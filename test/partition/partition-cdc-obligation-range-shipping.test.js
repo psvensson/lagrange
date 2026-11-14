@@ -681,10 +681,11 @@ async (t) => {
   const last = model.raw[BOUND.ACK_BATCH_MAX_EVENTS - 1];
   assert.deepEqual(laneOf(f).scan.cursor, {logIndex: last.logIndex, ordinal: last.ordinal},
     'the cursor stops at the last hydrated row that was acknowledged');
-  // With the proposer back the held batch is proposed and committed, and the
-  // lane goes on from the row it stopped at.
+  // With the proposer back the held batch is proposed (the quiescence driver
+  // commits it), and the lane goes on from the row it stopped at.
   registerCdcAcknowledgementProposer(registered);
-  await commitAcknowledgements(f);
+  track(f.leader.cdcDelivery.flushCdcAcknowledgements(REASON.DELIVERY_RETRY));
+  await settleTicks();
   await runLaneToQuiescence(f);
   assert.deepEqual(idsOfWaves(model), [rows.slice(hydrated)],
     'once acknowledgements can be proposed the rows above the image ship, once');

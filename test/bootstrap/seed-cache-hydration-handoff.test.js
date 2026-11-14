@@ -29,6 +29,7 @@ import {BootstrapNodeReadyRebalanceOwner} from
   '../../src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js';
 import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
 import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 
 const SEED_NODE_ID = 'seed-handoff-node';
 const LEADER_WAIT_REACHED = 'leader wait reached';
@@ -252,12 +253,13 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
 // record S-4b) ---
 //
 // The seed's NODES subscriber, registered through the real phase, with the
-// real node-ready rebalance owner behind its trigger. The node cache is a
-// recording double that merges an applied row as the system table cache does
-// for NODES ({...existing, ...incoming}; a DELETE removes the row), and the
-// propagation double applies a vector's members to it in order, as the source
-// leaf of a wave does. One-event delivery is the same subscriber handed
-// vectors of one, the cache applied between them.
+// real node-ready rebalance owner behind its trigger and the real system
+// table cache as the node cache. The propagation double applies a vector's
+// members to that cache in order through the cache's own merge
+// (applySystemTableChange), as the source leaf of a wave does. One-event
+// delivery is the same subscriber handed vectors of one, the cache applied
+// between them: what the hook works out for a later member of a vector is
+// compared with what the real cache held when that member arrived alone.
 async function nodeReadyHookSeed() {
   const subscribers = [];
   const partition = {
@@ -275,7 +277,7 @@ async function nodeReadyHookSeed() {
     getNodeReadyRebalanceDelayMs: () => NODE_READY_DELAY_MS,
     executeNodeReadyRebalance: () => {},
   }});
-  const nodeRows = new Map();
+  const cache = new SystemTableCache();
   const triggers = [];
   const messageGroup = {groupId: 'mg-1', initialized: true, async subscribeToCDC() {}};
   const delegates = {
@@ -283,7 +285,7 @@ async function nodeReadyHookSeed() {
     getNodeId: () => SEED_NODE_ID,
     getMessageGroupServices: () => new Map([['mg-1-r1', messageGroup]]),
     getPartitionServices: () => new Map([[getInitialReplicaIds(TABLES.NODES)[0], partition]]),
-    getSystemTableCache: () => ({get: (_table, nodeId) => nodeRows.get(nodeId) ?? null}),
+    getSystemTableCache: () => cache,
     resolveOperationalMessageGroupSelectionAsync: async () => ({service: messageGroup}),
     handleNodeReadyRebalanceTrigger: (event, previousRow) => {
       const scheduled = rebalanceOwner.handleNodeReadyRebalanceTrigger(event, previousRow);
@@ -293,17 +295,17 @@ async function nodeReadyHookSeed() {
     },
     propagatePartitionCDCEvent: async (_service, events) => {
       for (const event of events) {
-        if (event.operation === 'DELETE') nodeRows.delete(event.data.node_id);
-        else {
-          nodeRows.set(event.data.node_id,
-            {...nodeRows.get(event.data.node_id), ...event.data});
-        }
+        cache.applySystemTableChange(TABLES.NODES, event.operation,
+          structuredClone(event.data));
       }
     },
   };
   const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: {}});
   await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
-  return {subscriber: subscribers[0], nodeRows, triggers, rebalanceOwner};
+  const cacheRow = (row) => cache.applySystemTableChange(TABLES.NODES, 'INSERT', {...row});
+  const cachedRows = () => cache.getAll(TABLES.NODES)
+    .map((row) => ({...row})).sort((left, right) => left.node_id.localeCompare(right.node_id));
+  return {subscriber: subscribers[0], cacheRow, cachedRows, triggers, rebalanceOwner};
 }
 
 const LEASE = 4102444800000; // far in the future: the lease never lapses in the witness
@@ -363,14 +365,15 @@ for (const [name, {cached, events, scheduled}] of Object.entries(NODE_READY_VECT
     const vector = await nodeReadyHookSeed();
     try {
       for (const seed of [perEvent, vector]) {
-        for (const row of cached) seed.nodeRows.set(row.node_id, {...row});
+        for (const row of cached) seed.cacheRow(row);
       }
       for (const event of events) await perEvent.subscriber(Object.freeze([event]));
       await vector.subscriber(Object.freeze([...events]));
       assert.equal(perEvent.triggers.length, events.length);
       assert.deepEqual(vector.triggers, perEvent.triggers,
         'each member saw the previous row and took the decision of one-event delivery');
-      assert.deepEqual([...vector.nodeRows], [...perEvent.nodeRows]);
+      assert.deepEqual(vector.cachedRows(), perEvent.cachedRows(),
+        'the real cache holds the same rows after the vector as after one-event delivery');
       // Literal anchors, independent of the one-event run.
       assert.deepEqual(vector.triggers[0].previousRow,
         cached.find((row) => row.node_id === events[0].data.node_id),
@@ -391,12 +394,12 @@ test('seed node-ready hook: the second member of a node reads the first member m
   const deleted = await nodeReadyHookSeed();
   try {
     const partial = NODE_READY_VECTORS['a partial row first, ready second'];
-    merged.nodeRows.set('n1', {...partial.cached[0]});
+    merged.cacheRow(partial.cached[0]);
     await merged.subscriber(Object.freeze([...partial.events]));
     assert.deepEqual(merged.triggers[1].previousRow, {node_id: 'n1', status: 'joining',
       address: 'n1:2', ready_lease_expires_at: LEASE, last_heartbeat: 2});
     const removed = NODE_READY_VECTORS['a node deleted and inserted ready again'];
-    deleted.nodeRows.set('n1', {...removed.cached[0]});
+    deleted.cacheRow(removed.cached[0]);
     await deleted.subscriber(Object.freeze([...removed.events]));
     assert.equal(deleted.triggers[1].previousRow, null);
   } finally {
@@ -404,3 +407,58 @@ test('seed node-ready hook: the second member of a node reads the first member m
     deleted.rebalanceOwner.clearNodeReadyRebalanceState();
   }
 });
+
+// Where the real cache does not merge a member the way the hook overlays it:
+// an INSERT replaces the cached row (the overlay keeps its other fields), and
+// a member older than the cached row is rejected (the overlay applies it).
+// The hook follows record S-4b (the previous member of the same node inside
+// the vector is the previous row); these probes measure whether a later
+// member of the same node then takes another decision than under one-event
+// delivery through the real cache.
+const NODE_READY_MERGE_PROBES = Object.freeze({
+  'an INSERT over a cached row': {
+    cached: [nodeRow('n1', 'joining',
+      {address: 'n1:1', ready_lease_expires_at: LEASE, last_heartbeat: 1})],
+    events: [
+      nodesEvent('INSERT', nodeRow('n1', 'joining', {last_heartbeat: 2})),
+      nodesEvent('UPDATE', {node_id: 'n1', status: SERVICE_STATUS.ACTIVE, last_heartbeat: 3}),
+    ],
+  },
+  'a member older than the cached row': {
+    cached: [nodeRow('n1', SERVICE_STATUS.ACTIVE,
+      {ready_lease_expires_at: LEASE, last_heartbeat: 1, updated_at: 30})],
+    events: [
+      nodesEvent('UPDATE', nodeRow('n1', 'joining', {last_heartbeat: 2, updated_at: 10})),
+      nodesEvent('UPDATE', nodeRow('n1', SERVICE_STATUS.ACTIVE,
+        {ready_lease_expires_at: LEASE + 1, last_heartbeat: 3, updated_at: 20})),
+    ],
+  },
+});
+
+for (const [name, {cached, events}] of Object.entries(NODE_READY_MERGE_PROBES)) {
+  test(`seed node-ready hook against the real cache merge: ${name}`, async (t) => {
+    const perEvent = await nodeReadyHookSeed();
+    const vector = await nodeReadyHookSeed();
+    try {
+      for (const seed of [perEvent, vector]) {
+        for (const row of cached) seed.cacheRow(row);
+      }
+      for (const event of events) await perEvent.subscriber(Object.freeze([event]));
+      await vector.subscriber(Object.freeze([...events]));
+      const decisionsOf = (seed) => seed.triggers.map((trigger) => trigger.scheduled);
+      const previousOf = (seed) => seed.triggers.map((trigger) => trigger.previousRow);
+      t.diagnostic(`NODE_READY_PROBE ${JSON.stringify({name,
+        perEvent: {decisions: decisionsOf(perEvent), previous: previousOf(perEvent),
+          cached: perEvent.cachedRows()},
+        vector: {decisions: decisionsOf(vector), previous: previousOf(vector),
+          cached: vector.cachedRows()}})}`);
+      assert.deepEqual(vector.cachedRows(), perEvent.cachedRows(),
+        'the real cache holds the same rows either way');
+      assert.deepEqual(previousOf(vector)[0], previousOf(perEvent)[0],
+        'the first member reads the cached row either way');
+    } finally {
+      perEvent.rebalanceOwner.clearNodeReadyRebalanceState();
+      vector.rebalanceOwner.clearNodeReadyRebalanceState();
+    }
+  });
+}

@@ -913,3 +913,163 @@ test(
     }
   },
 );
+
+// Range shipping, challenge M-7: a rebuilt overlapping vector may commit at a
+// recipient AFTER the newer one. The lane ships a wide range whose outcome
+// stays unknown, halves its window and rebuilds a narrower range and then a
+// newer one; the wide range's commit can still land last. The final state
+// must be the newest row. The vectors are built from the raw ledger rows of
+// four real writes of one CONFIG key and delivered to a real native recipient
+// in that order, so the recipient's own handler and cache merge are the judge;
+// the merge alone is then asked again with the older rows.
+test(
+  'overlap order (M-7): a wide vector that commits at a native recipient after the ' +
+    'narrower rebuilt vector and the newer one leaves the newest row in its cache',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({
+      node: {id: NODE_A},
+      logging: {level: 'fatal'},
+      raft: {
+        heartbeatIntervalMs: 20,
+        electionTimeoutMinMs: 150,
+        electionTimeoutMaxMs: 300,
+      },
+    });
+    LoggingService.getInstance().initialize({level: 'fatal'});
+
+    const {routerA, routerB, portA, portB} = await connectTwoRouters(24387, 24388);
+    const f = {
+      phase: 'setup',
+      routerA,
+      routerB,
+      deliverA: routerA.deliver,
+      deliverB: routerB.deliver,
+      nodeRows: [
+        activeNodeRow(NODE_A, portA, 'mg-overlap-source'),
+        activeNodeRow(NODE_B, portB, 'mg-overlap-target'),
+      ],
+      services: new Map(),
+      serviceRouters: new Map(),
+      cutPeers: new Map(),
+      events: [],
+      native: [],
+      heldNative: [],
+      heldApplications: [],
+      applicationSettlements: new Set(),
+      subscribers: [],
+      interceptSend: null,
+      maxObservedInFlight: 0,
+      directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-overlap-order-')),
+    };
+    wrapRouterDelivery(f, routerA, f.deliverA, 'routerA');
+    wrapRouterDelivery(f, routerB, f.deliverB, 'routerB');
+
+    await setupReleasedConfigProducer(t, f, {
+      configPartId: 'config-overlap-order',
+      tempPrefix: 'mg-overlap-order-part-',
+    });
+
+    const key = 'overlap-order-key';
+    const debts = [await writeReleasedSql(
+      f.producer,
+      f.producerLeader,
+      'INSERT INTO config (config_key, config_value, value_type, ' +
+        'default_value, created_at) VALUES (?, ?, ?, ?, ?)',
+      [key, 'overlap-v1', 'string', '', 1],
+      'overlap-order-1',
+      TABLES.CONFIG,
+    )];
+    for (const version of [2, 3, 4]) {
+      debts.push(await writeReleasedSql(
+        f.producer,
+        f.producerLeader,
+        'UPDATE config SET config_value = ?, updated_at = ? WHERE config_key = ?',
+        [`overlap-v${version}`, version, key],
+        `overlap-order-${version}`,
+        TABLES.CONFIG,
+      ));
+    }
+    // The members a lane ships: the raw ledger event with its obligation identity.
+    const [e1, e2, e3, e4] = debts.map((debt) => copyCdcEvent({
+      ...JSON.parse(debt.eventJson),
+      eventKey: debt.eventKey,
+      entryId: debt.entryId,
+      sourceLogIndex: debt.logIndex,
+      sourceOrdinal: debt.ordinal,
+    }));
+    assert.deepEqual([e1, e2, e3, e4].map((event) => event.data.config_value),
+      ['overlap-v1', 'overlap-v2', 'overlap-v3', 'overlap-v4']);
+
+    f.source = await openMultiReplica(f, {
+      groupId: 'mg-overlap-source',
+      replicaId: 'mg-overlap-source-r1',
+      replicas: ['mg-overlap-source-r1'],
+      nodeId: NODE_A,
+      router: routerA,
+      rows: [],
+      hints: [nodeAddressOf(NODE_A, 'mg-overlap-source-r1')],
+      table: TABLES.CONFIG,
+    });
+    const target = await openMultiReplica(f, {
+      groupId: 'mg-overlap-target',
+      replicaId: 'mg-overlap-target-r1',
+      replicas: ['mg-overlap-target-r1'],
+      nodeId: NODE_B,
+      router: routerB,
+      rows: [],
+      hints: [nodeAddressOf(NODE_B, 'mg-overlap-target-r1')],
+      table: TABLES.CONFIG,
+    });
+    const deliver = async (vector) => {
+      const delivery = await driveWithPump(f, () =>
+        routerA.deliver(
+          target.unifiedAddress,
+          {
+            type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
+            events: vector,
+            sourceNodeId: NODE_A,
+            sourceGroupId: 'mg-overlap-source',
+            targetGroupId: 'mg-overlap-target',
+            [CDC_DELIVERY_REMAINING_MS]: 5000,
+          },
+          {targetNodeId: NODE_B, timeoutMs: 5000},
+        ),
+      );
+      assert.equal(isCommittedCdcDelivery(delivery, vector, 'mg-overlap-target'), true,
+        `the recipient committed ${vector.map((event) => event.data.config_value)}`);
+    };
+    const cached = () => target.systemTableCache.get(TABLES.CONFIG, key);
+
+    // The wide range [1, 2, 3] was shipped first; its commit is still in flight.
+    const wide = [e1, e2, e3];
+    // The lane halved its window and rebuilt: [1, 2] commits, then the newer [3, 4].
+    await deliver([e1, e2]);
+    assert.equal(cached()?.config_value, 'overlap-v2');
+    await deliver([e3, e4]);
+    assert.equal(cached()?.config_value, 'overlap-v4');
+    const newest = structuredClone(cached());
+    // The wide range's commit lands last.
+    await deliver(wide);
+    assert.deepEqual(cached(), newest,
+      'the wide vector that committed after the newer one left the newest row');
+    assert.equal(cached().updated_at_hlc, e4.data.updated_at_hlc);
+
+    // The cache merge alone, asked again with every older row in order: each is
+    // older than the row it holds, so the newest stays.
+    for (const event of wide) {
+      target.systemTableCache.applySystemTableChange(TABLES.CONFIG, event.operation,
+        structuredClone(event.data));
+      assert.deepEqual(cached(), newest,
+        `the cache merge keeps the newest row against ${event.data.config_value}`);
+    }
+    const committed = recordOf(target).entries.map((entry) => commandOf(entry))
+      .filter((command) => {
+        const members = command?.events ?? (command ? [command] : []);
+        return members.some((member) => member.eventKey === e1.eventKey);
+      });
+    t.diagnostic(`recipient commands that carry the first row: ${committed.length}`);
+    assert.ok(committed.length >= 1);
+  },
+);
