@@ -33,6 +33,7 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const STATE_ENV = 'FAKE_REMOTE_HOSTS_STATE';
 const REAL_GIT_ENV = 'FAKE_REMOTE_HOSTS_REAL_GIT';
+const SSH_KEY_ENV = 'FAKE_REMOTE_HOSTS_SSH_KEY';
 const EXIT_SUFFIX = /; printf '\\n__exit_code=%s' "\$\?"$/u;
 // The first command the campaign sends after its host preparation (the
 // controller address as a data host sees it): the scripted hosts stop here.
@@ -60,11 +61,14 @@ function word(command, pattern) {
 const ok = (out = '') => ({out, code: 0});
 const fail = (code, out) => ({out, code});
 
+// npm 10 stops at the first tarball its offline cache lacks and names only
+// that one (observed with npm 10.9.8 and an empty cache, 2026-11-14).
 function offlineInstall(host) {
   const missing = arrayFilter(lockfileTarballs(), (url) => !arrayIncludes(host.cache, url));
   if (missing.length === 0) return ok('added 12 packages');
-  return fail(1, arrayJoin(arrayMap(missing, (url) => `npm error request to ${url} failed: ` +
-    'cache mode is \'only-if-cached\' but no cached response is available.'), '\n'));
+  return fail(1, 'npm error code ENOTCACHED\n' +
+    `npm error request to ${missing[0]} failed: cache mode is 'only-if-cached' but no ` +
+    'cached response is available.');
 }
 
 // [pattern, answer(host, command)] - the first match answers.
@@ -123,14 +127,40 @@ function writeState(file, state) {
 }
 
 // `ssh [-o opt]... [-i key] user@ip <command>`
+// The campaign's ssh options: BatchMode=yes always, and the operator's key
+// when one is expected; a connection without them is refused as ssh would.
+function sshOptionsRefusal(options) {
+  if (!arrayIncludes(options.o, 'BatchMode=yes')) return 'BatchMode=yes missing';
+  const key = process.env[SSH_KEY_ENV];
+  if (key && options.i !== key) return 'Permission denied (publickey)';
+  return null;
+}
+
 function runFakeSsh(argv) {
   let at = 0;
-  while (argv[at] === '-o' || argv[at] === '-i') at += 2;
+  const options = {o: [], i: null};
+  while (argv[at] === '-o' || argv[at] === '-i') {
+    if (argv[at] === '-o') arrayPush(options.o, argv[at + 1]);
+    else options.i = argv[at + 1];
+    at += 2;
+  }
   const target = argv[at];
   const full = arrayJoin(argv.slice(at + 1), ' ');
   const ip = stringReplace(target, /^.*@/u, '');
   const file = process.env[STATE_ENV];
   const state = readState(file);
+  const refusal = sshOptionsRefusal(options);
+  if (refusal) {
+    arrayPush(state.sshRefused, {ip, command: full, refusal});
+    writeState(file, state);
+    process.stderr.write(`ssh: ${refusal}\n`);
+    return UNSCRIPTED_EXIT;
+  }
+  if (stringStartsWith(full, 'git-receive-pack ')) {
+    arrayPush(state.receivePacks, {ip, command: full, options});
+    writeState(file, state);
+    return 0;
+  }
   arrayPush(state.log, {ip, command: full});
   const host = state.hosts[ip];
   const withStatus = EXIT_SUFFIX.test(full);
@@ -172,17 +202,28 @@ function runFakeGit(argv) {
   const source = stringReplace(stringReplace(refspec, /^\+/u, ''), /:.*$/u, '');
   const file = process.env[STATE_ENV];
   const state = readState(file);
-  arrayPush(state.pushes, {url, refspec});
   const known = spawnSync(realGit, ['cat-file', '-e', `${source}^{commit}`]).status === 0;
   if (!known) {
+    arrayPush(state.pushes, {url, refspec});
     writeState(file, state);
     process.stderr.write(`error: src refspec ${source} does not match any\n`);
     return 1;
   }
-  const ip = stringReplace(stringReplace(url, /^ssh:\/\/[^@]*@/u, ''), /\/.*$/u, '');
-  arrayPush(state.hosts[ip].commits, stringTrim(execFileSync(realGit,
+  const target = stringReplace(stringReplace(url, /^ssh:\/\//u, ''), /\/.*$/u, '');
+  const repoPath = stringReplace(url, /^ssh:\/\/[^/]*/u, '');
+  // Connect as git push does: through GIT_SSH_COMMAND, read by a shell.
+  const connected = spawnSync('sh', ['-c', `${process.env.GIT_SSH_COMMAND || 'ssh'} "$@"`, 'sh',
+    target, `git-receive-pack '${repoPath}'`], {encoding: 'utf8'});
+  if (connected.status !== 0) {
+    process.stderr.write(`${connected.stderr}fatal: Could not read from remote repository.\n`);
+    return 128;
+  }
+  const after = readState(file);
+  const ip = stringReplace(target, /^.*@/u, '');
+  arrayPush(after.pushes, {url, refspec});
+  arrayPush(after.hosts[ip].commits, stringTrim(execFileSync(realGit,
     ['rev-parse', `${source}^{commit}`], {encoding: 'utf8'})));
-  writeState(file, state);
+  writeState(file, after);
   return 0;
 }
 
@@ -194,15 +235,16 @@ function runFakeProcess(name, argv) {
 /**
  * A directory holding the `ssh` and `git` stand-ins and the hosts' state.
  * @param {Array<string>} ips
+ * @param {{sshKey?: string}} [options] the key every ssh connection must offer
  * @return {{env: Object, state: Function, update: Function}}
  */
-function createFakeRemoteHosts(ips) {
+function createFakeRemoteHosts(ips, {sshKey = ''} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-remote-hosts-'));
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
   const file = path.join(dir, 'state.json');
   writeState(file, {hosts: Object.fromEntries(arrayMap(ips, (ip) => [ip, freshHost()])), log: [],
-    pushes: [], unscripted: [], pastPreparation: false});
+    pushes: [], unscripted: [], sshRefused: [], receivePacks: [], pastPreparation: false});
   const self = fileURLToPath(import.meta.url);
   for (const name of ['ssh', 'git']) {
     fs.writeFileSync(path.join(bin, name), `#!${process.execPath}\n` +
@@ -214,7 +256,7 @@ function createFakeRemoteHosts(ips) {
   for (const key of ['HOSTS', 'SSH_HOSTS', 'EXECUTION_TARGET', 'SSH_KEY']) delete clean[key];
   return {
     env: {...clean, PATH: `${bin}:${process.env.PATH}`, [STATE_ENV]: file,
-      [REAL_GIT_ENV]: realGit},
+      [REAL_GIT_ENV]: realGit, [SSH_KEY_ENV]: sshKey},
     state: () => readState(file),
     update: (change) => {
       const state = readState(file);

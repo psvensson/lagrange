@@ -18,7 +18,11 @@
  * that still refuses) and names host and the missing item; nothing is placed
  * after it, and the campaign never papers over it.
  */
-import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
+import {
+  GIT_OUTPUT_BOUND,
+  execGit,
+  execGitAsync,
+} from '../../../scripts/checks/git-invocation.js';
 import {
   campaignImagesByRole,
   ensureProductImages,
@@ -33,6 +37,7 @@ import {
 } from './comparative-benchmark-workload-call-site.js';
 import {
   arrayFilter,
+  arrayJoin,
   arrayMap,
   objectKeys,
   stringReplace,
@@ -79,6 +84,20 @@ function referenceClientTarballs(lock) {
     return {name: stringReplace(key, /^.*node_modules\//u, ''), version: entry.version,
       resolved: entry.resolved, integrity: entry.integrity};
   });
+}
+
+/**
+ * The controller's push of the harness commit into a host's checkout: git
+ * over ssh with the campaign's own ssh options (GIT_SSH_COMMAND is read by a
+ * shell, so every word is quoted), to a ref that is never checked out.
+ * @param {{controllerRoot: string, sshCommand: Array<string>}} input
+ * @return {Function} ({host, repoPath, harnessCommit}) => Promise
+ */
+function harnessCommitPusher({controllerRoot, sshCommand}) {
+  return ({host, repoPath, harnessCommit}) => execGitAsync(['push', '--quiet',
+    `ssh://${host.sshTarget}${repoPath}`, `+${harnessCommit}:refs/bench/harness`],
+  {cwd: controllerRoot, bound: GIT_OUTPUT_BOUND.COMMAND,
+    env: {...process.env, GIT_SSH_COMMAND: arrayJoin(arrayMap(sshCommand, shellQuote), ' ')}});
 }
 
 /** What provisioning places, from the campaign's own requirement definitions. */
@@ -205,6 +224,7 @@ async function provisionComparativeHosts({hosts, plan, sshRun, opts, pushHarness
 
 export {
   comparativeProvisioningPlan,
+  harnessCommitPusher,
   provisionComparativeHosts,
   readReferenceClientLock,
   referenceClientTarballs,

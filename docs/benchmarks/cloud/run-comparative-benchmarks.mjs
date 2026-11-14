@@ -65,6 +65,7 @@ import {
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
 import {
   comparativeProvisioningPlan,
+  harnessCommitPusher,
   provisionComparativeHosts,
   readReferenceClientLock,
 } from '../../../test/distributed/harness/comparative-benchmark-provisioning.js';
@@ -91,15 +92,10 @@ import {
 import {
   resolveLagrangeContainerImage,
 } from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
-import {shellQuote} from '../../../test/distributed/harness/real-product-remote-shell.js';
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
-import {
-  GIT_OUTPUT_BOUND,
-  execGit,
-  execGitAsync,
-} from '../../../scripts/checks/git-invocation.js';
+import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 
@@ -443,13 +439,9 @@ async function provisionGcpHosts({opts, manifest, dataHostCount}) {
   const plan = comparativeProvisioningPlan({targets: manifest.targets,
     lagrangeImage: opts.lagrangeImage, harnessCommit: gitCommit,
     referenceClientLock: readReferenceClientLock(REPO_ROOT, gitCommit)});
-  // GIT_SSH_COMMAND is read by a shell: every ssh word is quoted.
-  const pushHarnessCommit = ({host, repoPath, harnessCommit}) => execGitAsync(['push',
-    '--quiet', `ssh://${host.sshTarget}${repoPath}`, `+${harnessCommit}:refs/bench/harness`],
-  {cwd: REPO_ROOT, env: {...process.env, GIT_SSH_COMMAND: ['ssh', ...sshOptions(opts)]
-    .map(shellQuote).join(' ')}, bound: GIT_OUTPUT_BOUND.COMMAND});
   return provisionComparativeHosts({hosts, plan, sshRun: createSshRun(hosts, opts), opts,
-    pushHarnessCommit});
+    pushHarnessCommit: harnessCommitPusher({controllerRoot: REPO_ROOT,
+      sshCommand: ['ssh', ...sshOptions(opts)]})});
 }
 
 async function runLabCampaign({opts, manifest, dataHostCount}) {

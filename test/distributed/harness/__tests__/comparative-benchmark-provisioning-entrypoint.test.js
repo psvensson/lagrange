@@ -33,6 +33,7 @@ import {
 import {
   arrayFilter,
   arrayFindIndex,
+  arrayIncludes,
   arrayMap,
   arraySome,
   stringIncludes,
@@ -44,10 +45,13 @@ const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks
 const DATA = ['10.20.0.1', '10.20.0.2', '10.20.0.3'];
 const CLIENT = '10.20.0.9';
 const CHECKOUT = '/srv/lagrange-campaign';
+// The operator's key: every ssh connection, the campaign's and the commit
+// push's (through GIT_SSH_COMMAND, read by a shell), must offer it.
+const SSH_KEY = '/keys/bench key';
 const LAGRANGE = `psvensson/lagrange@sha256:${'e'.repeat(64)}`;
 const TARGETS = ['lagrange', 'tidb-tikv', 'pg-single-primary'];
 const COMMON = ['--execution-target', 'gcp', '--hosts', [...DATA, CLIENT].join(','),
-  '--ssh-user', 'bench', '--client-checkout', CHECKOUT, '--client-node', '/opt/node/bin/node',
+  '--ssh-user', 'bench', '--ssh-key', SSH_KEY, '--client-checkout', CHECKOUT, '--client-node', '/opt/node/bin/node',
   '--lagrange-image', LAGRANGE, '--targets', TARGETS.join(',')];
 const REFUSALS = ['image_unavailable', 'load_generator_commit_absent', 'offline_cache_incomplete'];
 const HEAD = stringTrim(execFileSync('git', ['rev-parse', 'HEAD'], {cwd: ROOT,
@@ -60,7 +64,7 @@ function cli(fake, args) {
 }
 
 function hosts() {
-  return createFakeRemoteHosts([...DATA, CLIENT]);
+  return createFakeRemoteHosts([...DATA, CLIENT], {sshKey: SSH_KEY});
 }
 
 function commandsOn(state, ip, pattern) {
@@ -98,6 +102,12 @@ test('--provision places, through the real CLI, exactly what the campaign checks
   // The harness commit is the controller's HEAD: pushed, then checked out.
   assert.deepEqual(state.pushes, [{url: `ssh://bench@${CLIENT}${CHECKOUT}`,
     refspec: `+${HEAD}:refs/bench/harness`}]);
+  // The push connected with the campaign's ssh options and the operator's key.
+  assert.deepEqual(state.sshRefused, []);
+  assert.equal(state.receivePacks.length, 1);
+  assert.equal(state.receivePacks[0].command, `git-receive-pack '${CHECKOUT}'`);
+  assert.equal(state.receivePacks[0].options.i, SSH_KEY);
+  assert.ok(arrayIncludes(state.receivePacks[0].options.o, 'BatchMode=yes'));
   const checkout = commandsOn(state, CLIENT, /git checkout --detach --quiet /u);
   assert.equal(checkout.length, 1);
   assert.ok(stringIncludes(checkout[0].command, HEAD));
@@ -153,7 +163,8 @@ test('negative twins: without provisioning the campaign refuses with image_unava
   const host = {ip: CLIENT, repoPath: CHECKOUT, nodePath: '/opt/node/bin/node'};
   const prepared = await prepareLoadGeneratorCheckout({sshRun, opts: {}, host,
     harnessCommit: HEAD, campaignId: 'bench-entry-2'});
-  assert.deepEqual(prepared.host.driverInstall.missing, lockfileTarballs());
+  assert.equal(prepared.host.driverInstall.missing.length, 1);
+  assert.ok(arrayIncludes(lockfileTarballs(), prepared.host.driverInstall.missing[0]));
   const manifest = buildComparativeCampaignManifest({campaignId: 'bench-entry-2',
     profile: COMPARATIVE_SMOKE_PROFILE, targets: ['tidb-tikv']});
   await assert.rejects(createRemoteWorkloadRunner({sshRun, opts: {}, host: prepared.host,

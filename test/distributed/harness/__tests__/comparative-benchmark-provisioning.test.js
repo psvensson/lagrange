@@ -104,9 +104,10 @@ function createFakeHosts(ips) {
     [/npm ci --offline --prefix test\/distributed\/reference-client/u, (state) => {
       const missing = arrayFilter(referenceClientTarballs(LOCK),
         (tarball) => !state.cache.has(tarball.resolved));
-      return missing.length === 0 ? exited(0, 'added 12 packages') : exited(1, arrayJoin(
-        arrayMap(missing, (tarball) => `npm error request to ${tarball.resolved} failed: ` +
-          'cache mode is \'only-if-cached\' but no cached response is available.'), '\n'));
+      // npm 10 names only the first tarball its offline cache lacks.
+      return missing.length === 0 ? exited(0, 'added 12 packages') : exited(1,
+        `npm error request to ${missing[0].resolved} failed: cache mode is ` +
+        '\'only-if-cached\' but no cached response is available.');
     }],
     [/ npm ci 2>&1/u, () => exited(0, 'added 900 packages')],
   ];
@@ -183,14 +184,14 @@ test('a fresh host fails the campaign\'s checks; after provisioning every target
 });
 
 test('each half of provisioning is needed: without the cache the TiDB arm\'s install ' +
-  'misses the lockfile\'s tarballs; without the commit the campaign refuses', async () => {
+  'misses a lockfile tarball; without the commit the campaign refuses', async () => {
   const fake = createFakeHosts([CLIENT.ip]);
   fake.hosts[CLIENT.ip].commits.add(COMMIT);
   fake.hosts[CLIENT.ip].head = COMMIT;
   const prepared = await prepareLoadGeneratorCheckout({sshRun: fake.sshRun, opts: {},
     host: CLIENT, harnessCommit: COMMIT, campaignId: 'bench-x'});
   assert.deepEqual(prepared.host.driverInstall.missing,
-    arrayMap(referenceClientTarballs(LOCK), (tarball) => tarball.resolved));
+    [referenceClientTarballs(LOCK)[0].resolved]);
   const bare = createFakeHosts([CLIENT.ip]);
   await assert.rejects(prepareLoadGeneratorCheckout({sshRun: bare.sshRun, opts: {},
     host: CLIENT, harnessCommit: COMMIT, campaignId: 'bench-x'}),

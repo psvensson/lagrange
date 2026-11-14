@@ -157,11 +157,13 @@ function storageArgs(opts, campaignId, index) {
 // node is refused, typed, and the directory is left as it is.
 const FOREIGN_STORAGE_EXIT = 3;
 
-function storagePreparationScript(dir) {
+// The shell script the throwaway container runs for one node directory; the
+// deployer passes owner = RUNTIME_USER (a test executes it with its own uid).
+function storagePreparationScript({dir, owner}) {
   return `if [ -d ${dir} ] && [ -n "$(ls -A ${dir})" ] && ` +
-    `[ "$(stat -c %u:%g ${dir})" != "${RUNTIME_USER}" ]; then ` +
+    `[ "$(stat -c %u:%g ${dir})" != "${owner}" ]; then ` +
     `echo "foreign $(stat -c %u:%g ${dir})"; exit ${FOREIGN_STORAGE_EXIT}; fi; ` +
-    `mkdir -p ${dir} && chown ${RUNTIME_USER} ${dir}`;
+    `mkdir -p ${dir} && chown ${owner} ${dir}`;
 }
 
 async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
@@ -171,7 +173,8 @@ async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
     image: POSTGRES_IMAGE_DEFAULT,
     dockerArgs: ['-v', `${opts.storageRoot}/${campaignId}:${STORAGE_MOUNT}`],
     commandArgs: ['sh', '-c',
-      storagePreparationScript(`${STORAGE_MOUNT}/${storageLabel(index)}`)]})} 2>&1`);
+      storagePreparationScript({dir: `${STORAGE_MOUNT}/${storageLabel(index)}`,
+        owner: RUNTIME_USER})]})} 2>&1`);
   if (result.exitCode === 0) return;
   const output = stringTrim(result.stdout);
   if (result.exitCode === FOREIGN_STORAGE_EXIT && stringStartsWith(output, 'foreign ')) {
@@ -661,4 +664,4 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   };
 }
 
-export {deployLagrangeCluster, resolveLagrangeContainerImage};
+export {deployLagrangeCluster, resolveLagrangeContainerImage, storagePreparationScript};
