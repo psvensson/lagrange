@@ -14,7 +14,12 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import {arrayFilter, arrayJoin, stringSplit} from '../real-product-captured-intrinsics.js';
+import {
+  arrayFilter,
+  arrayJoin,
+  objectKeys,
+  stringSplit,
+} from '../real-product-captured-intrinsics.js';
 
 const DOCKER = `#!/bin/sh
 case "$1" in
@@ -74,8 +79,8 @@ function lines(file) {
 
 /**
  * @param {{images?: Array<string>, sshKey?: string}} [options]
- * @return {{dir: string, env: Object, sshRun: Function, chowns: Function,
- *   sshConnections: Function}}
+ * @return {{dir: string, env: Object, sshRun: Function, asController: Function,
+ *   chowns: Function, sshConnections: Function}}
  */
 function createLocalShell({images = [], sshKey = ''} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-shell-'));
@@ -102,7 +107,24 @@ function createLocalShell({images = [], sshKey = ''} = {}) {
     }
     return result.stdout;
   };
-  return {dir, env, sshRun, chowns: () => lines(chownLog),
+  // The controller side of git push runs in this process: for `run`, its ssh
+  // (resolved through PATH by GIT_SSH_COMMAND) is the stand-in too.
+  const asController = async (run) => {
+    const saved = {};
+    for (const key of ['PATH', 'SSH_SHIM_LOG', 'SSH_SHIM_KEY']) {
+      saved[key] = process.env[key];
+      process.env[key] = env[key];
+    }
+    try {
+      return await run();
+    } finally {
+      for (const key of objectKeys(saved)) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
+      }
+    }
+  };
+  return {dir, env, sshRun, asController, chowns: () => lines(chownLog),
     sshConnections: () => lines(sshLog)};
 }
 

@@ -180,9 +180,9 @@ test('harness commit, executed with real git: pushed over ssh with the campaign\
   const host = {ip: '127.0.0.1', role: 'client', sshTarget: 'bench@127.0.0.1',
     repoPath: path.join(shell.dir, 'client'), nodePath: process.execPath};
   const plan = {images: {data: [], client: []}, harnessCommit: commit, tarballs: []};
-  const provision = (target, sshCommand) => provisionComparativeHosts({hosts: [target], plan,
-    sshRun: shell.sshRun, opts: {},
-    pushHarnessCommit: harnessCommitPusher({controllerRoot: controller, sshCommand})});
+  const provision = (target, sshCommand) => shell.asController(() =>
+    provisionComparativeHosts({hosts: [target], plan, sshRun: shell.sshRun, opts: {},
+      pushHarnessCommit: harnessCommitPusher({controllerRoot: controller, sshCommand})}));
   const receipt = await provision(host, ['ssh', '-o', 'BatchMode=yes', '-i', KEY]);
   assert.equal(receipt.client.head, commit);
   assert.equal(git(host.repoPath, ['rev-parse', 'HEAD']), commit);
