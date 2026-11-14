@@ -276,6 +276,9 @@ test('provision-gcp.sh --place, executed: refuses without HOSTS; runs the runner
   const refused = place({});
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /HOSTS is not set/u);
+  const noSsh = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'});
+  assert.notEqual(noSsh.status, 0);
+  assert.match(noSsh.stderr, /SSH_HOSTS is not set/u);
   assert.equal(fs.existsSync(record), false, 'nothing ran');
   const placed = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9', SSH_HOSTS: '1.2.3.4'});
   assert.equal(placed.status, 0, placed.stderr);
