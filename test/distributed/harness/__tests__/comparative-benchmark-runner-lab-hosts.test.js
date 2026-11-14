@@ -197,7 +197,8 @@ test('selection requires native identity and policy; fresh missing members never
       (entry) => [entry.name, entry.reason]));
     // Each exclusion keeps its own typed cause: an unavailable native decision
     // carries the native reason, a missing endpoint says it was never recorded.
-    assert.match(reasons.b, /^host-ineligible: native thermal decision unavailable \(UNAVAILABLE: .+\)$/u);
+    assert.equal(reasons.b, 'host-ineligible: native thermal decision unavailable ' +
+      `(UNAVAILABLE: ${state.nodes.b.testCapability.thermalObservation.reason})`);
     assert.equal(reasons.c, 'host-ineligible: native thermal endpoint not recorded');
     assert.equal(reasons.d, 'host-ineligible: native thermal endpoint invalid: ' +
       'invalid native thermal endpoint');

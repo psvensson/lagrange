@@ -273,12 +273,13 @@ test('provision-gcp.sh --place, executed: refuses without HOSTS; runs the runner
     PROJECT_ID: 'p', SSH_USER: 'bench'};
   const place = (extra) => spawnSync(bash, [script, '--place', '--client-checkout', '/srv/c'],
     {encoding: 'utf8', env: {...env, ...extra}});
-  const refused = place({});
+  // bash's own words for an unset required variable: `NAME: message`.
+  const refused = place({SSH_HOSTS: '1.2.3.4'});
   assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /HOSTS is not set/u);
+  assert.match(refused.stderr, /(^|[^_])HOSTS: HOSTS is not set/mu);
   const noSsh = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9'});
   assert.notEqual(noSsh.status, 0);
-  assert.match(noSsh.stderr, /SSH_HOSTS is not set/u);
+  assert.match(noSsh.stderr, /SSH_HOSTS: SSH_HOSTS is not set/u);
   assert.equal(fs.existsSync(record), false, 'nothing ran');
   const placed = place({HOSTS: '10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.9', SSH_HOSTS: '1.2.3.4'});
   assert.equal(placed.status, 0, placed.stderr);
