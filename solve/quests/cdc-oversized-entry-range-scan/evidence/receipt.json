@@ -2,45 +2,50 @@
   "schema": "test-receipt/1",
   "quest": "cdc-oversized-entry-range-scan",
   "status": "pass",
-  "interpretation": "Landing form on HEAD 95700a7344c34a07c47cc86ea7e76a5201441762 (sealed base c4f1cd064bee29d174ba63d0d8d52486651bc59f). Eliminates repeated O(M) SQLite position scans and repeated O(M) SELECT_OWED_ENTRY_BYTES sums of oversized CDC entries in composeCdcShipRange by maintaining a rollback-safe per-entry owed byte tally on the ledger connection owner (src/partition/partition-cdc-obligation-ledger.js) updated via RETURNING log_index, octet_length(event_json) on MARK_DELIVERED without modifying the SQLite schema, short-circuiting owedEntriesFrom on oversized entries to O(1) position queries per single-event shipment, paging non-oversized multi-row entries by BOUND.DRIVE_PAGE_ROWS in owedEntryPositionsAfter, paging firstReadyRow by BOUND.DRIVE_PAGE_ROWS, and using readOwedCdcObligationPositions in drainPendingHydratedObligations so hydrated-prefix acknowledgement never reads event_json payloads.",
+  "interpretation": "Landing form on HEAD 4202994aa9e7181305a8b10f28d3eb1fa8d495e2 (sealed base c4f1cd064bee29d174ba63d0d8d52486651bc59f). Eliminates repeated O(M) SQLite position scans and repeated O(M) SELECT_OWED_ENTRY_BYTES sums of oversized CDC entries in composeCdcShipRange by maintaining a per-entry owed byte tally on the ledger connection owner (src/partition/partition-cdc-obligation-ledger.js) updated via RETURNING log_index, octet_length(event_json) on MARK_DELIVERED and finalized through explicit afterCommit (commitOwedEntryByteTallies) and afterRollback (rollbackOwedEntryByteTallies) lifecycle hooks in applyCdcAcknowledgementCommand (src/partition/partition-cdc-obligation.js) without modifying the SQLite schema, short-circuiting owedEntriesFrom on oversized entries to O(1) position queries per single-event shipment, paging non-oversized multi-row entries by BOUND.DRIVE_PAGE_ROWS in owedEntryPositionsAfter, paging firstReadyRow by BOUND.DRIVE_PAGE_ROWS, and using readOwedCdcObligationPositions in drainPendingHydratedObligations so hydrated-prefix acknowledgement never reads event_json payloads.",
   "receipts": [
     {
       "id": "oversized-entry-scaling-witness",
       "measured": true,
       "passed": true,
-      "detail": "Measured on adams-gamla via labrun.py job 9f6d4ede-a952-418b-a775-0dc425c40785 (solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/): test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R1 and R4 prove that across M = 512, 1024, and 4096 owed events in a single oversized Raft entry (> 262,144 B total, 1,024 B per event), SELECT_OWED_ENTRY_BYTES executes exactly 1 time across the entire end-to-end drain (totalEntryBytesQueries = 1), every wave executes at most 4 SQLite range-read queries (maxWaveQueries = 4), and full-drain metrics with delayed acknowledgements across page boundaries scale linearly: M=512 (waves=387, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=19.435, maxDriveSpanMs=566.811, fullDrainMs=1021.147), M=1024 (waves=899, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=50.3, maxDriveSpanMs=562.131, fullDrainMs=1903.922), M=4096 (waves=3971, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=57.235, maxDriveSpanMs=549.313, fullDrainMs=7646.117)."
+      "detail": "Measured on adams-gamla via labrun.py job 58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d (solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/): test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R1, R4, and R5 prove that across M = 512, 1024, and 4096 owed events in a single oversized Raft entry (> 262,144 B total, 1,024 B per event), SELECT_OWED_ENTRY_BYTES executes exactly 1 time across the entire end-to-end drain (totalEntryBytesQueries = 1), every wave executes at most 4 SQLite range-read queries (maxWaveQueries = 4), completed entries and unverified keys are evicted on commit via commitOwedEntryByteTallies, rolled-back transactions immediately evict uncommitted tallies via rollbackOwedEntryByteTallies, and full-drain metrics with delayed acknowledgements across page boundaries scale linearly: M=512 (waves=387, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=18.904, maxDriveSpanMs=564.867, fullDrainMs=1017.812), M=1024 (waves=899, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=50.329, maxDriveSpanMs=564.891, fullDrainMs=1916.612), M=4096 (waves=3971, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=58.702, maxDriveSpanMs=554.435, fullDrainMs=7704.896)."
     },
     {
       "id": "oversized-to-whole-transition-and-unit-rule",
       "measured": true,
       "passed": true,
-      "detail": "Measured on adams-gamla via labrun.py job 9f6d4ede-a952-418b-a775-0dc425c40785: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (R2 and R4), test/partition/partition-cdc-obligation-ship-unit.test.js (54 assertions), test/partition/partition-cdc-obligation-ship-window.test.js (34 assertions), test/partition/partition-cdc-obligation-range-shipping.test.js (21 assertions), test/partition/partition-cdc-obligation-reclamation.test.js (8 assertions), test/partition/partition-cdc-obligation.test.js (23 assertions), test/partition/partition-cdc-subscriber-vector-contract.test.js (7 assertions), test/partition/partition-cdc-delivery-progress.test.js (6 assertions), and test/bootstrap/seed-retained-effects.test.js (170 assertions) all pass (9/9 files, 327 assertions, exit 0). Proves that while durable owed bytes in _cdc_obligations exceed SHIP_MAX_BYTES, each ordinal ships alone with cut = BYTES, and once committed CDC_DELIVERED acknowledgements reduce remaining owed bytes within SHIP_MAX_BYTES (<= 256 KiB), the remaining READY ordinals (e.g. the final 128 events in R4) transition in O(1) without re-querying SELECT_OWED_ENTRY_BYTES to a single whole-entry unit (alone: false) and ship together in 1 wave."
+      "detail": "Measured on adams-gamla via labrun.py job 58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (R2, R4, R5; 5 subtests), test/partition/partition-cdc-obligation-ship-unit.test.js (54 assertions), test/partition/partition-cdc-obligation-ship-window.test.js (34 assertions), test/partition/partition-cdc-obligation-range-shipping.test.js (21 assertions), test/partition/partition-cdc-obligation-reclamation.test.js (8 assertions), test/partition/partition-cdc-obligation.test.js (23 assertions), test/partition/partition-cdc-subscriber-vector-contract.test.js (7 assertions), test/partition/partition-cdc-delivery-progress.test.js (6 assertions), and test/bootstrap/seed-retained-effects.test.js (170 assertions) all pass (9/9 files, 328 assertions, exit 0). Proves that while durable owed bytes in _cdc_obligations exceed SHIP_MAX_BYTES, each ordinal ships alone with cut = BYTES, and once committed CDC_DELIVERED acknowledgements reduce remaining owed bytes within SHIP_MAX_BYTES (<= 256 KiB), the remaining READY ordinals (e.g. the final 128 events in R4) transition in O(1) without re-querying SELECT_OWED_ENTRY_BYTES to a single whole-entry unit (alone: false) and ship together in 1 wave."
     },
     {
       "id": "pending-hydrated-prefix-paging-and-position-only-drain",
       "measured": true,
       "passed": true,
-      "detail": "Measured on adams-gamla via labrun.py job 9f6d4ede-a952-418b-a775-0dc425c40785: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R3 proves that across a 300-row PENDING/HYDRATED prefix followed by a READY row, firstReadyRow pages position scans by DRIVE_PAGE_ROWS (256) in <= 6 position queries (down from 301 single-row limit: 1 queries on c4f1cd064), and drainPendingHydratedObligations acknowledges all 300 hydrated prefix rows via readOwedCdcObligationPositions with 0 event_json payload reads."
+      "detail": "Measured on adams-gamla via labrun.py job 58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R3 proves that across a 300-row PENDING/HYDRATED prefix followed by a READY row, firstReadyRow pages position scans by DRIVE_PAGE_ROWS (256) in <= 6 position queries (down from 301 single-row limit: 1 queries on c4f1cd064), and drainPendingHydratedObligations acknowledges all 300 hydrated prefix rows via readOwedCdcObligationPositions with 0 event_json payload reads."
     }
   ],
   "unmeasuredObligations": [],
   "source": {
-    "sha": "95700a7344c34a07c47cc86ea7e76a5201441762",
+    "sha": "4202994aa9e7181305a8b10f28d3eb1fa8d495e2",
     "sealedBase": "c4f1cd064bee29d174ba63d0d8d52486651bc59f",
     "labHost": "adams-gamla",
     "labHostBase": "9c576f3a06be3bf117623f038f43e6b36b5b33a5",
-    "labTransportCommit": "5d85a01b1d2d4fa6ca75a0f0b71558b26af8d479",
-    "labMeasuredTransportTree": "a4310b40776b94dbfaa737c5fed9a820643f73fd",
-    "labJobId": "9f6d4ede-a952-418b-a775-0dc425c40785"
+    "labTransportCommit": "743df82b452b08917c026e9f1169f11b15ae46b7",
+    "labMeasuredTransportTree": "22627ea07b0979b6021e6674e46fbe431e3f5165",
+    "labJobId": "58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d"
   },
   "evidence": {
-    "artifactDirectory": "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785",
+    "artifactDirectory": "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d",
     "files": [
-      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/job.json",
-      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/summary.json",
-      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/tap.txt"
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/job.json",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/summary.json",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/tap.txt",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/post-closure-applicability-2026-11-15.md"
     ],
-    "coordinationDirectory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/cdc-oversized-entry/labrun-adams-gamla-4"
+    "priorJobIds": [
+      "9f6d4ede-a952-418b-a775-0dc425c40785",
+      "240b17d3-5793-4ce6-b8c9-fb0b1c53be65"
+    ],
+    "coordinationDirectory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/cdc-oversized-entry/labrun-adams-gamla-6"
   },
-  "evidenceCeiling": "Component-level scaling and shipping-unit proof on the partition CDC obligation ledger, range selector, and delivery lane."
+  "evidenceCeiling": "Component-level scaling, shipping-unit, and transaction-lifecycle proof on the partition CDC obligation ledger, range selector, and delivery lane."
 }

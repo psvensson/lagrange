@@ -50,12 +50,14 @@ import {
 import {
   acknowledgedGroupsOf,
   cdcObligationEventKeyDigest,
+  commitOwedEntryByteTallies,
   ensureCdcObligationLedger,
   insertCdcObligation,
   markCdcObligationDelivered,
   readCdcObligationProgress,
   readCdcObligationStanding,
   reclaimDeliveredCdcObligations,
+  rollbackOwedEntryByteTallies,
 } from './partition-cdc-obligation-ledger.js';
 import {registerCdcAcknowledgementProposer} from
   './partition-cdc-obligation-delivery.js';
@@ -360,6 +362,7 @@ function applyCdcAcknowledgementCommand(service, committed) {
     return refuseAcknowledgement(service, committed,
       judged.refusal.failureCode, judged.refusal);
   }
+  committed.afterRollback(() => rollbackOwedEntryByteTallies(service.db));
   for (const eventKey of judged.owed) {
     markCdcObligationDelivered(service.db, eventKey, {index, term});
   }
@@ -367,6 +370,7 @@ function applyCdcAcknowledgementCommand(service, committed) {
   const settled = [...judged.owed, ...judged.alreadyDelivered];
   const progress = readCdcObligationProgress(service.db);
   committed.afterCommit(() => {
+    commitOwedEntryByteTallies(service.db);
     service.cdcDelivery.settleAcknowledgedObligations(settled, progress);
     service.logger.debug(LOG_MSG.ACKNOWLEDGEMENT_APPLIED, {
       partitionId: service.partitionId,
