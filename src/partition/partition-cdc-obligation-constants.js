@@ -175,6 +175,12 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
     'AND (log_index < @throughIndex OR ' +
     '(log_index = @throughIndex AND ordinal <= @throughOrdinal)) ' +
     'ORDER BY log_index, ordinal LIMIT @limit',
+  // The summed payload bytes of the rows of one entry the ledger still owes
+  // (what decides whether the entry ships whole or one ordinal per range).
+  SELECT_OWED_ENTRY_BYTES:
+    'SELECT COALESCE(SUM(octet_length(event_json)), 0) AS entry_bytes ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +
+    'AND log_index = @logIndex',
   SELECT_OWED_TAIL:
     'SELECT log_index, ordinal ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +

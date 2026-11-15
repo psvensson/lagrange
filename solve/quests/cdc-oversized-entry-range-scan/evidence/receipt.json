@@ -1,0 +1,37 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cdc-oversized-entry-range-scan",
+  "status": "pass",
+  "interpretation": "Landing form on HEAD c4f1cd064bee29d174ba63d0d8d52486651bc59f. Eliminates repeated O(M) SQLite position scans of oversized CDC entries in composeCdcShipRange by reading durable owed entry bytes in SQLite (SELECT_OWED_ENTRY_BYTES / readOwedCdcEntryBytes) and short-circuiting owedEntriesFrom to O(1) position queries per single-event shipment, pages firstReadyRow by BOUND.DRIVE_PAGE_ROWS instead of limit: 1 per pending/hydrated row, and uses readOwedCdcObligationPositions in drainPendingHydratedObligations so hydrated-prefix acknowledgement never reads event_json payloads.",
+  "receipts": [
+    {
+      "id": "oversized-entry-scaling-witness",
+      "measured": true,
+      "passed": true,
+      "detail": "Measured on adams-gamla via labrun.py job 240b17d3-5793-4ce6-b8c9-fb0b1c53be65 (and job 31e9a4fc-c4da-4f21-93d3-ad3871f95b2a): test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R1 proves that across M = 512, 1024, and 4096 owed events in a single oversized Raft entry (> 262,144 B total, 1,024 B per event), composeCdcShipRange executes exactly 4 SQLite queries (3 position/byte queries + 1 payload query) per single-event shipment instead of 172 / 343 / 1,367 position queries on c4f1cd064, shipping 1 event with cut = SHIP_RANGE_CUT.BYTES and nextRow = ordinal 2."
+    },
+    {
+      "id": "oversized-to-whole-transition-and-unit-rule",
+      "measured": true,
+      "passed": true,
+      "detail": "Measured on adams-gamla via labrun.py job 240b17d3-5793-4ce6-b8c9-fb0b1c53be65: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R2 and test/partition/partition-cdc-obligation-ship-unit.test.js (54 assertions), test/partition/partition-cdc-obligation-ship-window.test.js (34 assertions), test/partition/partition-cdc-obligation-range-shipping.test.js (21 assertions), test/partition/partition-cdc-obligation-reclamation.test.js (8 assertions), test/partition/partition-cdc-obligation.test.js (23 assertions), test/partition/partition-cdc-subscriber-vector-contract.test.js (7 assertions), and test/partition/partition-cdc-delivery-progress.test.js (6 assertions) all pass (8/8 files, 156 assertions, exit 0). Proves that while durable owed bytes in _cdc_obligations exceed SHIP_MAX_BYTES, each ordinal ships alone with cut = BYTES, and once committed CDC_DELIVERED acknowledgements reduce remaining owed bytes within SHIP_MAX_BYTES, the remaining READY ordinals transition to a single whole-entry unit (alone: false) and ship together."
+    },
+    {
+      "id": "pending-hydrated-prefix-paging-and-position-only-drain",
+      "measured": true,
+      "passed": true,
+      "detail": "Measured on adams-gamla via labrun.py job 240b17d3-5793-4ce6-b8c9-fb0b1c53be65: test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R3 proves that across a 300-row PENDING/HYDRATED prefix followed by a READY row, firstReadyRow pages position scans by DRIVE_PAGE_ROWS (256) in <= 6 position queries (down from 301 single-row limit: 1 queries on c4f1cd064), and drainPendingHydratedObligations acknowledges all 300 hydrated prefix rows via readOwedCdcObligationPositions with 0 event_json payload reads."
+    }
+  ],
+  "unmeasuredObligations": [],
+  "source": {
+    "sha": "c4f1cd064bee29d174ba63d0d8d52486651bc59f",
+    "sealedBase": "c4f1cd064bee29d174ba63d0d8d52486651bc59f",
+    "labMeasuredTransportTree": "fbc4410a372b7346bd6b50f519a3dbf0cf8de044",
+    "labJobId": "240b17d3-5793-4ce6-b8c9-fb0b1c53be65"
+  },
+  "evidence": {
+    "coordinationDirectory": "/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/cdc-oversized-entry/labrun-adams-gamla-2"
+  },
+  "evidenceCeiling": "Component-level scaling and shipping-unit proof on the partition CDC obligation ledger, range selector, and delivery lane."
+}
