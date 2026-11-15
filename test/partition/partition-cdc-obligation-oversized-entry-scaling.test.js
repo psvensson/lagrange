@@ -13,10 +13,12 @@
 //    drainPendingHydratedObligations reads positions only without reading
 //    event_json payloads.
 import assert from 'node:assert/strict';
+import {performance} from 'node:perf_hooks';
 import {afterEach, beforeEach, test} from 'node:test';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {
+  PARTITION_CDC_COMMAND as COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
   PARTITION_CDC_OBLIGATION_SQL as SQL,
@@ -28,8 +30,10 @@ import {
   insertCdcObligation,
 } from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {
+  applyCommitted,
   clearFixtureSingletons,
   resetFixtureSingletons,
+  settleTicks,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {
   TABLE,
@@ -57,6 +61,11 @@ const TAIL_ROWS = 5;
 const MAX_QUERIES_PER_WAVE = 4;
 const OVERSIZED_LOG_INDEX = 1;
 const OVERSIZED_TERM = 1;
+const DELAYED_ACK_HOLD_ORDINAL = BOUND.DRIVE_PAGE_ROWS + 4;
+const WHOLE_TAIL_EVENTS = 128;
+const MAX_COMPOSE_SPAN_MS = 100;
+const MAX_DRIVE_SPAN_MS = 3000;
+const MAX_FULL_DRAIN_MS = 20000;
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -92,39 +101,49 @@ function populateOversizedEntry(leader, count, tag = 'oversized-scaling') {
 
 function observeLedgerQueries(db) {
   const prepare = db.prepare;
+  let composeStartMs = null;
   const counts = {
     positionsAfter: 0,
     entryBytes: 0,
     payloadsAfter: 0,
   };
+  const markStart = () => {
+    composeStartMs ??= performance.now();
+  };
   const reset = () => {
     counts.positionsAfter = 0;
     counts.entryBytes = 0;
     counts.payloadsAfter = 0;
+    composeStartMs = null;
   };
   const snapshot = () => ({
     positionsAfter: counts.positionsAfter,
     entryBytes: counts.entryBytes,
     payloadsAfter: counts.payloadsAfter,
     totalRangeReads: counts.positionsAfter + counts.entryBytes + counts.payloadsAfter,
+    composeSpanMs: composeStartMs === null ? 0 :
+      Number((performance.now() - composeStartMs).toFixed(3)),
   });
   db.prepare = function(sql) {
     const statement = prepare.call(this, sql);
     if (sql === SQL.SELECT_OWED_POSITIONS_AFTER) {
       const all = statement.all;
       statement.all = function(...args) {
+        markStart();
         counts.positionsAfter += 1;
         return all.apply(this, args);
       };
     } else if (sql === SQL.SELECT_OWED_ENTRY_BYTES) {
       const get = statement.get;
       statement.get = function(...args) {
+        markStart();
         counts.entryBytes += 1;
         return get.apply(this, args);
       };
     } else if (sql === SQL.SELECT_OWED_AFTER) {
       const all = statement.all;
       statement.all = function(...args) {
+        markStart();
         counts.payloadsAfter += 1;
         return all.apply(this, args);
       };
@@ -139,6 +158,104 @@ function observeLedgerQueries(db) {
       db.prepare = prepare;
     },
   };
+}
+
+async function waitForIdleLane(f) {
+  while (laneOf(f).inFlight) {
+    await settleTicks();
+  }
+}
+
+async function commitProposedBatchesOnly(f) {
+  f.appliedAcknowledgements ??= new Set();
+  for (const command of f.proposed) {
+    if (command.type !== COMMAND.DELIVERED || f.appliedAcknowledgements.has(command.entryId)) {
+      continue;
+    }
+    f.appliedAcknowledgements.add(command.entryId);
+    assert.equal(applyCommitted(f.leader, command), null, 'the CDC_DELIVERED applied');
+  }
+  await settleTicks();
+  await waitForIdleLane(f);
+}
+
+async function drainOversizedEntryEndToEnd(t, eventCount) {
+  const tag = `full-drain-${eventCount}`;
+  const holdTailOrdinal = eventCount - WHOLE_TAIL_EVENTS;
+  const f = await fixture(t, {
+    rows: [],
+    subscribers: 1,
+    populate: (leader) => populateOversizedEntry(leader, eventCount, tag),
+  });
+  const observed = observeLedgerQueries(f.leader.db);
+  t.after(observed.restore);
+  const waveSnapshots = [];
+  const driveSpansMs = [];
+  const model = installRecipientModel(f, {
+    onWave: (wave) => {
+      waveSnapshots.push({...observed.snapshot(), rows: wave.rows});
+      observed.reset();
+    },
+  });
+  model.faults.set(
+    `txop:${tag}:${DELAYED_ACK_HOLD_ORDINAL}`,
+    new Map([[0, [RECIPIENT_FAULT.BACKPRESSURE]]]),
+  );
+  model.faults.set(
+    `txop:${tag}:${holdTailOrdinal}`,
+    new Map([[0, [RECIPIENT_FAULT.BACKPRESSURE]]]),
+  );
+  const timedDrive = async () => {
+    const startMs = performance.now();
+    const outcome = await f.drive();
+    driveSpansMs.push(Number((performance.now() - startMs).toFixed(3)));
+    return outcome;
+  };
+  observed.reset();
+  const drainStartMs = performance.now();
+  const page1 = await timedDrive();
+  assert.equal(page1.state, DRIVE.PAGE_YIELDED, `M=${eventCount}: page 1 yielded at 256 events`);
+  assert.equal(page1.delivered, BOUND.DRIVE_PAGE_ROWS);
+  assert.equal(countCdcObligations(f.leader.db).owed, eventCount,
+    `M=${eventCount}: page 1 acknowledgements remain delayed/uncommitted`);
+  const page2Delayed = await timedDrive();
+  assert.equal(page2Delayed.state, DRIVE.HELD_BY_SUBSCRIBER);
+  assert.equal(
+    f.leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements,
+    DELAYED_ACK_HOLD_ORDINAL,
+    `M=${eventCount}: drove into page 2 while page 1 acknowledgements stayed uncommitted`,
+  );
+  while (laneOf(f).lastDrive?.eventKey !== `txop:${tag}:${holdTailOrdinal}`) {
+    await commitProposedBatchesOnly(f);
+    if (laneOf(f).lastDrive?.eventKey !== `txop:${tag}:${holdTailOrdinal}`) {
+      await timedDrive();
+    }
+  }
+  await commitOpenAcknowledgements(f);
+  await waitForIdleLane(f);
+  await runLaneToQuiescence(f, {maxRounds: 200, label: tag});
+  const fullDrainMs = Number((performance.now() - drainStartMs).toFixed(3));
+  assertRecipientLogs(model, {label: tag});
+  assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: eventCount});
+  assert.equal(ledger.readOwedCdcEntryBytes(f.leader.db, OVERSIZED_LOG_INDEX), 0);
+  const totalEntryBytesQueries =
+    waveSnapshots.reduce((sum, wave) => sum + wave.entryBytes, 0) + observed.counts.entryBytes;
+  const maxWaveQueries = Math.max(...waveSnapshots.map((wave) => wave.totalRangeReads));
+  const maxComposeSpanMs = Math.max(...waveSnapshots.map((wave) => wave.composeSpanMs));
+  const maxDriveSpanMs = Math.max(...driveSpansMs);
+  const tailWaveRows = model.waves.at(-1).rows;
+  const summary = {
+    eventCount,
+    waves: waveSnapshots.length,
+    totalEntryBytesQueries,
+    maxWaveQueries,
+    tailWaveRows,
+    maxComposeSpanMs,
+    maxDriveSpanMs,
+    fullDrainMs,
+  };
+  t.diagnostic(`R4 full drain metrics: ${JSON.stringify(summary)}`);
+  return summary;
 }
 
 test('R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, ' +
@@ -203,6 +320,17 @@ test('R1 oversized entry scaling: shipping 1 event from a single Raft entry with
       `M=${eventCount} wave 2 SQLite queries: ${JSON.stringify(wave2)} ` +
       `(expected <= ${MAX_QUERIES_PER_WAVE})`,
     );
+    assert.equal(
+      wave1.entryBytes,
+      1,
+      `M=${eventCount} wave 1 computes SELECT_OWED_ENTRY_BYTES once: ${JSON.stringify(wave1)}`,
+    );
+    assert.equal(
+      wave2.entryBytes,
+      0,
+      `M=${eventCount} wave 2 reuses cached owed entry bytes (0 SELECT_OWED_ENTRY_BYTES): ` +
+      `${JSON.stringify(wave2)}`,
+    );
   }
   assert.equal(
     new Set(wave1Snapshots.map((entry) => entry.totalRangeReads)).size,
@@ -214,6 +342,41 @@ test('R1 oversized entry scaling: shipping 1 event from a single Raft entry with
     1,
     `wave 2 query count is constant across M=512, 1024, 4096: ${JSON.stringify(wave2Snapshots)}`,
   );
+});
+
+test('R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: ' +
+  'executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave ' +
+  'queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit ' +
+  'range, and bounds full-drain latency and synchronous spans', async (t) => {
+  const summaries = [];
+  for (const eventCount of SCALING_EVENT_COUNTS) {
+    const summary = await drainOversizedEntryEndToEnd(t, eventCount);
+    assert.equal(
+      summary.totalEntryBytesQueries,
+      1,
+      `M=${eventCount}: SELECT_OWED_ENTRY_BYTES must run exactly 1 time across the entire drain ` +
+      `(got ${summary.totalEntryBytesQueries}: ${JSON.stringify(summary)})`,
+    );
+    assert.ok(
+      summary.maxWaveQueries <= MAX_QUERIES_PER_WAVE,
+      `M=${eventCount}: max queries in any wave (${summary.maxWaveQueries}) <= ` +
+      `${MAX_QUERIES_PER_WAVE}`,
+    );
+    assert.equal(
+      summary.tailWaveRows,
+      WHOLE_TAIL_EVENTS,
+      `M=${eventCount}: once remaining owed bytes <= SHIP_MAX_BYTES, the final ` +
+      `${WHOLE_TAIL_EVENTS} ordinals ship together in one wave`,
+    );
+    assert.ok(
+      summary.maxComposeSpanMs <= MAX_COMPOSE_SPAN_MS &&
+      summary.maxDriveSpanMs <= MAX_DRIVE_SPAN_MS &&
+      summary.fullDrainMs <= MAX_FULL_DRAIN_MS,
+      `M=${eventCount}: bounded spans and full-drain latency: ${JSON.stringify(summary)}`,
+    );
+    summaries.push(summary);
+  }
+  t.diagnostic(`R4 scaling summary: ${JSON.stringify(summaries)}`);
 });
 
 test('R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an ' +

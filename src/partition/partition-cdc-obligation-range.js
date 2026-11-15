@@ -209,6 +209,28 @@ function isOversizedEntry(db, row) {
     readOwedCdcEntryBytes(db, row.logIndex) > BOUND.SHIP_MAX_BYTES;
 }
 
+function* owedEntryPositionsAfter(db, first, endThrough, pageRows) {
+  let from = positionOf(first);
+  let sameEntry = endThrough.logIndex === first.logIndex;
+  for (;;) {
+    const limit = sameEntry ? Math.max(pageRows, BOUND.DRIVE_PAGE_ROWS) : pageRows;
+    const through = sameEntry ?
+      {logIndex: from.logIndex, ordinal: Number.MAX_SAFE_INTEGER} :
+      endThrough;
+    const page = readOwedCdcObligationPositions(db, {after: from, through, limit});
+    yield* page;
+    if (page.length < limit) {
+      if (!sameEntry || from.logIndex >= endThrough.logIndex) return;
+      from = {logIndex: from.logIndex, ordinal: Number.MAX_SAFE_INTEGER};
+      sameEntry = false;
+      continue;
+    }
+    const last = page.at(-1);
+    sameEntry = last.logIndex === page[0].logIndex;
+    from = positionOf(last);
+  }
+}
+
 // The ledger entries from `first` through the entry `through` belongs to, in
 // log order: a whole entry ({rows, alone: false}) when its owed rows fit
 // SHIP_MAX_BYTES, or one single-row unit ({rows: [row], alone: true}) when the
@@ -227,7 +249,7 @@ function* owedEntriesFrom(db, first, through, pageRows) {
     return;
   }
   let entry = {rows: [first], alone: false};
-  for (const row of owedPositionsAfter(db, positionOf(first), endThrough, pageRows)) {
+  for (const row of owedEntryPositionsAfter(db, first, endThrough, pageRows)) {
     if (row.logIndex !== entry.rows[0].logIndex) {
       yield entry;
       entry = null;

@@ -1,0 +1,2211 @@
+TAP version 13
+# Subtest: R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+ok 1 - R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+  ---
+  duration_ms: 4648.372548
+  type: 'test'
+  ...
+# Subtest: R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+ok 2 - R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+  ---
+  duration_ms: 14506.689035
+  type: 'test'
+  ...
+# R4 full drain metrics: {"eventCount":512,"waves":387,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":19.435,"maxDriveSpanMs":566.811,"fullDrainMs":1021.147}
+# R4 full drain metrics: {"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":50.3,"maxDriveSpanMs":562.131,"fullDrainMs":1903.922}
+# R4 full drain metrics: {"eventCount":4096,"waves":3971,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":57.235,"maxDriveSpanMs":549.313,"fullDrainMs":7646.117}
+# R4 scaling summary: [{"eventCount":512,"waves":387,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":19.435,"maxDriveSpanMs":566.811,"fullDrainMs":1021.147},{"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":50.3,"maxDriveSpanMs":562.131,"fullDrainMs":1903.922},{"eventCount":4096,"waves":3971,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":57.235,"maxDriveSpanMs":549.313,"fullDrainMs":7646.117}]
+# Subtest: R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+ok 3 - R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+  ---
+  duration_ms: 131.322724
+  type: 'test'
+  ...
+# Subtest: R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+ok 4 - R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+  ---
+  duration_ms: 840.53449
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20134.224528
+# time=22230ms
+TAP version 13
+# Subtest: retained-delivered bound, entry not first in its range: the bound is asked where the entry begins, the whole entry joins, and the bound is passed only by its further ordinals
+ok 1 - retained-delivered bound, entry not first in its range: the bound is asked where the entry begins, the whole entry joins, and the bound is passed only by its further ordinals
+  ---
+  duration_ms: 4384.909279
+  type: 'test'
+  ...
+# Subtest: shipping window, entry not first in its range: the window cuts before the entry, never inside it
+ok 2 - shipping window, entry not first in its range: the window cuts before the entry, never inside it
+  ---
+  duration_ms: 120.839799
+  type: 'test'
+  ...
+# Subtest: byte bound, entry not first in its range: the byte bound cuts before the entry, never inside it
+ok 3 - byte bound, entry not first in its range: the byte bound cuts before the entry, never inside it
+  ---
+  duration_ms: 110.10086
+  type: 'test'
+  ...
+# Subtest: pinned cap, entry not first in its range: a cap that no longer ends a unit is not used; the range is composed again at unit boundaries
+ok 4 - pinned cap, entry not first in its range: a cap that no longer ends a unit is not used; the range is composed again at unit boundaries
+  ---
+  duration_ms: 84.863796
+  type: 'test'
+  ...
+# Subtest: shipping window below an entry a leaf holds: the entry is presented again whole, never ordinal by ordinal
+ok 5 - shipping window below an entry a leaf holds: the entry is presented again whole, never ordinal by ordinal
+  ---
+  duration_ms: 63.727366
+  type: 'test'
+  ...
+# Subtest: an entry whose owed ordinals together exceed the byte bound ships one ordinal per vector, in ordinal order, between the ranges around it
+ok 6 - an entry whose owed ordinals together exceed the byte bound ships one ordinal per vector, in ordinal order, between the ranges around it
+  ---
+  duration_ms: 178.75942
+  type: 'test'
+  ...
+# Subtest: an oversized entry ships one ordinal per vector from a cold window as well, and the window is left alone by it
+ok 7 - an oversized entry ships one ordinal per vector from a cold window as well, and the window is left alone by it
+  ---
+  duration_ms: 177.684345
+  type: 'test'
+  ...
+# Subtest: an oversized entry whose first ordinals are durably delivered ships its remaining ordinals as one unit once they fit the byte bound; a pinned ordinal is then presented again with its later sibling
+ok 8 - an oversized entry whose first ordinals are durably delivered ships its remaining ordinals as one unit once they fit the byte bound; a pinned ordinal is then presented again with its later sibling
+  ---
+  duration_ms: 172.37721
+  type: 'test'
+  ...
+# Subtest: the last owed ordinal of an oversized entry is an ordinary unit once its siblings are durably delivered: it travels with the row after it
+ok 9 - the last owed ordinal of an oversized entry is an ordinary unit once its siblings are durably delivered: it travels with the row after it
+  ---
+  duration_ms: 99.349963
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 101: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 10 - unit property, faults that hold the lane, seed 101: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 354.420064
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 102: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 11 - unit property, faults that hold the lane, seed 102: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 797.099876
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 103: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 12 - unit property, faults that hold the lane, seed 103: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 288.215307
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 104: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 13 - unit property, faults that hold the lane, seed 104: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 646.352945
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 105: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 14 - unit property, faults that hold the lane, seed 105: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 418.13044
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 106: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 15 - unit property, faults that hold the lane, seed 106: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 465.858466
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 107: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 16 - unit property, faults that hold the lane, seed 107: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 682.553483
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 108: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 17 - unit property, faults that hold the lane, seed 108: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 537.505714
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 109: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 18 - unit property, faults that hold the lane, seed 109: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 337.204704
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 110: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 19 - unit property, faults that hold the lane, seed 110: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 448.180579
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 111: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 20 - unit property, faults that hold the lane, seed 111: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 393.392956
+  type: 'test'
+  ...
+# Subtest: unit property, faults that hold the lane, seed 112: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 21 - unit property, faults that hold the lane, seed 112: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 585.400156
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 201: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 22 - unit property, the lane near the retained-delivered bound, seed 201: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 535.115927
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 202: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 23 - unit property, the lane near the retained-delivered bound, seed 202: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 281.920966
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 203: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 24 - unit property, the lane near the retained-delivered bound, seed 203: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 561.264441
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 204: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 25 - unit property, the lane near the retained-delivered bound, seed 204: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 396.87397
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 205: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 26 - unit property, the lane near the retained-delivered bound, seed 205: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 628.25008
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 206: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 27 - unit property, the lane near the retained-delivered bound, seed 206: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 359.635839
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 207: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 28 - unit property, the lane near the retained-delivered bound, seed 207: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 201.846803
+  type: 'test'
+  ...
+# Subtest: unit property, the lane near the retained-delivered bound, seed 208: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 29 - unit property, the lane near the retained-delivered bound, seed 208: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 476.764923
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 301: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 30 - unit property, a hydration handshake in flight, seed 301: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 256.363704
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 302: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 31 - unit property, a hydration handshake in flight, seed 302: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 345.986933
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 303: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 32 - unit property, a hydration handshake in flight, seed 303: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 331.700187
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 304: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 33 - unit property, a hydration handshake in flight, seed 304: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 299.793192
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 305: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 34 - unit property, a hydration handshake in flight, seed 305: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 173.400221
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 306: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 35 - unit property, a hydration handshake in flight, seed 306: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 214.724941
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 307: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 36 - unit property, a hydration handshake in flight, seed 307: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 488.276934
+  type: 'test'
+  ...
+# Subtest: unit property, a hydration handshake in flight, seed 308: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 37 - unit property, a hydration handshake in flight, seed 308: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 281.805588
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 401: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 38 - unit property, faults including provisional coverage, seed 401: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 607.909025
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 402: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 39 - unit property, faults including provisional coverage, seed 402: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 660.007369
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 403: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 40 - unit property, faults including provisional coverage, seed 403: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 253.137223
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 404: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 41 - unit property, faults including provisional coverage, seed 404: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 534.610592
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 405: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 42 - unit property, faults including provisional coverage, seed 405: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 234.938057
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 406: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 43 - unit property, faults including provisional coverage, seed 406: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 249.232946
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 407: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 44 - unit property, faults including provisional coverage, seed 407: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 417.235407
+  type: 'test'
+  ...
+# Subtest: unit property, faults including provisional coverage, seed 408: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 45 - unit property, faults including provisional coverage, seed 408: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 352.861936
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 501: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 46 - unit property, a new tenure in the middle of the backlog, seed 501: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 383.598736
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 502: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 47 - unit property, a new tenure in the middle of the backlog, seed 502: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 392.795235
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 503: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 48 - unit property, a new tenure in the middle of the backlog, seed 503: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 447.353971
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 504: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 49 - unit property, a new tenure in the middle of the backlog, seed 504: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 804.459136
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 505: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 50 - unit property, a new tenure in the middle of the backlog, seed 505: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 214.418836
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 506: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 51 - unit property, a new tenure in the middle of the backlog, seed 506: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 271.011104
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 507: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 52 - unit property, a new tenure in the middle of the backlog, seed 507: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 380.452902
+  type: 'test'
+  ...
+# Subtest: unit property, a new tenure in the middle of the backlog, seed 508: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+ok 53 - unit property, a new tenure in the middle of the backlog, seed 508: no composed range holds a strict subset of a unit, units are composed in ledger order, an oversized entry ships per ordinal, and no vector exceeds the byte bound plus one ordinal
+  ---
+  duration_ms: 284.426334
+  type: 'test'
+  ...
+# Subtest: unit property: the generated cases exercised every cut reason against a whole entry that is not first in its range, the oversized entry, re-presentation and acknowledgements between compositions
+ok 54 - unit property: the generated cases exercised every cut reason against a whole entry that is not first in its range, the oversized entry, re-presentation and acknowledgements between compositions
+  ---
+  duration_ms: 27.547026
+  type: 'test'
+  ...
+# exercised: {"compositions":1160,"windowHeldEntryBack":238,"bytesHeldEntryBack":27,"retainedHeldEntryBack":46,"ordinalShippedAlone":257,"entryWiderThanWindow":499,"pinnedPresentedAgain":192,"becameWhole":54,"acknowledgedBetweenCompositions":282}
+1..54
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 23710.863697
+# time=25836ms
+TAP version 13
+# Subtest: the window starts at one entry and doubles after each committed range the window cut; a range that took every READY row leaves it
+ok 1 - the window starts at one entry and doubles after each committed range the window cut; a range that took every READY row leaves it
+  ---
+  duration_ms: 4424.009664
+  type: 'test'
+  ...
+# Subtest: the window never passes ACK_BATCH_MAX_EVENTS and no range of ordinary entries is larger
+ok 2 - the window never passes ACK_BATCH_MAX_EVENTS and no range of ordinary entries is larger
+  ---
+  duration_ms: 1199.867553
+  type: 'test'
+  ...
+# Subtest: a lone owed row, and a run the byte bound cut, do not widen the window
+ok 3 - a lone owed row, and a run the byte bound cut, do not widen the window
+  ---
+  duration_ms: 114.810364
+  type: 'test'
+  ...
+# Subtest: the lane's bounds and delays keep their literal values
+ok 4 - the lane's bounds and delays keep their literal values
+  ---
+  duration_ms: 50.961386
+  type: 'test'
+  ...
+# Subtest: a recipient answering unknown for a three-row range leaves the window halved, and every row is delivered once the fault clears
+ok 5 - a recipient answering unknown for a three-row range leaves the window halved, and every row is delivered once the fault clears
+  ---
+  duration_ms: 60.938488
+  type: 'test'
+  ...
+# Subtest: a recipient answering committed_unknown for a three-row range leaves the window halved, and every row is delivered once the fault clears
+ok 6 - a recipient answering committed_unknown for a three-row range leaves the window halved, and every row is delivered once the fault clears
+  ---
+  duration_ms: 115.158759
+  type: 'test'
+  ...
+# Subtest: a recipient answering throw for a three-row range leaves the window halved, and every row is delivered once the fault clears
+ok 7 - a recipient answering throw for a three-row range leaves the window halved, and every row is delivered once the fault clears
+  ---
+  duration_ms: 87.744967
+  type: 'test'
+  ...
+# Subtest: a recipient answering backpressure for a three-row range leaves the window unchanged, and every row is delivered once the fault clears
+ok 8 - a recipient answering backpressure for a three-row range leaves the window unchanged, and every row is delivered once the fault clears
+  ---
+  duration_ms: 94.409747
+  type: 'test'
+  ...
+# Subtest: a recipient answering provisional for a three-row range leaves the window unchanged, and every row is delivered once the fault clears
+ok 9 - a recipient answering provisional for a three-row range leaves the window unchanged, and every row is delivered once the fault clears
+  ---
+  duration_ms: 54.061929
+  type: 'test'
+  ...
+# Subtest: conflict pin: while one row of a range is answered provisional the rows shipped with it stay owed, where the lane held at one entry delivers them
+ok 10 - conflict pin: while one row of a range is answered provisional the rows shipped with it stay owed, where the lane held at one entry delivers them
+  ---
+  duration_ms: 76.664863
+  type: 'test'
+  ...
+# Subtest: every CDC completion code is classified by its effect on the window, and the lane follows the classification
+ok 11 - every CDC completion code is classified by its effect on the window, and the lane follows the classification
+  ---
+  duration_ms: 70.162722
+  type: 'test'
+  ...
+# Subtest: every coverage state is classified by its effect on the window
+ok 12 - every coverage state is classified by its effect on the window
+  ---
+  duration_ms: 50.712022
+  type: 'test'
+  ...
+# Subtest: every retry disposition is classified, and only an attempted failure halves the window
+ok 13 - every retry disposition is classified, and only an attempted failure halves the window
+  ---
+  duration_ms: 104.359242
+  type: 'test'
+  ...
+# Subtest: the drive and flush states are all classified for a leading lane
+ok 14 - the drive and flush states are all classified for a leading lane
+  ---
+  duration_ms: 75.336785
+  type: 'test'
+  ...
+# Subtest: a subscriber that is not ready, and acknowledgement backpressure, attempt nothing and leave the window
+ok 15 - a subscriber that is not ready, and acknowledgement backpressure, attempt nothing and leave the window
+  ---
+  duration_ms: 907.126441
+  type: 'test'
+  ...
+# Subtest: a new leadership tenure starts the window at one entry again
+ok 16 - a new leadership tenure starts the window at one entry again
+  ---
+  duration_ms: 85.371456
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (recipient cannot apply the member) at the head of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 17 - a member that can never be applied (recipient cannot apply the member) at the head of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 71.795015
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (recipient cannot apply the member) at the middle of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 18 - a member that can never be applied (recipient cannot apply the member) at the middle of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 83.986757
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (recipient cannot apply the member) at the tail of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 19 - a member that can never be applied (recipient cannot apply the member) at the tail of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 76.381107
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (the stored payload cannot be built) at the head of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 20 - a member that can never be applied (the stored payload cannot be built) at the head of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 113.935814
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (the stored payload cannot be built) at the middle of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 21 - a member that can never be applied (the stored payload cannot be built) at the middle of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 102.680168
+  type: 'test'
+  ...
+# Subtest: a member that can never be applied (the stored payload cannot be built) at the tail of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+ok 22 - a member that can never be applied (the stored payload cannot be built) at the tail of the owed run: the rows ahead of it are delivered and acknowledged, the lane holds at it with a window of one, and nothing after it is acknowledged
+  ---
+  duration_ms: 89.467282
+  type: 'test'
+  ...
+# Subtest: a recipient that can never commit more than 1 row(s) in one range does not stop the lane: the window halves until a range fits and every row is delivered
+ok 23 - a recipient that can never commit more than 1 row(s) in one range does not stop the lane: the window halves until a range fits and every row is delivered
+  ---
+  duration_ms: 166.402156
+  type: 'test'
+  ...
+# Subtest: a recipient that can never commit more than 3 row(s) in one range does not stop the lane: the window halves until a range fits and every row is delivered
+ok 24 - a recipient that can never commit more than 3 row(s) in one range does not stop the lane: the window halves until a range fits and every row is delivered
+  ---
+  duration_ms: 108.068908
+  type: 'test'
+  ...
+# Subtest: a partially covered range is presented again unchanged although more rows were committed and the scan restarted: the covered leaf is not sent it again
+ok 25 - a partially covered range is presented again unchanged although more rows were committed and the scan restarted: the covered leaf is not sent it again
+  ---
+  duration_ms: 53.070419
+  type: 'test'
+  ...
+# Subtest: a pinned range is rebuilt when a hydration image acknowledged one of its rows: the cell is discarded and the new range is composed without its cap
+ok 26 - a pinned range is rebuilt when a hydration image acknowledged one of its rows: the cell is discarded and the new range is composed without its cap
+  ---
+  duration_ms: 49.233673
+  type: 'test'
+  ...
+# Subtest: a pinned range is rebuilt when the window fell below its row count
+ok 27 - a pinned range is rebuilt when the window fell below its row count
+  ---
+  duration_ms: 52.352034
+  type: 'test'
+  ...
+# Subtest: a window-cut range that is covered on a pinned retry widens the window
+ok 28 - a window-cut range that is covered on a pinned retry widens the window
+  ---
+  duration_ms: 109.666412
+  type: 'test'
+  ...
+# Subtest: captured tail: a retry after a hold continues the same scan and ships only the rows that existed when the scan was opened; rows committed during the hold follow in the next scan
+ok 29 - captured tail: a retry after a hold continues the same scan and ships only the rows that existed when the scan was opened; rows committed during the hold follow in the next scan
+  ---
+  duration_ms: 65.237215
+  type: 'test'
+  ...
+# Subtest: captured tail: an idle hydration handshake ends the scan, and the next scan captures the rows committed during the hold
+ok 30 - captured tail: an idle hydration handshake ends the scan, and the next scan captures the rows committed during the hold
+  ---
+  duration_ms: 56.993328
+  type: 'test'
+  ...
+# Subtest: a hydration image below the range in flight does not retire its invocation, and every row above the image is delivered
+ok 31 - a hydration image below the range in flight does not retire its invocation, and every row above the image is delivered
+  ---
+  duration_ms: 53.12872
+  type: 'test'
+  ...
+# Subtest: a hydration image inside the range in flight does not retire its invocation, and every row above the image is delivered
+ok 32 - a hydration image inside the range in flight does not retire its invocation, and every row above the image is delivered
+  ---
+  duration_ms: 67.296967
+  type: 'test'
+  ...
+# Subtest: a hydration image at the end of the range in flight retires its invocation, and every row above the image is delivered
+ok 33 - a hydration image at the end of the range in flight retires its invocation, and every row above the image is delivered
+  ---
+  duration_ms: 54.169471
+  type: 'test'
+  ...
+# Subtest: a range that fails after a hydration image came to cover part of it holds the lane: its rows above the image ship before any later row
+ok 34 - a range that fails after a hydration image came to cover part of it holds the lane: its rows above the image ship before any later row
+  ---
+  duration_ms: 71.244759
+  type: 'test'
+  ...
+1..34
+# tests 34
+# suites 0
+# pass 34
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9026.352024
+# time=11047ms
+TAP version 13
+# Subtest: R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order
+ok 1 - R1-1 driveCdcObligations ships 600 owed rows in at most ceil(600 / ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order
+  ---
+  duration_ms: 5499.410823
+  type: 'test'
+  ...
+# Subtest: R1-1 from a cold shipping window 600 owed rows drain in at most ceil(600 / ACK_BATCH_MAX_EVENTS) + log2(ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order
+ok 2 - R1-1 from a cold shipping window 600 owed rows drain in at most ceil(600 / ACK_BATCH_MAX_EVENTS) + log2(ACK_BATCH_MAX_EVENTS) subscriber calls, every row once in log order
+  ---
+  duration_ms: 1015.981048
+  type: 'test'
+  ...
+# Subtest: R1-2 under virtual time, with each wave costing W = 2000 ms and one row committed per 1000 ms, owed depth after every wave stays within 2W/1000 + 1
+ok 3 - R1-2 under virtual time, with each wave costing W = 2000 ms and one row committed per 1000 ms, owed depth after every wave stays within 2W/1000 + 1
+  ---
+  duration_ms: 275.647723
+  type: 'test'
+  ...
+# Subtest: R1-3 a partially covered vector is presented again unchanged, the covered leaf is not handed it again, and no CDC_DELIVERED precedes the last receipt
+ok 4 - R1-3 a partially covered vector is presented again unchanged, the covered leaf is not handed it again, and no CDC_DELIVERED precedes the last receipt
+  ---
+  duration_ms: 71.102883
+  type: 'test'
+  ...
+# Subtest: R1-5 guard: a 2 MiB row among small rows is handed whole and acknowledged; nothing is refused, split or dropped
+ok 5 - R1-5 guard: a 2 MiB row among small rows is handed whole and acknowledged; nothing is refused, split or dropped
+  ---
+  duration_ms: 282.024585
+  type: 'test'
+  ...
+# Subtest: R1-5 a row above the shipping byte bound ships alone between vectors and is acknowledged
+ok 6 - R1-5 a row above the shipping byte bound ships alone between vectors and is acknowledged
+  ---
+  duration_ms: 91.086319
+  type: 'test'
+  ...
+# Subtest: counterexample: several versions of one key in one vector keep their order, values and distinct occurrence identities
+ok 7 - counterexample: several versions of one key in one vector keep their order, values and distinct occurrence identities
+  ---
+  duration_ms: 73.66187
+  type: 'test'
+  ...
+# Subtest: counterexample: a hydrated prefix is acknowledged without delivery and the rest ships as one vector
+ok 8 - counterexample: a hydrated prefix is acknowledged without delivery and the rest ships as one vector
+  ---
+  duration_ms: 90.261394
+  type: 'test'
+  ...
+# Subtest: counterexample: acknowledgement backpressure on the first row ends the pass without handing it to a subscriber
+ok 9 - counterexample: acknowledgement backpressure on the first row ends the pass without handing it to a subscriber
+  ---
+  duration_ms: 952.586037
+  type: 'test'
+  ...
+# Subtest: counterexample: a second, non-propagation durable subscriber is handed the same vector and acknowledgement waits for both
+ok 10 - counterexample: a second, non-propagation durable subscriber is handed the same vector and acknowledgement waits for both
+  ---
+  duration_ms: 52.903999
+  type: 'test'
+  ...
+# Subtest: the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries
+ok 11 - the READY ordinals of one ledger entry are never cut apart: an entry ships whole at a window of one row, and a wider window cuts only at entry boundaries
+  ---
+  duration_ms: 58.924944
+  type: 'test'
+  ...
+# Subtest: an entry above the shipping byte bound ships one ordinal per vector, in ordinal order, between ranges; nothing is refused, merged or dropped
+ok 12 - an entry above the shipping byte bound ships one ordinal per vector, in ordinal order, between ranges; nothing is refused, merged or dropped
+  ---
+  duration_ms: 82.353054
+  type: 'test'
+  ...
+# Subtest: rows at or below the hydrated index that are not yet pending are acknowledged without delivery by the pre-pass, and the rows above it ship
+ok 13 - rows at or below the hydrated index that are not yet pending are acknowledged without delivery by the pre-pass, and the rows above it ship
+  ---
+  duration_ms: 95.429778
+  type: 'test'
+  ...
+# Subtest: a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window
+ok 14 - a row pending acknowledgement splits the run: the rows before it ship without the rows after it, and a hole never widens the window
+  ---
+  duration_ms: 50.288173
+  type: 'test'
+  ...
+# Subtest: the retained-delivered bound counts the rows already taken into the range: a range stops where the per-row lane stopped
+ok 15 - the retained-delivered bound counts the rows already taken into the range: a range stops where the per-row lane stopped
+  ---
+  duration_ms: 56.483208
+  type: 'test'
+  ...
+# Subtest: acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again before any later row
+ok 16 - acknowledgement refused inside a covered range leaves the rows from the refused one owed, stops the cursor before it, says so in the drive outcome, and ships them again before any later row
+  ---
+  duration_ms: 1405.608739
+  type: 'test'
+  ...
+# Subtest: the lane reads positions first and only the payloads of the range it ships; nothing of a range stays in the lane between attempts
+ok 17 - the lane reads positions first and only the payloads of the range it ships; nothing of a range stays in the lane between attempts
+  ---
+  duration_ms: 657.656798
+  type: 'test'
+  ...
+# Subtest: composition is fresh at every drive step: rows a hydration image covers while a range is in flight are not in the next range
+ok 18 - composition is fresh at every drive step: rows a hydration image covers while a range is in flight are not in the next range
+  ---
+  duration_ms: 67.476463
+  type: 'test'
+  ...
+# Subtest: composition reads the hydrated index at every drive step: rows it comes to cover while a range is in flight are acknowledged without delivery by the next step of the same scan
+ok 19 - composition reads the hydrated index at every drive step: rows it comes to cover while a range is in flight are acknowledged without delivery by the next step of the same scan
+  ---
+  duration_ms: 55.378206
+  type: 'test'
+  ...
+# Subtest: a hydrated row whose acknowledgement is refused ends the pass and is not passed: with the acknowledgement proposer unavailable no row above the image ships past it
+ok 20 - a hydrated row whose acknowledgement is refused ends the pass and is not passed: with the acknowledgement proposer unavailable no row above the image ships past it
+  ---
+  duration_ms: 340.920039
+  type: 'test'
+  ...
+# Subtest: an entry that is partly covered is presented again whole when a hydration handshake brought the lane to the retained-delivered bound: the covered leaf is never sent a strict prefix of an entry it holds
+ok 21 - an entry that is partly covered is presented again whole when a hydration handshake brought the lane to the retained-delivered bound: the covered leaf is never sent a strict prefix of an entry it holds
+  ---
+  duration_ms: 71.548675
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11354.933978
+# time=13427ms
+TAP version 13
+# Subtest: W-D1a: N committed writes with K acknowledging subscribers leave O(1) ledger rows after the pump (the compact progress, not N rows), the applied index advanced, and every replica of a three-replica group holds the identical ledger for the same committed prefix
+ok 1 - W-D1a: N committed writes with K acknowledging subscribers leave O(1) ledger rows after the pump (the compact progress, not N rows), the applied index advanced, and every replica of a three-replica group holds the identical ledger for the same committed prefix
+  ---
+  duration_ms: 6718.576278
+  type: 'test'
+  ...
+# Subtest: W-D1b: a slow subscriber that does not acknowledge keeps its owed rows; nothing at or above its first unacknowledged event is reclaimed while the acknowledged prefix is; once it acknowledges, reclamation catches up
+ok 2 - W-D1b: a slow subscriber that does not acknowledge keeps its owed rows; nothing at or above its first unacknowledged event is reclaimed while the acknowledged prefix is; once it acknowledges, reclamation catches up
+  ---
+  duration_ms: 309.563655
+  type: 'test'
+  ...
+# Subtest: W-D1c: hydration after reclamation - a late subscriber registers, reads image + P through readHydrationImage, and receives every event committed above P while the rows below P were already reclaimed
+ok 3 - W-D1c: hydration after reclamation - a late subscriber registers, reads image + P through readHydrationImage, and receives every event committed above P while the rows below P were already reclaimed
+  ---
+  duration_ms: 1767.018298
+  type: 'test'
+  ...
+# Subtest: W-D1d: growth bound - a soak of M acknowledged writes keeps the ledger at zero rows after each drain and its page count flat after warm-up (no row, no tombstone per write)
+ok 4 - W-D1d: growth bound - a soak of M acknowledged writes keeps the ledger at zero rows after each drain and its page count flat after warm-up (no row, no tombstone per write)
+  ---
+  duration_ms: 3133.241527
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:19.182Z","nodeId":"test-node","pid":794290,"subsystem":"partition","partitionId":"tx1-v3","entryId":"cdc-ack:tx1-v3:4733a49d4fc6c100f7abe0c9ef761f6bd2196c2d2bc2ef3979a67cebe5390602","failureCode":"cdc_acknowledgement_unknown_event","logIndex":1007,"ordinal":0,"positionMatches":0,"nodeId":"test-node","msg":"CDC_DELIVERED refused: it names an event this ledger does not owe (an atomicity alarm)"}
+# Subtest: W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committed again after reclamation refuses exact identity as compacted; fabricated old coordinates and digests never become successful acknowledgement evidence, while a position above the prefix remains unknown
+ok 5 - W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committed again after reclamation refuses exact identity as compacted; fabricated old coordinates and digests never become successful acknowledgement evidence, while a position above the prefix remains unknown
+  ---
+  duration_ms: 73.330516
+  type: 'test'
+  ...
+# Subtest: W-D1f: pending work under budget - an owed row the lane cannot complete (provisional coverage) keeps the delivered rows above it, the lane stops delivering past it at RETAINED_DELIVERED_MAX (ACKNOWLEDGEMENT_BACKPRESSURE), nothing is dropped, and once the row completes everything is reclaimed
+ok 6 - W-D1f: pending work under budget - an owed row the lane cannot complete (provisional coverage) keeps the delivered rows above it, the lane stops delivering past it at RETAINED_DELIVERED_MAX (ACKNOWLEDGEMENT_BACKPRESSURE), nothing is dropped, and once the row completes everything is reclaimed
+  ---
+  duration_ms: 2110.123749
+  type: 'test'
+  ...
+# Subtest: W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.cacheMutationTarget when service.systemTableCache is a read-only proxy
+ok 7 - W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.cacheMutationTarget when service.systemTableCache is a read-only proxy
+  ---
+  duration_ms: 83.178999
+  type: 'test'
+  ...
+# Subtest: W-D1h: a local cache apply failure stays with the partition catch and preserves committed CDC debt
+ok 8 - W-D1h: a local cache apply failure stays with the partition catch and preserves committed CDC debt
+  ---
+  duration_ms: 81.556196
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 14286.217089
+# time=16342ms
+TAP version 13
+# Subtest: TX1 CDC O1: a committed COMMIT records one owed obligation per applied operation inside its application transaction, and a planted failure of the applied-state write records none
+ok 1 - TX1 CDC O1: a committed COMMIT records one owed obligation per applied operation inside its application transaction, and a planted failure of the applied-state write records none
+  ---
+  duration_ms: 133.04127
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O2: an obligation is identified by transaction, entry and ordinal, holds the event payload as of its commit, and is byte-identical on two replicas
+ok 2 - TX1 CDC O2: an obligation is identified by transaction, entry and ordinal, holds the event payload as of its commit, and is byte-identical on two replicas
+  ---
+  duration_ms: 79.265548
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O3: an obligation is marked delivered only after every subscriber acknowledged it and the CDC_DELIVERED committed; a subscriber that is not ready holds it owed
+ok 3 - TX1 CDC O3: an obligation is marked delivered only after every subscriber acknowledged it and the CDC_DELIVERED committed; a subscriber that is not ready holds it owed
+  ---
+  duration_ms: 4318.105967
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O4: acknowledgements are batched by committed entry under the count bound: two entries' events fill one CDC_DELIVERED of exactly the bound, in log and ordinal order, and the rest follows at the deadline
+ok 4 - TX1 CDC O4: acknowledgements are batched by committed entry under the count bound: two entries' events fill one CDC_DELIVERED of exactly the bound, in log and ordinal order, and the rest follows at the deadline
+  ---
+  duration_ms: 463.827203
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O5: an arbitrary long durable event key is acknowledged by its bounded position and key digest
+ok 5 - TX1 CDC O5: an arbitrary long durable event key is acknowledged by its bounded position and key digest
+  ---
+  duration_ms: 82.755661
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:28.757Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","entryId":"cdc-ack:tx1-v3:69c53e00352be55683ff320d3a0aed162be9911531e1254720738939c4f45079","failureCode":"cdc_acknowledgement_unknown_event","logIndex":6,"ordinal":7,"positionMatches":0,"nodeId":"test-node","msg":"CDC_DELIVERED refused: it names an event this ledger does not owe (an atomicity alarm)"}
+# Subtest: TX1 CDC O6: a single acknowledged event is proposed at the flush deadline and not before
+ok 6 - TX1 CDC O6: a single acknowledged event is proposed at the flush deadline and not before
+  ---
+  duration_ms: 56.672135
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims the delivered prefix into the compact progress (decision D1), replays idempotently, refuses unknown or misfiled identities both before and after reclamation without a write, moves neither the generation nor an outcome row, and is admitted only from the CDC delivery owner in its pinned form
+ok 7 - TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims the delivered prefix into the compact progress (decision D1), replays idempotently, refuses unknown or misfiled identities both before and after reclamation without a write, moves neither the generation nor an outcome row, and is admitted only from the CDC delivery owner in its pinned form
+  ---
+  duration_ms: 58.128236
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:28.758Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","entryId":"cdc-ack:tx1-v3:60fa2b3012e6bb0256a869adb53a70e95f2452c65e192b7644e38786a932dca8","failureCode":"cdc_acknowledgement_position_mismatch","logIndex":6,"ordinal":0,"nodeId":"test-node","msg":"CDC_DELIVERED refused: it names an event this ledger does not owe (an atomicity alarm)"}
+# Subtest: TX1 CDC O8: obligations owed when the replica stopped are redelivered in log order on the next leadership, with the same identities, and every one survived the restart
+ok 8 - TX1 CDC O8: obligations owed when the replica stopped are redelivered in log order on the next leadership, with the same identities, and every one survived the restart
+  ---
+  duration_ms: 112.623954
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O9: an acknowledgement whose CDC_DELIVERED never committed is redelivered after a restart with the same identity, the consumer applies it once, and the ledger is then marked delivered
+ok 9 - TX1 CDC O9: an acknowledgement whose CDC_DELIVERED never committed is redelivered after a restart with the same identity, the consumer applies it once, and the ledger is then marked delivered
+  ---
+  duration_ms: 67.958059
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O10: repeated leader activation preserves the acknowledged batch
+ok 10 - TX1 CDC O10: repeated leader activation preserves the acknowledged batch
+  ---
+  duration_ms: 44.443413
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O11: a stale subscriber completion cannot acknowledge for a new tenure
+ok 11 - TX1 CDC O11: a stale subscriber completion cannot acknowledge for a new tenure
+  ---
+  duration_ms: 55.001218
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O12: same-row operations retain their own values and distinct consumer identities
+ok 12 - TX1 CDC O12: same-row operations retain their own values and distinct consumer identities
+  ---
+  duration_ms: 39.426215
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O13: arbitrary-length UTF-8 event IDs enter ACKs only as fixed digests
+ok 13 - TX1 CDC O13: arbitrary-length UTF-8 event IDs enter ACKs only as fixed digests
+  ---
+  duration_ms: 73.106248
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:29.195Z","nodeId":"test-node","pid":794302,"subsystem":"partition","event":"wait_bound_spent","wait":"PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS","awaited":"consensus commit of one admitted partition write","boundMs":30000,"elapsedMs":30000,"lastObserved":{"proposal":"proposed","logIndex":null,"role":"leader","pendingCommitCount":1},"scope":{"partitionId":"tx1-v3","entryId":"cdc-ack:tx1-v3:41a1eb610750684b98a2a7ad841453510bd584740b592d599620962035582ebb"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: TX1 CDC O14: an unknown acknowledgement retries the same command without new traffic
+ok 14 - TX1 CDC O14: an unknown acknowledgement retries the same command without new traffic
+  ---
+  duration_ms: 43.287971
+  type: 'test'
+  ...
+# Subtest: CDC prefix reconciliation settles 1 known events without certifying the compacted ACK identity and drains any remaining mixed-batch debt
+ok 15 - CDC prefix reconciliation settles 1 known events without certifying the compacted ACK identity and drains any remaining mixed-batch debt
+  ---
+  duration_ms: 60.776087
+  type: 'test'
+  ...
+# Subtest: CDC prefix reconciliation settles 2 known events without certifying the compacted ACK identity and drains any remaining mixed-batch debt
+ok 16 - CDC prefix reconciliation settles 2 known events without certifying the compacted ACK identity and drains any remaining mixed-batch debt
+  ---
+  duration_ms: 53.430324
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O15: resolved semantic subscriber refusal cannot acknowledge an event
+ok 17 - TX1 CDC O15: resolved semantic subscriber refusal cannot acknowledge an event
+  ---
+  duration_ms: 52.71801
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O16: ordinary writes retain an atomic obligation through later writes and replay
+ok 18 - TX1 CDC O16: ordinary writes retain an atomic obligation through later writes and replay
+  ---
+  duration_ms: 40.648343
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O17: provisional metadata advances formation without acknowledging source debt
+ok 19 - TX1 CDC O17: provisional metadata advances formation without acknowledging source debt
+  ---
+  duration_ms: 90.796088
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O18: provisional scanning yields after one page and revisits old debt
+ok 20 - TX1 CDC O18: provisional scanning yields after one page and revisits old debt
+  ---
+  duration_ms: 326.425903
+  type: 'test'
+  ...
+# Subtest: TX1 CDC O19: a subscription handshake is registration plus the lane drive (decision D4): the owed obligation reaches the new subscriber in the lane, nothing is replayed outside it, and the handshake carries no catch-up
+ok 21 - TX1 CDC O19: a subscription handshake is registration plus the lane drive (decision D4): the owed obligation reaches the new subscriber in the lane, nothing is replayed outside it, and the handshake carries no catch-up
+  ---
+  duration_ms: 45.773953
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+# Subtest: TX1 CDC O20: writes to a user table, logs and sql_write_operations record no obligation; a propagated system table records one per write and delivers it
+ok 22 - TX1 CDC O20: writes to a user table, logs and sql_write_operations record no obligation; a propagated system table records one per write and delivers it
+  ---
+  duration_ms: 157.161603
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.116Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.117Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.118Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"test_table","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.205Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.209Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"logs","operation":"UPSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.277Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+{"level":50,"time":"2026-11-15T13:54:30.278Z","nodeId":"test-node","pid":794302,"subsystem":"partition","partitionId":"tx1-v3","tableName":"sql_write_operations","operation":"INSERT","error":"consumer not ready","nodeId":"test-node","msg":"Failed to deliver CDC event"}
+# Subtest: TX1 CDC O21: the recording decision is identical on every replica of a three-replica group, with a subscriber attached on one replica only
+ok 23 - TX1 CDC O21: the recording decision is identical on every replica of a three-replica group, with a subscriber attached on one replica only
+  ---
+  duration_ms: 344.024392
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6807.711996
+# time=8875ms
+TAP version 13
+# Subtest: deliverCDCEventToSubscriber hands a subscriber function and a subscriber object the vector itself and returns the subscriber's answer
+ok 1 - deliverCDCEventToSubscriber hands a subscriber function and a subscriber object the vector itself and returns the subscriber's answer
+  ---
+  duration_ms: 110.958222
+  type: 'test'
+  ...
+# Subtest: deliverCDCEventToSubscriber refuses anything but a dense frozen vector of one table and one partition before the subscriber is invoked
+ok 2 - deliverCDCEventToSubscriber refuses anything but a dense frozen vector of one table and one partition before the subscriber is invoked
+  ---
+  duration_ms: 61.558401
+  type: 'test'
+  ...
+# Subtest: a subscriber is asked for readiness once per vector, with its first event
+ok 3 - a subscriber is asked for readiness once per vector, with its first event
+  ---
+  duration_ms: 59.5186
+  type: 'test'
+  ...
+# Subtest: the subscriber wrapper gives every member of a vector the subscription identity and its own sequence number, in order, and records the last one as delivered
+ok 4 - the subscriber wrapper gives every member of a vector the subscription identity and its own sequence number, in order, and records the last one as delivered
+  ---
+  duration_ms: 103.563996
+  type: 'test'
+  ...
+# Subtest: the non-durable producer hands each subscriber a frozen vector of exactly one event per write, in write order, and counts and emits each event once
+ok 5 - the non-durable producer hands each subscriber a frozen vector of exactly one event per write, in write order, and counts and emits each event once
+  ---
+  duration_ms: 39.431627
+  type: 'test'
+  ...
+# Subtest: a subscriber that throws fails the non-durable delivery exactly as before: counted, not emitted, and not buffered for a table that owes no obligation
+ok 6 - a subscriber that throws fails the non-durable delivery exactly as before: counted, not emitted, and not buffered for a table that owes no obligation
+  ---
+  duration_ms: 45.356961
+  type: 'test'
+  ...
+# Subtest: the buffered replay hands each buffered event as a frozen vector of one, marked replay-only, in buffer order
+ok 7 - the buffered replay hands each buffered event as a frozen vector of one, marked replay-only, in buffer order
+  ---
+  duration_ms: 50.879419
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 483.849862
+# time=2531ms
+TAP version 13
+# Subtest: source progress is fair across expired invocations and releases only complete weak coverage
+ok 1 - source progress is fair across expired invocations and releases only complete weak coverage
+  ---
+  duration_ms: 4337.020661
+  type: 'test'
+  ...
+# Subtest: mixed native and weak subscriber coverage keeps debt and reruns every branch after release
+ok 2 - mixed native and weak subscriber coverage keeps debt and reruns every branch after release
+  ---
+  duration_ms: 125.20428
+  type: 'test'
+  ...
+# Subtest: source reads only the payload it ships per await while keeping its 256-visit quantum and captured tail
+ok 3 - source reads only the payload it ships per await while keeping its 256-visit quantum and captured tail
+  ---
+  duration_ms: 1080.394346
+  type: 'test'
+  ...
+# Subtest: 435 owed obligations make bounded progress across explicit retry dispositions and drain in log order within the drive quantum
+ok 4 - 435 owed obligations make bounded progress across explicit retry dispositions and drain in log order within the drive quantum
+  ---
+  duration_ms: 619.637106
+  type: 'test'
+  ...
+# Subtest: handleDeliveryFailure logs at debug level on backpressure and warn on other errors
+ok 5 - handleDeliveryFailure logs at debug level on backpressure and warn on other errors
+  ---
+  duration_ms: 35.985364
+  type: 'test'
+  ...
+# Subtest: a lane held by typed backpressure preserves its open ACK batch until the flush deadline, and its retry continuation joins the same batch
+ok 6 - a lane held by typed backpressure preserves its open ACK batch until the flush deadline, and its retry continuation joins the same batch
+  ---
+  duration_ms: 122.676811
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6327.491172
+# time=8360ms
+TAP version 13
+# Subtest: retained fixture uses store-owned application transactions and preserves caller refusal
+ok 1 - retained fixture uses store-owned application transactions and preserves caller refusal
+  ---
+  duration_ms: 101.142252
+  type: 'test'
+  ...
+# Subtest: retained fixture rolls application effects back when the actual applied frontier write fails
+ok 2 - retained fixture rolls application effects back when the actual applied frontier write fails
+  ---
+  duration_ms: 87.844304
+  type: 'test'
+  ...
+# Subtest: original producer SQL is observed in each native range without applying pending work
+    # Subtest: message_groups: applied
+    ok 1 - message_groups: applied
+      ---
+      duration_ms: 65.84807
+      type: 'test'
+      ...
+    # Subtest: message_groups: committed-pending
+    ok 2 - message_groups: committed-pending
+      ---
+      duration_ms: 53.448244
+      type: 'test'
+      ...
+    # Subtest: message_groups: local-uncommitted
+    ok 3 - message_groups: local-uncommitted
+      ---
+      duration_ms: 64.305482
+      type: 'test'
+      ...
+    # Subtest: tables: applied
+    ok 4 - tables: applied
+      ---
+      duration_ms: 66.899141
+      type: 'test'
+      ...
+    # Subtest: tables: committed-pending
+    ok 5 - tables: committed-pending
+      ---
+      duration_ms: 51.700316
+      type: 'test'
+      ...
+    # Subtest: tables: local-uncommitted
+    ok 6 - tables: local-uncommitted
+      ---
+      duration_ms: 50.911614
+      type: 'test'
+      ...
+    # Subtest: partitions: applied
+    ok 7 - partitions: applied
+      ---
+      duration_ms: 59.948656
+      type: 'test'
+      ...
+    # Subtest: partitions: committed-pending
+    ok 8 - partitions: committed-pending
+      ---
+      duration_ms: 53.717557
+      type: 'test'
+      ...
+    # Subtest: partitions: local-uncommitted
+    ok 9 - partitions: local-uncommitted
+      ---
+      duration_ms: 59.211169
+      type: 'test'
+      ...
+    1..9
+ok 3 - original producer SQL is observed in each native range without applying pending work
+  ---
+  duration_ms: 532.801902
+  type: 'test'
+  ...
+# Subtest: first outcome and CDC obligation survive deduplicated SQL and repeated origin
+ok 4 - first outcome and CDC obligation survive deduplicated SQL and repeated origin
+  ---
+  duration_ms: 41.325999
+  type: 'test'
+  ...
+# Subtest: first origin resets legacy generation while later origin preserves successful effects
+ok 5 - first origin resets legacy generation while later origin preserves successful effects
+  ---
+  duration_ms: 45.094225
+  type: 'test'
+  ...
+# Subtest: one statement identity cannot authorize a different canonical foundation row
+ok 6 - one statement identity cannot authorize a different canonical foundation row
+  ---
+  duration_ms: 44.309428
+  type: 'test'
+  ...
+# Subtest: recognizing QUERY or ENABLE cannot hide a nonoriginal command effect
+    # Subtest: noncanonical SQL
+    ok 1 - noncanonical SQL
+      ---
+      duration_ms: 39.996893
+      type: 'test'
+      ...
+    # Subtest: changed immutable row identity
+    ok 2 - changed immutable row identity
+      ---
+      duration_ms: 41.444225
+      type: 'test'
+      ...
+    # Subtest: changed creation stamp
+    ok 3 - changed creation stamp
+      ---
+      duration_ms: 38.795218
+      type: 'test'
+      ...
+    # Subtest: missing parameters
+    ok 4 - missing parameters
+      ---
+      duration_ms: 42.635092
+      type: 'test'
+      ...
+    # Subtest: extra parameter
+    ok 5 - extra parameter
+      ---
+      duration_ms: 57.14392
+      type: 'test'
+      ...
+    # Subtest: foreign proposer
+    ok 6 - foreign proposer
+      ---
+      duration_ms: 38.775307
+      type: 'test'
+      ...
+    # Subtest: malformed timestamp
+    ok 7 - malformed timestamp
+      ---
+      duration_ms: 41.877595
+      type: 'test'
+      ...
+    # Subtest: foreign but valid timestamp identity
+    ok 8 - foreign but valid timestamp identity
+      ---
+      duration_ms: 69.651983
+      type: 'test'
+      ...
+    # Subtest: negative proposed time
+    ok 9 - negative proposed time
+      ---
+      duration_ms: 40.119067
+      type: 'test'
+      ...
+    # Subtest: session work
+    ok 10 - session work
+      ---
+      duration_ms: 40.305692
+      type: 'test'
+      ...
+    # Subtest: transaction work
+    ok 11 - transaction work
+      ---
+      duration_ms: 38.398446
+      type: 'test'
+      ...
+    # Subtest: split mirror work
+    ok 12 - split mirror work
+      ---
+      duration_ms: 40.781117
+      type: 'test'
+      ...
+    # Subtest: transaction command
+    ok 13 - transaction command
+      ---
+      duration_ms: 37.675999
+      type: 'test'
+      ...
+    # Subtest: ENABLE carrying SQL
+    ok 14 - ENABLE carrying SQL
+      ---
+      duration_ms: 40.311873
+      type: 'test'
+      ...
+    1..14
+ok 7 - recognizing QUERY or ENABLE cannot hide a nonoriginal command effect
+  ---
+  duration_ms: 609.699839
+  type: 'test'
+  ...
+# Subtest: original source stamps bind the actual proposer while preserving forwarded command bytes
+    # Subtest: ENABLE: valid HLC from a different producer is contrary
+    ok 1 - ENABLE: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 39.639556
+      type: 'test'
+      ...
+    # Subtest: QUERY: valid HLC from a different producer is contrary
+    ok 2 - QUERY: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 37.816867
+      type: 'test'
+      ...
+    # Subtest: CDC_DELIVERED: valid HLC from a different producer is contrary
+    ok 3 - CDC_DELIVERED: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 43.079869
+      type: 'test'
+      ...
+    # Subtest: another declared founder stamps a forwarded original command
+    ok 4 - another declared founder stamps a forwarded original command
+      ---
+      duration_ms: 37.834505
+      type: 'test'
+      ...
+    1..4
+ok 8 - original source stamps bind the actual proposer while preserving forwarded command bytes
+  ---
+  duration_ms: 159.028013
+  type: 'test'
+  ...
+# Subtest: catalog identity and unused publication rights do not admit service or config work
+    # Subtest: services
+    ok 1 - services
+      ---
+      duration_ms: 41.685728
+      type: 'test'
+      ...
+    # Subtest: config
+    ok 2 - config
+      ---
+      duration_ms: 39.759899
+      type: 'test'
+      ...
+    # Subtest: substituted member incarnation
+    ok 3 - substituted member incarnation
+      ---
+      duration_ms: 37.027756
+      type: 'test'
+      ...
+    1..3
+ok 9 - catalog identity and unused publication rights do not admit service or config work
+  ---
+  duration_ms: 118.989496
+  type: 'test'
+  ...
+# Subtest: applied foundation rows must match their exact producer and applied command
+    # Subtest: missing row
+    ok 1 - missing row
+      ---
+      duration_ms: 50.821915
+      type: 'test'
+      ...
+    # Subtest: different leader
+    ok 2 - different leader
+      ---
+      duration_ms: 56.288007
+      type: 'test'
+      ...
+    # Subtest: different creation
+    ok 3 - different creation
+      ---
+      duration_ms: 43.771516
+      type: 'test'
+      ...
+    # Subtest: different key
+    ok 4 - different key
+      ---
+      duration_ms: 53.914869
+      type: 'test'
+      ...
+    # Subtest: extra row
+    ok 5 - extra row
+      ---
+      duration_ms: 46.096023
+      type: 'test'
+      ...
+    # Subtest: canonical row without applied statement is not inferred applied
+    ok 6 - canonical row without applied statement is not inferred applied
+      ---
+      duration_ms: 42.731427
+      type: 'test'
+      ...
+    # Subtest: partition transition work
+    ok 7 - partition transition work
+      ---
+      duration_ms: 39.789794
+      type: 'test'
+      ...
+    1..7
+ok 10 - applied foundation rows must match their exact producer and applied command
+  ---
+  duration_ms: 334.465512
+  type: 'test'
+  ...
+# Subtest: participant, origin, generation and statement outcomes are one observed extent
+    # Subtest: missing outcome
+    ok 1 - missing outcome
+      ---
+      duration_ms: 47.876725
+      type: 'test'
+      ...
+    # Subtest: moved outcome index
+    ok 2 - moved outcome index
+      ---
+      duration_ms: 45.991024
+      type: 'test'
+      ...
+    # Subtest: wrong outcome term
+    ok 3 - wrong outcome term
+      ---
+      duration_ms: 50.353759
+      type: 'test'
+      ...
+    # Subtest: failed outcome
+    ok 4 - failed outcome
+      ---
+      duration_ms: 46.491011
+      type: 'test'
+      ...
+    # Subtest: zero changed rows
+    ok 5 - zero changed rows
+      ---
+      duration_ms: 45.967617
+      type: 'test'
+      ...
+    # Subtest: lost insert identity
+    ok 6 - lost insert identity
+      ---
+      duration_ms: 45.471424
+      type: 'test'
+      ...
+    # Subtest: foreign owner result
+    ok 7 - foreign owner result
+      ---
+      duration_ms: 45.980545
+      type: 'test'
+      ...
+    # Subtest: stray outcome
+    ok 8 - stray outcome
+      ---
+      duration_ms: 43.998255
+      type: 'test'
+      ...
+    # Subtest: extra generation
+    ok 9 - extra generation
+      ---
+      duration_ms: 47.865315
+      type: 'test'
+      ...
+    # Subtest: lost origin
+    ok 10 - lost origin
+      ---
+      duration_ms: 45.72153
+      type: 'test'
+      ...
+    # Subtest: terminal transaction is still unrelated work
+    ok 11 - terminal transaction is still unrelated work
+      ---
+      duration_ms: 39.171189
+      type: 'test'
+      ...
+    1..11
+ok 11 - participant, origin, generation and statement outcomes are one observed extent
+  ---
+  duration_ms: 506.410011
+  type: 'test'
+  ...
+# Subtest: source obligation census rejects missing, extra and changed debt
+    # Subtest: missing owed row
+    ok 1 - missing owed row
+      ---
+      duration_ms: 45.907135
+      type: 'test'
+      ...
+    # Subtest: erased lazy ledger after emission
+    ok 2 - erased lazy ledger after emission
+      ---
+      duration_ms: 47.744579
+      type: 'test'
+      ...
+    # Subtest: wrong source term
+    ok 3 - wrong source term
+      ---
+      duration_ms: 47.269675
+      type: 'test'
+      ...
+    # Subtest: wrong source ordinal
+    ok 4 - wrong source ordinal
+      ---
+      duration_ms: 44.821251
+      type: 'test'
+      ...
+    # Subtest: wrong source identity
+    ok 5 - wrong source identity
+      ---
+      duration_ms: 45.88327
+      type: 'test'
+      ...
+    # Subtest: wrong source entry id
+    ok 6 - wrong source entry id
+      ---
+      duration_ms: 46.115559
+      type: 'test'
+      ...
+    # Subtest: content changed
+    ok 7 - content changed
+      ---
+      duration_ms: 45.392621
+      type: 'test'
+      ...
+    # Subtest: malformed delivered flag
+    ok 8 - malformed delivered flag
+      ---
+      duration_ms: 46.108278
+      type: 'test'
+      ...
+    # Subtest: invented delivered position
+    ok 9 - invented delivered position
+      ---
+      duration_ms: 43.747691
+      type: 'test'
+      ...
+    # Subtest: additional source occurrence
+    ok 10 - additional source occurrence
+      ---
+      duration_ms: 43.040688
+      type: 'test'
+      ...
+    1..10
+ok 12 - source obligation census rejects missing, extra and changed debt
+  ---
+  duration_ms: 457.359291
+  type: 'test'
+  ...
+# Subtest: scope-absent original CDC debt cannot acquire invented source-scope authority
+ok 13 - scope-absent original CDC debt cannot acquire invented source-scope authority
+  ---
+  duration_ms: 51.418856
+  type: 'test'
+  ...
+# Subtest: only the first applied pinned ACK can justify a delivered obligation
+    # Subtest: applied repeated ACK keeps first position
+    ok 1 - applied repeated ACK keeps first position
+      ---
+      duration_ms: 48.283711
+      type: 'test'
+      ...
+    # Subtest: a mixed compacted ACK refuses whole before the remaining source is acknowledged
+    ok 2 - a mixed compacted ACK refuses whole before the remaining source is acknowledged
+      ---
+      duration_ms: 88.546514
+      type: 'test'
+      ...
+    # Subtest: pre-D1 storage (the delivered row retained, no compact progress) is contrary
+    ok 3 - pre-D1 storage (the delivered row retained, no compact progress) is contrary
+      ---
+      duration_ms: 83.862152
+      type: 'test'
+      ...
+    # Subtest: committed-pending ACK retains owed debt
+    ok 4 - committed-pending ACK retains owed debt
+      ---
+      duration_ms: 47.779177
+      type: 'test'
+      ...
+    1..4
+ok 14 - only the first applied pinned ACK can justify a delivered obligation
+  ---
+  duration_ms: 269.287162
+  type: 'test'
+  ...
+# Subtest: lazy ledger absence and pending SQL-to-ACK dependencies preserve every obligation
+    # Subtest: no emitting application legitimately has no lazy ledger
+    ok 1 - no emitting application legitimately has no lazy ledger
+      ---
+      duration_ms: 46.357773
+      type: 'test'
+      ...
+    # Subtest: pending SQL and pending ACK at commit 2
+    ok 2 - pending SQL and pending ACK at commit 2
+      ---
+      duration_ms: 47.110144
+      type: 'test'
+      ...
+    # Subtest: pending SQL and pending ACK at commit 3
+    ok 3 - pending SQL and pending ACK at commit 3
+      ---
+      duration_ms: 41.053607
+      type: 'test'
+      ...
+    # Subtest: no preceding occurrence
+    ok 4 - no preceding occurrence
+      ---
+      duration_ms: 39.029997
+      type: 'test'
+      ...
+    # Subtest: wrong pending digest
+    ok 5 - wrong pending digest
+      ---
+      duration_ms: 40.568361
+      type: 'test'
+      ...
+    1..5
+ok 15 - lazy ledger absence and pending SQL-to-ACK dependencies preserve every obligation
+  ---
+  duration_ms: 214.953714
+  type: 'test'
+  ...
+# Subtest: MG content correspondence never grants source-occurrence or delivery authority
+    # Subtest: single exact content
+    ok 1 - single exact content
+      ---
+      duration_ms: 39.922395
+      type: 'test'
+      ...
+    # Subtest: batch exact content
+    ok 2 - batch exact content
+      ---
+      duration_ms: 39.795633
+      type: 'test'
+      ...
+    # Subtest: valid envelope clock differs from original row clock
+    ok 3 - valid envelope clock differs from original row clock
+      ---
+      duration_ms: 36.342021
+      type: 'test'
+      ...
+    # Subtest: batch cannot drop malformed member
+    ok 4 - batch cannot drop malformed member
+      ---
+      duration_ms: 39.562042
+      type: 'test'
+      ...
+    # Subtest: missing timestamp cannot be invented
+    ok 5 - missing timestamp cannot be invented
+      ---
+      duration_ms: 36.3478
+      type: 'test'
+      ...
+    # Subtest: malformed envelope timestamp
+    ok 6 - malformed envelope timestamp
+      ---
+      duration_ms: 38.995068
+      type: 'test'
+      ...
+    # Subtest: unrelated message
+    ok 7 - unrelated message
+      ---
+      duration_ms: 39.004345
+      type: 'test'
+      ...
+    # Subtest: unrelated acknowledgment
+    ok 8 - unrelated acknowledgment
+      ---
+      duration_ms: 36.29187
+      type: 'test'
+      ...
+    # Subtest: foreign row
+    ok 9 - foreign row
+      ---
+      duration_ms: 39.300729
+      type: 'test'
+      ...
+    # Subtest: inconsistent HLC row
+    ok 10 - inconsistent HLC row
+      ---
+      duration_ms: 36.337863
+      type: 'test'
+      ...
+    1..10
+ok 16 - MG content correspondence never grants source-occurrence or delivery authority
+  ---
+  duration_ms: 417.97111
+  type: 'test'
+  ...
+# Subtest: MG observers retain original TABLES and PARTITIONS content without inventing source binding
+    # Subtest: tables
+    ok 1 - tables
+      ---
+      duration_ms: 75.044522
+      type: 'test'
+      ...
+    # Subtest: partitions
+    ok 2 - partitions
+      ---
+      duration_ms: 77.045754
+      type: 'test'
+      ...
+    1..2
+ok 17 - MG observers retain original TABLES and PARTITIONS content without inventing source binding
+  ---
+  duration_ms: 152.52819
+  type: 'test'
+  ...
+# Subtest: empty required application tables still require the actual partition schema
+    # Subtest: missing table
+    ok 1 - missing table
+      ---
+      duration_ms: 41.540975
+      type: 'test'
+      ...
+    # Subtest: missing column
+    ok 2 - missing column
+      ---
+      duration_ms: 45.051545
+      type: 'test'
+      ...
+    # Subtest: extra column
+    ok 3 - extra column
+      ---
+      duration_ms: 44.684453
+      type: 'test'
+      ...
+    # Subtest: wrong declared type
+    ok 4 - wrong declared type
+      ---
+      duration_ms: 42.393481
+      type: 'test'
+      ...
+    # Subtest: missing primary key
+    ok 5 - missing primary key
+      ---
+      duration_ms: 44.244211
+      type: 'test'
+      ...
+    1..5
+ok 18 - empty required application tables still require the actual partition schema
+  ---
+  duration_ms: 218.755133
+  type: 'test'
+  ...
+# Subtest: application schema rejects an unresolved view without evaluating or repairing its body
+ok 19 - application schema rejects an unresolved view without evaluating or repairing its body
+  ---
+  duration_ms: 52.542853
+  type: 'test'
+  ...
+# Subtest: SQL_TRANSACTIONS origin and schema enforcer must correspond without inspection repair
+    # Subtest: pre-origin REQUIRED is a legitimate empty original table
+    ok 1 - pre-origin REQUIRED is a legitimate empty original table
+      ---
+      duration_ms: 40.797368
+      type: 'test'
+      ...
+    # Subtest: actual applied origin installs ENFORCED state
+    ok 2 - actual applied origin installs ENFORCED state
+      ---
+      duration_ms: 39.330238
+      type: 'test'
+      ...
+    # Subtest: lost trigger after applied origin is contrary
+    ok 3 - lost trigger after applied origin is contrary
+      ---
+      duration_ms: 45.339509
+      type: 'test'
+      ...
+    # Subtest: changed trigger after applied origin is contrary
+    ok 4 - changed trigger after applied origin is contrary
+      ---
+      duration_ms: 41.041837
+      type: 'test'
+      ...
+    # Subtest: missing required column before origin
+    ok 5 - missing required column before origin
+      ---
+      duration_ms: 38.00113
+      type: 'test'
+      ...
+    # Subtest: missing required column after origin
+    ok 6 - missing required column after origin
+      ---
+      duration_ms: 41.395517
+      type: 'test'
+      ...
+    1..6
+ok 20 - SQL_TRANSACTIONS origin and schema enforcer must correspond without inspection repair
+  ---
+  duration_ms: 246.828029
+  type: 'test'
+  ...
+# Subtest: SeedRegistrationPhase refuses an invalid original timestamp before phase effects
+ok 21 - SeedRegistrationPhase refuses an invalid original timestamp before phase effects
+  ---
+  duration_ms: 0.762268
+  type: 'test'
+  ...
+# Subtest: SeedRegistrationPhase keeps the ordinary delegate clock and exact original timestamp paths
+    # Subtest: ordinary hosted clock
+    ok 1 - ordinary hosted clock
+      ---
+      duration_ms: 0.374952
+      type: 'test'
+      ...
+    # Subtest: original timestamp
+    ok 2 - original timestamp
+      ---
+      duration_ms: 0.169449
+      type: 'test'
+      ...
+    1..2
+ok 22 - SeedRegistrationPhase keeps the ordinary delegate clock and exact original timestamp paths
+  ---
+  duration_ms: 0.834922
+  type: 'test'
+  ...
+# Subtest: unreadable required owners, snapshot coverage and caller transactions stay unavailable
+    # Subtest: missing _partition_statement_outcomes
+    ok 1 - missing _partition_statement_outcomes
+      ---
+      duration_ms: 37.136186
+      type: 'test'
+      ...
+    # Subtest: missing _partition_write_generation
+    ok 2 - missing _partition_write_generation
+      ---
+      duration_ms: 39.525973
+      type: 'test'
+      ...
+    # Subtest: missing _participant_transactions
+    ok 3 - missing _participant_transactions
+      ---
+      duration_ms: 40.115122
+      type: 'test'
+      ...
+    # Subtest: missing message_groups
+    ok 4 - missing message_groups
+      ---
+      duration_ms: 37.298953
+      type: 'test'
+      ...
+    # Subtest: snapshot prefix has no invented original provenance
+    ok 5 - snapshot prefix has no invented original provenance
+      ---
+      duration_ms: 41.805663
+      type: 'test'
+      ...
+    # Subtest: caller owns its open transaction
+    ok 6 - caller owns its open transaction
+      ---
+      duration_ms: 33.212185
+      type: 'test'
+      ...
+    # Subtest: invalid native frontier is contrary, not an absent ledger
+    ok 7 - invalid native frontier is contrary, not an absent ledger
+      ---
+      duration_ms: 39.68445
+      type: 'test'
+      ...
+    1..7
+ok 23 - unreadable required owners, snapshot coverage and caller transactions stay unavailable
+  ---
+  duration_ms: 269.62223
+  type: 'test'
+  ...
+# Subtest: each empty internal owner must have its complete schema before absence is accepted
+    # Subtest: _partition_statement_outcomes
+    ok 1 - _partition_statement_outcomes
+      ---
+      duration_ms: 48.377292
+      type: 'test'
+      ...
+    # Subtest: _participant_transactions
+    ok 2 - _participant_transactions
+      ---
+      duration_ms: 52.683733
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations
+    ok 3 - _cdc_obligations
+      ---
+      duration_ms: 52.211066
+      type: 'test'
+      ...
+    1..3
+ok 24 - each empty internal owner must have its complete schema before absence is accepted
+  ---
+  duration_ms: 153.788814
+  type: 'test'
+  ...
+# Subtest: a view at a reserved owner name is contrary rather than absent or usable storage
+    # Subtest: _cdc_obligations
+    ok 1 - _cdc_obligations
+      ---
+      duration_ms: 51.749399
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes
+    ok 2 - _partition_statement_outcomes
+      ---
+      duration_ms: 49.10349
+      type: 'test'
+      ...
+    # Subtest: _participant_transactions
+    ok 3 - _participant_transactions
+      ---
+      duration_ms: 48.719099
+      type: 'test'
+      ...
+    # Subtest: _partition_write_generation
+    ok 4 - _partition_write_generation
+      ---
+      duration_ms: 48.265621
+      type: 'test'
+      ...
+    1..4
+ok 25 - a view at a reserved owner name is contrary rather than absent or usable storage
+  ---
+  duration_ms: 198.533125
+  type: 'test'
+  ...
+# Subtest: internal owner indexes and effect surfaces remain required even without rows
+    # Subtest: missing _participant_transactions_state
+    ok 1 - missing _participant_transactions_state
+      ---
+      duration_ms: 47.784388
+      type: 'test'
+      ...
+    # Subtest: missing _cdc_obligations_owed
+    ok 2 - missing _cdc_obligations_owed
+      ---
+      duration_ms: 48.902454
+      type: 'test'
+      ...
+    # Subtest: unowned trigger on _partition_statement_outcomes
+    ok 3 - unowned trigger on _partition_statement_outcomes
+      ---
+      duration_ms: 50.361184
+      type: 'test'
+      ...
+    # Subtest: unowned trigger on _participant_transactions
+    ok 4 - unowned trigger on _participant_transactions
+      ---
+      duration_ms: 48.000755
+      type: 'test'
+      ...
+    # Subtest: unowned trigger on _partition_write_generation
+    ok 5 - unowned trigger on _partition_write_generation
+      ---
+      duration_ms: 45.316689
+      type: 'test'
+      ...
+    # Subtest: unowned trigger on _cdc_obligations
+    ok 6 - unowned trigger on _cdc_obligations
+      ---
+      duration_ms: 48.788068
+      type: 'test'
+      ...
+    # Subtest: generation singleton constraint cannot be widened
+    ok 7 - generation singleton constraint cannot be widened
+      ---
+      duration_ms: 49.485977
+      type: 'test'
+      ...
+    1..7
+ok 26 - internal owner indexes and effect surfaces remain required even without rows
+  ---
+  duration_ms: 339.703432
+  type: 'test'
+  ...
+# Subtest: the generation owner rejects a second persisted singleton under unchanged canonical DDL
+ok 27 - the generation owner rejects a second persisted singleton under unchanged canonical DDL
+  ---
+  duration_ms: 49.511528
+  type: 'test'
+  ...
+# Subtest: actual old-owner ALTER upgrades retain schema compatibility for the read-only observer
+    # Subtest: _partition_statement_outcomes
+    ok 1 - _partition_statement_outcomes
+      ---
+      duration_ms: 49.07166
+      type: 'test'
+      ...
+    # Subtest: _partition_write_generation
+    ok 2 - _partition_write_generation
+      ---
+      duration_ms: 47.897662
+      type: 'test'
+      ...
+    1..2
+ok 28 - actual old-owner ALTER upgrades retain schema compatibility for the read-only observer
+  ---
+  duration_ms: 97.688172
+  type: 'test'
+  ...
+# Subtest: outcome and CDC censuses reject malformed raw SQLite types before coercion
+    # Subtest: _partition_statement_outcomes.log_index: BLOB
+    ok 1 - _partition_statement_outcomes.log_index: BLOB
+      ---
+      duration_ms: 50.244095
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes.term: BLOB
+    ok 2 - _partition_statement_outcomes.term: BLOB
+      ---
+      duration_ms: 50.609756
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes.changes: BLOB
+    ok 3 - _partition_statement_outcomes.changes: BLOB
+      ---
+      duration_ms: 52.845358
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes.last_insert_rowid: BLOB
+    ok 4 - _partition_statement_outcomes.last_insert_rowid: BLOB
+      ---
+      duration_ms: 50.733318
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes.log_index: number
+    ok 5 - _partition_statement_outcomes.log_index: number
+      ---
+      duration_ms: 48.169881
+      type: 'test'
+      ...
+    # Subtest: _partition_statement_outcomes.term: string
+    ok 6 - _partition_statement_outcomes.term: string
+      ---
+      duration_ms: 52.774486
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.log_index: BLOB
+    ok 7 - _cdc_obligations.log_index: BLOB
+      ---
+      duration_ms: 50.778416
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.term: BLOB
+    ok 8 - _cdc_obligations.term: BLOB
+      ---
+      duration_ms: 50.149074
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.ordinal: BLOB
+    ok 9 - _cdc_obligations.ordinal: BLOB
+      ---
+      duration_ms: 50.536621
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.delivered: BLOB
+    ok 10 - _cdc_obligations.delivered: BLOB
+      ---
+      duration_ms: 51.545692
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.ordinal: number
+    ok 11 - _cdc_obligations.ordinal: number
+      ---
+      duration_ms: 52.139267
+      type: 'test'
+      ...
+    # Subtest: _cdc_obligations.delivered: string
+    ok 12 - _cdc_obligations.delivered: string
+      ---
+      duration_ms: 50.532876
+      type: 'test'
+      ...
+    # Subtest: BLOB JSON cannot masquerade as a TEXT source event
+    ok 13 - BLOB JSON cannot masquerade as a TEXT source event
+      ---
+      duration_ms: 50.569909
+      type: 'test'
+      ...
+    # Subtest: reclaimed-progress advanced_index rejects BLOB decimal bytes
+    ok 14 - reclaimed-progress advanced_index rejects BLOB decimal bytes
+      ---
+      duration_ms: 53.186784
+      type: 'test'
+      ...
+    # Subtest: reclaimed-progress advanced_term rejects BLOB decimal bytes
+    ok 15 - reclaimed-progress advanced_term rejects BLOB decimal bytes
+      ---
+      duration_ms: 51.480046
+      type: 'test'
+      ...
+    # Subtest: reclaimed-progress through_log_index rejects BLOB decimal bytes
+    ok 16 - reclaimed-progress through_log_index rejects BLOB decimal bytes
+      ---
+      duration_ms: 49.556109
+      type: 'test'
+      ...
+    # Subtest: reclaimed-progress reclaimed rejects BLOB decimal bytes
+    ok 17 - reclaimed-progress reclaimed rejects BLOB decimal bytes
+      ---
+      duration_ms: 51.398877
+      type: 'test'
+      ...
+    1..17
+ok 29 - outcome and CDC censuses reject malformed raw SQLite types before coercion
+  ---
+  duration_ms: 869.594489
+  type: 'test'
+  ...
+# Subtest: owner censuses retain exact large INTEGER positions and results without Number rounding
+ok 30 - owner censuses retain exact large INTEGER positions and results without Number rounding
+  ---
+  duration_ms: 52.620447
+  type: 'test'
+  ...
+# Subtest: participant census validates raw integer/text fields and re-reads restored valid rows
+    # Subtest: transaction_epoch
+    ok 1 - transaction_epoch
+      ---
+      duration_ms: 56.677945
+      type: 'test'
+      ...
+    # Subtest: prepare_index
+    ok 2 - prepare_index
+      ---
+      duration_ms: 60.187145
+      type: 'test'
+      ...
+    # Subtest: prepare_term
+    ok 3 - prepare_term
+      ---
+      duration_ms: 57.258121
+      type: 'test'
+      ...
+    # Subtest: decision_index
+    ok 4 - decision_index
+      ---
+      duration_ms: 56.57874
+      type: 'test'
+      ...
+    # Subtest: decision_term
+    ok 5 - decision_term
+      ---
+      duration_ms: 56.45236
+      type: 'test'
+      ...
+    # Subtest: operations_text
+    ok 6 - operations_text
+      ---
+      duration_ms: 57.284482
+      type: 'test'
+      ...
+    # Subtest: session_id
+    ok 7 - session_id
+      ---
+      duration_ms: 61.010321
+      type: 'test'
+      ...
+    1..7
+ok 31 - participant census validates raw integer/text fields and re-reads restored valid rows
+  ---
+  duration_ms: 406.571972
+  type: 'test'
+  ...
+1..31
+# tests 170
+# suites 0
+# pass 170
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7223.46191
+# time=9233ms
