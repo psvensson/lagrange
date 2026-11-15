@@ -98,14 +98,23 @@ test('the semantic gate record from the gate stage lands in correctness', async 
 
 test('a product setup failure (SQLSTATE 55P03) is a product failure with a complete record',
   async () => {
-    const {execute} = executor(b1Record({observations: {runStatus: 'setup-failed',
-      setup: {sqlstate: '55P03'}, requests: []}, deployment: {endpoint:
-      {host: '10.0.0.1', port: 5433}, dataset: {resetMethod: 'fresh-formation',
-      verification: {status: 'unobserved'}}}}));
-    const result = await execute();
+    let observePlacementCalls = 0;
+    const run = createWorkloadRunExecutor({clientHost: '10.0.0.9',
+      runWorkload: async () => b1Record({observations: {runStatus: 'setup-failed',
+        setup: {sqlstate: '55P03'}, requests: []}, deployment: {endpoint:
+        {host: '10.0.0.1', port: 5433}, dataset: {resetMethod: 'fresh-formation',
+        verification: {status: 'unobserved'}}}}),
+      describeLoadGenerator: async () => ({hostname: 'lg', bootId: 'b'})});
+    const deployed = {...deployment(), operations: {observePlacement: async () => {
+      observePlacementCalls += 1;
+      return {replicasByPartition: []};
+    }}};
+    const result = await run({run: RUN, manifest: MANIFEST, deployment: deployed});
     assert.deepEqual(result.productFailure, {runStatus: 'setup-failed',
       setup: {sqlstate: '55P03'}});
     assert.equal(result.failure, null);
+    assert.equal(result.placement, null);
+    assert.equal(observePlacementCalls, 0);
   });
 
 test('refusals, non-executions, foreign endpoints, plan drift and unverified data are typed',
