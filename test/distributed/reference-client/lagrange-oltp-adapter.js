@@ -358,64 +358,69 @@ async function insertRows(client, table, columns, rows) {
 // A table the product answers is present; every other observation is one
 // of the classification owner's provisioning states.
 const TABLE_PRESENT = 'present';
+const CREATE_TABLE_DDL_PATTERN =
+  /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)\s*\((.+)\)\s*$/iu;
+const TABLE_PRIMARY_KEY_PATTERN = /,\s*PRIMARY\s+KEY\s*\(([^)]+)\)\s*$/iu;
+const CREATE_INDEX_DDL_PATTERN =
+  /^\s*CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([A-Za-z0-9_]+)\s+ON\s+([A-Za-z0-9_]+)\s*\(([^)]+)\)\s*$/iu;
+const INVALID_INDEX_STATES = new Set(['FAILED', 'DROPPED', 'ERROR', 'INVALID']);
 
-const CANONICAL_TABLE_COLUMNS = Object.freeze({
-  warehouse: Object.freeze(['id', 'ytd_cents']),
-  district: Object.freeze(['warehouse_id', 'district_id', 'ytd_cents', 'next_order_id']),
-  customer: Object.freeze([
-    'warehouse_id',
-    'district_id',
-    'customer_id',
-    'balance_cents',
-    'ytd_payment_cents',
-    'payment_count',
-    'delivery_count',
-  ]),
-  item: Object.freeze(['item_id', 'price_cents']),
-  stock: Object.freeze([
-    'warehouse_id',
-    'item_id',
-    'quantity',
-    'ytd_quantity',
-    'order_count',
-    'remote_count',
-  ]),
-  orders: Object.freeze([
-    'warehouse_id',
-    'district_id',
-    'order_id',
-    'customer_id',
-    'carrier_id',
-    'line_count',
-    'all_local',
-  ]),
-  new_order: Object.freeze(['warehouse_id', 'district_id', 'order_id']),
-  order_line: Object.freeze([
-    'warehouse_id',
-    'district_id',
-    'order_id',
-    'line_number',
-    'item_id',
-    'supply_warehouse_id',
-    'quantity',
-    'amount_cents',
-    'delivered',
-  ]),
-  history: Object.freeze([
-    'phase',
-    'worker_id',
-    'sequence_id',
-    'customer_warehouse_id',
-    'customer_district_id',
-    'customer_id',
-    'home_warehouse_id',
-    'home_district_id',
-    'amount_cents',
-  ]),
-});
+function deriveCanonicalSchemaFromDdl(statements) {
+  const columnsByTable = {};
+  const primaryKeysByTable = {};
+  const requiredIndexes = [];
+  for (const statement of statements) {
+    const tableMatch = CREATE_TABLE_DDL_PATTERN.exec(statement);
+    if (tableMatch) {
+      const table = tableMatch[1];
+      let body = tableMatch[2].trim();
+      let primaryKey = [];
+      const pkClauseMatch = TABLE_PRIMARY_KEY_PATTERN.exec(body);
+      if (pkClauseMatch) {
+        primaryKey = pkClauseMatch[1].split(',').map((col) => col.trim());
+        body = body.slice(ZERO, pkClauseMatch.index).trim();
+      }
+      const columns = [];
+      for (const colDef of body.split(',')) {
+        const trimmed = colDef.trim();
+        const colName = trimmed.split(/\s+/u)[ZERO];
+        columns.push(colName);
+        if (/\bPRIMARY\s+KEY\b/iu.test(trimmed)) primaryKey = [colName];
+      }
+      columnsByTable[table] = Object.freeze(columns);
+      primaryKeysByTable[table] = Object.freeze(primaryKey);
+      continue;
+    }
+    const indexMatch = CREATE_INDEX_DDL_PATTERN.exec(statement);
+    if (indexMatch) {
+      requiredIndexes.push(Object.freeze({
+        indexName: indexMatch[1],
+        tableName: indexMatch[2],
+        columns: Object.freeze(indexMatch[3].split(',').map((col) => col.trim())),
+      }));
+      continue;
+    }
+    throw new Error(`Unsupported canonical schema statement: ${statement}`);
+  }
+  return Object.freeze({
+    columns: Object.freeze(columnsByTable),
+    primaryKeys: Object.freeze(primaryKeysByTable),
+    indexes: Object.freeze(requiredIndexes),
+  });
+}
+
+const CANONICAL_SCHEMA = deriveCanonicalSchemaFromDdl(CREATE_SCHEMA);
+const CANONICAL_TABLE_COLUMNS = CANONICAL_SCHEMA.columns;
+const CANONICAL_TABLE_PRIMARY_KEYS = CANONICAL_SCHEMA.primaryKeys;
+const CANONICAL_REQUIRED_INDEXES = CANONICAL_SCHEMA.indexes;
 
 const CANONICAL_SCHEMA_SHA256 = createHash('sha256')
-  .update(JSON.stringify(CANONICAL_TABLE_COLUMNS))
+  .update(JSON.stringify({
+    tables: CANONICAL_TABLE_COLUMNS,
+    primaryKeys: CANONICAL_TABLE_PRIMARY_KEYS,
+    indexes: CANONICAL_REQUIRED_INDEXES,
+    ddl: CREATE_SCHEMA,
+  }))
   .digest('hex');
 
 const OLTP_DATASET_RESET_OUTCOME = Object.freeze({
@@ -474,10 +479,127 @@ async function validateCanonicalTableSchema(client, table) {
   }
 }
 
-async function validateAllCanonicalTableSchemas(client) {
+function parseIndexColumns(rawColumns, indexName) {
+  if (Array.isArray(rawColumns)) return rawColumns.map((col) => String(col).trim());
+  if (typeof rawColumns === 'string') {
+    try {
+      const parsed = JSON.parse(rawColumns);
+      if (Array.isArray(parsed)) return parsed.map((col) => String(col).trim());
+    } catch (error) {
+      throw schemaMismatchError(
+        `Canonical index ${indexName} has unreadable column_names: ${rawColumns}`,
+        error,
+      );
+    }
+  }
+  throw schemaMismatchError(
+    `Canonical index ${indexName} is missing column_names metadata`,
+  );
+}
+
+function parsePgIndexDefColumns(indexdef, indexName) {
+  const match = /\(([^()]+)\)\s*$/u.exec(String(indexdef || '').trim());
+  if (!match) {
+    throw schemaMismatchError(
+      `Canonical index ${indexName} has unreadable pg_indexes definition: ${indexdef}`,
+    );
+  }
+  return match[1].split(',').map((col) => col.trim());
+}
+
+function assertIndexColumnsMatch(actualColumns, expected) {
+  if (actualColumns.length !== expected.columns.length ||
+      actualColumns.some((col, index) => col !== expected.columns[index])) {
+    throw schemaMismatchError(
+      `Canonical index ${expected.indexName} on ${expected.tableName} has columns ` +
+        `(${actualColumns.join(', ')}), expected (${expected.columns.join(', ')})`,
+    );
+  }
+}
+
+async function validateLagrangeCanonicalIndex(client, expected) {
+  let result;
+  try {
+    result = await client.query(
+      'SELECT index_name, table_name, column_names, state FROM indices ' +
+        `WHERE table_name = '${expected.tableName}'`,
+    );
+  } catch (error) {
+    throw schemaMismatchError(
+      `Canonical index validation failed for ${expected.indexName}: ${error?.message || error}`,
+      error,
+    );
+  }
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const row = rows.find((entry) => entry?.index_name === expected.indexName);
+  if (!row) {
+    throw schemaMismatchError(
+      `Missing canonical index ${expected.indexName} on ${expected.tableName}`,
+    );
+  }
+  if (row.table_name !== expected.tableName) {
+    throw schemaMismatchError(
+      `Canonical index ${expected.indexName} is bound to ${row.table_name}, ` +
+        `expected ${expected.tableName}`,
+    );
+  }
+  const state = typeof row.state === 'string' ? row.state.trim().toUpperCase() : '';
+  if (state.length > ZERO && INVALID_INDEX_STATES.has(state)) {
+    throw schemaMismatchError(
+      `Canonical index ${expected.indexName} on ${expected.tableName} is in ${row.state} state`,
+    );
+  }
+  assertIndexColumnsMatch(
+    parseIndexColumns(row.column_names, expected.indexName),
+    expected,
+  );
+}
+
+async function validatePostgresCanonicalIndex(client, expected) {
+  let result;
+  try {
+    result = await client.query(
+      'SELECT indexname, tablename, indexdef FROM pg_indexes ' +
+        `WHERE tablename = '${expected.tableName}' AND indexname = '${expected.indexName}'`,
+    );
+  } catch (error) {
+    throw schemaMismatchError(
+      `Canonical index validation failed for ${expected.indexName}: ${error?.message || error}`,
+      error,
+    );
+  }
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const row = rows.find(
+    (entry) =>
+      entry?.indexname === expected.indexName &&
+      entry?.tablename === expected.tableName,
+  );
+  if (!row) {
+    throw schemaMismatchError(
+      `Missing canonical index ${expected.indexName} on ${expected.tableName}`,
+    );
+  }
+  assertIndexColumnsMatch(
+    parsePgIndexDefColumns(row.indexdef, expected.indexName),
+    expected,
+  );
+}
+
+async function validateCanonicalIndexes(client, lockingReadMode = LOCKING_READ_MODE) {
+  for (const expected of CANONICAL_REQUIRED_INDEXES) {
+    if (lockingReadMode === NATIVE_LOCKING_READ_MODE) {
+      await validatePostgresCanonicalIndex(client, expected);
+    } else {
+      await validateLagrangeCanonicalIndex(client, expected);
+    }
+  }
+}
+
+async function validateAllCanonicalTableSchemas(client, lockingReadMode = LOCKING_READ_MODE) {
   for (const table of DROP_TABLES) {
     await validateCanonicalTableSchema(client, table);
   }
+  await validateCanonicalIndexes(client, lockingReadMode);
 }
 
 async function dropExistingTables(client) {
@@ -626,8 +748,13 @@ async function createSchema(client, provisioning) {
   }
 }
 
-async function resetCanonicalDataset(client, dataset, tables) {
-  await validateAllCanonicalTableSchemas(client);
+async function resetCanonicalDataset(
+  client,
+  dataset,
+  tables,
+  lockingReadMode = LOCKING_READ_MODE,
+) {
+  await validateAllCanonicalTableSchemas(client, lockingReadMode);
   for (const table of DROP_TABLES) {
     const startedMs = Date.now();
     try {
@@ -740,7 +867,7 @@ async function prepareDataset(
     if (lockingReadMode === NATIVE_LOCKING_READ_MODE) {
       await dropExistingTables(client);
       await createSchema(client, tables);
-      await validateAllCanonicalTableSchemas(client);
+      await validateAllCanonicalTableSchemas(client, lockingReadMode);
       await loadDataset(client, dataset);
       return evidence();
     }
@@ -750,12 +877,12 @@ async function prepareDataset(
     }
     if (existingTables.length === ZERO) {
       await createSchema(client, tables);
-      await validateAllCanonicalTableSchemas(client);
+      await validateAllCanonicalTableSchemas(client, lockingReadMode);
       await loadDataset(client, dataset);
       return evidence();
     }
     if (existingTables.length === DROP_TABLES.length) {
-      await resetCanonicalDataset(client, dataset, tables);
+      await resetCanonicalDataset(client, dataset, tables, lockingReadMode);
       return evidence();
     }
     throw schemaMismatchError(
@@ -919,7 +1046,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       const tables = [];
       const client = await openClient(createClient, resolvedClientOptions);
       try {
-        await resetCanonicalDataset(client, dataset, tables);
+        await resetCanonicalDataset(client, dataset, tables, resolvedLockingReadMode);
         return Object.freeze({
           outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
           schemaSha256: CANONICAL_SCHEMA_SHA256,
@@ -959,8 +1086,10 @@ async function createLagrangeOltpAdapter(options = {}) {
 }
 
 export {
+  CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,
+  CANONICAL_TABLE_PRIMARY_KEYS,
   LOCKING_READ_MODE as PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
   OLTP_DATASET_RESET_OUTCOME,
   PUBLIC_EXECUTION_PATH as PGWIRE_OLTP_EXECUTION_PATH,

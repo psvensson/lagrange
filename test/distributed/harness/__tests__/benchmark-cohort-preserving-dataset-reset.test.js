@@ -45,6 +45,7 @@ import {SQLParser} from '../../../../src/query/sql-parser.js';
 import {withExecutedStatementType} from '../../../../src/query/application-database-result.js';
 import {deriveCommandTag} from '../../../../src/runtime/pgwire-result-mapper.js';
 import {
+  CANONICAL_REQUIRED_INDEXES,
   CANONICAL_SCHEMA_SHA256,
   CANONICAL_TABLE_COLUMNS,
   OLTP_DATASET_RESET_OUTCOME,
@@ -416,6 +417,7 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
   'and restores clean initial dataset counts', async () => {
   const store = new Map();
   const tableSchemas = new Map();
+  const createdIndexes = new Map();
   const executedSqls = [];
 
   function verifySchemaSelect(colList, table) {
@@ -444,6 +446,32 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
         store.set(table, []);
         tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
         return {rows: [], rowCount: 0};
+      }
+      const createIndexMatch =
+        /^CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z0-9_]+)\s+ON\s+([a-z0-9_]+)\s*\(([^)]+)\)$/iu
+          .exec(normalized);
+      if (createIndexMatch) {
+        const indexName = createIndexMatch[1];
+        const tableName = createIndexMatch[2];
+        const cols = arrayMap(stringSplit(createIndexMatch[3], ','), (c) => stringTrim(c));
+        createdIndexes.set(indexName, {
+          index_name: indexName,
+          table_name: tableName,
+          column_names: JSON.stringify(cols),
+          state: 'READY',
+        });
+        return {rows: [], rowCount: 0};
+      }
+      const indexCatalogMatch =
+        /^SELECT\s+index_name,\s*table_name,\s*column_names,\s*state\s+FROM\s+indices\s+WHERE\s+table_name\s*=\s*'([a-z0-9_]+)'$/iu
+          .exec(normalized);
+      if (indexCatalogMatch) {
+        const targetTable = indexCatalogMatch[1];
+        const matching = arrayFilter(
+          [...createdIndexes.values()],
+          (entry) => entry.table_name === targetTable,
+        );
+        return {rows: matching, rowCount: matching.length};
       }
       if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
         const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
@@ -474,6 +502,16 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
     },
     end: async () => {},
   };
+
+  assert.equal(CANONICAL_REQUIRED_INDEXES.length, 1);
+  assert.equal(CANONICAL_REQUIRED_INDEXES[0].indexName, 'idx_orders_customer_latest');
+  assert.equal(CANONICAL_REQUIRED_INDEXES[0].tableName, 'orders');
+  assert.deepEqual(CANONICAL_REQUIRED_INDEXES[0].columns, [
+    'warehouse_id',
+    'district_id',
+    'customer_id',
+    'order_id',
+  ]);
 
   const adapter = await createLagrangeOltpAdapter({
     endpoint: {host: '127.0.0.1', port: 5433},
@@ -605,5 +643,176 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
       workload: {scale: 1, workers: 1},
     }),
     (error) => error.code === OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED,
+  );
+});
+
+test('interrupted-schema-setup-missing-index: reopening a cohort where all 9 tables exist ' +
+  'but CREATE INDEX idx_orders_customer_latest was not completed fails closed with ' +
+  'schema-mismatch before any TRUNCATE TABLE', async () => {
+  const store = new Map();
+  const tableSchemas = new Map();
+  const createdIndexes = new Map();
+  let failCreateIndexOnInitialSetup = true;
+
+  const catalogClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      const normalized = stringTrim(sql);
+      const createMatch = /^CREATE\s+TABLE\s+([a-z_]+)/iu.exec(normalized);
+      if (createMatch) {
+        const table = createMatch[1];
+        store.set(table, []);
+        tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
+        return {rows: [], rowCount: 0};
+      }
+      const createIndexMatch =
+        /^CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z0-9_]+)\s+ON\s+([a-z0-9_]+)\s*\(([^)]+)\)$/iu
+          .exec(normalized);
+      if (createIndexMatch) {
+        if (failCreateIndexOnInitialSetup) {
+          throw new Error('simulated connection loss before idx_orders_customer_latest creation');
+        }
+        const indexName = createIndexMatch[1];
+        const tableName = createIndexMatch[2];
+        const cols = arrayMap(stringSplit(createIndexMatch[3], ','), (c) => stringTrim(c));
+        createdIndexes.set(indexName, {
+          index_name: indexName,
+          table_name: tableName,
+          column_names: JSON.stringify(cols),
+          state: 'READY',
+        });
+        return {rows: [], rowCount: 0};
+      }
+      const indexCatalogMatch =
+        /^SELECT\s+index_name,\s*table_name,\s*column_names,\s*state\s+FROM\s+indices\s+WHERE\s+table_name\s*=\s*'([a-z0-9_]+)'$/iu
+          .exec(normalized);
+      if (indexCatalogMatch) {
+        const targetTable = indexCatalogMatch[1];
+        const matching = arrayFilter(
+          [...createdIndexes.values()],
+          (entry) => entry.table_name === targetTable,
+        );
+        return {rows: matching, rowCount: matching.length};
+      }
+      if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
+        const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
+        if (!store.has(table)) {
+          throw new Error(`Table not found: ${table}`);
+        }
+        return {rows: [{row_count: store.get(table).length}]};
+      }
+      const schemaSelectMatch = /^SELECT\s+(.+?)\s+FROM\s+([a-z_]+)\s+LIMIT\s+1$/iu.exec(normalized);
+      if (schemaSelectMatch) {
+        const table = schemaSelectMatch[2];
+        if (!store.has(table)) {
+          throw new Error(`Table not found: ${table}`);
+        }
+        const knownCols = tableSchemas.get(table) || new Set();
+        const requestedCols = arrayMap(stringSplit(schemaSelectMatch[1], ','), (c) => stringTrim(c));
+        for (const col of requestedCols) {
+          if (!knownCols.has(col)) {
+            throw new Error(`Column "${col}" does not exist on table "${table}"`);
+          }
+        }
+        return {rows: [], rowCount: 0};
+      }
+      if (stringStartsWith(normalized, 'TRUNCATE TABLE')) {
+        const table = stringReplace(normalized, /^TRUNCATE TABLE\s+/u, '');
+        store.set(table, []);
+        return {rows: [], rowCount: 0};
+      }
+      if (stringStartsWith(normalized, 'INSERT INTO')) {
+        const table = (/^INSERT INTO\s+([a-z_]+)/u.exec(normalized) || [])[1];
+        if (!store.has(table)) store.set(table, []);
+        store.get(table).push(params);
+        return {rows: [], rowCount: 1};
+      }
+      return {rows: [], rowCount: 0};
+    },
+    end: async () => {},
+  };
+
+  // 1. Initial schema setup succeeds on all 9 CREATE TABLE statements and
+  // fails before CREATE INDEX idx_orders_customer_latest completes.
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => catalogClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    /simulated connection loss before idx_orders_customer_latest creation/u,
+  );
+  assert.equal(store.size, 9, 'all 9 OLTP tables exist after interrupted setup');
+  assert.equal(createdIndexes.size, 0, 'idx_orders_customer_latest was not created');
+
+  // 2. Reopening the retained cohort sees all 9 tables present, validates
+  // canonical tables + indexes, detects the missing idx_orders_customer_latest
+  // index, and rejects with schema-mismatch BEFORE executing any TRUNCATE TABLE.
+  failCreateIndexOnInitialSetup = false;
+  const reopenSqls = [];
+  const reopenClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      reopenSqls.push(sql);
+      return catalogClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => reopenClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) =>
+      error.code === OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH &&
+      /idx_orders_customer_latest/u.test(error.message),
+  );
+
+  const truncateStatements = arrayFilter(
+    reopenSqls,
+    (sql) => stringStartsWith(stringTrim(sql), 'TRUNCATE TABLE'),
+  );
+  assert.equal(
+    truncateStatements.length,
+    0,
+    'TRUNCATE TABLE must never execute when idx_orders_customer_latest is missing',
+  );
+
+  // 3. Even if an index named idx_orders_customer_latest exists on orders, if
+  // its column list does not match the canonical 4-column definition, cohort
+  // reuse is also refused with schema-mismatch before any TRUNCATE TABLE.
+  createdIndexes.set('idx_orders_customer_latest', {
+    index_name: 'idx_orders_customer_latest',
+    table_name: 'orders',
+    column_names: JSON.stringify(['warehouse_id', 'district_id']),
+    state: 'READY',
+  });
+  const wrongColsSqls = [];
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => ({
+        connect: async () => {},
+        query: async (sql, params = []) => {
+          wrongColsSqls.push(sql);
+          return catalogClient.query(sql, params);
+        },
+        end: async () => {},
+      }),
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) =>
+      error.code === OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH &&
+      /idx_orders_customer_latest/u.test(error.message),
+  );
+  assert.equal(
+    arrayFilter(wrongColsSqls, (sql) => stringStartsWith(stringTrim(sql), 'TRUNCATE TABLE')).length,
+    0,
+    'TRUNCATE TABLE must never execute when idx_orders_customer_latest has wrong columns',
   );
 });
