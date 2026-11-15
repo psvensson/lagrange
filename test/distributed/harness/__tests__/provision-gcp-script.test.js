@@ -85,6 +85,22 @@ echo "gcloud stand-in: unscripted: $*" >&2
 exit 3
 `;
 
+function seedStandInState(dir, state, {instances, firewall, flags}) {
+  for (const sub of [state, path.join(state, 'instances'), path.join(state, 'firewall'),
+    path.join(dir, '.ssh')]) {
+    fs.mkdirSync(sub, {recursive: true});
+  }
+  for (const name of instances) fs.writeFileSync(path.join(state, 'instances', name), '');
+  for (const [name, rule] of Object.entries(firewall)) {
+    fs.writeFileSync(path.join(state, 'firewall', name), rule);
+  }
+  for (const flag of flags) fs.writeFileSync(path.join(state, flag), '');
+  // Something for a key search to find (CP-12): the script must never use these.
+  for (const name of ['id_ecdsa.pub', 'id_rsa.pub', 'google_compute_engine.pub']) {
+    fs.writeFileSync(path.join(dir, '.ssh', name), `ssh-rsa PLANTED-${name} found@home\n`);
+  }
+}
+
 /**
  * Run the script once. `state` sets up the stand-in's cloud before the run:
  * instances present, firewall rules (name -> rule text) and flag files.
@@ -93,24 +109,13 @@ function runScript({args = [], env = {}, instances = [], firewall = {}, flags = 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'provision-gcp-'));
   const bin = path.join(dir, 'bin');
   const state = path.join(dir, 'state');
-  for (const sub of [bin, state, path.join(state, 'instances'), path.join(state, 'firewall')]) {
-    fs.mkdirSync(sub, {recursive: true});
-  }
+  fs.mkdirSync(bin, {recursive: true});
   fs.writeFileSync(path.join(bin, 'gcloud'), GCLOUD, {mode: 0o755});
   const nodeArgv = path.join(dir, 'node-argv.json');
   fs.writeFileSync(path.join(bin, 'node'), `#!${process.execPath}\n` +
     `require('fs').writeFileSync(${JSON.stringify(nodeArgv)}, ` +
     'JSON.stringify(process.argv.slice(2)));\n', {mode: 0o755});
-  for (const name of instances) fs.writeFileSync(path.join(state, 'instances', name), '');
-  for (const [name, rule] of Object.entries(firewall)) {
-    fs.writeFileSync(path.join(state, 'firewall', name), rule);
-  }
-  for (const flag of flags) fs.writeFileSync(path.join(state, flag), '');
-  // Something for a key search to find (CP-12): the script must never use these.
-  fs.mkdirSync(path.join(dir, '.ssh'));
-  for (const name of ['id_ecdsa.pub', 'id_rsa.pub', 'google_compute_engine.pub']) {
-    fs.writeFileSync(path.join(dir, '.ssh', name), `ssh-rsa PLANTED-${name} found@home\n`);
-  }
+  seedStandInState(dir, state, {instances, firewall, flags});
   const key = path.join(dir, 'bench.pub');
   fs.writeFileSync(key, 'ssh-ed25519 AAAAC3Nza bench@controller\n');
   const out = path.join(dir, 'out');
