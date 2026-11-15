@@ -220,9 +220,21 @@ async function typedReadiness(component, run) {
     return await run();
   } catch (error) {
     if (error?.code) throw error;
-    throw deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+    const aborted = Boolean(error?.aborted);
+    const deadlineExpired = Boolean(error?.deadlineExpired);
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
       `${component} readiness failed: ${errorText(error)}`,
-      {component, last: {error: errorText(error)}});
+      {
+        component,
+        aborted,
+        deadlineExpired,
+        last: {error: errorText(error)},
+        lastObservation: {error: errorText(error)},
+      });
+    failure.aborted = aborted;
+    failure.deadlineExpired = deadlineExpired;
+    failure.lastObservation = {error: errorText(error)};
+    throw failure;
   }
 }
 

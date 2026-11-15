@@ -52,7 +52,12 @@ import {
   deploymentFailure,
 } from './real-product-deployment-contract.js';
 import {inspectProducts, runClassOf} from './real-product-identity.js';
-import {errorText, shellWord} from './real-product-remote-shell.js';
+import {
+  createInFlightTracker,
+  createTrackedSshRun,
+  errorText,
+  shellWord,
+} from './real-product-remote-shell.js';
 import {
   PGWIRE_OLTP_EXECUTION_PATH, PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE, PGWIRE_OLTP_PROTOCOL,
   PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE, createLagrangeOltpAdapter,
@@ -65,9 +70,11 @@ import {
   TIDB_CASE_EXECUTORS,
   TIDB_DATABASE_BY_CASE,
   TIDB_EXECUTED_CASE_IDS,
+  createTrackedMysqlConnectionFactory,
   dropTiDbDatabase,
   executeTiDbDurabilityAfter,
   executeTiDbDurabilityBefore,
+  executeTiDbDurabilitySequence,
   mysqlConnectionFactoryOf,
 } from './comparative-benchmark-tidb-cases.js';
 import {executeProof as executeDeliveryProof} from '../scenarios/scenario-a-delivery-lagrange.js';
@@ -139,7 +146,6 @@ const RETAINED_OBLIGATIONS = objectFreeze([
 const STORAGE_CONTINUITY_PRESERVED = 'preserved';
 const STORAGE_CONTINUITY_UNPRESERVED = 'unpreserved';
 const TIKV_ROLE = 'tikv';
-
 
 const PG_CASE_EXECUTORS = objectFreeze({
   'new-order-contention': executeNewOrderContentionProof,
@@ -487,8 +493,12 @@ function assertSemanticGateActive({signal = null, deadlineAtMs = null, targetId 
 }
 
 function awaitWithGateSignal(promiseOrFn, gateControl = {}) {
-  const promise = typeof promiseOrFn === 'function' ?
-    Promise.resolve().then(promiseOrFn) : promiseOrFn;
+  assertSemanticGateActive(gateControl);
+  const rawPromise = typeof promiseOrFn === 'function' ?
+    Promise.resolve().then(promiseOrFn) : Promise.resolve(promiseOrFn);
+  const promise = typeof gateControl?.trackInFlight === 'function' ?
+    gateControl.trackInFlight(rawPromise) : rawPromise;
+  promise.catch(() => {});
   const signal = gateControl?.signal ?? null;
   if (!signal) return promise;
   return new Promise((resolve, reject) => {
@@ -532,8 +542,19 @@ async function runRemoteNodeJson(sshRun, opts, host, script, payload, gateContro
     targetId = null,
     stage = 'remote-gate-action',
     caseId = null,
+    trackInFlight = null,
+    settleInFlight = null,
   } = gateControl || {};
-  const activeControl = {signal, deadlineAtMs, nowFn, targetId, stage, caseId};
+  const activeControl = {
+    signal,
+    deadlineAtMs,
+    nowFn,
+    targetId,
+    stage,
+    caseId,
+    trackInFlight,
+    settleInFlight,
+  };
   assertSemanticGateActive(activeControl);
   const clock = typeof nowFn === 'function' ? nowFn : dateNow;
   const remainingMs = numberIsFinite(deadlineAtMs) ? deadlineAtMs - clock() : null;
@@ -840,11 +861,19 @@ async function recordCaseOutcome({result, proofCase, system, outcome, evidenceDi
   );
 }
 
-function recordCaseError(result, error) {
+async function recordCaseError({result, proofCase, system, error, evidenceDir}) {
   result.status = 'errored';
   result.error = errorText(error);
   result.failureKind = OLTP_SCENARIO_A_PROOF_FAILURE_KIND.EVIDENCE_INSUFFICIENT;
   result.failureReasons = ['case_errored'];
+  const evidencePath = await persistGateArtifact(
+    evidenceDir,
+    `scenario-a-${proofCase.id}-${system}.json`,
+    result,
+  );
+  if (evidencePath !== null) {
+    result.evidencePath = evidencePath;
+  }
 }
 
 async function runRemotePgWireCase({proofCase, system, connection, binding, persistentStorage,
@@ -866,10 +895,13 @@ async function runRemotePgWireCase({proofCase, system, connection, binding, pers
         onCaseDatasetPrepared({caseId: proofCase.id, resetOutcome: before?.resetOutcome ?? null});
       }
       assertSemanticGateActive({...caseControl, stage: 'durability-restart'});
-      const faultEvidence = await restartProduct({
-        context: {system, endpoint: connection.endpoint, connection: connection.credentials,
-          binding},
-      });
+      const faultEvidence = await awaitWithGateSignal(
+        () => restartProduct({
+          context: {system, endpoint: connection.endpoint, connection: connection.credentials,
+            binding},
+        }),
+        {...caseControl, stage: 'durability-restart'},
+      );
       assertSemanticGateActive({...caseControl, stage: 'durability-after'});
       outcome = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
         {action: REMOTE_ACTION.PG_DURABILITY_AFTER, system, connection, binding, before,
@@ -892,7 +924,7 @@ async function runRemotePgWireCase({proofCase, system, connection, binding, pers
       throw error;
     }
     assertSemanticGateActive(caseControl);
-    recordCaseError(result, error);
+    await recordCaseError({result, proofCase, system, error, evidenceDir});
   }
   assertSemanticGateActive({...caseControl, stage: 'after-case'});
   return objectFreeze(result);
@@ -940,107 +972,54 @@ async function runRemotePgWireSemanticGate({system, connection, binding, evidenc
   let activeConnection = connection;
   let activeBinding = binding;
   const cases = [];
-  for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
-    const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
-    assertSemanticGateActive({...(gateControl || {}), stage: 'before-case', caseId: proofCase.id});
-    const rebound = await beforeCase({caseId: proofCase.id});
-    if (rebound) {
-      activeConnection = rebound.connection;
-      activeBinding = rebound.binding;
-    }
-    assertSemanticGateActive({...(gateControl || {}), stage: 'case-start', caseId: proofCase.id});
-    arrayPush(cases, await runRemotePgWireCase({
-      proofCase,
-      system,
-      connection: activeConnection,
-      binding: activeBinding,
-      persistentStorage,
-      restartProduct,
-      evidenceDir,
-      sshRun,
-      opts,
-      loadGeneratorHost,
-      gateControl,
-      onCaseDatasetPrepared,
-    }));
-    assertSemanticGateActive({...(gateControl || {}), stage: 'case-complete',
-      caseId: proofCase.id});
-  }
-  return summarizeCasesToGate(system, cases);
-}
-
-async function cleanupFailedTiDbDurability({connection, sshRun, opts, loadGeneratorHost,
-  createMysqlConnection, result, gateControl = null}) {
   try {
-    if (loadGeneratorHost) {
-      await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-        {action: REMOTE_ACTION.TIDB_DURABILITY_CLEANUP, connection},
-        gateControl ? {...gateControl, signal: null, deadlineAtMs: null} : null);
-      return;
+    for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
+      const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
+      const beforeControl = {
+        ...(gateControl || {}),
+        stage: 'before-case',
+        caseId: proofCase.id,
+      };
+      assertSemanticGateActive(beforeControl);
+      const rebound = await awaitWithGateSignal(
+        () => beforeCase({caseId: proofCase.id}),
+        beforeControl,
+      );
+      if (rebound) {
+        activeConnection = rebound.connection;
+        activeBinding = rebound.binding;
+      }
+      assertSemanticGateActive({...(gateControl || {}), stage: 'case-start', caseId: proofCase.id});
+      arrayPush(cases, await runRemotePgWireCase({
+        proofCase,
+        system,
+        connection: activeConnection,
+        binding: activeBinding,
+        persistentStorage,
+        restartProduct,
+        evidenceDir,
+        sshRun,
+        opts,
+        loadGeneratorHost,
+        gateControl,
+        onCaseDatasetPrepared,
+      }));
+      assertSemanticGateActive({...(gateControl || {}), stage: 'case-complete',
+        caseId: proofCase.id});
     }
-    const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
-    await dropTiDbDatabase(
-      connection.endpoint,
-      TIDB_DATABASE_BY_CASE[DURABILITY_CASE_ID],
-      createConnection,
-    );
+    return summarizeCasesToGate(system, cases);
   } catch (error) {
-    result.cleanupError = errorText(error);
+    if (cases.length > 0 && error && typeof error === 'object') {
+      error.semanticGate = error.semanticGate ?? summarizeCasesToGate(system, copyArray(cases));
+    }
+    throw error;
   }
-}
-
-async function executeTiDbDurabilitySequence({connection, binding, restartProduct, sshRun, opts,
-  loadGeneratorHost, createMysqlConnection, result, gateControl = null,
-  onCaseDatasetPrepared = null}) {
-  const before = loadGeneratorHost ?
-    await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-      {action: REMOTE_ACTION.TIDB_DURABILITY_BEFORE, connection},
-      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID}) :
-    await awaitWithGateSignal(() => executeTiDbDurabilityBefore({
-      connection,
-      createMysqlConnection,
-    }), {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID});
-  onCaseDatasetPrepared?.({caseId: DURABILITY_CASE_ID});
-  let faultEvidence;
-  try {
-    assertSemanticGateActive({...(gateControl || {}), stage: 'durability-restart',
-      caseId: DURABILITY_CASE_ID});
-    faultEvidence = await restartProduct({
-      context: {
-        system: SYSTEM.TIDB_TIKV,
-        endpoint: connection.endpoint,
-        connection: connection.credentials,
-        binding,
-      },
-    });
-  } catch (restartError) {
-    await cleanupFailedTiDbDurability({
-      connection,
-      sshRun,
-      opts,
-      loadGeneratorHost,
-      createMysqlConnection,
-      result,
-      gateControl,
-    });
-    throw restartError;
-  }
-  return loadGeneratorHost ?
-    runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-      {action: REMOTE_ACTION.TIDB_DURABILITY_AFTER, connection, binding, before, faultEvidence},
-      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID}) :
-    awaitWithGateSignal(() => executeTiDbDurabilityAfter({
-      connection,
-      binding,
-      before,
-      faultEvidence,
-      createMysqlConnection,
-    }), {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID});
 }
 
 async function runTiDbExecutedCase({proofCase, connection, binding, persistentStorage,
   restartProduct, evidenceDir, sshRun, opts, loadGeneratorHost, createMysqlConnection,
-  gateControl = null, onCaseDatasetPrepared = null}) {
+  rawCreateMysqlConnection = createMysqlConnection, gateControl = null,
+  onCaseDatasetPrepared = null}) {
   assertSemanticGateActive({...(gateControl || {}), stage: 'case-start', caseId: proofCase.id});
   const precondition = durabilityPreconditionResult(
     proofCase, persistentStorage, restartProduct, binding);
@@ -1057,9 +1036,17 @@ async function runTiDbExecutedCase({proofCase, connection, binding, persistentSt
         opts,
         loadGeneratorHost,
         createMysqlConnection,
+        rawCreateMysqlConnection,
         result,
         gateControl,
         onCaseDatasetPrepared,
+        runRemoteNodeJson,
+        remoteGateScript: REMOTE_GATE_SCRIPT,
+        beforeAction: REMOTE_ACTION.TIDB_DURABILITY_BEFORE,
+        afterAction: REMOTE_ACTION.TIDB_DURABILITY_AFTER,
+        cleanupAction: REMOTE_ACTION.TIDB_DURABILITY_CLEANUP,
+        assertSemanticGateActive,
+        awaitWithGateSignal,
       });
     } else if (loadGeneratorHost) {
       outcome = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
@@ -1083,16 +1070,29 @@ async function runTiDbExecutedCase({proofCase, connection, binding, persistentSt
       evidenceDir,
     });
   } catch (error) {
-    if (isGateAbortError(error)) throw error;
+    if (isGateAbortError(error, gateControl?.signal)) {
+      assertSemanticGateActive({...(gateControl || {}), stage: 'case-error',
+        caseId: proofCase.id});
+      throw error;
+    }
     assertSemanticGateActive({...(gateControl || {}), stage: 'case-error', caseId: proofCase.id});
-    recordCaseError(result, error);
+    await recordCaseError({
+      result,
+      proofCase,
+      system: SYSTEM.TIDB_TIKV,
+      error,
+      evidenceDir,
+    });
   }
   return objectFreeze(result);
 }
 
-async function advanceCaseTarget(beforeCase, caseId, current) {
+async function advanceCaseTarget(beforeCase, caseId, current, gateControl = null) {
   if (!beforeCase) return current;
-  const rebound = await beforeCase({caseId});
+  const rebound = await awaitWithGateSignal(
+    () => beforeCase({caseId}),
+    {...(gateControl || {}), stage: 'before-case', caseId},
+  );
   return rebound ? {connection: rebound.connection, binding: rebound.binding} : current;
 }
 
@@ -1114,7 +1114,8 @@ async function advanceCaseTarget(beforeCase, caseId, current) {
  */
 async function runTiDbSemanticGate(input) {
   const nowFn = typeof input.now === 'function' ? input.now : dateNow;
-  const gateControl = input.gateControl || {
+  const inFlightTracker = createInFlightTracker();
+  const baseGateControl = input.gateControl || {
     signal: input.signal ?? input.opts?.signal ?? null,
     deadlineAtMs: resolveGateDeadlineAtMs({
       deadlineAtMs: input.deadlineAtMs ?? input.opts?.deadlineAtMs,
@@ -1123,41 +1124,72 @@ async function runTiDbSemanticGate(input) {
     nowFn,
     targetId: input.targetId ?? SYSTEM.TIDB_TIKV,
   };
+  const trackInFlight = typeof baseGateControl.trackInFlight === 'function' ?
+    (promiseOrFn) => baseGateControl.trackInFlight(inFlightTracker.trackInFlight(promiseOrFn)) :
+    inFlightTracker.trackInFlight;
+  const settleInFlight = async () => {
+    await inFlightTracker.settleInFlight();
+    if (typeof baseGateControl.settleInFlight === 'function') {
+      await baseGateControl.settleInFlight();
+    }
+  };
+  const gateControl = {
+    ...baseGateControl,
+    trackInFlight,
+    settleInFlight,
+  };
+  const rawCreateMysqlConnection = input.createMysqlConnection || null;
+  const trackedCreateMysqlConnection = createTrackedMysqlConnectionFactory(
+    rawCreateMysqlConnection,
+    gateControl,
+    {assertSemanticGateActive, awaitWithGateSignal},
+  );
   let target = {connection: input.connection, binding: input.binding};
   const cases = [];
   const executedCaseIds = input.executedCaseIds || TIDB_EXECUTED_CASE_IDS;
-  for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
-    const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
-    assertSemanticGateActive({...gateControl, stage: 'before-case', caseId: proofCase.id});
-    if (!arrayIncludes(executedCaseIds, proofCase.id)) {
-      arrayPush(cases, objectFreeze({
-        caseId: proofCase.id,
-        proofIds: proofCase.proofIds,
+  try {
+    for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
+      const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
+      assertSemanticGateActive({...gateControl, stage: 'before-case', caseId: proofCase.id});
+      if (!arrayIncludes(executedCaseIds, proofCase.id)) {
+        arrayPush(cases, objectFreeze({
+          caseId: proofCase.id,
+          proofIds: proofCase.proofIds,
+          binding: target.binding,
+          status: 'not-executed',
+          reason: 'not-executed-in-tidb-gate-probe',
+        }));
+        continue;
+      }
+      target = await advanceCaseTarget(input.beforeCase, proofCase.id, target, gateControl);
+      assertSemanticGateActive({...gateControl, stage: 'case-start', caseId: proofCase.id});
+      arrayPush(cases, await runTiDbExecutedCase({
+        proofCase,
+        connection: target.connection,
         binding: target.binding,
-        status: 'not-executed',
-        reason: 'not-executed-in-tidb-gate-probe',
+        persistentStorage: Boolean(input.persistentStorage),
+        restartProduct: input.restartProduct || null,
+        evidenceDir: input.evidenceDir || null,
+        sshRun: input.sshRun || null,
+        opts: input.opts || {},
+        loadGeneratorHost: input.loadGeneratorHost || null,
+        createMysqlConnection: trackedCreateMysqlConnection,
+        rawCreateMysqlConnection,
+        gateControl,
+        onCaseDatasetPrepared: input.onCaseDatasetPrepared || null,
       }));
-      continue;
+      assertSemanticGateActive({...gateControl, stage: 'case-complete', caseId: proofCase.id});
     }
-    target = await advanceCaseTarget(input.beforeCase, proofCase.id, target);
-    assertSemanticGateActive({...gateControl, stage: 'case-start', caseId: proofCase.id});
-    arrayPush(cases, await runTiDbExecutedCase({
-      proofCase,
-      connection: target.connection,
-      binding: target.binding,
-      persistentStorage: Boolean(input.persistentStorage),
-      restartProduct: input.restartProduct || null,
-      evidenceDir: input.evidenceDir || null,
-      sshRun: input.sshRun || null,
-      opts: input.opts || {},
-      loadGeneratorHost: input.loadGeneratorHost || null,
-      createMysqlConnection: input.createMysqlConnection || null,
-      gateControl,
-      onCaseDatasetPrepared: input.onCaseDatasetPrepared || null,
-    }));
-    assertSemanticGateActive({...gateControl, stage: 'case-complete', caseId: proofCase.id});
+    return summarizeCasesToGate(SYSTEM.TIDB_TIKV, cases);
+  } catch (error) {
+    if (cases.length > 0 && error && typeof error === 'object') {
+      error.semanticGate = error.semanticGate ??
+        summarizeCasesToGate(SYSTEM.TIDB_TIKV, copyArray(cases));
+    }
+    throw error;
+  } finally {
+    await settleInFlight();
   }
-  return summarizeCasesToGate(SYSTEM.TIDB_TIKV, cases);
 }
 
 function indexProductsByContainer(products) {
@@ -1193,11 +1225,20 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
       deadlineAtMs: deadlineAtMs ?? stageDeadlineAtMs ?? opts?.deadlineAtMs,
       deadlineAt: deadlineAt ?? stageDeadlineAt ?? opts?.deadlineAt,
     });
+    const inFlightTracker = createInFlightTracker();
+    const {trackedSshRun, settleInFlight: settleTrackedSsh} =
+      createTrackedSshRun(sshRun, effectiveSignal);
+    const settleStageInFlight = async () => {
+      await inFlightTracker.settleInFlight();
+      await settleTrackedSsh();
+    };
     const gateControl = {
       signal: effectiveSignal,
       deadlineAtMs: effectiveDeadlineAtMs,
       nowFn: now,
       targetId: run.targetId ?? run.system ?? null,
+      trackInFlight: inFlightTracker.trackInFlight,
+      settleInFlight: settleStageInFlight,
     };
     assertSemanticGateActive({...gateControl, stage: 'start'});
     const evidenceDir = evidenceDirOf(run);
@@ -1222,19 +1263,20 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
     const hasOuterReset = typeof run.resetDataset === 'function' ||
       Boolean(run.adapter && typeof run.adapter.resetDataset === 'function');
     const reset = async (caseId) => {
-      assertSemanticGateActive({...gateControl, stage: 'dataset-reset', caseId});
+      const resetControl = {...gateControl, stage: 'dataset-reset', caseId};
+      assertSemanticGateActive(resetControl);
       if (typeof run.resetDataset === 'function') {
-        await run.resetDataset({
+        await awaitWithGateSignal(() => run.resetDataset({
           caseId,
           connection: connectionOf(current),
           binding: bindingOf(manifest, current),
-        });
+        }), resetControl);
       } else if (run.adapter && typeof run.adapter.resetDataset === 'function') {
-        await run.adapter.resetDataset({caseId});
+        await awaitWithGateSignal(() => run.adapter.resetDataset({caseId}), resetControl);
       } else {
         return;
       }
-      assertSemanticGateActive({...gateControl, stage: 'dataset-reset', caseId});
+      assertSemanticGateActive(resetControl);
       arrayPush(events, {
         kind: EVENT.DATASET_RESET,
         at: at(),
@@ -1270,18 +1312,35 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
         (one) => ownField(one, 'containerId') === target.containerId) ?? null;
       const beforeStartedAt = ownField(beforeProduct, 'startedAt') ?? null;
       const restartedAt = at();
-      await sshRun(target.host, effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
-        `docker restart -t ${RESTART_GRACE_SECONDS} ${shellWord(target.containerId)}`);
-      assertSemanticGateActive({...gateControl, stage: 'product-restart-await-ready'});
-      const readiness = await current.operations.awaitReady();
-      assertSemanticGateActive({...gateControl, stage: 'product-restart-inspect'});
+      await awaitWithGateSignal(
+        () => trackedSshRun(
+          target.host,
+          effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
+          `docker restart -t ${RESTART_GRACE_SECONDS} ${shellWord(target.containerId)}`,
+        ),
+        {...gateControl, stage: 'product-restart'},
+      );
+      const awaitReadyControl = {...gateControl, stage: 'product-restart-await-ready'};
+      assertSemanticGateActive(awaitReadyControl);
+      const readiness = await awaitWithGateSignal(
+        () => current.operations.awaitReady({
+          signal: effectiveSignal,
+          deadlineAtMs: effectiveDeadlineAtMs,
+        }),
+        awaitReadyControl,
+      );
+      const inspectControl = {...gateControl, stage: 'product-restart-inspect'};
+      assertSemanticGateActive(inspectControl);
       const previousByContainer = indexProductsByContainer(current.identity.products);
       current.identity.products = arrayMap(
-        await inspectProducts({
-          sshRun,
-          opts: effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
-          roles: current.identity.products,
-        }),
+        await awaitWithGateSignal(
+          () => inspectProducts({
+            sshRun: trackedSshRun,
+            opts: effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
+            roles: current.identity.products,
+          }),
+          inspectControl,
+        ),
         (one) => preserveReportedIdentity(one, previousByContainer),
       );
       const afterProduct = arrayFind(current.identity.products,
@@ -1327,32 +1386,46 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
       now,
       targetId: gateControl.targetId,
       gateControl,
+      trackInFlight: inFlightTracker.trackInFlight,
+      settleInFlight: settleStageInFlight,
       onCaseDatasetPrepared,
       ...(run.executedCaseIds ? {executedCaseIds: run.executedCaseIds} : {}),
     };
-    let gate;
-    if (run.system === SYSTEM.TIDB_TIKV) {
-      gate = tidbJourney ? await tidbJourney(gateArgs) :
-        await runTiDbSemanticGate({
+    let gate = null;
+    try {
+      if (run.system === SYSTEM.TIDB_TIKV) {
+        gate = tidbJourney ?
+          await awaitWithGateSignal(() => tidbJourney(gateArgs), gateControl) :
+          await runTiDbSemanticGate({
+            ...gateArgs,
+            sshRun: trackedSshRun,
+            opts,
+            loadGeneratorHost,
+            createMysqlConnection,
+          });
+      } else if (loadGeneratorHost) {
+        gate = await runRemotePgWireSemanticGate({
           ...gateArgs,
-          sshRun,
+          sshRun: trackedSshRun,
           opts,
           loadGeneratorHost,
-          createMysqlConnection,
         });
-    } else if (loadGeneratorHost) {
-      gate = await runRemotePgWireSemanticGate({
-        ...gateArgs,
-        sshRun,
-        opts,
-        loadGeneratorHost,
-      });
-    } else {
-      gate = await journey(gateArgs);
+      } else {
+        gate = await awaitWithGateSignal(() => journey(gateArgs), gateControl);
+      }
+      assertSemanticGateActive({...gateControl, stage: 'complete'});
+      if (run.system === SYSTEM.LAGRANGE && hasOuterReset) await reset(BEFORE_MEASUREMENT);
+      return {gate, deployment: current, events};
+    } catch (error) {
+      if (error && typeof error === 'object') {
+        error.events = copyArray(events);
+        error.deployment = current;
+        error.semanticGate = error.semanticGate ?? gate ?? null;
+      }
+      throw error;
+    } finally {
+      await settleStageInFlight();
     }
-    assertSemanticGateActive({...gateControl, stage: 'complete'});
-    if (run.system === SYSTEM.LAGRANGE && hasOuterReset) await reset(BEFORE_MEASUREMENT);
-    return {gate, deployment: current, events};
   };
 }
 

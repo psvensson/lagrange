@@ -19,6 +19,9 @@ import {
   arrayJoin,
   arrayMap,
   arraySome,
+  dateNow,
+  numberIsFinite,
+  objectHasOwn,
   stringSplit,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
@@ -41,6 +44,7 @@ import {
 } from './real-product-exhausted-deployment.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
+  createTrackedSshRun,
   dockerRunDetached,
   shellQuote,
   shellWord,
@@ -104,17 +108,48 @@ function standbyScript({primaryHost, name, password}) {
       (setting) => `-c ${setting}`), ' ')}`], '\n');
 }
 
-function serverReady(ctx, role) {
-  return pollReadiness({component: `${role.role}@${role.host}`,
-    attempts: ctx.budget.attempts, intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep,
-    probe: async () => ({ready: true, diagnostic: await ctx.sshRun(role.host, ctx.opts,
-      `docker exec ${shellWord(role.containerId)} pg_isready -h 127.0.0.1 -p ${PORT} ` +
-      '-U postgres')})});
+function callOptsFor(ctx, pollContext = null) {
+  const hasPollSignal = Boolean(pollContext && objectHasOwn(pollContext, 'signal'));
+  const signal = hasPollSignal ? pollContext.signal : ctx.signal;
+  const timeoutMs = numberIsFinite(pollContext?.remainingMs) ?
+    Math.max(1, pollContext.remainingMs) : undefined;
+  if ((signal === undefined || signal === null) && timeoutMs === undefined) return ctx.opts;
+  return {
+    ...(ctx.opts || {}),
+    ...(signal !== undefined && signal !== null ? {signal} : {}),
+    ...(timeoutMs !== undefined ? {timeoutMs} : {}),
+  };
 }
 
-async function query(ctx, role, sql) {
-  return stringTrim(String(await ctx.sshRun(role.host, ctx.opts,
-    adminSql(role.containerId, sql))));
+function serverReady(ctx, role) {
+  return pollReadiness({
+    component: `${role.role}@${role.host}`,
+    attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: ctx.signal ?? null,
+    deadlineAtMs: ctx.deadlineAtMs ?? null,
+    probe: async (pollContext) => {
+      const callOpts = callOptsFor(ctx, pollContext);
+      return {
+        ready: true,
+        diagnostic: await ctx.sshRun(
+          role.host,
+          callOpts,
+          `docker exec ${shellWord(role.containerId)} pg_isready -h 127.0.0.1 -p ${PORT} ` +
+            '-U postgres',
+          callOpts?.timeoutMs,
+        ),
+      };
+    },
+  });
+}
+
+async function query(ctx, role, sql, pollContext = null) {
+  const callOpts = callOptsFor(ctx, pollContext);
+  return stringTrim(String(await ctx.sshRun(role.host, callOpts,
+    adminSql(role.containerId, sql), callOpts?.timeoutMs)));
 }
 
 function replicationRows(text) {
@@ -138,28 +173,42 @@ async function configureAccess(ctx, primary, {clientIps, standbyHosts, passwords
 }
 
 function streamingReady(ctx, primary, expected) {
-  return pollReadiness({component: 'postgres-streaming-standbys',
-    attempts: ctx.budget.attempts, intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep,
-    probe: async () => {
+  return pollReadiness({
+    component: 'postgres-streaming-standbys',
+    attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: ctx.signal ?? null,
+    deadlineAtMs: ctx.deadlineAtMs ?? null,
+    probe: async (pollContext) => {
       const rows = replicationRows(await query(ctx, primary,
         'SELECT application_name, state, sync_state FROM pg_stat_replication ' +
-        'ORDER BY application_name'));
+        'ORDER BY application_name', pollContext));
       return {ready: rows.length === expected &&
         arrayEvery(rows, (row) => row.state === 'streaming'), diagnostic: rows};
-    }});
+    },
+  });
 }
 
 function synchronousReady(ctx, primary, setting) {
-  return pollReadiness({component: 'postgres-synchronous-standby',
-    attempts: ctx.budget.attempts, intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep,
-    probe: async () => {
-      const readBack = await query(ctx, primary, 'SHOW synchronous_standby_names');
+  return pollReadiness({
+    component: 'postgres-synchronous-standby',
+    attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: ctx.signal ?? null,
+    deadlineAtMs: ctx.deadlineAtMs ?? null,
+    probe: async (pollContext) => {
+      const readBack = await query(ctx, primary, 'SHOW synchronous_standby_names', pollContext);
       const rows = replicationRows(await query(ctx, primary,
         'SELECT application_name, state, sync_state FROM pg_stat_replication ' +
-        'ORDER BY application_name'));
+        'ORDER BY application_name', pollContext));
       return {ready: readBack === setting && arraySome(rows, (row) => row.syncState === 'sync'),
         diagnostic: {synchronousStandbyNames: readBack, replication: rows}};
-    }});
+    },
+  });
 }
 
 async function startStandbys(ctx, primary, {hosts, campaignId, image, passwords, roles}) {
@@ -190,29 +239,56 @@ async function observeRoles(ctx, roles) {
     'ORDER BY application_name'))};
 }
 
+function resolvePostgresClock(now, nowFn, opts) {
+  if (typeof nowFn === 'function') return nowFn;
+  if (typeof now === 'function') return now;
+  if (typeof opts?.nowFn === 'function') return opts.nowFn;
+  if (typeof opts?.now === 'function') return opts.now;
+  return dateNow;
+}
+
 /**
  * @param {{targetId: string, hosts: Array<string>, clientIp: string,
- *   sshRun: Function, opts: Object, campaignId: string, sleep: Function}} input
+ *   sshRun: Function, opts: Object, campaignId: string, sleep: Function,
+ *   signal?: AbortSignal|null, now?: Function, nowFn?: Function}} input
  * @return {Promise<Object>}
  */
-async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, campaignId,
-  sleep}) {
+async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts = {}, campaignId,
+  sleep, signal = null, now, nowFn}) {
   requireCampaignId(campaignId);
   if (targetId !== TARGET.SINGLE && targetId !== TARGET.SYNC_HA) {
     throw new Error(`unknown PostgreSQL comparative target ${targetId}`);
   }
   const image = opts.postgresImage || POSTGRES_IMAGE_DEFAULT;
-  const ctx = {sshRun, opts, sleep, budget: resolveReadinessBudget(opts)};
+  const clock = resolvePostgresClock(now, nowFn, opts);
+  const abortSignal = signal ?? opts?.signal ?? null;
+  const deadlineAtMs = numberIsFinite(opts?.deadlineAtMs) ? opts.deadlineAtMs : null;
+  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
+  const ctx = {sshRun: trackedSshRun, settleInFlight, opts, sleep, now: clock,
+    signal: abortSignal, deadlineAtMs, budget: resolveReadinessBudget(opts)};
   const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
-  const postFailureCtx = {...ctx, opts: postFailureOpts, signal: null};
+  const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null, deadlineAtMs: null};
   const passwords = {superuser: generatedPassword(), app: generatedPassword(),
     replication: generatedPassword()};
   const formed = {roles: [], endpoint: null};
-  return describingReadinessExhaustion(() => formPostgresCluster({ctx, targetId, hosts,
-    clientIp, campaignId, image, passwords, formed}), (failure) => describeExhaustedDeployment({
-    targetId, topology: postgresTopology(targetId), sshRun, opts: postFailureOpts,
-    roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_ROOT,
-    readVersions: (products) => reportedVersions(postFailureCtx, products), failure}));
+  try {
+    return await describingReadinessExhaustion(
+      async () => {
+        try {
+          return await formPostgresCluster({ctx, targetId, hosts,
+            clientIp, campaignId, image, passwords, formed});
+        } finally {
+          await settleInFlight();
+        }
+      },
+      (failure) => describeExhaustedDeployment({
+        targetId, topology: postgresTopology(targetId), sshRun, opts: postFailureOpts,
+        roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_ROOT,
+        readVersions: (products) => reportedVersions(postFailureCtx, products), failure}),
+    );
+  } finally {
+    await settleInFlight();
+  }
 }
 
 function postgresTopology(targetId) {
@@ -290,13 +366,22 @@ async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, 
       observePlacement: async () => observeRoles(ctx, roles),
       observeRoles: async () => observeRoles(ctx, roles),
       // The arm's readiness contract again (after a product restart).
-      awaitReady: async () => {
-        const again = {servers: []};
-        for (const role of roles) again.servers.push(await serverReady(ctx, role));
-        if (roles.length > 1) {
-          again.streaming = await streamingReady(ctx, primary, roles.length - 1);
+      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs} = {}) => {
+        const readyCtx = {
+          ...ctx,
+          signal: readySignal !== undefined ? readySignal : ctx.signal,
+          deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : ctx.deadlineAtMs,
+        };
+        try {
+          const again = {servers: []};
+          for (const role of roles) again.servers.push(await serverReady(readyCtx, role));
+          if (roles.length > 1) {
+            again.streaming = await streamingReady(readyCtx, primary, roles.length - 1);
+          }
+          return again;
+        } finally {
+          await ctx.settleInFlight();
         }
-        return again;
       },
     },
   };

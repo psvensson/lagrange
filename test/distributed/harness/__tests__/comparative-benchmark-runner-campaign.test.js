@@ -7,10 +7,16 @@
 // stream A's record owner (a recording stand-in for validateRunRecord /
 // computeRunObservationsDigest; the real one is wired by the runner CLI).
 import assert from 'node:assert/strict';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import {runComparativeCampaign} from '../comparative-benchmark-campaign-runner.js';
-import {createSemanticGateStage} from '../comparative-benchmark-semantic-gate.js';
+import {
+  createSemanticGateStage,
+  runTiDbSemanticGate,
+} from '../comparative-benchmark-semantic-gate.js';
 import * as deployers from '../real-product-cluster-deployers.js';
 import {runScenarioASemanticProofJourney} from '../../scenarios/scenario-a-semantic-proof-journey.js';
 import {
@@ -747,4 +753,181 @@ test('watchdog cancellation & deadline inside semantic gate (remote loadGenerato
   assert.deepEqual(arrayMap(erroredGate.events, (e) => [e.kind, e.caseId]), [
     ['dataset-reset', 'visibility'],
   ]);
+});
+
+test('Review #6: delayed in-flight semantic-gate operation settles before teardownRun, and ' +
+  'earlier Case 1 failure/error + harnessEvents are preserved on the interrupted run record',
+async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'lagrange-campaign-rev6-'));
+  try {
+    const timeline = [];
+    let clock = 1_000;
+    const deadlineAt = 1_020;
+    const stage = createSemanticGateStage({
+      journey: (gateArgs) => runScenarioASemanticProofJourney({
+        ...gateArgs,
+        createClient: () => {
+          let connectNum = 0;
+          return {
+            connect: async () => {
+              connectNum += 1;
+            },
+            query: async () => {
+              if (gateArgs.onCaseDatasetPrepared && connectNum === 1) {
+                // Case 1 fails with an adapter/query error; Case 2 delays 35ms past abort.
+              }
+              throw new Error('unexpected query');
+            },
+            end: async () => {},
+          };
+        },
+      }),
+      sshRun: async (_host, _callOpts, command) => {
+        const encoded = stringTrim(stringSplit(command, /\s+/u).at(-1));
+        const payload = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+        if (payload.caseId === 'new-order-contention') {
+          timeline.push('case1-error');
+          throw new Error('case-1-contention-boom');
+        }
+        timeline.push(`case2-start:${payload.caseId}`);
+        await new Promise((resolve) => setTimeout(resolve, 45));
+        timeline.push(`case2-settled:${payload.caseId}`);
+        return JSON.stringify({evaluation: {passed: true}, proofRecord: null, evidence: {}});
+      },
+      opts: {},
+      loadGeneratorHost: {ip: '10.0.0.9', repoPath: '/srv/repo', nodePath: '/usr/bin/node'},
+      evidenceDirOf: (activeRun) => path.join(tempDir, activeRun.runId),
+      now: () => clock,
+      redeploy: async () => deployment('r-lagrange'),
+    });
+
+    const {deps, records} = harness({
+      now: () => clock,
+      deadlineAt,
+      runSemanticGate: ({run: activeRun, manifest, deployment: deployed, signal, deadlineAtMs}) => {
+        if (activeRun.targetId !== 'lagrange') {
+          return Promise.resolve({gate: {status: 'passed'}, deployment: deployed, events: []});
+        }
+        return stage({
+          run: {
+            ...activeRun,
+            system: 'lagrange',
+            resetDataset: async () => {
+              clock = 1_005;
+            },
+          },
+          manifest,
+          deployment: {
+            ...deployed,
+            access: {
+              endpoint: {host: '10.0.0.1', port: 5432, protocol: 'pg-wire'},
+              connection: {user: 'postgres', database: 'lagrange'},
+            },
+            operations: {awaitReady: async () => ({ready: true})},
+          },
+          signal,
+          deadlineAtMs,
+        });
+      },
+      teardownRun: async (activeRun) => {
+        if (activeRun.targetId === 'lagrange') {
+          timeline.push('teardown-run');
+        }
+        return {complete: true, removed: ['c1'], unclosed: []};
+      },
+    });
+
+    await run(deps);
+
+    const lagrangeRecord = arrayFind(records.slice(1), (r) => r.targetId === 'lagrange');
+    assert.ok(lagrangeRecord, 'interrupted Lagrange run record must be present');
+    assert.deepEqual(timeline, [
+      'case1-error',
+      'case2-start:visibility',
+      'case2-settled:visibility',
+      'teardown-run',
+    ], 'teardownRun must not execute until Case 2 in-flight SSH operation has settled');
+    assert.equal(lagrangeRecord.execution.state, 'interrupted');
+    assert.equal(lagrangeRecord.failureClass, 'interrupted');
+    assert.equal(lagrangeRecord.execution.failure.code, 'watchdog_stopped');
+
+    // Verify Case 1 errored artifact was persisted to disk before Case 2 was interrupted:
+    const case1ArtifactPath = path.join(
+      tempDir,
+      lagrangeRecord.runId,
+      'scenario-a-new-order-contention-lagrange.json',
+    );
+    const persistedCase1 = JSON.parse(await readFile(case1ArtifactPath, 'utf8'));
+    assert.equal(persistedCase1.caseId, 'new-order-contention');
+    assert.equal(persistedCase1.status, 'errored');
+    assert.match(persistedCase1.error, /case-1-contention-boom/u);
+
+    // Verify the final campaign run record preserves Case 1's failure/error in correctness:
+    assert.ok(lagrangeRecord.correctness, 'interrupted run with prior case result must retain correctness');
+    assert.equal(lagrangeRecord.correctness.status, 'fail');
+    assert.ok(lagrangeRecord.correctness.semanticGate);
+    assert.equal(lagrangeRecord.correctness.semanticGate.cases.length, 1);
+    assert.equal(lagrangeRecord.correctness.semanticGate.cases[0].caseId, 'new-order-contention');
+    assert.equal(lagrangeRecord.correctness.semanticGate.cases[0].status, 'errored');
+    assert.match(lagrangeRecord.correctness.semanticGate.cases[0].error, /case-1-contention-boom/u);
+    assert.equal(lagrangeRecord.correctness.semanticGate.cases[0].evidencePath, case1ArtifactPath);
+
+    // Verify prior gate harnessEvents (dataset-reset before visibility) are retained alongside watchdog-stop:
+    assert.deepEqual(
+      arrayMap(lagrangeRecord.harnessEvents, (e) => [e.kind, e.caseId ?? null]),
+      [
+        ['dataset-reset', 'visibility'],
+        ['watchdog-stop', null],
+      ],
+    );
+
+    // Also verify runTiDbSemanticGate waits for in-flight SQL queries to settle on abort:
+    const tidbTimeline = [];
+    const tidbAbort = new AbortController();
+    await assert.rejects(
+      async () => {
+        try {
+          await runTiDbSemanticGate({
+            connection: {endpoint: {host: '10.0.0.1', port: 4000}, credentials: {user: 'root'}},
+            binding: {
+              campaignId: 'camp-rev6',
+              containerId: 'c'.repeat(64),
+              imageId: `sha256:${'a'.repeat(64)}`,
+              endpoint: '10.0.0.1:4000',
+            },
+            persistentStorage: false,
+            executedCaseIds: ['visibility'],
+            signal: tidbAbort.signal,
+            createMysqlConnection: async () => ({
+              query: async () => {
+                tidbTimeline.push('sql-query-start');
+                setTimeout(() => {
+                  tidbTimeline.push('tidb-signal-abort');
+                  tidbAbort.abort();
+                }, 5);
+                await new Promise((resolve) => setTimeout(resolve, 35));
+                tidbTimeline.push('sql-query-settled');
+                return [[]];
+              },
+              end: async () => {
+                tidbTimeline.push('sql-conn-ended');
+              },
+            }),
+          });
+        } finally {
+          tidbTimeline.push('tidb-gate-exited');
+        }
+      },
+      (error) => error.code === 'watchdog_stopped',
+    );
+    assert.deepEqual(tidbTimeline, [
+      'sql-query-start',
+      'tidb-signal-abort',
+      'sql-conn-ended',
+      'sql-query-settled',
+      'tidb-gate-exited',
+    ], 'runTiDbSemanticGate must wait for delayed in-flight SQL query to settle before exiting');
+  } finally {
+    await rm(tempDir, {recursive: true, force: true});
+  }
 });
