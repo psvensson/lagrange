@@ -1,3 +1,4 @@
+import {loadMysql2Promise} from './native-clients.js';
 import {
   TABLES,
   buildTableQuery,
@@ -19,8 +20,8 @@ function connectionOptions(endpoint, databaseName) {
 }
 
 async function defaultCreateConnection(options) {
-  const mysql = await import('mysql2/promise');
-  return (mysql.default || mysql).createConnection(options);
+  const mysql = await loadMysql2Promise();
+  return mysql.createConnection(options);
 }
 
 async function observeTiDbOltpStateSnapshot(options = {}) {

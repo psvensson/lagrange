@@ -387,13 +387,23 @@ async function tableExists(client, table) {
   throw observed.error;
 }
 
-// Preparation drops every existing table; an engine that cannot drop is a
-// failed preparation (the dataset is fresh only on a fresh formation).
-async function dropExistingTables(client) {
+// Preparation resets every existing table: engines that support DROP TABLE
+// drop and recreate; engines that refuse DROP TABLE (Lagrange) truncate in
+// place so cohort-preserving semantic cases and the measured workload share
+// the same cluster without re-forming.
+async function resetExistingTables(client) {
+  const truncated = new Set();
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) continue;
-    await client.query(`DROP TABLE IF EXISTS ${table}`);
+    try {
+      await client.query(`DROP TABLE IF EXISTS ${table}`);
+    } catch (error) {
+      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
+      await client.query(`TRUNCATE TABLE ${table}`);
+      truncated.add(table);
+    }
   }
+  return truncated;
 }
 
 const TABLE_DROP_OUTCOME = Object.freeze({
@@ -531,8 +541,14 @@ async function createSchemaStatement(client, statement, provisioning) {
   }
 }
 
-async function createSchema(client, provisioning) {
+async function createSchema(client, provisioning, truncatedTables) {
   for (const statement of CREATE_SCHEMA) {
+    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1] ?? null;
+    if (table !== null && truncatedTables.has(table)) {
+      provisioning.push(Object.freeze({table, outcome: PROVISIONING_OUTCOME.ROUTABLE,
+        states: Object.freeze([])}));
+      continue;
+    }
     await createSchemaStatement(client, statement, provisioning);
   }
 }
@@ -613,8 +629,8 @@ async function prepareDataset(createClient, options, dataset) {
     tables: Object.freeze([...tables])});
   const client = await openClient(createClient, options);
   try {
-    await dropExistingTables(client);
-    await createSchema(client, tables);
+    const truncatedTables = await resetExistingTables(client);
+    await createSchema(client, tables, truncatedTables);
     await loadDataset(client, dataset);
     return evidence();
   } catch (error) {

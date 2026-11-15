@@ -468,4 +468,34 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
   assert.equal(afterEvidence.stateCounts.history, 0);
 
   await adapter.close();
+
+  // Opening a second adapter against the same cohort (as each semantic-gate
+  // case and the measured workload do) truncates existing tables in place when
+  // DROP TABLE is unsupported, without re-issuing CREATE TABLE on them.
+  const secondSqls = [];
+  const lagrangeClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      secondSqls.push(sql);
+      const normalized = stringTrim(sql);
+      if (stringStartsWith(normalized, 'DROP TABLE')) {
+        throw new Error('Unsupported statement type: DROP_TABLE');
+      }
+      if (stringStartsWith(normalized, 'CREATE TABLE')) {
+        throw new Error('Table already exists');
+      }
+      return fakeClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+  store.set('orders', [{order_id: 202}]);
+  const secondAdapter = await createLagrangeOltpAdapter({
+    endpoint: {host: '127.0.0.1', port: 5433},
+    connection: {user: 'bench', database: 'bench'},
+    createClient: () => lagrangeClient,
+    workload: {scale: 1, workers: 1},
+  });
+  assert.equal((await secondAdapter.getEvidence()).stateCounts.orders, 0);
+  assert.ok(arrayFilter(secondSqls, (s) => stringStartsWith(stringTrim(s), 'TRUNCATE TABLE')).length >= 9);
+  await secondAdapter.close();
 });
