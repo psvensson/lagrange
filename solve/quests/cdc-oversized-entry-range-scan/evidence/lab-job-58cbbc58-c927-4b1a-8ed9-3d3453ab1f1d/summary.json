@@ -1,0 +1,19 @@
+{
+ "job": "58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d",
+ "terminal": {
+  "docker_create_attempted": false,
+  "elapsed_s": 152.234,
+  "execution_scope_closed": true,
+  "exit_code": 0,
+  "generation": "e1b0571f-c4ea-4346-b4ce-d2d7819463d8",
+  "host": "adams-gamla",
+  "intentDigest": "5c7be681cfd7a50b43959ded033a0b6a060d797f0c84edcbb7bfc73dfbb7a2f0",
+  "job_id": "58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d",
+  "reason": null,
+  "source_execution_started": false,
+  "state": "COMPLETE",
+  "unit": "lagrange-lab3-e1b0571fc4ea4346b4ced2d7819463d8-58cbbc58c9274b1a8ed93d3453ab1f1d.service",
+  "workload_started": true
+ },
+ "evidence_problems": []
+}

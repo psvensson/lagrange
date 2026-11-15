@@ -21,6 +21,7 @@ import {
   PARTITION_CDC_COMMAND as COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
+  PARTITION_CDC_OBLIGATION_REASON as REASON,
   PARTITION_CDC_OBLIGATION_SQL as SQL,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
 import * as ledger from '../../src/partition/partition-cdc-obligation-ledger.js';
@@ -66,6 +67,8 @@ const WHOLE_TAIL_EVENTS = 128;
 const MAX_COMPOSE_SPAN_MS = 100;
 const MAX_DRIVE_SPAN_MS = 3000;
 const MAX_FULL_DRAIN_MS = 20000;
+const MULTI_OVERSIZED_LOG_INDICES = Object.freeze([10, 11, 12]);
+const MULTI_OVERSIZED_EVENTS_PER_ENTRY = 300;
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -73,7 +76,12 @@ afterEach(clearFixtureSingletons);
 const idsOf = (count, prefix) => Array.from({length: count}, (_unused, index) =>
   `${prefix}-${String(index).padStart(4, '0')}`);
 
-function populateOversizedEntry(leader, count, tag = 'oversized-scaling') {
+function populateOversizedEntry(
+  leader,
+  count,
+  tag = 'oversized-scaling',
+  logIndex = OVERSIZED_LOG_INDEX,
+) {
   ensureCdcObligationLedger(leader.db);
   const timestamp = new HLCTimestamp(1000, 0, 'source-progress-component').toString();
   const insertAll = leader.db.transaction(() => {
@@ -81,7 +89,7 @@ function populateOversizedEntry(leader, count, tag = 'oversized-scaling') {
       const id = `${tag}-${String(ordinal).padStart(4, '0')}`;
       insertCdcObligation(leader.db, {
         eventKey: `txop:${tag}:${ordinal}`,
-        logIndex: OVERSIZED_LOG_INDEX,
+        logIndex,
         term: OVERSIZED_TERM,
         ordinal,
         entryId: `commit:${tag}`,
@@ -237,9 +245,24 @@ async function drainOversizedEntryEndToEnd(t, eventCount) {
   const fullDrainMs = Number((performance.now() - drainStartMs).toFixed(3));
   assertRecipientLogs(model, {label: tag});
   assert.deepEqual(countCdcObligations(f.leader.db), {owed: 0, delivered: eventCount});
-  assert.equal(ledger.readOwedCdcEntryBytes(f.leader.db, OVERSIZED_LOG_INDEX), 0);
   const totalEntryBytesQueries =
     waveSnapshots.reduce((sum, wave) => sum + wave.entryBytes, 0) + observed.counts.entryBytes;
+  assert.equal(
+    f.leader.db._cdcOwedEntryBytes?.has(OVERSIZED_LOG_INDEX) ?? false,
+    false,
+    `M=${eventCount}: completed entry evicted from _cdcOwedEntryBytes on commit without final byte read`,
+  );
+  assert.equal(
+    f.leader.db._cdcOwedEntryBytes?.size ?? 0,
+    0,
+    `M=${eventCount}: _cdcOwedEntryBytes holds zero retained entries after full drain`,
+  );
+  assert.equal(ledger.readOwedCdcEntryBytes(f.leader.db, OVERSIZED_LOG_INDEX), 0);
+  assert.equal(
+    f.leader.db._cdcOwedEntryBytes?.has(OVERSIZED_LOG_INDEX) ?? false,
+    false,
+    `M=${eventCount}: reading 0 owed bytes does not repopulate _cdcOwedEntryBytes`,
+  );
   const maxWaveQueries = Math.max(...waveSnapshots.map((wave) => wave.totalRangeReads));
   const maxComposeSpanMs = Math.max(...waveSnapshots.map((wave) => wave.composeSpanMs));
   const maxDriveSpanMs = Math.max(...driveSpansMs);
@@ -529,5 +552,133 @@ test('R3 pending/hydrated prefix paging and position-only drainPendingHydratedOb
   assert.deepEqual(
     countCdcObligations(fDrain.leader.db),
     {owed: 0, delivered: drainRows.length},
+  );
+});
+
+test('R5 byte-tally commit eviction and rollback restoration: completing multiple oversized entries evicts every tally on commit with zero retained unverified keys, and rolling back a failed CDC_DELIVERED apply after MARK_DELIVERED invalidates the uncommitted tally via afterRollback', async (t) => {
+  const fMulti = await fixture(t, {
+    rows: [],
+    subscribers: 1,
+    populate: (leader) => {
+      let total = 0;
+      for (const logIndex of MULTI_OVERSIZED_LOG_INDICES) {
+        total += populateOversizedEntry(
+          leader,
+          MULTI_OVERSIZED_EVENTS_PER_ENTRY,
+          `r5-multi-${logIndex}`,
+          logIndex,
+        );
+      }
+      return total;
+    },
+  });
+  const multiModel = installRecipientModel(fMulti);
+  await runLaneToQuiescence(fMulti, {maxRounds: 400, label: 'r5-multi-entry'});
+  assertRecipientLogs(multiModel, {label: 'r5-multi-entry'});
+  assert.deepEqual(
+    countCdcObligations(fMulti.leader.db),
+    {
+      owed: 0,
+      delivered: MULTI_OVERSIZED_LOG_INDICES.length * MULTI_OVERSIZED_EVENTS_PER_ENTRY,
+    },
+  );
+  assert.equal(
+    fMulti.leader.db._cdcOwedEntryBytes?.size ?? 0,
+    0,
+    'all completed oversized entries evicted from _cdcOwedEntryBytes on commit without extra byte reads',
+  );
+  for (const logIndex of MULTI_OVERSIZED_LOG_INDICES) {
+    assert.equal(
+      fMulti.leader.db._cdcOwedEntryBytes?.has(logIndex) ?? false,
+      false,
+      `logIndex=${logIndex}: evicted on final CDC_DELIVERED commit`,
+    );
+  }
+
+  const fRollback = await fixture(t, {
+    rows: [],
+    subscribers: 1,
+    populate: (leader) => populateOversizedEntry(
+      leader,
+      MULTI_OVERSIZED_EVENTS_PER_ENTRY,
+      'r5-rollback',
+      OVERSIZED_LOG_INDEX,
+    ),
+  });
+  const rollbackModel = installRecipientModel(fRollback);
+  const wave1 = await fRollback.drive();
+  assert.equal(wave1.state, DRIVE.PAGE_YIELDED);
+  assert.equal(
+    fRollback.leader.db._cdcOwedEntryBytes?.has(OVERSIZED_LOG_INDEX),
+    true,
+    'oversized entry tally warmed on drive',
+  );
+  const durableBytesBefore = fRollback.leader.db._cdcOwedEntryBytes.get(OVERSIZED_LOG_INDEX).bytes;
+  assert.ok(durableBytesBefore > BOUND.SHIP_MAX_BYTES);
+
+  await fRollback.leader.cdcDelivery.flushCdcAcknowledgements(REASON.FLUSH_DEADLINE);
+  await settleTicks();
+  const [ackCommand] = fRollback.proposed.filter((cmd) => cmd.type === COMMAND.DELIVERED);
+  assert.ok(ackCommand, 'CDC_DELIVERED batch proposed');
+
+  const originalPrepare = fRollback.leader.db.prepare;
+  let injectedProgressFailure = false;
+  let unverifiedDuringApply = 0;
+  fRollback.leader.db.prepare = function(sql) {
+    const statement = originalPrepare.call(this, sql);
+    if (sql === SQL.UPSERT_PROGRESS && !injectedProgressFailure) {
+      return {
+        ...statement,
+        run() {
+          injectedProgressFailure = true;
+          unverifiedDuringApply =
+            fRollback.leader.db._cdcOwedEntryBytes?.get(OVERSIZED_LOG_INDEX)?.unverified.size ?? 0;
+          throw new Error('simulated mid-transaction progress write failure');
+        },
+      };
+    }
+    return statement;
+  };
+  try {
+    const failedOutcome = applyCommitted(fRollback.leader, ackCommand);
+    assert.equal(
+      failedOutcome,
+      'simulated mid-transaction progress write failure',
+      'acknowledgement transaction threw after MARK_DELIVERED and rolled back',
+    );
+  } finally {
+    fRollback.leader.db.prepare = originalPrepare;
+  }
+
+  assert.ok(
+    unverifiedDuringApply > 0,
+    'MARK_DELIVERED mutated the in-memory tally inside the transaction before the rollback',
+  );
+  assert.equal(
+    fRollback.leader.db._cdcOwedEntryBytes?.has(OVERSIZED_LOG_INDEX) ?? false,
+    false,
+    'afterRollback immediately evicted the uncommitted tally upon transaction rollback',
+  );
+  assert.deepEqual(
+    countCdcObligations(fRollback.leader.db),
+    {owed: MULTI_OVERSIZED_EVENTS_PER_ENTRY, delivered: 0},
+    'durable ledger rows remain owed after rollback',
+  );
+  assert.equal(
+    ledger.readOwedCdcEntryBytes(fRollback.leader.db, OVERSIZED_LOG_INDEX),
+    durableBytesBefore,
+    'next readOwedCdcEntryBytes recomputes exact durable owed bytes from SQLite',
+  );
+
+  await runLaneToQuiescence(fRollback, {maxRounds: 300, label: 'r5-rollback'});
+  assertRecipientLogs(rollbackModel, {label: 'r5-rollback'});
+  assert.deepEqual(
+    countCdcObligations(fRollback.leader.db),
+    {owed: 0, delivered: MULTI_OVERSIZED_EVENTS_PER_ENTRY},
+  );
+  assert.equal(
+    fRollback.leader.db._cdcOwedEntryBytes?.size ?? 0,
+    0,
+    'completed entry evicted after recovery drain',
   );
 });

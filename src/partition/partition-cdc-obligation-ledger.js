@@ -47,7 +47,7 @@ function restoreUnverifiedEntryBytes(tally) {
   tally.unverifiedTerm = null;
 }
 
-function settleUnverifiedEntryBytes(db, tally) {
+function settleUnverifiedEntryBytes(db, tally, byLogIndex = null, logIndex = null) {
   if (tally.unverified.size === 0) return;
   let lastEventKey = null;
   for (const eventKey of tally.unverified.keys()) {
@@ -63,10 +63,15 @@ function settleUnverifiedEntryBytes(db, tally) {
   tally.unverified.clear();
   tally.unverifiedIndex = null;
   tally.unverifiedTerm = null;
+  if (tally.bytes <= 0 && byLogIndex && logIndex !== null) {
+    byLogIndex.delete(logIndex);
+  }
 }
 
 function recordDeliveredEntryBytes(db, moved, eventKey, {index, term}) {
-  const tally = db._cdcOwedEntryBytes?.get(Number(moved.log_index));
+  const byLogIndex = db._cdcOwedEntryBytes;
+  const logIndex = Number(moved.log_index);
+  const tally = byLogIndex?.get(logIndex);
   if (tally === undefined) return;
   const normalizedIndex = Number(index);
   const normalizedTerm = Number(term);
@@ -83,6 +88,32 @@ function recordDeliveredEntryBytes(db, moved, eventKey, {index, term}) {
     tally.unverified.set(eventKey, eventBytes);
     tally.unverifiedIndex = normalizedIndex;
     tally.unverifiedTerm = normalizedTerm;
+  } else if (tally.bytes <= 0) {
+    byLogIndex.delete(logIndex);
+  }
+}
+
+function commitOwedEntryByteTallies(db) {
+  const byLogIndex = db?._cdcOwedEntryBytes;
+  if (!byLogIndex) return;
+  for (const [logIndex, tally] of byLogIndex) {
+    tally.unverified.clear();
+    tally.unverifiedIndex = null;
+    tally.unverifiedTerm = null;
+    if (tally.bytes <= 0) {
+      byLogIndex.delete(logIndex);
+    }
+  }
+}
+
+function rollbackOwedEntryByteTallies(db) {
+  const byLogIndex = db?._cdcOwedEntryBytes;
+  if (!byLogIndex) return;
+  for (const [logIndex, tally] of byLogIndex) {
+    if (tally.unverified.size > 0) {
+      restoreUnverifiedEntryBytes(tally);
+      byLogIndex.delete(logIndex);
+    }
   }
 }
 
@@ -268,13 +299,15 @@ function readOwedCdcEntryBytes(db, logIndex) {
   const tally = byLogIndex.get(normalizedLogIndex);
   if (tally !== undefined) {
     if (tally.unverified.size > 0 && !db.inTransaction) {
-      settleUnverifiedEntryBytes(db, tally);
+      settleUnverifiedEntryBytes(db, tally, byLogIndex, normalizedLogIndex);
+    } else if (tally.bytes <= 0 && !db.inTransaction) {
+      byLogIndex.delete(normalizedLogIndex);
     }
     return tally.bytes;
   }
   const row = db.prepare(SQL.SELECT_OWED_ENTRY_BYTES).get({logIndex: normalizedLogIndex});
   const bytes = Number(row.entry_bytes);
-  if (!db.inTransaction) {
+  if (!db.inTransaction && bytes > 0) {
     if (byLogIndex.size >= BOUND.OWED_MAX_EVENTS) {
       const [oldestKey] = byLogIndex.keys();
       byLogIndex.delete(oldestKey);
@@ -642,6 +675,7 @@ export {
   buildCdcAcknowledgementCommand,
   cdcObligationEventKeyDigest,
   cdcObligationLedgerExists,
+  commitOwedEntryByteTallies,
   countCdcObligations,
   countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
@@ -660,4 +694,5 @@ export {
   readOwedCdcObligations,
   readOwedCdcTail,
   reclaimDeliveredCdcObligations,
+  rollbackOwedEntryByteTallies,
 };
