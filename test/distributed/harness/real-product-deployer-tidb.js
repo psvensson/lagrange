@@ -185,16 +185,22 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts, campaignId, sle
   }
   const hostByContainer = new Map();
   const budget = resolveReadinessBudget(opts);
+  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
   const ctx = {sshRun, opts, clientIp, sleep, campaignId, budget, hostByContainer,
     provider: createRemoteDockerProvider({sshRun, opts,
+      hostOf: (containerId) => hostByContainer.get(containerId)})};
+  const postFailureCtx = {...ctx, opts: postFailureOpts, signal: null,
+    provider: createRemoteDockerProvider({sshRun, opts: postFailureOpts,
       hostOf: (containerId) => hostByContainer.get(containerId)})};
   const images = {pd: opts.pdImage || PD_IMAGE_DEFAULT, tikv: opts.tikvImage || TIKV_IMAGE_DEFAULT,
     tidb: opts.tidbImage || TIDB_IMAGE_DEFAULT};
   const formed = {roles: [], endpoint: null};
   return describingReadinessExhaustion(() => formTiDbCluster({ctx, hosts, images, formed}),
     (failure) => describeExhaustedDeployment({targetId: 'tidb-tikv', topology: TOPOLOGY,
-      sshRun, opts, roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_DIR,
-      readVersions: (products) => reportedVersions(ctx, formed.endpoint, products), failure}));
+      sshRun, opts: postFailureOpts, roles: [...formed.roles], endpoint: formed.endpoint,
+      dataDir: DATA_DIR,
+      readVersions: (products) => reportedVersions(postFailureCtx, formed.endpoint, products),
+      failure}));
 }
 
 async function formTiDbCluster({ctx, hosts, images, formed}) {

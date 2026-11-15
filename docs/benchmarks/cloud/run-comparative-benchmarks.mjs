@@ -305,7 +305,8 @@ function createSshRun(hosts, opts) {
   return async (ip, callOpts, command, timeoutMs = SSH_TIMEOUT_MS) => {
     const target = targetOf.get(ip);
     if (!target) throw new Error(`host ${ip} is not part of this campaign`);
-    const signal = callOpts?.signal ?? opts?.signal;
+    const signal = callOpts && Object.hasOwn(callOpts, 'signal') ?
+      callOpts.signal : opts?.signal;
     const boundedTimeoutMs = Number.isFinite(callOpts?.timeoutMs) ?
       Math.max(1, Math.min(timeoutMs, Math.floor(callOpts.timeoutMs))) : timeoutMs;
     const {stdout} = await execFileAsync('ssh', [...sshOptions(opts), target, command],
@@ -393,15 +394,23 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))});
   const teardown = () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
     campaignId: manifest.campaignId, sshRun, opts});
+  const semanticGate = createSemanticGateStage({journey: runScenarioASemanticProofJourney,
+    sshRun, opts, loadGeneratorHost, now: Date.now,
+    redeploy: async (run, {signal} = {}) => {
+      await teardown();
+      return deployArm(run, {signal});
+    },
+    evidenceDirOf: (run) => path.resolve(REPO_ROOT,
+      `test-output/bench/${manifest.campaignId}/${run.runId}/semantic-gate`)});
   const deps = {
-    runSemanticGate: createSemanticGateStage({journey: runScenarioASemanticProofJourney,
-      sshRun, opts, loadGeneratorHost,
-      redeploy: async (run) => {
-        await teardown();
-        return deployArm(run);
-      },
-      evidenceDirOf: (run) => path.resolve(REPO_ROOT,
-        `test-output/bench/${manifest.campaignId}/${run.runId}/semantic-gate`)}),
+    runSemanticGate: ({run, manifest, deployment, signal, deadlineAtMs, deadlineAt}) =>
+      semanticGate({
+        run,
+        manifest,
+        deployment,
+        signal,
+        deadlineAtMs: deadlineAtMs ?? deadlineAt ?? deps.deadlineAt,
+      }),
     recordOwner,
     now: Date.now,
     deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,

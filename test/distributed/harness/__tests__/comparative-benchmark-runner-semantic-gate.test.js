@@ -643,7 +643,7 @@ test('Lagrange: cohort preserved per case and before measurement, restart of the
     redeploy: async () => armOf(ledger, generation += 1, {persistent: true}),
   });
   const result = await stage({
-    run: {runId: 'r1', system: 'lagrange'},
+    run: {runId: 'r1', system: 'lagrange', resetDataset: async () => {}},
     manifest: {campaignId: 'camp'},
     deployment: first,
   });
@@ -692,12 +692,18 @@ test('PostgreSQL resets through its adapter; unknown systems record semantic-gat
       },
     });
     const pg = await stage({
-      run: {runId: 'r', system: 'postgresql'},
+      run: {runId: 'r', system: 'postgresql', adapter: {resetDataset: async () => {}}},
       manifest: {campaignId: 'c'},
       deployment: armOf(ledger, 0),
     });
     assert.equal(redeploys, 0);
     assert.deepEqual(arrayMap(pg.events, (event) => event.kind), ['dataset-reset']);
+    const noOuterReset = await stage({
+      run: {runId: 'r-no-outer', system: 'lagrange'},
+      manifest: {campaignId: 'c'},
+      deployment: armOf(ledger, 0),
+    });
+    assert.deepEqual(noOuterReset.events, []);
     const unknown = await stage({
       run: {runId: 'r', system: 'cockroachdb'},
       manifest: {campaignId: 'c'},
@@ -990,62 +996,33 @@ test('Item 4: negative controls fail closed for every claimed TiDB canonical inv
     const connection = {endpoint: {host: '10.0.0.1', port: 4000}, credentials: {user: 'root'}};
 
     const negativeControls = [
-      {
-        label: 'visibility dirty read',
-        fault: {dirtyRead: true},
+      {label: 'visibility dirty read', fault: {dirtyRead: true},
         expectedFailedIds: OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-        caseId: 'visibility',
-        reason: 'dirty_read',
-      },
-      {
-        label: 'visibility broken read-your-own-writes',
+        caseId: 'visibility', reason: 'dirty_read'},
+      {label: 'visibility broken read-your-own-writes',
         fault: {breakReadYourOwnWrites: true},
         expectedFailedIds: OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-        caseId: 'visibility',
-        reason: 'read_your_own_write',
-      },
-      {
-        label: 'payment corrupted warehouse ytd',
-        fault: {corruptWarehouseYtd: true},
+        caseId: 'visibility', reason: 'read_your_own_write'},
+      {label: 'payment corrupted warehouse ytd', fault: {corruptWarehouseYtd: true},
         expectedFailedIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        caseId: 'payment',
-        reason: 'warehouse_ytd',
-      },
-      {
-        label: 'payment corrupted district ytd',
-        fault: {corruptDistrictYtd: true},
+        caseId: 'payment', reason: 'warehouse_ytd'},
+      {label: 'payment corrupted district ytd', fault: {corruptDistrictYtd: true},
         expectedFailedIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        caseId: 'payment',
-        reason: 'district_ytd',
-      },
-      {
-        label: 'payment corrupted customer balance',
-        fault: {corruptCustomerBalance: true},
+        caseId: 'payment', reason: 'district_ytd'},
+      {label: 'payment corrupted customer balance', fault: {corruptCustomerBalance: true},
         expectedFailedIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        caseId: 'payment',
-        reason: 'customer_balance',
-      },
-      {
-        label: 'payment corrupted customer payment counters',
+        caseId: 'payment', reason: 'customer_balance'},
+      {label: 'payment corrupted customer payment counters',
         fault: {corruptCustomerCounters: true},
         expectedFailedIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        caseId: 'payment',
-        reason: 'customer_payment_counters',
-      },
-      {
-        label: 'payment corrupted history row',
-        fault: {corruptHistoryAmount: true},
+        caseId: 'payment', reason: 'customer_payment_counters'},
+      {label: 'payment corrupted history row', fault: {corruptHistoryAmount: true},
         expectedFailedIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-        caseId: 'payment',
-        reason: 'history_row',
-      },
-      {
-        label: 'failure-atomicity partial commit on rollback',
+        caseId: 'payment', reason: 'history_row'},
+      {label: 'failure-atomicity partial commit on rollback',
         fault: {partialCommitOnRollback: true},
         expectedFailedIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-        caseId: 'failure-atomicity',
-        reason: 'partial_commit',
-      },
+        caseId: 'failure-atomicity', reason: 'partial_commit'},
     ];
 
     for (const control of negativeControls) {

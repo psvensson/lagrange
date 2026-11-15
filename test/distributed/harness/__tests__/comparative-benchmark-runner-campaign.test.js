@@ -10,7 +10,9 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {runComparativeCampaign} from '../comparative-benchmark-campaign-runner.js';
+import {createSemanticGateStage} from '../comparative-benchmark-semantic-gate.js';
 import * as deployers from '../real-product-cluster-deployers.js';
+import {runScenarioASemanticProofJourney} from '../../scenarios/scenario-a-semantic-proof-journey.js';
 import {
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
@@ -507,8 +509,7 @@ async () => {
         campaignId: `${MANIFEST.campaignId}-${one.runId}`,
         signal,
         sleep: () => new Promise((resolve) => {
-          const timer = setTimeout(resolve, 60_000);
-          timer.unref?.();
+          setTimeout(resolve, 50);
         }),
         opts: {
           lagrangeImage: LAGRANGE_IMAGE,
@@ -570,4 +571,180 @@ async () => {
   assert.equal(lagrangeRun.deployment.closure.status, 'complete');
   assert.equal(ledger.containers.size, 0,
     'teardownComparativeDeployment must remove all 3 Lagrange containers');
+});
+
+test('watchdog cancellation & deadline inside semantic gate (remote loadGeneratorHost and local ' +
+  'journey) bounds sshRun timeoutMs, stops on case 1 without starting case 2, and records ' +
+  'interrupted without synthetic dataset-reset events', async () => {
+  const remoteCasesStarted = [];
+  const remoteTimeouts = [];
+  const clock = 1_000;
+  const deadlineAt = 1_015;
+  const remoteStage = createSemanticGateStage({
+    journey: runScenarioASemanticProofJourney,
+    sshRun: async (_host, callOpts, command, timeoutMs) => {
+      remoteTimeouts.push(timeoutMs ?? callOpts?.timeoutMs ?? null);
+      const encoded = stringTrim(stringSplit(command, /\s+/u).at(-1));
+      const payload = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+      remoteCasesStarted.push(payload.caseId ?? payload.action);
+      return new Promise((_resolve, reject) => {
+        const hold = setTimeout(() => {}, 500);
+        const onAbort = () => {
+          clearTimeout(hold);
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        };
+        if (callOpts?.signal?.aborted) {
+          onAbort();
+          return;
+        }
+        callOpts?.signal?.addEventListener('abort', onAbort, {once: true});
+      });
+    },
+    opts: {},
+    loadGeneratorHost: {ip: '10.0.0.9', repoPath: '/srv/repo', nodePath: '/usr/bin/node'},
+    evidenceDirOf: () => null,
+    now: () => clock,
+    redeploy: async () => deployment('r-lagrange'),
+  });
+  const {deps, records} = harness({
+    now: () => clock,
+    deadlineAt,
+    runSemanticGate: ({run: activeRun, manifest, deployment: deployed, signal, deadlineAtMs}) =>
+      remoteStage({
+        run: {...activeRun, system: activeRun.targetId === 'lagrange' ? 'lagrange' : 'postgresql'},
+        manifest,
+        deployment: {
+          ...deployed,
+          access: {
+            endpoint: {host: '10.0.0.1', port: 5432, protocol: 'pg-wire'},
+            connection: {user: 'postgres', database: 'lagrange'},
+          },
+          operations: {awaitReady: async () => ({ready: true})},
+        },
+        signal,
+        deadlineAtMs,
+      }),
+    executeWorkloadRun: async (input) => {
+      if (input.setupFailure) {
+        return {
+          observations: {
+            runStatus: 'setup-failed',
+            setup: input.setupFailure,
+            requests: [{outcome: 'unissued'}],
+            accounting: {offered: 1, issued: 0, unissued: 1},
+          },
+          correctness: {semanticGate: null, finalState: null},
+          plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+          endpoint: null,
+          harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
+          dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+          placement: null,
+          loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+          events: [],
+          failure: null,
+          productFailure: {runStatus: 'setup-failed', setup: input.setupFailure},
+        };
+      }
+      return {
+        observations: {accounting: {offered: 1}},
+        correctness: {semanticGate: input.semanticGate},
+        plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+        dataset: {resetMethod: 'fresh-formation'},
+        loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+      };
+    },
+  });
+  await run(deps);
+  assert.deepEqual(remoteCasesStarted, ['new-order-contention'],
+    'watchdog firing during case 1 must never start case 2');
+  assert.deepEqual(remoteTimeouts, [15],
+    'runRemoteNodeJson must bound timeoutMs to remaining campaign deadline');
+  const interruptedLagrange = arrayFind(records.slice(1), (r) => r.targetId === 'lagrange');
+  assert.equal(interruptedLagrange.execution.state, 'interrupted');
+  assert.equal(interruptedLagrange.failureClass, 'interrupted');
+  assert.equal(interruptedLagrange.execution.failure.code, 'watchdog_stopped');
+
+  // Local journey without outer resetDataset stops immediately when signal aborts on case 1:
+  const localAbort = new AbortController();
+  let localConnectCalls = 0;
+  const localStage = createSemanticGateStage({
+    journey: (gateArgs) => runScenarioASemanticProofJourney({
+      ...gateArgs,
+      createClient: () => ({
+        connect: async () => {
+          localConnectCalls += 1;
+          localAbort.abort();
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          throw err;
+        },
+        query: async () => ({rows: []}),
+        end: async () => {},
+      }),
+    }),
+    sshRun: async () => '',
+    opts: {},
+    evidenceDirOf: () => null,
+    now: () => 5_000,
+    redeploy: async () => deployment('r-local'),
+  });
+  await assert.rejects(
+    localStage({
+      run: {runId: 'r-local', system: 'lagrange'},
+      manifest: MANIFEST,
+      deployment: {
+        ...deployment('r-local'),
+        access: {
+          endpoint: {host: '10.0.0.1', port: 5432, protocol: 'pg-wire'},
+          connection: {user: 'postgres', database: 'lagrange'},
+        },
+        operations: {awaitReady: async () => ({ready: true})},
+      },
+      signal: localAbort.signal,
+      deadlineAtMs: 60_000,
+    }),
+    (error) => {
+      assert.equal(error.code, 'watchdog_stopped');
+      assert.equal(error.failureClass, 'interrupted');
+      assert.equal(error.aborted, true);
+      return true;
+    },
+  );
+  assert.equal(localConnectCalls, 1,
+    'aborting during case 1 must never start case 2');
+
+  // Without an outer resetDataset, dataset-reset events are recorded only when cases 2..N
+  // actually prepare/reset their adapter dataset (and never from a no-op outer reset()):
+  const erroredStage = createSemanticGateStage({
+    journey: async ({beforeCase, onCaseDatasetPrepared, binding}) => {
+      await beforeCase({caseId: 'new-order-contention'});
+      onCaseDatasetPrepared({caseId: 'new-order-contention'});
+      await beforeCase({caseId: 'visibility'});
+      onCaseDatasetPrepared({caseId: 'visibility'});
+      await beforeCase({caseId: 'payment'});
+      return {status: 'incomplete', passed: [], failed: [], missing: ['payment'], binding};
+    },
+    sshRun: async () => '',
+    opts: {},
+    evidenceDirOf: () => null,
+    now: () => 5_000,
+    redeploy: async () => deployment('r-events'),
+  });
+  const erroredGate = await erroredStage({
+    run: {runId: 'r-events', system: 'lagrange'},
+    manifest: MANIFEST,
+    deployment: {
+      ...deployment('r-events'),
+      access: {
+        endpoint: {host: '10.0.0.1', port: 5432, protocol: 'pg-wire'},
+        connection: {user: 'postgres', database: 'lagrange'},
+      },
+      operations: {awaitReady: async () => ({ready: true})},
+    },
+  });
+  assert.deepEqual(arrayMap(erroredGate.events, (e) => [e.kind, e.caseId]), [
+    ['dataset-reset', 'visibility'],
+  ]);
 });

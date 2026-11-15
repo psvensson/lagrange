@@ -45,8 +45,11 @@ async function readVersionsOrRecord(products, readVersions) {
  */
 async function describeExhaustedDeployment({targetId, topology, sshRun, opts, roles, endpoint,
   dataDir, readVersions, failure}) {
-  const products = await readVersionsOrRecord(await inspectProducts({sshRun, opts, roles}),
-    readVersions);
+  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
+  const products = await readVersionsOrRecord(
+    await inspectProducts({sshRun, opts: postFailureOpts, roles}),
+    readVersions,
+  );
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));
   const lastObservation = failure?.lastObservation ??
     failure?.diagnostic?.lastObservation ?? failure?.diagnostic?.last ?? null;

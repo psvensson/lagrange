@@ -28,7 +28,7 @@
   "censusSize": 2652,
   "digest": "fnv1a32-4f00193e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8ca27836",
+  "observationDigest": "fnv1a32-e2a1b976",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7402,6 +7402,17 @@
       ],
       "directories": [
         "src"
+      ],
+      "env": [
+        "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_DELIVERY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_DURABILITY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
       ]
     },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": {
