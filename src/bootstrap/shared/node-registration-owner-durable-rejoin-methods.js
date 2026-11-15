@@ -8,14 +8,15 @@ import {AuthoritativeControlPlaneView} from
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  NODE_STATE,
   SERVICE_TYPE,
-  STATE,
   TABLES,
   TRANSPORT_TYPE,
 } from '../../constants/index.js';
-import {NodeService} from '../../node/node-service.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
+import {
+  classifyControlPlaneMutationResult,
+} from '../../control-plane/control-plane-mutation-outcome-classifier.js';
+import {raiseBootIncarnationFloor} from '../boot-incarnation-owner.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {resolveAutoRejoinStartupDecision} from '../rejoin-hints.js';
@@ -36,7 +37,6 @@ import {
   classifyNodeIncarnationRelation,
 } from '../../control-plane/owners/node-registration-incarnation-write.js';
 import {
-  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
   JOIN_ADMISSION_PUBLICATION,
@@ -46,86 +46,24 @@ import {
   NODE_REGISTRATION_ERROR,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
   SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
-  STORAGE_INCARNATION_FIELD,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
 import {
+  NON_REUSABLE_NODE_STATUSES,
+  buildAuthoritativeRowSourceUnavailableError,
   buildFailedLostStoragePartitionRow,
+  buildLostStorageMutationFailureError,
+  buildReentryNormalizedNodeRow,
+  filterAuthoritativePartitionServiceRowsForNode,
+  readObservedBootIncarnation,
   readObservedStorageIncarnation,
+  resolveHighestObservedNodeIncarnation,
   stampEndpointStorageIncarnationMetadata,
 } from './node-registration-owner-row-builder.js';
 
-const NON_REUSABLE_NODE_STATUSES = Object.freeze([
-  NODE_STATE.FAILED,
-  NODE_STATE.SHUTTING_DOWN,
-  NODE_STATE.STOPPED,
-]);
-
 const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
   'Node boot incarnation advance was not observed on the authoritative row';
-
-/**
- * A reused durable membership row must never re-publish a terminal status
- * or a stale lease/heartbeat from the previous incarnation. Reentry
- * normalizes the row to JOINING with a fresh heartbeat and a cleared lease,
- * stamped with THIS boot's incarnation; the canonical ready transition
- * promotes it from there.
- * @param {Object} nodeRow - Authoritative durable node row.
- * @param {number} now - Current timestamp.
- * @param {number} bootIncarnation - This boot's incarnation.
- * @return {Object} Reentry-normalized node row.
- */
-function buildReentryNormalizedNodeRow(
-  nodeRow,
-  now,
-  bootIncarnation,
-  storageIncarnation = null,
-) {
-  const persistedStatus = normalizeString(nodeRow?.[COLUMN.STATUS]);
-  const reusableStatus =
-    NON_REUSABLE_NODE_STATUSES.includes(persistedStatus) ?
-      null :
-      persistedStatus;
-  const resolvedStorageIncarnation =
-    normalizeKnownNodeBootIncarnation(storageIncarnation) ||
-    readObservedStorageIncarnation(nodeRow) ||
-    normalizeKnownNodeBootIncarnation(bootIncarnation);
-  return {
-    ...nodeRow,
-    [COLUMN.STATUS]: reusableStatus || NODE_STATE.JOINING,
-    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-    [COLUMN.LAST_HEARTBEAT]: now,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-    [COLUMN.BOOT_INCARNATION]: bootIncarnation,
-    ...(resolvedStorageIncarnation > 0 ?
-      {[STORAGE_INCARNATION_FIELD]: resolvedStorageIncarnation} :
-      {}),
-  };
-}
-
-function readObservedBootIncarnation(nodeRow) {
-  const observed = nodeRow?.[COLUMN.BOOT_INCARNATION];
-  return observed === undefined ? null : observed;
-}
-
-/**
- * Build the typed deferred error for an UNAVAILABLE authoritative row
- * source. Transient unavailability must never fall through to the fresh
- * upsert (which could clobber a row the authority actually holds); the
- * error is tagged retryable (deferRetry + retryAfterMs) so the join
- * registration retry loop re-enters instead of proceeding fresh.
- * @param {string} tableName - Authoritative table whose read was unavailable.
- * @return {Error} Tagged retryable deferred error.
- */
-function buildAuthoritativeRowSourceUnavailableError(tableName) {
-  const error = new Error(AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE);
-  error.deferRetry = true;
-  error.retryAfterMs = AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS;
-  error.authoritativeRowReadState = AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE;
-  error.tableName = tableName;
-  return error;
-}
 
 class NodeRegistrationOwnerDurableRejoinMethods {
   /**
@@ -256,7 +194,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async resolveExistingJoinAdmissionProgress() {
-    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+    if (!(await this.hasDurableRejoinStorageContinuity())) {
       return null;
     }
 
@@ -265,19 +203,9 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     if (!this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow)) {
       return null;
     }
-    const observedIncarnation = normalizeKnownNodeBootIncarnation(
-      readObservedBootIncarnation(authoritativeNodeRow),
-    );
     const currentIncarnation = normalizeKnownNodeBootIncarnation(
       this.getRegistrationBootIncarnation(),
     );
-    const belongsToCurrentBoot =
-      observedIncarnation > 0 && observedIncarnation === currentIncarnation;
-    const hasDurableContinuity =
-      await this.hasDurableRejoinStorageContinuity();
-    if (!belongsToCurrentBoot && !hasDurableContinuity) {
-      return null;
-    }
 
     const authoritativeEndpointOutcome =
       await this.readAuthoritativeNodeEndpointRowOutcome();
@@ -285,12 +213,11 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const metaEndpointOutcome =
       await this.readAuthoritativeMetaEndpointRowsOutcome();
     this.throwIfAuthoritativeRowsUnavailable(metaEndpointOutcome);
-    const storageIncarnation = hasDurableContinuity ?
+    const storageIncarnation =
       readObservedStorageIncarnation(
         authoritativeNodeRow,
         authoritativeEndpointOutcome.row,
-      ) || currentIncarnation :
-      currentIncarnation;
+      ) || currentIncarnation;
     const endpointRow = authoritativeEndpointOutcome.row ?
       stampEndpointStorageIncarnationMetadata(
         authoritativeEndpointOutcome.row,
@@ -423,7 +350,50 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   getRegistrationBootIncarnation() {
-    return this.delegates.getBootIncarnation();
+    const effective = normalizeKnownNodeBootIncarnation(
+      this.effectiveRegistrationBootIncarnation,
+    );
+    return effective > 0 ? effective : this.delegates.getBootIncarnation();
+  }
+
+  hasConfiguredAuthoritativeControlPlaneSource() {
+    return this.getAuthoritativeControlPlaneView()?.canRead() === true;
+  }
+
+  async advanceFreshStorageIncarnationFloorFromCluster() {
+    const currentIncarnation = normalizeKnownNodeBootIncarnation(
+      this.getRegistrationBootIncarnation(),
+    );
+    if (!this.hasConfiguredAuthoritativeControlPlaneSource()) {
+      return currentIncarnation;
+    }
+    const nodeOutcome =
+      await this.readAuthoritativeDurableRejoinNodeRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(nodeOutcome);
+    const endpointOutcome =
+      await this.readAuthoritativeNodeEndpointRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(endpointOutcome);
+
+    const highestObservedIncarnation = resolveHighestObservedNodeIncarnation(
+      nodeOutcome,
+      endpointOutcome,
+    );
+    if (highestObservedIncarnation <= 0) {
+      return currentIncarnation;
+    }
+    const nextIncarnation = Math.max(
+      currentIncarnation,
+      highestObservedIncarnation + 1,
+    );
+    this.effectiveRegistrationBootIncarnation = nextIncarnation;
+    if (hasFunction(this.delegates.raiseBootIncarnationFloor)) {
+      await this.delegates.raiseBootIncarnationFloor(nextIncarnation);
+    }
+    const dataDir = normalizeString(this.delegates.getDataDir?.());
+    if (dataDir.length > 0) {
+      await raiseBootIncarnationFloor(dataDir, nextIncarnation);
+    }
+    return nextIncarnation;
   }
 
   /**
@@ -761,63 +731,28 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     return outcome.rows;
   }
 
-  async readExistingPartitionServiceRowsForNode() {
-    const rowsById = new Map();
-    const collectRows = (rows) => {
-      for (const row of Array.isArray(rows) ? rows : []) {
-        const serviceId = normalizeString(
-          row?.[COLUMN.SERVICE_ID] || row?.[COLUMN.REPLICA_ID],
-        );
-        if (
-          serviceId.length > 0 &&
-          normalizeString(row?.[COLUMN.NODE_ID]) === this.nodeId &&
-          normalizeString(row?.[COLUMN.SERVICE_TYPE]).toLowerCase() ===
-            String(SERVICE_TYPE.PARTITION).toLowerCase() &&
-          !rowsById.has(serviceId)
-        ) {
-          rowsById.set(serviceId, row);
-        }
-      }
-    };
-
-    const authoritativeOutcome = await this.readAuthoritativeRows(
+  async readAuthoritativePartitionServiceRowsOutcome() {
+    const outcome = await this.readAuthoritativeRows(
       TABLES.SERVICES,
       SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
       [this.nodeId, SERVICE_TYPE.PARTITION],
     );
-    if (authoritativeOutcome.state === AUTHORITATIVE_ROW_READ_STATE.READABLE) {
-      collectRows(authoritativeOutcome.rows);
-    } else {
-      const delegatedGateway =
-        this.delegates.getJoinAdmissionControlPlaneSystemTableGateway?.() ||
-        null;
-      if (hasFunction(delegatedGateway?.readAuthoritativeRows)) {
-        try {
-          const gatewayResult = await delegatedGateway.readAuthoritativeRows(
-            TABLES.SERVICES,
-            SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
-            [this.nodeId, SERVICE_TYPE.PARTITION],
-          );
-          if (gatewayResult?.success === true) {
-            collectRows(gatewayResult.rows);
-          }
-        } catch (_error) {
-          // Ignore fallback read errors when gateway is a partial stub.
-        }
-      }
-    }
+    return {
+      ...outcome,
+      rows: filterAuthoritativePartitionServiceRowsForNode(
+        outcome,
+        this.nodeId,
+      ),
+    };
+  }
 
-    let systemTableCache = this.delegates.getSystemTableCache?.();
-    if (
-      !systemTableCache &&
-      authoritativeOutcome.state !== AUTHORITATIVE_ROW_READ_STATE.READABLE
-    ) {
-      systemTableCache = NodeService.getInstance().getSystemTableCache();
+  async readExistingPartitionServiceRowsForNode() {
+    if (!this.hasConfiguredAuthoritativeControlPlaneSource()) {
+      return [];
     }
-    if (hasFunction(systemTableCache?.getAll)) {
-      collectRows(systemTableCache.getAll(TABLES.SERVICES));
-    }
-    return [...rowsById.values()];
+    const outcome = await this.readAuthoritativePartitionServiceRowsOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(outcome);
+    return outcome.rows;
   }
 
   async reconcileLostStoragePartitionReplicas(
@@ -831,14 +766,24 @@ class NodeRegistrationOwnerDurableRejoinMethods {
         continue;
       }
       const failedRow = buildFailedLostStoragePartitionRow(row, now);
-      await this.upsertSystemTableRowWithRetry(
+      const expectedIdentity = {
+        [COLUMN.NODE_ID]: this.nodeId,
+        [COLUMN.SERVICE_TYPE]:
+          normalizeString(row?.[COLUMN.SERVICE_TYPE]) || SERVICE_TYPE.PARTITION,
+      };
+      const updateResult = await this.upsertSystemTableRowWithRetry(
         TABLES.SERVICES,
         failedRow,
         {
           admissionTarget:
             JOIN_ADMISSION_PUBLICATION.LOST_STORAGE_PARTITION_REPLICA,
+          expectedIdentity,
         },
       );
+      const classification = classifyControlPlaneMutationResult(updateResult);
+      if (classification.applied !== true) {
+        throw buildLostStorageMutationFailureError(failedRow, classification);
+      }
       this.seedJoinTimeCacheRow(TABLES.SERVICES, failedRow);
       reconciledRows.push(failedRow);
     }

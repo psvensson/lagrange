@@ -462,13 +462,15 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         operation,
         this.getReplicaOperationStepsHistory(operation),
       );
-    return (
-      Number.isSafeInteger(currentStorageIncarnation) &&
-      currentStorageIncarnation > 0 &&
-      Number.isSafeInteger(operationStorageIncarnation) &&
-      operationStorageIncarnation > 0 &&
-      currentStorageIncarnation > operationStorageIncarnation
-    );
+    if (
+      !Number.isSafeInteger(currentStorageIncarnation) ||
+      currentStorageIncarnation <= 0 ||
+      !Number.isSafeInteger(operationStorageIncarnation) ||
+      operationStorageIncarnation <= 0
+    ) {
+      return true;
+    }
+    return currentStorageIncarnation !== operationStorageIncarnation;
   }
 
   /**

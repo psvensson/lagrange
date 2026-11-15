@@ -981,6 +981,7 @@ function createFormationWorld() {
       upNodeIds.delete(nodeId);
       if (wipeDataDir) {
         replicaRuntime.wipeNode(nodeId);
+        bootIncarnationByNodeId.delete(nodeId);
         if (externalServicesCleanup) {
           for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
             candidate[COLUMN.NODE_ID] === nodeId)) {
@@ -1078,7 +1079,7 @@ function createFormationWorld() {
       const registrationNow = Number.isFinite(registrationNowMs) ?
         Math.floor(registrationNowMs) :
         time.now();
-      const bootIncarnation = nextBootIncarnation(nodeId);
+      let bootIncarnation = nextBootIncarnation(nodeId);
       const clusterIncarnationFence = buildClusterIncarnationFence(
         durableStateDetected ? {
           durableStateDetected: true,
@@ -1098,6 +1099,17 @@ function createFormationWorld() {
           getLogger: () => hosts.controlPlaneReadinessService.logger,
           getNow: () => () => registrationNow,
           getBootIncarnation: () => bootIncarnation,
+          raiseBootIncarnationFloor: (knownIncarnation) => {
+            if (
+              Number.isSafeInteger(knownIncarnation) &&
+              knownIncarnation > bootIncarnation
+            ) {
+              bootIncarnation = knownIncarnation;
+              bootIncarnationByNodeId.set(nodeId, knownIncarnation);
+              hosts.heartbeatService.bootIncarnation = knownIncarnation;
+            }
+            return bootIncarnation;
+          },
           getNodeCapabilities: () => [],
           getClusterIncarnationFence: async () => clusterIncarnationFence,
           getJoinLifecycleIntentType: () =>

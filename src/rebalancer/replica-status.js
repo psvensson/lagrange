@@ -248,10 +248,187 @@ export {
   resolveReplicaOperationSemanticPhaseFromRecord,
   buildReplicaOperationSemanticWitnesses,
   isTerminalReplicaOperationSemanticPhase,
-  readOperationTargetNodeBootIncarnation,
-  readOperationTargetNodeStorageIncarnation,
-  resolveTargetNodeIncarnationSnapshot,
 } from './replica-operation-progress.js';
+
+function readPositiveSafeInteger(value) {
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function parseEndpointMetadataStorageIncarnation(endpointRow) {
+  const rawMetadata = endpointRow?.metadata;
+  if (!rawMetadata) {
+    return null;
+  }
+  if (typeof rawMetadata === 'object' && !Array.isArray(rawMetadata)) {
+    return readPositiveSafeInteger(rawMetadata.storageIncarnation);
+  }
+  if (typeof rawMetadata !== 'string' || rawMetadata.length === 0) {
+    return null;
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawMetadata);
+  } catch (_error) {
+    parsed = null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+  return readPositiveSafeInteger(parsed.storageIncarnation);
+}
+
+function resolveTargetNodeIncarnationSnapshot(systemTableCache, targetNodeId) {
+  if (
+    !systemTableCache ||
+    typeof targetNodeId !== 'string' ||
+    targetNodeId.length === 0
+  ) {
+    return Object.freeze({
+      bootIncarnation: null,
+      storageIncarnation: null,
+    });
+  }
+  const targetNode = systemTableCache.get('nodes', targetNodeId);
+  const targetEndpoint = systemTableCache.get(
+    'node_endpoints',
+    `ep-${targetNodeId}-ws`,
+  );
+  let bootIncarnation = readPositiveSafeInteger(
+    targetNode?.boot_incarnation,
+  );
+  if (bootIncarnation === null) {
+    bootIncarnation = readPositiveSafeInteger(
+      targetNode?.bootIncarnation,
+    );
+  }
+  if (bootIncarnation === null) {
+    bootIncarnation = readPositiveSafeInteger(
+      targetEndpoint?.boot_incarnation,
+    );
+  }
+  if (bootIncarnation === null) {
+    bootIncarnation = readPositiveSafeInteger(
+      targetEndpoint?.bootIncarnation,
+    );
+  }
+  const endpointStorageIncarnation =
+    parseEndpointMetadataStorageIncarnation(targetEndpoint);
+  let nodeStorageIncarnation = readPositiveSafeInteger(
+    targetNode?.storage_incarnation,
+  );
+  if (nodeStorageIncarnation === null) {
+    nodeStorageIncarnation = readPositiveSafeInteger(
+      targetNode?.storageIncarnation,
+    );
+  }
+  let storageIncarnation = endpointStorageIncarnation;
+  if (
+    nodeStorageIncarnation !== null &&
+    (storageIncarnation === null ||
+      nodeStorageIncarnation > storageIncarnation)
+  ) {
+    storageIncarnation = nodeStorageIncarnation;
+  }
+  if (storageIncarnation === null) {
+    storageIncarnation = bootIncarnation;
+  }
+  return Object.freeze({
+    bootIncarnation,
+    storageIncarnation,
+  });
+}
+
+function readStepsHistoryPositiveInteger(stepsHistory, metadataKey) {
+  if (!Array.isArray(stepsHistory)) {
+    return null;
+  }
+  for (let index = stepsHistory.length - 1; index >= 0; index -= 1) {
+    const entry = stepsHistory[index];
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const candidate = readPositiveSafeInteger(entry[metadataKey]);
+    if (candidate !== null) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function readOperationTargetNodeBootIncarnation(operation, stepsHistory) {
+  const directCamel = readPositiveSafeInteger(
+    operation?.[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION],
+  );
+  if (directCamel !== null) {
+    return directCamel;
+  }
+  const directSnake = readPositiveSafeInteger(
+    operation?.target_node_boot_incarnation,
+  );
+  if (directSnake !== null) {
+    return directSnake;
+  }
+  return readStepsHistoryPositiveInteger(
+    stepsHistory,
+    OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION,
+  );
+}
+
+function readOperationTargetNodeStorageIncarnation(operation, stepsHistory) {
+  const directCamel = readPositiveSafeInteger(
+    operation?.[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION],
+  );
+  if (directCamel !== null) {
+    return directCamel;
+  }
+  const directSnake = readPositiveSafeInteger(
+    operation?.target_node_storage_incarnation,
+  );
+  if (directSnake !== null) {
+    return directSnake;
+  }
+  const historyStorageIncarnation = readStepsHistoryPositiveInteger(
+    stepsHistory,
+    OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION,
+  );
+  if (historyStorageIncarnation !== null) {
+    return historyStorageIncarnation;
+  }
+  return readOperationTargetNodeBootIncarnation(operation, stepsHistory);
+}
+
+function preserveOperationTargetNodeIncarnations(operation, stepEntry) {
+  let stepsHistory = operation?.stepsHistory;
+  if (!Array.isArray(stepsHistory)) {
+    stepsHistory = operation?.steps_history;
+  }
+  if (typeof stepsHistory === 'string') {
+    stepsHistory = memoizedParseStepsHistoryString(stepsHistory);
+  }
+  const normalizedHistory = Array.isArray(stepsHistory) ? stepsHistory : [];
+  const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
+    operation,
+    normalizedHistory,
+  );
+  const targetNodeStorageIncarnation =
+    readOperationTargetNodeStorageIncarnation(
+      operation,
+      normalizedHistory,
+    );
+  if (targetNodeBootIncarnation !== null) {
+    stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+      targetNodeBootIncarnation;
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+      targetNodeBootIncarnation;
+  }
+  if (targetNodeStorageIncarnation !== null) {
+    stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+      targetNodeStorageIncarnation;
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+      targetNodeStorageIncarnation;
+  }
+}
 
 // The one peer-admission rule over a services row's status, read by
 // partition and message-group admission alike (F1/F2): a row whose replica
@@ -313,4 +490,8 @@ export {
   OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
   isDisruptiveOperationLedgerSelfMove,
   normalizeOperationLedgerMoveType,
+  preserveOperationTargetNodeIncarnations,
+  readOperationTargetNodeBootIncarnation,
+  readOperationTargetNodeStorageIncarnation,
+  resolveTargetNodeIncarnationSnapshot,
 };

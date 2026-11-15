@@ -716,12 +716,27 @@ class NodeRegistrationOwnerPublicationMethods {
       const serviceId = normalizeString(
         rowData?.[COLUMN.SERVICE_ID] || rowData?.[COLUMN.REPLICA_ID],
       );
+      const expectedIdentity =
+        options.expectedIdentity && typeof options.expectedIdentity === 'object' ?
+          options.expectedIdentity :
+          {
+            [COLUMN.NODE_ID]:
+              normalizeString(rowData?.[COLUMN.NODE_ID]) || this.nodeId,
+            ...(normalizeString(rowData?.[COLUMN.SERVICE_TYPE]).length > 0 ?
+              {
+                [COLUMN.SERVICE_TYPE]: normalizeString(
+                  rowData[COLUMN.SERVICE_TYPE],
+                ),
+              } :
+              {}),
+          };
       if (
         serviceId.length > 0 &&
         hasFunction(membershipPublicationRuntimeOwner?.servicesOwner?.updateService)
       ) {
         return membershipPublicationRuntimeOwner.servicesOwner.updateService(
           serviceId,
+          expectedIdentity,
           rowData,
           mutationOptions,
         );
@@ -729,7 +744,7 @@ class NodeRegistrationOwnerPublicationMethods {
       if (serviceId.length > 0) {
         return this.updateJoinAdmissionSystemTableRowWithRetry(
           TABLES.SERVICES,
-          {[COLUMN.SERVICE_ID]: serviceId},
+          {[COLUMN.SERVICE_ID]: serviceId, ...expectedIdentity},
           rowData,
           options,
         );

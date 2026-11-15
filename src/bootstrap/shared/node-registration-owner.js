@@ -80,6 +80,7 @@ class NodeRegistrationOwner {
     this.membershipPublicationRuntimeOwner =
       options.membershipPublicationRuntimeOwner || null;
     this.joinAdmissionControlPlaneSystemTableGateway = null;
+    this.effectiveRegistrationBootIncarnation = null;
   }
 
   async registerNodeInCluster() {
@@ -91,7 +92,7 @@ class NodeRegistrationOwner {
     });
 
     const now = this.delegates.getNow()();
-    const nodeRow = this.buildNodeRegistrationRow(now);
+    this.effectiveRegistrationBootIncarnation = null;
 
     try {
       const existingMembership =
@@ -118,6 +119,8 @@ class NodeRegistrationOwner {
       let budgetRow = existingJoinAdmissionProgress?.nodeRow || null;
       let resolution = existingJoinAdmissionProgress?.resolution || null;
       if (!budgetRow) {
+        await this.advanceFreshStorageIncarnationFloorFromCluster();
+        const nodeRow = this.buildNodeRegistrationRow(now);
         const budgetService =
           this.delegates.getNodeStorageBudgetService();
         const budgetResolution =
@@ -206,10 +209,7 @@ class NodeRegistrationOwner {
         );
       }
 
-      const shouldReconcileLostStorage =
-        !existingJoinAdmissionProgress ||
-        !(await this.hasDurableRejoinStorageContinuity());
-      const lostStorageReplicas = shouldReconcileLostStorage ?
+      const lostStorageReplicas = !existingJoinAdmissionProgress ?
         await this.reconcileLostStoragePartitionReplicas(now) :
         [];
 
@@ -235,7 +235,7 @@ class NodeRegistrationOwner {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
-      bootIncarnation: this.delegates.getBootIncarnation(),
+      bootIncarnation: this.getRegistrationBootIncarnation(),
       now,
     });
   }

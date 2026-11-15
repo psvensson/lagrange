@@ -570,6 +570,15 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getMessageGroupServices: () => this.messageGroupServices,
         getNodeStorageBudgetService: () => this.getNodeStorageBudgetService(),
         getBootIncarnation: () => this.bootIncarnation,
+        raiseBootIncarnationFloor: (knownIncarnation) => {
+          if (
+            Number.isSafeInteger(knownIncarnation) &&
+            knownIncarnation > this.bootIncarnation
+          ) {
+            this.bootIncarnation = knownIncarnation;
+          }
+          return this.bootIncarnation;
+        },
         getSystemTableCache: () =>
           NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () => this.ensureLatencyTopologyOwners(),
