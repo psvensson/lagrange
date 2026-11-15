@@ -40,9 +40,9 @@ function resolveRenewalIntervalMs(ttlMs = DEFAULT_TTL_MS) {
 
 /**
  * Parse a node row's READY lease expiry timestamp without coercing null,
- * undefined, empty string, boolean, or non-positive values to epoch 0.
+ * undefined, empty string, boolean, or epoch-zero values to a live timestamp.
  * @param {Object|null|undefined} row - Nodes row.
- * @return {number|null} Finite positive expiry timestamp or null.
+ * @return {number|null} Finite non-zero expiry timestamp or null.
  */
 function parseLeaseExpiresAt(row) {
   const raw = row?.[COLUMN.READY_LEASE_EXPIRES_AT];
@@ -55,7 +55,7 @@ function parseLeaseExpiresAt(row) {
     return null;
   }
   const leaseExpiry = Number(raw);
-  if (!Number.isFinite(leaseExpiry) || leaseExpiry <= MIN_LEASE_TIMESTAMP_MS) {
+  if (!Number.isFinite(leaseExpiry) || leaseExpiry === MIN_LEASE_TIMESTAMP_MS) {
     return null;
   }
   return leaseExpiry;

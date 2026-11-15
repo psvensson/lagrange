@@ -118,6 +118,11 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
 const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
+// Cross-VM (--network host) transport ACK and join timeouts, matching
+// cluster-class-lifecycle-base.js (commit 5ff58af0c, CL-007).
+const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
+const JOINING_HTTP_TIMEOUT_MS = 60000;
+const JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000;
 
 function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(String(index + 1), NODE_ID_WIDTH, '0')}`;
@@ -129,10 +134,15 @@ function nodeEnv({nodeId, host, seedHost, connection}) {
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
+    LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS: HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS,
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
-  if (seedHost !== host) env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+  if (seedHost !== host) {
+    env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+    env.NODE_JOINING_HTTP_TIMEOUT_MS = JOINING_HTTP_TIMEOUT_MS;
+    env.NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = JOINING_LEADERSHIP_WAIT_TIMEOUT_MS;
+  }
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
 
@@ -577,22 +587,31 @@ function exhaustedEndpoint(listener, roles) {
     port: listener.port, containerId: node.containerId, binding: null};
 }
 
+async function startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId,
+  index}) {
+  const nodeId = nodeIdOf(index);
+  const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
+    ordinal: index + 1, image: imageForHost(opts, host, image),
+    dockerArgs: [...storageArgs(opts, campaignId, index),
+      ...nodeEnv({nodeId, host, seedHost, connection})]});
+  return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
+}
+
 async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeReadiness,
   formed, campaignId}) {
   const {sshRun, opts} = ctx;
   const seedHost = hosts[0];
+  await Promise.all(arrayMap(hosts, (host, index) =>
+    prepareNodeStorage({sshRun, opts, host, campaignId, index})));
+  roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
+    campaignId, index: 0}));
+  const joinerIndices = [];
+  for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
+  const joinerRoles = await Promise.all(arrayMap(joinerIndices, (index) =>
+    startLagrangeNode({sshRun, opts, host: hosts[index], seedHost, image, connection, campaignId,
+      index})));
+  for (const role of joinerRoles) roles.push(role);
   for (let index = 0; index < hosts.length; index += 1) {
-    const host = hosts[index];
-    const nodeId = nodeIdOf(index);
-    await prepareNodeStorage({sshRun, opts, host, campaignId, index});
-    const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
-      ordinal: index + 1, image: imageForHost(opts, host, image),
-      dockerArgs: [...storageArgs(opts, campaignId, index),
-        ...nodeEnv({nodeId, host, seedHost, connection})]});
-    roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
-    if (index === 0) nodeReadiness.push(await nodeReady(ctx, host));
-  }
-  for (let index = 1; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
   const membership = await membershipReady(ctx, seedHost, hosts.length);

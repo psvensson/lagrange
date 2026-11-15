@@ -1,3 +1,4 @@
+import {loadMysql2Promise} from './native-clients.js';
 import {dropsDataset} from './oltp-adapter-contract.js';
 import {
   buildOltpBaselineDataset,
@@ -426,8 +427,8 @@ async function dropDatabase(connect, endpoint, databaseName) {
 }
 
 async function defaultConnectionFactory(options) {
-  const mysql = await import('mysql2/promise');
-  return (mysql.default || mysql).createConnection(options);
+  const mysql = await loadMysql2Promise();
+  return mysql.createConnection(options);
 }
 
 async function createTiDbOltpAdapter(options = {}) {
