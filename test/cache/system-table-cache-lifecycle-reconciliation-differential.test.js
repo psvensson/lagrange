@@ -46,6 +46,11 @@ const INCARNATION_TOKEN_COLUMNS = Object.freeze([
   'create_attempt_token',
   'cleanup_token',
 ]);
+const ORDINARY_TERMINAL_REQUIRED_COLUMNS = Object.freeze([
+  ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+  'status',
+  ROW_VERSION_COLUMN,
+]);
 
 function isAbsent(value) {
   return value === null || value === undefined;
@@ -114,6 +119,95 @@ function isCachedLifecycleBlocking(cached, authority) {
       Number(cached[authorityLifecycle.column]) > authorityLifecycle.value);
 }
 
+function oracleCompleteOrdinaryServiceRow(row) {
+  if (!row || typeof row !== 'object' ||
+      row.service_type === SERVICE_TYPE.PARTITION_CLEANUP) {
+    return false;
+  }
+  const requiredStrings = [
+    ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+    'status',
+  ];
+  return ORDINARY_TERMINAL_REQUIRED_COLUMNS.every((column) =>
+    Object.hasOwn(row, column)) &&
+    requiredStrings.every((column) => isNonEmptyString(row[column])) &&
+    oracleLifecycleVersion(row) !== null &&
+    isFiniteVersion(row[ROW_VERSION_COLUMN]);
+}
+
+function oracleNewerIncarnation(cached, authority) {
+  return oracleCompleteOrdinaryServiceRow(cached) &&
+    oracleCompleteOrdinaryServiceRow(authority) &&
+    isFiniteVersion(cached.created_at) &&
+    isFiniteVersion(authority.created_at) &&
+    Number(cached.created_at) > Number(authority.created_at);
+}
+
+function oracleOlderIncarnation(cached, authority) {
+  if (!oracleCompleteOrdinaryServiceRow(authority)) {
+    return false;
+  }
+  if (
+    isFiniteVersion(cached.created_at) &&
+    isFiniteVersion(authority.created_at) &&
+    Number(cached.created_at) !== Number(authority.created_at)
+  ) {
+    return Number(cached.created_at) < Number(authority.created_at);
+  }
+  const tokenConflict = isNonEmptyString(cached.create_attempt_token) &&
+    isNonEmptyString(authority.create_attempt_token) &&
+    cached.create_attempt_token !== authority.create_attempt_token;
+  return tokenConflict &&
+    !isCachedRowVersionBlocking(cached, authority) &&
+    !isCachedLifecycleBlocking(cached, authority);
+}
+
+function applyOracleCrossIncarnationLifecycleAndTimestamp(base, cached, authority) {
+  const authorityLifecycle = oracleLifecycleVersion(authority);
+  const cachedLifecycle = authorityLifecycle ?
+    Number(cached[authorityLifecycle.column]) : NaN;
+  if (authorityLifecycle && (
+    !Number.isFinite(cachedLifecycle) ||
+    authorityLifecycle.value >= cachedLifecycle
+  )) {
+    for (const column of Object.keys(authority).filter(isLifecycleColumn)) {
+      if (authority[column] !== undefined) {
+        base[column] = JSON.parse(JSON.stringify(authority[column]));
+      }
+    }
+  }
+  if (Number.isFinite(Number(cached.updated_at)) &&
+      Number.isFinite(Number(authority.updated_at))) {
+    base.updated_at = Math.max(
+      Number(cached.updated_at),
+      Number(authority.updated_at),
+    );
+  }
+}
+
+function oracleBaseCrossIncarnationOutput(cached, authority) {
+  const base = JSON.parse(JSON.stringify(cached));
+  for (const hlcColumn of ['updated_at_hlc', 'updatedAtHlc']) {
+    if (!Object.hasOwn(authority, hlcColumn) &&
+        Number.isFinite(Number(cached.updated_at)) &&
+        Number.isFinite(Number(authority.updated_at)) &&
+        Number(authority.updated_at) > Number(cached.updated_at)) {
+      delete base[hlcColumn];
+    }
+  }
+  for (const [column, value] of Object.entries(authority)) {
+    if (!Object.hasOwn(base, column) && value !== undefined) {
+      base[column] = JSON.parse(JSON.stringify(value));
+    }
+  }
+  for (const column of SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES) {
+    base[column] = authority[column] === undefined ?
+      undefined : JSON.parse(JSON.stringify(authority[column]));
+  }
+  applyOracleCrossIncarnationLifecycleAndTimestamp(base, cached, authority);
+  return base;
+}
+
 // Q1 of the record. The partition-cleanup kind is excluded: the builder
 // replaces such a row wholesale, so it never keeps an absent cached cell.
 function isQ1Cell(cached, authority, column) {
@@ -147,6 +241,42 @@ function aligned(row, authority) {
   );
 }
 
+function evaluateIncarnationEquivalence(
+  cell,
+  output,
+  label,
+  newerIncarnation,
+  olderIncarnation,
+  inputQ1,
+  report,
+) {
+  if (newerIncarnation) {
+    if (serializeRow(output) !== serializeRow(cell.cached)) {
+      report.q1NotAuthoritative.push(`${label}:newerIncarnation`);
+    }
+    return oracleBaseCrossIncarnationOutput(cell.cached, cell.authority);
+  }
+  if (olderIncarnation) {
+    for (const [column, value] of Object.entries(cell.authority)) {
+      if (serializeRow({v: output[column]}) !== serializeRow({v: value})) {
+        report.q1NotAuthoritative.push(`${label}:${column}`);
+      }
+    }
+    return oracleBaseCrossIncarnationOutput(cell.cached, cell.authority);
+  }
+  const baseEquivalent = {...output};
+  for (const column of inputQ1) {
+    if (serializeRow({v: output[column]}) !==
+        serializeRow({v: cell.authority[column]})) {
+      report.q1NotAuthoritative.push(`${label}:${column}`);
+    }
+    if (Object.hasOwn(cell.cached, column) && cell.cached[column] === null) {
+      baseEquivalent[column] = null;
+    }
+  }
+  return baseEquivalent;
+}
+
 function evaluateCombo(axes, report) {
   const key = comboKey(axes);
   const golden = GOLDEN.golden[key];
@@ -161,21 +291,33 @@ function evaluateCombo(axes, report) {
       cell.cached,
       cell.authority,
     );
+    const newerIncarnation = oracleNewerIncarnation(
+      cell.cached,
+      cell.authority,
+    );
+    const olderIncarnation = !newerIncarnation && oracleOlderIncarnation(
+      cell.cached,
+      cell.authority,
+    );
     const inputQ1 = q1Columns(cell.cached, cell.authority);
     report.q1CellCount += inputQ1.length;
-    const baseEquivalent = {...output};
-    for (const column of inputQ1) {
-      if (serializeRow({v: output[column]}) !==
-          serializeRow({v: cell.authority[column]})) {
-        report.q1NotAuthoritative.push(`${label}:${column}`);
-      }
-      if (Object.hasOwn(cell.cached, column) && cell.cached[column] === null) {
-        baseEquivalent[column] = null;
-      }
-    }
+    const baseEquivalent = evaluateIncarnationEquivalence(
+      cell,
+      output,
+      label,
+      newerIncarnation,
+      olderIncarnation,
+      inputQ1,
+      report,
+    );
     baseEquivalentOutputs.push(baseEquivalent);
     const before = aligned(cell.cached, cell.authority);
-    const expectedBefore = inputQ1.length > 0 ? false : goldenBefore[index];
+    let expectedBefore = inputQ1.length > 0 ? false : goldenBefore[index];
+    if (newerIncarnation) {
+      expectedBefore = true;
+    } else if (olderIncarnation) {
+      expectedBefore = false;
+    }
     if (before !== expectedBefore) {
       report.predicateBefore.push(label);
     }
@@ -184,7 +326,14 @@ function evaluateCombo(axes, report) {
     if (outputQ1.length > 0) {
       report.outputQ1.push(`${label}:${outputQ1.join(',')}`);
     }
-    const expectedAfter = outputQ1.length > 0 ? false : goldenAfter[index];
+    let expectedAfter = outputQ1.length > 0 ? false : goldenAfter[index];
+    if (
+      newerIncarnation ||
+      olderIncarnation ||
+      oracleNewerIncarnation(output, cell.authority)
+    ) {
+      expectedAfter = true;
+    }
     if (after !== expectedAfter) {
       report.predicateAfter.push(label);
     }

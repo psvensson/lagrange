@@ -104,6 +104,12 @@ const SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES = Object.freeze([
   'updated_at',
 ]);
 
+const SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD = Object.freeze({
+  PORT: 'port',
+  CREATE_ATTEMPT_TOKEN: 'create_attempt_token',
+  CREATE_ATTEMPT_TOKEN_CAMEL: 'createAttemptToken',
+});
+
 // ---------------------------------------------------------------------------
 // CDC-Propagated vs Non-Propagated Table Classification
 // ---------------------------------------------------------------------------
@@ -220,5 +226,6 @@ export {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD,
   SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES,
 };

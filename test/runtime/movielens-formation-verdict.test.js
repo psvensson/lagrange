@@ -202,6 +202,17 @@ test('reason precedence: leases, then spread, then the admission blocker', (t) =
   });
   t.equal(blocked.reason, FORMATION_VERDICT_REASON.ADMISSION_BLOCKED);
   t.equal(blocked.admission.canonicalBlocker, 'snapshot_query_error');
+  const preAdmissionTimeout = deriveFormationVerdict({
+    seedLogText: noLeaseLog,
+    schemaAdmission: null,
+    environment: {},
+  });
+  t.equal(preAdmissionTimeout.verdict, FORMATION_VERDICT.FAIL);
+  t.equal(
+    preAdmissionTimeout.reason,
+    FORMATION_VERDICT_REASON.FORMATION_INCOMPLETE,
+  );
+  t.equal(preAdmissionTimeout.admission.state, null);
   t.end();
 });
 

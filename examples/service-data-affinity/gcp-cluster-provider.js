@@ -65,6 +65,9 @@ const GCP_DEMO_DEPLOYMENT_PROFILE = Object.freeze({
 });
 const GCP_DEMO_ZONE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP_ZONE';
 const DEMO_NODE_COUNT = 5;
+const DEFAULT_CLUSTER_FORM_TIMEOUT_MS = 180000;
+const MIN_GCP_NODE_STARTUP_TIMEOUT_MS = 90000;
+const STARTUP_TIMEOUT_FRACTION_DIVISOR = 2;
 const ADMIN_STREAM_PATH = '/api/admin/stream';
 const SEED_ADMIN_PORT = 8081;
 const GCP_DEMO_SCENARIO_NAME = 'movielens-service-data-affinity-demo';
@@ -83,12 +86,26 @@ function resolveGcpDemoDeploymentProfile(environment = process.env) {
   };
 }
 
-function buildGcpDemoClusterConfig(deploymentProfile) {
-  return mergeWithDefaults({
+function buildGcpDemoClusterConfig(
+  deploymentProfile,
+  {timeoutMs = DEFAULT_CLUSTER_FORM_TIMEOUT_MS} = {},
+) {
+  const startupTimeout = Math.max(
+    MIN_GCP_NODE_STARTUP_TIMEOUT_MS,
+    Math.floor(timeoutMs / STARTUP_TIMEOUT_FRACTION_DIVISOR),
+  );
+  const config = mergeWithDefaults({
     size: DEMO_NODE_COUNT,
     gcp: deploymentProfile.infrastructure,
     resourceLimits: deploymentProfile.container,
+    timeouts: {
+      nodeStartup: startupTimeout,
+    },
   });
+  return {
+    ...config,
+    startupTimeout,
+  };
 }
 
 async function materializeGcpFullNodeLogs(nodes, outputDir) {
@@ -189,10 +206,15 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
  * @param {Object} options
  * @param {boolean} [options.verbose]
  * @param {string} [options.outputDir]
+ * @param {number} [options.timeoutMs]
  * @return {Promise<{cluster: Object, provisioner: Object, target: string,
  *   seedExternalIp: string, stop: Function}>}
  */
-async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
+async function startGcpAffinityCluster({
+  verbose = false,
+  outputDir,
+  timeoutMs = DEFAULT_CLUSTER_FORM_TIMEOUT_MS,
+} = {}) {
   const deploymentProfile = resolveGcpDemoDeploymentProfile();
   const provisioner = new GCPProvisioner(deploymentProfile.infrastructure);
   let provisioned = false;
@@ -211,7 +233,7 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
     // the 5-node scale factor 2.0 = 60s); every other sealed term
     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
     const config = await applySourceFingerprintConfig(
-      buildGcpDemoClusterConfig(deploymentProfile),
+      buildGcpDemoClusterConfig(deploymentProfile, {timeoutMs}),
     );
     await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);

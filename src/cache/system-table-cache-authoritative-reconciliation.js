@@ -15,6 +15,7 @@ import {
   SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD,
   SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES,
 } from './cache-constants.js';
 
@@ -170,10 +171,22 @@ function areAuthoritativeSystemTableCacheRowsAligned(
       cachedRow.cleanup_token === authoritativeRow.cleanup_token &&
       Number(cachedRow.updated_at) === Number(authoritativeRow.updated_at);
   }
+  if (isCachedServiceIncarnationNewer(cachedRow, authoritativeRow)) {
+    return true;
+  }
+  if (isCachedServiceIncarnationOlder(cachedRow, authoritativeRow)) {
+    return false;
+  }
   const identityAligned =
     SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES.every((fieldName) =>
       stableSerialize(cachedRow[fieldName]) ===
-        stableSerialize(authoritativeRow[fieldName]));
+        stableSerialize(authoritativeRow[fieldName])) &&
+    (!Object.prototype.hasOwnProperty.call(
+      authoritativeRow,
+      SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD.PORT,
+    ) ||
+      stableSerialize(cachedRow.port) ===
+        stableSerialize(authoritativeRow.port));
   if (!identityAligned || cachedRow.status !== authoritativeRow.status) {
     return false;
   }
@@ -379,6 +392,60 @@ function isCachedServiceRowVersionNewerOrAuthorityUnversioned(
       Number(existingUpdatedAt) > Number(authoritativeUpdatedAt));
 }
 
+function hasConflictingCreateAttemptToken(existing, authoritative) {
+  return hasConflictingNonEmptyField(
+    existing,
+    authoritative,
+    SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD.CREATE_ATTEMPT_TOKEN,
+  ) || hasConflictingNonEmptyField(
+    existing,
+    authoritative,
+    SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD.CREATE_ATTEMPT_TOKEN_CAMEL,
+  );
+}
+
+function hasCompleteOrdinaryServiceIncarnationRow(row) {
+  return hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
+    TABLES.SERVICES,
+    row,
+  ) && !isPartitionCleanupServiceRow(row);
+}
+
+function isCachedServiceIncarnationNewer(existing, authoritative) {
+  if (
+    !hasCompleteOrdinaryServiceIncarnationRow(existing) ||
+    !hasCompleteOrdinaryServiceIncarnationRow(authoritative)
+  ) {
+    return false;
+  }
+  return isFiniteSystemTableCacheNumber(existing?.created_at) &&
+    isFiniteSystemTableCacheNumber(authoritative?.created_at) &&
+    Number(existing.created_at) > Number(authoritative.created_at);
+}
+
+function isCachedServiceIncarnationOlder(existing, authoritative) {
+  if (
+    !existing ||
+    typeof existing !== 'object' ||
+    !hasCompleteOrdinaryServiceIncarnationRow(authoritative)
+  ) {
+    return false;
+  }
+  if (
+    isFiniteSystemTableCacheNumber(existing.created_at) &&
+    isFiniteSystemTableCacheNumber(authoritative.created_at) &&
+    Number(existing.created_at) !== Number(authoritative.created_at)
+  ) {
+    return Number(existing.created_at) < Number(authoritative.created_at);
+  }
+  return hasConflictingCreateAttemptToken(existing, authoritative) &&
+    !isCachedServiceRowVersionNewerOrAuthorityUnversioned(
+      existing,
+      authoritative,
+    ) &&
+    !isCachedServiceLifecycleVersionNewer(existing, authoritative);
+}
+
 // A cached key holding null or undefined is absent evidence, not a newer
 // value: it takes the authoritative value of a non-identity, non-lifecycle
 // column when the cached row version is not newer, the cached lifecycle is
@@ -398,17 +465,20 @@ function authorityFillsAbsentCachedServiceField(
     !hasDifferentServiceIdentity(existing, authoritative);
 }
 
-function buildAuthoritativeServiceLifecycleCacheReplacement(
-  existing,
-  authoritative,
-) {
-  if (isPartitionCleanupServiceRow(authoritative)) {
-    return buildAuthoritativeSystemTableCacheReplacement(
-      TABLES.SERVICES,
-      existing,
-      authoritative,
-    );
+function buildNewerIncarnationServiceReplacement(existing, authoritative) {
+  const replacement = fastJsonClone(existing);
+  for (const fieldName of HLC_LOCAL_FIELD_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(authoritative || {}, fieldName)) {
+      delete replacement[fieldName];
+    }
   }
+  for (const [fieldName, fieldValue] of Object.entries(authoritative)) {
+    replacement[fieldName] = fastJsonClone(fieldValue);
+  }
+  return replacement;
+}
+
+function buildSameIncarnationBaseReplacement(existing, authoritative) {
   const replacement = fastJsonClone(existing);
   for (const fieldName of HLC_LOCAL_FIELD_NAMES) {
     if (
@@ -434,8 +504,38 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
       replacement[fieldName] = fastJsonClone(fieldValue);
     }
   }
+  return replacement;
+}
+
+function buildAuthoritativeServiceLifecycleCacheReplacement(
+  existing,
+  authoritative,
+) {
+  if (isPartitionCleanupServiceRow(authoritative)) {
+    return buildAuthoritativeSystemTableCacheReplacement(
+      TABLES.SERVICES,
+      existing,
+      authoritative,
+    );
+  }
+  if (isCachedServiceIncarnationNewer(existing, authoritative)) {
+    return fastJsonClone(existing);
+  }
+  if (isCachedServiceIncarnationOlder(existing, authoritative)) {
+    return buildNewerIncarnationServiceReplacement(existing, authoritative);
+  }
+  const replacement = buildSameIncarnationBaseReplacement(
+    existing,
+    authoritative,
+  );
   for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES) {
     replacement[fieldName] = fastJsonClone(authoritative[fieldName]);
+  }
+  if (Object.prototype.hasOwnProperty.call(
+    authoritative,
+    SYSTEM_TABLE_CACHE_SERVICE_RECONCILIATION_FIELD.PORT,
+  )) {
+    replacement.port = fastJsonClone(authoritative.port);
   }
   const authoritativeVersion = resolveServiceDurableVersion(authoritative);
   const existingVersion = authoritativeVersion ?

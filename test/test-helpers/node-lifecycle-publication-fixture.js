@@ -68,7 +68,10 @@ function createNodeLifecyclePublicationFixture(options = {}) {
         return result;
       },
     },
-    leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
+    leaseAuthority:
+      Number.isFinite(options.readyLeaseMs) && options.readyLeaseMs > 0 ?
+        new NodeReadyLeaseAuthority({readyLeaseMs: options.readyLeaseMs}) :
+        NodeReadyLeaseAuthority.fromConfiguration(),
     now: options.now,
   });
 }

@@ -101,10 +101,27 @@ test('MovieLens GCP deployment profile owns VM and container capacity', (t) => {
     {memory: '2g', cpus: '2.0'},
     'the live workload cannot inherit the legacy 512MiB/1-CPU fallback',
   );
+  const defaultClusterConfig = buildGcpDemoClusterConfig(defaultProfile);
   assert.deepEqual(
-    buildGcpDemoClusterConfig(defaultProfile).resourceLimits,
+    defaultClusterConfig.resourceLimits,
     defaultProfile.container,
     'the cluster consumes the deployment profile without a second default',
+  );
+  t.equal(
+    defaultClusterConfig.startupTimeout,
+    90000,
+    '2-vCPU container bootstrap with attribution gets at least 90s startup budget',
+  );
+  t.equal(
+    defaultClusterConfig.timeouts.nodeStartup,
+    90000,
+    'Cluster._waitForBootstrapApi receives the 90s nodeStartup timeout',
+  );
+  t.equal(
+    buildGcpDemoClusterConfig(defaultProfile, {timeoutMs: 240000})
+      .timeouts.nodeStartup,
+    120000,
+    'larger formation timeout scales nodeStartup proportionally',
   );
   assert.equal(
     resolveGcpDemoDeploymentProfile({

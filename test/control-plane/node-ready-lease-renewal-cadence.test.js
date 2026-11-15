@@ -21,6 +21,12 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {HEARTBEAT_DEFAULT} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {assembleHeartbeatService} from
+  '../../src/control-plane/heartbeat-service.js';
+import {
+  FIXTURE_BOOT_INCARNATION,
+  createNodeLifecyclePublicationFixture,
+} from '../test-helpers/node-lifecycle-publication-fixture.js';
 import {
   DEFAULT_RENEWAL_CADENCE_DIVISOR,
   DEFAULT_RENEWAL_INTERVAL_MS,
@@ -533,6 +539,76 @@ test(
       true,
       'isReadyNodeRow accepts READY row with live positive lease',
     );
+    t.end();
+  },
+);
+
+test(
+  'assembleHeartbeatService derives 2000 ms heartbeat and metadata coalescing ' +
+    'intervals from readyLeaseMs: 6000 so a 6 s lease renews every 2 s without ' +
+    'manual internal overrides',
+  async (t) => {
+    initEnv();
+    const configuredLeaseMs = 6000;
+    const expectedCadenceMs = resolveRenewalIntervalMs(configuredLeaseMs);
+    t.equal(expectedCadenceMs, 2000);
+    let nowMs = 100_000;
+    const nodeWrites = [];
+    const cdc = {
+      insertSystemTableRow: async () => ({
+        success: true,
+        partitionResult: {affectedRows: 1},
+      }),
+      updateSystemTableRow: async (tableName, whereClause, row) => {
+        if (tableName === 'nodes') {
+          nodeWrites.push({at: nowMs, whereClause, row: {...row}});
+        }
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+      upsertSystemTableRow: async () => ({success: true}),
+    };
+    const cache = createMockCache();
+    const service = assembleHeartbeatService({
+      nodeId: 'node-short-lease',
+      nodeAddress: '127.0.0.1:8080',
+      bootIncarnation: FIXTURE_BOOT_INCARNATION,
+      readyLeaseMs: configuredLeaseMs,
+      cdcIntegrationService: cdc,
+      systemTableCache: cache,
+      nodeLifecyclePublication: createNodeLifecyclePublicationFixture({
+        nodeId: 'node-short-lease',
+        bootIncarnation: FIXTURE_BOOT_INCARNATION,
+        readyLeaseMs: configuredLeaseMs,
+        controlPlaneSystemTableGateway: cdc,
+        systemTableCache: cache,
+        now: () => nowMs,
+      }),
+      now: () => nowMs,
+    });
+    t.equal(service.readyLeaseMs, 6000);
+    t.equal(service.heartbeatIntervalMs, 2000);
+    t.equal(service.nodeMetadataMinUpdateIntervalMs, 2000);
+    t.equal(service.nodeMetadataMaxStalenessMs, 2000);
+
+    await service.sendHeartbeat(null, ['partition_replica']);
+    t.equal(nodeWrites.length, 1, 'initial heartbeat writes at t=100000');
+    t.equal(nodeWrites[0].row.ready_lease_expires_at, 106_000);
+
+    nowMs = 102_000;
+    await service.sendHeartbeat(null, ['partition_replica']);
+    t.equal(nodeWrites.length, 2, 'heartbeat renews at +2000 ms');
+    t.equal(nodeWrites[1].row.ready_lease_expires_at, 108_000);
+
+    nowMs = 104_000;
+    await service.sendHeartbeat(null, ['partition_replica']);
+    t.equal(
+      nodeWrites.length,
+      3,
+      'heartbeat renews at +4000 ms before 106000 expiry',
+    );
+    t.equal(nodeWrites[2].row.ready_lease_expires_at, 110_000);
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
     t.end();
   },
 );

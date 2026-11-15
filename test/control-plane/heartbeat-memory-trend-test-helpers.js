@@ -87,6 +87,7 @@ function createHeartbeatService(options = {}) {
         authoritativeNodeRow: options.authoritativeNodeRow,
         nodeId: options.nodeId,
         bootIncarnation: options.bootIncarnation,
+        readyLeaseMs: options.readyLeaseMs,
         now: options.now,
       }),
   });
