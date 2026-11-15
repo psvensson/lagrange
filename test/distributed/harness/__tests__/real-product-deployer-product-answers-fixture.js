@@ -195,6 +195,8 @@ function lagrangeSystemTableRules(nodeIds, hosts) {
 function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3']} = {}) {
   const seedHost = hosts[0];
   return [
+    // --storage-root: the node directory preparation (a fresh directory).
+    [/^docker run --rm .*chown 10001:10001 \/campaign\//u, '\n__exit_code=0'],
     ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length), hosts),
     ...dockerRules(ledger),
     [/\/readyz/u, (command) => {
