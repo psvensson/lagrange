@@ -300,13 +300,15 @@ function probeCallOptions(ctx, pollContext = null) {
 }
 
 async function getJson(ctx, url, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    {signal: ctx.signal, timeoutMs: undefined};
   return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url,
     signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
 }
 
 function getFacts(ctx, host, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    {signal: ctx.signal, timeoutMs: undefined};
   return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
     url: `http://${host}:${PORT.REST}/management/v1/facts`, basicAuth: ctx.connection,
     signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
@@ -633,6 +635,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
   const ctx = {sshRun: trackedSshRun, opts, clientIp, sleep, now: clock, signal: abortSignal,
     formationDeadlineMs, deadlineAtMs: null, deadlineMs: formationDeadlineMs,
     budget, connection, expectedVersion};
+  const postFailureOpts = {...opts, signal: null, deadlineAtMs: null, deadlineMs: null};
+  const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null,
+    deadlineAtMs: null, deadlineMs: null};
   const roles = [];
   const nodeReadiness = [];
   const formed = {listener: null};
@@ -647,10 +652,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
         }
       },
       (failure) => describeExhaustedDeployment({
-        targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
+        targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts: postFailureOpts,
         roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
-        readVersions: (products) => reportedVersions({...ctx, sshRun, signal: null,
-          deadlineAtMs: null, deadlineMs: null}, products), failure}),
+        readVersions: (products) => reportedVersions(postFailureCtx, products), failure}),
     );
   } catch (error) {
     await settleInFlight();
@@ -658,7 +662,12 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
       error.roles = [...roles];
     }
     if (opts.cleanupOnFailure) {
-      error.cleanup = await removeCampaignContainers({hosts, campaignId, sshRun, opts});
+      error.cleanup = await removeCampaignContainers({
+        hosts,
+        campaignId,
+        sshRun,
+        opts: postFailureOpts,
+      });
     }
     throw error;
   }

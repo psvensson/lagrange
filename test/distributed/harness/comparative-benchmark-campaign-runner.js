@@ -199,12 +199,20 @@ async function observeRolesSafely(deployment, events, now) {
 }
 
 // The semantic gate before the window; without a gate stage the run says so.
-async function semanticGateStage({run, manifest, deps, deployment, events}) {
+async function semanticGateStage({run, manifest, deps, deployment, events, signal}) {
   if (!deps.runSemanticGate) {
     events.push({kind: EVENT.SEMANTIC_GATE_UNAVAILABLE, at: iso(deps.now())});
     return {gate: null, deployment};
   }
-  const staged = await deps.runSemanticGate({run, manifest, deployment});
+  const deadlineAtMs = Number.isFinite(deps.deadlineAt) ? deps.deadlineAt : null;
+  const staged = await deps.runSemanticGate({
+    run,
+    manifest,
+    deployment,
+    signal,
+    deadlineAtMs,
+    deadlineAt: deadlineAtMs,
+  });
   events.push(...(staged.events || []));
   return staged;
 }
@@ -223,8 +231,8 @@ async function measureRun({run, manifest, deps, events, signal}) {
     productsAfter: null, roleObservations: null};
   // The deployment stays in the record (and pins its identity) when refused.
   await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));
-  const staged = await semanticGateStage({run, manifest, deps,
-    deployment: attempt.deployment, events});
+  const staged = await withAttempt(attempt, () => semanticGateStage({run, manifest, deps,
+    deployment: attempt.deployment, events, signal}));
   attempt.deployment = staged.deployment;
   const deployment = attempt.deployment;
   assertEndpointBound(deployment);

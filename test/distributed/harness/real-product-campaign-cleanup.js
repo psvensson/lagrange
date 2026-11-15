@@ -47,8 +47,9 @@ async function closeHost({host, campaignId, sshRun, opts}) {
  */
 async function removeCampaignContainers({hosts, campaignId, sshRun, opts}) {
   requireCampaignId(campaignId);
+  const cleanupOpts = opts ? {...opts, signal: null, deadlineAtMs: null, deadlineMs: null} : opts;
   const outcomes = await Promise.all(arrayMap([...new Set(hosts)],
-    (host) => closeHost({host, campaignId, sshRun, opts})));
+    (host) => closeHost({host, campaignId, sshRun, opts: cleanupOpts})));
   const removed = arrayMap(arrayFilter(outcomes, (one) => one.removed), (one) => one.removed);
   const unclosed = arrayMap(arrayFilter(outcomes, (one) => one.unclosed),
     (one) => one.unclosed);

@@ -601,3 +601,76 @@ test('active probe cancellation: aborting signal while an sshRun probe is in fli
   );
   assert.equal(ledger.containers.size, 0);
 });
+
+test('post-abort inspection & cleanup: opts.signal is stripped via signal: null so ' +
+  'describeExhaustedDeployment, reportedVersions, and removeCampaignContainers succeed after abort',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const controller = new AbortController();
+  const {sshRun: baseSshRun} = createScriptedSsh([
+    [/^docker ps -aq --filter label=lagrange\.bench\.campaign=/u, (_command, host) => {
+      const ids = [];
+      for (const entry of ledger.containers.values()) {
+        if (entry.host === host && !entry.removed) ids.push(entry.id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [/^docker rm -f /u, (command) => {
+      const ids = arrayFilter(
+        arrayMap(stringSplit(stringReplace(command, /^docker rm -f\s+/u, ''), /\s+/u),
+          (part) => stringReplace(stringTrim(part), /^'|'$/gu, '')),
+        Boolean,
+      );
+      for (const id of ids) {
+        const entry = ledger.containers.get(id);
+        if (entry) entry.removed = true;
+        ledger.containers.delete(id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'), () => {
+      controller.abort();
+      return http(503, {ready: false, phase: 'init', reasons: ['aborting-with-opts-signal']});
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  const signalHonoringSshRun = async (host, callOpts, command, timeoutMs) => {
+    if (callOpts?.signal?.aborted) {
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+    return baseSshRun(host, callOpts, command, timeoutMs);
+  };
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun: signalHonoringSshRun,
+      campaignId: CAMPAIGN,
+      signal: controller.signal,
+      sleep: async () => {},
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        signal: controller.signal,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.aborted, true);
+      assert.equal(error.deploymentUnobservable, undefined,
+        'post-abort docker inspect must not inherit aborted opts.signal');
+      assert.equal(error.deployment.identity.products.length, HOSTS.length);
+      for (const product of error.deployment.identity.products) {
+        assert.equal(product.reportedVersion, '0.4.0',
+          'post-abort reportedVersions must not inherit aborted opts.signal');
+      }
+      assert.equal(error.cleanup.complete, true,
+        'post-abort removeCampaignContainers must not inherit aborted opts.signal');
+      return true;
+    },
+  );
+  assert.equal(ledger.containers.size, 0);
+});

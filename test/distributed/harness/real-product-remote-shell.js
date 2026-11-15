@@ -15,6 +15,7 @@ import {
 import {
   arrayMap,
   numberIsFinite,
+  objectHasOwn,
   stringLastIndexOf,
   stringReplace,
   stringSplit,
@@ -56,11 +57,18 @@ function errorText(error) {
   return String(error?.stderr || error?.message || error);
 }
 
+function resolveEffectiveSignal(opts, signal) {
+  if (signal !== undefined) return signal;
+  if (opts && objectHasOwn(opts, 'signal')) return opts.signal;
+  return undefined;
+}
+
 function mergeCallOpts(opts, {signal = undefined, timeoutMs = undefined} = {}) {
-  if (signal === undefined && timeoutMs === undefined) return opts;
+  const effectiveSignal = resolveEffectiveSignal(opts, signal);
+  if (effectiveSignal === undefined && timeoutMs === undefined) return opts;
   return {
     ...(opts || {}),
-    ...(signal !== undefined ? {signal} : {}),
+    ...(effectiveSignal !== undefined ? {signal: effectiveSignal} : {}),
     ...(numberIsFinite(timeoutMs) ? {timeoutMs} : {}),
   };
 }
@@ -72,7 +80,8 @@ function mergeCallOpts(opts, {signal = undefined, timeoutMs = undefined} = {}) {
  */
 async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = undefined,
   basicAuth = undefined, signal = undefined, timeoutMs = undefined}) {
-  if (signal?.aborted) {
+  const effectiveSignal = resolveEffectiveSignal(opts, signal);
+  if (effectiveSignal?.aborted) {
     return {status: null, body: null, json: null, error: 'aborted'};
   }
   if (numberIsFinite(timeoutMs) && timeoutMs <= 0) {
@@ -94,7 +103,7 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
   }
   words.push('-w', shellQuote(`\\n${HTTP_STATUS_MARKER}%{http_code}`), shellQuote(url));
   const callOpts = mergeCallOpts(opts, {
-    signal,
+    signal: effectiveSignal,
     timeoutMs: numberIsFinite(timeoutMs) ? effectiveTimeoutMs : undefined,
   });
   let raw;
@@ -200,12 +209,14 @@ function dockerRunOnceCommand({campaignId, image, dockerArgs = [], commandArgs =
 function createTrackedSshRun(sshRun, defaultSignal = null) {
   const inFlightOps = new Set();
   const trackedSshRun = (host, callOpts, command, timeoutMs) => {
-    const signal = callOpts?.signal ?? defaultSignal ?? null;
+    const hasExplicitSignal = Boolean(callOpts && objectHasOwn(callOpts, 'signal'));
+    const signal = hasExplicitSignal ? callOpts.signal : (defaultSignal ?? null);
     if (signal?.aborted) {
       return Promise.reject(new Error('ssh operation aborted before start'));
     }
-    const effectiveOpts = signal && (!callOpts || callOpts.signal !== signal) ?
-      {...(callOpts || {}), signal} : callOpts;
+    const effectiveOpts = hasExplicitSignal ? callOpts :
+      (signal && (!callOpts || callOpts.signal !== signal) ?
+        {...(callOpts || {}), signal} : callOpts);
     const opPromise = Promise.resolve().then(() =>
       sshRun(host, effectiveOpts, command, timeoutMs));
     inFlightOps.add(opPromise);

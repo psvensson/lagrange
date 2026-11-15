@@ -44,7 +44,13 @@ import {
   jsonParse, jsonStringify, mapGet, mapSet, numberIsFinite, numberIsInteger, objectFreeze,
   objectGetPrototypeOf, objectHasOwn, objectKeys, stringSplit, stringTrim, toNumber, toStringValue,
 } from './real-product-captured-intrinsics.js';
-import {READINESS_STATE, RUN_CLASS, STORAGE_KIND} from './real-product-deployment-contract.js';
+import {
+  DEPLOYMENT_FAILURE,
+  READINESS_STATE,
+  RUN_CLASS,
+  STORAGE_KIND,
+  deploymentFailure,
+} from './real-product-deployment-contract.js';
 import {inspectProducts, runClassOf} from './real-product-identity.js';
 import {errorText, shellWord} from './real-product-remote-shell.js';
 import {
@@ -429,15 +435,141 @@ async function persistGateArtifact(evidenceDir, fileName, payload) {
   return outputPath;
 }
 
-async function runRemoteNodeJson(sshRun, opts, host, script, payload) {
+function resolveGateDeadlineAtMs({deadlineAtMs, deadlineAt, run, manifest, opts} = {}) {
+  const candidates = [
+    deadlineAtMs,
+    deadlineAt,
+    ownField(run, 'deadlineAtMs'),
+    ownField(run, 'deadlineAt'),
+    ownField(manifest, 'deadlineAtMs'),
+    ownField(manifest, 'deadlineAt'),
+    ownField(opts, 'deadlineAtMs'),
+    ownField(opts, 'deadlineAt'),
+  ];
+  for (let index = 0; index < candidates.length; index += 1) {
+    if (numberIsFinite(candidates[index])) return candidates[index];
+  }
+  return null;
+}
+
+function isGateAbortError(error, signal = null) {
+  return Boolean(
+    error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
+    error?.aborted === true ||
+    error?.diagnostic?.aborted === true ||
+    error?.name === 'AbortError' ||
+    signal?.aborted === true,
+  );
+}
+
+function assertSemanticGateActive({signal = null, deadlineAtMs = null, targetId = null,
+  stage = 'semantic-gate', caseId = null, nowFn = dateNow} = {}) {
+  const clock = typeof nowFn === 'function' ? nowFn : dateNow;
+  const aborted = Boolean(signal?.aborted);
+  const deadlineExpired = numberIsFinite(deadlineAtMs) && clock() >= deadlineAtMs;
+  if (!aborted && !deadlineExpired) return;
+  const err = deploymentFailure(
+    DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+    `Campaign watchdog or deadline stopped semantic gate (${stage}` +
+      `${caseId ? `:${caseId}` : ''})`,
+    {
+      targetId,
+      stage,
+      caseId,
+      failureClass: 'interrupted',
+      aborted: true,
+      deadlineExpired,
+    },
+  );
+  err.aborted = true;
+  err.failureClass = 'interrupted';
+  throw err;
+}
+
+function awaitWithGateSignal(promiseOrFn, gateControl = {}) {
+  const promise = typeof promiseOrFn === 'function' ?
+    Promise.resolve().then(promiseOrFn) : promiseOrFn;
+  const signal = gateControl?.signal ?? null;
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        assertSemanticGateActive(gateControl);
+      } catch (abortErr) {
+        reject(abortErr);
+      }
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, {once: true});
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function runRemoteNodeJson(sshRun, opts, host, script, payload, gateControl = {}) {
+  const {
+    signal = null,
+    deadlineAtMs = null,
+    nowFn = dateNow,
+    targetId = null,
+    stage = 'remote-gate-action',
+    caseId = null,
+  } = gateControl || {};
+  const activeControl = {signal, deadlineAtMs, nowFn, targetId, stage, caseId};
+  assertSemanticGateActive(activeControl);
+  const clock = typeof nowFn === 'function' ? nowFn : dateNow;
+  const remainingMs = numberIsFinite(deadlineAtMs) ? deadlineAtMs - clock() : null;
+  if (remainingMs !== null && remainingMs <= 0) {
+    assertSemanticGateActive(activeControl);
+  }
+  const effectiveTimeoutMs = remainingMs !== null ?
+    Math.max(1, Math.min(REMOTE_GATE_ACTION_TIMEOUT_MS, Math.floor(remainingMs))) :
+    REMOTE_GATE_ACTION_TIMEOUT_MS;
+  const callOpts = signal !== null || remainingMs !== null ? {
+    ...(opts || {}),
+    ...(signal ? {signal} : {}),
+    timeoutMs: effectiveTimeoutMs,
+  } : opts;
   const rawNodePath = ownField(host, 'nodePath');
   const nodeBinary = typeof rawNodePath === 'string' && rawNodePath !== '' ?
     rawNodePath : 'node';
   const encoded = Buffer.from(jsonStringify(payload), 'utf8').toString('base64');
   const command = `cd ${shellWord(ownField(host, 'repoPath'))} && ${shellWord(nodeBinary)} ` +
     `--input-type=module -e ${shellWord(script)} ${shellWord(encoded)}`;
-  const stdout = stringTrim(toStringValue(await sshRun(
-    ownField(host, 'ip'), opts, command, REMOTE_GATE_ACTION_TIMEOUT_MS)));
+  let rawStdout;
+  try {
+    rawStdout = await awaitWithGateSignal(
+      Promise.resolve().then(() =>
+        sshRun(ownField(host, 'ip'), callOpts, command, effectiveTimeoutMs)),
+      activeControl,
+    );
+  } catch (error) {
+    assertSemanticGateActive(activeControl);
+    if (isGateAbortError(error, signal)) {
+      assertSemanticGateActive({...activeControl, signal: {aborted: true}});
+    }
+    throw error;
+  }
+  assertSemanticGateActive(activeControl);
+  const stdout = stringTrim(toStringValue(rawStdout));
   const lines = arrayFilter(stringSplit(stdout, '\n'), (line) => stringTrim(line) !== '');
   return jsonParse(lines[lines.length - 1]);
 }
@@ -507,7 +639,13 @@ async function executeRemotePgCase(req, overrides) {
     });
     adapter = outcome.adapter;
     const evidence = buildProofEvidence(outcome);
-    return {evaluation: outcome.evaluation, proofRecord: evidence.proofRecord, evidence};
+    return {
+      evaluation: outcome.evaluation,
+      proofRecord: evidence.proofRecord,
+      evidence,
+      datasetPrepared: true,
+      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
+    };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
   }
@@ -547,6 +685,8 @@ async function executeRemotePgDurabilityBefore(req, overrides) {
       retryEvidence: retryOutcome.evidence,
       paymentBeforeRestart,
       stateBeforeRestart,
+      datasetPrepared: true,
+      resetOutcome: adapter?.schemaProvisioning?.outcome ?? null,
     };
   } finally {
     await closePgAdapterQuietly(adapter, cleanupDiagnostics);
@@ -708,7 +848,10 @@ function recordCaseError(result, error) {
 }
 
 async function runRemotePgWireCase({proofCase, system, connection, binding, persistentStorage,
-  restartProduct, evidenceDir, sshRun, opts, loadGeneratorHost}) {
+  restartProduct, evidenceDir, sshRun, opts, loadGeneratorHost, gateControl = {},
+  onCaseDatasetPrepared = null}) {
+  const caseControl = {...gateControl, stage: 'run-case', caseId: proofCase.id};
+  assertSemanticGateActive(caseControl);
   const precondition = durabilityPreconditionResult(
     proofCase, persistentStorage, restartProduct, binding);
   if (precondition) return precondition;
@@ -717,23 +860,41 @@ async function runRemotePgWireCase({proofCase, system, connection, binding, pers
     let outcome;
     if (proofCase.id === DURABILITY_CASE_ID) {
       const before = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-        {action: REMOTE_ACTION.PG_DURABILITY_BEFORE, system, connection, binding});
+        {action: REMOTE_ACTION.PG_DURABILITY_BEFORE, system, connection, binding},
+        {...caseControl, stage: 'durability-before'});
+      if (typeof onCaseDatasetPrepared === 'function') {
+        onCaseDatasetPrepared({caseId: proofCase.id, resetOutcome: before?.resetOutcome ?? null});
+      }
+      assertSemanticGateActive({...caseControl, stage: 'durability-restart'});
       const faultEvidence = await restartProduct({
         context: {system, endpoint: connection.endpoint, connection: connection.credentials,
           binding},
       });
+      assertSemanticGateActive({...caseControl, stage: 'durability-after'});
       outcome = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
         {action: REMOTE_ACTION.PG_DURABILITY_AFTER, system, connection, binding, before,
-          faultEvidence});
+          faultEvidence},
+        {...caseControl, stage: 'durability-after'});
     } else {
       outcome = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
         {action: REMOTE_ACTION.PG_CASE, caseId: proofCase.id, system, connection, binding,
-          persistentStorage});
+          persistentStorage},
+        caseControl);
+      if (typeof onCaseDatasetPrepared === 'function') {
+        onCaseDatasetPrepared({caseId: proofCase.id, resetOutcome: outcome?.resetOutcome ?? null});
+      }
     }
+    assertSemanticGateActive({...caseControl, stage: 'after-case'});
     await recordCaseOutcome({result, proofCase, system, outcome, evidenceDir});
   } catch (error) {
+    if (isGateAbortError(error, caseControl.signal)) {
+      assertSemanticGateActive(caseControl);
+      throw error;
+    }
+    assertSemanticGateActive(caseControl);
     recordCaseError(result, error);
   }
+  assertSemanticGateActive({...caseControl, stage: 'after-case'});
   return objectFreeze(result);
 }
 
@@ -774,17 +935,20 @@ function summarizeCasesToGate(system, cases) {
 }
 
 async function runRemotePgWireSemanticGate({system, connection, binding, evidenceDir, beforeCase,
-  restartProduct, persistentStorage, sshRun, opts, loadGeneratorHost}) {
+  restartProduct, persistentStorage, sshRun, opts, loadGeneratorHost, gateControl = null,
+  onCaseDatasetPrepared = null}) {
   let activeConnection = connection;
   let activeBinding = binding;
   const cases = [];
   for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
     const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
+    assertSemanticGateActive({...(gateControl || {}), stage: 'before-case', caseId: proofCase.id});
     const rebound = await beforeCase({caseId: proofCase.id});
     if (rebound) {
       activeConnection = rebound.connection;
       activeBinding = rebound.binding;
     }
+    assertSemanticGateActive({...(gateControl || {}), stage: 'case-start', caseId: proofCase.id});
     arrayPush(cases, await runRemotePgWireCase({
       proofCase,
       system,
@@ -796,17 +960,22 @@ async function runRemotePgWireSemanticGate({system, connection, binding, evidenc
       sshRun,
       opts,
       loadGeneratorHost,
+      gateControl,
+      onCaseDatasetPrepared,
     }));
+    assertSemanticGateActive({...(gateControl || {}), stage: 'case-complete',
+      caseId: proofCase.id});
   }
   return summarizeCasesToGate(system, cases);
 }
 
 async function cleanupFailedTiDbDurability({connection, sshRun, opts, loadGeneratorHost,
-  createMysqlConnection, result}) {
+  createMysqlConnection, result, gateControl = null}) {
   try {
     if (loadGeneratorHost) {
       await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-        {action: REMOTE_ACTION.TIDB_DURABILITY_CLEANUP, connection});
+        {action: REMOTE_ACTION.TIDB_DURABILITY_CLEANUP, connection},
+        gateControl ? {...gateControl, signal: null, deadlineAtMs: null} : null);
       return;
     }
     const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
@@ -821,13 +990,21 @@ async function cleanupFailedTiDbDurability({connection, sshRun, opts, loadGenera
 }
 
 async function executeTiDbDurabilitySequence({connection, binding, restartProduct, sshRun, opts,
-  loadGeneratorHost, createMysqlConnection, result}) {
+  loadGeneratorHost, createMysqlConnection, result, gateControl = null,
+  onCaseDatasetPrepared = null}) {
   const before = loadGeneratorHost ?
     await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-      {action: REMOTE_ACTION.TIDB_DURABILITY_BEFORE, connection}) :
-    await executeTiDbDurabilityBefore({connection, createMysqlConnection});
+      {action: REMOTE_ACTION.TIDB_DURABILITY_BEFORE, connection},
+      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID}) :
+    await awaitWithGateSignal(() => executeTiDbDurabilityBefore({
+      connection,
+      createMysqlConnection,
+    }), {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID});
+  onCaseDatasetPrepared?.({caseId: DURABILITY_CASE_ID});
   let faultEvidence;
   try {
+    assertSemanticGateActive({...(gateControl || {}), stage: 'durability-restart',
+      caseId: DURABILITY_CASE_ID});
     faultEvidence = await restartProduct({
       context: {
         system: SYSTEM.TIDB_TIKV,
@@ -844,30 +1021,60 @@ async function executeTiDbDurabilitySequence({connection, binding, restartProduc
       loadGeneratorHost,
       createMysqlConnection,
       result,
+      gateControl,
     });
     throw restartError;
   }
   return loadGeneratorHost ?
     runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-      {action: REMOTE_ACTION.TIDB_DURABILITY_AFTER, connection, binding, before, faultEvidence}) :
-    executeTiDbDurabilityAfter({connection, binding, before, faultEvidence,
-      createMysqlConnection});
+      {action: REMOTE_ACTION.TIDB_DURABILITY_AFTER, connection, binding, before, faultEvidence},
+      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID}) :
+    awaitWithGateSignal(() => executeTiDbDurabilityAfter({
+      connection,
+      binding,
+      before,
+      faultEvidence,
+      createMysqlConnection,
+    }), {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID});
 }
 
 async function runTiDbExecutedCase({proofCase, connection, binding, persistentStorage,
-  restartProduct, evidenceDir, sshRun, opts, loadGeneratorHost, createMysqlConnection}) {
+  restartProduct, evidenceDir, sshRun, opts, loadGeneratorHost, createMysqlConnection,
+  gateControl = null, onCaseDatasetPrepared = null}) {
+  assertSemanticGateActive({...(gateControl || {}), stage: 'case-start', caseId: proofCase.id});
   const precondition = durabilityPreconditionResult(
     proofCase, persistentStorage, restartProduct, binding);
   if (precondition) return precondition;
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds, binding};
   try {
-    const outcome = proofCase.id === DURABILITY_CASE_ID ?
-      await executeTiDbDurabilitySequence({connection, binding, restartProduct, sshRun, opts,
-        loadGeneratorHost, createMysqlConnection, result}) :
-      (loadGeneratorHost ?
-        await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
-          {action: REMOTE_ACTION.TIDB_CASE, caseId: proofCase.id, connection, binding}) :
-        await TIDB_CASE_EXECUTORS[proofCase.id]({connection, binding, createMysqlConnection}));
+    let outcome;
+    if (proofCase.id === DURABILITY_CASE_ID) {
+      outcome = await executeTiDbDurabilitySequence({
+        connection,
+        binding,
+        restartProduct,
+        sshRun,
+        opts,
+        loadGeneratorHost,
+        createMysqlConnection,
+        result,
+        gateControl,
+        onCaseDatasetPrepared,
+      });
+    } else if (loadGeneratorHost) {
+      outcome = await runRemoteNodeJson(sshRun, opts, loadGeneratorHost, REMOTE_GATE_SCRIPT,
+        {action: REMOTE_ACTION.TIDB_CASE, caseId: proofCase.id, connection, binding},
+        {...(gateControl || {}), stage: 'remote-case', caseId: proofCase.id});
+      onCaseDatasetPrepared?.({caseId: proofCase.id});
+    } else {
+      outcome = await awaitWithGateSignal(
+        () => TIDB_CASE_EXECUTORS[proofCase.id]({connection, binding, createMysqlConnection}),
+        {...(gateControl || {}), stage: 'case-execute', caseId: proofCase.id},
+      );
+      onCaseDatasetPrepared?.({caseId: proofCase.id});
+    }
+    assertSemanticGateActive({...(gateControl || {}), stage: 'case-complete',
+      caseId: proofCase.id});
     await recordCaseOutcome({
       result,
       proofCase,
@@ -876,6 +1083,8 @@ async function runTiDbExecutedCase({proofCase, connection, binding, persistentSt
       evidenceDir,
     });
   } catch (error) {
+    if (isGateAbortError(error)) throw error;
+    assertSemanticGateActive({...(gateControl || {}), stage: 'case-error', caseId: proofCase.id});
     recordCaseError(result, error);
   }
   return objectFreeze(result);
@@ -897,15 +1106,29 @@ async function advanceCaseTarget(beforeCase, caseId, current) {
  * @param {{connection: Object, binding: Object, evidenceDir?: string|null,
  *   beforeCase?: Function|null, persistentStorage?: boolean,
  *   restartProduct?: Function|null, sshRun?: Function, opts?: Object,
- *   loadGeneratorHost?: Object|null, createMysqlConnection?: Function|null}} input
+ *   loadGeneratorHost?: Object|null, createMysqlConnection?: Function|null,
+ *   signal?: AbortSignal|null, deadlineAtMs?: number|null,
+ *   deadlineAt?: string|number|null, now?: Function, targetId?: string|null,
+ *   gateControl?: Object|null, onCaseDatasetPrepared?: Function|null}} input
  * @return {Promise<Object>}
  */
 async function runTiDbSemanticGate(input) {
+  const nowFn = typeof input.now === 'function' ? input.now : dateNow;
+  const gateControl = input.gateControl || {
+    signal: input.signal ?? input.opts?.signal ?? null,
+    deadlineAtMs: resolveGateDeadlineAtMs({
+      deadlineAtMs: input.deadlineAtMs ?? input.opts?.deadlineAtMs,
+      deadlineAt: input.deadlineAt ?? input.opts?.deadlineAt,
+    }),
+    nowFn,
+    targetId: input.targetId ?? SYSTEM.TIDB_TIKV,
+  };
   let target = {connection: input.connection, binding: input.binding};
   const cases = [];
   const executedCaseIds = input.executedCaseIds || TIDB_EXECUTED_CASE_IDS;
   for (let index = 0; index < OLTP_SCENARIO_A_PROOF_CASES.length; index += 1) {
     const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
+    assertSemanticGateActive({...gateControl, stage: 'before-case', caseId: proofCase.id});
     if (!arrayIncludes(executedCaseIds, proofCase.id)) {
       arrayPush(cases, objectFreeze({
         caseId: proofCase.id,
@@ -917,6 +1140,7 @@ async function runTiDbSemanticGate(input) {
       continue;
     }
     target = await advanceCaseTarget(input.beforeCase, proofCase.id, target);
+    assertSemanticGateActive({...gateControl, stage: 'case-start', caseId: proofCase.id});
     arrayPush(cases, await runTiDbExecutedCase({
       proofCase,
       connection: target.connection,
@@ -928,7 +1152,10 @@ async function runTiDbSemanticGate(input) {
       opts: input.opts || {},
       loadGeneratorHost: input.loadGeneratorHost || null,
       createMysqlConnection: input.createMysqlConnection || null,
+      gateControl,
+      onCaseDatasetPrepared: input.onCaseDatasetPrepared || null,
     }));
+    assertSemanticGateActive({...gateControl, stage: 'case-complete', caseId: proofCase.id});
   }
   return summarizeCasesToGate(SYSTEM.TIDB_TIKV, cases);
 }
@@ -947,15 +1174,32 @@ function indexProductsByContainer(products) {
  * @param {{journey: Function, tidbJourney?: Function, redeploy: Function,
  *   sshRun: Function, opts: Object, evidenceDirOf: Function,
  *   loadGeneratorHost?: Object|null, createMysqlConnection?: Function|null,
- *   now?: Function}} input
+ *   now?: Function, signal?: AbortSignal|null, deadlineAtMs?: number|null,
+ *   deadlineAt?: string|number|null}} input
  *   redeploy(run) tears the arm down and deploys it fresh, returning the new
  *   deployment; evidenceDirOf(run) names a directory unique to the campaign
  *   and run
- * @return {Function} ({run, manifest, deployment}) => {gate, deployment, events}
+ * @return {Function} ({run, manifest, deployment, signal?, deadlineAtMs?, deadlineAt?}) =>
+ *   {gate, deployment, events}
  */
 function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun, opts,
-  evidenceDirOf, loadGeneratorHost = null, createMysqlConnection = null, now = dateNow}) {
-  return async ({run, manifest, deployment}) => {
+  evidenceDirOf, loadGeneratorHost = null, createMysqlConnection = null, now = dateNow,
+  signal: stageSignal = null, deadlineAtMs: stageDeadlineAtMs = undefined,
+  deadlineAt: stageDeadlineAt = undefined}) {
+  return async ({run, manifest, deployment, signal = null, deadlineAtMs = undefined,
+    deadlineAt = undefined}) => {
+    const effectiveSignal = signal ?? stageSignal ?? opts?.signal ?? null;
+    const effectiveDeadlineAtMs = resolveGateDeadlineAtMs({
+      deadlineAtMs: deadlineAtMs ?? stageDeadlineAtMs ?? opts?.deadlineAtMs,
+      deadlineAt: deadlineAt ?? stageDeadlineAt ?? opts?.deadlineAt,
+    });
+    const gateControl = {
+      signal: effectiveSignal,
+      deadlineAtMs: effectiveDeadlineAtMs,
+      nowFn: now,
+      targetId: run.targetId ?? run.system ?? null,
+    };
+    assertSemanticGateActive({...gateControl, stage: 'start'});
     const evidenceDir = evidenceDirOf(run);
     const at = () => dateToISOString(new DateConstructor(now()));
     if (run.system !== SYSTEM.LAGRANGE && run.system !== SYSTEM.POSTGRESQL &&
@@ -974,8 +1218,12 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
     const events = [];
     const current = deployment;
     let casesStarted = 0;
+    let preparedCases = 0;
+    const hasOuterReset = typeof run.resetDataset === 'function' ||
+      Boolean(run.adapter && typeof run.adapter.resetDataset === 'function');
     const reset = async (caseId) => {
-      if (run.resetDataset) {
+      assertSemanticGateActive({...gateControl, stage: 'dataset-reset', caseId});
+      if (typeof run.resetDataset === 'function') {
         await run.resetDataset({
           caseId,
           connection: connectionOf(current),
@@ -983,7 +1231,10 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
         });
       } else if (run.adapter && typeof run.adapter.resetDataset === 'function') {
         await run.adapter.resetDataset({caseId});
+      } else {
+        return;
       }
+      assertSemanticGateActive({...gateControl, stage: 'dataset-reset', caseId});
       arrayPush(events, {
         kind: EVENT.DATASET_RESET,
         at: at(),
@@ -992,25 +1243,45 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
           'adapter truncate-and-reload' : 'adapter drop-and-reload',
       });
     };
+    const onCaseDatasetPrepared = ({caseId}) => {
+      preparedCases += 1;
+      if (!hasOuterReset && preparedCases > 1) {
+        arrayPush(events, {
+          kind: EVENT.DATASET_RESET,
+          at: at(),
+          caseId,
+          method: run.system === SYSTEM.LAGRANGE ?
+            'adapter truncate-and-reload' : 'adapter drop-and-reload',
+        });
+      }
+    };
     const beforeCase = async ({caseId}) => {
+      assertSemanticGateActive({...gateControl, stage: 'before-case', caseId});
       casesStarted += 1;
       if (casesStarted === 1) return null;
       await reset(caseId);
       return {connection: connectionOf(current), binding: bindingOf(manifest, current)};
     };
     const restartProduct = async (request = {}) => {
+      assertSemanticGateActive({...gateControl, stage: 'product-restart'});
       const normalizedRequest = normalizeRestartRequest(request);
       const target = selectDurabilityFaultTarget(run.system, current, normalizedRequest);
       const beforeProduct = arrayFind(current.identity.products,
         (one) => ownField(one, 'containerId') === target.containerId) ?? null;
       const beforeStartedAt = ownField(beforeProduct, 'startedAt') ?? null;
       const restartedAt = at();
-      await sshRun(target.host, opts,
+      await sshRun(target.host, effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
         `docker restart -t ${RESTART_GRACE_SECONDS} ${shellWord(target.containerId)}`);
+      assertSemanticGateActive({...gateControl, stage: 'product-restart-await-ready'});
       const readiness = await current.operations.awaitReady();
+      assertSemanticGateActive({...gateControl, stage: 'product-restart-inspect'});
       const previousByContainer = indexProductsByContainer(current.identity.products);
       current.identity.products = arrayMap(
-        await inspectProducts({sshRun, opts, roles: current.identity.products}),
+        await inspectProducts({
+          sshRun,
+          opts: effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
+          roles: current.identity.products,
+        }),
         (one) => preserveReportedIdentity(one, previousByContainer),
       );
       const afterProduct = arrayFind(current.identity.products,
@@ -1051,6 +1322,12 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
       beforeCase,
       restartProduct,
       persistentStorage: hasPersistentStorage(current),
+      signal: effectiveSignal,
+      deadlineAtMs: effectiveDeadlineAtMs,
+      now,
+      targetId: gateControl.targetId,
+      gateControl,
+      onCaseDatasetPrepared,
       ...(run.executedCaseIds ? {executedCaseIds: run.executedCaseIds} : {}),
     };
     let gate;
@@ -1073,7 +1350,8 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
     } else {
       gate = await journey(gateArgs);
     }
-    if (run.system === SYSTEM.LAGRANGE) await reset(BEFORE_MEASUREMENT);
+    assertSemanticGateActive({...gateControl, stage: 'complete'});
+    if (run.system === SYSTEM.LAGRANGE && hasOuterReset) await reset(BEFORE_MEASUREMENT);
     return {gate, deployment: current, events};
   };
 }

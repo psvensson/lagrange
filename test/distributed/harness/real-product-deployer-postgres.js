@@ -203,14 +203,16 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts, c
   }
   const image = opts.postgresImage || POSTGRES_IMAGE_DEFAULT;
   const ctx = {sshRun, opts, sleep, budget: resolveReadinessBudget(opts)};
+  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
+  const postFailureCtx = {...ctx, opts: postFailureOpts, signal: null};
   const passwords = {superuser: generatedPassword(), app: generatedPassword(),
     replication: generatedPassword()};
   const formed = {roles: [], endpoint: null};
   return describingReadinessExhaustion(() => formPostgresCluster({ctx, targetId, hosts,
     clientIp, campaignId, image, passwords, formed}), (failure) => describeExhaustedDeployment({
-    targetId, topology: postgresTopology(targetId), sshRun, opts, roles: [...formed.roles],
-    endpoint: formed.endpoint, dataDir: DATA_ROOT,
-    readVersions: (products) => reportedVersions(ctx, products), failure}));
+    targetId, topology: postgresTopology(targetId), sshRun, opts: postFailureOpts,
+    roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_ROOT,
+    readVersions: (products) => reportedVersions(postFailureCtx, products), failure}));
 }
 
 function postgresTopology(targetId) {

@@ -10,6 +10,7 @@ import {
   arrayJoin,
   arrayMap,
   numberIsFinite,
+  objectHasOwn,
   stringIncludes,
   stringSplit,
   stringTrim,
@@ -67,16 +68,19 @@ function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
  */
 function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
   callOptions = {}) {
-  const {signal = undefined, timeoutMs = undefined} = callOptions || {};
+  const hasExplicitSignal = Boolean(callOptions && objectHasOwn(callOptions, 'signal'));
+  const signal = hasExplicitSignal ? callOptions.signal :
+    (opts && objectHasOwn(opts, 'signal') ? opts.signal : undefined);
+  const timeoutMs = callOptions?.timeoutMs;
   if (signal?.aborted) {
     return Promise.reject(new Error('psql operation aborted'));
   }
   if (numberIsFinite(timeoutMs) && timeoutMs <= 0) {
     return Promise.reject(new Error('psql operation deadline expired'));
   }
-  const callOpts = signal !== undefined || timeoutMs !== undefined ? {
+  const callOpts = hasExplicitSignal || signal !== undefined || timeoutMs !== undefined ? {
     ...(opts || {}),
-    ...(signal !== undefined ? {signal} : {}),
+    ...(hasExplicitSignal || signal !== undefined ? {signal} : {}),
     ...(numberIsFinite(timeoutMs) ? {timeoutMs} : {}),
   } : opts;
   return sshRun(from, callOpts, dockerRunOnceCommand({campaignId,

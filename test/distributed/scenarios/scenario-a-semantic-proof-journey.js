@@ -34,6 +34,10 @@ import {
 import {
   OLTP_SCENARIO_A_DURABILITY_FAULT_EVIDENCE_CODES,
 } from '../harness/oltp-scenario-a-durability-case.js';
+import {
+  DEPLOYMENT_FAILURE,
+  deploymentFailure,
+} from '../harness/real-product-deployment-contract.js';
 import {executeProof as executeDeliveryProof} from './scenario-a-delivery-lagrange.js';
 import {executeProof as executeDurabilityProof} from './scenario-a-durability-lagrange.js';
 import {
@@ -252,7 +256,43 @@ function recordEvaluation(result, proofCase, evaluation) {
   result.failureKind = classifyProofCaseFailure(proofCase.id, result.failureReasons);
 }
 
+function isJourneyAbortError(error, signal) {
+  return Boolean(
+    error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
+    error?.aborted === true ||
+    error?.diagnostic?.aborted === true ||
+    error?.name === 'AbortError' ||
+    signal?.aborted === true,
+  );
+}
+
+function assertJourneyActive(request, stage, caseId = null) {
+  const signal = request?.signal ?? null;
+  const deadlineAtMs = request?.deadlineAtMs ?? request?.deadlineAt ?? null;
+  const nowFn = typeof request?.now === 'function' ? request.now : Date.now;
+  const aborted = Boolean(signal?.aborted);
+  const deadlineExpired = Number.isFinite(deadlineAtMs) && nowFn() >= deadlineAtMs;
+  if (!aborted && !deadlineExpired) return;
+  const err = deploymentFailure(
+    DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+    `Campaign watchdog or deadline stopped semantic gate (${stage}` +
+      `${caseId ? `:${caseId}` : ''})`,
+    {
+      targetId: request?.targetId ?? request?.system ?? null,
+      stage,
+      caseId,
+      failureClass: 'interrupted',
+      aborted: true,
+      deadlineExpired,
+    },
+  );
+  err.aborted = true;
+  err.failureClass = 'interrupted';
+  throw err;
+}
+
 async function runCase(proofCase, context, options, journey) {
+  assertJourneyActive(journey, 'run-case', proofCase.id);
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
     binding: context.binding};
   const precondition = durabilityPrecondition(proofCase, options, result);
@@ -264,6 +304,10 @@ async function runCase(proofCase, context, options, journey) {
   try {
     const outcome = await CASE_EXECUTORS[proofCase.id]({context, options, cluster: null});
     adapter = outcome.adapter;
+    if (typeof journey.onCaseDatasetPrepared === 'function') {
+      journey.onCaseDatasetPrepared({caseId: proofCase.id, adapter});
+    }
+    assertJourneyActive(journey, 'after-case', proofCase.id);
     const evidence = buildProofEvidence(outcome);
     const deployment = await observedDeployment(journey, proofCase, context);
     result.deploymentObservation = deployment;
@@ -277,12 +321,19 @@ async function runCase(proofCase, context, options, journey) {
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
       proofCase.id, evidence);
   } catch (error) {
+    if (isJourneyAbortError(error, journey.signal)) {
+      await closeQuietly(adapter, result);
+      assertJourneyActive(journey, 'run-case', proofCase.id);
+      throw error;
+    }
+    assertJourneyActive(journey, 'run-case', proofCase.id);
     result.status = CASE_STATUS.ERRORED;
     result.error = String(error?.message || error);
     result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
     result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
   }
   await closeQuietly(adapter, result);
+  assertJourneyActive(journey, 'after-case', proofCase.id);
   return Object.freeze(result);
 }
 
@@ -337,13 +388,20 @@ async function runScenarioASemanticProofJourney(request = {}) {
   if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
     throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
   }
+  assertJourneyActive(request, 'start');
   let context = buildContext(request.system, request.connection, request.binding);
   const createAdapter = adapterFactoryOf(request);
   const cases = [];
   for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
+    assertJourneyActive(request, 'before-case', proofCase.id);
     try {
       context = await rebindForCase(context, proofCase, request);
     } catch (error) {
+      if (isJourneyAbortError(error, request.signal)) {
+        assertJourneyActive(request, 'before-case', proofCase.id);
+        throw error;
+      }
+      assertJourneyActive(request, 'before-case', proofCase.id);
       cases.push(Object.freeze({caseId: proofCase.id, proofIds: proofCase.proofIds,
         binding: context.binding, status: CASE_STATUS.ERRORED,
         error: String(error?.message || error),
@@ -351,6 +409,7 @@ async function runScenarioASemanticProofJourney(request = {}) {
         failureReasons: [FAILURE_REASON.CASE_ERRORED]}));
       continue;
     }
+    assertJourneyActive(request, 'run-case', proofCase.id);
     const current = context;
     const options = Object.freeze({
       createAdapter,
@@ -361,6 +420,7 @@ async function runScenarioASemanticProofJourney(request = {}) {
         {}),
     });
     cases.push(await runCase(proofCase, current, options, request));
+    assertJourneyActive(request, 'after-case', proofCase.id);
   }
   const bindings = [];
   for (const entry of cases) {
