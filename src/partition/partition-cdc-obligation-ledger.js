@@ -27,12 +27,64 @@ import {
 import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableInteger} from './partition-retained-store-observation.js';
 
-const ONE_ROW = 1;
 const FIRST_POSITION = Object.freeze({logIndex: 0, ordinal: -1});
 const DELIVERED_FLAG = Object.freeze({OWED: 0, DELIVERED: 1});
 const JSON_ARRAY_BRACKETS = 2;
 const JSON_SEPARATOR_LENGTH = 1;
 const SHA256_HEX_LENGTH = 64;
+
+function owedEntryBytesMapOf(db) {
+  db._cdcOwedEntryBytes ??= new Map();
+  return db._cdcOwedEntryBytes;
+}
+
+function restoreUnverifiedEntryBytes(tally) {
+  for (const eventBytes of tally.unverified.values()) {
+    tally.bytes += eventBytes;
+  }
+  tally.unverified.clear();
+  tally.unverifiedIndex = null;
+  tally.unverifiedTerm = null;
+}
+
+function settleUnverifiedEntryBytes(db, tally) {
+  if (tally.unverified.size === 0) return;
+  let lastEventKey = null;
+  for (const eventKey of tally.unverified.keys()) {
+    lastEventKey = eventKey;
+  }
+  const committed =
+    (readCdcObligationProgress(db)?.advancedIndex ?? 0) >= tally.unverifiedIndex ||
+    readCdcObligation(db, lastEventKey)?.delivered === true;
+  if (!committed) {
+    restoreUnverifiedEntryBytes(tally);
+    return;
+  }
+  tally.unverified.clear();
+  tally.unverifiedIndex = null;
+  tally.unverifiedTerm = null;
+}
+
+function recordDeliveredEntryBytes(db, moved, eventKey, {index, term}) {
+  const tally = db._cdcOwedEntryBytes?.get(Number(moved.log_index));
+  if (tally === undefined) return;
+  const normalizedIndex = Number(index);
+  const normalizedTerm = Number(term);
+  if (tally.unverified.has(eventKey)) {
+    restoreUnverifiedEntryBytes(tally);
+  } else if (tally.unverified.size > 0 &&
+      (tally.unverifiedIndex !== normalizedIndex ||
+        tally.unverifiedTerm !== normalizedTerm)) {
+    settleUnverifiedEntryBytes(db, tally);
+  }
+  const eventBytes = Number(moved.event_bytes);
+  tally.bytes = Math.max(0, tally.bytes - eventBytes);
+  if (db.inTransaction) {
+    tally.unverified.set(eventKey, eventBytes);
+    tally.unverifiedIndex = normalizedIndex;
+    tally.unverifiedTerm = normalizedTerm;
+  }
+}
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -134,6 +186,7 @@ function insertCdcObligation(db, row) {
     entryId: row.entryId,
     eventJson: row.eventJson,
   });
+  db._cdcOwedEntryBytes?.delete(Number(row.logIndex));
 }
 
 function obligationOf(row) {
@@ -210,8 +263,30 @@ function readOwedCdcObligationPositions(db, {after, through, limit}) {
  */
 function readOwedCdcEntryBytes(db, logIndex) {
   if (!cdcObligationLedgerExists(db)) return 0;
-  const row = db.prepare(SQL.SELECT_OWED_ENTRY_BYTES).get({logIndex});
-  return Number(row.entry_bytes);
+  const normalizedLogIndex = Number(logIndex);
+  const byLogIndex = owedEntryBytesMapOf(db);
+  const tally = byLogIndex.get(normalizedLogIndex);
+  if (tally !== undefined) {
+    if (tally.unverified.size > 0 && !db.inTransaction) {
+      settleUnverifiedEntryBytes(db, tally);
+    }
+    return tally.bytes;
+  }
+  const row = db.prepare(SQL.SELECT_OWED_ENTRY_BYTES).get({logIndex: normalizedLogIndex});
+  const bytes = Number(row.entry_bytes);
+  if (!db.inTransaction) {
+    if (byLogIndex.size >= BOUND.OWED_MAX_EVENTS) {
+      const [oldestKey] = byLogIndex.keys();
+      byLogIndex.delete(oldestKey);
+    }
+    byLogIndex.set(normalizedLogIndex, {
+      bytes,
+      unverified: new Map(),
+      unverifiedIndex: null,
+      unverifiedTerm: null,
+    });
+  }
+  return bytes;
 }
 
 // A finite scan pass ends at this position even while new obligations arrive.
@@ -347,6 +422,7 @@ function reclaimDeliveredCdcObligations(db, {index, term}) {
   const through = positionOf(reclaimable.at(-1));
   const deleted = db.prepare(SQL.DELETE_RECLAIMED).run(through).changes;
   if (deleted !== reclaimable.length) {
+    db._cdcOwedEntryBytes?.clear();
     throw new Error(`${MESSAGE.RECLAIM_COUNT_MISMATCH}${MESSAGE.CODE_SEPARATOR}` +
       `${deleted}/${reclaimable.length}`);
   }
@@ -365,11 +441,13 @@ function reclaimDeliveredCdcObligations(db, {index, term}) {
  * @param {{index: number, term: number}} position - The CDC_DELIVERED entry.
  */
 function markCdcObligationDelivered(db, eventKey, {index, term}) {
-  const moved = db.prepare(SQL.MARK_DELIVERED).run({eventKey, index, term});
-  if (moved.changes !== ONE_ROW) {
+  const moved = db.prepare(SQL.MARK_DELIVERED).get({eventKey, index, term});
+  if (moved === undefined) {
+    db._cdcOwedEntryBytes?.clear();
     throw new Error(
       `${MESSAGE.MARK_NOT_ONE_ROW}${MESSAGE.CODE_SEPARATOR}${eventKey}`);
   }
+  recordDeliveredEntryBytes(db, moved, eventKey, {index, term});
 }
 
 /**
