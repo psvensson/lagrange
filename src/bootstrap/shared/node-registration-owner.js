@@ -21,6 +21,7 @@ import {
   LOG_NODE_REGISTER_ERROR_PREFIX,
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
+  STORAGE_INCARNATION_FIELD,
 } from './node-registration-owner-constants.js';
 
 // The error code a registration failure surfaces: the direct `code` when
@@ -184,7 +185,9 @@ class NodeRegistrationOwner {
 
       const endpointRow =
         existingJoinAdmissionProgress?.endpointRow ||
-        await this.registerNodeEndpoint(this.delegates.getNow()());
+        await this.registerNodeEndpoint(this.delegates.getNow()(), {
+          storageIncarnation: budgetRow?.[STORAGE_INCARNATION_FIELD],
+        });
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
         endpointRow,
@@ -203,10 +206,18 @@ class NodeRegistrationOwner {
         );
       }
 
+      const shouldReconcileLostStorage =
+        !existingJoinAdmissionProgress ||
+        !(await this.hasDurableRejoinStorageContinuity());
+      const lostStorageReplicas = shouldReconcileLostStorage ?
+        await this.reconcileLostStoragePartitionReplicas(now) :
+        [];
+
       return {
         nodeRow: budgetRow,
         endpointRow,
         metaEndpointRows,
+        lostStorageReplicas,
         resolution,
       };
     } catch (error) {

@@ -1,6 +1,9 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   isDisruptiveOperationLedgerSelfMove,
+  readOperationTargetNodeBootIncarnation,
+  readOperationTargetNodeStorageIncarnation,
+  resolveTargetNodeIncarnationSnapshot,
 } from './replica-status.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 import {
@@ -247,6 +250,40 @@ class OperationWorkflowTransitionOrchestration
     };
     if (readinessSnapshot) {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
+    }
+    const currentStepsHistory =
+      normalizeOperationWorkflowTransitionStepsHistory(operation);
+    const targetIncarnationSnapshot = resolveTargetNodeIncarnationSnapshot(
+      this.repository?.systemTableCache,
+      targetNodeId,
+    );
+    let targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
+      operation,
+      currentStepsHistory,
+    );
+    if (targetNodeBootIncarnation === null) {
+      targetNodeBootIncarnation = targetIncarnationSnapshot.bootIncarnation;
+    }
+    let targetNodeStorageIncarnation =
+      readOperationTargetNodeStorageIncarnation(
+        operation,
+        currentStepsHistory,
+      );
+    if (targetNodeStorageIncarnation === null) {
+      targetNodeStorageIncarnation =
+        targetIncarnationSnapshot.storageIncarnation;
+    }
+    if (targetNodeBootIncarnation !== null) {
+      stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+        targetNodeBootIncarnation;
+      operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+        targetNodeBootIncarnation;
+    }
+    if (targetNodeStorageIncarnation !== null) {
+      stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+        targetNodeStorageIncarnation;
+      operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+        targetNodeStorageIncarnation;
     }
     return stepEntry;
   }

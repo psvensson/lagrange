@@ -5,20 +5,122 @@ import {
   NUM,
   STATE,
 } from '../../constants/index.js';
+import {
+  normalizeKnownNodeBootIncarnation,
+} from '../../control-plane/control-plane-error-classification.js';
+import {RAFT_ROLE} from '../../raft/constants.js';
+import {ReplicaStatus} from '../../rebalancer/replica-status.js';
+import {
+  NODE_STORAGE_LOST_TRIGGER_REASON,
+  STORAGE_INCARNATION_FIELD,
+  STORAGE_INCARNATION_METADATA_KEY,
+} from './node-registration-owner-constants.js';
 
 const BOOT_INCARNATION_REQUIRED =
   'Node registration requires a positive boot incarnation';
+
+function parseEndpointMetadataObject(metadataValue) {
+  let candidate = metadataValue;
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch (_error) {
+      candidate = null;
+    }
+  }
+  if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+    return {...candidate};
+  }
+  return {};
+}
+
+function readObservedStorageIncarnation(nodeRow, endpointRow = null) {
+  const metadata = parseEndpointMetadataObject(
+    endpointRow?.[COLUMN.METADATA],
+  );
+  const endpointStorageIncarnation = normalizeKnownNodeBootIncarnation(
+    metadata?.[STORAGE_INCARNATION_METADATA_KEY],
+  );
+  if (endpointStorageIncarnation > 0) {
+    return endpointStorageIncarnation;
+  }
+  const nodeStorageIncarnation = normalizeKnownNodeBootIncarnation(
+    nodeRow?.[STORAGE_INCARNATION_FIELD],
+  );
+  if (nodeStorageIncarnation > 0) {
+    return nodeStorageIncarnation;
+  }
+  const observedNodeBootIncarnation = normalizeKnownNodeBootIncarnation(
+    nodeRow?.[COLUMN.BOOT_INCARNATION],
+  );
+  if (observedNodeBootIncarnation > 0) {
+    return observedNodeBootIncarnation;
+  }
+  return normalizeKnownNodeBootIncarnation(
+    endpointRow?.[COLUMN.BOOT_INCARNATION],
+  );
+}
+
+function stampEndpointStorageIncarnationMetadata(row, storageIncarnation) {
+  if (!row || typeof row !== 'object') {
+    return row;
+  }
+  const normalizedStorageIncarnation =
+    normalizeKnownNodeBootIncarnation(storageIncarnation);
+  if (normalizedStorageIncarnation <= 0) {
+    return row;
+  }
+  const metadata = parseEndpointMetadataObject(row[COLUMN.METADATA]);
+  return {
+    ...row,
+    [COLUMN.METADATA]: JSON.stringify({
+      ...metadata,
+      [STORAGE_INCARNATION_METADATA_KEY]: normalizedStorageIncarnation,
+    }),
+  };
+}
+
+function advanceTimestampPastObserved(now, observedValue) {
+  const numericObserved = Number(observedValue);
+  if (Number.isFinite(numericObserved) && numericObserved >= now) {
+    return Math.floor(numericObserved) + 1;
+  }
+  return now;
+}
+
+function buildFailedLostStoragePartitionRow(row, now) {
+  const previousStatus = row?.[COLUMN.STATUS];
+  const transitionAt = advanceTimestampPastObserved(
+    advanceTimestampPastObserved(now, row?.[COLUMN.STATE_ENTERED_AT]),
+    row?.[COLUMN.UPDATED_AT],
+  );
+  return {
+    ...row,
+    [COLUMN.PREVIOUS_STATE]:
+      typeof previousStatus === 'string' ? previousStatus : null,
+    [COLUMN.STATUS]: ReplicaStatus.FAILED,
+    [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+    [COLUMN.TRIGGER_REASON]: NODE_STORAGE_LOST_TRIGGER_REASON,
+    [COLUMN.STATE_ENTERED_AT]: transitionAt,
+    [COLUMN.UPDATED_AT]: transitionAt,
+  };
+}
 
 function buildNodeRegistrationRow({
   nodeId,
   nodeAddress,
   nodeCapabilities,
   bootIncarnation,
+  storageIncarnation,
   now,
 }) {
   if (!Number.isSafeInteger(bootIncarnation) || bootIncarnation <= 0) {
     throw new Error(BOOT_INCARNATION_REQUIRED);
   }
+  const resolvedStorageIncarnation =
+    Number.isSafeInteger(storageIncarnation) && storageIncarnation > 0 ?
+      storageIncarnation :
+      bootIncarnation;
   const cpus = os.cpus();
   const totalMemoryBytes = os.totalmem();
   const totalMemoryMb = Math.floor(
@@ -39,8 +141,15 @@ function buildNodeRegistrationRow({
     [COLUMN.CAPABILITIES]: JSON.stringify(nodeCapabilities || []),
     [COLUMN.LAST_HEARTBEAT]: now,
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
+    [STORAGE_INCARNATION_FIELD]: resolvedStorageIncarnation,
     [COLUMN.CREATED_AT]: now,
   };
 }
 
-export {buildNodeRegistrationRow};
+export {
+  buildFailedLostStoragePartitionRow,
+  buildNodeRegistrationRow,
+  parseEndpointMetadataObject,
+  readObservedStorageIncarnation,
+  stampEndpointStorageIncarnationMetadata,
+};

@@ -7,9 +7,18 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  buildClusterIncarnationFence,
+} from '../../src/bootstrap/cluster-incarnation-fence.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+} from '../../src/control-plane/membership-lifecycle-controller.js';
+import {
+  NodeRegistrationOwner,
+} from '../../src/bootstrap/shared/node-registration-owner.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {COLUMN, NODE_STATE, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -17,7 +26,15 @@ import {
 import {
   PROJECTION_READINESS_REASON,
 } from '../../src/control-plane/projection-readiness-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  OPERATION_METADATA_KEY,
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
+import {
+  EntityType,
+  UnifiedRebalancer,
+} from '../../src/rebalancer/unified-rebalancer.js';
 import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
@@ -553,6 +570,252 @@ test('converged priorityPartitionSummary refuses surplus seed REMOVE when a remo
     t.match(
       String(evaluation?.error || ''),
       /would drop voter-ready replicas below minimum \(2\/3\)/,
+    );
+  } finally {
+    await coordinator.shutdown();
+    resetTestEnvironment();
+  }
+});
+
+test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity contract across durable rejoin, wiped-disk restart with ACTIVE membership row, cleared tombstones, and clock rollback', async (t) => {
+  initializeTestEnvironment();
+  const coordinator = createWedgeCoordinator({
+    committedJoinersReady: true,
+    prioritySummarySatisfied: true,
+    denialReasonCodesByNodeId: {},
+  });
+  coordinator.initialize();
+  try {
+    const cache = coordinator.systemTableCache;
+    const buildRegistrationOwner = ({
+      bootIncarnation,
+      durableStateDetected,
+      nowMs,
+    }) => {
+      const fence = buildClusterIncarnationFence(
+        durableStateDetected ? {
+          durableStateDetected: true,
+          localIdentityMatched: true,
+          peerProofRequired: true,
+          peerAddresses: ['ws://seed-node:9000'],
+        } : {
+          durableStateDetected: false,
+        },
+      );
+      const owner = new NodeRegistrationOwner({
+        nodeId: TEST_JOINER_NODE_ID_B,
+        nodeAddress: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+        delegates: {
+          getLogger: () => ({
+            info() {},
+            warn() {},
+            error() {},
+            debug() {},
+          }),
+          getNow: () => () => nowMs,
+          getBootIncarnation: () => bootIncarnation,
+          getNodeCapabilities: () => [],
+          getClusterIncarnationFence: async () => fence,
+          getJoinLifecycleIntentType: () =>
+            durableStateDetected ?
+              MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY :
+              MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
+          getSystemTableCache: () => cache,
+          getNodeStorageBudgetService: () => ({
+            resolveBudgetRow: (nodeRow) => ({
+              budgetRow: {
+                ...nodeRow,
+                [COLUMN.STORAGE_BUDGET_BYTES]: 1024 * 1024 * 1024,
+                [COLUMN.STORAGE_BUDGET_SOURCE]: 'configured',
+                [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nowMs,
+              },
+              resolution: {
+                isValid: true,
+                budgetBytes: 1024 * 1024 * 1024,
+                source: 'configured',
+                diskBytes: 1024 * 1024 * 1024,
+              },
+            }),
+          }),
+        },
+      });
+      owner.authoritativeControlPlaneView = {
+        canRead: () => true,
+        syncOwnerDependencies: () => {},
+        readRows: async (tableName) => ({
+          success: true,
+          rows: cache.getAll(tableName).filter(
+            (row) => row?.[COLUMN.NODE_ID] === TEST_JOINER_NODE_ID_B,
+          ),
+        }),
+      };
+      owner.upsertSystemTableRowWithRetry = async (tableName, rowData) => {
+        cache.applySystemTableChange(tableName, 'UPSERT', rowData);
+        return {success: true, partitionResult: {affectedRows: 1}};
+      };
+      owner.advanceNodeBootIncarnation = async (_observedRow, nextNodeRow) => {
+        cache.applySystemTableChange(TABLES.NODES, 'UPSERT', nextNodeRow);
+        return nextNodeRow;
+      };
+      return owner;
+    };
+
+    // Initial fresh registration at bootIncarnation = 1, now = 1000.
+    cache.delete(TABLES.NODES, TEST_JOINER_NODE_ID_B);
+    await buildRegistrationOwner({
+      bootIncarnation: 1,
+      durableStateDetected: false,
+      nowMs: 1000,
+    }).registerNodeInCluster();
+
+    // Terminal ADD operation completed at timestamp 2000 for storageIncarnation = 1.
+    const terminalAddOperation = {
+      operation_id: 'op-add-joiner-b-inc1',
+      type: OperationType.ADD,
+      partition_id: TEST_LEDGER_PARTITION_ID,
+      entity_type: EntityType.PARTITION,
+      entity_id: TEST_LEDGER_PARTITION_ID,
+      source_node_id: TEST_SEED_NODE_ID,
+      target_node_id: TEST_JOINER_NODE_ID_B,
+      replica_id: TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      status: ReplicaStatus.ACTIVE,
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      created_at: 1500,
+      updated_at: 2000,
+      completed_at: 2000,
+      steps_history: JSON.stringify([
+        {
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: 2000,
+          [OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION]: 1,
+          [OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION]: 1,
+        },
+      ]),
+    };
+    cache.set(
+      TABLES.REPLICA_OPERATIONS,
+      terminalAddOperation.operation_id,
+      terminalAddOperation,
+    );
+
+    const rebalancer = new UnifiedRebalancer({
+      entityId: TEST_LEDGER_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_SEED_NODE_ID,
+      systemTableCache: cache,
+      cdcIntegrationService: coordinator.cdcIntegrationService,
+      tablePolicyService: coordinator.tablePolicyService,
+      messageRouter: coordinator.messageRouter,
+      rebalanceCoordinator: coordinator,
+      sqlQueryEngine: coordinator.sqlQueryEngine,
+      controlPlaneSystemTableGateway:
+        coordinator.controlPlaneSystemTableGateway,
+      controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+    });
+
+    // 1. Durable rejoin (durableStateDetected: true) at bootIncarnation = 2, now = 3000:
+    // boot_incarnation advances (1 -> 2), storageIncarnation remains 1,
+    // SERVICES row remains ACTIVE, and terminal ADD is NOT superseded even if
+    // SERVICES row is temporarily lagging/absent in cache.
+    await buildRegistrationOwner({
+      bootIncarnation: 2,
+      durableStateDetected: true,
+      nowMs: 3000,
+    }).registerNodeInCluster();
+    t.equal(
+      cache.get(TABLES.NODES, TEST_JOINER_NODE_ID_B)?.[COLUMN.BOOT_INCARNATION],
+      2,
+      'durable rejoin advances boot_incarnation to 2',
+    );
+    t.equal(
+      JSON.parse(
+        cache.get(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`)?.[
+          COLUMN.METADATA
+        ] || '{}',
+      ).storageIncarnation,
+      1,
+      'durable rejoin preserves storageIncarnation = 1 in NODE_ENDPOINTS.metadata',
+    );
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'durable rejoin does not supersede terminal ADD from the same storageIncarnation',
+    );
+
+    // 2. Wiped-disk restart (durableStateDetected: false) at bootIncarnation = 3
+    // while old NODES row is still ACTIVE/CONNECTED and SERVICES row is still
+    // ACTIVE in the cluster store, AND with clock rollback (nowMs = 500 < completed_at = 2000):
+    await buildRegistrationOwner({
+      bootIncarnation: 3,
+      durableStateDetected: false,
+      nowMs: 500,
+    }).registerNodeInCluster();
+    const nodeAfterWipe = cache.get(TABLES.NODES, TEST_JOINER_NODE_ID_B);
+    t.equal(
+      nodeAfterWipe?.[COLUMN.BOOT_INCARNATION],
+      3,
+      'wiped-disk registration advances boot_incarnation to 3',
+    );
+    t.equal(
+      nodeAfterWipe?.[COLUMN.CREATED_AT],
+      500,
+      'wiped-disk registration refuses to reuse old ACTIVE NODES row and mints fresh row even under rolled-back clock',
+    );
+    t.equal(
+      JSON.parse(
+        cache.get(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`)?.[
+          COLUMN.METADATA
+        ] || '{}',
+      ).storageIncarnation,
+      3,
+      'wiped-disk registration advances storageIncarnation to 3',
+    );
+    const serviceAfterWipe = cache.get(
+      TABLES.SERVICES,
+      TEST_JOINER_REPLACEMENT_REPLICA_ID,
+    );
+    t.equal(
+      serviceAfterWipe?.[COLUMN.STATUS],
+      ReplicaStatus.FAILED,
+      'NodeRegistrationOwner transitions untouched SERVICES row on wiped node to FAILED',
+    );
+    t.equal(
+      serviceAfterWipe?.[COLUMN.TRIGGER_REASON],
+      'node_storage_lost_on_fresh_registration',
+      'failed SERVICES row carries node_storage_lost_on_fresh_registration trigger reason',
+    );
+
+    // 3 & 4. Delete SERVICES row and clear all cache tombstones while clock is
+    // rolled back (node.created_at = 500 < operation.completed_at = 2000):
+    // storageIncarnation (3 > 1) still supersedes the terminal ADD and prevents
+    // ghost replica projection.
+    cache.delete(TABLES.SERVICES, TEST_JOINER_REPLACEMENT_REPLICA_ID);
+    cache.tombstoneStore?.clearAll?.();
+    t.equal(
+      rebalancer.hasActiveServiceTombstone(TEST_JOINER_REPLACEMENT_REPLICA_ID),
+      false,
+      'cache tombstones are cleared/absent',
+    );
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'storageIncarnation supersession (3 > 1) detects wiped-disk restart without tombstones and under clock rollback',
+    );
+    const projectedReplicas = rebalancer.getCurrentReplicas();
+    t.equal(
+      projectedReplicas.some(
+        (row) => row.replica_id === TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'superseded terminal ADD does not project a ghost ACTIVE replica',
     );
   } finally {
     await coordinator.shutdown();

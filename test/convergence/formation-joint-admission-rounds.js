@@ -363,7 +363,9 @@ function createRoundDriver(world) {
     },
     async joinerArrives(nodeId) {
       nextEvaluationInstant(world);
-      watchBounds(world.registerJoiner(nodeId));
+      watchBounds(await world.registerJoiner(nodeId, {
+        durableStateDetected: false,
+      }));
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));
       await settleWorld(world);
       // The seed's readiness owner evaluates the new member.
@@ -383,18 +385,26 @@ function createRoundDriver(world) {
     },
     async restartJoiner(
       nodeId,
-      {wipeDataDir = false, markWipedReplicasFailed = false} = {},
+      {
+        wipeDataDir = false,
+        externalServicesCleanup = false,
+        registrationNowMs = null,
+      } = {},
     ) {
       nextEvaluationInstant(world);
       world.stopNode(nodeId, {
         expireLease: true,
         wipeDataDir,
-        markWipedReplicasFailed,
+        externalServicesCleanup,
       });
+      if (externalServicesCleanup) {
+        world.cache.tombstoneStore?.clearAll?.();
+      }
       await settleWorld(world);
       nextEvaluationInstant(world);
-      const hosts = world.registerJoiner(nodeId, {
+      const hosts = await world.registerJoiner(nodeId, {
         durableStateDetected: !wipeDataDir,
+        registrationNowMs,
       });
       watchBounds(hosts);
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));

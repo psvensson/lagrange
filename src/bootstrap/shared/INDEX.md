@@ -26,7 +26,7 @@ documentClass: generated
 - [node-registration-owner-constants.js](node-registration-owner-constants.js) - No leading comment; first export: AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE. (importers: few)
 - [node-registration-owner-durable-rejoin-methods.js](node-registration-owner-durable-rejoin-methods.js) - A reused durable membership row must never re-publish a terminal status or a stale lease/heartbeat from the previous... (importers: one)
 - [node-registration-owner-publication-methods.js](node-registration-owner-publication-methods.js) - No leading comment; first export: createNodeRegistrationPublicationMethods. (importers: one)
-- [node-registration-owner-row-builder.js](node-registration-owner-row-builder.js) - No leading comment; first export: buildNodeRegistrationRow. (importers: few)
+- [node-registration-owner-row-builder.js](node-registration-owner-row-builder.js) - No leading comment; first export: buildFailedLostStoragePartitionRow. (importers: few)
 - [node-registration-owner.js](node-registration-owner.js) - No leading comment; first export: NodeRegistrationOwner. (importers: many)
 - [node-state-publication-outcome.js](node-state-publication-outcome.js) - No leading comment; first export: NODE_STATE_PUBLICATION_OWNER_LITERAL. (importers: one)
 - [node-state-publication-owner.js](node-state-publication-owner.js) - Log a terminal node-state update failure. (importers: few)

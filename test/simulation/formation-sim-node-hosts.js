@@ -244,6 +244,7 @@ function createSimulatedPublicationRuntimeOwner({
   for (const metadataOwner of [
     runtimeOwner.nodesOwner,
     runtimeOwner.nodeEndpointsOwner,
+    runtimeOwner.servicesOwner,
     runtimeOwner.serviceEndpointsOwner,
     runtimeOwner.messageGroupsOwner,
     runtimeOwner.controlPlanePublicationsOwner,
