@@ -37,6 +37,7 @@ import {test} from 'node:test';
 
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   OUTCOME,
   STEPPED_CADENCE_NAMES,
@@ -360,9 +361,14 @@ test('join-core-coupling: rolling-restart-seed-during-formation converges ' +
 });
 
 test('join-core-coupling: joiner-restart-wiped-data-dir re-replicates and ' +
-  'converges to TRAFFIC_READY', async () => {
+  'converges to TRAFFIC_READY without deleting REPLICA_OPERATIONS history',
+async () => {
   let j1ReplicasBeforeWipe = 0;
   let j1ReplicasAfterWipe = -1;
+  let j1OperationsBeforeWipe = 0;
+  let j1OperationsAfterWipe = -1;
+  let j1BootIncarnationBefore = 0;
+  let j1BootIncarnationAfter = 0;
   const report = await runArrivalOrder(LOSING_ORDER, {
     rounds: {
       7: async (driver, world) => {
@@ -370,11 +376,23 @@ test('join-core-coupling: joiner-restart-wiped-data-dir re-replicates and ' +
           TABLES.SERVICES,
           (row) => row[COLUMN.NODE_ID] === J1,
         ).length;
+        j1OperationsBeforeWipe = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        j1BootIncarnationBefore =
+            world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
         await driver.restartJoiner(J1, {wipeDataDir: true});
         j1ReplicasAfterWipe = world.cache.filter(
           TABLES.SERVICES,
           (row) => row[COLUMN.NODE_ID] === J1,
         ).length;
+        j1OperationsAfterWipe = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        j1BootIncarnationAfter =
+            world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
       },
     },
   });
@@ -382,10 +400,66 @@ test('join-core-coupling: joiner-restart-wiped-data-dir re-replicates and ' +
     'j1 held priority replicas before wiping its data directory');
   assert.equal(j1ReplicasAfterWipe, 0,
     'wiped data directory removes all local replicas on j1');
+  assert.ok(j1OperationsBeforeWipe >= 2,
+    'j1 had committed REPLICA_OPERATIONS history before the wipe');
+  assert.equal(j1OperationsAfterWipe, j1OperationsBeforeWipe,
+    'cluster REPLICA_OPERATIONS history is preserved across local disk wipe');
+  assert.ok(j1BootIncarnationAfter > j1BootIncarnationBefore,
+    'restarted joiner registers a strictly newer boot_incarnation');
   assertEveryAdmittedJoinerReady(report, 'joiner-restart-wiped-data-dir');
   assertSafety(report, 'joiner-restart-wiped-data-dir');
   assertSpreadComplete(report, 'joiner-restart-wiped-data-dir');
   assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
+
+  // Local-disk-only wipe witness: neither SERVICES nor REPLICA_OPERATIONS
+  // rows are deleted by stopNode; the wiped node's SERVICES rows transition
+  // to FAILED and the real MovePlanner + RebalanceCoordinator drive
+  // REMOVE (reason: replica_failed) followed by re-replication.
+  let localWipeServicesBefore = 0;
+  let localWipeFailedServicesAfter = 0;
+  let localWipeOpsBefore = 0;
+  let localWipeOpsAfter = 0;
+  const localWipeReport = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      7: async (driver, world) => {
+        localWipeServicesBefore = world.cache.filter(
+          TABLES.SERVICES,
+          (row) => row[COLUMN.NODE_ID] === J1,
+        ).length;
+        localWipeOpsBefore = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        await driver.restartJoiner(J1, {
+          wipeDataDir: true,
+          markWipedReplicasFailed: true,
+        });
+        localWipeFailedServicesAfter = world.cache.filter(
+          TABLES.SERVICES,
+          (row) =>
+            row[COLUMN.NODE_ID] === J1 &&
+              (row[COLUMN.STATUS] === ReplicaStatus.FAILED ||
+                row[COLUMN.STATUS] === ReplicaStatus.REMOVING),
+        ).length;
+        localWipeOpsAfter = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+      },
+    },
+  });
+  assert.ok(localWipeServicesBefore >= 2,
+    'j1 held SERVICES rows before local-disk-only wipe');
+  assert.equal(localWipeFailedServicesAfter, localWipeServicesBefore,
+    'SERVICES rows remain in cluster store as FAILED for planner cleanup');
+  assert.equal(localWipeOpsAfter, localWipeOpsBefore,
+    'REPLICA_OPERATIONS rows remain untouched in cluster store');
+  assertEveryAdmittedJoinerReady(
+    localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assertSafety(localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assertSpreadComplete(
+    localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assert.equal(lowestFloor(localWipeReport), VOTER_READY_FLOOR);
 });
 
 test('join-core-coupling: single-node-operation and ' +

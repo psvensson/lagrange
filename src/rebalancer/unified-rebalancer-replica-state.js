@@ -371,7 +371,14 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       ).trim();
       const existingIndex = replicaIndexById.get(targetReplicaId);
       if (existingIndex === undefined) {
-        if (targetNodeId.length === 0) {
+        if (
+          targetNodeId.length === 0 ||
+          this.isTerminalCreateSupersededByNodeRegistration(
+            operation,
+            targetNodeId,
+            targetReplicaId,
+          )
+        ) {
           continue;
         }
         replicaIndexById.set(targetReplicaId, projectedReplicas.length);
@@ -409,6 +416,65 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     }
 
     return projectedReplicas;
+  }
+
+  hasActiveServiceTombstone(targetReplicaId) {
+    if (targetReplicaId.length === 0) {
+      return false;
+    }
+    const serviceTombstones =
+      this.systemTableCache?.tombstoneStore?.tables?.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+      );
+    return serviceTombstones?.has(targetReplicaId) === true;
+  }
+
+  readOperationComparisonTimestamp(operation) {
+    const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+      nowMs: this.nowFn(),
+    });
+    for (const candidate of [
+      normalizedOperation.completedAt,
+      normalizedOperation.updatedAt,
+      normalizedOperation.createdAt,
+    ]) {
+      if (candidate !== null && candidate !== undefined) {
+        return Number(candidate);
+      }
+    }
+    return Number.NaN;
+  }
+
+  /**
+   * Whether a terminal ADD or REPLACE operation on an absent SERVICES row has
+   * been superseded by an active SERVICES DELETE tombstone or by the target
+   * node re-registering with a newer NODES.created_at birth.
+   * @param {Object} operation
+   * @param {string} targetNodeId
+   * @param {string} targetReplicaId
+   * @return {boolean}
+   * @private
+   */
+  isTerminalCreateSupersededByNodeRegistration(
+    operation,
+    targetNodeId,
+    targetReplicaId = UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+  ) {
+    if (this.hasActiveServiceTombstone(targetReplicaId)) {
+      return true;
+    }
+    const targetNode = this.systemTableCache?.get(
+      SYSTEM_TABLE_NAME.NODES,
+      targetNodeId,
+    );
+    const nodeCreatedAt = Number(targetNode?.[COLUMN.CREATED_AT]);
+    const operationCompletedAt =
+      this.readOperationComparisonTimestamp(operation);
+    return (
+      Number.isFinite(nodeCreatedAt) &&
+      Number.isFinite(operationCompletedAt) &&
+      nodeCreatedAt > operationCompletedAt
+    );
   }
 
   /**

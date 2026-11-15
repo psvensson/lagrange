@@ -26,7 +26,6 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {SEED_NODE_ID, nodeAddressOf} from './formation-joint-admission-world.js';
 
 const EVALUATION_STEP_MS = 1;
@@ -125,10 +124,11 @@ const STAMP_CADENCES = Object.freeze({
  */
 function mountJoinReadySignal(world, nodeId) {
   const hosts = world.hostsById.get(nodeId);
+  const bootIncarnation = world.bootIncarnationOf(nodeId);
   const sleeps = [];
   const barrierLog = [];
   const service = new NodeJoiningService({
-    bootIncarnation: TEST_BOOT_INCARNATION,
+    bootIncarnation,
     nodeId,
     nodeAddress: nodeAddressOf(nodeId),
     seedNodeAddress: nodeAddressOf(SEED_NODE_ID),
@@ -148,7 +148,7 @@ function mountJoinReadySignal(world, nodeId) {
   service.sendControlPlaneNodeStateUpdate = async (publication) =>
     world.lifecyclePublicationOf(SEED_NODE_ID).publish({
       nodeId,
-      bootIncarnation: TEST_BOOT_INCARNATION,
+      bootIncarnation,
       state: publication.state,
       heartbeatOnly: publication.heartbeatOnly,
       heartbeatAt: publication.heartbeatAt,
@@ -381,13 +381,22 @@ function createRoundDriver(world) {
       await settleWorld(world);
       nextEvaluationInstant(world);
     },
-    async restartJoiner(nodeId, {wipeDataDir = false} = {}) {
+    async restartJoiner(
+      nodeId,
+      {wipeDataDir = false, markWipedReplicasFailed = false} = {},
+    ) {
       nextEvaluationInstant(world);
-      world.stopNode(nodeId, {expireLease: true, wipeDataDir});
+      world.stopNode(nodeId, {
+        expireLease: true,
+        wipeDataDir,
+        markWipedReplicasFailed,
+      });
       await settleWorld(world);
       nextEvaluationInstant(world);
-      watchBounds(
-        world.registerJoiner(nodeId, {durableStateDetected: !wipeDataDir}));
+      const hosts = world.registerJoiner(nodeId, {
+        durableStateDetected: !wipeDataDir,
+      });
+      watchBounds(hosts);
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));
       driver.startReadySignal(nodeId);
       await settleWorld(world);

@@ -359,9 +359,16 @@ function linkKey(leftNodeId, rightNodeId) {
   return [leftNodeId, rightNodeId].sort().join(LINK_KEY_SEPARATOR);
 }
 
-function installMeshTransport(hosts, upNodeIds, downLinks) {
+function installMeshTransport(
+  hosts,
+  upNodeIds,
+  downLinks,
+  bootIncarnationByNodeId,
+) {
   const router = hosts.messageRouter;
   const localNodeId = hosts.nodeId;
+  const incarnationOf = (nodeId) =>
+    bootIncarnationByNodeId.get(nodeId) ?? TEST_BOOT_INCARNATION;
   const isUp = (nodeId) => upNodeIds.has(nodeId) &&
     upNodeIds.has(localNodeId) &&
     !downLinks.has(linkKey(localNodeId, nodeId));
@@ -374,17 +381,23 @@ function installMeshTransport(hosts, upNodeIds, downLinks) {
   router.isOutboundQueueAvailable = () => true;
   router.getQueryDataPlaneTransportReadiness = () =>
     ({ready: true, state: STATE.READY});
-  router.getLocalBootIncarnationIdentity = () => Object.freeze({
-    nodeId: localNodeId,
-    bootIncarnation: TEST_BOOT_INCARNATION,
-    connectionId: `local:${localNodeId}:${TEST_BOOT_INCARNATION}`,
-  });
-  router.getCurrentPrimaryConnectionBootIncarnation = (nodeId) =>
-    (nodeId !== localNodeId && isUp(nodeId) ? Object.freeze({
+  router.getLocalBootIncarnationIdentity = () => {
+    const bootIncarnation = incarnationOf(localNodeId);
+    return Object.freeze({
+      nodeId: localNodeId,
+      bootIncarnation,
+      connectionId: `local:${localNodeId}:${bootIncarnation}`,
+    });
+  };
+  router.getCurrentPrimaryConnectionBootIncarnation = (nodeId) => {
+    if (nodeId === localNodeId || !isUp(nodeId)) return null;
+    const bootIncarnation = incarnationOf(nodeId);
+    return Object.freeze({
       nodeId,
-      bootIncarnation: TEST_BOOT_INCARNATION,
-      connectionId: `primary:${nodeId}:${TEST_BOOT_INCARNATION}`,
-    }) : null);
+      bootIncarnation,
+      connectionId: `primary:${nodeId}:${bootIncarnation}`,
+    });
+  };
 }
 
 // A durable row carries every column of its table (an unset one is SQL
@@ -647,7 +660,12 @@ function installDelivery(hosts, cache, replicaRuntime, deliveries,
 // A node's bootstrap transport endpoint, as its registration publishes it
 // (node-registration-owner-publication-methods.js registerNodeEndpoint),
 // stamped with the incarnation that published it.
-function insertNodeEndpointRow(cache, nodeId, nowMs) {
+function insertNodeEndpointRow(
+  cache,
+  nodeId,
+  nowMs,
+  bootIncarnation = TEST_BOOT_INCARNATION,
+) {
   insertStoredRow(cache, TABLES.NODE_ENDPOINTS, {
     [COLUMN.ENDPOINT_ID]: `ep-${nodeId}-ws`,
     [COLUMN.NODE_ID]: nodeId,
@@ -658,7 +676,7 @@ function insertNodeEndpointRow(cache, nodeId, nowMs) {
     [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
     [COLUMN.CREATED_AT]: nowMs,
     [COLUMN.UPDATED_AT]: nowMs,
-    [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+    [COLUMN.BOOT_INCARNATION]: bootIncarnation,
   });
 }
 
@@ -728,6 +746,15 @@ function createFormationWorld() {
   const hostsById = new Map();
   const upNodeIds = new Set();
   const downLinks = new Set();
+  const bootIncarnationByNodeId = new Map([
+    [SEED_NODE_ID, TEST_BOOT_INCARNATION],
+  ]);
+  const nextBootIncarnation = (nodeId) => {
+    const next =
+      (bootIncarnationByNodeId.get(nodeId) ?? (TEST_BOOT_INCARNATION - 1)) + 1;
+    bootIncarnationByNodeId.set(nodeId, next);
+    return next;
+  };
   const publicationModeByNodeId = new Map();
   const lifecyclePublicationByNodeId = new Map();
   const dispatchServiceByNodeId = new Map();
@@ -796,6 +823,8 @@ function createFormationWorld() {
       leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
       now: time.now,
     });
+    hosts.heartbeatService.bootIncarnation =
+      bootIncarnationByNodeId.get(nodeId) ?? TEST_BOOT_INCARNATION;
     hosts.heartbeatService.nodeLifecyclePublication = nodeLifecyclePublication;
     // The node's replica dispatch owner, built as control-plane setup builds
     // it; its timers are armed on the world clock and never fire.
@@ -826,7 +855,7 @@ function createFormationWorld() {
     hostsById.set(nodeId, hosts);
     lifecyclePublicationByNodeId.set(nodeId, nodeLifecyclePublication);
     upNodeIds.add(nodeId);
-    installMeshTransport(hosts, upNodeIds, downLinks);
+    installMeshTransport(hosts, upNodeIds, downLinks, bootIncarnationByNodeId);
     installDelivery(hosts, cache, replicaRuntime, deliveries,
       dispatchServiceByNodeId);
     return hosts;
@@ -844,6 +873,9 @@ function createFormationWorld() {
     time,
     hostsById,
     upNodeIds,
+    bootIncarnationByNodeId,
+    bootIncarnationOf: (nodeId) =>
+      bootIncarnationByNodeId.get(nodeId) ?? TEST_BOOT_INCARNATION,
     replicaRuntime,
     deliveries,
     dispatchServiceByNodeId,
@@ -870,6 +902,9 @@ function createFormationWorld() {
         publicationModeByNodeId.delete(nodeId);
       }
     },
+    // Simulation boundary: consensus is doubled by PARTITIONS.leader_node_id
+    // and SERVICES.raft_role in the shared row store. When a non-seed leader
+    // stops, remaining active voters elect a new leader for that partition.
     reassignStoppedNodeLeadership(nodeId) {
       if (nodeId === SEED_NODE_ID) return;
       for (const partition of cache.getAll(TABLES.PARTITIONS)) {
@@ -897,7 +932,23 @@ function createFormationWorld() {
         });
       }
     },
-    stopNode(nodeId, {expireLease = false, wipeDataDir = false} = {}) {
+    // Stop a node's controllers. Cluster REPLICA_OPERATIONS rows are NEVER
+    // deleted. When wipeDataDir is true:
+    // - replicaRuntime.wipeNode(nodeId) clears the node's local replica state;
+    // - when markWipedReplicasFailed is true (local-disk-only wipe witness),
+    //   cluster SERVICES rows remain in the store and transition to FAILED so
+    //   the real MovePlanner and RebalanceCoordinator drive REMOVE + ADD;
+    // - when markWipedReplicasFailed is false (external SERVICES cleanup),
+    //   the wiped node's SERVICES rows are removed while REPLICA_OPERATIONS
+    //   history remains intact for planner/coordinator supersession checks.
+    stopNode(
+      nodeId,
+      {
+        expireLease = false,
+        wipeDataDir = false,
+        markWipedReplicasFailed = false,
+      } = {},
+    ) {
       const existingHosts = hostsById.get(nodeId);
       if (existingHosts) {
         existingHosts.heartbeatService.stop();
@@ -911,13 +962,17 @@ function createFormationWorld() {
         replicaRuntime.wipeNode(nodeId);
         for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
           candidate[COLUMN.NODE_ID] === nodeId)) {
-          cache.applySystemTableChange(
-            TABLES.SERVICES, CDC_OPERATION.DELETE, row);
-        }
-        for (const op of cache.filter(TABLES.REPLICA_OPERATIONS, (candidate) =>
-          candidate[COLUMN.TARGET_NODE_ID] === nodeId)) {
-          cache.applySystemTableChange(
-            TABLES.REPLICA_OPERATIONS, CDC_OPERATION.DELETE, op);
+          if (markWipedReplicasFailed) {
+            cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
+              ...row,
+              [COLUMN.PREVIOUS_STATE]: row[COLUMN.STATUS],
+              [COLUMN.STATUS]: ReplicaStatus.FAILED,
+              [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+            });
+          } else {
+            cache.applySystemTableChange(
+              TABLES.SERVICES, CDC_OPERATION.DELETE, row);
+          }
         }
       }
       this.reassignStoppedNodeLeadership(nodeId);
@@ -949,6 +1004,7 @@ function createFormationWorld() {
       while (time.now() < nextHb) {
         clock.advance(1);
       }
+      const bootIncarnation = nextBootIncarnation(SEED_NODE_ID);
       const nextSeed = startNode(SEED_NODE_ID, buildClusterIncarnationFence({
         durableStateDetected: true,
         localIdentityMatched: true,
@@ -958,12 +1014,13 @@ function createFormationWorld() {
         [COLUMN.NODE_ADDRESS]: nodeAddressOf(SEED_NODE_ID),
         [COLUMN.LAST_HEARTBEAT]: nextHb,
         [COLUMN.READY_LEASE_EXPIRES_AT]: nextHb + READY_LEASE_MS,
-        [COLUMN.CREATED_AT]: nextHb,
-        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+        [COLUMN.CREATED_AT]: existingSeed?.[COLUMN.CREATED_AT] ?? nextHb,
+        [COLUMN.BOOT_INCARNATION]: bootIncarnation,
         [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
         [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
         [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nextHb,
       }, nextHb));
+      insertNodeEndpointRow(cache, SEED_NODE_ID, nextHb, bootIncarnation);
       world.seed = nextSeed;
       world.seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
         [INITIAL_PARTITION_IDS[tableId],
@@ -973,6 +1030,9 @@ function createFormationWorld() {
     /**
      * A joiner's process starts and the seed registers it: its node row as
      * the registration owner builds it (JOINING, CONNECTED, no READY lease).
+     * On durable rejoin (durableStateDetected: true), created_at is preserved
+     * while boot_incarnation advances; on initial join or wiped-data-dir
+     * restart (durableStateDetected: false), created_at is minted fresh.
      * @param {string} nodeId
      * @param {object} [options]
      * @return {object} the joiner's hosts
@@ -983,6 +1043,7 @@ function createFormationWorld() {
       while (time.now() < minNow) {
         clock.advance(1);
       }
+      const bootIncarnation = nextBootIncarnation(nodeId);
       const hosts = startNode(nodeId, buildClusterIncarnationFence(
         durableStateDetected ? {
           durableStateDetected: true,
@@ -992,19 +1053,24 @@ function createFormationWorld() {
         } : {
           durableStateDetected: false,
         }));
+      const baseRegistrationRow = buildNodeRegistrationRow({
+        nodeId,
+        nodeAddress: nodeAddressOf(nodeId),
+        nodeCapabilities: [],
+        bootIncarnation,
+        now: time.now(),
+      });
       insertStoredRow(cache, TABLES.NODES, {
-        ...buildNodeRegistrationRow({
-          nodeId,
-          nodeAddress: nodeAddressOf(nodeId),
-          nodeCapabilities: [],
-          bootIncarnation: TEST_BOOT_INCARNATION,
-          now: time.now(),
-        }),
+        ...baseRegistrationRow,
+        [COLUMN.CREATED_AT]:
+          durableStateDetected && existingNode ?
+            existingNode[COLUMN.CREATED_AT] :
+            baseRegistrationRow[COLUMN.CREATED_AT],
         [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
         [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
         [COLUMN.STORAGE_BUDGET_UPDATED_AT]: time.now(),
       });
-      insertNodeEndpointRow(cache, nodeId, time.now());
+      insertNodeEndpointRow(cache, nodeId, time.now(), bootIncarnation);
       return hosts;
     },
   };
