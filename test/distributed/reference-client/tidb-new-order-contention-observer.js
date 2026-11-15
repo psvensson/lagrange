@@ -1,9 +1,11 @@
+import {loadMysql2Promise} from './native-clients.js';
+
 const ONE = 1;
 const MAX_PORT = 65535;
 
 async function defaultCreateConnection(options) {
-  const mysql = await import('mysql2/promise');
-  return (mysql.default || mysql).createConnection(options);
+  const mysql = await loadMysql2Promise();
+  return mysql.createConnection(options);
 }
 
 function normalizeEndpoint(value = {}) {

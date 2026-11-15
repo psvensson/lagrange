@@ -64,6 +64,7 @@ import {
   toNumber,
 } from './real-product-captured-intrinsics.js';
 import {errorText} from './real-product-remote-shell.js';
+import {loadMysql2Promise} from '../reference-client/native-clients.js';
 import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {observeTiDbDeliveryState} from '../reference-client/tidb-delivery-observer.js';
 import {observeTiDbNewOrderContentionState} from '../reference-client/tidb-new-order-contention-observer.js';
@@ -129,12 +130,7 @@ function copyArray(items) {
 }
 
 async function defaultMysqlConnection(connOpts) {
-  const mysql = await import('mysql2/promise');
-  const hasDirectCreate = mysql !== null &&
-    (typeof mysql === 'object' || typeof mysql === 'function') &&
-    objectHasOwn(mysql, 'createConnection') &&
-    typeof mysql.createConnection === 'function';
-  const driver = hasDirectCreate ? mysql : mysql.default;
+  const driver = await loadMysql2Promise();
   return driver.createConnection(connOpts);
 }
 
