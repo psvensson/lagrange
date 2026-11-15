@@ -632,9 +632,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
   const budget = Object.freeze({...resolveReadinessBudget(opts),
     attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
   const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
-  const ctx = {sshRun: trackedSshRun, opts, clientIp, sleep, now: clock, signal: abortSignal,
-    formationDeadlineMs, deadlineAtMs: null, deadlineMs: formationDeadlineMs,
-    budget, connection, expectedVersion};
+  const ctx = {sshRun: trackedSshRun, settleInFlight, opts, clientIp, sleep, now: clock,
+    signal: abortSignal, formationDeadlineMs, deadlineAtMs: null,
+    deadlineMs: formationDeadlineMs, budget, connection, expectedVersion};
   const postFailureOpts = {...opts, signal: null, deadlineAtMs: null, deadlineMs: null};
   const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null,
     deadlineAtMs: null, deadlineMs: null};
@@ -804,9 +804,21 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
           dateToISOString(new DateConstructor(ctx.now()))), routable};
       },
       // The arm's readiness contract again (after a product restart).
-      awaitReady: async () => ({cluster: await clusterReady(postFormationCtx,
-        'lagrange-system-tables', query, nodeRoles),
-      probe: await probeWriteReadback(postFormationCtx, sql, campaignId, visibility)}),
+      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs} = {}) => {
+        const readyCtx = {
+          ...postFormationCtx,
+          signal: readySignal !== undefined ? readySignal : postFormationCtx.signal,
+          deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : null,
+        };
+        try {
+          return {
+            cluster: await clusterReady(readyCtx, 'lagrange-system-tables', query, nodeRoles),
+            probe: await probeWriteReadback(readyCtx, sql, campaignId, visibility),
+          };
+        } finally {
+          await ctx.settleInFlight();
+        }
+      },
       observeRoles: async () => ({leaders: await observedLeaders(ctx, seedHost)}),
     },
   };

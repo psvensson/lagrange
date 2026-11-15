@@ -39,8 +39,26 @@ function buildReadinessSql(tikvStoreCount = DEFAULTS.tikvStoreCount) {
 
 const READINESS_SQL = buildReadinessSql();
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms, signal = null) {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, {once: true});
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+  });
 }
 
 function normalizeStoreCount(value) {
@@ -200,12 +218,23 @@ async function collectReadinessDiagnostics(provider, watchedContainers = []) {
   return diagnostics;
 }
 
-async function assertWatchedContainersRunning(provider, watchedContainers = []) {
+async function assertWatchedContainersRunning(provider, watchedContainers = [],
+  callOptions = undefined) {
   for (const watched of watchedContainers) {
+    if (callOptions?.signal?.aborted) {
+      const err = new Error('TiDB reference SQL readiness aborted');
+      err.aborted = true;
+      throw err;
+    }
     let inspect;
     try {
-      inspect = await provider.inspectContainer(watched.containerId);
+      inspect = await provider.inspectContainer(watched.containerId, callOptions);
     } catch (error) {
+      if (callOptions?.signal?.aborted) {
+        const err = new Error(`TiDB reference SQL readiness aborted: ${error.message}`);
+        err.aborted = true;
+        throw err;
+      }
       const diagnostics = await collectReadinessDiagnostics(
         provider,
         watchedContainers,
@@ -275,9 +304,10 @@ function isSqlReadinessSuccessful(result) {
     stringTrim(String(result.stdout || '')) === READY_VALUE;
 }
 
-async function executeSqlReadinessAttempt(provider, clientContainerId, command) {
+async function executeSqlReadinessAttempt(provider, clientContainerId, command,
+  callOptions = undefined) {
   try {
-    const result = await provider.execInContainer(clientContainerId, command);
+    const result = await provider.execInContainer(clientContainerId, command, callOptions);
     return {result, error: null};
   } catch (error) {
     return {result: null, error};
@@ -285,7 +315,10 @@ async function executeSqlReadinessAttempt(provider, clientContainerId, command) 
 }
 
 async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
-  const started = Date.now();
+  const clock = typeof options.now === 'function' ? options.now : Date.now;
+  const started = clock();
+  const signal = options.signal ?? null;
+  const deadlineAtMs = Number.isFinite(options.deadlineAtMs) ? options.deadlineAtMs : null;
   let lastError = null;
   let lastResult = null;
   let attempts = ZERO;
@@ -293,14 +326,24 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   const command = buildSqlReadinessCommand(endpoint, readinessSql);
   const watchedContainers = options.watchedContainers || [];
 
-  while (Date.now() - started < options.timeoutMs) {
+  while (clock() - started < options.timeoutMs) {
+    if (signal?.aborted) break;
+    const remainingDeadlineMs = deadlineAtMs !== null ? deadlineAtMs - clock() : null;
+    if (remainingDeadlineMs !== null && remainingDeadlineMs <= 0) break;
+    const callOptions = signal || remainingDeadlineMs !== null ? {
+      ...(signal ? {signal} : {}),
+      ...(remainingDeadlineMs !== null ? {timeoutMs: Math.max(1, remainingDeadlineMs)} : {}),
+    } : undefined;
     attempts += 1;
-    await assertWatchedContainersRunning(provider, watchedContainers);
+    await assertWatchedContainersRunning(provider, watchedContainers, callOptions);
     const outcome = await executeSqlReadinessAttempt(
       provider,
       clientContainerId,
       command,
+      callOptions,
     );
+    if (signal?.aborted) break;
+    if (deadlineAtMs !== null && clock() >= deadlineAtMs) break;
     if (outcome.error) {
       lastError = outcome.error;
     } else {
@@ -313,18 +356,25 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
         };
       }
     }
-    await sleep(options.pollIntervalMs);
+    const postAttemptRemainingMs = deadlineAtMs !== null ?
+      Math.max(0, deadlineAtMs - clock()) : options.pollIntervalMs;
+    await sleep(Math.min(options.pollIntervalMs, postAttemptRemainingMs), signal);
   }
 
+  const aborted = Boolean(signal?.aborted);
+  const deadlineExpired = Boolean(deadlineAtMs !== null && clock() >= deadlineAtMs);
   const detail = formatSqlReadinessDetail(lastError, lastResult);
-  const diagnostics = await collectReadinessDiagnostics(
+  const diagnostics = aborted ? [] : await collectReadinessDiagnostics(
     provider,
     watchedContainers,
   );
-  throw new Error(
+  const failure = new Error(
     `TiDB reference SQL readiness failed within ${options.timeoutMs}ms: ` +
     `${detail}; diagnostics=${JSON.stringify(diagnostics)}`,
   );
+  failure.aborted = aborted;
+  failure.deadlineExpired = deadlineExpired;
+  throw failure;
 }
 
 async function stopTiDbReferenceCluster(provider, created) {

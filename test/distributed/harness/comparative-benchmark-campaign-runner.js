@@ -100,10 +100,16 @@ function failureOf(error, signal = null) {
   const failureClass = interrupted ? INTERRUPTED_SETUP_FAILURE_CLASS :
     (isReadiness ? READINESS_SETUP_FAILURE_CLASS : null);
   const lastObservation = lastObservationOf(error, error?.attempt);
+  const semanticGate = error?.semanticGate ?? error?.attempt?.semanticGate ?? null;
+  const rawDiagnostic = error?.diagnostic ?? null;
+  const diagnostic = semanticGate ?
+    (rawDiagnostic && typeof rawDiagnostic === 'object' ?
+      {...rawDiagnostic, semanticGate} : {semanticGate}) :
+    rawDiagnostic;
   return {
     code: error?.code || (interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : UNCLASSIFIED),
     message: errorText(error),
-    diagnostic: error?.diagnostic ?? null,
+    diagnostic,
     ...(failureClass ? {failureClass} : {}),
     ...(interrupted ? {aborted: true} : {}),
     ...(lastObservation !== null ? {lastObservation} : {}),
@@ -199,21 +205,36 @@ async function observeRolesSafely(deployment, events, now) {
 }
 
 // The semantic gate before the window; without a gate stage the run says so.
-async function semanticGateStage({run, manifest, deps, deployment, events, signal}) {
+async function semanticGateStage({run, manifest, deps, attempt = null, deployment, events,
+  signal}) {
   if (!deps.runSemanticGate) {
     events.push({kind: EVENT.SEMANTIC_GATE_UNAVAILABLE, at: iso(deps.now())});
     return {gate: null, deployment};
   }
   const deadlineAtMs = Number.isFinite(deps.deadlineAt) ? deps.deadlineAt : null;
-  const staged = await deps.runSemanticGate({
-    run,
-    manifest,
-    deployment,
-    signal,
-    deadlineAtMs,
-    deadlineAt: deadlineAtMs,
-  });
+  let staged;
+  try {
+    staged = await deps.runSemanticGate({
+      run,
+      manifest,
+      deployment,
+      signal,
+      deadlineAtMs,
+      deadlineAt: deadlineAtMs,
+    });
+  } catch (error) {
+    events.push(...(error?.events || []));
+    if (attempt) {
+      attempt.deployment = error?.deployment ?? attempt.deployment;
+      attempt.semanticGate = error?.semanticGate ?? null;
+    }
+    throw error;
+  }
   events.push(...(staged.events || []));
+  if (attempt) {
+    attempt.deployment = staged.deployment ?? deployment;
+    attempt.semanticGate = staged.gate ?? null;
+  }
   return staged;
 }
 
@@ -228,12 +249,13 @@ async function withAttempt(attempt, step) {
 
 async function measureRun({run, manifest, deps, events, signal}) {
   const attempt = {deployment: await deps.deployRun(run, {signal}), workload: null,
-    productsAfter: null, roleObservations: null};
+    semanticGate: null, productsAfter: null, roleObservations: null};
   // The deployment stays in the record (and pins its identity) when refused.
   await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));
   const staged = await withAttempt(attempt, () => semanticGateStage({run, manifest, deps,
-    deployment: attempt.deployment, events, signal}));
+    attempt, deployment: attempt.deployment, events, signal}));
   attempt.deployment = staged.deployment;
+  attempt.semanticGate = staged.gate ?? null;
   const deployment = attempt.deployment;
   assertEndpointBound(deployment);
   const rolesBefore = await observeRolesSafely(deployment, events, deps.now);
@@ -306,6 +328,25 @@ function validatedRecord(record, recordOwner, attempt) {
   return record;
 }
 
+function resolveRecordCorrectness(workload, attempt) {
+  const gate = attempt?.semanticGate ?? null;
+  if (workload) {
+    if (!workload.correctness) {
+      return gate ? {status: 'fail', semanticGate: gate, finalState: null} : null;
+    }
+    if (!workload.correctness.semanticGate && gate) {
+      return {...workload.correctness, semanticGate: gate};
+    }
+    return workload.correctness;
+  }
+  if (!gate) return null;
+  return {
+    status: gate.status === 'passed' ? 'pass' : 'fail',
+    semanticGate: gate,
+    finalState: null,
+  };
+}
+
 function runRecord({run, manifest, header, state, failure, attempt, events, closure,
   startedAt, endedAt, recordOwner}) {
   const workload = attempt?.workload ?? null;
@@ -327,7 +368,7 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     plan: recordedPlan(run, manifest, workload),
     deployment,
     observations: workload ? workload.observations : null,
-    correctness: workload ? workload.correctness : null,
+    correctness: resolveRecordCorrectness(workload, attempt),
     harnessEvents: arrayFilter(events,
       (event) => !arrayIncludes(DEPLOYMENT_EVENT_KINDS, event.kind))};
   record.rawObservationsDigest = recordOwner.computeRunObservationsDigest(record);
@@ -367,8 +408,13 @@ async function unmeasuredAttempt({run, manifest, deps, events, error, signal}) {
   return attempt;
 }
 
+function hasCampaignAttempt(error) {
+  return Boolean(error?.attempt && typeof error.attempt === 'object');
+}
+
 function isDescribedExhaustion(error) {
   return Boolean(error?.deployment) &&
+    !hasCampaignAttempt(error) &&
     (error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED ||
       error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
       error?.aborted === true);
@@ -385,15 +431,21 @@ async function settleAttempt({run, manifest, deps, events, signal}) {
       events.push({kind: EVENT.WATCHDOG_STOP, observedAt: iso(deps.now())});
     }
     if (!isDescribedExhaustion(error)) {
-      return {attempt: error?.attempt ?? (error?.deployment ? {deployment: error.deployment,
-        workload: null, productsAfter: null, roleObservations: null} : null), failure};
+      const recordedAttempt = hasCampaignAttempt(error) ? error.attempt :
+        (error?.deployment ? {deployment: error.deployment,
+          workload: null, semanticGate: error?.semanticGate ?? null,
+          productsAfter: null, roleObservations: null} : null);
+      return {attempt: recordedAttempt, failure};
     }
     try {
       return {attempt: await unmeasuredAttempt({run, manifest, deps, events, error, signal}),
         failure};
     } catch (unrecorded) {
-      return {attempt: unrecorded?.attempt ?? {deployment: error.deployment, workload: null,
-        productsAfter: null, roleObservations: null}, failure};
+      const fallbackAttempt = hasCampaignAttempt(unrecorded) ? unrecorded.attempt :
+        {deployment: error.deployment, workload: null,
+          semanticGate: error?.semanticGate ?? null,
+          productsAfter: null, roleObservations: null};
+      return {attempt: fallbackAttempt, failure};
     }
   }
 }

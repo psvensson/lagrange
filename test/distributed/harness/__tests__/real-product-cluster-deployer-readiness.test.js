@@ -13,6 +13,7 @@ import {
   dockerRules,
   http,
   lagrangeHealthyRules,
+  tidbHealthyRules,
 } from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayEvery,
@@ -673,4 +674,105 @@ test('post-abort inspection & cleanup: opts.signal is stripped via signal: null 
     },
   );
   assert.equal(ledger.containers.size, 0);
+});
+
+test('Review #6: Postgres and TiDB deployers forward signal, settle in-flight sshRun before ' +
+  'describing exhaustion, and TiDB always stops readiness-client container on abort',
+{timeout: 300000}, async () => {
+  // 1. Postgres deployer signal forwarding + in-flight settlement
+  const pgLedger = createContainerLedger();
+  const pgController = new AbortController();
+  const pgTimeline = [];
+  const {sshRun: pgSshRun} = createScriptedSsh([
+    [/pg_isready/u, () => new Promise((_resolve, reject) => {
+      pgTimeline.push('pg-probe-started');
+      setTimeout(() => {
+        pgTimeline.push('pg-signal-aborted');
+        pgController.abort();
+      }, 5);
+      setTimeout(() => {
+        pgTimeline.push('pg-probe-settled');
+        reject(new Error('pg_isready aborted after delay'));
+      }, 25);
+    })],
+    [/^docker inspect /u, (command, host, calls, opts) => {
+      pgTimeline.push('pg-describe-inspect');
+      return dockerRules(pgLedger)[1][1](command, host, calls, opts);
+    }],
+    ...dockerRules(pgLedger),
+  ]);
+  await assert.rejects(
+    deployers.deployPostgresCluster({
+      ...baseInput(pgSshRun),
+      targetId: 'pg-single-primary',
+      signal: pgController.signal,
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.aborted, true);
+      assert.equal(error.diagnostic.aborted, true);
+      const settledIdx = arrayFindIndex(pgTimeline, (item) => item === 'pg-probe-settled');
+      const inspectIdx = arrayFindIndex(pgTimeline, (item) => item === 'pg-describe-inspect');
+      assert.ok(settledIdx >= 0 && inspectIdx > settledIdx,
+        `pg probe must settle before describeExhaustedDeployment (${JSON.stringify(pgTimeline)})`);
+      return true;
+    },
+  );
+
+  // 2. TiDB deployer signal forwarding + awaitReady stops readiness-client container on abort
+  const tidbLedger = createContainerLedger();
+  let abortOnNextMysql = false;
+  const awaitReadyController = new AbortController();
+  const tidbTimeline = [];
+  const {sshRun: tidbBaseSshRun} = createScriptedSsh([
+    [/^docker stop -t 0 [0-9a-f]+$/u, (command) => {
+      tidbTimeline.push(`stop:${command}`);
+      return tidbLedger.stop(command);
+    }],
+    [
+      (command) => /^docker exec \S+ 'mysql'/u.test(command) &&
+        !stringIncludes(command, 'tidb_version()') &&
+        !stringIncludes(command, 'CLUSTER_INFO'),
+      () => {
+        if (!abortOnNextMysql) return '1\n__exit_code=0';
+        return new Promise((resolve) => {
+          tidbTimeline.push('sql-probe-started');
+          setTimeout(() => {
+            tidbTimeline.push('tidb-signal-aborted');
+            awaitReadyController.abort();
+          }, 5);
+          setTimeout(() => {
+            tidbTimeline.push('sql-probe-settled');
+            resolve('0\n__exit_code=0');
+          }, 25);
+        });
+      },
+    ],
+    ...tidbHealthyRules(tidbLedger),
+  ]);
+  const tidbSshRun = async (host, callOpts, command, timeoutMs) => {
+    if (callOpts?.signal?.aborted) {
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+    return tidbBaseSshRun(host, callOpts, command, timeoutMs);
+  };
+  const deployedTiDb = await deployers.deployTiDbCluster(baseInput(tidbSshRun));
+  tidbTimeline.length = 0;
+  abortOnNextMysql = true;
+  await assert.rejects(
+    deployedTiDb.operations.awaitReady({signal: awaitReadyController.signal}),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.aborted, true);
+      assert.equal(error.diagnostic.aborted, true);
+      const settledIdx = arrayFindIndex(tidbTimeline, (item) => item === 'sql-probe-settled');
+      const stopIdx = arrayFindIndex(tidbTimeline, (item) =>
+        stringIncludes(item, 'stop:docker stop -t 0'));
+      assert.ok(settledIdx >= 0 && stopIdx >= 0,
+        `TiDB readiness client must be stopped even after abort (${JSON.stringify(tidbTimeline)})`);
+      return true;
+    },
+  );
 });

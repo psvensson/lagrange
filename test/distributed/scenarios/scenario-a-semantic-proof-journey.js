@@ -147,6 +147,28 @@ const ADAPTER_BY_SYSTEM = Object.freeze({
   [OLTP_SCENARIO_A_SYSTEM.POSTGRESQL]: createPostgreSqlOltpAdapter,
 });
 
+function createJourneyInFlightTracker(externalTrackInFlight = null) {
+  const inFlightOps = new Set();
+  const trackInFlight = (promiseOrFn) => {
+    const opPromise = typeof promiseOrFn === 'function' ?
+      Promise.resolve().then(promiseOrFn) : Promise.resolve(promiseOrFn);
+    inFlightOps.add(opPromise);
+    if (typeof externalTrackInFlight === 'function') {
+      externalTrackInFlight(opPromise);
+    }
+    opPromise.finally(() => {
+      inFlightOps.delete(opPromise);
+    }).catch(() => {});
+    return opPromise;
+  };
+  const settleInFlight = async () => {
+    while (inFlightOps.size > 0) {
+      await Promise.allSettled([...inFlightOps]);
+    }
+  };
+  return {trackInFlight, settleInFlight, inFlightOps};
+}
+
 // The system's PG-wire adapter. A request that names its PG client factory
 // (the native client the adapter opens every connection with) hands it to the
 // adapter; without one the adapter opens the native pg client.
@@ -156,8 +178,52 @@ function adapterFactoryOf(request) {
   if (typeof request.createClient !== 'function') {
     throw new Error('Scenario A proof journey createClient must be a function');
   }
-  return (adapterOptions) => createSystemAdapter({...adapterOptions,
-    createClient: request.createClient});
+  const signal = request.signal ?? null;
+  const track = typeof request.trackInFlight === 'function' ?
+    request.trackInFlight : (p) => Promise.resolve(p);
+  const createTrackedClient = (clientOptions) => {
+    const client = request.createClient(clientOptions);
+    if (!client || typeof client !== 'object') return client;
+    const closeOnAbort = () => {
+      try {
+        if (typeof client.end === 'function') {
+          Promise.resolve(client.end()).catch(() => {});
+        }
+      } catch {
+        // Ignore abort teardown errors
+      }
+    };
+    if (signal) {
+      if (signal.aborted) closeOnAbort();
+      signal.addEventListener('abort', closeOnAbort, {once: true});
+    }
+    return {
+      ...client,
+      ...(typeof client.connect === 'function' ? {
+        connect: (...args) => awaitWithJourneySignal(
+          () => client.connect(...args),
+          request,
+          'client-connect',
+        ),
+      } : {}),
+      ...(typeof client.query === 'function' ? {
+        query: (...args) => awaitWithJourneySignal(
+          () => client.query(...args),
+          request,
+          'client-query',
+        ),
+      } : {}),
+      end: async (...args) => {
+        if (signal) signal.removeEventListener('abort', closeOnAbort);
+        if (typeof client.end !== 'function') return undefined;
+        return track(() => client.end(...args));
+      },
+    };
+  };
+  return (adapterOptions) => createSystemAdapter({
+    ...adapterOptions,
+    createClient: createTrackedClient,
+  });
 }
 
 function requireBinding(binding) {
@@ -187,10 +253,15 @@ function requireConnection(connection) {
   return connection;
 }
 
-async function closeQuietly(adapter, caseResult) {
+async function closeQuietly(adapter, caseResult, journey = null) {
   if (!adapter) return;
   try {
-    await adapter.close(OLTP_ADAPTER_KEEP_DATASET);
+    const closePromise = Promise.resolve().then(() => adapter.close(OLTP_ADAPTER_KEEP_DATASET));
+    if (typeof journey?.trackInFlight === 'function') {
+      await journey.trackInFlight(closePromise);
+    } else {
+      await closePromise;
+    }
   } catch (error) {
     caseResult.cleanupError = String(error?.message || error);
   }
@@ -216,7 +287,12 @@ function bindingMatches(binding, observed) {
 // answers a rebind {connection, binding}; null keeps the current one.
 async function rebindForCase(current, proofCase, journey) {
   if (!journey.beforeCase) return current;
-  const answer = await journey.beforeCase({caseId: proofCase.id, context: current});
+  const answer = await awaitWithJourneySignal(
+    () => journey.beforeCase({caseId: proofCase.id, context: current}),
+    journey,
+    'before-case',
+    proofCase.id,
+  );
   if (answer === null) return current;
   if (!answer || typeof answer !== 'object' || !answer.connection || !answer.binding) {
     throw new Error('beforeCase must answer {connection, binding} or null');
@@ -226,7 +302,12 @@ async function rebindForCase(current, proofCase, journey) {
 
 async function observedDeployment(journey, proofCase, context) {
   if (!journey.observeDeployment) return DEPLOYMENT_OBSERVATION.NOT_OBSERVED;
-  const observed = await journey.observeDeployment({caseId: proofCase.id, context});
+  const observed = await awaitWithJourneySignal(
+    () => journey.observeDeployment({caseId: proofCase.id, context}),
+    journey,
+    'observe-deployment',
+    proofCase.id,
+  );
   return Object.freeze({containerId: observed.containerId, endpoint: observed.endpoint});
 }
 
@@ -291,6 +372,48 @@ function assertJourneyActive(request, stage, caseId = null) {
   throw err;
 }
 
+function awaitWithJourneySignal(promiseOrFn, request, stage, caseId = null) {
+  assertJourneyActive(request, stage, caseId);
+  const rawPromise = typeof promiseOrFn === 'function' ?
+    Promise.resolve().then(promiseOrFn) : Promise.resolve(promiseOrFn);
+  const opPromise = typeof request?.trackInFlight === 'function' ?
+    request.trackInFlight(rawPromise) : rawPromise;
+  opPromise.catch(() => {});
+  const signal = request?.signal ?? null;
+  if (!signal) return opPromise;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        assertJourneyActive(request, stage, caseId);
+      } catch (abortErr) {
+        reject(abortErr);
+      }
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, {once: true});
+    opPromise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function runCase(proofCase, context, options, journey) {
   assertJourneyActive(journey, 'run-case', proofCase.id);
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
@@ -302,7 +425,12 @@ async function runCase(proofCase, context, options, journey) {
   }
   let adapter = null;
   try {
-    const outcome = await CASE_EXECUTORS[proofCase.id]({context, options, cluster: null});
+    const outcome = await awaitWithJourneySignal(
+      () => CASE_EXECUTORS[proofCase.id]({context, options, cluster: null}),
+      journey,
+      'run-case',
+      proofCase.id,
+    );
     adapter = outcome.adapter;
     if (typeof journey.onCaseDatasetPrepared === 'function') {
       journey.onCaseDatasetPrepared({caseId: proofCase.id, adapter});
@@ -313,7 +441,7 @@ async function runCase(proofCase, context, options, journey) {
     result.deploymentObservation = deployment;
     if (deployment !== DEPLOYMENT_OBSERVATION.NOT_OBSERVED &&
         !bindingMatches(context.binding, deployment)) {
-      await closeQuietly(adapter, result);
+      await closeQuietly(adapter, result, journey);
       return refusal(result, {});
     }
     recordEvaluation(result, proofCase, outcome.evaluation);
@@ -322,7 +450,7 @@ async function runCase(proofCase, context, options, journey) {
       proofCase.id, evidence);
   } catch (error) {
     if (isJourneyAbortError(error, journey.signal)) {
-      await closeQuietly(adapter, result);
+      await closeQuietly(adapter, result, journey);
       assertJourneyActive(journey, 'run-case', proofCase.id);
       throw error;
     }
@@ -331,8 +459,17 @@ async function runCase(proofCase, context, options, journey) {
     result.error = String(error?.message || error);
     result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
     result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
+    const evidencePath = await persistEvidence(
+      journey.evidenceDir,
+      context.system,
+      proofCase.id,
+      result,
+    );
+    if (evidencePath !== null) {
+      result.evidencePath = evidencePath;
+    }
   }
-  await closeQuietly(adapter, result);
+  await closeQuietly(adapter, result, journey);
   assertJourneyActive(journey, 'after-case', proofCase.id);
   return Object.freeze(result);
 }
@@ -384,44 +521,7 @@ function buildContext(system, rawConnection, rawBinding) {
   });
 }
 
-async function runScenarioASemanticProofJourney(request = {}) {
-  if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
-    throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
-  }
-  assertJourneyActive(request, 'start');
-  let context = buildContext(request.system, request.connection, request.binding);
-  const createAdapter = adapterFactoryOf(request);
-  const cases = [];
-  for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
-    assertJourneyActive(request, 'before-case', proofCase.id);
-    try {
-      context = await rebindForCase(context, proofCase, request);
-    } catch (error) {
-      if (isJourneyAbortError(error, request.signal)) {
-        assertJourneyActive(request, 'before-case', proofCase.id);
-        throw error;
-      }
-      assertJourneyActive(request, 'before-case', proofCase.id);
-      cases.push(Object.freeze({caseId: proofCase.id, proofIds: proofCase.proofIds,
-        binding: context.binding, status: CASE_STATUS.ERRORED,
-        error: String(error?.message || error),
-        failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
-        failureReasons: [FAILURE_REASON.CASE_ERRORED]}));
-      continue;
-    }
-    assertJourneyActive(request, 'run-case', proofCase.id);
-    const current = context;
-    const options = Object.freeze({
-      createAdapter,
-      prepareContext: async () => current,
-      persistentStorage: request.persistentStorage,
-      ...(request.restartProduct ?
-        {restartCluster: ({context: active}) => request.restartProduct({context: active})} :
-        {}),
-    });
-    cases.push(await runCase(proofCase, current, options, request));
-    assertJourneyActive(request, 'after-case', proofCase.id);
-  }
+function summarizeJourneyCases(system, cases) {
   const bindings = [];
   for (const entry of cases) {
     if (!arraySome(bindings, (seen) => JSON.stringify(seen) === JSON.stringify(entry.binding))) {
@@ -436,10 +536,10 @@ async function runScenarioASemanticProofJourney(request = {}) {
   const failureKinds = arrayMap(arrayFilter(cases, (entry) => entry.failureKind),
     (entry) => ({caseId: entry.caseId, kind: entry.failureKind,
       reasons: [...entry.failureReasons]}));
-  const gate = buildScenarioASemanticGateEvidence({systems: [request.system], proofs});
-  const summary = gate.systems[request.system];
+  const gate = buildScenarioASemanticGateEvidence({systems: [system], proofs});
+  const summary = gate.systems[system];
   return Object.freeze({
-    system: request.system,
+    system,
     status: gateStatusOf(summary),
     passed: summary.passedProofIds,
     failed: summary.failedProofIds,
@@ -451,8 +551,82 @@ async function runScenarioASemanticProofJourney(request = {}) {
     semanticProfileSha256: gate.semanticProfileSha256,
     semanticGateEvidenceSha256: gate.semanticGateEvidenceSha256,
     failureKinds: Object.freeze(failureKinds),
-    cases: Object.freeze(cases),
+    cases: Object.freeze([...cases]),
   });
+}
+
+async function runScenarioASemanticProofJourney(request = {}) {
+  if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
+    throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
+  }
+  assertJourneyActive(request, 'start');
+  let context = buildContext(request.system, request.connection, request.binding);
+  const tracker = createJourneyInFlightTracker(request.trackInFlight);
+  const journeyRequest = {
+    ...request,
+    trackInFlight: tracker.trackInFlight,
+  };
+  const createAdapter = adapterFactoryOf(journeyRequest);
+  const cases = [];
+  try {
+    for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
+      assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+      try {
+        context = await rebindForCase(context, proofCase, journeyRequest);
+      } catch (error) {
+        if (isJourneyAbortError(error, journeyRequest.signal)) {
+          assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+          throw error;
+        }
+        assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+        const erroredCase = {
+          caseId: proofCase.id,
+          proofIds: proofCase.proofIds,
+          binding: context.binding,
+          status: CASE_STATUS.ERRORED,
+          error: String(error?.message || error),
+          failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
+          failureReasons: [FAILURE_REASON.CASE_ERRORED],
+        };
+        const evidencePath = await persistEvidence(
+          journeyRequest.evidenceDir,
+          context.system,
+          proofCase.id,
+          erroredCase,
+        );
+        if (evidencePath !== null) {
+          erroredCase.evidencePath = evidencePath;
+        }
+        cases.push(Object.freeze(erroredCase));
+        continue;
+      }
+      assertJourneyActive(journeyRequest, 'run-case', proofCase.id);
+      const current = context;
+      const options = Object.freeze({
+        createAdapter,
+        prepareContext: async () => current,
+        persistentStorage: journeyRequest.persistentStorage,
+        ...(journeyRequest.restartProduct ? {
+          restartCluster: ({context: active}) => awaitWithJourneySignal(
+            () => journeyRequest.restartProduct({context: active}),
+            journeyRequest,
+            'restart-product',
+            proofCase.id,
+          ),
+        } : {}),
+      });
+      cases.push(await runCase(proofCase, current, options, journeyRequest));
+      assertJourneyActive(journeyRequest, 'after-case', proofCase.id);
+    }
+    return summarizeJourneyCases(request.system, cases);
+  } catch (error) {
+    if (cases.length > 0 && error && typeof error === 'object') {
+      error.semanticGate = error.semanticGate ?? summarizeJourneyCases(request.system, cases);
+    }
+    throw error;
+  } finally {
+    await tracker.settleInFlight();
+  }
 }
 
 export {

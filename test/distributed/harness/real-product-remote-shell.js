@@ -153,12 +153,28 @@ function createRemoteDockerProvider({sshRun, opts, hostOf}) {
     return found;
   };
   return Object.freeze({
-    execInContainer: (containerId, argv) => execWithStatus(sshRun, host(containerId), opts,
-      `docker exec ${shellWord(containerId)} ${arrayMap(argv, shellQuote).join(' ')}`),
-    inspectContainer: async (containerId) => JSON.parse(
-      await sshRun(host(containerId), opts, inspectContainerCommand(containerId))),
-    getContainerLogs: (containerId, {tail = DIAGNOSTIC_LOG_TAIL} = {}) => sshRun(
-      host(containerId), opts, `docker logs --tail ${tail} ${shellWord(containerId)} 2>&1`),
+    execInContainer: (containerId, argv, callOptions = undefined) => execWithStatus(
+      sshRun,
+      host(containerId),
+      opts,
+      `docker exec ${shellWord(containerId)} ${arrayMap(argv, shellQuote).join(' ')}`,
+      callOptions?.timeoutMs,
+      callOptions?.signal,
+    ),
+    inspectContainer: async (containerId, callOptions = undefined) => JSON.parse(
+      await sshRun(
+        host(containerId),
+        mergeCallOpts(opts, callOptions),
+        inspectContainerCommand(containerId),
+        callOptions?.timeoutMs,
+      )),
+    getContainerLogs: (containerId, {tail = DIAGNOSTIC_LOG_TAIL, signal = undefined,
+      timeoutMs = undefined} = {}) => sshRun(
+      host(containerId),
+      mergeCallOpts(opts, {signal, timeoutMs}),
+      `docker logs --tail ${tail} ${shellWord(containerId)} 2>&1`,
+      timeoutMs,
+    ),
   });
 }
 
@@ -201,13 +217,37 @@ function dockerRunOnceCommand({campaignId, image, dockerArgs = [], commandArgs =
 }
 
 /**
+ * Track arbitrary asynchronous operations in a Set so callers can await
+ * settlement of all in-flight work (`settleInFlight()`) before tearing down
+ * containers or exiting a stage after cancellation.
+ */
+function createInFlightTracker() {
+  const inFlightOps = new Set();
+  const trackInFlight = (promiseOrFn) => {
+    const opPromise = typeof promiseOrFn === 'function' ?
+      Promise.resolve().then(promiseOrFn) : Promise.resolve(promiseOrFn);
+    inFlightOps.add(opPromise);
+    opPromise.finally(() => {
+      inFlightOps.delete(opPromise);
+    }).catch(() => {});
+    return opPromise;
+  };
+  const settleInFlight = async () => {
+    while (inFlightOps.size > 0) {
+      await Promise.allSettled([...inFlightOps]);
+    }
+  };
+  return {trackInFlight, settleInFlight, inFlightOps};
+}
+
+/**
  * Wrap `sshRun` to track in-flight remote operations in a Set, forward the
  * active AbortSignal, and reject immediately when `signal` aborts while an
  * operation is in flight. `settleInFlight()` awaits all underlying operations
  * via `Promise.allSettled` before container cleanup runs.
  */
 function createTrackedSshRun(sshRun, defaultSignal = null) {
-  const inFlightOps = new Set();
+  const {trackInFlight, settleInFlight, inFlightOps} = createInFlightTracker();
   const trackedSshRun = (host, callOpts, command, timeoutMs) => {
     const hasExplicitSignal = Boolean(callOpts && objectHasOwn(callOpts, 'signal'));
     const signal = hasExplicitSignal ? callOpts.signal : (defaultSignal ?? null);
@@ -217,12 +257,8 @@ function createTrackedSshRun(sshRun, defaultSignal = null) {
     const effectiveOpts = hasExplicitSignal ? callOpts :
       (signal && (!callOpts || callOpts.signal !== signal) ?
         {...(callOpts || {}), signal} : callOpts);
-    const opPromise = Promise.resolve().then(() =>
+    const opPromise = trackInFlight(() =>
       sshRun(host, effectiveOpts, command, timeoutMs));
-    inFlightOps.add(opPromise);
-    opPromise.finally(() => {
-      inFlightOps.delete(opPromise);
-    }).catch(() => {});
     if (!signal) return opPromise;
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -252,15 +288,11 @@ function createTrackedSshRun(sshRun, defaultSignal = null) {
       );
     });
   };
-  const settleInFlight = async () => {
-    while (inFlightOps.size > 0) {
-      await Promise.allSettled([...inFlightOps]);
-    }
-  };
-  return {trackedSshRun, settleInFlight, inFlightOps};
+  return {trackedSshRun, trackInFlight, settleInFlight, inFlightOps};
 }
 
 export {
+  createInFlightTracker,
   createRemoteDockerProvider,
   createTrackedSshRun,
   dockerRunDetached,

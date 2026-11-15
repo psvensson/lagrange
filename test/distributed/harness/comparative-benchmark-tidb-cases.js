@@ -805,14 +805,212 @@ const TIDB_CASE_EXECUTORS = objectFreeze({
   'retryable-conflict': executeTiDbRetryableConflictCase,
 });
 
+function createTrackedMysqlConnectionFactory(
+  createMysqlConnection,
+  gateControl,
+  {assertSemanticGateActive, awaitWithGateSignal},
+) {
+  const baseFactory = mysqlConnectionFactoryOf({credentials: null}, createMysqlConnection);
+  const track = typeof gateControl?.trackInFlight === 'function' ?
+    gateControl.trackInFlight :
+    (promise) => Promise.resolve(promise);
+  const signal = gateControl?.signal ?? null;
+  return async (connOpts) => {
+    assertSemanticGateActive(gateControl);
+    const conn = await awaitWithGateSignal(() => baseFactory(connOpts), gateControl);
+    if (!conn || typeof conn !== 'object') return conn;
+    let endPromise = null;
+    const closeConnectionOnce = (...args) => {
+      if (endPromise) return endPromise;
+      if (typeof conn.end !== 'function') return Promise.resolve();
+      endPromise = track(() => conn.end(...args));
+      endPromise.catch(() => {});
+      return endPromise;
+    };
+    const closeOnAbort = () => {
+      try {
+        if (typeof conn.destroy === 'function') {
+          conn.destroy();
+        } else {
+          closeConnectionOnce();
+        }
+      } catch {
+        // Ignore teardown errors on abort
+      }
+    };
+    if (signal) {
+      if (signal.aborted) {
+        closeOnAbort();
+        assertSemanticGateActive(gateControl);
+      }
+      signal.addEventListener('abort', closeOnAbort, {once: true});
+    }
+    const wrapMethod = (fn) => (...args) => {
+      assertSemanticGateActive(gateControl);
+      return awaitWithGateSignal(() => fn.apply(conn, args), gateControl);
+    };
+    return {
+      ...conn,
+      ...(typeof conn.beginTransaction === 'function' ?
+        {beginTransaction: wrapMethod(conn.beginTransaction)} : {}),
+      ...(typeof conn.commit === 'function' ? {commit: wrapMethod(conn.commit)} : {}),
+      ...(typeof conn.rollback === 'function' ? {rollback: wrapMethod(conn.rollback)} : {}),
+      ...(typeof conn.query === 'function' ? {query: wrapMethod(conn.query)} : {}),
+      ...(typeof conn.execute === 'function' ? {execute: wrapMethod(conn.execute)} : {}),
+      end: async (...args) => {
+        if (signal) signal.removeEventListener('abort', closeOnAbort);
+        return closeConnectionOnce(...args);
+      },
+    };
+  };
+}
+
+async function cleanupFailedTiDbDurability({
+  connection,
+  sshRun,
+  opts,
+  loadGeneratorHost,
+  createMysqlConnection,
+  result,
+  gateControl = null,
+  runRemoteNodeJson,
+  remoteGateScript,
+  cleanupAction,
+}) {
+  try {
+    if (loadGeneratorHost) {
+      await runRemoteNodeJson(
+        sshRun,
+        opts,
+        loadGeneratorHost,
+        remoteGateScript,
+        {action: cleanupAction, connection},
+        gateControl ? {...gateControl, signal: null, deadlineAtMs: null} : null,
+      );
+      return;
+    }
+    const createConnection = mysqlConnectionFactoryOf(connection, createMysqlConnection);
+    const cleanupPromise = dropTiDbDatabase(
+      connection.endpoint,
+      TIDB_DATABASE_BY_CASE[DURABILITY_CASE_ID],
+      createConnection,
+    );
+    if (typeof gateControl?.trackInFlight === 'function') {
+      await gateControl.trackInFlight(cleanupPromise);
+    } else {
+      await cleanupPromise;
+    }
+  } catch (error) {
+    result.cleanupError = errorText(error);
+  }
+}
+
+async function executeTiDbDurabilitySequence({
+  connection,
+  binding,
+  restartProduct,
+  sshRun,
+  opts,
+  loadGeneratorHost,
+  createMysqlConnection,
+  rawCreateMysqlConnection = createMysqlConnection,
+  result,
+  gateControl = null,
+  onCaseDatasetPrepared = null,
+  runRemoteNodeJson,
+  remoteGateScript,
+  beforeAction,
+  afterAction,
+  cleanupAction,
+  assertSemanticGateActive,
+  awaitWithGateSignal,
+}) {
+  const before = loadGeneratorHost ?
+    await runRemoteNodeJson(
+      sshRun,
+      opts,
+      loadGeneratorHost,
+      remoteGateScript,
+      {action: beforeAction, connection},
+      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID},
+    ) :
+    await awaitWithGateSignal(
+      () => executeTiDbDurabilityBefore({
+        connection,
+        createMysqlConnection,
+      }),
+      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID},
+    );
+  onCaseDatasetPrepared?.({caseId: DURABILITY_CASE_ID});
+  let faultEvidence;
+  try {
+    const restartControl = {
+      ...(gateControl || {}),
+      stage: 'durability-restart',
+      caseId: DURABILITY_CASE_ID,
+    };
+    assertSemanticGateActive(restartControl);
+    faultEvidence = await awaitWithGateSignal(
+      () => restartProduct({
+        context: {
+          system: SYSTEM_TIDB,
+          endpoint: connection.endpoint,
+          connection: connection.credentials,
+          binding,
+        },
+      }),
+      restartControl,
+    );
+  } catch (restartError) {
+    if (typeof gateControl?.settleInFlight === 'function') {
+      await gateControl.settleInFlight();
+    }
+    await cleanupFailedTiDbDurability({
+      connection,
+      sshRun,
+      opts,
+      loadGeneratorHost,
+      createMysqlConnection: rawCreateMysqlConnection,
+      result,
+      gateControl,
+      runRemoteNodeJson,
+      remoteGateScript,
+      cleanupAction,
+    });
+    throw restartError;
+  }
+  return loadGeneratorHost ?
+    runRemoteNodeJson(
+      sshRun,
+      opts,
+      loadGeneratorHost,
+      remoteGateScript,
+      {action: afterAction, connection, binding, before, faultEvidence},
+      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID},
+    ) :
+    awaitWithGateSignal(
+      () => executeTiDbDurabilityAfter({
+        connection,
+        binding,
+        before,
+        faultEvidence,
+        createMysqlConnection,
+      }),
+      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID},
+    );
+}
+
 export {
   TIDB_CASE_EXECUTORS,
   TIDB_DATABASE_BY_CASE,
   TIDB_EXECUTED_CASE_IDS,
+  cleanupFailedTiDbDurability,
+  createTrackedMysqlConnectionFactory,
   dropTiDbDatabase,
   executeTiDbDeliveryCase,
   executeTiDbDurabilityAfter,
   executeTiDbDurabilityBefore,
+  executeTiDbDurabilitySequence,
   executeTiDbFailureAtomicityCase,
   executeTiDbNewOrderContentionCase,
   executeTiDbOrderStatusCase,
