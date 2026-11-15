@@ -349,6 +349,7 @@ class ControlPlaneSetup {
 
       rebalanceCoordinator = new RebalanceCoordinator({
         nodeId,
+        bootIncarnation,
         systemTableCache,
         cdcIntegrationService,
         messageRouter,

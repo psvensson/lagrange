@@ -95,6 +95,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       options,
       'dataDir',
     );
+    this.explicitDataDirProvided = explicitDataDirProvided;
     this.rolloutControls = assertRequiredControlPlaneRollout({
       owner: NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE,
       controls: options.rolloutControls,
@@ -442,9 +443,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getRandom: () => this.random,
         getHttpPostImpl: () => this.httpPostImpl,
         getBootstrapResponse: () => this.bootstrapResponse,
-        setBootstrapResponse: (v) => {
-          this.bootstrapResponse = v;
-        },
+        setBootstrapResponse: (v) => this.applyBootstrapResponse(v),
         getLastRetryableSeedContactEvidence: () =>
           this.lastRetryableSeedContactEvidence,
         setLastRetryableSeedContactEvidence: (v) => {
@@ -570,15 +569,8 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getMessageGroupServices: () => this.messageGroupServices,
         getNodeStorageBudgetService: () => this.getNodeStorageBudgetService(),
         getBootIncarnation: () => this.bootIncarnation,
-        raiseBootIncarnationFloor: (knownIncarnation) => {
-          if (
-            Number.isSafeInteger(knownIncarnation) &&
-            knownIncarnation > this.bootIncarnation
-          ) {
-            this.bootIncarnation = knownIncarnation;
-          }
-          return this.bootIncarnation;
-        },
+        raiseBootIncarnationFloor: (knownIncarnation) =>
+          this.syncBootIncarnation(knownIncarnation),
         getSystemTableCache: () =>
           NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () => this.ensureLatencyTopologyOwners(),

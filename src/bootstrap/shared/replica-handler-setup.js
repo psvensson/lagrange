@@ -13,7 +13,10 @@
  */
 
 import {ReplicaHandler} from '../../node/replica-handler.js';
-import {ReplicaStateMachine} from '../../node/replica-state-machine.js';
+import {
+  ReplicaStateMachine,
+  defineReplicaLifecycleOwnerIncarnation,
+} from '../../node/replica-state-machine.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
@@ -395,6 +398,36 @@ class ReplicaLifecycleOwner {
       record.ownerIncarnation === requestedIncarnation &&
       record.replicaHandler !== null &&
       record.replicaStateMachine.isTimeoutCheckerArmed() === true;
+  }
+
+  /**
+   * Synchronize a recorded replica lifecycle authority when this boot's
+   * incarnation floor is raised during join admission.
+   * @param {number} ownerIncarnation
+   */
+  syncOwnerIncarnation(ownerIncarnation) {
+    const requestedIncarnation = requireOwnerIncarnation(ownerIncarnation);
+    const record = this.record;
+    if (record === null) {
+      return;
+    }
+    record.ownerIncarnation = requestedIncarnation;
+    if (record.replicaStateMachine) {
+      defineReplicaLifecycleOwnerIncarnation(
+        record.replicaStateMachine,
+        requestedIncarnation,
+      );
+    }
+    if (record.replicaHandler) {
+      defineReplicaLifecycleOwnerIncarnation(
+        record.replicaHandler,
+        requestedIncarnation,
+      );
+      if (record.replicaHandler.replicaCreateAdmissionOwner) {
+        record.replicaHandler.replicaCreateAdmissionOwner.ownerIncarnation =
+          requestedIncarnation;
+      }
+    }
   }
 
   /**

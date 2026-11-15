@@ -224,6 +224,79 @@ function withoutEndpointId(row) {
   return data;
 }
 
+const STORAGE_INCARNATION_METADATA_KEY = 'storageIncarnation';
+
+function isNodeEndpointRow(row, observedRow = null) {
+  return (
+    Object.hasOwn(row || {}, COLUMN.METADATA) ||
+    Object.hasOwn(row || {}, COLUMN.TRANSPORT_TYPE) ||
+    Object.hasOwn(observedRow || {}, COLUMN.METADATA) ||
+    Object.hasOwn(observedRow || {}, COLUMN.TRANSPORT_TYPE)
+  );
+}
+
+function parseEndpointMetadataObject(metadataValue) {
+  let candidate = metadataValue;
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch (_error) {
+      candidate = null;
+    }
+  }
+  if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+    return {...candidate};
+  }
+  return {};
+}
+
+function readMetadataStorageIncarnation(row) {
+  const metadata = parseEndpointMetadataObject(row?.[COLUMN.METADATA]);
+  return normalizeKnownNodeBootIncarnation(
+    metadata[STORAGE_INCARNATION_METADATA_KEY],
+  );
+}
+
+function withMetadataStorageIncarnation(row, storageIncarnation) {
+  const normalized = normalizeKnownNodeBootIncarnation(storageIncarnation);
+  if (normalized <= 0) {
+    return row;
+  }
+  const metadata = parseEndpointMetadataObject(row?.[COLUMN.METADATA]);
+  return {
+    ...row,
+    [COLUMN.METADATA]: JSON.stringify({
+      ...metadata,
+      [STORAGE_INCARNATION_METADATA_KEY]: normalized,
+    }),
+  };
+}
+
+function withNodeEndpointBirthStorageIncarnation(row, bootIncarnation) {
+  if (!isNodeEndpointRow(row)) {
+    return row;
+  }
+  if (readMetadataStorageIncarnation(row) > 0) {
+    return row;
+  }
+  return withMetadataStorageIncarnation(row, bootIncarnation);
+}
+
+function withPreservedObservedStorageIncarnation(row, observedRow) {
+  if (!isNodeEndpointRow(row, observedRow)) {
+    return row;
+  }
+  if (readMetadataStorageIncarnation(row) > 0) {
+    return row;
+  }
+  const observedStorageIncarnation =
+    readMetadataStorageIncarnation(observedRow);
+  if (observedStorageIncarnation <= 0) {
+    return row;
+  }
+  return withMetadataStorageIncarnation(row, observedStorageIncarnation);
+}
+
 // The logical write an endpoint mutation is: this incarnation's birth of
 // the row, or its CAS from the exact incarnation observed. Every attempt of
 // one of them (a re-drive after an unknown outcome among them) is delivered
@@ -249,12 +322,13 @@ function settleEndpointWrite(row, outcome) {
 
 function casFromObserved(options, row, observedRow) {
   const observedIncarnation = endpointIncarnationOf(observedRow);
+  const updateRow = withPreservedObservedStorageIncarnation(row, observedRow);
   return attemptWrite(() => options.update(
     {
       [COLUMN.ENDPOINT_ID]: row[COLUMN.ENDPOINT_ID],
       [COLUMN.BOOT_INCARNATION]: observedIncarnation,
     },
-    withoutEndpointId(row),
+    withoutEndpointId(updateRow),
     endpointWriteIdentity(row, ENDPOINT_WRITE_VERB.CAS_FROM,
       observedIncarnation),
   ));
@@ -264,7 +338,11 @@ function casFromObserved(options, row, observedRow) {
 // observed same-or-older incarnation, none for a newer owner.
 function planEndpointWrite(options, row, observed, bootIncarnation) {
   if (!observed.row) {
-    return () => attemptWrite(() => options.insert(row,
+    const birthRow = withNodeEndpointBirthStorageIncarnation(
+      row,
+      bootIncarnation,
+    );
+    return () => attemptWrite(() => options.insert(birthRow,
       endpointWriteIdentity(row, ENDPOINT_WRITE_VERB.BIRTH)));
   }
   if (endpointIncarnationOf(observed.row) > bootIncarnation) return null;

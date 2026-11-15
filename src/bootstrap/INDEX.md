@@ -69,7 +69,7 @@ documentClass: generated
 - [node-joining-backfill-merge-and-status.js](node-joining-backfill-merge-and-status.js) - Query all known routable replicas for one propagated table and return successful row sets. (importers: one)
 - [node-joining-cdc-subscription-and-backfill.js](node-joining-cdc-subscription-and-backfill.js) - Phase 2: Connect to seed node via WebSocket for cross-node communication. (importers: one)
 - [node-joining-constants.js](node-joining-constants.js) - No leading comment; first export: CDC_REESTABLISHMENT. (importers: hub)
-- [node-joining-delegate-bundles.js](node-joining-delegate-bundles.js) - Normalize the optional seed contact candidate list. (importers: one)
+- [node-joining-delegate-bundles.js](node-joining-delegate-bundles.js) - Normalize the optional seed contact candidate list. (importers: few)
 - [node-joining-message-group-runtime-delegation.js](node-joining-message-group-runtime-delegation.js) - Unified lifecycle start hook for join partition replicas. (importers: one)
 - [node-joining-owner-construction.js](node-joining-owner-construction.js) - No leading comment; first export: NodeJoiningOwnerConstruction. (importers: one)
 - [node-joining-publication-activation.js](node-joining-publication-activation.js) - Restore durable local partition runtimes from hydrated system metadata before join admission writes depend on... (importers: few)

@@ -294,44 +294,32 @@ function resolveTargetNodeIncarnationSnapshot(systemTableCache, targetNodeId) {
     'node_endpoints',
     `ep-${targetNodeId}-ws`,
   );
-  let bootIncarnation = readPositiveSafeInteger(
-    targetNode?.boot_incarnation,
-  );
-  if (bootIncarnation === null) {
-    bootIncarnation = readPositiveSafeInteger(
-      targetNode?.bootIncarnation,
-    );
-  }
-  if (bootIncarnation === null) {
-    bootIncarnation = readPositiveSafeInteger(
-      targetEndpoint?.boot_incarnation,
-    );
-  }
-  if (bootIncarnation === null) {
-    bootIncarnation = readPositiveSafeInteger(
-      targetEndpoint?.bootIncarnation,
-    );
-  }
-  const endpointStorageIncarnation =
+  const nodeBootIncarnation =
+    readPositiveSafeInteger(targetNode?.boot_incarnation) ??
+    readPositiveSafeInteger(targetNode?.bootIncarnation);
+  const endpointBootIncarnation =
+    readPositiveSafeInteger(targetEndpoint?.boot_incarnation) ??
+    readPositiveSafeInteger(targetEndpoint?.bootIncarnation);
+  const bootIncarnation = nodeBootIncarnation ?? endpointBootIncarnation;
+  const nodeStorageIncarnation =
+    readPositiveSafeInteger(targetNode?.storage_incarnation) ??
+    readPositiveSafeInteger(targetNode?.storageIncarnation);
+  const rawEndpointStorageIncarnation =
     parseEndpointMetadataStorageIncarnation(targetEndpoint);
-  let nodeStorageIncarnation = readPositiveSafeInteger(
-    targetNode?.storage_incarnation,
-  );
-  if (nodeStorageIncarnation === null) {
-    nodeStorageIncarnation = readPositiveSafeInteger(
-      targetNode?.storageIncarnation,
-    );
-  }
+  const endpointCoherentWithNode =
+    nodeBootIncarnation !== null &&
+    endpointBootIncarnation === nodeBootIncarnation;
+  const endpointStorageIncarnation = endpointCoherentWithNode ?
+    rawEndpointStorageIncarnation :
+    null;
   let storageIncarnation = endpointStorageIncarnation;
   if (
     nodeStorageIncarnation !== null &&
+    (targetEndpoint == null || endpointCoherentWithNode) &&
     (storageIncarnation === null ||
       nodeStorageIncarnation > storageIncarnation)
   ) {
     storageIncarnation = nodeStorageIncarnation;
-  }
-  if (storageIncarnation === null) {
-    storageIncarnation = bootIncarnation;
   }
   return Object.freeze({
     bootIncarnation,
@@ -388,14 +376,10 @@ function readOperationTargetNodeStorageIncarnation(operation, stepsHistory) {
   if (directSnake !== null) {
     return directSnake;
   }
-  const historyStorageIncarnation = readStepsHistoryPositiveInteger(
+  return readStepsHistoryPositiveInteger(
     stepsHistory,
     OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION,
   );
-  if (historyStorageIncarnation !== null) {
-    return historyStorageIncarnation;
-  }
-  return readOperationTargetNodeBootIncarnation(operation, stepsHistory);
 }
 
 function preserveOperationTargetNodeIncarnations(operation, stepEntry) {
@@ -407,6 +391,14 @@ function preserveOperationTargetNodeIncarnations(operation, stepEntry) {
     stepsHistory = memoizedParseStepsHistoryString(stepsHistory);
   }
   const normalizedHistory = Array.isArray(stepsHistory) ? stepsHistory : [];
+  if (
+    operation &&
+    typeof operation === 'object' &&
+    !Array.isArray(operation.stepsHistory) &&
+    !Object.isFrozen(operation)
+  ) {
+    operation.stepsHistory = normalizedHistory;
+  }
   const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
     operation,
     normalizedHistory,
@@ -419,15 +411,20 @@ function preserveOperationTargetNodeIncarnations(operation, stepEntry) {
   if (targetNodeBootIncarnation !== null) {
     stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
       targetNodeBootIncarnation;
-    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-      targetNodeBootIncarnation;
+    if (operation && !Object.isFrozen(operation)) {
+      operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+        targetNodeBootIncarnation;
+    }
   }
   if (targetNodeStorageIncarnation !== null) {
     stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
       targetNodeStorageIncarnation;
-    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-      targetNodeStorageIncarnation;
+    if (operation && !Object.isFrozen(operation)) {
+      operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+        targetNodeStorageIncarnation;
+    }
   }
+  return stepEntry;
 }
 
 // The one peer-admission rule over a services row's status, read by

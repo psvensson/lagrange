@@ -1,27 +1,34 @@
 import os from 'os';
 import {
   COLUMN,
+  ENDPOINT_STATUS,
   NODE_STATE,
   NUM,
   SERVICE_TYPE,
   STATE,
+  TRANSPORT_TYPE,
 } from '../../constants/index.js';
 import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../rejoin-hints-constants.js';
 import {
-  ENDPOINT_INCARNATION_OUTCOME,
-  isEndpointIncarnationOutcomeCompleted,
-} from '../../control-plane/owners/endpoint-incarnation-authority.js';
-import {
   normalizeKnownNodeBootIncarnation,
 } from '../../control-plane/control-plane-error-classification.js';
+import {
+  CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE,
+} from '../cluster-incarnation-fence.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+} from '../../control-plane/membership-lifecycle-controller.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
+  DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
+  JOIN_ADMISSION_RESOLUTION_SOURCE,
   NODE_STORAGE_LOST_TRIGGER_REASON,
+  REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
   STORAGE_INCARNATION_FIELD,
   STORAGE_INCARNATION_METADATA_KEY,
   normalizeString,
@@ -63,8 +70,7 @@ function buildReentryNormalizedNodeRow(
       persistedStatus;
   const resolvedStorageIncarnation =
     normalizeKnownNodeBootIncarnation(storageIncarnation) ||
-    readObservedStorageIncarnation(nodeRow) ||
-    normalizeKnownNodeBootIncarnation(bootIncarnation);
+    normalizeKnownNodeBootIncarnation(readObservedStorageIncarnation(nodeRow));
   return {
     ...nodeRow,
     [COLUMN.STATUS]: reusableStatus || NODE_STATE.JOINING,
@@ -89,15 +95,19 @@ function resolveHighestObservedNodeIncarnation(nodeOutcome, endpointOutcome) {
       normalizeKnownNodeBootIncarnation(
         readObservedBootIncarnation(endpointRow),
       ),
-      readObservedStorageIncarnation(null, endpointRow),
+      normalizeKnownNodeBootIncarnation(
+        readObservedStorageIncarnation(null, endpointRow),
+      ),
     );
   }
   const observedNodeBootIncarnation = normalizeKnownNodeBootIncarnation(
     readObservedBootIncarnation(nodeOutcome?.row),
   );
-  const observedStorageIncarnation = readObservedStorageIncarnation(
-    nodeOutcome?.row,
-    endpointOutcome?.row,
+  const observedStorageIncarnation = normalizeKnownNodeBootIncarnation(
+    readObservedStorageIncarnation(
+      nodeOutcome?.row,
+      endpointOutcome?.row,
+    ),
   );
   return Math.max(
     observedNodeBootIncarnation,
@@ -142,21 +152,20 @@ function withOriginHlcStamp(row, originHlc) {
     row;
 }
 
-function normalizeEndpointOutcomeResult(endpointOutcome) {
-  const completed =
-    isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
-    endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
-  if (!completed && endpointOutcome.error) throw endpointOutcome.error;
-  const originHlc =
-    endpointOutcome.result?.originHlc ||
-    endpointOutcome.result?.partitionResult?.originHlc ||
-    null;
+function buildRejectedJoinAdmissionMutationAcceptance({
+  contractState,
+  nextAction,
+  outcome,
+  retryAfterMs,
+}) {
   return {
-    success: completed,
-    outcome: endpointOutcome.outcome,
-    originHlc:
-      typeof originHlc === 'string' && originHlc.length > 0 ? originHlc : null,
-    error: completed ? null : endpointOutcome.outcome,
+    accepted: false,
+    success: false,
+    withdrawalDeferred: false,
+    contractState,
+    nextAction,
+    outcome,
+    retryAfterMs,
   };
 }
 
@@ -193,30 +202,34 @@ function parseEndpointMetadataObject(metadataValue) {
 }
 
 function readObservedStorageIncarnation(nodeRow, endpointRow = null) {
-  const metadata = parseEndpointMetadataObject(
-    endpointRow?.[COLUMN.METADATA],
+  const nodeBootIncarnation = normalizeKnownNodeBootIncarnation(
+    nodeRow?.[COLUMN.BOOT_INCARNATION],
   );
-  const endpointStorageIncarnation = normalizeKnownNodeBootIncarnation(
-    metadata?.[STORAGE_INCARNATION_METADATA_KEY],
+  const endpointBootIncarnation = normalizeKnownNodeBootIncarnation(
+    endpointRow?.[COLUMN.BOOT_INCARNATION],
   );
-  if (endpointStorageIncarnation > 0) {
-    return endpointStorageIncarnation;
+  const endpointCoherentWithNode =
+    nodeBootIncarnation === 0 ||
+    endpointBootIncarnation === 0 ||
+    endpointBootIncarnation === nodeBootIncarnation;
+  if (endpointCoherentWithNode) {
+    const metadata = parseEndpointMetadataObject(
+      endpointRow?.[COLUMN.METADATA],
+    );
+    const endpointStorageIncarnation = normalizeKnownNodeBootIncarnation(
+      metadata?.[STORAGE_INCARNATION_METADATA_KEY],
+    );
+    if (endpointStorageIncarnation > 0) {
+      return endpointStorageIncarnation;
+    }
   }
   const nodeStorageIncarnation = normalizeKnownNodeBootIncarnation(
-    nodeRow?.[STORAGE_INCARNATION_FIELD],
+    nodeRow?.[STORAGE_INCARNATION_FIELD] ?? nodeRow?.storageIncarnation,
   );
   if (nodeStorageIncarnation > 0) {
     return nodeStorageIncarnation;
   }
-  const observedNodeBootIncarnation = normalizeKnownNodeBootIncarnation(
-    nodeRow?.[COLUMN.BOOT_INCARNATION],
-  );
-  if (observedNodeBootIncarnation > 0) {
-    return observedNodeBootIncarnation;
-  }
-  return normalizeKnownNodeBootIncarnation(
-    endpointRow?.[COLUMN.BOOT_INCARNATION],
-  );
+  return null;
 }
 
 function stampEndpointStorageIncarnationMetadata(row, storageIncarnation) {
@@ -304,15 +317,207 @@ function buildNodeRegistrationRow({
   };
 }
 
+function filterAuthoritativeNodeEndpointRow(
+  outcome,
+  nodeId,
+  expectedWsAddress,
+) {
+  const normalizedAddress = normalizeString(expectedWsAddress);
+  return outcome.rows.find((row) => {
+    const rowNodeId = normalizeString(row?.[COLUMN.NODE_ID]);
+    const transportType = normalizeString(
+      row?.[COLUMN.TRANSPORT_TYPE],
+    ).toLowerCase();
+    const status = normalizeString(row?.[COLUMN.STATUS]).toLowerCase();
+    const address = normalizeString(row?.[COLUMN.ADDRESS]);
+    return (
+      rowNodeId === nodeId &&
+      transportType === String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
+      status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
+      address === normalizedAddress
+    );
+  }) || null;
+}
+
+function filterAuthoritativeMetaEndpointRows(outcome, nodeId) {
+  const rows = outcome.state === AUTHORITATIVE_ROW_READ_STATE.READABLE ?
+    outcome.rows :
+    [];
+  const rowsByServiceId = new Map();
+  for (const row of rows) {
+    const rowNodeId = normalizeString(row?.[COLUMN.NODE_ID]);
+    const serviceId = normalizeString(row?.[COLUMN.SERVICE_ID]);
+    if (
+      rowNodeId !== nodeId ||
+      !DURABLE_REJOIN_REQUIRED_SERVICE_IDS.includes(serviceId) ||
+      rowsByServiceId.has(serviceId)
+    ) {
+      continue;
+    }
+    rowsByServiceId.set(serviceId, row);
+  }
+  return DURABLE_REJOIN_REQUIRED_SERVICE_IDS
+    .map((serviceId) => rowsByServiceId.get(serviceId) || null)
+    .filter(Boolean);
+}
+
+function canReuseObservedJoinAdmissionNodeRowForAddress(nodeRow, nodeAddress) {
+  if (!nodeRow || typeof nodeRow !== 'object') {
+    return false;
+  }
+  const cachedNodeAddress = normalizeString(nodeRow[COLUMN.NODE_ADDRESS]);
+  const currentNodeAddress = normalizeString(nodeAddress);
+  if (
+    cachedNodeAddress.length > 0 &&
+    currentNodeAddress.length > 0 &&
+    cachedNodeAddress !== currentNodeAddress
+  ) {
+    return false;
+  }
+  if (
+    NON_REUSABLE_NODE_STATUSES.includes(
+      normalizeString(nodeRow[COLUMN.STATUS]),
+    )
+  ) {
+    return false;
+  }
+  return REUSABLE_JOIN_ADMISSION_CONNECTION_STATES.includes(
+    normalizeString(nodeRow[COLUMN.CONNECTION_STATE]).toLowerCase(),
+  );
+}
+
+function isDurableRejoinFenceContinuityPresent(fence, joinLifecycleIntentType) {
+  if (
+    !fence ||
+    typeof fence !== 'object' ||
+    fence.allowed !== true ||
+    fence.durableMembershipState ===
+      CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE.ABSENT
+  ) {
+    return false;
+  }
+  return (
+    fence.durableMembershipState ===
+      CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE.PRESENT ||
+    joinLifecycleIntentType === MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
+  );
+}
+
+function buildDurableRejoinMembershipResolution({
+  authoritativeNodeRow,
+  authoritativeEndpointRow,
+  metaEndpointRows,
+  now,
+  currentIncarnation,
+  storageIncarnation,
+}) {
+  return {
+    nodeRow: buildReentryNormalizedNodeRow(
+      authoritativeNodeRow,
+      now,
+      currentIncarnation,
+      storageIncarnation,
+    ),
+    observedNodeRow: authoritativeNodeRow,
+    endpointRow: stampEndpointStorageIncarnationMetadata(
+      authoritativeEndpointRow,
+      storageIncarnation,
+    ),
+    metaEndpointRows,
+    storageIncarnation,
+    resolution: {
+      source:
+        JOIN_ADMISSION_RESOLUTION_SOURCE.DURABLE_REJOIN_EXISTING_MEMBERSHIP,
+    },
+    reusedExistingMembership: true,
+  };
+}
+
+function buildExistingJoinAdmissionProgressResolution({
+  authoritativeNodeRow,
+  authoritativeEndpointRow,
+  metaEndpointRows,
+  now,
+  currentIncarnation,
+  storageIncarnation,
+  sameBootRetry,
+}) {
+  return {
+    nodeRow: buildReentryNormalizedNodeRow(
+      authoritativeNodeRow,
+      now,
+      currentIncarnation,
+      storageIncarnation,
+    ),
+    observedNodeRow: authoritativeNodeRow,
+    endpointRow: authoritativeEndpointRow ?
+      stampEndpointStorageIncarnationMetadata(
+        authoritativeEndpointRow,
+        storageIncarnation,
+      ) :
+      null,
+    metaEndpointRows,
+    storageIncarnation,
+    sameBootRetry,
+    resolution: {
+      source: JOIN_ADMISSION_RESOLUTION_SOURCE.EXISTING_PROGRESS,
+    },
+  };
+}
+
+function buildNodeEndpointRegistrationData({
+  endpointId,
+  nodeId,
+  canonicalWsAddress,
+  storageIncarnation,
+  now,
+}) {
+  return {
+    [COLUMN.ENDPOINT_ID]: endpointId,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+    [COLUMN.ADDRESS]: canonicalWsAddress,
+    [COLUMN.PRIORITY]: 0,
+    [COLUMN.METADATA]: JSON.stringify({
+      [STORAGE_INCARNATION_METADATA_KEY]: storageIncarnation,
+    }),
+    [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+    [COLUMN.CREATED_AT]: now,
+    [COLUMN.UPDATED_AT]: now,
+  };
+}
+
+function buildRefusedJoinAdmissionWithdrawal(registeredNodeId, transition) {
+  return {
+    success: false,
+    accepted: false,
+    withdrawalDeferred: false,
+    registeredNodeId,
+    outcome: transition.outcome,
+    knownIncarnation: transition.knownIncarnation ?? null,
+    nodeEndpointWithdrawn: false,
+    metaEndpointCount: 0,
+    metaEndpointWithdrawnCount: 0,
+  };
+}
+
 export {
   NON_REUSABLE_NODE_STATUSES,
   buildAuthoritativeRowSourceUnavailableError,
+  buildDurableRejoinMembershipResolution,
+  buildExistingJoinAdmissionProgressResolution,
   buildFailedLostStoragePartitionRow,
   buildLostStorageMutationFailureError,
+  buildNodeEndpointRegistrationData,
   buildNodeRegistrationRow,
   buildReentryNormalizedNodeRow,
+  buildRefusedJoinAdmissionWithdrawal,
+  buildRejectedJoinAdmissionMutationAcceptance,
+  canReuseObservedJoinAdmissionNodeRowForAddress,
+  filterAuthoritativeMetaEndpointRows,
+  filterAuthoritativeNodeEndpointRow,
   filterAuthoritativePartitionServiceRowsForNode,
-  normalizeEndpointOutcomeResult,
+  isDurableRejoinFenceContinuityPresent,
   parseEndpointMetadataObject,
   readObservedBootIncarnation,
   readObservedStorageIncarnation,

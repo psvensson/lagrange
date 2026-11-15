@@ -32,6 +32,13 @@ import {
   stampEndpointIncarnation,
 } from '../../control-plane/owners/endpoint-incarnation-authority.js';
 import {
+  buildNodeEndpointRegistrationData,
+  buildRefusedJoinAdmissionWithdrawal,
+  buildRejectedJoinAdmissionMutationAcceptance,
+  resolveServiceUpdateExpectedIdentity,
+  withOriginHlcStamp,
+} from './node-registration-owner-row-builder.js';
+import {
   NODE_TERMINAL_TRANSITION_OUTCOME,
   applyNodeTerminalTransition,
   isNodeTerminalTransitionRefused,
@@ -57,7 +64,6 @@ import {
   LOG_JOIN_ADMISSION_WRITE_RETRY,
   LOG_META_ENDPOINT_REGISTER_FAILED,
   NODE_REGISTRATION_ERROR,
-  STORAGE_INCARNATION_METADATA_KEY,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
@@ -115,20 +121,17 @@ function normalizeOwnRetryAfterMs(primary, pressure) {
   return NULL_VALUE;
 }
 
-function buildRejectedJoinAdmissionMutationAcceptance({
-  contractState,
-  nextAction,
-  outcome,
-  retryAfterMs,
-}) {
+function normalizeEndpointOutcomeResult(endpointOutcome) {
+  const completed =
+    isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
+    endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
+  if (!completed && endpointOutcome.error) throw endpointOutcome.error;
+  const originHlc = endpointOutcome.result?.originHlc ||
+    endpointOutcome.result?.partitionResult?.originHlc || null;
   return {
-    accepted: false,
-    success: false,
-    withdrawalDeferred: false,
-    contractState,
-    nextAction,
-    outcome,
-    retryAfterMs,
+    success: completed, outcome: endpointOutcome.outcome,
+    originHlc: typeof originHlc === 'string' && originHlc.length > 0 ? originHlc : null,
+    error: completed ? null : endpointOutcome.outcome,
   };
 }
 
@@ -212,35 +215,6 @@ const RESOLVED_JOIN_ADMISSION_WITHDRAWAL = Object.freeze({
   retryAfterMs: NULL_VALUE,
 });
 
-function buildRefusedJoinAdmissionWithdrawal(registeredNodeId, transition) {
-  return {
-    success: false, accepted: false, withdrawalDeferred: false,
-    registeredNodeId, outcome: transition.outcome,
-    knownIncarnation: transition.knownIncarnation ?? null,
-    nodeEndpointWithdrawn: false, metaEndpointCount: 0,
-    metaEndpointWithdrawnCount: 0,
-  };
-}
-
-function withOriginHlcStamp(row, originHlc) {
-  return typeof originHlc === 'string' && originHlc.length > 0 ?
-    {...row, [COLUMN.UPDATED_AT_HLC]: originHlc} : row;
-}
-
-function normalizeEndpointOutcomeResult(endpointOutcome) {
-  const completed =
-    isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
-    endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
-  if (!completed && endpointOutcome.error) throw endpointOutcome.error;
-  const originHlc = endpointOutcome.result?.originHlc ||
-    endpointOutcome.result?.partitionResult?.originHlc || null;
-  return {
-    success: completed, outcome: endpointOutcome.outcome,
-    originHlc: typeof originHlc === 'string' && originHlc.length > 0 ? originHlc : null,
-    error: completed ? null : endpointOutcome.outcome,
-  };
-}
-
 class NodeRegistrationOwnerPublicationMethods {
   resolveNodeEndpointId() {
     return `ep-${this.nodeId}-ws`;
@@ -264,19 +238,13 @@ class NodeRegistrationOwnerPublicationMethods {
         options.storageIncarnation :
         bootIncarnation;
 
-    const endpointData = {
-      [COLUMN.ENDPOINT_ID]: endpointId,
-      [COLUMN.NODE_ID]: this.nodeId,
-      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.ADDRESS]: canonicalWsAddress,
-      [COLUMN.PRIORITY]: 0,
-      [COLUMN.METADATA]: JSON.stringify({
-        [STORAGE_INCARNATION_METADATA_KEY]: storageIncarnation,
-      }),
-      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-      [COLUMN.CREATED_AT]: now,
-      [COLUMN.UPDATED_AT]: now,
-    };
+    const endpointData = buildNodeEndpointRegistrationData({
+      endpointId,
+      nodeId: this.nodeId,
+      canonicalWsAddress,
+      storageIncarnation,
+      now,
+    });
 
     // Bounded-await join membership write: full retry budget, fail on error.
     const endpointResult = await this.upsertSystemTableRowWithRetry(
@@ -604,7 +572,7 @@ class NodeRegistrationOwnerPublicationMethods {
     const transition = await applyNodeTerminalTransition({
       gateway: this.getJoinAdmissionControlPlaneSystemTableGateway(),
       nodeId: registeredNodeId,
-      bootIncarnation: this.delegates.getBootIncarnation(),
+      bootIncarnation: this.getRegistrationBootIncarnation(),
       destination: {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
@@ -716,20 +684,11 @@ class NodeRegistrationOwnerPublicationMethods {
       const serviceId = normalizeString(
         rowData?.[COLUMN.SERVICE_ID] || rowData?.[COLUMN.REPLICA_ID],
       );
-      const expectedIdentity =
-        options.expectedIdentity && typeof options.expectedIdentity === 'object' ?
-          options.expectedIdentity :
-          {
-            [COLUMN.NODE_ID]:
-              normalizeString(rowData?.[COLUMN.NODE_ID]) || this.nodeId,
-            ...(normalizeString(rowData?.[COLUMN.SERVICE_TYPE]).length > 0 ?
-              {
-                [COLUMN.SERVICE_TYPE]: normalizeString(
-                  rowData[COLUMN.SERVICE_TYPE],
-                ),
-              } :
-              {}),
-          };
+      const expectedIdentity = resolveServiceUpdateExpectedIdentity(
+        this.nodeId,
+        rowData,
+        options,
+      );
       if (
         serviceId.length > 0 &&
         hasFunction(membershipPublicationRuntimeOwner?.servicesOwner?.updateService)

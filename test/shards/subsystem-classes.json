@@ -28,7 +28,7 @@
   "censusSize": 2648,
   "digest": "fnv1a32-0863499d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d2bde54f",
+  "observationDigest": "fnv1a32-dc5ddf0d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3224,10 +3224,13 @@
     },
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": {
       "files": [
+        "src/bootstrap/cluster-incarnation-fence.js",
         "src/bootstrap/shared/node-registration-owner.js",
         "src/control-plane/control-plane-error-classification.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/owners/membership-publication-runtime-owner.js"
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/owners/node-registration-incarnation-write.js",
+        "src/control-plane/owners/services-owner.js"
       ]
     },
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": {
@@ -3518,8 +3521,7 @@
         "src/bootstrap/cluster-incarnation-fence.js",
         "src/bootstrap/shared/node-registration-owner.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/owners/node-registration-incarnation-write.js",
-        "src/control-plane/owners/services-owner.js"
+        "src/control-plane/owners/node-registration-incarnation-write.js"
       ]
     },
     "test/bootstrap/node-state-gating.property.test.js": {
