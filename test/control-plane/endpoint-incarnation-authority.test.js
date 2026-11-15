@@ -213,13 +213,35 @@ test('endpoint writes never replace a newer incarnation and advance from an ' +
   t.equal(snapshot(g2Owned), before, 'G2 endpoint state is unchanged');
 
   const g1Owned = createDurableTables({[TABLES.NODE_ENDPOINTS]: [
-    nodeEndpoint(G1, 'ws://g1-host:8082')]});
+    nodeEndpoint(G1, 'ws://g1-host:8082', {
+      metadata: JSON.stringify({storageIncarnation: G1}),
+    })]});
   t.equal((await write(g1Owned, G2, 'ws://g2-host:8082', null)).outcome,
     OUTCOME.APPLIED,
     'G2 advances over the older G1 row even from a stale-absent observation');
   t.match(g1Owned.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID),
     {boot_incarnation: G2, address: 'ws://g2-host:8082'});
+  t.equal(
+    JSON.parse(
+      g1Owned.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID)?.metadata || '{}',
+    ).storageIncarnation,
+    G1,
+    'CAS advance preserves observed storageIncarnation when update payload omits it',
+  );
   t.same(g1Owned.writes.find((w) => w.op === 'update')?.whereClause,
     {endpoint_id: ENDPOINT_ID, boot_incarnation: G1},
     'the advance is one CAS on the observed older incarnation');
+
+  const freshStore = createDurableTables({});
+  t.equal((await write(freshStore, G2, 'ws://g2-host:8082', null)).outcome,
+    OUTCOME.APPLIED,
+    'birthing a brand-new node_endpoints row succeeds');
+  t.equal(
+    JSON.parse(
+      freshStore.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID)?.metadata ||
+        '{}',
+    ).storageIncarnation,
+    G2,
+    'birthing a brand-new node_endpoints row stamps storageIncarnation: bootIncarnation',
+  );
 });

@@ -1,8 +1,10 @@
 import {
   readOperationRecordWorkflowStep,
+} from './replica-operation-progress.js';
+import {
   readOperationTargetNodeStorageIncarnation,
   resolveTargetNodeIncarnationSnapshot,
-} from './replica-operation-progress.js';
+} from './replica-status.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,

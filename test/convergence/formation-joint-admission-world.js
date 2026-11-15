@@ -818,6 +818,9 @@ function createFormationWorld() {
     const hosts = createSimulatedNodeHosts({
       network,
       nodeId,
+      nodeAddress: nodeAddressOf(nodeId),
+      bootIncarnation:
+        bootIncarnationByNodeId.get(nodeId) ?? TEST_BOOT_INCARNATION,
       systemTableCache: cache,
       partitionAuthority,
       randomSource: new SeededRandomSource({seed: RANDOM_SEED}),
@@ -842,8 +845,6 @@ function createFormationWorld() {
       leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
       now: time.now,
     });
-    hosts.heartbeatService.bootIncarnation =
-      bootIncarnationByNodeId.get(nodeId) ?? TEST_BOOT_INCARNATION;
     hosts.heartbeatService.nodeLifecyclePublication = nodeLifecyclePublication;
     // The node's replica dispatch owner, built as control-plane setup builds
     // it; its timers are armed on the world clock and never fire.
@@ -1079,7 +1080,7 @@ function createFormationWorld() {
       const registrationNow = Number.isFinite(registrationNowMs) ?
         Math.floor(registrationNowMs) :
         time.now();
-      let bootIncarnation = nextBootIncarnation(nodeId);
+      nextBootIncarnation(nodeId);
       const clusterIncarnationFence = buildClusterIncarnationFence(
         durableStateDetected ? {
           durableStateDetected: true,
@@ -1098,17 +1099,11 @@ function createFormationWorld() {
         delegates: {
           getLogger: () => hosts.controlPlaneReadinessService.logger,
           getNow: () => () => registrationNow,
-          getBootIncarnation: () => bootIncarnation,
-          raiseBootIncarnationFloor: (knownIncarnation) => {
-            if (
-              Number.isSafeInteger(knownIncarnation) &&
-              knownIncarnation > bootIncarnation
-            ) {
-              bootIncarnation = knownIncarnation;
-              bootIncarnationByNodeId.set(nodeId, knownIncarnation);
-              hosts.heartbeatService.bootIncarnation = knownIncarnation;
-            }
-            return bootIncarnation;
+          getBootIncarnation: () => hosts.bootIncarnation,
+          raiseBootIncarnationFloor: async (knownIncarnation) => {
+            const updated = await hosts.syncBootIncarnation(knownIncarnation);
+            bootIncarnationByNodeId.set(nodeId, updated);
+            return updated;
           },
           getNodeCapabilities: () => [],
           getClusterIncarnationFence: async () => clusterIncarnationFence,

@@ -1,9 +1,11 @@
 import {readStateField} from '../utils/state-field-read.js';
 import {
   readOperationRecordWorkflowStep,
+} from './replica-operation-progress.js';
+import {
   readOperationTargetNodeBootIncarnation,
   readOperationTargetNodeStorageIncarnation,
-} from './replica-operation-progress.js';
+} from './replica-status.js';
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';

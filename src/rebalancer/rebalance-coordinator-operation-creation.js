@@ -33,7 +33,7 @@ import {
 } from './committed-membership-bootstrap-read.js';
 import {
   resolveTargetNodeIncarnationSnapshot,
-} from './replica-operation-progress.js';
+} from './replica-status.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
@@ -586,6 +586,13 @@ class RebalanceCoordinatorOperationCreation {
     return this.createOperationRecordInternal(recordContext);
   }
 
+  resolveOperationTargetNodeIncarnationSnapshot(targetNodeId) {
+    return resolveTargetNodeIncarnationSnapshot(
+      this.systemTableCache,
+      targetNodeId,
+    );
+  }
+
   /**
    * Create and persist one operation after dedupe checks pass.
    * @param {Object} context
@@ -677,10 +684,8 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     // Create operation using the helper from replica-status.js
-    const targetIncarnationSnapshot = resolveTargetNodeIncarnationSnapshot(
-      this.systemTableCache,
-      move.nodeId,
-    );
+    const targetIncarnationSnapshot =
+      this.resolveOperationTargetNodeIncarnationSnapshot(move.nodeId);
     const operation = createOperationRecord({
       operationId,
       type: normalizedMoveType || move.type,

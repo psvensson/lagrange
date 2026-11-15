@@ -7,10 +7,8 @@ import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
 import {
   COLUMN,
-  ENDPOINT_STATUS,
   SERVICE_TYPE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../constants/index.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {
@@ -25,9 +23,6 @@ import {
   normalizeKnownNodeBootIncarnation,
 } from '../../control-plane/control-plane-error-classification.js';
 import {
-  CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE,
-} from '../cluster-incarnation-fence.js';
-import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../rejoin-hints-constants.js';
 import {
@@ -40,7 +35,6 @@ import {
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
   JOIN_ADMISSION_PUBLICATION,
-  JOIN_ADMISSION_RESOLUTION_SOURCE,
   LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   NODE_REGISTRATION_ERROR,
@@ -50,16 +44,19 @@ import {
   normalizeString,
 } from './node-registration-owner-constants.js';
 import {
-  NON_REUSABLE_NODE_STATUSES,
   buildAuthoritativeRowSourceUnavailableError,
+  buildDurableRejoinMembershipResolution,
+  buildExistingJoinAdmissionProgressResolution,
   buildFailedLostStoragePartitionRow,
   buildLostStorageMutationFailureError,
-  buildReentryNormalizedNodeRow,
+  canReuseObservedJoinAdmissionNodeRowForAddress,
+  filterAuthoritativeMetaEndpointRows,
+  filterAuthoritativeNodeEndpointRow,
   filterAuthoritativePartitionServiceRowsForNode,
+  isDurableRejoinFenceContinuityPresent,
   readObservedBootIncarnation,
   readObservedStorageIncarnation,
   resolveHighestObservedNodeIncarnation,
-  stampEndpointStorageIncarnationMetadata,
 } from './node-registration-owner-row-builder.js';
 
 const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
@@ -126,34 +123,25 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    const storageIncarnation =
-      readObservedStorageIncarnation(
-        authoritativeNodeRow,
-        authoritativeEndpointRow,
-      ) || this.getRegistrationBootIncarnation();
-    const reusedNodeRow = buildReentryNormalizedNodeRow(
-      authoritativeNodeRow,
-      now,
+    const currentIncarnation = normalizeKnownNodeBootIncarnation(
       this.getRegistrationBootIncarnation(),
-      storageIncarnation,
     );
-    const reusedEndpointRow = stampEndpointStorageIncarnationMetadata(
+    const storageIncarnation = readObservedStorageIncarnation(
+      authoritativeNodeRow,
       authoritativeEndpointRow,
-      storageIncarnation,
     );
-    return {
-      nodeRow: reusedNodeRow,
-      observedNodeRow: authoritativeNodeRow,
-      endpointRow: reusedEndpointRow,
+    this.latchedRegistrationBootIncarnation = currentIncarnation;
+    if (storageIncarnation !== null) {
+      this.latchedRegistrationStorageIncarnation = storageIncarnation;
+    }
+    return buildDurableRejoinMembershipResolution({
+      authoritativeNodeRow,
+      authoritativeEndpointRow,
       metaEndpointRows,
+      now,
+      currentIncarnation,
       storageIncarnation,
-      resolution: {
-        source:
-          JOIN_ADMISSION_RESOLUTION_SOURCE
-            .DURABLE_REJOIN_EXISTING_MEMBERSHIP,
-      },
-      reusedExistingMembership: true,
-    };
+    });
   }
 
   hasReusableJoinAdmissionConnectionState(connectionState) {
@@ -168,44 +156,41 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   canReuseObservedJoinAdmissionNodeRow(nodeRow) {
-    if (!nodeRow || typeof nodeRow !== 'object') {
-      return false;
-    }
-
-    const cachedNodeAddress = normalizeString(
-      nodeRow[COLUMN.NODE_ADDRESS],
-    );
-    const currentNodeAddress = normalizeString(this.nodeAddress);
-    if (cachedNodeAddress.length > 0 &&
-      currentNodeAddress.length > 0 &&
-      cachedNodeAddress !== currentNodeAddress) {
-      return false;
-    }
-
-    if (NON_REUSABLE_NODE_STATUSES.includes(
-      normalizeString(nodeRow[COLUMN.STATUS]),
-    )) {
-      return false;
-    }
-
-    return this.hasReusableJoinAdmissionConnectionState(
-      nodeRow[COLUMN.CONNECTION_STATE],
+    return canReuseObservedJoinAdmissionNodeRowForAddress(
+      nodeRow,
+      this.nodeAddress,
     );
   }
 
   async resolveExistingJoinAdmissionProgress() {
-    if (!(await this.hasDurableRejoinStorageContinuity())) {
+    const hasDurableContinuity =
+      await this.hasDurableRejoinStorageContinuity();
+    const latchedBootIncarnation = normalizeKnownNodeBootIncarnation(
+      this.latchedRegistrationBootIncarnation,
+    );
+    const hasLatchedSameBootAttempt = latchedBootIncarnation > 0;
+    if (!hasDurableContinuity && !hasLatchedSameBootAttempt) {
       return null;
     }
 
     const authoritativeNodeRow =
       await this.readAuthoritativeDurableRejoinNodeRow();
-    if (!this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow)) {
+    const observedBootIncarnation = normalizeKnownNodeBootIncarnation(
+      readObservedBootIncarnation(authoritativeNodeRow),
+    );
+    const sameBootRetry =
+      hasLatchedSameBootAttempt &&
+      observedBootIncarnation === latchedBootIncarnation;
+    if (
+      !this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow) ||
+      (!hasDurableContinuity && !sameBootRetry)
+    ) {
       return null;
     }
     const currentIncarnation = normalizeKnownNodeBootIncarnation(
       this.getRegistrationBootIncarnation(),
     );
+    this.latchedRegistrationBootIncarnation = currentIncarnation;
 
     const authoritativeEndpointOutcome =
       await this.readAuthoritativeNodeEndpointRowOutcome();
@@ -213,32 +198,33 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const metaEndpointOutcome =
       await this.readAuthoritativeMetaEndpointRowsOutcome();
     this.throwIfAuthoritativeRowsUnavailable(metaEndpointOutcome);
-    const storageIncarnation =
-      readObservedStorageIncarnation(
-        authoritativeNodeRow,
-        authoritativeEndpointOutcome.row,
-      ) || currentIncarnation;
-    const endpointRow = authoritativeEndpointOutcome.row ?
-      stampEndpointStorageIncarnationMetadata(
-        authoritativeEndpointOutcome.row,
-        storageIncarnation,
-      ) :
-      null;
-    return {
-      nodeRow: buildReentryNormalizedNodeRow(
-        authoritativeNodeRow,
-        this.delegates.getNow()(),
-        currentIncarnation,
-        storageIncarnation,
-      ),
-      observedNodeRow: authoritativeNodeRow,
-      endpointRow,
+    const observedStorageIncarnation = readObservedStorageIncarnation(
+      authoritativeNodeRow,
+      authoritativeEndpointOutcome.row,
+    );
+    let storageIncarnation = observedStorageIncarnation;
+    if (storageIncarnation === null) {
+      if (sameBootRetry) {
+        storageIncarnation = this.getRegistrationStorageIncarnation();
+      } else if (
+        !authoritativeEndpointOutcome.row &&
+        observedBootIncarnation === 1
+      ) {
+        storageIncarnation = 1;
+      }
+    }
+    if (storageIncarnation !== null) {
+      this.latchedRegistrationStorageIncarnation = storageIncarnation;
+    }
+    return buildExistingJoinAdmissionProgressResolution({
+      authoritativeNodeRow,
+      authoritativeEndpointRow: authoritativeEndpointOutcome.row,
       metaEndpointRows: metaEndpointOutcome.rows,
+      now: this.delegates.getNow()(),
+      currentIncarnation,
       storageIncarnation,
-      resolution: {
-        source: JOIN_ADMISSION_RESOLUTION_SOURCE.EXISTING_PROGRESS,
-      },
-    };
+      sameBootRetry,
+    });
   }
 
   /**
@@ -265,20 +251,9 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return false;
     }
     const fence = await this.resolveClusterIncarnationFence();
-    if (
-      !fence ||
-      typeof fence !== 'object' ||
-      fence.allowed !== true ||
-      fence.durableMembershipState ===
-        CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE.ABSENT
-    ) {
-      return false;
-    }
-    return (
-      fence.durableMembershipState ===
-        CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE.PRESENT ||
-      this.getJoinLifecycleIntentType() ===
-        MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
+    return isDurableRejoinFenceContinuityPresent(
+      fence,
+      this.getJoinLifecycleIntentType(),
     );
   }
 
@@ -350,23 +325,29 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   getRegistrationBootIncarnation() {
-    const effective = normalizeKnownNodeBootIncarnation(
-      this.effectiveRegistrationBootIncarnation,
+    const latched = normalizeKnownNodeBootIncarnation(
+      this.latchedRegistrationBootIncarnation,
     );
-    return effective > 0 ? effective : this.delegates.getBootIncarnation();
+    return latched > 0 ? latched : this.delegates.getBootIncarnation();
   }
 
-  hasConfiguredAuthoritativeControlPlaneSource() {
-    return this.getAuthoritativeControlPlaneView()?.canRead() === true;
+  getRegistrationStorageIncarnation() {
+    const latched = normalizeKnownNodeBootIncarnation(
+      this.latchedRegistrationStorageIncarnation,
+    );
+    return latched > 0 ? latched : this.getRegistrationBootIncarnation();
   }
 
   async advanceFreshStorageIncarnationFloorFromCluster() {
+    const latched = normalizeKnownNodeBootIncarnation(
+      this.latchedRegistrationBootIncarnation,
+    );
+    if (latched > 0) {
+      return latched;
+    }
     const currentIncarnation = normalizeKnownNodeBootIncarnation(
       this.getRegistrationBootIncarnation(),
     );
-    if (!this.hasConfiguredAuthoritativeControlPlaneSource()) {
-      return currentIncarnation;
-    }
     const nodeOutcome =
       await this.readAuthoritativeDurableRejoinNodeRowOutcome();
     this.throwIfAuthoritativeRowsUnavailable(nodeOutcome);
@@ -378,14 +359,15 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       nodeOutcome,
       endpointOutcome,
     );
+    const nextIncarnation =
+      highestObservedIncarnation > 0 ?
+        Math.max(currentIncarnation, highestObservedIncarnation + 1) :
+        currentIncarnation;
+    this.latchedRegistrationBootIncarnation = nextIncarnation;
+    this.latchedRegistrationStorageIncarnation = nextIncarnation;
     if (highestObservedIncarnation <= 0) {
-      return currentIncarnation;
+      return nextIncarnation;
     }
-    const nextIncarnation = Math.max(
-      currentIncarnation,
-      highestObservedIncarnation + 1,
-    );
-    this.effectiveRegistrationBootIncarnation = nextIncarnation;
     if (hasFunction(this.delegates.raiseBootIncarnationFloor)) {
       await this.delegates.raiseBootIncarnationFloor(nextIncarnation);
     }
@@ -472,6 +454,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       progress.observedNodeRow,
       progress.nodeRow,
     );
+    await this.advanceReusedEndpointRows(progress);
   }
 
   // The NODES registration is monotonic in its own mutation (D-7): a newer
@@ -662,9 +645,6 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async readAuthoritativeNodeEndpointRowOutcome() {
-    const expectedWsAddress = normalizeString(
-      this.resolveCanonicalWsAddress(),
-    );
     const outcome = await this.readAuthoritativeRows(
       TABLES.NODE_ENDPOINTS,
       `SELECT * FROM ${TABLES.NODE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
@@ -672,21 +652,11 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     );
     return {
       ...outcome,
-      row: outcome.rows.find((row) => {
-        const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
-        const transportType = normalizeString(
-          row?.[COLUMN.TRANSPORT_TYPE],
-        ).toLowerCase();
-        const status = normalizeString(
-          row?.[COLUMN.STATUS],
-        ).toLowerCase();
-        const address = normalizeString(row?.[COLUMN.ADDRESS]);
-        return nodeId === this.nodeId &&
-          transportType ===
-            String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
-          status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
-          address === expectedWsAddress;
-      }) || null,
+      row: filterAuthoritativeNodeEndpointRow(
+        outcome,
+        this.nodeId,
+        this.resolveCanonicalWsAddress(),
+      ),
     };
   }
 
@@ -702,26 +672,9 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
       [this.nodeId],
     );
-    const rows = outcome.state === AUTHORITATIVE_ROW_READ_STATE.READABLE ?
-      outcome.rows :
-      [];
-    const rowsByServiceId = new Map();
-    for (const row of rows) {
-      const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
-      const serviceId = normalizeString(row?.[COLUMN.SERVICE_ID]);
-      if (nodeId !== this.nodeId ||
-        !DURABLE_REJOIN_REQUIRED_SERVICE_IDS.includes(serviceId) ||
-        rowsByServiceId.has(serviceId)) {
-        continue;
-      }
-      rowsByServiceId.set(serviceId, row);
-    }
-
     return {
       ...outcome,
-      rows: DURABLE_REJOIN_REQUIRED_SERVICE_IDS
-        .map((serviceId) => rowsByServiceId.get(serviceId) || null)
-        .filter(Boolean),
+      rows: filterAuthoritativeMetaEndpointRows(outcome, this.nodeId),
     };
   }
 
@@ -747,9 +700,6 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async readExistingPartitionServiceRowsForNode() {
-    if (!this.hasConfiguredAuthoritativeControlPlaneSource()) {
-      return [];
-    }
     const outcome = await this.readAuthoritativePartitionServiceRowsOutcome();
     this.throwIfAuthoritativeRowsUnavailable(outcome);
     return outcome.rows;

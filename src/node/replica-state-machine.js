@@ -129,7 +129,7 @@ function defineReplicaLifecycleOwnerIncarnation(target, ownerIncarnation) {
       null,
     enumerable: true,
     writable: false,
-    configurable: false,
+    configurable: true,
   });
 }
 

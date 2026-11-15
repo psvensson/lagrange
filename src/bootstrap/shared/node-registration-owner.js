@@ -21,7 +21,6 @@ import {
   LOG_NODE_REGISTER_ERROR_PREFIX,
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
-  STORAGE_INCARNATION_FIELD,
 } from './node-registration-owner-constants.js';
 
 // The error code a registration failure surfaces: the direct `code` when
@@ -80,7 +79,8 @@ class NodeRegistrationOwner {
     this.membershipPublicationRuntimeOwner =
       options.membershipPublicationRuntimeOwner || null;
     this.joinAdmissionControlPlaneSystemTableGateway = null;
-    this.effectiveRegistrationBootIncarnation = null;
+    this.latchedRegistrationBootIncarnation = null;
+    this.latchedRegistrationStorageIncarnation = null;
   }
 
   async registerNodeInCluster() {
@@ -92,7 +92,6 @@ class NodeRegistrationOwner {
     });
 
     const now = this.delegates.getNow()();
-    this.effectiveRegistrationBootIncarnation = null;
 
     try {
       const existingMembership =
@@ -189,7 +188,7 @@ class NodeRegistrationOwner {
       const endpointRow =
         existingJoinAdmissionProgress?.endpointRow ||
         await this.registerNodeEndpoint(this.delegates.getNow()(), {
-          storageIncarnation: budgetRow?.[STORAGE_INCARNATION_FIELD],
+          storageIncarnation: this.getRegistrationStorageIncarnation(),
         });
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
@@ -209,7 +208,10 @@ class NodeRegistrationOwner {
         );
       }
 
-      const lostStorageReplicas = !existingJoinAdmissionProgress ?
+      const shouldReconcileLostStorage =
+        !existingJoinAdmissionProgress ||
+        existingJoinAdmissionProgress.sameBootRetry === true;
+      const lostStorageReplicas = shouldReconcileLostStorage ?
         await this.reconcileLostStoragePartitionReplicas(now) :
         [];
 
@@ -236,6 +238,7 @@ class NodeRegistrationOwner {
       nodeAddress: this.nodeAddress,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
       bootIncarnation: this.getRegistrationBootIncarnation(),
+      storageIncarnation: this.getRegistrationStorageIncarnation(),
       now,
     });
   }

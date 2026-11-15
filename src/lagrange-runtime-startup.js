@@ -235,7 +235,7 @@ async function startJoinNode(options) {
     nodeAddress: joiningNodeAddress,
     peerAddresses: seedNodeAddresses,
     clusterId: joinedClusterId,
-    bootIncarnation,
+    bootIncarnation: nodeJoiningService.bootIncarnation,
     logger: mainLogger,
   }), options.signal);
 
@@ -341,7 +341,7 @@ async function startJoinNode(options) {
     nodeId,
     nodeAddress: joiningNodeAddress,
     nodeRole: 'joiner',
-    bootIncarnation,
+    bootIncarnation: nodeJoiningService.bootIncarnation,
     [METADATA_GETTER_KEY]: () => metadata,
     logger: mainLogger,
   });

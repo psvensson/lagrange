@@ -37,6 +37,10 @@ import {
   OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
+  preserveOperationTargetNodeIncarnations,
+  readOperationTargetNodeBootIncarnation,
+  readOperationTargetNodeStorageIncarnation,
+  resolveTargetNodeIncarnationSnapshot,
 } from '../../src/rebalancer/replica-status.js';
 import {
   EntityType,
@@ -96,6 +100,7 @@ function createSeedReadyNodeRow() {
     node_id: TEST_SEED_NODE_ID,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.READY,
+    boot_incarnation: 1,
     ready_lease_expires_at: Date.now() + 60000,
   };
 }
@@ -107,6 +112,7 @@ function createBarrierHeldJoinerNodeRow(nodeId) {
     node_id: nodeId,
     status: NODE_STATE.ACTIVE,
     connection_state: NODE_STATE.CONNECTED,
+    boot_incarnation: 1,
     ready_lease_expires_at: 0,
   };
 }
@@ -303,6 +309,19 @@ function createWedgeCoordinator({
     }),
     cacheData: {
       nodes: nodeRows.map((row) => ({...row})),
+      node_endpoints: nodeRows.map((row) => {
+        const bootIncarnation = row.boot_incarnation ?? 1;
+        const storageIncarnation = row.storage_incarnation ?? bootIncarnation;
+        return {
+          endpoint_id: `ep-${row.node_id}-ws`,
+          node_id: row.node_id,
+          transport_type: 'websocket',
+          address: `ws://${row.node_id}:9000`,
+          status: 'active',
+          boot_incarnation: bootIncarnation,
+          metadata: JSON.stringify({storageIncarnation}),
+        };
+      }),
       services: rows.map((row) => ({...row})),
       partitions: [
         {
@@ -594,6 +613,23 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
   coordinator.initialize();
   try {
     const cache = new SystemTableCache();
+    cache.set = (tableName, key, row) => {
+      cache.tables.get(tableName)?.delete(key);
+      cache.tombstoneStore.clear();
+      cache.applySystemTableChange(tableName, 'INSERT', {...row});
+    };
+    cache.delete = (tableName, key) => {
+      const keyColumnByTable = {
+        [TABLES.NODES]: COLUMN.NODE_ID,
+        [TABLES.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+        [TABLES.SERVICE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+        [TABLES.SERVICES]: COLUMN.SERVICE_ID,
+        [TABLES.PARTITIONS]: COLUMN.PARTITION_ID,
+        [TABLES.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
+      };
+      const keyColumn = keyColumnByTable[tableName] || COLUMN.SERVICE_ID;
+      cache.applySystemTableChange(tableName, 'DELETE', {[keyColumn]: key});
+    };
     for (const tableName of [
       TABLES.NODES,
       TABLES.SERVICES,
@@ -614,33 +650,40 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
 
     const updateWhereCalls = [];
     const servicesOwner = new ServicesOwner({
-      updateWhere: async (whereClause, data, options) => {
-        updateWhereCalls.push({whereClause, data, options});
-        const existing = cache.get(
-          TABLES.SERVICES,
-          whereClause[COLUMN.SERVICE_ID],
-        );
-        if (
-          !existing ||
-          existing[COLUMN.NODE_ID] !== whereClause[COLUMN.NODE_ID]
-        ) {
+      controlPlaneSystemTableGateway: {
+        updateSystemTableRow: async (
+          tableName,
+          whereClause,
+          data,
+          options,
+        ) => {
+          updateWhereCalls.push({tableName, whereClause, data, options});
+          const existing = cache.get(
+            TABLES.SERVICES,
+            whereClause[COLUMN.SERVICE_ID],
+          );
+          if (
+            !existing ||
+            existing[COLUMN.NODE_ID] !== whereClause[COLUMN.NODE_ID]
+          ) {
+            return {
+              success: true,
+              changes: 0,
+              partitionResult: {affectedRows: 0},
+            };
+          }
+          const updatedRow = {...existing, ...data};
+          cache.set(
+            TABLES.SERVICES,
+            whereClause[COLUMN.SERVICE_ID],
+            updatedRow,
+          );
           return {
             success: true,
-            changes: 0,
-            partitionResult: {affectedRows: 0},
+            changes: 1,
+            partitionResult: {affectedRows: 1},
           };
-        }
-        const updatedRow = {...existing, ...data};
-        cache.set(
-          TABLES.SERVICES,
-          whereClause[COLUMN.SERVICE_ID],
-          updatedRow,
-        );
-        return {
-          success: true,
-          changes: 1,
-          partitionResult: {affectedRows: 1},
-        };
+        },
       },
     });
     const membershipPublicationRuntimeOwner = {
@@ -909,19 +952,13 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
     // when its SERVICES row is absent.
     cache.delete(TABLES.SERVICES, TEST_JOINER_REPLACEMENT_REPLICA_ID);
     t.equal(
-      cache.tombstoneStore.isTombstoned(
-        TABLES.SERVICES,
-        TEST_JOINER_REPLACEMENT_REPLICA_ID,
-      ),
+      rebalancer.hasActiveServiceTombstone(TEST_JOINER_REPLACEMENT_REPLICA_ID),
       true,
       'deleting SERVICES row records a tombstone before clear()',
     );
     cache.tombstoneStore.clear();
     t.equal(
-      cache.tombstoneStore.isTombstoned(
-        TABLES.SERVICES,
-        TEST_JOINER_REPLACEMENT_REPLICA_ID,
-      ),
+      rebalancer.hasActiveServiceTombstone(TEST_JOINER_REPLACEMENT_REPLICA_ID),
       false,
       'tombstoneStore.clear() removes all SERVICES tombstones',
     );
@@ -965,6 +1002,221 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       ),
       false,
       'superseded terminal ADD does not project a ghost ACTIVE replica',
+    );
+
+    // 5. Boot-only historical operation metadata (targetNodeBootIncarnation: 1,
+    // no targetNodeStorageIncarnation): readOperationTargetNodeStorageIncarnation
+    // returns null, preserveOperationTargetNodeIncarnations does not fabricate
+    // targetNodeStorageIncarnation, and terminal projection is withheld when
+    // SERVICES row is absent.
+    const bootOnlyOperation = {
+      ...terminalAddOperation,
+      operation_id: 'op-add-joiner-b-boot-only',
+      steps_history: JSON.stringify([
+        {
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: 2000,
+          [OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION]: 1,
+        },
+      ]),
+    };
+    const bootOnlyHistory = JSON.parse(bootOnlyOperation.steps_history);
+    t.equal(
+      readOperationTargetNodeBootIncarnation(
+        bootOnlyOperation,
+        bootOnlyHistory,
+      ),
+      1,
+      'boot-only operation preserves targetNodeBootIncarnation = 1',
+    );
+    t.equal(
+      readOperationTargetNodeStorageIncarnation(
+        bootOnlyOperation,
+        bootOnlyHistory,
+      ),
+      null,
+      'readOperationTargetNodeStorageIncarnation returns null when storageIncarnation is absent',
+    );
+    const preservedStep = preserveOperationTargetNodeIncarnations(
+      bootOnlyOperation,
+      {step: WORKFLOW_STEP.ACTIVE, timestamp: 2500},
+    );
+    t.equal(
+      preservedStep[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION],
+      1,
+      'preserveOperationTargetNodeIncarnations keeps explicit boot incarnation',
+    );
+    t.equal(
+      OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION in preservedStep,
+      false,
+      'preserveOperationTargetNodeIncarnations never fabricates targetNodeStorageIncarnation from bootIncarnation',
+    );
+    // Restore coherent boot=2, storage=1 in cache (valid durable restart state)
+    // and verify bootOnlyOperation is still withheld when SERVICES row is absent.
+    cache.set(TABLES.NODES, TEST_JOINER_NODE_ID_B, {
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.NODE_ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: NODE_STATE.READY,
+      [COLUMN.BOOT_INCARNATION]: 2,
+      [COLUMN.CREATED_AT]: 1000,
+      [COLUMN.LAST_HEARTBEAT]: 3000,
+    });
+    cache.set(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`, {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_JOINER_NODE_ID_B}-ws`,
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.TRANSPORT_TYPE]: 'websocket',
+      [COLUMN.ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.BOOT_INCARNATION]: 2,
+      [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
+    });
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        bootOnlyOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'boot-only operation metadata is withheld when SERVICES row is absent',
+    );
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'valid same-storage durable restart (boot 1 -> 2, storageIncarnation 1 in NODE_ENDPOINTS) remains authorized',
+    );
+
+    // 6. Staggered NODES vs NODE_ENDPOINTS delivery in both orders using
+    // persisted-schema-conformant rows (no storage_incarnation column on NODES):
+    // Order A: new NODES (boot 3) arrives before new NODE_ENDPOINTS (boot 3)
+    // while old NODE_ENDPOINTS (boot 1, storageIncarnation 1) is still in cache.
+    cache.set(TABLES.NODES, TEST_JOINER_NODE_ID_B, {
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.NODE_ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: NODE_STATE.READY,
+      [COLUMN.BOOT_INCARNATION]: 3,
+      [COLUMN.CREATED_AT]: 4000,
+      [COLUMN.LAST_HEARTBEAT]: 4000,
+    });
+    cache.set(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`, {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_JOINER_NODE_ID_B}-ws`,
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.TRANSPORT_TYPE]: 'websocket',
+      [COLUMN.ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.BOOT_INCARNATION]: 1,
+      [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
+    });
+    t.same(
+      resolveTargetNodeIncarnationSnapshot(cache, TEST_JOINER_NODE_ID_B),
+      {bootIncarnation: 3, storageIncarnation: null},
+      'Order A staggered delivery (NODES boot 3, NODE_ENDPOINTS boot 1) yields storageIncarnation: null',
+    );
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'Order A staggered delivery withholds terminal projection until coherent NODE_ENDPOINTS arrives',
+    );
+    // Now new NODE_ENDPOINTS (boot 3) arrives:
+    // - If durable restart preserved storageIncarnation: 1 -> authorized (false)
+    // - If wiped-disk rejoin minted storageIncarnation: 3 -> superseded (true)
+    cache.set(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`, {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_JOINER_NODE_ID_B}-ws`,
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.TRANSPORT_TYPE]: 'websocket',
+      [COLUMN.ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.BOOT_INCARNATION]: 3,
+      [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
+    });
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'Order A coherent NODE_ENDPOINTS (boot 3, storage 1) authorizes projection',
+    );
+    cache.set(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`, {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_JOINER_NODE_ID_B}-ws`,
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.TRANSPORT_TYPE]: 'websocket',
+      [COLUMN.ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.BOOT_INCARNATION]: 3,
+      [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 3}),
+    });
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'Order A coherent NODE_ENDPOINTS (boot 3, storage 3) supersedes projection',
+    );
+
+    // Order B: new NODE_ENDPOINTS (boot 3, storage 1) arrives before new NODES
+    // (boot 3) while old NODES (boot 1) is still in cache.
+    cache.set(TABLES.NODES, TEST_JOINER_NODE_ID_B, {
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.NODE_ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: NODE_STATE.READY,
+      [COLUMN.BOOT_INCARNATION]: 1,
+      [COLUMN.CREATED_AT]: 1000,
+      [COLUMN.LAST_HEARTBEAT]: 1000,
+    });
+    cache.set(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`, {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_JOINER_NODE_ID_B}-ws`,
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.TRANSPORT_TYPE]: 'websocket',
+      [COLUMN.ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.BOOT_INCARNATION]: 3,
+      [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
+    });
+    t.same(
+      resolveTargetNodeIncarnationSnapshot(cache, TEST_JOINER_NODE_ID_B),
+      {bootIncarnation: 1, storageIncarnation: null},
+      'Order B staggered delivery (NODES boot 1, NODE_ENDPOINTS boot 3) yields storageIncarnation: null',
+    );
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'Order B staggered delivery withholds terminal projection until NODES boot 3 arrives',
+    );
+    cache.set(TABLES.NODES, TEST_JOINER_NODE_ID_B, {
+      [COLUMN.NODE_ID]: TEST_JOINER_NODE_ID_B,
+      [COLUMN.NODE_ADDRESS]: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: NODE_STATE.READY,
+      [COLUMN.BOOT_INCARNATION]: 3,
+      [COLUMN.CREATED_AT]: 1000,
+      [COLUMN.LAST_HEARTBEAT]: 4000,
+    });
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        terminalAddOperation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'Order B authorizes projection once NODES boot 3 arrives to match NODE_ENDPOINTS boot 3',
     );
   } finally {
     await coordinator.shutdown();

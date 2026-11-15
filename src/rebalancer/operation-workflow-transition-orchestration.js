@@ -341,8 +341,9 @@ class OperationWorkflowTransitionOrchestration
       previousStep,
       now,
     ), stepMetadata);
-    const currentStepsHistory =
-      normalizeOperationWorkflowTransitionStepsHistory(operation);
+    const currentStepsHistory = Array.isArray(operation?.stepsHistory) ?
+      operation.stepsHistory :
+      [];
     const projectedOperation = {
       ...operation,
       workflowStep: step,
