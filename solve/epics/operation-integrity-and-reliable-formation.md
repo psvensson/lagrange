@@ -111,7 +111,72 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (12 November 2026)
+## Current integration summary (15 November 2026)
+
+- **Governing rules and source:** rule-set revision 5, integrated from
+  `origin/main` `c4f1cd064bee29d174ba63d0d8d52486651bc59f` into candidate branch
+  `work/integrated-candidate-20261115`. All five active repair streams are
+  verified within their bounded scopes and composed on one candidate lineage.
+- **Bounded repairs composed in the 15 November 2026 candidate:**
+  - **Stream 5b -- Foundation PRs `#208`-`#211` (`2dc0ca4cc..40cc67121`):**
+    canonical JSON data-plane serialization, Raft durable-store connection
+    custody, CDC timer-until-shutdown resource cleanup, and `PR206`
+    replica-lifecycle observation row-carrier cut.
+  - **Stream 4 -- [cdc-oversized-entry-range-scan](../quests/cdc-oversized-entry-range-scan/quest.json) (`3c2c3af13`):**
+    eliminates repeated $O(M)$ position scans of oversized CDC entries in
+    `composeCdcShipRange` via SQLite `SELECT_OWED_ENTRY_BYTES` (`<= 4` queries
+    per wave at 512, 1024, and 4096 events), pages `firstReadyRow` by
+    `DRIVE_PAGE_ROWS`, and uses position-only `readOwedCdcObligationPositions`
+    in `drainPendingHydratedObligations` while preserving `S-12` and `S-13`.
+  - **Stream 5a -- [node-ready-lease-renewal-cadence](../quests/node-ready-lease-renewal-cadence/quest.json) & authoritative `SERVICES` incarnation merge (`fb634397f`):**
+    aligns `HeartbeatService` renewal cadence defaults (`5000 ms` renewal for
+    `15000 ms` lease), preserves `port` and `create_attempt_token` across
+    same-incarnation and monotonic `version` / `updated_at` advancement in
+    `buildAuthoritativeServiceLifecycleCacheReplacement`, and binds the
+    affinity demo formation verdict to explicit convergence.
+  - **Stream 2 -- [formation-ready-lease-independent-of-spread](../quests/formation-ready-lease-independent-of-spread/quest.json) (`#217`, `5bc4d0769..ebd94a498`):**
+    retires the formation-cohort spread gate on `NODES.status = READY` and the
+    associated formation-release handoff machinery (`~29,770` net lines deleted
+    across `src/`, `models/`, `scripts/`, and `test/`), enforces the
+    `READY`-lease + voter-ready floor on priority `REMOVE` safety
+    (`9e943db3` defect class), and seals all 9 priority-recovery cases
+    (`Cases 1-9`, including `Case 6` post-ADD old-owner removal and `Case 9`
+    superseded target cleanup).
+  - **Stream 1 -- Comparative harness & explicit provisioning (`#218`, `#219`, `6855453b6..0f0392838`):**
+    lands [comparative-explicit-load-generator](../quests/comparative-explicit-load-generator/quest.json)
+    and [comparative-campaign-explicit-provisioning](../quests/comparative-campaign-explicit-provisioning/quest.json),
+    enforces seed-first storage preparation and startup ownership in
+    `RealProductLagrangeDeployer`, eliminates duplicate seed bootstrap and
+    missing schema-readiness gates in `LagrangeOltpAdapter`, and restores
+    cohort-preserving per-case dataset reset across comparative workloads.
+- **Service and aggregate acceptance status (R09 / R19 / R22):**
+  bounded deterministic, differential, and unit/integration proofs for the five
+  streams are green on their verified trees, but neither the unchanged physical
+  three-node service gate
+  ([fresh-formation-user-table-routability](../quests/fresh-formation-user-table-routability/evidence/receipt.json))
+  nor the broader epic aggregate
+  ([canonical-authority-formation-acceptance](../quests/canonical-authority-formation-acceptance/quest.json))
+  is claimed as passed until the frozen integrated candidate completes its
+  three-consecutive-run physical formation journey and all required aggregate
+  receipts are admitted.
+- **Next action:** execute the public formation journey
+  `fresh-formation-user-table-routability` on `tv-dator` and the combined
+  cross-stream regression shards on `adams-gamla` and `carinas-windows` against
+  the frozen `work/integrated-candidate-20261115` SHA, followed by physical
+  three-node qualification (`E9`) and `Q12` aggregate receipt admission.
+
+### Integrated candidate commit table (15 November 2026)
+
+| Layer | Stream | Commit range (`work/integrated-candidate-20261115`) | Bounded scope and verification witness |
+| --- | --- | --- | --- |
+| Base | `origin/main` | `c4f1cd064` | Clean starting baseline (`#216` merged). |
+| Layer 1 | Stream 5b (`#208`-`#211`) | `2dc0ca4cc..40cc67121` | Canonical JSON data plane, durable-store connection custody, CDC timer shutdown resource, and `PR206` lifecycle-observation cut; 6 test suites (60 assertions) green. |
+| Layer 2 | Stream 4 (`cdc-oversized-entry-range-scan`) | `3c2c3af13` | $O(1)$ SQLite query bound per oversized CDC wave, paged `firstReadyRow`, and position-only hydration drain; 14 CDC/topology test files (214 subtests) green. |
+| Layer 3 | Stream 5a (`node-ready-lease-renewal-cadence` + cache merge) | `fb634397f` | `HeartbeatService` renewal cadence alignment, authoritative `SERVICES` incarnation merge field preservation, and affinity formation verdict; 9 cache/lease/runtime test files (250 assertions) green. |
+| Layer 4 | Stream 2 (`formation-ready-lease-independent-of-spread` `#217`) | `5bc4d0769..ebd94a498` | Spread-independent `READY` lease, formation-barrier retirement, `READY`-lease voter-ready `REMOVE` floor, and 9 sealed priority-recovery cases; 55/55 convergence + 165/165 rebalancer tests green. |
+| Layer 5 | Stream 1 (`#218` + `#219` comparative harness & adapter) | `6855453b6..0f0392838` | Explicit comparative load generator & provisioning, seed-first Lagrange deployment, `LagrangeOltpAdapter` single-bootstrap/schema gate, and cohort-preserving reset; 16/16 harness test files (82 assertions) green. |
+
+### Prior planning summary (12 November 2026)
 
 - **Governing rules and source:** rule-set revision 5, inspected at
   main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd` and preserved WIP
@@ -217,7 +282,7 @@ The semantic owner is named even when no execution agent has been assigned.
 | Q5 | [Give replica completion one canonical observation](../quests/canonical-replica-completion-observation/quest.json) | Replica repository and completion/recovery consumers | high | Q1 |
 | Q6 | [Preserve policy currency for all outstanding reads](../quests/table-policy-outstanding-read-currency/quest.json) | Table-policy producer, outstanding reads and mutation consumer | medium to high | Q1 |
 | Q7 | [Retire routing protection only after the relevant state catches up](../quests/routing-overlay-complete-state-retirement/quest.json) | Query engine, cache/projection and query executor | medium to high | Q1 |
-| Q8 | [Restore formation progress without weakening safety](../quests/formation-spread-progress-at-cause/quest.json) | Planner, admission, membership and formation release; one writer | high | Q1, Q3 |
+| Q8 | [Restore formation progress without weakening safety](../quests/formation-spread-progress-at-cause/quest.json) (superseded at cause by [formation-ready-lease-independent-of-spread](../quests/formation-ready-lease-independent-of-spread/quest.json)) | Planner, admission, membership and formation release; one writer | high | Q1, Q3 |
 | Q9 | [Make failed and successful startup terminate naturally](../quests/node-startup-natural-shutdown/quest.json) | Node lifecycle and retained resource owners | medium to high | Q1 |
 | Q10 | [Unify lab, census and benchmark evidence custody](../quests/lab-census-benchmark-evidence-custody/quest.json) | Canonical lab runner, census and benchmark proof producers | medium | Q3 |
 | Q11 | [Close legacy and fallback removal by semantic owner](../quests/repository-legacy-fallback-closure/quest.json) | Existing per-owner retirement Quests; integration owns global reconciliation | scope dependent; potentially large | P0 |
@@ -909,3 +974,16 @@ Quest evidence above govern continuation.
   = `5000 ms` for a `15000 ms` lease) and eliminate `Number(null) -> 0`
   timestamp coercion across `NodeReadyLeaseAuthority`, `LeaseService`,
   `node-readiness-policy.js`, and `message-group-target-resolver.js`.
+- 2026-11-15: Assembled integrated candidate `work/integrated-candidate-20261115`
+  from `origin/main` `c4f1cd064bee29d174ba63d0d8d52486651bc59f` combining
+  Stream 5b (`#208`-`#211`, `2dc0ca4cc..40cc67121`), Stream 4
+  (`cdc-oversized-entry-range-scan`, `3c2c3af13`), Stream 5a
+  (`node-ready-lease-renewal-cadence` and authoritative `SERVICES` incarnation
+  merge, `fb634397f`), Stream 2 (`formation-ready-lease-independent-of-spread`
+  `#217`, `READY`-lease voter-ready `REMOVE` floor, and 9 sealed recovery
+  cases, `5bc4d0769..ebd94a498`), and Stream 1 (`#218`, `#219`, seed-first
+  startup ownership, `LagrangeOltpAdapter` single-bootstrap/schema gate, and
+  cohort-preserving reset, `6855453b6..0f0392838`). Preserved R09/R19/R22
+  separation between bounded stream verification and pending physical
+  three-node formation (`fresh-formation-user-table-routability`) / `Q12`
+  aggregate acceptance.
