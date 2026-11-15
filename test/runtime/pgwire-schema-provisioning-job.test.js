@@ -163,3 +163,45 @@ test(
     }))));
   },
 );
+
+test(
+  'pending schema job from background retry transition projects 55P03 ' +
+  'instead of CommandComplete',
+  async () => {
+    const socket = new RecordingSocket();
+    const handler = new PgWireProtocolHandler({
+      adapter: {
+        async execute() {
+          return {
+            success: true,
+            statementType: 'CREATE_TABLE',
+            contractState: 'pending',
+            nextAction: 'retry',
+            jobId: 'schema-job-orders',
+            reasonCodes: ['replica_convergence_pending'],
+            retryAfterMs: 250,
+            provisioningDeadlineExpired: false,
+          };
+        },
+      },
+      socket,
+      logger: LOGGER,
+    });
+    handler._session = SESSION;
+
+    await handler._executeAndSend(
+      'CREATE TABLE orders (o_id INT PRIMARY KEY)',
+      [],
+    );
+
+    assert.equal(socket.messages.length, 1);
+    assert.equal(socket.messages[0][0], PG_BACKEND_MSG.ERROR_RESPONSE);
+    assert.ok(socket.messages[0].includes(Buffer.from(
+      PG_ERROR_CODE.LOCK_NOT_AVAILABLE,
+    )));
+    assert.ok(socket.messages[0].includes(Buffer.from(JSON.stringify({
+      provisioning_job_id: 'schema-job-orders',
+      retry_after_ms: 250,
+    }))));
+  },
+);

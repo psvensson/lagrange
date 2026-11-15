@@ -4,6 +4,8 @@
  * @module runtime/pgwire-result-mapper
  */
 
+import {OWNER_CONTRACT_STATE} from
+  '../control-plane/owner-contract-outcome.js';
 import {
   readAffectedRowCount,
   readExecutedStatementType,
@@ -69,7 +71,7 @@ const fixedTag = (tag) => () => tag;
 // lifecycle command, or the EXPLAIN DISTRIBUTED operation) -> the
 // CommandComplete tag. DML and SELECT carry their counts; every other kind
 // is named by its own statement. Kinds the engine refuses to execute
-// (DROP, CREATE INDEX) never reach the mapper.
+// (DROP TABLE) never reach the mapper.
 const COMMAND_TAG_BY_STATEMENT_TYPE = new Map([
   [AST_TYPE.SELECT, (result) =>
     `SELECT ${Array.isArray(result?.rows) ? result.rows.length : 0}`],
@@ -82,6 +84,8 @@ const COMMAND_TAG_BY_STATEMENT_TYPE = new Map([
   [AST_TYPE.TRUNCATE, fixedTag('TRUNCATE TABLE')],
   [AST_TYPE.CREATE_TABLE, fixedTag('CREATE TABLE')],
   [AST_TYPE.ALTER_TABLE, fixedTag('ALTER TABLE')],
+  [AST_TYPE.CREATE_INDEX, fixedTag('CREATE INDEX')],
+  [AST_TYPE.DROP_INDEX, fixedTag('DROP INDEX')],
   [AST_TYPE.BEGIN_TRANSACTION, fixedTag('BEGIN')],
   [AST_TYPE.COMMIT, fixedTag('COMMIT')],
   [AST_TYPE.ROLLBACK, fixedTag('ROLLBACK')],
@@ -214,16 +218,16 @@ function extractWireErrorDetail(error) {
 }
 
 /**
- * Raise a retryable PostgreSQL 55P03 error when a schema provisioning deadline
- * expires while the durable job remains active.
+ * Raise a retryable PostgreSQL 55P03 error when a schema provisioning job
+ * remains pending or its request deadline expires while active.
  *
  * @param {Object} result - SqlCore execution result.
  */
 function throwIfProvisioningDeadlineExpired(result) {
-  if (
-    result?.provisioningDeadlineExpired !== true ||
-    typeof result?.jobId !== LOCAL_STR_STRING
-  ) {
+  const provisioningRemainsActive =
+    result?.provisioningDeadlineExpired === true ||
+    result?.contractState === OWNER_CONTRACT_STATE.PENDING;
+  if (!provisioningRemainsActive || typeof result?.jobId !== LOCAL_STR_STRING) {
     return;
   }
   const error = new Error(LOCAL_STR_SCHEMA_PROVISIONING_ACTIVE);

@@ -107,6 +107,8 @@ describe('deriveCommandTag tags the executed statement kind', () => {
       [{statementType: 'SELECT'}, 'SELECT 0'],
       [{statementType: 'CREATE_TABLE'}, 'CREATE TABLE'],
       [{statementType: 'ALTER_TABLE'}, 'ALTER TABLE'],
+      [{statementType: 'CREATE_INDEX'}, 'CREATE INDEX'],
+      [{statementType: 'DROP_INDEX'}, 'DROP INDEX'],
       [{statementType: 'BEGIN_TRANSACTION'}, 'BEGIN'],
       [{statementType: 'COMMIT'}, 'COMMIT'],
       [{statementType: 'ROLLBACK'}, 'ROLLBACK'],

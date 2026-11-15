@@ -1,3 +1,5 @@
+import {OWNER_CONTRACT_STATE} from
+  '../control-plane/owner-contract-outcome.js';
 import {validateUserTableCreateIntent} from './user-table-create-intent.js';
 import {SCHEMA_PROVISIONING_ERROR_CODE} from
   './schema-provisioning-job-constants.js';
@@ -61,7 +63,10 @@ const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
           committed = {gateway, positions};
         }),
     );
-    if (result?.provisioningDeadlineExpired !== true) {
+    if (
+      result?.provisioningDeadlineExpired !== true &&
+      result?.contractState !== OWNER_CONTRACT_STATE.PENDING
+    ) {
       await awaitCreateTableProjection(committed, options.abortSignal);
     }
     return result;
