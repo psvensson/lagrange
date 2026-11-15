@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "395ecd8f16118a5264fdddd3c54991952285ebbc4e2df28c6a9d8d1029f3dba1"
+        "sha256": "04d52cd0774ac55b8b07435aeea43c1fa33df23ceb58d988e52b1c884f20a6e1"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3550479,
-        "sha256": "bbf8028f603b067fd83946c9f48d2d84ca7ded79c5d9a82d0261d38b017d5fbc"
+        "sha256": "08f3d36ead908ce21850f1df2cecd70116d4dad4e289155575da1a48bb79edc3"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "617b8bbd15a5d4d524a787ea7217a9a90f48e0ddc5fb7f2ae493a863a9eedec6"
+        "sha256": "691ee2a2efb3ec76e0b3044f29a3fc83b7cf8dfe8b46a39bdddc8d50d61881ab"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "6c06ce58d8771cda91afe1b31d29376ac5caa07da602394673adcd3644b09753"
+    "inputDigest": "5e5e485541552d6ff0ebbfa4ab5e837d93decf59462d5e8348b8d832cff42de7"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "395ecd8f16118a5264fdddd3c54991952285ebbc4e2df28c6a9d8d1029f3dba1"
+        "sha256": "04d52cd0774ac55b8b07435aeea43c1fa33df23ceb58d988e52b1c884f20a6e1"
       },
-      "declaredCount": 1702,
-      "observedCount": 1702,
-      "assignedCount": 1702
+      "declaredCount": 1703,
+      "observedCount": 1703,
+      "assignedCount": 1703
     },
     "cognitive": {
       "identity": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "617b8bbd15a5d4d524a787ea7217a9a90f48e0ddc5fb7f2ae493a863a9eedec6"
+          "sha256": "691ee2a2efb3ec76e0b3044f29a3fc83b7cf8dfe8b46a39bdddc8d50d61881ab"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -174,28 +174,28 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3550479,
-        "sha256": "bbf8028f603b067fd83946c9f48d2d84ca7ded79c5d9a82d0261d38b017d5fbc"
+        "sha256": "08f3d36ead908ce21850f1df2cecd70116d4dad4e289155575da1a48bb79edc3"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "36d01b7e52fc7a0ed1cd5c7a39b37ec06e67b0b1e183e12e943bd01cdeeb51b3",
+      "sourceDigest": "213ab6f462ee9b4afcb7f419315ae8eb451352831a02944ed355f65a5786f09f",
       "moduleCount": 6186,
       "edgeCount": 35165,
       "unresolvedCount": 47
     }
   },
   "assignment": {
-    "sourceSignalCount": 2381,
-    "assignedSignalCount": 2381,
-    "uniqueAssignmentCount": 2381,
-    "digest": "6c8fa5ce6e347ea3b391972494c3a3d1f82a13c6bb42346869bd921bd49412fc"
+    "sourceSignalCount": 2382,
+    "assignedSignalCount": 2382,
+    "uniqueAssignmentCount": 2382,
+    "digest": "357d638aea871fccb6a246c30e415cd2a4d133595bf919efd68a4323796793b9"
   },
   "signalCounts": {
     "cognitive": 145,
-    "complexity": 1702,
+    "complexity": 1703,
     "duplication": 452,
     "fileSize": 42,
     "lintExclusion": 40
@@ -329,8 +329,8 @@
         "src/bootstrap"
       ],
       "fileCount": 66,
-      "signalCount": 137,
-      "complexity": 115,
+      "signalCount": 138,
+      "complexity": 116,
       "cognitive": 18,
       "oversizedFiles": 3,
       "duplicatedLines": 64,
@@ -339,7 +339,7 @@
       "lintExclusions": 0,
       "importIn": 369,
       "importOut": 491,
-      "score": 646.4,
+      "score": 650.4,
       "topPaths": [
         "src/bootstrap/bootstrap-api-control-plane-methods.js",
         "src/bootstrap/node-joining-admission-readiness.js",
