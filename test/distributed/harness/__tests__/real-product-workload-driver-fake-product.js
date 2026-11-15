@@ -100,8 +100,9 @@ function productError(dialect) {
 }
 
 function createState() {
-  return {tables: new Map(), historySnapshots: 0, armed: false, removed: false, statements: [],
-    connections: 0, destroyed: 0, lockHolder: null, lockReleased: null, releaseLock: null};
+  return {tables: new Map(), indexes: new Map(), historySnapshots: 0, armed: false,
+    removed: false, statements: [], connections: 0, destroyed: 0, lockHolder: null,
+    lockReleased: null, releaseLock: null};
 }
 
 function rowsOf(state, table) {
@@ -369,6 +370,37 @@ function administrative(state, sql, parameters) {
   if (INSERT_BATCH_PATTERN.test(sql)) return insertBatch(state, sql, parameters);
   const created = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
   if (created) return createTable(state, created[1]);
+  const createdIndex =
+    /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/u.exec(sql);
+  if (createdIndex) {
+    const [, indexName, tableName, colText] = createdIndex;
+    const cols = arrayMap(stringSplit(colText, ','), (c) => stringTrim(c));
+    state.indexes.set(indexName, {
+      index_name: indexName,
+      table_name: tableName,
+      column_names: JSON.stringify(cols),
+      state: 'READY',
+      indexdef: `CREATE INDEX ${indexName} ON public.${tableName} USING btree (${cols.join(', ')})`,
+    });
+    return {rows: [], rowCount: 0};
+  }
+  const indexCatalog =
+    /^SELECT index_name, table_name, column_names, state FROM indices WHERE table_name = '([a-z0-9_]+)'$/u
+      .exec(sql);
+  if (indexCatalog) {
+    const rows = arrayFilter([...state.indexes.values()],
+      (entry) => entry.table_name === indexCatalog[1]);
+    return {rows, rowCount: rows.length};
+  }
+  const pgIndexCatalog =
+    /^SELECT indexname, tablename, indexdef FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/u
+      .exec(sql);
+  if (pgIndexCatalog) {
+    const entry = state.indexes.get(pgIndexCatalog[2]);
+    const rows = entry && entry.table_name === pgIndexCatalog[1] ?
+      [{indexname: entry.index_name, tablename: entry.table_name, indexdef: entry.indexdef}] : [];
+    return {rows, rowCount: rows.length};
+  }
   if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
   const truncated = /^TRUNCATE TABLE ([a-z_]+)$/u.exec(sql);
   if (truncated) {

@@ -275,7 +275,7 @@ function handleDatabaseDdl(store, session, normalized) {
   const createDbMatch = /^CREATE DATABASE `?([A-Za-z0-9_]+)`?$/iu.exec(normalized);
   if (createDbMatch) {
     store.databases.set(createDbMatch[1],
-      {tables: new Map(), baseline: new Map(), activeStaged: null});
+      {tables: new Map(), indexes: new Map(), baseline: new Map(), activeStaged: null});
     return {rows: [], rowCount: 0};
   }
   const useMatch = /^USE `?([A-Za-z0-9_]+)`?$/iu.exec(normalized);
@@ -295,6 +295,27 @@ function handleAdminSql(store, session, normalized, params) {
     tableRowsOf(db.tables, createTbl[1]);
     return {rows: [], rowCount: 0};
   }
+  const createIdx = /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu
+    .exec(normalized);
+  if (createIdx) {
+    const cols = arrayMap(stringSplit(createIdx[3], ','), (c) => stringTrim(c));
+    db.indexes.set(createIdx[1], {index_name: createIdx[1], table_name: createIdx[2],
+      column_names: JSON.stringify(cols), state: 'READY',
+      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`});
+    return {rows: [], rowCount: 0};
+  }
+  const idxCat = /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu
+    .exec(normalized);
+  if (idxCat) {
+    return {rows: arrayFilter([...db.indexes.values()], (e) => e.table_name === idxCat[1])};
+  }
+  const pgIdx = /^SELECT indexname, .+ FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/iu
+    .exec(normalized);
+  if (pgIdx) {
+    const e = db.indexes.get(pgIdx[2]);
+    return {rows: e && e.table_name === pgIdx[1] ?
+      [{indexname: e.index_name, tablename: e.table_name, indexdef: e.indexdef}] : []};
+  }
   if (/^(CREATE INDEX|DROP TABLE)/iu.test(normalized)) return {rows: [], rowCount: 0};
   const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
   if (truncateTbl) {
@@ -302,12 +323,8 @@ function handleAdminSql(store, session, normalized, params) {
     return {rows: [], rowCount: 0};
   }
   const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/iu.exec(normalized);
-  if (schemaProbe) {
-    return {rows: tableRowsOf(db.tables, schemaProbe[2]).slice(0, 1), rowCount: 0};
-  }
-  if (/^SELECT CONNECTION_ID\(\)/iu.test(normalized)) {
-    return {rows: [{connection_id: session.id}]};
-  }
+  if (schemaProbe) return {rows: tableRowsOf(db.tables, schemaProbe[2]).slice(0, 1), rowCount: 0};
+  if (/^SELECT CONNECTION_ID\(\)/iu.test(normalized)) return {rows: [{connection_id: session.id}]};
   if (stringStartsWith(normalized, 'SELECT (SELECT COUNT(*) FROM orders)')) {
     return {rows: [{orders_count: tableRowsOf(db.tables, 'orders').length,
       new_order_count: tableRowsOf(db.tables, 'new_order').length,
@@ -315,9 +332,7 @@ function handleAdminSql(store, session, normalized, params) {
       history_count: tableRowsOf(db.tables, 'history').length}]};
   }
   const countMatch = COUNT_PATTERN.exec(normalized);
-  if (countMatch) {
-    return {rows: [{row_count: tableRowsOf(db.tables, countMatch[1]).length}]};
-  }
+  if (countMatch) return {rows: [{row_count: tableRowsOf(db.tables, countMatch[1]).length}]};
   if (INSERT_BATCH_PATTERN.test(normalized)) return insertBatchRows(db, normalized, params);
   if (SNAPSHOT_PATTERN.test(normalized)) {
     return {rows: sortedSnapshotRows(selectReadView(db, session, store.fault), normalized)};
@@ -333,7 +348,8 @@ function createTransactionalOltpStore(fault = {}) {
     ensureDb(name) {
       const key = name || 'default_db';
       if (!store.databases.has(key)) {
-        store.databases.set(key, {tables: new Map(), baseline: new Map(), activeStaged: null});
+        store.databases.set(key,
+          {tables: new Map(), indexes: new Map(), baseline: new Map(), activeStaged: null});
       }
       return store.databases.get(key);
     },
