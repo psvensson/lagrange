@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2635,
+    "ordinary": 2636,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-ba76cfae",
+  "censusSize": 2662,
+  "digest": "fnv1a32-db4d49d4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1408,6 +1408,7 @@
     "test/partition/partition-cdc-invocation-custody.test.js": "ordinary",
     "test/partition/partition-cdc-lane-typed-backpressure.test.js": "ordinary",
     "test/partition/partition-cdc-lane-wave-isolation.test.js": "ordinary",
+    "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js": "ordinary",
     "test/partition/partition-cdc-obligation-provisional-tail-order.test.js": "ordinary",
     "test/partition/partition-cdc-obligation-range-differential.test.js": "ordinary",
     "test/partition/partition-cdc-obligation-range-shipping.test.js": "ordinary",

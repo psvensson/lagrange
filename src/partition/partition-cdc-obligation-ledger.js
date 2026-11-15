@@ -201,6 +201,19 @@ function readOwedCdcObligationPositions(db, {after, through, limit}) {
   }));
 }
 
+/**
+ * The summed payload byte length of all owed rows for one committed entry
+ * (`log_index`), or zero when none are owed or the ledger is absent.
+ * @param {Object} db - The partition's connection.
+ * @param {number} logIndex - The committed entry's log index.
+ * @return {number} The summed `octet_length(event_json)` of owed rows.
+ */
+function readOwedCdcEntryBytes(db, logIndex) {
+  if (!cdcObligationLedgerExists(db)) return 0;
+  const row = db.prepare(SQL.SELECT_OWED_ENTRY_BYTES).get({logIndex});
+  return Number(row.entry_bytes);
+}
+
 // A finite scan pass ends at this position even while new obligations arrive.
 // It is a scheduling bound, never evidence that any prefix was delivered.
 function readOwedCdcTail(db) {
@@ -563,6 +576,7 @@ export {
   readCdcObligationCensusIn,
   readCdcObligationProgress,
   readCdcObligationStanding,
+  readOwedCdcEntryBytes,
   readOwedCdcHead,
   readOwedCdcObligationPositions,
   readOwedCdcObligations,

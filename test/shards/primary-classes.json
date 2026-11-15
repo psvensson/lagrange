@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2306,
+    "unit": 2307,
     "integration": 124,
     "bootstrap": 224,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-4acc1a15",
+  "censusSize": 2662,
+  "digest": "fnv1a32-02795605",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1409,6 +1409,7 @@
     "test/partition/partition-cdc-invocation-custody.test.js": "unit",
     "test/partition/partition-cdc-lane-typed-backpressure.test.js": "unit",
     "test/partition/partition-cdc-lane-wave-isolation.test.js": "unit",
+    "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js": "unit",
     "test/partition/partition-cdc-obligation-provisional-tail-order.test.js": "unit",
     "test/partition/partition-cdc-obligation-range-differential.test.js": "unit",
     "test/partition/partition-cdc-obligation-range-shipping.test.js": "unit",

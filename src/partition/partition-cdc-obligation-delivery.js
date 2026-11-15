@@ -36,7 +36,7 @@ import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_
   PARTITION_CDC_OBLIGATION_ORIGIN as ORIGIN, PARTITION_CDC_OBLIGATION_REASON as REASON} from
   './partition-cdc-obligation-constants.js';
 import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, isCdcPositionReclaimed,
-  readCdcObligationProgress, readOwedCdcHead, readOwedCdcObligations} from
+  readCdcObligationProgress, readOwedCdcHead, readOwedCdcObligationPositions} from
   './partition-cdc-obligation-ledger.js';
 
 // The one acknowledgement proposer (see the header): (service, command) ->
@@ -677,7 +677,8 @@ function drainPendingHydratedObligations(delivery, lane) {
   if (throughLogIndex <= 0 || owner.isShutdown || !owner.db || !laneIsCurrent(delivery, lane)) {
     return 0;
   }
-  const obligations = readOwedCdcObligations(owner.db, {
+  const obligations = readOwedCdcObligationPositions(owner.db, {
+    after: null,
     through: {logIndex: throughLogIndex, ordinal: Number.MAX_SAFE_INTEGER},
     limit: Number.MAX_SAFE_INTEGER,
   });

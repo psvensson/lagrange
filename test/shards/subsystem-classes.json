@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 228,
+    "storage-partition": 229,
     "storage-raft": 151,
     "test-infrastructure": 172,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-e4e31b18",
+  "censusSize": 2662,
+  "digest": "fnv1a32-f7e12944",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8172836",
+  "observationDigest": "fnv1a32-bdb03819",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1428,6 +1428,7 @@
     "test/partition/partition-cdc-invocation-custody.test.js": "storage-partition",
     "test/partition/partition-cdc-lane-typed-backpressure.test.js": "storage-partition",
     "test/partition/partition-cdc-lane-wave-isolation.test.js": "storage-partition",
+    "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js": "storage-partition",
     "test/partition/partition-cdc-obligation-provisional-tail-order.test.js": "storage-partition",
     "test/partition/partition-cdc-obligation-range-differential.test.js": "storage-partition",
     "test/partition/partition-cdc-obligation-range-shipping.test.js": "storage-partition",
@@ -12444,6 +12445,32 @@
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/topology/cdc-group-propagation-service-harness.js"
+      ]
+    },
+    "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-cdc-obligation-delivery.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/partition-cdc-obligation-provisional-tail-order.test.js": {

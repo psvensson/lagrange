@@ -67,7 +67,8 @@ import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
   PARTITION_CDC_OBLIGATION_EVENT_FIELD as FIELD} from './partition-cdc-obligation-constants.js';
 import {countRetainedDeliveredCdcObligations, isCdcPositionReclaimed, readCdcObligationProgress,
-  readOwedCdcHead, readOwedCdcObligationPositions, readOwedCdcObligations, readOwedCdcTail} from
+  readOwedCdcEntryBytes, readOwedCdcHead, readOwedCdcObligationPositions, readOwedCdcObligations,
+  readOwedCdcTail} from
   './partition-cdc-obligation-ledger.js';
 import {cdcProgressHoldsCoverage} from './partition-cdc-obligation-progress.js';
 
@@ -175,21 +176,20 @@ function resolvePrePassStep(delivery, lane, obligation, acknowledge) {
   return PRE_PASS_STEP.READY;
 }
 
-// The first READY row after the scan cursor, one position read per row so
-// each row is judged as the ledger and the lane stand after the previous
-// row's acknowledgement: {state: READY, row}, the drained range when nothing
-// up to `through` is READY, or the backpressured range when the pass ends here.
+// The first READY row after the scan cursor, paged over positions while each
+// row is judged as the ledger and the lane stand after the previous row's
+// acknowledgement: {state: READY, row}, the drained range when nothing up to
+// `through` is READY, or the backpressured range when the pass ends here.
 function firstReadyRow(delivery, lane, through, acknowledge) {
   const {owner} = delivery;
-  for (;;) {
-    const [row] = readOwedCdcObligationPositions(owner.db,
-      {after: openScan(owner, lane).cursor, through, limit: 1});
-    if (!row) return DRAINED_RANGE;
+  for (const row of owedPositionsAfter(owner.db, openScan(owner, lane).cursor,
+    through, BOUND.DRIVE_PAGE_ROWS)) {
     const step = resolvePrePassStep(delivery, lane, row, acknowledge);
     if (step === PRE_PASS_STEP.BACKPRESSURE) return BACKPRESSURED_RANGE;
     if (step === PRE_PASS_STEP.READY) return {state: SHIP_RANGE_STATE.READY, row};
     advanceScanCursor(lane, row);
   }
+  return DRAINED_RANGE;
 }
 
 // The owed positions after `after` up to `through`, in log order, read in
@@ -204,37 +204,56 @@ function* owedPositionsAfter(db, after, through, pageRows) {
   }
 }
 
-// The ledger entries from the one `first` belongs to through the one
-// `through` belongs to, each with every row it still owes, in log order:
-// {rows, bytes}, `bytes` the summed payload bytes of those owed rows (what
-// decides how the entry ships, see the header).
+function isOversizedEntry(db, row) {
+  return row.eventBytes > BOUND.SHIP_MAX_BYTES ||
+    readOwedCdcEntryBytes(db, row.logIndex) > BOUND.SHIP_MAX_BYTES;
+}
+
+// The ledger entries from `first` through the entry `through` belongs to, in
+// log order: a whole entry ({rows, alone: false}) when its owed rows fit
+// SHIP_MAX_BYTES, or one single-row unit ({rows: [row], alone: true}) when the
+// entry's durable owed bytes exceed SHIP_MAX_BYTES so an oversized entry is
+// never scanned past the cut.
 function* owedEntriesFrom(db, first, through, pageRows) {
-  let entry = null;
-  for (const row of owedPositionsAfter(db, {logIndex: first.logIndex, ordinal: -1},
-    {logIndex: through.logIndex, ordinal: Number.MAX_SAFE_INTEGER}, pageRows)) {
-    if (entry !== null && row.logIndex !== entry.rows[0].logIndex) {
+  const endThrough = {logIndex: through.logIndex, ordinal: Number.MAX_SAFE_INTEGER};
+  if (isOversizedEntry(db, first)) {
+    yield {rows: [first], alone: true};
+    const [afterFirst] = readOwedCdcObligationPositions(db, {
+      after: positionOf(first),
+      through: endThrough,
+      limit: 1,
+    });
+    if (afterFirst) yield {rows: [afterFirst], alone: true};
+    return;
+  }
+  let entry = {rows: [first], alone: false};
+  for (const row of owedPositionsAfter(db, positionOf(first), endThrough, pageRows)) {
+    if (row.logIndex !== entry.rows[0].logIndex) {
       yield entry;
       entry = null;
+      if (isOversizedEntry(db, row)) {
+        yield {rows: [row], alone: true};
+        return;
+      }
+      entry = {rows: [row], alone: false};
+      continue;
     }
-    entry ??= {rows: [], bytes: 0};
     entry.rows.push(row);
-    entry.bytes += row.eventBytes;
   }
   if (entry !== null) yield entry;
 }
 
-// The units of one entry in the READY run that begins at `first`: its rows
-// before `first` were passed by the scan; a row pending acknowledgement ends
-// the run (`runEnded`). An entry that fits the byte bound gives one unit, its
-// consecutive READY rows; one that exceeds it gives one unit per READY row,
-// each travelling alone.
-function unitsOfEntry(lane, entry, first) {
-  const alone = entry.bytes > BOUND.SHIP_MAX_BYTES;
+// The units of one entry slice in the READY run that begins at `first`: a row
+// pending acknowledgement ends the run (`runEnded`). An entry that fits the
+// byte bound gives one unit, its consecutive READY rows; one that exceeds it
+// gives one unit per READY row, each travelling alone.
+function unitsOfEntry(lane, entry) {
   const units = [];
   for (const row of entry.rows) {
-    if (isBefore(row, first)) continue;
     if (lane.pending.has(row.eventKey)) return {units, runEnded: true};
-    if (alone || units.length === 0) units.push({rows: [], bytes: 0, alone});
+    if (entry.alone || units.length === 0) {
+      units.push({rows: [], bytes: 0, alone: entry.alone});
+    }
     units.at(-1).rows.push(row);
     units.at(-1).bytes += row.eventBytes;
   }
@@ -249,7 +268,7 @@ function unitsOfEntry(lane, entry, first) {
 // is read whole like every other, so neither ever ends a run inside a unit.
 function* shipUnitsFrom(db, lane, first, end, pageRows) {
   for (const entry of owedEntriesFrom(db, first, end.through, pageRows)) {
-    const {units, runEnded} = unitsOfEntry(lane, entry, first);
+    const {units, runEnded} = unitsOfEntry(lane, entry);
     yield* units;
     if (runEnded) return SHIP_RANGE_CUT.NOT_READY;
   }

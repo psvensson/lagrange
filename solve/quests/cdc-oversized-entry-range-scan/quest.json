@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-oversized-entry-range-scan",
+  "class": "fix",
+  "statement": "Eliminate repeated O(M) position scans of oversized CDC entries in composeCdcShipRange by reading entry owed byte totals in SQLite (SELECT_OWED_ENTRY_BYTES / readOwedCdcEntryBytes) and streaming per-ordinal units from first.ordinal - 1 without buffering the entire entry, page firstReadyRow position scans by DRIVE_PAGE_ROWS instead of single-row queries, and use readOwedCdcObligationPositions in drainPendingHydratedObligations so hydrated-prefix acknowledgement never reads event_json payloads while preserving S-12 shipping-unit and S-13 single-cut-authority invariants.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-oversized-entry-range-scan/evidence/receipt.json",
+      "requiredReceipts": [
+        "oversized-entry-scaling-witness",
+        "oversized-to-whole-transition-and-unit-rule",
+        "pending-hydrated-prefix-paging-and-position-only-drain"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "constant-query-work-per-oversized-entry-wave",
+      "statement": "Shipping one event from an oversized Raft entry (entry owed bytes > SHIP_MAX_BYTES) executes a constant O(1) number of SQLite read queries per wave (<= 4 queries across 512, 1024, and 4096 owed events in a single entry) by querying SELECT_OWED_ENTRY_BYTES in SQLite and starting owedEntriesFrom at first.ordinal - 1 with per-ordinal unit streaming when isOversizedEntry(db, row) holds."
+    },
+    {
+      "id": "preserve-s12-shipping-unit-and-s13-cut-authority",
+      "statement": "An entry whose durable owed bytes in _cdc_obligations exceed SHIP_MAX_BYTES ships one ordinal per vector with SHIP_RANGE_CUT.BYTES; once committed CDC_DELIVERED acknowledgements reduce its remaining owed bytes within SHIP_MAX_BYTES, the remaining READY ordinals are classified as one whole-entry unit (alone: false) and ship together. All existing ship-unit, ship-window, range-shipping, and range-differential invariants remain green."
+    },
+    {
+      "id": "paged-pre-pass-and-position-only-hydration-drain",
+      "statement": "firstReadyRow pages owed positions using owedPositionsAfter with BOUND.DRIVE_PAGE_ROWS instead of limit: 1 per row, and drainPendingHydratedObligations reads owed positions via readOwedCdcObligationPositions instead of reading event_json payloads via readOwedCdcObligations."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction"
+  ],
+  "sealedAt": "c4f1cd064bee29d174ba63d0d8d52486651bc59f"
+}
