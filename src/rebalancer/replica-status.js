@@ -147,6 +147,24 @@ function createOperation(params) {
     initialHistory[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] =
       params.sourceReplicaId;
   }
+  const targetNodeBootIncarnation = Number(params.targetNodeBootIncarnation);
+  const hasTargetNodeBootIncarnation =
+    Number.isSafeInteger(targetNodeBootIncarnation) &&
+    targetNodeBootIncarnation > 0;
+  if (hasTargetNodeBootIncarnation) {
+    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+      targetNodeBootIncarnation;
+  }
+  const targetNodeStorageIncarnation = Number(
+    params.targetNodeStorageIncarnation,
+  );
+  const hasTargetNodeStorageIncarnation =
+    Number.isSafeInteger(targetNodeStorageIncarnation) &&
+    targetNodeStorageIncarnation > 0;
+  if (hasTargetNodeStorageIncarnation) {
+    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+      targetNodeStorageIncarnation;
+  }
   const operation = {
     operationId: params.operationId,
     type: params.type,
@@ -162,6 +180,14 @@ function createOperation(params) {
     errorMessage: null,
     stepsHistory: [initialHistory],
   };
+  if (hasTargetNodeBootIncarnation) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+      targetNodeBootIncarnation;
+  }
+  if (hasTargetNodeStorageIncarnation) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+      targetNodeStorageIncarnation;
+  }
   // The planning membership epoch rides the operation record top-level so
   // the dispatch-time epoch gate can fence stale ADD/REPLACE execution
   // (audit finding 7); it is no longer duplicated into stepsHistory.
@@ -222,6 +248,9 @@ export {
   resolveReplicaOperationSemanticPhaseFromRecord,
   buildReplicaOperationSemanticWitnesses,
   isTerminalReplicaOperationSemanticPhase,
+  readOperationTargetNodeBootIncarnation,
+  readOperationTargetNodeStorageIncarnation,
+  resolveTargetNodeIncarnationSnapshot,
 } from './replica-operation-progress.js';
 
 // The one peer-admission rule over a services row's status, read by

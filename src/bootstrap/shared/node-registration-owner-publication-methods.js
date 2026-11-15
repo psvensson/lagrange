@@ -57,6 +57,7 @@ import {
   LOG_JOIN_ADMISSION_WRITE_RETRY,
   LOG_META_ENDPOINT_REGISTER_FAILED,
   NODE_REGISTRATION_ERROR,
+  STORAGE_INCARNATION_METADATA_KEY,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
@@ -245,7 +246,7 @@ class NodeRegistrationOwnerPublicationMethods {
     return `ep-${this.nodeId}-ws`;
   }
 
-  async registerNodeEndpoint(now) {
+  async registerNodeEndpoint(now, options = {}) {
     const logger = this.delegates.getLogger();
 
     logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERING, {
@@ -256,6 +257,12 @@ class NodeRegistrationOwnerPublicationMethods {
     const endpointId = this.resolveNodeEndpointId();
     const canonicalWsAddress =
       this.resolveCanonicalWsAddress();
+    const bootIncarnation = this.getRegistrationBootIncarnation();
+    const storageIncarnation =
+      Number.isSafeInteger(options?.storageIncarnation) &&
+      options.storageIncarnation > 0 ?
+        options.storageIncarnation :
+        bootIncarnation;
 
     const endpointData = {
       [COLUMN.ENDPOINT_ID]: endpointId,
@@ -263,7 +270,9 @@ class NodeRegistrationOwnerPublicationMethods {
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
       [COLUMN.ADDRESS]: canonicalWsAddress,
       [COLUMN.PRIORITY]: 0,
-      [COLUMN.METADATA]: JSON.stringify({}),
+      [COLUMN.METADATA]: JSON.stringify({
+        [STORAGE_INCARNATION_METADATA_KEY]: storageIncarnation,
+      }),
       [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
       [COLUMN.CREATED_AT]: now,
       [COLUMN.UPDATED_AT]: now,
@@ -703,6 +712,30 @@ class NodeRegistrationOwnerPublicationMethods {
         mutationOptions,
       );
     }
+    if (tableName === TABLES.SERVICES) {
+      const serviceId = normalizeString(
+        rowData?.[COLUMN.SERVICE_ID] || rowData?.[COLUMN.REPLICA_ID],
+      );
+      if (
+        serviceId.length > 0 &&
+        hasFunction(membershipPublicationRuntimeOwner?.servicesOwner?.updateService)
+      ) {
+        return membershipPublicationRuntimeOwner.servicesOwner.updateService(
+          serviceId,
+          rowData,
+          mutationOptions,
+        );
+      }
+      if (serviceId.length > 0) {
+        return this.updateJoinAdmissionSystemTableRowWithRetry(
+          TABLES.SERVICES,
+          {[COLUMN.SERVICE_ID]: serviceId},
+          rowData,
+          options,
+        );
+      }
+      return this.upsertJoinServiceRowWithRetry(rowData, options);
+    }
     if (tableName !== TABLES.NODE_ENDPOINTS &&
         tableName !== TABLES.SERVICE_ENDPOINTS) {
       throw new Error(
@@ -734,12 +767,13 @@ class NodeRegistrationOwnerPublicationMethods {
       return;
     }
 
-    const systemTableCache =
-      NodeService.getInstance().getSystemTableCache();
+    let systemTableCache = this.delegates.getSystemTableCache?.();
+    if (!systemTableCache) {
+      systemTableCache = NodeService.getInstance().getSystemTableCache();
+    }
     if (
       !systemTableCache ||
-      typeof systemTableCache.applySystemTableChange !==
-        'function'
+      !hasFunction(systemTableCache.applySystemTableChange)
     ) {
       return;
     }

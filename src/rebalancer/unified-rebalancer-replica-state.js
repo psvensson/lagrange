@@ -1,4 +1,8 @@
-import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {
+  readOperationRecordWorkflowStep,
+  readOperationTargetNodeStorageIncarnation,
+  resolveTargetNodeIncarnationSnapshot,
+} from './replica-operation-progress.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
@@ -429,26 +433,10 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     return serviceTombstones?.has(targetReplicaId) === true;
   }
 
-  readOperationComparisonTimestamp(operation) {
-    const normalizedOperation = normalizeReplicaOperationRecord(operation, {
-      nowMs: this.nowFn(),
-    });
-    for (const candidate of [
-      normalizedOperation.completedAt,
-      normalizedOperation.updatedAt,
-      normalizedOperation.createdAt,
-    ]) {
-      if (candidate !== null && candidate !== undefined) {
-        return Number(candidate);
-      }
-    }
-    return Number.NaN;
-  }
-
   /**
    * Whether a terminal ADD or REPLACE operation on an absent SERVICES row has
    * been superseded by an active SERVICES DELETE tombstone or by the target
-   * node re-registering with a newer NODES.created_at birth.
+   * node re-registering with a newer storageIncarnation.
    * @param {Object} operation
    * @param {string} targetNodeId
    * @param {string} targetReplicaId
@@ -463,17 +451,23 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     if (this.hasActiveServiceTombstone(targetReplicaId)) {
       return true;
     }
-    const targetNode = this.systemTableCache?.get(
-      SYSTEM_TABLE_NAME.NODES,
+    const targetIncarnationSnapshot = resolveTargetNodeIncarnationSnapshot(
+      this.systemTableCache,
       targetNodeId,
     );
-    const nodeCreatedAt = Number(targetNode?.[COLUMN.CREATED_AT]);
-    const operationCompletedAt =
-      this.readOperationComparisonTimestamp(operation);
+    const currentStorageIncarnation =
+      targetIncarnationSnapshot.storageIncarnation;
+    const operationStorageIncarnation =
+      readOperationTargetNodeStorageIncarnation(
+        operation,
+        this.getReplicaOperationStepsHistory(operation),
+      );
     return (
-      Number.isFinite(nodeCreatedAt) &&
-      Number.isFinite(operationCompletedAt) &&
-      nodeCreatedAt > operationCompletedAt
+      Number.isSafeInteger(currentStorageIncarnation) &&
+      currentStorageIncarnation > 0 &&
+      Number.isSafeInteger(operationStorageIncarnation) &&
+      operationStorageIncarnation > 0 &&
+      currentStorageIncarnation > operationStorageIncarnation
     );
   }
 

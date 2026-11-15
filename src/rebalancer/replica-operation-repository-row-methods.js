@@ -1,5 +1,9 @@
 import {readStateField} from '../utils/state-field-read.js';
-import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {
+  readOperationRecordWorkflowStep,
+  readOperationTargetNodeBootIncarnation,
+  readOperationTargetNodeStorageIncarnation,
+} from './replica-operation-progress.js';
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
@@ -223,6 +227,20 @@ function assignReplicaOperationRepositoryRowMethods(
       );
       if (bootstrapMembership) {
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
+      }
+      const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
+        row,
+        stepsHistory,
+      );
+      if (targetNodeBootIncarnation !== null) {
+        operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+          targetNodeBootIncarnation;
+      }
+      const targetNodeStorageIncarnation =
+        readOperationTargetNodeStorageIncarnation(row, stepsHistory);
+      if (targetNodeStorageIncarnation !== null) {
+        operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+          targetNodeStorageIncarnation;
       }
       attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
       return operation;

@@ -31,6 +31,9 @@ import {
   buildCommittedBootstrapTopology,
   readCommittedMembershipStamp,
 } from './committed-membership-bootstrap-read.js';
+import {
+  resolveTargetNodeIncarnationSnapshot,
+} from './replica-operation-progress.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
@@ -674,6 +677,10 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     // Create operation using the helper from replica-status.js
+    const targetIncarnationSnapshot = resolveTargetNodeIncarnationSnapshot(
+      this.systemTableCache,
+      move.nodeId,
+    );
     const operation = createOperationRecord({
       operationId,
       type: normalizedMoveType || move.type,
@@ -683,6 +690,9 @@ class RebalanceCoordinatorOperationCreation {
       replicaId: operationReplicaId,
       sourceReplicaId,
       membershipPublicationEpoch: move.membershipPublicationEpoch,
+      targetNodeBootIncarnation: targetIncarnationSnapshot.bootIncarnation,
+      targetNodeStorageIncarnation:
+        targetIncarnationSnapshot.storageIncarnation,
     });
     operation.entityType = entityType;
     operation.entityId = entityId;

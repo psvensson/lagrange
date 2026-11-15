@@ -63,6 +63,7 @@ class MembershipPublicationRuntimeOwner {
     this.nodeEndpointsOwner =
       systemMetadataOwners.nodeEndpointsOwner ||
       new NodeEndpointsOwner(ownerOptions);
+    this.servicesOwner = systemMetadataOwners.servicesOwner;
     this.serviceEndpointsOwner = systemMetadataOwners.serviceEndpointsOwner;
     this.messageGroupsOwner = systemMetadataOwners.messageGroupsOwner;
     this.controlPlanePublicationsOwner =
@@ -81,6 +82,7 @@ class MembershipPublicationRuntimeOwner {
   syncOwnerDependencies(ownerOptions = this.buildOwnerOptions()) {
     applyOwnerDependencies(this.nodesOwner, ownerOptions);
     applyOwnerDependencies(this.nodeEndpointsOwner, ownerOptions);
+    applyOwnerDependencies(this.servicesOwner, ownerOptions);
     applyOwnerDependencies(this.serviceEndpointsOwner, ownerOptions);
     applyOwnerDependencies(this.messageGroupsOwner, ownerOptions);
     applyOwnerDependencies(this.controlPlanePublicationsOwner, ownerOptions);
