@@ -459,3 +459,145 @@ test('readiness cancellation signal: aborting signal during readiness polling im
   assert.equal(ledger.containers.size, 0,
     'cohort cleanup must remove all 3 containers when readiness polling is aborted');
 });
+
+test('late successful probe past deadlineAtMs: a probeWriteReadback that starts before ' +
+  'deadlineAtMs and resolves {ready: true} after deadlineAtMs is rejected as readiness_exhausted',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const controller = new AbortController();
+  let clockMs = 1_000_000;
+  let selectCalls = 0;
+  const {sshRun} = createScriptedSsh([
+    ...cleanupDockerRules(ledger),
+    [/CREATE TABLE IF NOT EXISTS bench_readiness_probe/u, (_command, _host, _calls, opts, timeoutMs) => {
+      // Advance to 15s before the 420,000 ms formation deadline (1,420,000).
+      clockMs = 1_405_000;
+      assert.ok(opts?.signal, 'SQL probe statement must receive AbortSignal');
+      assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0);
+      return 'CREATE TABLE';
+    }],
+    [/INSERT INTO bench_readiness_probe/u, (_command, _host, _calls, _opts, timeoutMs) => {
+      assert.equal(timeoutMs, 15_000,
+        'INSERT step must bound its timeoutMs by the remaining 15,000 ms before deadlineAtMs');
+      clockMs = 1_415_000;
+      return 'INSERT 0 1';
+    }],
+    [/SELECT token FROM bench_readiness_probe/u, (command, _host, _calls, _opts, timeoutMs) => {
+      selectCalls += 1;
+      assert.equal(timeoutMs, 5_000,
+        'SELECT step must bound its timeoutMs by the remaining 5,000 ms before deadlineAtMs');
+      // Complete 1,000 ms AFTER deadlineAtMs (1,420,000) while returning a valid 1-row readback.
+      clockMs = 1_421_000;
+      const campaign = (/lagrange\.bench\.campaign=(\S+)/u.exec(command) || [])[1];
+      const id = (/WHERE id = (\d+)/u.exec(command) || [])[1];
+      return `token\n${campaign}-${id}`;
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun,
+      campaignId: CAMPAIGN,
+      signal: controller.signal,
+      nowFn: () => clockMs,
+      sleep: async (ms) => {
+        clockMs += ms;
+      },
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.component, 'lagrange-probe-write-readback');
+      assert.equal(error.diagnostic.deadlineExpired, true);
+      assert.equal(error.diagnostic.attempt, 1);
+      assert.equal(selectCalls, 1);
+      assert.equal(error.diagnostic.lastObservation.insertRowCount, 1);
+      assert.equal(error.diagnostic.lastObservation.readBack.length, 1);
+      assert.equal(error.deployment.readiness.state, 'exhausted');
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    },
+  );
+  assert.equal(ledger.containers.size, 0);
+});
+
+test('active probe cancellation: aborting signal while an sshRun probe is in flight aborts the ' +
+  'probe and settles in-flight sshRun operations before cohort cleanup runs',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const controller = new AbortController();
+  const timeline = [];
+  let capturedSignal = null;
+  const {sshRun} = createScriptedSsh([
+    [/^docker ps -aq --filter label=lagrange\.bench\.campaign=/u, (_command, host) => {
+      const ids = [];
+      for (const entry of ledger.containers.values()) {
+        if (entry.host === host && !entry.removed) ids.push(entry.id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [/^docker rm -f /u, (command) => {
+      timeline.push('cohort-cleanup-rm');
+      const ids = arrayFilter(
+        arrayMap(stringSplit(stringReplace(command, /^docker rm -f\s+/u, ''), /\s+/u),
+          (part) => stringReplace(stringTrim(part), /^'|'$/gu, '')),
+        Boolean,
+      );
+      for (const id of ids) {
+        const entry = ledger.containers.get(id);
+        if (entry) entry.removed = true;
+        ledger.containers.delete(id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'),
+      (_command, _host, _calls, opts) => new Promise((resolve) => {
+        capturedSignal = opts?.signal ?? null;
+        timeline.push('probe-started');
+        setTimeout(() => {
+          timeline.push('signal-aborted');
+          controller.abort();
+        }, 5);
+        setTimeout(() => {
+          timeline.push('in-flight-probe-settled');
+          resolve(http(503, {ready: false, phase: 'init', reasons: ['in-flight-cancelled']}));
+        }, 25);
+      })],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun,
+      campaignId: CAMPAIGN,
+      signal: controller.signal,
+      sleep: async () => {},
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.aborted, true);
+      assert.equal(error.diagnostic.aborted, true);
+      assert.equal(Boolean(capturedSignal && capturedSignal.aborted), true,
+        'active sshRun probe must receive the aborted AbortSignal');
+      const settledIdx = arrayFindIndex(timeline, (item) => item === 'in-flight-probe-settled');
+      const cleanupIdx = arrayFindIndex(timeline, (item) => item === 'cohort-cleanup-rm');
+      assert.ok(settledIdx >= 0 && cleanupIdx > settledIdx,
+        `in-flight sshRun must settle before cohort cleanup runs (${JSON.stringify(timeline)})`);
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    },
+  );
+  assert.equal(ledger.containers.size, 0);
+});

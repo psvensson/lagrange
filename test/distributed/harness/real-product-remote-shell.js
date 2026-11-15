@@ -14,6 +14,7 @@ import {
 } from './real-product-deployment-contract.js';
 import {
   arrayMap,
+  numberIsFinite,
   stringLastIndexOf,
   stringReplace,
   stringSplit,
@@ -29,6 +30,8 @@ const EXIT_MARKER = '__exit_code=';
 // never pulls (owner decision D1, 2026-11-14); placing images is provisioning.
 const NEVER_PULL = '--pull=never';
 const HTTP_TIMEOUT_SECONDS = 10;
+const MS_PER_SECOND = 1000;
+const MIN_CURL_TIMEOUT_SECONDS = 1;
 const DIAGNOSTIC_LOG_TAIL = 80;
 
 function shellQuote(value) {
@@ -53,14 +56,34 @@ function errorText(error) {
   return String(error?.stderr || error?.message || error);
 }
 
+function mergeCallOpts(opts, {signal = undefined, timeoutMs = undefined} = {}) {
+  if (signal === undefined && timeoutMs === undefined) return opts;
+  return {
+    ...(opts || {}),
+    ...(signal !== undefined ? {signal} : {}),
+    ...(numberIsFinite(timeoutMs) ? {timeoutMs} : {}),
+  };
+}
+
 /**
  * One HTTP request made FROM `from` (the host whose view matters, normally the
  * load-generator host) with curl. Never throws: a transport failure is a
  * `{status: null, error}` answer the caller decides on.
  */
 async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = undefined,
-  basicAuth = undefined}) {
-  const words = ['curl', '-sS', '--max-time', String(HTTP_TIMEOUT_SECONDS)];
+  basicAuth = undefined, signal = undefined, timeoutMs = undefined}) {
+  if (signal?.aborted) {
+    return {status: null, body: null, json: null, error: 'aborted'};
+  }
+  if (numberIsFinite(timeoutMs) && timeoutMs <= 0) {
+    return {status: null, body: null, json: null, error: 'deadline_expired'};
+  }
+  const defaultHttpTimeoutMs = HTTP_TIMEOUT_SECONDS * MS_PER_SECOND;
+  const effectiveTimeoutMs = numberIsFinite(timeoutMs) ?
+    Math.min(defaultHttpTimeoutMs, Math.max(1, timeoutMs)) : defaultHttpTimeoutMs;
+  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
+    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
+  const words = ['curl', '-sS', '--max-time', String(curlTimeoutSeconds)];
   if (method !== 'GET') words.push('-X', method);
   if (basicAuth !== undefined) {
     words.push('-u', shellQuote(`${basicAuth.user}:${basicAuth.password}`));
@@ -70,9 +93,14 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
       '--data', shellQuote(JSON.stringify(body)));
   }
   words.push('-w', shellQuote(`\\n${HTTP_STATUS_MARKER}%{http_code}`), shellQuote(url));
+  const callOpts = mergeCallOpts(opts, {
+    signal,
+    timeoutMs: numberIsFinite(timeoutMs) ? effectiveTimeoutMs : undefined,
+  });
   let raw;
   try {
-    raw = await sshRun(from, opts, words.join(' '));
+    raw = await sshRun(from, callOpts, words.join(' '),
+      numberIsFinite(timeoutMs) ? effectiveTimeoutMs : undefined);
   } catch (error) {
     return {status: null, body: null, json: null, error: errorText(error)};
   }
@@ -91,8 +119,10 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
  * Run a command and keep its exit status instead of throwing on it: the
  * status is printed after the command's own output.
  */
-async function execWithStatus(sshRun, host, opts, command, timeoutMs = undefined) {
-  const raw = String(await sshRun(host, opts,
+async function execWithStatus(sshRun, host, opts, command, timeoutMs = undefined,
+  signal = undefined) {
+  const callOpts = mergeCallOpts(opts, {signal, timeoutMs});
+  const raw = String(await sshRun(host, callOpts,
     `${command}; printf '\\n${EXIT_MARKER}%s' "$?"`, timeoutMs) ?? '');
   const {before, value} = splitTrailer(raw, EXIT_MARKER);
   return {exitCode: value === null ? null : Number(value), stdout: before, stderr: ''};
@@ -161,8 +191,67 @@ function dockerRunOnceCommand({campaignId, image, dockerArgs = [], commandArgs =
     ...arrayMap(commandArgs, shellWord)].join(' ');
 }
 
+/**
+ * Wrap `sshRun` to track in-flight remote operations in a Set, forward the
+ * active AbortSignal, and reject immediately when `signal` aborts while an
+ * operation is in flight. `settleInFlight()` awaits all underlying operations
+ * via `Promise.allSettled` before container cleanup runs.
+ */
+function createTrackedSshRun(sshRun, defaultSignal = null) {
+  const inFlightOps = new Set();
+  const trackedSshRun = (host, callOpts, command, timeoutMs) => {
+    const signal = callOpts?.signal ?? defaultSignal ?? null;
+    if (signal?.aborted) {
+      return Promise.reject(new Error('ssh operation aborted before start'));
+    }
+    const effectiveOpts = signal && (!callOpts || callOpts.signal !== signal) ?
+      {...(callOpts || {}), signal} : callOpts;
+    const opPromise = Promise.resolve().then(() =>
+      sshRun(host, effectiveOpts, command, timeoutMs));
+    inFlightOps.add(opPromise);
+    opPromise.finally(() => {
+      inFlightOps.delete(opPromise);
+    }).catch(() => {});
+    if (!signal) return opPromise;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('ssh operation aborted'));
+      };
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, {once: true});
+      opPromise.then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener('abort', onAbort);
+          resolve(value);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener('abort', onAbort);
+          reject(error);
+        },
+      );
+    });
+  };
+  const settleInFlight = async () => {
+    while (inFlightOps.size > 0) {
+      await Promise.allSettled([...inFlightOps]);
+    }
+  };
+  return {trackedSshRun, settleInFlight, inFlightOps};
+}
+
 export {
   createRemoteDockerProvider,
+  createTrackedSshRun,
   dockerRunDetached,
   dockerRunOnceCommand,
   errorText,

@@ -1,0 +1,1033 @@
+{"event": "bounded_script_transport", "sha256": "a538b9286e03ea3a18945bdd817d8826946700ec3f04336649837d3cb74371a4", "bytes": 463811}
+{"allowed_cpus": [0, 1, 2, 3], "checkpoint_seconds": 300, "config_sha": "4caab6908143782fbcaa6f945599b3d5bb6cde30aa13c03f07babf346231e755", "entry_sha": "e3cd98ab3ed5c7a2593a3201ac9191ddfc561212d8bb9b8601ef08eb31df4f5c", "event": "native_pacing_launch", "identity": {"generation": "e1b0571f-c4ea-4346-b4ce-d2d7819463d8", "intentDigest": "7b0d9cce056eb80121440c33c740f628e241ea028f68ccd66df3da4c8aff534f", "job_id": "1034c873-144c-4f88-a6e4-1a85294630c7", "unit": "lagrange-lab3-e1b0571fc4ea4346b4ced2d7819463d8-1034c873144c4f88a6e41a85294630c7.service"}, "original_deadline": 4941562.707600538, "selected_cpu": 0}
+{"elapsed_seconds": 0.025807389989495277, "event": "native_thermal_checkpoint", "observations": {"cpu": {"device": "/sys/devices/platform/coretemp.0", "hwmon_name": "coretemp", "label": "Package id 0", "millidegrees": 33000, "path": "/sys/devices/platform/coretemp.0/hwmon/hwmon1/temp1_input"}, "ssd": {"device": "/sys/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:0/0:0:0:0", "hwmon_name": "drivetemp", "label": null, "millidegrees": 24000, "path": "/sys/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:0/0:0:0:0/hwmon/hwmon4/temp1_input"}}, "poll": 0, "reason": null, "stage": "source-stage"}
+Cloning into '/home/peter/.local/state/lagrange-lab3-worker/runs/e1b0571f-c4ea-4346-b4ce-d2d7819463d8/1034c873144c4f88a6e41a85294630c7/artifacts/candidate'...
+/home/peter/.local/state/lagrange-lab3-worker/runs/e1b0571f-c4ea-4346-b4ce-d2d7819463d8/1034c873144c4f88a6e41a85294630c7/artifacts/source.bundle is okay
+The bundle contains this ref:
+49c469b52a3b89e9bfdf3997e2dea7b2d22991a3 HEAD
+The bundle requires this ref:
+9c576f3a06be3bf117623f038f43e6b36b5b33a5 
+The bundle uses this hash algorithm: sha1
+From /home/peter/.local/state/lagrange-lab3-worker/runs/e1b0571f-c4ea-4346-b4ce-d2d7819463d8/1034c873144c4f88a6e41a85294630c7/artifacts/source.bundle
+ * branch              HEAD       -> FETCH_HEAD
+HEAD is now at 49c469b5 labrun transport of 5d4a3c98843fbc0e7644a6dc36f22348735a73a0 (tree 21c3a6f647a5e619b7e364947b71eaeb435a8756)
+{"event": "prepared_cache_seed", "manifest_sha256": "4ee82dc1ee251b72820cef63aa1c7ead185bc9a382a8cc99b5b1257f1d17e2b2", "prepared": "/home/peter/.local/share/lagrange-lab3/offline-cache-9c576-6bdfcc92-7b6b-4494-a522-51953aaf20bf", "original_unchanged": true}
+{"event": "offline_npm_namespace", "namespace": "net:[4026532460]", "interfaces": ["lo"]}
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.4.0 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 964 packages in 19s
+{"event": "physical_readonly_candidate_endpoint", "source_sha256": "5ee92ea323c929541edb9df1a13bd14ff740cfa3bbd5fb6c5dca1adb1955005b", "config_sha256": "8c400c3bcac65273f045a7c59b752a2b8f3f17e2bf52fb3f6c80ddfda925f56d", "boot_id": "d7288037-0a8a-4144-a3c4-80101d565062", "execution_policy": {"mode": "sensor-required", "cadence_ms": 0, "max_concurrency": 1}, "original_monotonic_deadline": 4941562.707600538, "descriptor_deadline_ms": 1794756336399, "worker_installation_changed": false}
+{"elapsed_seconds": 0.02325403317809105, "event": "native_thermal_checkpoint", "observations": {"cpu": {"device": "/sys/devices/platform/coretemp.0", "hwmon_name": "coretemp", "label": "Package id 0", "millidegrees": 58000, "path": "/sys/devices/platform/coretemp.0/hwmon/hwmon1/temp1_input"}, "ssd": {"device": "/sys/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:0/0:0:0:0", "hwmon_name": "drivetemp", "label": null, "millidegrees": 24000, "path": "/sys/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:0/0:0:0:0/hwmon/hwmon4/temp1_input"}}, "poll": 0, "reason": null, "stage": "focused-tests"}
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js (16 assertions, 465ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js (3 assertions, 408ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js (10 assertions, 495ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js (16 assertions, 1279ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-network.test.js (4 assertions, 378ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js (1 assertions, 400ms)
+ok test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js (5 assertions, 387ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js (7 assertions, 3017ms)
+ok test/distributed/harness/__tests__/benchmark-cohort-preserving-dataset-reset.test.js (7 assertions, 2150ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js (6 assertions, 4230ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-runner-lab-hosts.test.js (21 assertions, 1886ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js (21 assertions, 1232ms)
+ok test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js (9 assertions, 1734ms)
+ok test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js (4 assertions, 2049ms)
+ok test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js (5 assertions, 2457ms)
+# test-files total=15 pass=15 fail=0 assertions=135
+{"event": "prepared_cache_verify", "manifest_sha256": "4ee82dc1ee251b72820cef63aa1c7ead185bc9a382a8cc99b5b1257f1d17e2b2", "prepared": "/home/peter/.local/share/lagrange-lab3/offline-cache-9c576-6bdfcc92-7b6b-4494-a522-51953aaf20bf", "original_unchanged": true}
+LABRUN_EVIDENCE bytes=11189 sha256=f2412fbeea17f417cb61e202f4921d94146b76604e8c243afd1dde5d313fe758
+LABRUN_EXIT=0
+LABRUN_CLEANED free_kb=45743724
+
+
+# ==== benchmark-cohort-preserving-dataset-reset.test.js.tap ====
+TAP version 13
+# Subtest: supported-reset-capability: TRUNCATE TABLE parses, routes to all partitions, and derives PG command tag TRUNCATE TABLE
+ok 1 - supported-reset-capability: TRUNCATE TABLE parses, routes to all partitions, and derives PG command tag TRUNCATE TABLE
+  ---
+  duration_ms: 7.932114
+  type: 'test'
+  ...
+# Subtest: repeatable-clean-dataset-without-reformation: semantic gate stage resets dataset between cases without calling redeploy
+ok 2 - repeatable-clean-dataset-without-reformation: semantic gate stage resets dataset between cases without calling redeploy
+  ---
+  duration_ms: 32.119974
+  type: 'test'
+  ...
+# Subtest: durability-restart-retained: in-place container restart retains container identity and volume continuity
+ok 3 - durability-restart-retained: in-place container restart retains container identity and volume continuity
+  ---
+  duration_ms: 0.416819
+  type: 'test'
+  ...
+# Subtest: same-cohort-journey-to-valid-observed: full Lagrange journey on same cohort is admitted as valid-observed
+ok 4 - same-cohort-journey-to-valid-observed: full Lagrange journey on same cohort is admitted as valid-observed
+  ---
+  duration_ms: 44.892251
+  type: 'test'
+  ...
+# Subtest: cross-deployment-rejection: different deployment cohort between gate and measurement is rejected with SEMANTIC_GATE_UNBOUND
+ok 5 - cross-deployment-rejection: different deployment cohort between gate and measurement is rejected with SEMANTIC_GATE_UNBOUND
+  ---
+  duration_ms: 52.656759
+  type: 'test'
+  ...
+# Subtest: actual-product-reset-and-state-evidence: adapter resetDataset executes TRUNCATE TABLE and restores clean initial dataset counts
+ok 6 - actual-product-reset-and-state-evidence: adapter resetDataset executes TRUNCATE TABLE and restores clean initial dataset counts
+  ---
+  duration_ms: 572.331476
+  type: 'test'
+  ...
+# Subtest: interrupted-schema-setup-missing-index: reopening a cohort where all 9 tables exist but CREATE INDEX idx_orders_customer_latest was not completed fails closed with schema-mismatch before any TRUNCATE TABLE
+ok 7 - interrupted-schema-setup-missing-index: reopening a cohort where all 9 tables exist but CREATE INDEX idx_orders_customer_latest was not completed fails closed with schema-mismatch before any TRUNCATE TABLE
+  ---
+  duration_ms: 98.326803
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 854.84301
+# time=2150ms
+
+
+# ==== comparative-benchmark-generated-commands.test.js.tap ====
+TAP version 13
+# Subtest: storage preparation through the deployer's own command line, executed: absent and empty node directories are prepared before each node starts; a non-empty directory of another owner refuses that node, typed, and is left untouched
+ok 1 - storage preparation through the deployer's own command line, executed: absent and empty node directories are prepared before each node starts; a non-empty directory of another owner refuses that node, typed, and is left untouched
+  ---
+  duration_ms: 59.86261
+  type: 'test'
+  ...
+# Subtest: storage preparation keeps the runtime user's own non-empty directory and starts the node
+ok 2 - storage preparation keeps the runtime user's own non-empty directory and starts the node
+  ---
+  duration_ms: 30.938944
+  type: 'test'
+  ...
+# Subtest: storage preparation that fails for a non-foreign reason refuses the node, typed; it never starts
+ok 3 - storage preparation that fails for a non-foreign reason refuses the node, typed; it never starts
+  ---
+  duration_ms: 4.383787
+  type: 'test'
+  ...
+# Subtest: runComparativeCampaign awaits all concurrent joiner startups before removeCampaignContainers, records delayed joiner roles, and leaves zero unremoved containers in ledger
+ok 4 - runComparativeCampaign awaits all concurrent joiner startups before removeCampaignContainers, records delayed joiner roles, and leaves zero unremoved containers in ledger
+  ---
+  duration_ms: 56.87685
+  type: 'test'
+  ...
+# Subtest: image presence probe, executed: a present image answers its id; an absent one refuses
+ok 5 - image presence probe, executed: a present image answers its id; an absent one refuses
+  ---
+  duration_ms: 14.133593
+  type: 'test'
+  ...
+# Subtest: harness commit, executed with real git: pushed over ssh with the campaign's options, checked out, probed; the campaign then prepares its worktree and installs offline; a checkout without the commit refuses; a push without the key or BatchMode fails
+ok 6 - harness commit, executed with real git: pushed over ssh with the campaign's options, checked out, probed; the campaign then prepares its worktree and installs offline; a checkout without the commit refuses; a push without the key or BatchMode fails
+  ---
+  duration_ms: 1189.519156
+  type: 'test'
+  ...
+# Subtest: offline install, executed with the real npm and an empty cache: the tarball npm names is a lockfile tarball, and the TiDB arm refuses offline_cache_incomplete naming it
+ok 7 - offline install, executed with the real npm and an empty cache: the tarball npm names is a lockfile tarball, and the TiDB arm refuses offline_cache_incomplete naming it
+  ---
+  duration_ms: 356.783758
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1730.445367
+# time=3017ms
+
+
+# ==== comparative-benchmark-provisioning.test.js.tap ====
+TAP version 13
+# Subtest: the provisioning plan is the campaign's own requirement: images per role, the reference-client lockfile, the harness commit
+ok 1 - the provisioning plan is the campaign's own requirement: images per role, the reference-client lockfile, the harness commit
+  ---
+  duration_ms: 3.101012
+  type: 'test'
+  ...
+# Subtest: a fresh host fails the campaign's checks; after provisioning every target set passes them with nothing left for the campaign to obtain
+ok 2 - a fresh host fails the campaign's checks; after provisioning every target set passes them with nothing left for the campaign to obtain
+  ---
+  duration_ms: 35.539943
+  type: 'test'
+  ...
+# Subtest: each half of provisioning is needed: without the cache the TiDB arm's install misses a lockfile tarball; without the commit the campaign refuses
+ok 3 - each half of provisioning is needed: without the cache the TiDB arm's install misses a lockfile tarball; without the commit the campaign refuses
+  ---
+  duration_ms: 0.511522
+  type: 'test'
+  ...
+# Subtest: provisioning failures are typed and name host, role and the missing item
+ok 4 - provisioning failures are typed and name host, role and the missing item
+  ---
+  duration_ms: 1.646387
+  type: 'test'
+  ...
+# Subtest: a cache that does not serve the offline install fails provisioning, naming the tarballs
+ok 5 - a cache that does not serve the offline install fails provisioning, naming the tarballs
+  ---
+  duration_ms: 1.247472
+  type: 'test'
+  ...
+# Subtest: the runner's provisioning mode is GCP only, separate from --dry-run, and needs an absolute client checkout
+ok 6 - the runner's provisioning mode is GCP only, separate from --dry-run, and needs an absolute client checkout
+  ---
+  duration_ms: 2858.638126
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2961.096124
+# time=4230ms
+
+
+# ==== comparative-benchmark-runner-campaign.test.js.tap ====
+TAP version 13
+# Subtest: campaign: header first, one v2 run record per attempted run, append only
+ok 1 - campaign: header first, one v2 run record per attempted run, append only
+  ---
+  duration_ms: 5.708385
+  type: 'test'
+  ...
+# Subtest: J7: readiness exhausted - measurement never starts; the record is a complete setup-failed product failure with every planned request unissued
+ok 2 - J7: readiness exhausted - measurement never starts; the record is a complete setup-failed product failure with every planned request unissued
+  ---
+  duration_ms: 1.210693
+  type: 'test'
+  ...
+# Subtest: J7: a readiness exhaustion the deployer could not describe is a failed run, never a product failure without its product
+ok 3 - J7: a readiness exhaustion the deployer could not describe is a failed run, never a product failure without its product
+  ---
+  duration_ms: 0.670072
+  type: 'test'
+  ...
+# Subtest: header: pins every target's product identity from its running containers, before any run record
+ok 4 - header: pins every target's product identity from its running containers, before any run record
+  ---
+  duration_ms: 0.726198
+  type: 'test'
+  ...
+# Subtest: header: a target whose containers of one role differ is not pinned, and says why
+ok 5 - header: a target whose containers of one role differ is not pinned, and says why
+  ---
+  duration_ms: 1.234561
+  type: 'test'
+  ...
+# Subtest: header: a campaign that pinned no product identity writes no header and fails
+ok 6 - header: a campaign that pinned no product identity writes no header and fails
+  ---
+  duration_ms: 0.921126
+  type: 'test'
+  ...
+# Subtest: J15: product containers removed while the harness lives - no successful completion
+ok 7 - J15: product containers removed while the harness lives - no successful completion
+  ---
+  duration_ms: 0.805101
+  type: 'test'
+  ...
+# Subtest: identity after the window: a restarted container is an event and fails the run
+ok 8 - identity after the window: a restarted container is an event and fails the run
+  ---
+  duration_ms: 0.714516
+  type: 'test'
+  ...
+# Subtest: endpoint bound to a container outside the recorded roles is topology-false
+ok 9 - endpoint bound to a container outside the recorded roles is topology-false
+  ---
+  duration_ms: 0.725349
+  type: 'test'
+  ...
+# Subtest: watchdog: past the campaign deadline the remaining runs are recorded interrupted
+ok 10 - watchdog: past the campaign deadline the remaining runs are recorded interrupted
+  ---
+  duration_ms: 0.909044
+  type: 'test'
+  ...
+# Subtest: teardown failure is recorded in closure and the campaign continues
+ok 11 - teardown failure is recorded in closure and the campaign continues
+  ---
+  duration_ms: 0.568296
+  type: 'test'
+  ...
+# Subtest: a topology refusal is blocked, never failed or passed
+ok 12 - a topology refusal is blocked, never failed or passed
+  ---
+  duration_ms: 0.525236
+  type: 'test'
+  ...
+# Subtest: a completed run whose record stream A's validator rejects is recorded failed
+ok 13 - a completed run whose record stream A's validator rejects is recorded failed
+  ---
+  duration_ms: 0.9664
+  type: 'test'
+  ...
+# Subtest: a product setup failure is a complete, validated product-failure record, not skipped
+ok 14 - a product setup failure is a complete, validated product-failure record, not skipped
+  ---
+  duration_ms: 0.59619
+  type: 'test'
+  ...
+# Subtest: a workload failure (e.g. unverified dataset) keeps the attempt in the record
+ok 15 - a workload failure (e.g. unverified dataset) keeps the attempt in the record
+  ---
+  duration_ms: 0.613874
+  type: 'test'
+  ...
+# Subtest: the semantic gate stage runs before the workload on the deployment it hands back
+ok 16 - the semantic gate stage runs before the workload on the deployment it hands back
+  ---
+  duration_ms: 0.606904
+  type: 'test'
+  ...
+# Subtest: without a gate stage the run records that the semantic gate was unavailable
+ok 17 - without a gate stage the run records that the semantic gate was unavailable
+  ---
+  duration_ms: 0.368854
+  type: 'test'
+  ...
+# Subtest: header: a role pins its content identity; per-host image facts are recorded only
+ok 18 - header: a role pins its content identity; per-host image facts are recorded only
+  ---
+  duration_ms: 0.519453
+  type: 'test'
+  ...
+# Subtest: header: different or missing content identity in one role is not pinned
+ok 19 - header: different or missing content identity in one role is not pinned
+  ---
+  duration_ms: 0.800516
+  type: 'test'
+  ...
+# Subtest: header: a role whose version no container answered pins null with the reason
+ok 20 - header: a role whose version no container answered pins null with the reason
+  ---
+  duration_ms: 0.875977
+  type: 'test'
+  ...
+# Subtest: an inspection after the window that fails is identity_unverified on a failed run that keeps its deployment, never read as an absent container
+ok 21 - an inspection after the window that fails is identity_unverified on a failed run that keeps its deployment, never read as an absent container
+  ---
+  duration_ms: 2.498469
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 129.213609
+# time=1232ms
+
+
+# ==== comparative-benchmark-runner-lab-hosts.test.js.tap ====
+TAP version 13
+# Subtest: holds every host in name order under purpose bench:<campaignId>
+ok 1 - holds every host in name order under purpose bench:<campaignId>
+  ---
+  duration_ms: 2.547767
+  type: 'test'
+  ...
+# Subtest: a busy host releases the holds taken and names its holder
+ok 2 - a busy host releases the holds taken and names its holder
+  ---
+  duration_ms: 0.899801
+  type: 'test'
+  ...
+# Subtest: the thermal gate carries the endpoint and a fixed remote deadline through a real shell
+ok 3 - the thermal gate carries the endpoint and a fixed remote deadline through a real shell
+  ---
+  duration_ms: 409.883913
+  type: 'test'
+  ...
+# Subtest: selection prefers free hosts, then held ones the hold will wait for; unreachable, docker-less and duplicate machines are excluded
+ok 4 - selection prefers free hosts, then held ones the hold will wait for; unreachable, docker-less and duplicate machines are excluded
+  ---
+  duration_ms: 2.047407
+  type: 'test'
+  ...
+# Subtest: a host whose checkout runs an old Node is never the load generator
+ok 5 - a host whose checkout runs an old Node is never the load generator
+  ---
+  duration_ms: 0.913619
+  type: 'test'
+  ...
+# Subtest: sensor unavailability refuses while explicit operator pacing preserves unmeasured facts
+ok 6 - sensor unavailability refuses while explicit operator pacing preserves unmeasured facts
+  ---
+  duration_ms: 189.027308
+  type: 'test'
+  ...
+# Subtest: selection requires native identity and policy; fresh missing members never use cached facts
+ok 7 - selection requires native identity and policy; fresh missing members never use cached facts
+  ---
+  duration_ms: 1.23878
+  type: 'test'
+  ...
+# Subtest: the pinned image resolves per host by content identity across image stores; absent is image_unavailable with no pull attempt
+ok 8 - the pinned image resolves per host by content identity across image stores; absent is image_unavailable with no pull attempt
+  ---
+  duration_ms: 1.342109
+  type: 'test'
+  ...
+# Subtest: an image absent on a host refuses the campaign naming host, role and image; no pull
+ok 9 - an image absent on a host refuses the campaign naming host, role and image; no pull
+  ---
+  duration_ms: 0.776619
+  type: 'test'
+  ...
+# Subtest: every campaign docker run refuses to pull (--pull=never)
+ok 10 - every campaign docker run refuses to pull (--pull=never)
+  ---
+  duration_ms: 0.690738
+  type: 'test'
+  ...
+# Subtest: docker disk is a fleet fact: a host below the data-host requirement is not a data host but may be the load generator (2026-11-01: adam-laptop had 433 MB free)
+ok 11 - docker disk is a fleet fact: a host below the data-host requirement is not a data host but may be the load generator (2026-11-01: adam-laptop had 433 MB free)
+  ---
+  duration_ms: 0.492465
+  type: 'test'
+  ...
+# Subtest: product and readiness-client images go to the data hosts; the load generator holds only the psql client image
+ok 12 - product and readiness-client images go to the data hosts; the load generator holds only the psql client image
+  ---
+  duration_ms: 0.270063
+  type: 'test'
+  ...
+# Subtest: the load generator needs room for the harness worktree on its checkout filesystem
+ok 13 - the load generator needs room for the harness worktree on its checkout filesystem
+  ---
+  duration_ms: 0.602654
+  type: 'test'
+  ...
+# Subtest: the load-generator requirement is measured from the checkout tree
+ok 14 - the load-generator requirement is measured from the checkout tree
+  ---
+  duration_ms: 22.50842
+  type: 'test'
+  ...
+# Subtest: host facts are read locale-independently; a non-numeric fact is typed
+ok 15 - host facts are read locale-independently; a non-numeric fact is typed
+  ---
+  duration_ms: 0.674306
+  type: 'test'
+  ...
+# Subtest: an explicit registered load generator is reserved before data-host selection
+ok 16 - an explicit registered load generator is reserved before data-host selection
+  ---
+  duration_ms: 0.352799
+  type: 'test'
+  ...
+# Subtest: an unknown explicit load generator refuses rather than selecting another host
+ok 17 - an unknown explicit load generator refuses rather than selecting another host
+  ---
+  duration_ms: 0.286046
+  type: 'test'
+  ...
+# Subtest: a held explicit load generator is kept for the hold to wait for, not replaced
+ok 18 - a held explicit load generator is kept for the hold to wait for, not replaced
+  ---
+  duration_ms: 0.324716
+  type: 'test'
+  ...
+# Subtest: an ineligible explicit load generator is refused with its reason and no substitute
+ok 19 - an ineligible explicit load generator is refused with its reason and no substitute
+  ---
+  duration_ms: 0.763723
+  type: 'test'
+  ...
+# Subtest: an explicit physical alias or a host absent from fresh discovery is refused
+ok 20 - an explicit physical alias or a host absent from fresh discovery is refused
+  ---
+  duration_ms: 0.369574
+  type: 'test'
+  ...
+# Subtest: the explicit load generator leaves the data hosts their disk policy and topology
+ok 21 - the explicit load generator leaves the data hosts their disk policy and topology
+  ---
+  duration_ms: 0.72856
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 685.756026
+# time=1886ms
+
+
+# ==== comparative-benchmark-runner-semantic-gate.test.js.tap ====
+TAP version 13
+# Subtest: Lagrange: cohort preserved per case and before measurement, restart of the endpoint container only, single binding preserved across the journey
+ok 1 - Lagrange: cohort preserved per case and before measurement, restart of the endpoint container only, single binding preserved across the journey
+  ---
+  duration_ms: 6.815135
+  type: 'test'
+  ...
+# Subtest: PostgreSQL resets through its adapter; unknown systems record semantic-gate-not-run
+ok 2 - PostgreSQL resets through its adapter; unknown systems record semantic-gate-not-run
+  ---
+  duration_ms: 0.514314
+  type: 'test'
+  ...
+# Subtest: Item 5: proofs from deployment A cannot authorize measurements on deployment B; valid single-deployment proofs remain accepted
+ok 3 - Item 5: proofs from deployment A cannot authorize measurements on deployment B; valid single-deployment proofs remain accepted
+  ---
+  duration_ms: 166.417856
+  type: 'test'
+  ...
+# Subtest: Item 4: TiDB gate probe claims only canonical case invariants, stays incomplete, and leaves skipped durability unproven
+ok 4 - Item 4: TiDB gate probe claims only canonical case invariants, stays incomplete, and leaves skipped durability unproven
+  ---
+  duration_ms: 29.978178
+  type: 'test'
+  ...
+# Subtest: Item 4 & Item 7: TiDB positive canonical cases + persistent TiKV replica durability (local and remote loadGeneratorHost) claim exact 12 proof IDs and stay incomplete
+ok 5 - Item 4 & Item 7: TiDB positive canonical cases + persistent TiKV replica durability (local and remote loadGeneratorHost) claim exact 12 proof IDs and stay incomplete
+  ---
+  duration_ms: 45.256574
+  type: 'test'
+  ...
+# Subtest: Item 4: negative controls fail closed for every claimed TiDB canonical invariant
+ok 6 - Item 4: negative controls fail closed for every claimed TiDB canonical invariant
+  ---
+  duration_ms: 61.030808
+  type: 'test'
+  ...
+# Subtest: Item 7: remote PG durability supplies canonical proof IDs and passes on genuine fault; endpoint-only faults, unchanged incarnations, and missing storage continuity fail closed
+ok 7 - Item 7: remote PG durability supplies canonical proof IDs and passes on genuine fault; endpoint-only faults, unchanged incarnations, and missing storage continuity fail closed
+  ---
+  duration_ms: 92.069002
+  type: 'test'
+  ...
+# Subtest: the journey is told whether the arm's storage is persistent
+ok 8 - the journey is told whether the arm's storage is persistent
+  ---
+  duration_ms: 0.506242
+  type: 'test'
+  ...
+# Subtest: HOLD-4 adversarial readiness, unparseable startedAt, and Object.prototype pollution fail closed while real composite deployers stay accepted
+ok 9 - HOLD-4 adversarial readiness, unparseable startedAt, and Object.prototype pollution fail closed while real composite deployers stay accepted
+  ---
+  duration_ms: 168.509782
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 632.726543
+# time=1734ms
+
+
+# ==== real-product-cluster-deployer-cleanup.test.js.tap ====
+TAP version 13
+# Subtest: D20: every product container the deployer starts carries the campaign label
+ok 1 - D20: every product container the deployer starts carries the campaign label
+  ---
+  duration_ms: 13.537782
+  type: 'test'
+  ...
+# Subtest: D20: teardown filters on the campaign label only and records what it could not close
+ok 2 - D20: teardown filters on the campaign label only and records what it could not close
+  ---
+  duration_ms: 1.938999
+  type: 'test'
+  ...
+# Subtest: D20: teardown refuses a campaign id that could widen the filter
+ok 3 - D20: teardown refuses a campaign id that could widen the filter
+  ---
+  duration_ms: 0.507923
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 40.121538
+# time=408ms
+
+
+# ==== real-product-cluster-deployer-dataset.test.js.tap ====
+TAP version 13
+# Subtest: D08: the deployer seeds no hand-written key set of its own
+ok 1 - D08: the deployer seeds no hand-written key set of its own
+  ---
+  duration_ms: 12.284684
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19.12519
+# time=400ms
+
+
+# ==== real-product-cluster-deployer-identity.test.js.tap ====
+TAP version 13
+# Subtest: D18: identity comes from docker inspect of the running containers, never the tag
+ok 1 - D18: identity comes from docker inspect of the running containers, never the tag
+  ---
+  duration_ms: 14.002684
+  type: 'test'
+  ...
+# Subtest: D21: data directories inside the container layer make the deployment a smoke run; an explicit storage root makes host volumes
+ok 2 - D21: data directories inside the container layer make the deployment a smoke run; an explicit storage root makes host volumes
+  ---
+  duration_ms: 7.793363
+  type: 'test'
+  ...
+# Subtest: J8: comparator absent at identity time fails identity
+ok 3 - J8: comparator absent at identity time fails identity
+  ---
+  duration_ms: 2.307617
+  type: 'test'
+  ...
+# Subtest: J8: an emulator answering the version query fails identity
+ok 4 - J8: an emulator answering the version query fails identity
+  ---
+  duration_ms: 1.180332
+  type: 'test'
+  ...
+# Subtest: J8: a running container of the wrong image fails identity
+ok 5 - J8: a running container of the wrong image fails identity
+  ---
+  duration_ms: 1.039188
+  type: 'test'
+  ...
+# Subtest: D18: a publishable run refuses a tag-only Lagrange image; a digest reference verifies against the campaign's expected version and revision label
+ok 6 - D18: a publishable run refuses a tag-only Lagrange image; a digest reference verifies against the campaign's expected version and revision label
+  ---
+  duration_ms: 2.960468
+  type: 'test'
+  ...
+# Subtest: D18: the Lagrange image is pinned by content; a host where it was docker-loaded (no RepoDigest) runs it by image id with typed provenance
+ok 7 - D18: the Lagrange image is pinned by content; a host where it was docker-loaded (no RepoDigest) runs it by image id with typed provenance
+  ---
+  duration_ms: 6.880707
+  type: 'test'
+  ...
+# Subtest: F6: repoDigests records the full list; repoDigest is only the digest of the pinned repository, and none matching is the typed loaded provenance
+ok 8 - F6: repoDigests records the full list; repoDigest is only the digest of the pinned repository, and none matching is the typed loaded provenance
+  ---
+  duration_ms: 2.918765
+  type: 'test'
+  ...
+# Subtest: D18: image content identity is the digest of the ordered RootFS diff_ids, the same on a containerd store (.Id = manifest digest) and an overlay2 store (.Id = config digest); .Id is never compared across stores
+ok 9 - D18: image content identity is the digest of the ordered RootFS diff_ids, the same on a containerd store (.Id = manifest digest) and an overlay2 store (.Id = config digest); .Id is never compared across stores
+  ---
+  duration_ms: 8.089541
+  type: 'test'
+  ...
+# Subtest: D18: an image that declares no labels is recorded as such, not refused
+ok 10 - D18: an image that declares no labels is recorded as such, not refused
+  ---
+  duration_ms: 6.787477
+  type: 'test'
+  ...
+# Subtest: after the window an unanswered inspection is identity_unverified, not an absent container
+ok 11 - after the window an unanswered inspection is identity_unverified, not an absent container
+  ---
+  duration_ms: 0.602599
+  type: 'test'
+  ...
+# Subtest: the reproduction guide's content-identity recipe equals contentIdentityOf
+ok 12 - the reproduction guide's content-identity recipe equals contentIdentityOf
+  ---
+  duration_ms: 15.715562
+  type: 'test'
+  ...
+# Subtest: D34: only an explicit host bind mount is persistent storage
+ok 13 - D34: only an explicit host bind mount is persistent storage
+  ---
+  duration_ms: 0.209432
+  type: 'test'
+  ...
+# Subtest: after the window a product keeps its version and the reason it was unanswered
+ok 14 - after the window a product keeps its version and the reason it was unanswered
+  ---
+  duration_ms: 0.391546
+  type: 'test'
+  ...
+# Subtest: resolveLagrangeContainerImage pins by @sha256 digest and refuses unpinned remote GCP tags
+ok 15 - resolveLagrangeContainerImage pins by @sha256 digest and refuses unpinned remote GCP tags
+  ---
+  duration_ms: 0.393749
+  type: 'test'
+  ...
+# Subtest: bootProvenance is preserved after the window and verified against expectedSrcFingerprint
+ok 16 - bootProvenance is preserved after the window and verified against expectedSrcFingerprint
+  ---
+  duration_ms: 25.578547
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 177.094108
+# time=1279ms
+
+
+# ==== real-product-cluster-deployer-network.test.js.tap ====
+TAP version 13
+# Subtest: D22: a qdisc that does not show netem is a typed failure
+ok 1 - D22: a qdisc that does not show netem is a typed failure
+  ---
+  duration_ms: 2.696286
+  type: 'test'
+  ...
+# Subtest: D22: a tc command failure propagates as impairment_failed
+ok 2 - D22: a tc command failure propagates as impairment_failed
+  ---
+  duration_ms: 0.413333
+  type: 'test'
+  ...
+# Subtest: D22: a verified impairment records configured and achieved RTT
+ok 3 - D22: a verified impairment records configured and achieved RTT
+  ---
+  duration_ms: 0.608698
+  type: 'test'
+  ...
+# Subtest: D22: an RTT that cannot be measured is a typed failure
+ok 4 - D22: an RTT that cannot be measured is a typed failure
+  ---
+  duration_ms: 0.388035
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13.241548
+# time=378ms
+
+
+# ==== real-product-cluster-deployer-readiness.test.js.tap ====
+TAP version 13
+# Subtest: D05/J7: Lagrange readiness never reached throws readiness_exhausted with the last diagnostic and measurement never starts
+ok 1 - D05/J7: Lagrange readiness never reached throws readiness_exhausted with the last diagnostic and measurement never starts
+  ---
+  duration_ms: 8.196768
+  type: 'test'
+  ...
+# Subtest: D05: PostgreSQL pg_isready exhaustion throws readiness_exhausted
+ok 2 - D05: PostgreSQL pg_isready exhaustion throws readiness_exhausted
+  ---
+  duration_ms: 1.599052
+  type: 'test'
+  ...
+# Subtest: D05: TiDB that never reports 3 Up stores throws readiness_exhausted
+ok 3 - D05: TiDB that never reports 3 Up stores throws readiness_exhausted
+  ---
+  duration_ms: 2.8203
+  type: 'test'
+  ...
+# Subtest: D04: a throwing semantic-proof path never yields a passed count; the deployer runs no ad-hoc proof statements
+ok 4 - D04: a throwing semantic-proof path never yields a passed count; the deployer runs no ad-hoc proof statements
+  ---
+  duration_ms: 6.759512
+  type: 'test'
+  ...
+# Subtest: live diagnosis: /health and /readyz healthy but a node lease lapsed and a partition without a leader - readiness_exhausted names the denials, nothing is measured
+ok 5 - live diagnosis: /health and /readyz healthy but a node lease lapsed and a partition without a leader - readiness_exhausted names the denials, nothing is measured
+  ---
+  duration_ms: 4.637793
+  type: 'test'
+  ...
+# Subtest: after the canonical load every partition of every created table must be routable and replicated
+ok 6 - after the canonical load every partition of every created table must be routable and replicated
+  ---
+  duration_ms: 5.97794
+  type: 'test'
+  ...
+# Subtest: F1: a missing replica_count is a typed readiness denial, never a lowered target
+ok 7 - F1: a missing replica_count is a typed readiness denial, never a lowered target
+  ---
+  duration_ms: 0.372258
+  type: 'test'
+  ...
+# Subtest: F1: a non-numeric replica_count is a typed readiness denial
+ok 8 - F1: a non-numeric replica_count is a typed readiness denial
+  ---
+  duration_ms: 0.451919
+  type: 'test'
+  ...
+# Subtest: F1: RF=3 with two active services is under-replicated, whatever the cluster size
+ok 9 - F1: RF=3 with two active services is under-replicated, whatever the cluster size
+  ---
+  duration_ms: 0.421644
+  type: 'test'
+  ...
+# Subtest: live diagnosis 2026-11-01: serve lane closed (priority control-plane recovery pending) never becomes ready; the exhaustion carries the reason codes and elapsed time
+ok 10 - live diagnosis 2026-11-01: serve lane closed (priority control-plane recovery pending) never becomes ready; the exhaustion carries the reason codes and elapsed time
+  ---
+  duration_ms: 7.624766
+  type: 'test'
+  ...
+# Subtest: readiness must hold for the stable window: a flapping verdict resets the count
+ok 11 - readiness must hold for the stable window: a flapping verdict resets the count
+  ---
+  duration_ms: 3.153797
+  type: 'test'
+  ...
+# Subtest: predicate step 6: the probe INSERT must report one row, and a single PG-wire listener is recorded as a typed visibility limitation, never as pass
+ok 12 - predicate step 6: the probe INSERT must report one row, and a single PG-wire listener is recorded as a typed visibility limitation, never as pass
+  ---
+  duration_ms: 6.898929
+  type: 'test'
+  ...
+# Subtest: predicate step 5: time-to-routable is recorded per canonical table
+ok 13 - predicate step 5: time-to-routable is recorded per canonical table
+  ---
+  duration_ms: 11.900307
+  type: 'test'
+  ...
+# Subtest: CL-007: Lagrange cross-host deployment sets 30s transport message timeout and join timeouts
+ok 14 - CL-007: Lagrange cross-host deployment sets 30s transport message timeout and join timeouts
+  ---
+  duration_ms: 7.754037
+  type: 'test'
+  ...
+# Subtest: shared formation wall-clock deadline: slow probes across sequential readiness stages share one 420,000 ms deadline and fail closed before attempt 420 with lastObservation and cohort cleanup
+ok 15 - shared formation wall-clock deadline: slow probes across sequential readiness stages share one 420,000 ms deadline and fail closed before attempt 420 with lastObservation and cohort cleanup
+  ---
+  duration_ms: 5.438114
+  type: 'test'
+  ...
+# Subtest: readiness cancellation signal: aborting signal during readiness polling immediately aborts deployLagrangeCluster with lastObservation and runs full cohort cleanup
+ok 16 - readiness cancellation signal: aborting signal during readiness polling immediately aborts deployLagrangeCluster with lastObservation and runs full cohort cleanup
+  ---
+  duration_ms: 9.101927
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 93.89674
+# time=465ms
+
+
+# ==== real-product-cluster-deployer-recovery.test.js.tap ====
+TAP version 13
+# Subtest: D10/J11: a failed interruption is not-measured, never a fixed timing
+ok 1 - D10/J11: a failed interruption is not-measured, never a fixed timing
+  ---
+  duration_ms: 1.409418
+  type: 'test'
+  ...
+# Subtest: J11: a component that never recovers is not-measured
+ok 2 - J11: a component that never recovers is not-measured
+  ---
+  duration_ms: 0.42696
+  type: 'test'
+  ...
+# Subtest: J11: a failed user operation after recovery is not-measured
+ok 3 - J11: a failed user operation after recovery is not-measured
+  ---
+  duration_ms: 0.259474
+  type: 'test'
+  ...
+# Subtest: J11: an interruption restarts exactly the named container and observes it
+ok 4 - J11: an interruption restarts exactly the named container and observes it
+  ---
+  duration_ms: 1.713428
+  type: 'test'
+  ...
+# Subtest: D10: the backfill measurement no longer exists
+ok 5 - D10: the backfill measurement no longer exists
+  ---
+  duration_ms: 0.129008
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26.248026
+# time=387ms
+
+
+# ==== real-product-cluster-deployer-topology.test.js.tap ====
+TAP version 13
+# Subtest: Lagrange: the PG-wire listener host is a named role bound to its container
+ok 1 - Lagrange: the PG-wire listener host is a named role bound to its container
+  ---
+  duration_ms: 13.029808
+  type: 'test'
+  ...
+# Subtest: a listener owned by no campaign container is endpoint_unbound
+ok 2 - a listener owned by no campaign container is endpoint_unbound
+  ---
+  duration_ms: 3.639674
+  type: 'test'
+  ...
+# Subtest: D12: the PostgreSQL HA arm is a primary with two synchronous streaming standbys, clients connect to the primary, access is scoped scram
+ok 3 - D12: the PostgreSQL HA arm is a primary with two synchronous streaming standbys, clients connect to the primary, access is scoped scram
+  ---
+  duration_ms: 7.034462
+  type: 'test'
+  ...
+# Subtest: TiDB: PD, three TiKV stores on three hosts and TiDB, versions from the product
+ok 4 - TiDB: PD, three TiKV stores on three hosts and TiDB, versions from the product
+  ---
+  duration_ms: 4.717739
+  type: 'test'
+  ...
+# Subtest: TiDB: the readiness client runs on the TiDB host and is exited before measurement
+ok 5 - TiDB: the readiness client runs on the TiDB host and is exited before measurement
+  ---
+  duration_ms: 2.614895
+  type: 'test'
+  ...
+# Subtest: Lagrange: DATA_DIR is the data directory the image gives its runtime user
+ok 6 - Lagrange: DATA_DIR is the data directory the image gives its runtime user
+  ---
+  duration_ms: 9.778355
+  type: 'test'
+  ...
+# Subtest: Lagrange: with --storage-root each node directory is owned by the runtime user before its container starts
+ok 7 - Lagrange: with --storage-root each node directory is owned by the runtime user before its container starts
+  ---
+  duration_ms: 20.487264
+  type: 'test'
+  ...
+# Subtest: Lagrange: a --storage-root node directory with foreign-owned data is refused, never re-owned
+ok 8 - Lagrange: a --storage-root node directory with foreign-owned data is refused, never re-owned
+  ---
+  duration_ms: 0.997528
+  type: 'test'
+  ...
+# Subtest: Lagrange: an unanswered version is null with the product's non-answer as reason
+ok 9 - Lagrange: an unanswered version is null with the product's non-answer as reason
+  ---
+  duration_ms: 4.525241
+  type: 'test'
+  ...
+# Subtest: Lagrange: starts all joining nodes before polling joiner /readyz so 3-node priority spread can converge
+ok 10 - Lagrange: starts all joining nodes before polling joiner /readyz so 3-node priority spread can converge
+  ---
+  duration_ms: 2.539692
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105.69173
+# time=495ms
+
+
+# ==== real-product-workload-driver-dispatch.test.js.tap ====
+TAP version 14
+# Subtest: D06: Lagrange and TiDB Scenario A execute the same canonical family
+    1..0
+ok 1 - D06: Lagrange and TiDB Scenario A execute the same canonical family # time=582.185ms
+
+# Subtest: D11: scale-out is a typed refusal, never a substitute statement
+    1..0
+ok 2 - D11: scale-out is a typed refusal, never a substitute statement # time=1.094ms
+
+# Subtest: D07: Lagrange Scenario B is blocked without a SELECT substitute
+    1..0
+ok 3 - D07: Lagrange Scenario B is blocked without a SELECT substitute # time=42.23ms
+
+# Subtest: D24: Scenario C is unsupported without a rollup SELECT substitute
+    1..0
+ok 4 - D24: Scenario C is unsupported without a rollup SELECT substitute # time=12.527ms
+
+1..4
+# { total: 4, pass: 4 }
+# time=654.399ms
+
+
+# ==== real-product-workload-driver-lagrange-wire-facts.test.js.tap ====
+TAP version 14
+# Subtest: D29: an unroutable partition during provisioning is a typed pending state
+    1..0
+ok 1 - D29: an unroutable partition during provisioning is a typed pending state # time=375.913ms
+
+# Subtest: D29: any other answer during provisioning is a product error
+    1..0
+ok 2 - D29: any other answer during provisioning is a product error # time=19.198ms
+
+# Subtest: D30: every statement records its receipt shape; durability is never inferred
+    1..0
+ok 3 - D30: every statement records its receipt shape; durability is never inferred # time=244.889ms
+
+# Subtest: integer columns as canonical decimal text are a recorded dialect fact
+    1..0
+ok 4 - integer columns as canonical decimal text are a recorded dialect fact # time=287.664ms
+
+# Subtest: integer columns as non-canonical text are a correctness failure
+    1..0
+ok 5 - integer columns as non-canonical text are a correctness failure # time=132.395ms
+
+1..5
+# { total: 5, pass: 5 }
+# time=1082.283ms

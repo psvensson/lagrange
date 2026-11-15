@@ -10,16 +10,29 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {runComparativeCampaign} from '../comparative-benchmark-campaign-runner.js';
+import * as deployers from '../real-product-cluster-deployers.js';
 import {
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
 } from '../comparative-benchmark-campaign-manifest.js';
+import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
+import {
+  LAGRANGE_IMAGE,
+  createContainerLedger,
+  http,
+  lagrangeHealthyRules,
+} from './real-product-deployer-product-answers-fixture.js';
 import {
   arrayEvery,
   arrayFilter,
   arrayFind,
+  arrayJoin,
   arrayMap,
   arraySome,
+  stringIncludes,
+  stringReplace,
+  stringSplit,
+  stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
 const MANIFEST = buildComparativeCampaignManifest({campaignId: 'bench-c-1',
@@ -451,4 +464,110 @@ test('an inspection after the window that fails is identity_unverified on a fail
   assert.notEqual(first.deployment, null);
   assert.equal(arraySome(first.harnessEvents, (event) => event.kind === 'container-absent'),
     false);
+});
+
+test('watchdog cancellation during Lagrange readiness polling records failureClass interrupted ' +
+  '(never product_error) and retains deployment identity, lastObservation, and cleanup',
+async () => {
+  const hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
+  const ledger = createContainerLedger();
+  const {sshRun} = createScriptedSsh([
+    [/^docker ps -aq --filter label=lagrange\.bench\.campaign=/u, (_command, host) => {
+      const ids = [];
+      for (const entry of ledger.containers.values()) {
+        if (entry.host === host && !entry.removed) ids.push(entry.id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [/^docker rm -f /u, (command) => {
+      const ids = arrayFilter(
+        arrayMap(stringSplit(stringReplace(command, /^docker rm -f\s+/u, ''), /\s+/u),
+          (part) => stringReplace(stringTrim(part), /^'|'$/gu, '')),
+        Boolean,
+      );
+      for (const id of ids) {
+        const entry = ledger.containers.get(id);
+        if (entry) entry.removed = true;
+        ledger.containers.delete(id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'), () =>
+      http(503, {ready: false, phase: 'joining', reasons: ['awaiting-quorum']})],
+    ...lagrangeHealthyRules(ledger, {hosts}),
+  ]);
+  const {deps, records} = harness({
+    deadlineAt: 15,
+    deployRun: async (one, {signal} = {}) => {
+      if (one.targetId !== 'lagrange') return deployment(one.runId);
+      return deployers.deployLagrangeCluster({
+        hosts,
+        clientIp: '10.0.0.9',
+        sshRun,
+        campaignId: `${MANIFEST.campaignId}-${one.runId}`,
+        signal,
+        sleep: () => new Promise((resolve) => {
+          const timer = setTimeout(resolve, 60_000);
+          timer.unref?.();
+        }),
+        opts: {
+          lagrangeImage: LAGRANGE_IMAGE,
+          readiness: {stablePolls: 1, attempts: 420, intervalMs: 60_000},
+        },
+      });
+    },
+    inspectProducts: async (deployed) => deployed?.identity?.products ?? [product('c1')],
+    executeWorkloadRun: async (input) => {
+      if (input.setupFailure) {
+        return {
+          observations: {
+            runStatus: 'setup-failed',
+            setup: input.setupFailure,
+            requests: [{outcome: 'unissued'}],
+            accounting: {offered: 1, issued: 0, unissued: 1},
+          },
+          correctness: {semanticGate: null, finalState: null},
+          plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+          endpoint: null,
+          harness: {driverSourceSha256: 'feed', adapterIds: ['a']},
+          dataset: {resetMethod: 'fresh-formation', verification: {status: 'failed'}},
+          placement: null,
+          loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+          events: [],
+          failure: null,
+          productFailure: {runStatus: 'setup-failed', setup: input.setupFailure},
+        };
+      }
+      return {
+        observations: {accounting: {offered: 1}},
+        correctness: {semanticGate: null},
+        plan: {operationSliceDigest: 'sha256:slice', plannedOperationCounts: {payment: 1}},
+        dataset: {resetMethod: 'fresh-formation'},
+        loadGenerator: {host: '10.0.0.9', nodeVersion: 'v22', driverVersions: {}},
+      };
+    },
+    teardownRun: async (one) => deployers.removeCampaignContainers({
+      hosts,
+      sshRun,
+      opts: {},
+      campaignId: `${MANIFEST.campaignId}-${one.runId}`,
+    }),
+  });
+  await run(deps);
+  const lagrangeRun = arrayFind(records.slice(1), (record) => record.targetId === 'lagrange');
+  assert.ok(lagrangeRun, 'interrupted Lagrange run must be recorded');
+  assert.equal(lagrangeRun.execution.state, 'interrupted');
+  assert.equal(lagrangeRun.failureClass, 'interrupted');
+  assert.equal(lagrangeRun.execution.failureClass, 'interrupted');
+  assert.equal(lagrangeRun.execution.failure.failureClass, 'interrupted');
+  assert.notEqual(lagrangeRun.failureClass, 'product_error');
+  assert.equal(lagrangeRun.observations.setup.failureClass, 'interrupted');
+  assert.notEqual(lagrangeRun.observations.setup.failureClass, 'product_error');
+  assert.equal(lagrangeRun.identity.products.length, hosts.length);
+  assert.match(JSON.stringify(lagrangeRun.lastObservation), /awaiting-quorum/u);
+  assert.match(JSON.stringify(lagrangeRun.execution.failure.lastObservation), /awaiting-quorum/u);
+  assert.equal(lagrangeRun.cleanup.status, 'complete');
+  assert.equal(lagrangeRun.deployment.closure.status, 'complete');
+  assert.equal(ledger.containers.size, 0,
+    'teardownComparativeDeployment must remove all 3 Lagrange containers');
 });

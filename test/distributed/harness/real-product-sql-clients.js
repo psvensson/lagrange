@@ -9,6 +9,7 @@ import {
   arrayFilter,
   arrayJoin,
   arrayMap,
+  numberIsFinite,
   stringIncludes,
   stringSplit,
   stringTrim,
@@ -64,12 +65,25 @@ function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
  * header line (unaligned, no footer): one short-lived client per query, so no
  * client stays attached to the product during measurement.
  */
-function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql) {
-  return sshRun(from, opts, dockerRunOnceCommand({campaignId,
+function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
+  callOptions = {}) {
+  const {signal = undefined, timeoutMs = undefined} = callOptions || {};
+  if (signal?.aborted) {
+    return Promise.reject(new Error('psql operation aborted'));
+  }
+  if (numberIsFinite(timeoutMs) && timeoutMs <= 0) {
+    return Promise.reject(new Error('psql operation deadline expired'));
+  }
+  const callOpts = signal !== undefined || timeoutMs !== undefined ? {
+    ...(opts || {}),
+    ...(signal !== undefined ? {signal} : {}),
+    ...(numberIsFinite(timeoutMs) ? {timeoutMs} : {}),
+  } : opts;
+  return sshRun(from, callOpts, dockerRunOnceCommand({campaignId,
     image: SQL_CLIENT_IMAGE, dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
     commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
       '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
-      '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}));
+      '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}), timeoutMs);
 }
 
 /**
@@ -77,16 +91,16 @@ function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql) {
  * row count of a write, read from the product's own answer.
  */
 function createPsqlStatementRunner(target) {
-  return async (sql) => {
-    const tag = stringTrim(String(await psqlText(target, sql) ?? ''));
+  return async (sql, callOptions = {}) => {
+    const tag = stringTrim(String(await psqlText(target, sql, callOptions) ?? ''));
     const count = Number(stringSplit(tag, /\s+/u).pop());
     return {tag, rowCount: Number.isInteger(count) ? count : null};
   };
 }
 
 function createPsqlQueryReader(target) {
-  return async (sql) => {
-    const text = String(await psqlText(target, sql) ?? '');
+  return async (sql, callOptions = {}) => {
+    const text = String(await psqlText(target, sql, callOptions) ?? '');
     const [header, ...rows] = arrayFilter(stringSplit(text, /\r?\n/u), (line) => line !== '');
     if (header === undefined) return [];
     return rowsFromDelimitedText(arrayJoin(rows, '\n'), stringSplit(header, PSQL_SEPARATOR),

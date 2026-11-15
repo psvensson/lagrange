@@ -74,6 +74,7 @@ import {
 } from './real-product-exhausted-deployment.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
+  createTrackedSshRun,
   dockerRunDetached,
   dockerRunOnceCommand,
   errorText,
@@ -283,13 +284,32 @@ function versionPatternOf(imageRef, expectedVersion) {
     (version) => new RegExp(`^${stringReplace(version, /\./gu, '\\.')}$`, 'u'));
 }
 
-async function getJson(ctx, url) {
-  return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url});
+function probeCallOptions(ctx, pollContext = null) {
+  const signal = pollContext?.signal ?? ctx.signal ?? null;
+  if (signal?.aborted) throw new Error('readiness probe aborted');
+  const deadlineAtMs = pollContext?.deadlineAtMs ?? ctx.deadlineAtMs ?? null;
+  if (!numberIsFinite(deadlineAtMs)) {
+    return {signal: signal ?? undefined, timeoutMs: undefined};
+  }
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const remainingMs = deadlineAtMs - clock();
+  if (remainingMs <= 0) {
+    throw new Error('readiness probe formation deadline expired');
+  }
+  return {signal: signal ?? undefined, timeoutMs: remainingMs};
 }
 
-function getFacts(ctx, host) {
+async function getJson(ctx, url, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
+  return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url,
+    signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
+}
+
+function getFacts(ctx, host, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
   return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
-    url: `http://${host}:${PORT.REST}/management/v1/facts`, basicAuth: ctx.connection});
+    url: `http://${host}:${PORT.REST}/management/v1/facts`, basicAuth: ctx.connection,
+    signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
 }
 
 function readinessOf(ctx, component, probe, stablePolls = 1) {
@@ -300,16 +320,16 @@ function readinessOf(ctx, component, probe, stablePolls = 1) {
 }
 
 function nodeReady(ctx, host) {
-  return readinessOf(ctx, `${NODE_ROLE}@${host}`, async () => {
-    const answer = await getJson(ctx, `http://${host}:${PORT.REST}/readyz`);
+  return readinessOf(ctx, `${NODE_ROLE}@${host}`, async (pollContext) => {
+    const answer = await getJson(ctx, `http://${host}:${PORT.REST}/readyz`, pollContext);
     return {ready: answer.status === HTTP_OK && answer.json?.ready === true,
       diagnostic: answer};
   });
 }
 
 function membershipReady(ctx, seedHost, nodeCount) {
-  return readinessOf(ctx, 'lagrange-membership', async () => {
-    const answer = await getFacts(ctx, seedHost);
+  return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
+    const answer = await getFacts(ctx, seedHost, pollContext);
     return {ready: answer.json?.facts?.topology?.readyNodeCount === nodeCount,
       diagnostic: answer};
   });
@@ -327,15 +347,16 @@ function healthyListener(services, roles) {
 async function publicPgWireReady(ctx, seedHost, roles) {
   const admin = `http://${seedHost}:${PORT.ADMIN}`;
   let listener = null;
-  await readinessOf(ctx, 'lagrange-public-pg-wire', async () => {
+  await readinessOf(ctx, 'lagrange-public-pg-wire', async (pollContext) => {
+    const scaleCall = probeCallOptions(ctx, pollContext);
     const scale = await httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
       url: `${admin}/api/admin/services/${PG_WIRE_SERVICE_ID}/scale`, method: 'POST',
-      body: PG_WIRE_DESIRED_STATE});
+      body: PG_WIRE_DESIRED_STATE, signal: scaleCall.signal, timeoutMs: scaleCall.timeoutMs});
     if (scale.json?.success !== true || scale.json?.outcome !== 'applied') {
       return {ready: false, diagnostic: {scale}};
     }
     const found = await getJson(ctx,
-      `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`);
+      `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`, pollContext);
     listener = healthyListener(found.json?.services, roles);
     return {ready: listener !== null, diagnostic: {discovery: found}};
   });
@@ -408,13 +429,14 @@ function revisionLabelOf(product) {
   return product.imageLabels[REVISION_LABEL];
 }
 
-function readPartitions(ctx, seedHost) {
-  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`);
+function readPartitions(ctx, seedHost, pollContext = null) {
+  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
+    pollContext);
 }
 
 function leadersReady(ctx, seedHost) {
-  return readinessOf(ctx, 'lagrange-partition-leaders', async () => {
-    const answer = await readPartitions(ctx, seedHost);
+  return readinessOf(ctx, 'lagrange-partition-leaders', async (pollContext) => {
+    const answer = await readPartitions(ctx, seedHost, pollContext);
     if (answer.status !== HTTP_OK) return {ready: false, diagnostic: answer};
     const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
     return {ready: partitions.length > 0 &&
@@ -424,17 +446,19 @@ function leadersReady(ctx, seedHost) {
   });
 }
 
-async function readSystemTables(query) {
+async function readSystemTables(query, ctx = null, pollContext = null) {
   const tables = {};
-  for (const [name, sql] of Object.entries(SYSTEM_TABLE_QUERIES)) tables[name] = await query(sql);
+  for (const [name, sql] of Object.entries(SYSTEM_TABLE_QUERIES)) {
+    tables[name] = await query(sql, pollContext ? probeCallOptions(ctx, pollContext) : {});
+  }
   return tables;
 }
 
-async function controlSnapshots(ctx, roles) {
+async function controlSnapshots(ctx, roles, pollContext = null) {
   const snapshots = [];
   for (const role of roles) {
     const answer = await getJson(ctx,
-      `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot`);
+      `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot`, pollContext);
     snapshots.push({nodeId: role.nodeId,
       snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null});
   }
@@ -443,13 +467,14 @@ async function controlSnapshots(ctx, roles) {
 
 // Every canonical table answers a COUNT(*) through the public wire (a result,
 // not a participant failure).
-async function tableRoutingDenials(query, requiredTables) {
+async function tableRoutingDenials(query, requiredTables, ctx = null, pollContext = null) {
   const denials = [];
   // null: system-table readiness, no user-table scope (the evaluation owner's state).
   if (requiredTables === null) return denials;
   for (const table of requiredTables) {
+    const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
     try {
-      await query(`SELECT COUNT(*) AS row_count FROM ${table}`);
+      await query(`SELECT COUNT(*) AS row_count FROM ${table}`, callOptions);
     } catch (error) {
       denials.push(`table_not_routable:${table}:${errorText(error)}`);
     }
@@ -475,16 +500,17 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
   const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
   const startedAt = clock();
   const tableReadyAt = {};
-  const readiness = await readinessOf(ctx, component, async () => {
-    const tables = await readSystemTables(query);
+  const readiness = await readinessOf(ctx, component, async (pollContext) => {
+    const tables = await readSystemTables(query, ctx, pollContext);
     const now = clock();
     recordTableRoutability(tableReadyAt, tables, {requiredTables, expectedNodeIds, now,
       startedAt});
     const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
       requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now});
-    const lane = evaluateLagrangeServeLane({snapshots: await controlSnapshots(ctx, nodeRoles)});
+    const lane = evaluateLagrangeServeLane({
+      snapshots: await controlSnapshots(ctx, nodeRoles, pollContext)});
     const routing = verdict.ready && lane.ready ?
-      await tableRoutingDenials(query, requiredTables) : [];
+      await tableRoutingDenials(query, requiredTables, ctx, pollContext) : [];
     const denials = [...verdict.denials, ...lane.denials, ...routing];
     return {ready: denials.length === 0, diagnostic: {denials,
       nodes: tables.nodes.length, partitions: tables.partitions.length,
@@ -504,14 +530,17 @@ function probeVisibility(listenerNodeId, nodeRoles) {
 
 function probeWriteReadback(ctx, sql, campaignId, visibility) {
   const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
-  return readinessOf(ctx, 'lagrange-probe-write-readback', async () => {
+  return readinessOf(ctx, 'lagrange-probe-write-readback', async (pollContext) => {
     const id = clock();
     const token = `${campaignId}-${id}`;
     await sql.statement(
-      `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`);
+      `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`,
+      probeCallOptions(ctx, pollContext));
     const insert = await sql.statement(
-      `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`);
-    const rows = await sql.query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`);
+      `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`,
+      probeCallOptions(ctx, pollContext));
+    const rows = await sql.query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`,
+      probeCallOptions(ctx, pollContext));
     return {ready: insert.rowCount === 1 && rows.length === 1 && rows[0].token === token,
       diagnostic: {written: token, insertTag: insert.tag, insertRowCount: insert.rowCount,
         readBack: rows, visibility}};
@@ -600,20 +629,31 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
   const formationDeadlineMs = resolveFormationDeadlineMs(opts);
   const budget = Object.freeze({...resolveReadinessBudget(opts),
     attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
-  const ctx = {sshRun, opts, clientIp, sleep, now: clock, signal: abortSignal,
+  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
+  const ctx = {sshRun: trackedSshRun, opts, clientIp, sleep, now: clock, signal: abortSignal,
     formationDeadlineMs, deadlineAtMs: null, deadlineMs: formationDeadlineMs,
     budget, connection, expectedVersion};
   const roles = [];
   const nodeReadiness = [];
   const formed = {listener: null};
   try {
-    return await describingReadinessExhaustion(() => formLagrangeCluster({ctx, hosts, image,
-      connection, roles, nodeReadiness, formed, campaignId}),
-    (failure) => describeExhaustedDeployment({
-      targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
-      roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
-      readVersions: (products) => reportedVersions(ctx, products), failure}));
+    return await describingReadinessExhaustion(
+      async () => {
+        try {
+          return await formLagrangeCluster({ctx, hosts, image, connection,
+            roles, nodeReadiness, formed, campaignId});
+        } finally {
+          await settleInFlight();
+        }
+      },
+      (failure) => describeExhaustedDeployment({
+        targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
+        roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
+        readVersions: (products) => reportedVersions({...ctx, sshRun, signal: null,
+          deadlineAtMs: null, deadlineMs: null}, products), failure}),
+    );
   } catch (error) {
+    await settleInFlight();
     if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
       error.roles = [...roles];
     }

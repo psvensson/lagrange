@@ -302,11 +302,14 @@ function sshOptions(opts) {
 
 function createSshRun(hosts, opts) {
   const targetOf = new Map(hosts.map((host) => [host.ip, host.sshTarget]));
-  return async (ip, _opts, command, timeoutMs = SSH_TIMEOUT_MS) => {
+  return async (ip, callOpts, command, timeoutMs = SSH_TIMEOUT_MS) => {
     const target = targetOf.get(ip);
     if (!target) throw new Error(`host ${ip} is not part of this campaign`);
+    const signal = callOpts?.signal ?? opts?.signal;
+    const boundedTimeoutMs = Number.isFinite(callOpts?.timeoutMs) ?
+      Math.max(1, Math.min(timeoutMs, Math.floor(callOpts.timeoutMs))) : timeoutMs;
     const {stdout} = await execFileAsync('ssh', [...sshOptions(opts), target, command],
-      {timeout: timeoutMs, maxBuffer: SSH_MAX_BUFFER});
+      {timeout: boundedTimeoutMs, maxBuffer: SSH_MAX_BUFFER, ...(signal ? {signal} : {})});
     return String(stdout || '').trim();
   };
 }

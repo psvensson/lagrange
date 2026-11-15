@@ -48,9 +48,14 @@ async function describeExhaustedDeployment({targetId, topology, sshRun, opts, ro
   const products = await readVersionsOrRecord(await inspectProducts({sshRun, opts, roles}),
     readVersions);
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));
+  const lastObservation = failure?.lastObservation ??
+    failure?.diagnostic?.lastObservation ?? failure?.diagnostic?.last ?? null;
+  const aborted = Boolean(failure?.aborted || failure?.diagnostic?.aborted ||
+    failure?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED);
   return {targetId, topology, roles: [...roles], storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.EXHAUSTED, observedAt: new Date().toISOString(),
-      evidence: {failure: failure.message, diagnostic: failure.diagnostic}},
+      aborted, lastObservation,
+      evidence: {failure: failure.message, diagnostic: failure.diagnostic, lastObservation}},
     identity: {products}, placement: null, endpoint};
 }
 
@@ -66,7 +71,12 @@ async function describingReadinessExhaustion(deploy, describe) {
   try {
     return await deploy();
   } catch (error) {
-    if (error?.code !== DEPLOYMENT_FAILURE.READINESS_EXHAUSTED) throw error;
+    if (error?.code !== DEPLOYMENT_FAILURE.READINESS_EXHAUSTED &&
+        error?.code !== DEPLOYMENT_FAILURE.WATCHDOG_STOPPED &&
+        error?.aborted !== true &&
+        error?.diagnostic?.aborted !== true) {
+      throw error;
+    }
     try {
       error.deployment = await describe(error);
     } catch (unobservable) {
