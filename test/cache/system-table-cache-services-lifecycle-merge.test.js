@@ -6,8 +6,10 @@ import {
 import {TABLES} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
   '../../src/cache/cache-constants.js';
-import {areAuthoritativeSystemTableCacheRowsAligned} from
-  '../../src/cache/system-table-cache-authoritative-reconciliation.js';
+import {
+  areAuthoritativeSystemTableCacheRowsAligned,
+  normalizeSourceLogIndex,
+} from '../../src/cache/system-table-cache-authoritative-reconciliation.js';
 import {
   advanceServiceRowCreatedAtFloor,
   mintServiceRowCreatedAt,
@@ -557,6 +559,11 @@ test(
     });
     for (const supersessionOptions of [
       {authoritativeIncarnationSupersedes: true},
+      {
+        cachedSourceLogIndex: 10,
+        authoritativeSourceLogIndex: null,
+        authoritativeIncarnationSupersedes: true,
+      },
       {cachedSourceLogIndex: 10, authoritativeSourceLogIndex: 20},
       {
         cachedOriginHlc: '1000-0-services-p1-r1',
@@ -628,6 +635,16 @@ test(
       );
       t.equal(fenced.alignedAfter, true);
     }
+
+    for (const invalidIndex of [null, undefined, false, '', '  ', -1]) {
+      t.equal(
+        normalizeSourceLogIndex(invalidIndex),
+        null,
+        `normalizeSourceLogIndex preserves unknown index (${invalidIndex})`,
+      );
+    }
+    t.equal(normalizeSourceLogIndex(10), 10);
+    t.equal(normalizeSourceLogIndex('10'), 10);
 
     const observedDurableCreatedAt = mintServiceRowCreatedAt(1000) + 10;
     t.equal(

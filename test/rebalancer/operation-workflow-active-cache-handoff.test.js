@@ -795,37 +795,28 @@ test(
     operation.entityId = TEST_PARTITION_ID;
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
-    coordinator.workflowOwner.scheduleObservedProgressRetry =
-      (operationId) => {
-        scheduledOperationIds.push(operationId);
-        return true;
-      };
+    coordinator.workflowOwner.completeOperation = async (
+      completedOperation,
+    ) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
+    coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
+      scheduledOperationIds.push(operationId);
+      return true;
+    };
 
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-
       t.equal(deferred, true, 'wrong-node authority remains owned progress');
       t.same(completedOperationIds, [], 'terminal state remains blocked');
       t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
-      t.same(
-        refreshCalls[0]?.options,
-        {
-          expectedFields: {
-            status: ReplicaStatus.ACTIVE,
-            node_id: TEST_NODE_ID,
-          },
-        },
-        'authoritative repair itself requires intended-node alignment',
-      );
+      t.same(refreshCalls[0]?.options, {
+        expectedFields: {status: ReplicaStatus.ACTIVE, node_id: TEST_NODE_ID},
+      });
       t.equal(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).node_id,
         wrongNodeId,
-        'a truthy repair result is rechecked against the cache owner boundary',
       );
     } finally {
       await coordinator.shutdown();
@@ -869,50 +860,23 @@ test(
     });
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
+    coordinator.workflowOwner.completeOperation = async (
+      completedOperation,
+    ) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
 
     try {
       const completed = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-      const cachedRow = cache.get(
-        SYSTEM_TABLE_NAME.SERVICES,
-        TEST_REPLICA_ID,
-      );
-
-      t.equal(
-        completed,
-        true,
-        'owner-scoped production alignment releases terminal state',
-      );
-      t.same(
-        completedOperationIds,
-        [TEST_OPERATION_ID],
-        'the workflow completes only after exact lifecycle alignment',
-      );
-      t.equal(cachedRow.status, 'active', 'durable lifecycle state is exact');
-      t.equal(
-        cachedRow.state_entered_at,
-        2000,
-        'lifecycle ordering follows its owner timestamp',
-      );
-      t.equal(
-        cachedRow.raft_role,
-        'follower',
-        'the older authoritative lifecycle read cannot regress live role evidence',
-      );
-      t.equal(
-        cachedRow.updated_at,
-        2000,
-        'the equal composite row version does not justify a role regression',
-      );
-      t.equal(
-        cachedRow.updated_at_hlc,
-        '2000-1-active-cache-handoff-owner',
-        'cache-local causal evidence survives authoritative replacement',
-      );
+      const cachedRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
+      t.equal(completed, true);
+      t.same(completedOperationIds, [TEST_OPERATION_ID]);
+      t.equal(cachedRow.status, 'active');
+      t.equal(cachedRow.state_entered_at, 2000);
+      t.equal(cachedRow.raft_role, 'follower');
+      t.equal(cachedRow.updated_at, 2000);
+      t.equal(cachedRow.updated_at_hlc, '2000-1-active-cache-handoff-owner');
     } finally {
       await coordinator.shutdown();
     }
@@ -1036,35 +1000,25 @@ test(
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
-    coordinator.workflowOwner.scheduleObservedProgressRetry =
-      (operationId) => {
-        scheduledOperationIds.push(operationId);
-        return true;
-      };
+    coordinator.workflowOwner.completeOperation = async (
+      completedOperation,
+    ) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
+    coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
+      scheduledOperationIds.push(operationId);
+      return true;
+    };
 
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-
       t.equal(deferred, true, 'a dropped repair remains owned progress');
-      t.same(
-        completedOperationIds,
-        [],
-        'an invoked mutation is not accepted as proof of cache alignment',
-      );
-      t.same(
-        scheduledOperationIds,
-        [TEST_OPERATION_ID],
-        'the workflow retains an independent retry wake-up',
-      );
+      t.same(completedOperationIds, []);
+      t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
       t.equal(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).status,
         'syncing',
-        'the unchanged cache remains observably divergent',
       );
     } finally {
       await coordinator.shutdown();
@@ -1416,6 +1370,41 @@ test(
   },
 );
 
+async function assertNullAppliedIndexRefreshScenarios(t, staleRow, rebornRow) {
+  const nullWitness = {
+    state: 'observed',
+    role: 'LEADER',
+    term: 2,
+    appliedIndex: null,
+    commitIndex: null,
+  };
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.SERVICES,
+    CDC_OPERATION.UPSERT,
+    staleRow,
+    {sourceLogIndex: 10},
+  );
+  const host = buildProductionCacheRefreshHost({
+    cache,
+    authoritativeRow: rebornRow,
+  });
+  host.executeAuthoritativeSystemTableRead = async () => ({
+    success: true,
+    rows: [rebornRow],
+    readAuthorityWitness: nullWitness,
+  });
+  t.equal(
+    await host.refreshAuthoritativeCacheRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      TEST_REPLICA_ID,
+      {expectedFields: {status: ReplicaStatus.ACTIVE, node_id: TEST_NODE_ID}},
+    ),
+    true,
+  );
+  t.same(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID), rebornRow);
+}
+
 test(
   'ACTIVE terminal handoff repairs a stale cached incarnation after owner ' +
     'restart and wall-clock rollback and fences a delayed read when CDC ' +
@@ -1440,8 +1429,8 @@ test(
     await driveHandoffOverCachedTarget(t, staleRow, rebornRow, rebornRow, {
       authoritativeIncarnationSupersedes: true,
     });
+    await assertNullAppliedIndexRefreshScenarios(t, staleRow, rebornRow);
 
-    const cache = new SystemTableCache();
     const oldRow = buildAuthoritativeServiceRow({
       status: ReplicaStatus.SYNCING,
       raft_role: 'learner',
@@ -1459,34 +1448,44 @@ test(
       updated_at: 900,
       updated_at_hlc: '2000-0-services-owner',
     });
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      CDC_OPERATION.UPSERT,
-      {...oldRow, updated_at_hlc: '1000-0-services-owner'},
-    );
-    const host = buildProductionCacheRefreshHost({
-      cache,
-      authoritativeRow: oldRow,
-    });
-    host.executeAuthoritativeSystemTableRead = async () => {
+    for (const appliedIndex of [10, null]) {
+      const cache = new SystemTableCache();
       cache.applySystemTableChange(
         SYSTEM_TABLE_NAME.SERVICES,
         CDC_OPERATION.UPSERT,
-        newCdcRow,
-        {sourceLogIndex: 20},
+        {...oldRow, updated_at_hlc: '1000-0-services-owner'},
       );
-      return {
-        success: true,
-        rows: [oldRow],
-        readAuthorityWitness: {appliedIndex: 10, observedAtMs: 1000},
+      const host = buildProductionCacheRefreshHost({
+        cache,
+        authoritativeRow: oldRow,
+      });
+      host.executeAuthoritativeSystemTableRead = async () => {
+        cache.applySystemTableChange(
+          SYSTEM_TABLE_NAME.SERVICES,
+          CDC_OPERATION.UPSERT,
+          newCdcRow,
+          {sourceLogIndex: 20},
+        );
+        return {
+          success: true,
+          rows: [oldRow],
+          readAuthorityWitness: {
+            state: 'observed',
+            role: 'LEADER',
+            term: 2,
+            appliedIndex,
+            commitIndex: null,
+            observedAtMs: 1000,
+          },
+        };
       };
-    };
-    const aligned = await host.refreshAuthoritativeCacheRow(
-      SYSTEM_TABLE_NAME.SERVICES,
-      TEST_REPLICA_ID,
-      {expectedFields: {status: ReplicaStatus.ACTIVE, node_id: TEST_NODE_ID}},
-    );
-    t.equal(aligned, true, 'delayed authoritative read is fenced');
-    t.same(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID), newCdcRow);
+      const aligned = await host.refreshAuthoritativeCacheRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        TEST_REPLICA_ID,
+        {expectedFields: {status: ReplicaStatus.ACTIVE, node_id: TEST_NODE_ID}},
+      );
+      t.equal(aligned, true, `delayed read fenced (appliedIndex=${appliedIndex})`);
+      t.same(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID), newCdcRow);
+    }
   },
 );
