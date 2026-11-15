@@ -138,7 +138,7 @@ test('live diagnosis: /health and /readyz healthy but a node lease lapsed and a 
     assert.ok(arrayIncludes(denials, `node_connection_not_ready:${nodeIds[2]}`));
     assert.ok(arrayIncludes(denials, `node_heartbeat_stale:${nodeIds[0]}`),
       'a live lease on a heartbeat older than the product lease is stale (live diagnosis)');
-    assert.ok(arrayIncludes(denials, 'partition_not_routable:p-warehouse'));
+    assert.ok(arrayIncludes(denials, 'partition_not_routable:control_plane_publications-p1'));
     // The exhausted formation is described from its running containers: the
     // campaign records the complete product failure, not a run without a product.
     const described = error.deployment;
@@ -169,7 +169,7 @@ test('after the canonical load every partition of every created table must be ro
     endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
     partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '2',
       leader_node_id: 'a'}],
-    services: [{partition_id: 'p1', node_id: 'a', status: 'active', raft_role: 'leader'}],
+    services: [{partition_id: 'p1', node_id: 'a', status: 'active', raft_role: 'follower'}],
     expectedNodeIds: ['a', 'b'], requiredServiceIds: ['sys-postgres-wire'],
     requiredTables: ['stock', 'item']});
   assert.equal(verdict.ready, false);
@@ -190,8 +190,8 @@ function replicationVerdict({replicaCount, activeNodeIds, expectedNodeIds}) {
   return evaluateLagrangeClusterReadiness({nodes, now,
     endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
     partitions: [partition],
-    services: arrayMap(activeNodeIds, (nodeId, index) => ({partition_id: 'p1',
-      node_id: nodeId, status: 'active', raft_role: index === 0 ? 'leader' : 'follower'})),
+    services: arrayMap(activeNodeIds, (nodeId) => ({partition_id: 'p1',
+      node_id: nodeId, status: 'active', raft_role: 'follower'})),
     expectedNodeIds, requiredServiceIds: ['sys-postgres-wire'], requiredTables: ['stock']});
 }
 
@@ -233,8 +233,8 @@ test('live diagnosis 2026-11-01: serve lane closed (priority control-plane recov
       const nodeId = `00000000-0000-4000-8000-00000000000${1 + arrayFindIndex(HOSTS, (host) =>
         stringIncludes(command, `//${host}:`))}`;
       return http(200, {replicaOperations: {inFlightCount: 2}, controlPlaneDiagnostics: {
-        readinessByNodeId: {[nodeId]: {serveEligible: false,
-          reasonCodes: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING']}}}});
+        readinessByNodeId: {[nodeId]: {dimensions: {serveEligible: false},
+          reasons: [{code: 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'}]}}}});
     }],
     ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
   ]);
