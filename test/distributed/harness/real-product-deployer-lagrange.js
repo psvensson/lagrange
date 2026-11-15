@@ -117,6 +117,11 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // 15 polls a minute for 15 minutes (5.6x the one routable observation); it is
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
+// Cold 3-node formation requires all 6 priority control-plane partitions to
+// spread across 3 distinct nodes before joiners' /readyz opens; matches
+// FORMATION_BOUND_MS = 420_000 (420 polls at 1000 ms) in
+// test/distributed/scenarios/fresh-formation-user-table-routability.js.
+const FORMATION_ATTEMPTS = 420;
 const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 // Cross-VM (--network host) transport ACK and join timeouts, matching
 // cluster-class-lifecycle-base.js (commit 5ff58af0c, CL-007).
@@ -561,7 +566,9 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId,
   const expectedVersion = opts.lagrangeVersion || semverTagOf(rawImage);
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
-  const ctx = {sshRun, opts, clientIp, sleep, budget: resolveReadinessBudget(opts), connection,
+  const budget = Object.freeze({...resolveReadinessBudget(opts),
+    attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
+  const ctx = {sshRun, opts, clientIp, sleep, budget, connection,
     expectedVersion};
   const roles = [];
   const nodeReadiness = [];
