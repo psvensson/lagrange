@@ -162,7 +162,7 @@ function synchronousReady(ctx, primary, setting) {
     }});
 }
 
-async function startStandbys(ctx, primary, {hosts, campaignId, image, passwords}) {
+async function startStandbys(ctx, primary, {hosts, campaignId, image, passwords, roles}) {
   const standbys = [];
   for (let index = 0; index < STANDBY_NAMES.length; index += 1) {
     const started = await dockerRunDetached({sshRun: ctx.sshRun, opts: ctx.opts,
@@ -171,8 +171,10 @@ async function startStandbys(ctx, primary, {hosts, campaignId, image, passwords}
         '-e', `PGDATA=${PGDATA}`, '--entrypoint', 'sh'],
       commandArgs: ['-c', standbyScript({primaryHost: primary.host,
         name: STANDBY_NAMES[index], password: passwords.replication})]});
-    standbys.push({role: ROLE.STANDBY, host: started.host, containerId: started.containerId,
-      standbyName: STANDBY_NAMES[index]});
+    const standby = {role: ROLE.STANDBY, host: started.host, containerId: started.containerId,
+      standbyName: STANDBY_NAMES[index]};
+    roles.push(standby);
+    standbys.push(standby);
   }
   return standbys;
 }
@@ -250,9 +252,9 @@ async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, 
   const clientIps = [...new Set([clientIp, ...(opts.proofClientIps || [])])];
   const hbaRules = await configureAccess(ctx, primary, {clientIps, standbyHosts, passwords});
   if (targetId === TARGET.SYNC_HA) {
-    const standbys = await startStandbys(ctx, primary, {hosts, campaignId, image, passwords});
+    const standbys = await startStandbys(ctx, primary, {hosts, campaignId, image, passwords,
+      roles});
     for (const standby of standbys) readiness.servers.push(await serverReady(ctx, standby));
-    roles.push(...standbys);
     readiness.streaming = await streamingReady(ctx, primary, standbys.length);
     const setting = `FIRST 1 (${arrayJoin(STANDBY_NAMES, ', ')})`;
     await query(ctx, primary, `ALTER SYSTEM SET synchronous_standby_names = '${setting}'`);

@@ -266,7 +266,7 @@ function selectReadView(db, session, fault) {
   return db.tables;
 }
 
-function handleAdminSql(store, session, normalized, params) {
+function handleDatabaseDdl(store, session, normalized) {
   const dropMatch = /^DROP DATABASE IF EXISTS `?([A-Za-z0-9_]+)`?$/iu.exec(normalized);
   if (dropMatch) {
     store.databases.delete(dropMatch[1]);
@@ -283,6 +283,12 @@ function handleAdminSql(store, session, normalized, params) {
     session.dbName = useMatch[1];
     return {rows: [], rowCount: 0};
   }
+  return null;
+}
+
+function handleAdminSql(store, session, normalized, params) {
+  const dbDdl = handleDatabaseDdl(store, session, normalized);
+  if (dbDdl) return dbDdl;
   const db = store.ensureDb(session.dbName);
   const createTbl = /^CREATE TABLE ([a-z_]+)/iu.exec(normalized);
   if (createTbl) {
@@ -290,6 +296,15 @@ function handleAdminSql(store, session, normalized, params) {
     return {rows: [], rowCount: 0};
   }
   if (/^(CREATE INDEX|DROP TABLE)/iu.test(normalized)) return {rows: [], rowCount: 0};
+  const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
+  if (truncateTbl) {
+    db.tables.set(truncateTbl[1], []);
+    return {rows: [], rowCount: 0};
+  }
+  const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/iu.exec(normalized);
+  if (schemaProbe) {
+    return {rows: tableRowsOf(db.tables, schemaProbe[2]).slice(0, 1), rowCount: 0};
+  }
   if (/^SELECT CONNECTION_ID\(\)/iu.test(normalized)) {
     return {rows: [{connection_id: session.id}]};
   }

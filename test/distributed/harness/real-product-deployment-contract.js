@@ -74,7 +74,7 @@ const POSTGRES_IMAGE_DEFAULT = 'postgres:17-alpine';
 const SQL_CLIENT_IMAGE = POSTGRES_IMAGE_DEFAULT;
 
 const DEFAULT_READINESS = Object.freeze({
-  attempts: 240,
+  attempts: 120,
   // Consecutive ready verdicts the cluster predicate must hold (quiet window).
   stablePolls: 3,
   intervalMs: 1000,

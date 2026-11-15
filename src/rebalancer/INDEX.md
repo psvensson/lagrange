@@ -91,7 +91,7 @@ documentClass: generated
 - [operation-workflow-recovery-timeout.js](operation-workflow-recovery-timeout.js) - Level-triggered operation-liveness reconciler - the holistic safety net for the whole ORPHANED-OPERATION class, not... (importers: few)
 - [operation-workflow-remove-safety-entity-tier.js](operation-workflow-remove-safety-entity-tier.js) - Remove safety for replicated entities that are not partitions. (importers: few)
 - [operation-workflow-remove-safety-evaluator.js](operation-workflow-remove-safety-evaluator.js) - Project the distinct-node spread floor for one serialized removal. (importers: few)
-- [operation-workflow-remove-safety-membership.js](operation-workflow-remove-safety-membership.js) - Build recovery projection node IDs. (importers: few)
+- [operation-workflow-remove-safety-membership.js](operation-workflow-remove-safety-membership.js) - Check whether a node is ready in the committed node floor when provided. (importers: few)
 - [operation-workflow-remove-safety-universal-tier.js](operation-workflow-remove-safety-universal-tier.js) - The universal PARTITION execution-time remove-safety floor (audit finding 1). (importers: few)
 - [operation-workflow-replace-handoff-attempt.js](operation-workflow-replace-handoff-attempt.js) - Owner contract: Owner: the REPLACE owner's leadership handoff attempt (quest replace-source-removal-owner,... (importers: few)
 - [operation-workflow-replace-intent.js](operation-workflow-replace-intent.js) - Owner contract: Owner: the REPLACE owner's removal-intent boundary and its C0 (quest replace-source-removal-owner,... (importers: few)

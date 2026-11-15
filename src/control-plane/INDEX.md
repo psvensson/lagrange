@@ -95,7 +95,7 @@ documentClass: generated
 - [heartbeat-service-reporter-visibility-methods.js](heartbeat-service-reporter-visibility-methods.js) - Normalize reporter heartbeat visibility evidence into one canonical decision so coalescing and verification follow... (importers: one)
 - [heartbeat-service-runtime-state.js](heartbeat-service-runtime-state.js) - Estimate usage-percent slope (percent per minute) with linear regression. (importers: few)
 - [heartbeat-service-write-coalescing.js](heartbeat-service-write-coalescing.js) - No leading comment; first export: buildNodeHeartbeatWriteDecision. (importers: few)
-- [heartbeat-service.js](heartbeat-service.js) - HeartbeatService - Periodic heartbeat updates and consecutive failure tracking. (importers: many)
+- [heartbeat-service.js](heartbeat-service.js) - HeartbeatService - Periodic heartbeat updates and consecutive failure tracking. (importers: hub)
 - [invariant-constants.js](invariant-constants.js) - Constants for the control-plane invariant engine. (importers: few)
 - [invariant-engine-diagnostics.js](invariant-engine-diagnostics.js) - Diagnostics conversion and hard gate helpers for invariant results. (importers: one)
 - [invariant-engine-progress-checks.js](invariant-engine-progress-checks.js) - Control-plane invariant checks for readiness, progress, publication, and coverage records. (importers: one)

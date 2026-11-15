@@ -370,6 +370,16 @@ function administrative(state, sql, parameters) {
   const created = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
   if (created) return createTable(state, created[1]);
   if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
+  const truncated = /^TRUNCATE TABLE ([a-z_]+)$/u.exec(sql);
+  if (truncated) {
+    state.tables.set(truncated[1], []);
+    return {rows: [], rowCount: 0};
+  }
+  const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/u.exec(sql);
+  if (schemaProbe) {
+    if (!state.tables.has(schemaProbe[2])) throw new Error(`Table not found: ${schemaProbe[2]}`);
+    return {rows: rowsOf(state, schemaProbe[2]).slice(0, 1), rowCount: 0};
+  }
   if (/^(CREATE INDEX|DROP |CREATE DATABASE|USE )/u.test(sql)) return {rows: [], rowCount: 0};
   throw new Error(`fake product does not know statement: ${sql}`);
 }
