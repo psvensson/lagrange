@@ -45,7 +45,10 @@ sweeps, live movement, RTT sweeps, recovery and backfill are recorded in the cam
 
 Without `--storage-root`, product data lives in the containers' writable layer and every run is
 recorded as `smoke`. With `--storage-root <dir>`, each data directory is an explicit host volume
-under `<dir>/<campaignId>/` and the deployment records it as `host-volume`.
+under `<dir>/<campaignId>/` and the deployment records it as `host-volume`. Before a Lagrange
+node starts, its directory is created owned by the image's runtime user (10001:10001) through a
+throwaway `postgres:17-alpine` container; a directory that already holds data of another owner
+is refused (`deployment_command_failed`, reason `storage_foreign_owner`) and never re-owned.
 
 Publishing is not part of the runner: published pages are regenerated from admitted cells only.
 
@@ -95,6 +98,16 @@ read on a containerd-store host on 2026-11-01). Every data host must already hol
 the runner never pulls it and never deletes or prunes images. On a host whose daemon cannot pull
 from the registry, place the image yourself (`docker save` on a host that has it, `docker load`
 on that host); the run then records its provenance as `loaded:<image id>`.
+The runner never places any image: every image a host role runs must be on that host before the
+campaign (data hosts: the product images, `postgres:17-alpine` and, for TiDB, `mysql:8.4.11`; the
+load generator: `postgres:17-alpine`, the psql client the Lagrange arm reads through). An absent
+image refuses the campaign with `image_unavailable` naming host, role and image, and every
+campaign container runs with `--pull=never`. The load generator installs the reference client
+(`test/distributed/reference-client`, mysql2) with `npm ci --offline` from its npm cache; a tarball
+the cache lacks refuses the TiDB arm and is named. The load generator's checkout must already hold
+the harness commit (`load_generator_commit_absent` otherwise; it is never fetched). On the lab,
+placing the images, the commit and the cache is the operator's step (no repository code places
+them on lab hosts); on GCP it is `provision-gcp.sh --place` (section 3).
 Every selected host is held with the lab's machine-wide `flock` and holder record before any
 deployment (a host another run holds refuses the campaign, naming the holder), the thermal gate
 `scripts/checks/wait-for-thermal-headroom.js` runs on every held host, and the holds are released
@@ -110,16 +123,58 @@ GCP is used only when asked for, with hosts you provisioned; the runner creates 
 ### Step 1 - Provision VMs
 ```sh
 export PROJECT_ID="your-gcp-project-id"
-export ZONE="us-central1-a"
+export SSH_USER="bench"
+export SSH_PUBLIC_KEY_FILE="$HOME/.ssh/id_ed25519.pub"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
-The script creates the VMs (the dedicated client VM last), an intra-cluster firewall rule, and
-installs Docker. It does not open the Docker socket to everyone and does not add users to the
-`docker` group: grant Docker access to the one SSH user the runner connects as yourself. SSH
-host keys are verified as usual; record each VM's host key in `known_hosts` (for example with
-`gcloud compute ssh` once per VM) before the run.
+Every value is named by you or is a documented default, and the script prints the values in use
+before it creates anything. `PROJECT_ID`, `SSH_USER` and `SSH_PUBLIC_KEY_FILE` are required (the
+key is installed for `SSH_USER` on every VM; a missing or unreadable key file is refused before any
+`gcloud` call, and the script never searches for a key). Defaults: `ZONE=us-central1-a`,
+`MACHINE_TYPE=e2-standard-4`, `CLUSTER_PREFIX=lagrange-bench`, `NETWORK=default`,
+`BOOT_DISK_SIZE=50GB`, `BOOT_DISK_TYPE=pd-ssd` (the disk type bears on results),
+`FIREWALL_ALLOW=tcp:1-65535,udp:1-65535,icmp` (between the VMs only), and the image
+`ubuntu-2404-lts-amd64` in `ubuntu-os-cloud` unless you name another with both `IMAGE_FAMILY` and
+`IMAGE_PROJECT` (for example a project's pre-baked `lagrange-distributed-harness` family); naming
+only one is refused, and the script never switches to an image you did not name. It creates the
+VMs (the dedicated client VM last) and an intra-cluster firewall rule; a rule of that name that
+already exists was not created by this run and is refused (run `--teardown`, which deletes it).
+gcloud acts as the account of your gcloud configuration; the script prints that account and the
+project before it creates or deletes anything. The startup script installs Docker and git from the image's archive (not pinned;
+step 2 records the versions). The script does not open the Docker socket to everyone and does not
+add users to the `docker` group: grant Docker access to the one SSH user the runner connects as
+yourself. SSH host keys are verified as usual; record each VM's host key in `known_hosts` (for
+example with `gcloud compute ssh` once per VM) before the run. Put Node at the repository's
+engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IMAGE_FAMILY`,
+`IMAGE_PROJECT`, `BOOT_DISK_SIZE`, `BOOT_DISK_TYPE` and `FIREWALL_ALLOW` lines the script prints;
+step 2 refuses without any of them and records them for every host.
 
-### Step 2 - Preview and run
+### Step 2 - Place what the campaign needs
+```sh
+./docs/benchmarks/cloud/provision-gcp.sh --place --client-checkout /home/$SSH_USER/lagrange \
+  --client-node /path/to/node --lagrange-image psvensson/lagrange@sha256:<digest>
+```
+This is the only step that uses the network on purpose; the campaign never pulls or fetches. It
+runs the runner's `--provision` mode with your campaign options (`--targets`, `--lagrange-image`,
+`--lagrange-image-content`): it checks Docker on every VM and git and Node (at the engines floor)
+on the load generator first, then on every VM pulls each
+image its role runs, by the reference the
+campaign checks (the Lagrange image by its `@sha256` digest; the comparator images by their
+pinned tags), pushes this checkout's HEAD (the harness commit) into `--client-checkout` on the
+load generator, checks it out and runs `npm ci` there, and adds every tarball of the reference
+client's lockfile (at that commit) to the load generator's npm cache. It then verifies each with
+the campaign's
+own check. A failure is typed and names the host and what is missing (a `provisioning_*` code,
+or the code of the campaign check that still refuses); fix it and run the step again. Its
+output records, for every host, how the VMs were created (image family and project, boot disk
+size and type, firewall rules), the Docker server version and the id of every image it verified, and for the
+load generator the git and Node versions. This path
+is tested through the real CLI with only `ssh` and `git push` scripted, and its generated
+commands (storage preparation, image probe, commit push/checkout/probe, offline install) are
+executed in tests with the real shell, git and npm; it has not yet been run on GCP: registry
+pulls, `npm cache add` from the registry and `npm ci` on a fresh VM are unproven.
+
+### Step 3 - Preview and run
 ```sh
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp \
   --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER" --dry-run
@@ -128,14 +183,15 @@ node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --execution-target gcp
   --hosts "$HOSTS" --ssh-hosts "$SSH_HOSTS" --ssh-user "$SSH_USER"
 ```
 The first three `--hosts` addresses are the data hosts and the last is the load generator.
-A live GCP run also needs `--client-checkout <path>` (a checkout of this commit with
-`npm ci` done on the load-generator VM) and, if `node` there is not Node 22 or later,
-`--client-node <path>`.
+A live GCP run also needs the `--client-checkout` and `--client-node` you placed with.
 
-### Step 3 - Tear down
+### Step 4 - Tear down
 ```sh
 ./docs/benchmarks/cloud/provision-gcp.sh --teardown
 ```
+Teardown reports each VM and the firewall rule as deleted, already absent or failed, then asks
+again: it prints `Teardown complete` only when no VM of the prefix remains, and otherwise exits
+non-zero naming what may still be billed.
 
 AWS and Azure provisioning scripts exist in [`cloud/`](cloud/) but are not execution targets of
 this runner. Both open SSH (port 22) only to the network you name: `--ssh-cidr <cidr>` is required,
@@ -151,7 +207,7 @@ has no default and refuses a `/0` network, so pass your own address, for example
 node docs/benchmarks/cloud/run-comparative-benchmarks.mjs --help
 ```
 `--targets` selects arms (`lagrange`, `tidb-tikv`, `pg-single-primary`, `pg-patroni-sync-ha-rf3`;
-default `lagrange,tidb-tikv,pg-patroni-sync-ha-rf3`). The PostgreSQL HA arm is a primary with two
+default `lagrange,tidb-tikv,pg-single-primary`). The PostgreSQL HA arm is a primary with two
 synchronous streaming standbys; clients connect to the primary directly and no HA manager runs.
 
 ---

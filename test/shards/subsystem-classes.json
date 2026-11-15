@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 234,
     "convergence-topology": 83,
-    "distributed-harness": 216,
+    "distributed-harness": 220,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 280,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2648,
-  "digest": "fnv1a32-0863499d",
+  "censusSize": 2652,
+  "digest": "fnv1a32-4f00193e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-23862a33",
+  "observationDigest": "fnv1a32-f4ba29b7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -904,6 +904,9 @@
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
@@ -987,6 +990,7 @@
     "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
@@ -7260,6 +7264,94 @@
         "test/distributed/harness"
       ]
     },
+    "test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": {
+      "files": [
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "FAKE_REMOTE_HOSTS_STATE",
+        "GIT_SSH_COMMAND",
+        "PATH"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": {
+      "files": [
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {
       "files": [
         "Dockerfile",
@@ -8033,6 +8125,15 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": {
+      "files": [
+        "docs/benchmarks/cloud/provision-gcp.sh",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+      ],
+      "env": [
+        "PATH"
       ]
     },
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": {

@@ -140,29 +140,44 @@ function exclusionOf(node, facts, seenBootIds) {
   if (!node.ssh || !node.ip) return 'no ssh target or ip in the inventory';
   if (facts.error || !facts.capability) return `unreachable: ${facts.error || 'never probed'}`;
   if (facts.capability.dockerReachable !== true) return 'docker not reachable';
-  const thermal = thermalOf(facts.capability);
-  if (!thermalEligible(thermal)) {
-    return 'host-ineligible: native thermal decision unavailable';
-  }
+  const thermal = thermalExclusion(thermalOf(facts.capability));
+  if (thermal) return thermal;
   if (facts.capability.bootId && seenBootIds.has(facts.capability.bootId)) {
     return 'same machine as another inventory node';
   }
   return null;
 }
 
-function thermalEligible(thermal) {
-  return Boolean(thermal) && (thermalPermits(thermal.decision) ||
-    thermal.decision.outcome === HEADROOM.HOLD);
+// Why a host's native thermal facts exclude it, or null: each cause keeps its
+// own typed reason (an endpoint never recorded or invalid, or the native
+// decision's outcome and reason), never one generic "unavailable". The only
+// decision that excludes is UNAVAILABLE (checkedThermalObservation yields
+// READY, HOLD, OPERATOR_PACED or UNAVAILABLE), and its producer always sets a
+// non-empty `reason` (wait-for-thermal-headroom.js `unavailable` and the
+// observation contract), so that one field is read.
+function thermalExclusion(thermal) {
+  if (thermal.refusal) return `host-ineligible: ${thermal.refusal}`;
+  const {decision} = thermal;
+  if (thermalPermits(decision) || decision.outcome === HEADROOM.HOLD) return null;
+  return `host-ineligible: native thermal decision unavailable (${decision.outcome}: ` +
+    `${decision.reason})`;
 }
 
+const THERMAL_ENDPOINT_NOT_RECORDED = 'native thermal endpoint not recorded';
+
 function thermalOf(capability) {
-  try {
-    const endpoint = parseThermalEndpoint(JSON.stringify(capability.thermalEndpoint));
-    return {endpoint, decision: checkedThermalObservation(capability.thermalObservation,
-      endpoint, capability.thermalStatus)};
-  } catch {
-    return null;
+  if (capability.thermalEndpoint === undefined || capability.thermalEndpoint === null) {
+    return {endpoint: null, decision: null, refusal: THERMAL_ENDPOINT_NOT_RECORDED};
   }
+  let endpoint;
+  try {
+    endpoint = parseThermalEndpoint(JSON.stringify(capability.thermalEndpoint));
+  } catch (error) {
+    return {endpoint: null, decision: null,
+      refusal: `native thermal endpoint invalid: ${errorText(error)}`};
+  }
+  return {endpoint, refusal: null, decision: checkedThermalObservation(
+    capability.thermalObservation, endpoint, capability.thermalStatus)};
 }
 
 function lockOf(facts) {
@@ -407,6 +422,7 @@ async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
 }
 
 export {
+  versionAtLeast,
   THERMAL_GATE,
   checkLabThermalHeadroom,
   holdLabBenchmarkHosts,
