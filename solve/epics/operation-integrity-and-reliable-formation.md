@@ -122,33 +122,59 @@ invalid evidence before integration.
     canonical JSON data-plane serialization, Raft durable-store connection
     custody, CDC timer-until-shutdown resource cleanup, and `PR206`
     replica-lifecycle observation row-carrier cut.
-  - **Stream 4 -- [cdc-oversized-entry-range-scan](../quests/cdc-oversized-entry-range-scan/quest.json) (`3c2c3af13`):**
-    eliminates repeated $O(M)$ position scans of oversized CDC entries in
-    `composeCdcShipRange` via SQLite `SELECT_OWED_ENTRY_BYTES` (`<= 4` queries
-    per wave at 512, 1024, and 4096 events), pages `firstReadyRow` by
-    `DRIVE_PAGE_ROWS`, and uses position-only `readOwedCdcObligationPositions`
-    in `drainPendingHydratedObligations` while preserving `S-12` and `S-13`.
-  - **Stream 5a -- [node-ready-lease-renewal-cadence](../quests/node-ready-lease-renewal-cadence/quest.json) & authoritative `SERVICES` incarnation merge (`fb634397f`):**
-    aligns `HeartbeatService` renewal cadence defaults (`5000 ms` renewal for
-    `15000 ms` lease), preserves `port` and `create_attempt_token` across
-    same-incarnation and monotonic `version` / `updated_at` advancement in
-    `buildAuthoritativeServiceLifecycleCacheReplacement`, and binds the
-    affinity demo formation verdict to explicit convergence.
-  - **Stream 2 -- [formation-ready-lease-independent-of-spread](../quests/formation-ready-lease-independent-of-spread/quest.json) (`#217`, `5bc4d0769..ebd94a498`):**
+  - **Stream 4 -- [cdc-oversized-entry-range-scan](../quests/cdc-oversized-entry-range-scan/quest.json) (`3c2c3af13`, `96d6aefb8`, `082b8fc8f` / component `f28f61cf4`):**
+    eliminates repeated $O(M)$ position and byte-sum scans of oversized CDC
+    entries via connection-scoped `_cdcOwedEntryBytes` (`SELECT_OWED_ENTRY_BYTES`
+    executes once per oversized entry across an entire drain, `<= 4` queries per
+    wave at 512, 1024, and 4096 events, and finalizes/evicts tallies on
+    transaction commit and rollback via `commitOwedEntryByteTallies` and
+    `rollbackOwedEntryByteTallies`), pages `firstReadyRow` and
+    `owedEntryPositionsAfter` by `DRIVE_PAGE_ROWS`, and uses position-only
+    `readOwedCdcObligationPositions` in `drainPendingHydratedObligations`
+    (verified on `adams-gamla` in lab jobs `9f6d4ede-a952-418b-a775-0dc425c40785`
+    and `58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d`, 9/9 test files, 328 assertions;
+    post-closure applicability recorded in
+    [post-closure-applicability-2026-11-15.md](../quests/cdc-oversized-entry-range-scan/evidence/post-closure-applicability-2026-11-15.md)).
+  - **Stream 5a -- [node-ready-lease-renewal-cadence](../quests/node-ready-lease-renewal-cadence/quest.json) & authoritative `SERVICES` incarnation supersession (`fb634397f`, `678b9492f`, `19ff97346` / component `2005ad36e`):**
+    derives `HeartbeatService` renewal cadence and `metadataUpdateCooldown` from
+    `leaseTtlMs` (`floor(leaseTtlMs / 3)`), separates `SERVICES` birth
+    incarnation identity (`created_at`) from causal supersession ordering
+    (advancing the birth timestamp floor across owner restarts, fencing
+    authoritative point reads with `beforeReadSnapshot` / `afterReadSnapshot` and
+    CDC `sourceLogIndex` provenance, and preserving unknown `appliedIndex: null`
+    as `null` via `normalizeSourceLogIndex` so a reborn authoritative incarnation
+    replaces a stale cached incarnation even after owner restart and clock
+    rollback), and binds the affinity demo formation verdict to explicit
+    convergence (verified on `carinas-windows` in lab jobs
+    `bbb81104-731c-41dd-80c9-9515d8ac37c6` and
+    `5b4798a9-dbb9-46ec-9ea1-f81a264eb898`, 9/9 test files, 573 assertions).
+  - **Stream 2 -- [formation-ready-lease-independent-of-spread](../quests/formation-ready-lease-independent-of-spread/quest.json) (`#217`, `5bc4d0769..ebd94a498`, `f67f16071` / component `40233af70`):**
     retires the formation-cohort spread gate on `NODES.status = READY` and the
     associated formation-release handoff machinery (`~29,770` net lines deleted
     across `src/`, `models/`, `scripts/`, and `test/`), enforces the
     `READY`-lease + voter-ready floor on priority `REMOVE` safety
-    (`9e943db3` defect class), and seals all 9 priority-recovery cases
-    (`Cases 1-9`, including `Case 6` post-ADD old-owner removal and `Case 9`
-    superseded target cleanup).
-  - **Stream 1 -- Comparative harness & explicit provisioning (`#218`, `#219`, `6855453b6..0f0392838`):**
+    (`evaluateRemoveSafety`, `MovePlanner`, and `ConsensusRecoveryService`),
+    prevents `projectPriorityTerminalCreateTargets` from resurrecting pre-wipe or
+    tombstoned `SERVICES` rows, preserves `REPLICA_OPERATIONS` across
+    wiped-data-dir restarts with both external-cleanup and local-disk-only
+    (`markWipedReplicasFailed: true`) witnesses in
+    `dt-formation-joint-admission-release-liveness.test.js`, and records
+    post-closure applicability in
+    [post-closure-applicability-2026-11-15.md](../../docs/evidence/formation-ready-lease-independent-of-spread-2026-11/post-closure-applicability-2026-11-15.md).
+  - **Stream 1 -- Comparative harness & explicit provisioning (`#218`, `#219`, `6855453b6..0f0392838`, `89404602b`, `1caf39d24`, `1a5a9235d` / component `c7746ef77`):**
     lands [comparative-explicit-load-generator](../quests/comparative-explicit-load-generator/quest.json)
     and [comparative-campaign-explicit-provisioning](../quests/comparative-campaign-explicit-provisioning/quest.json),
-    enforces seed-first storage preparation and startup ownership in
-    `RealProductLagrangeDeployer`, eliminates duplicate seed bootstrap and
-    missing schema-readiness gates in `LagrangeOltpAdapter`, and restores
-    cohort-preserving per-case dataset reset across comparative workloads.
+    enforces `Promise.allSettled` startup ownership and cleanup in
+    `RealProductLagrangeDeployer` and `RealProductPostgresDeployer`, enforces one
+    shared `420,000 ms` wall-clock formation deadline and `AbortSignal`
+    cancellation across sequential Lagrange readiness stages, derives canonical
+    DDL + index (`idx_orders_customer_latest`) validation before retained-cohort
+    truncation in `LagrangeOltpAdapter`, and records post-closure applicability
+    in
+    [post-closure-applicability-2026-11-15.md](../../docs/evidence/comparative-campaign-explicit-provisioning-2026-11/post-closure-applicability-2026-11-15.md)
+    (verified on `tv-dator` job `9b3f4a63-b442-4f4c-ac4e-5885305cc405` and
+    `adams-gamla` job `1034c873-144c-4f88-a6e4-1a85294630c7`, 15/15 test files,
+    135 assertions).
 - **Service and aggregate acceptance status (R09 / R19 / R22):**
   bounded deterministic, differential, and unit/integration proofs for the five
   streams are green on their verified trees, but neither the unchanged physical
@@ -158,23 +184,25 @@ invalid evidence before integration.
   ([canonical-authority-formation-acceptance](../quests/canonical-authority-formation-acceptance/quest.json))
   is claimed as passed until the frozen integrated candidate completes its
   three-consecutive-run physical formation journey and all required aggregate
-  receipts are admitted.
-- **Next action:** execute the public formation journey
-  `fresh-formation-user-table-routability` on `tv-dator` and the combined
-  cross-stream regression shards on `adams-gamla` and `carinas-windows` against
-  the frozen `work/integrated-candidate-20261115` SHA, followed by physical
-  three-node qualification (`E9`) and `Q12` aggregate receipt admission.
+  receipts are admitted. Earlier intermediate failure `9e8a8950` (`c3ec15e6b`,
+  where `control_plane_publications-p1` remained in `ledger_in_flight` for
+  `2,817 ms > 2,500 ms` under `g-projection-agrees-with-authority`) remains an
+  unresolved failure of that earlier composition and is not reclassified away.
+- **Next action:** execute the combined cross-stream regression witnesses and the
+  public formation journey `fresh-formation-user-table-routability` on the lab
+  fleet against the frozen `work/integrated-candidate-20261115` SHA, followed by
+  physical three-node qualification (`E9`) and `Q12` aggregate receipt admission.
 
 ### Integrated candidate commit table (15 November 2026)
 
-| Layer | Stream | Commit range (`work/integrated-candidate-20261115`) | Bounded scope and verification witness |
-| --- | --- | --- | --- |
-| Base | `origin/main` | `c4f1cd064` | Clean starting baseline (`#216` merged). |
-| Layer 1 | Stream 5b (`#208`-`#211`) | `2dc0ca4cc..40cc67121` | Canonical JSON data plane, durable-store connection custody, CDC timer shutdown resource, and `PR206` lifecycle-observation cut; 6 test suites (60 assertions) green. |
-| Layer 2 | Stream 4 (`cdc-oversized-entry-range-scan`) | `3c2c3af13` | $O(1)$ SQLite query bound per oversized CDC wave, paged `firstReadyRow`, and position-only hydration drain; 14 CDC/topology test files (214 subtests) green. |
-| Layer 3 | Stream 5a (`node-ready-lease-renewal-cadence` + cache merge) | `fb634397f` | `HeartbeatService` renewal cadence alignment, authoritative `SERVICES` incarnation merge field preservation, and affinity formation verdict; 9 cache/lease/runtime test files (250 assertions) green. |
-| Layer 4 | Stream 2 (`formation-ready-lease-independent-of-spread` `#217`) | `5bc4d0769..ebd94a498` | Spread-independent `READY` lease, formation-barrier retirement, `READY`-lease voter-ready `REMOVE` floor, and 9 sealed priority-recovery cases; 55/55 convergence + 165/165 rebalancer tests green. |
-| Layer 5 | Stream 1 (`#218` + `#219` comparative harness & adapter) | `6855453b6..0f0392838` | Explicit comparative load generator & provisioning, seed-first Lagrange deployment, `LagrangeOltpAdapter` single-bootstrap/schema gate, and cohort-preserving reset; 16/16 harness test files (82 assertions) green. |
+| Layer | Stream | Commit range (`work/integrated-candidate-20261115`) | Component branch head | Bounded scope and verification witness |
+| --- | --- | --- | --- | --- |
+| Base | `origin/main` | `c4f1cd064` | `c4f1cd064` | Clean starting baseline (`#216` merged). |
+| Layer 1 | Stream 5b (`#208`-`#211`) | `2dc0ca4cc..40cc67121` | `40cc67121` (`origin/wip/order5b-foundation-repairs-rebased-20261115`) | Canonical JSON data plane, durable-store connection custody, CDC timer shutdown resource, and `PR206` lifecycle-observation cut; 6 test suites (60 assertions) green. |
+| Layer 2 | Stream 4 (`cdc-oversized-entry-range-scan`) | `3c2c3af13`, `96d6aefb8`, `082b8fc8f` | `f28f61cf4` (`origin/wip/order4-cdc-oversized-entry-range-scan-20261115`) | Single-aggregate per-entry owed byte tally finalized on transaction commit/rollback, paged `firstReadyRow`, and position-only hydration drain; lab job `58cbbc58` (9 files, 328 assertions) green. |
+| Layer 3 | Stream 5a (`node-ready-lease-renewal-cadence` + cache merge) | `fb634397f`, `678b9492f`, `19ff97346` | `2005ad36e` (`origin/wip/order5a-lease-cadence-service-row-20261115`) | TTL-derived `HeartbeatService` renewal cadence, `SERVICES` birth identity vs causal supersession with unknown-position preservation, and affinity formation verdict; lab job `5b4798a9` (9 files, 573 assertions) green. |
+| Layer 4 | Stream 2 (`formation-ready-lease-independent-of-spread` `#217`) | `5bc4d0769..ebd94a498`, `f67f16071` | `40233af70` (`origin/wip/order2-formation-ready-lease-20261115`) | Spread-independent `READY` lease, `READY`-lease voter-ready `REMOVE` floor, `REPLICA_OPERATIONS`-preserving wiped-data-dir recovery (external + local-disk-only witnesses), and 9 sealed priority-recovery cases; 12/12 joint-admission convergence tests green. |
+| Layer 5 | Stream 1 (`#218` + `#219` comparative harness & adapter) | `6855453b6..0f0392838`, `89404602b`, `1caf39d24`, `1a5a9235d` | `c7746ef77` (`origin/wip/order1-comparative-provisioning-20261115`) | `Promise.allSettled` startup ownership, shared `420,000 ms` formation wall-clock deadline + `AbortSignal` cancellation, canonical DDL + `idx_orders_customer_latest` index validation before cohort truncation; lab job `1034c873` (15 files, 135 assertions) green. |
 
 ### Prior planning summary (12 November 2026)
 

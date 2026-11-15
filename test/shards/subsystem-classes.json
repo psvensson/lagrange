@@ -28,7 +28,7 @@
   "censusSize": 2657,
   "digest": "fnv1a32-e1eb3591",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a81755ed",
+  "observationDigest": "fnv1a32-5d58c9ad",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4038,8 +4038,7 @@
     },
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": {
       "files": [
-        "src/cache/cache-constants.js",
-        "src/cache/system-table-cache-authoritative-reconciliation.js"
+        "src/cache/cache-constants.js"
       ]
     },
     "test/cache/system-table-cache-tombstone-time-authority.test.js": {
