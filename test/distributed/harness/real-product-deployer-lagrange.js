@@ -601,15 +601,16 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   formed, campaignId}) {
   const {sshRun, opts} = ctx;
   const seedHost = hosts[0];
-  await Promise.all(arrayMap(hosts, (host, index) =>
-    prepareNodeStorage({sshRun, opts, host, campaignId, index})));
+  await prepareNodeStorage({sshRun, opts, host: seedHost, campaignId, index: 0});
   roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
     campaignId, index: 0}));
   const joinerIndices = [];
   for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
-  const joinerRoles = await Promise.all(arrayMap(joinerIndices, (index) =>
-    startLagrangeNode({sshRun, opts, host: hosts[index], seedHost, image, connection, campaignId,
-      index})));
+  const joinerRoles = await Promise.all(arrayMap(joinerIndices, async (index) => {
+    const host = hosts[index];
+    await prepareNodeStorage({sshRun, opts, host, campaignId, index});
+    return startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId, index});
+  }));
   for (const role of joinerRoles) roles.push(role);
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
