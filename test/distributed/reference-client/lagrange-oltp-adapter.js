@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {dropsDataset} from './oltp-adapter-contract.js';
 import {createPgWireClient} from './pg-wire-client.js';
 
@@ -354,16 +355,87 @@ async function insertRows(client, table, columns, rows) {
   }
 }
 
-// Lagrange's SQL engine does not execute DROP TABLE yet (the statement parses
-// and the executor refuses it as an unsupported statement type). The proof
-// runs against a freshly formed cluster, so the reset drops only tables that
-// actually exist: a fresh cluster skips every drop honestly, and a reused
-// cluster that still holds the schema fails loudly on the product gap rather
-// than silently loading on top of stale rows.
-const DROP_TABLE_UNSUPPORTED_MARKER = 'Unsupported statement type: DROP_TABLE';
 // A table the product answers is present; every other observation is one
 // of the classification owner's provisioning states.
 const TABLE_PRESENT = 'present';
+
+const CANONICAL_TABLE_COLUMNS = Object.freeze({
+  warehouse: Object.freeze(['id', 'ytd_cents']),
+  district: Object.freeze(['warehouse_id', 'district_id', 'ytd_cents', 'next_order_id']),
+  customer: Object.freeze([
+    'warehouse_id',
+    'district_id',
+    'customer_id',
+    'balance_cents',
+    'ytd_payment_cents',
+    'payment_count',
+    'delivery_count',
+  ]),
+  item: Object.freeze(['item_id', 'price_cents']),
+  stock: Object.freeze([
+    'warehouse_id',
+    'item_id',
+    'quantity',
+    'ytd_quantity',
+    'order_count',
+    'remote_count',
+  ]),
+  orders: Object.freeze([
+    'warehouse_id',
+    'district_id',
+    'order_id',
+    'customer_id',
+    'carrier_id',
+    'line_count',
+    'all_local',
+  ]),
+  new_order: Object.freeze(['warehouse_id', 'district_id', 'order_id']),
+  order_line: Object.freeze([
+    'warehouse_id',
+    'district_id',
+    'order_id',
+    'line_number',
+    'item_id',
+    'supply_warehouse_id',
+    'quantity',
+    'amount_cents',
+    'delivered',
+  ]),
+  history: Object.freeze([
+    'phase',
+    'worker_id',
+    'sequence_id',
+    'customer_warehouse_id',
+    'customer_district_id',
+    'customer_id',
+    'home_warehouse_id',
+    'home_district_id',
+    'amount_cents',
+  ]),
+});
+
+const CANONICAL_SCHEMA_SHA256 = createHash('sha256')
+  .update(JSON.stringify(CANONICAL_TABLE_COLUMNS))
+  .digest('hex');
+
+const OLTP_DATASET_RESET_OUTCOME = Object.freeze({
+  CREATED: 'created',
+  RESET_AND_ROUTABLE: 'reset-and-routable',
+  SCHEMA_MISMATCH: 'schema-mismatch',
+  RESET_UNSUPPORTED: 'reset-unsupported',
+});
+
+function schemaMismatchError(message, cause = null) {
+  const error = new Error(message, cause ? {cause} : undefined);
+  error.code = OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH;
+  return error;
+}
+
+function resetUnsupportedError(message, cause = null) {
+  const error = new Error(message, cause ? {cause} : undefined);
+  error.code = OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED;
+  return error;
+}
 
 // The table as the product answers it now: present, or a typed
 // provisioning state; any other answer is raised as the product's error.
@@ -387,23 +459,32 @@ async function tableExists(client, table) {
   throw observed.error;
 }
 
-// Preparation resets every existing table: engines that support DROP TABLE
-// drop and recreate; engines that refuse DROP TABLE (Lagrange) truncate in
-// place so cohort-preserving semantic cases and the measured workload share
-// the same cluster without re-forming.
-async function resetExistingTables(client) {
-  const truncated = new Set();
+async function validateCanonicalTableSchema(client, table) {
+  const columns = CANONICAL_TABLE_COLUMNS[table];
+  if (!Array.isArray(columns) || columns.length === ZERO) {
+    throw schemaMismatchError(`Unknown canonical OLTP table ${table}`);
+  }
+  try {
+    await client.query(`SELECT ${columns.join(', ')} FROM ${table} LIMIT 1`);
+  } catch (error) {
+    throw schemaMismatchError(
+      `Canonical schema validation failed for ${table}: ${error?.message || error}`,
+      error,
+    );
+  }
+}
+
+async function validateAllCanonicalTableSchemas(client) {
+  for (const table of DROP_TABLES) {
+    await validateCanonicalTableSchema(client, table);
+  }
+}
+
+async function dropExistingTables(client) {
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) continue;
-    try {
-      await client.query(`DROP TABLE IF EXISTS ${table}`);
-    } catch (error) {
-      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
-      await client.query(`TRUNCATE TABLE ${table}`);
-      truncated.add(table);
-    }
+    await client.query(`DROP TABLE IF EXISTS ${table}`);
   }
-  return truncated;
 }
 
 const TABLE_DROP_OUTCOME = Object.freeze({
@@ -412,23 +493,21 @@ const TABLE_DROP_OUTCOME = Object.freeze({
   DROP_UNSUPPORTED: 'drop-unsupported',
 });
 
-// Cleanup reports one typed outcome per table: an engine that refuses DROP
-// TABLE is a named outcome the caller records, not a tolerated skip.
-async function dropTablesForCleanup(client) {
+// Cleanup reports one typed outcome per table: an engine whose contract does
+// not support DROP TABLE (Lagrange) reports DROP_UNSUPPORTED explicitly.
+async function dropTablesForCleanup(client, lockingReadMode = LOCKING_READ_MODE) {
   const outcomes = [];
   for (const table of DROP_TABLES) {
     if (!(await tableExists(client, table))) {
       outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.ABSENT}));
       continue;
     }
-    try {
-      await client.query(`DROP TABLE IF EXISTS ${table}`);
-      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROPPED}));
-    } catch (error) {
-      if (!String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER)) throw error;
-      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROP_UNSUPPORTED,
-        error: String(error.message)}));
+    if (lockingReadMode === LOCKING_READ_MODE) {
+      outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROP_UNSUPPORTED}));
+      continue;
     }
+    await client.query(`DROP TABLE IF EXISTS ${table}`);
+    outcomes.push(Object.freeze({table, outcome: TABLE_DROP_OUTCOME.DROPPED}));
   }
   return Object.freeze(outcomes);
 }
@@ -541,16 +620,37 @@ async function createSchemaStatement(client, statement, provisioning) {
   }
 }
 
-async function createSchema(client, provisioning, truncatedTables) {
+async function createSchema(client, provisioning) {
   for (const statement of CREATE_SCHEMA) {
-    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1] ?? null;
-    if (table !== null && truncatedTables.has(table)) {
-      provisioning.push(Object.freeze({table, outcome: PROVISIONING_OUTCOME.ROUTABLE,
-        states: Object.freeze([])}));
-      continue;
-    }
     await createSchemaStatement(client, statement, provisioning);
   }
+}
+
+async function resetCanonicalDataset(client, dataset, tables) {
+  await validateAllCanonicalTableSchemas(client);
+  for (const table of DROP_TABLES) {
+    const startedMs = Date.now();
+    try {
+      await client.query(`TRUNCATE TABLE ${table}`);
+    } catch (error) {
+      throw resetUnsupportedError(
+        `TRUNCATE TABLE ${table} failed during cohort-preserving reset: ` +
+          `${error?.message || error}`,
+        error,
+      );
+    }
+    const observed = await observeTableState(client, table);
+    if (observed !== TABLE_PRESENT) {
+      throw observed.error;
+    }
+    tables.push(Object.freeze({
+      table,
+      outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
+      schemaSha256: CANONICAL_SCHEMA_SHA256,
+      states: Object.freeze([stateEntry(startedMs, TABLE_PRESENT, null)]),
+    }));
+  }
+  await loadDataset(client, dataset);
 }
 
 async function loadDataset(client, dataset) {
@@ -622,17 +722,46 @@ async function loadDataset(client, dataset) {
 }
 
 // The provisioning observations are returned, and attached to a failure,
-// as {boundMs, derivation, tables}.
-async function prepareDataset(createClient, options, dataset) {
+// as {boundMs, derivation, schemaSha256, tables}.
+async function prepareDataset(
+  createClient,
+  options,
+  dataset,
+  lockingReadMode = LOCKING_READ_MODE,
+) {
   const tables = [];
-  const evidence = () => Object.freeze({...SCHEMA_PROVISIONING_BOUND,
-    tables: Object.freeze([...tables])});
+  const evidence = () => Object.freeze({
+    ...SCHEMA_PROVISIONING_BOUND,
+    schemaSha256: CANONICAL_SCHEMA_SHA256,
+    tables: Object.freeze([...tables]),
+  });
   const client = await openClient(createClient, options);
   try {
-    const truncatedTables = await resetExistingTables(client);
-    await createSchema(client, tables, truncatedTables);
-    await loadDataset(client, dataset);
-    return evidence();
+    if (lockingReadMode === NATIVE_LOCKING_READ_MODE) {
+      await dropExistingTables(client);
+      await createSchema(client, tables);
+      await validateAllCanonicalTableSchemas(client);
+      await loadDataset(client, dataset);
+      return evidence();
+    }
+    const existingTables = [];
+    for (const table of DROP_TABLES) {
+      if (await tableExists(client, table)) existingTables.push(table);
+    }
+    if (existingTables.length === ZERO) {
+      await createSchema(client, tables);
+      await validateAllCanonicalTableSchemas(client);
+      await loadDataset(client, dataset);
+      return evidence();
+    }
+    if (existingTables.length === DROP_TABLES.length) {
+      await resetCanonicalDataset(client, dataset, tables);
+      return evidence();
+    }
+    throw schemaMismatchError(
+      `Lagrange OLTP cohort has partial schema (${existingTables.length} of ` +
+        `${DROP_TABLES.length} tables present: ${existingTables.join(', ')})`,
+    );
   } catch (error) {
     throw provisioningFailure(error, evidence());
   } finally {
@@ -658,10 +787,14 @@ async function queryStateCounts(client) {
 }
 
 // Cleanup returns the per-table drop outcomes; the caller records them.
-async function cleanupDataset(createClient, options) {
+async function cleanupDataset(
+  createClient,
+  options,
+  lockingReadMode = LOCKING_READ_MODE,
+) {
   const client = await openClient(createClient, options);
   try {
-    return await dropTablesForCleanup(client);
+    return await dropTablesForCleanup(client, lockingReadMode);
   } finally {
     await client.end();
   }
@@ -696,7 +829,12 @@ async function createLagrangeOltpAdapter(options = {}) {
   let schemaProvisioning = null;
 
   try {
-    schemaProvisioning = await prepareDataset(createClient, resolvedClientOptions, dataset);
+    schemaProvisioning = await prepareDataset(
+      createClient,
+      resolvedClientOptions,
+      dataset,
+      resolvedLockingReadMode,
+    );
     datasetPrepared = true;
     for (let index = ZERO; index < config.workers; index += ONE) {
       const client = await openClient(createClient, resolvedClientOptions);
@@ -712,7 +850,11 @@ async function createLagrangeOltpAdapter(options = {}) {
     }
     if (datasetPrepared) {
       try {
-        await cleanupDataset(createClient, resolvedClientOptions);
+        await cleanupDataset(
+          createClient,
+          resolvedClientOptions,
+          resolvedLockingReadMode,
+        );
       } catch (cleanupError) {
         failures.push(cleanupError);
       }
@@ -774,14 +916,15 @@ async function createLagrangeOltpAdapter(options = {}) {
     },
     async resetDataset() {
       if (closed) throw new Error('Lagrange OLTP adapter is closed');
+      const tables = [];
       const client = await openClient(createClient, resolvedClientOptions);
       try {
-        for (const table of DROP_TABLES) {
-          if (await tableExists(client, table)) {
-            await client.query(`TRUNCATE TABLE ${table}`);
-          }
-        }
-        await loadDataset(client, dataset);
+        await resetCanonicalDataset(client, dataset, tables);
+        return Object.freeze({
+          outcome: OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE,
+          schemaSha256: CANONICAL_SCHEMA_SHA256,
+          tables: Object.freeze([...tables]),
+        });
       } finally {
         await client.end();
       }
@@ -798,7 +941,11 @@ async function createLagrangeOltpAdapter(options = {}) {
       }
       if (dropsDataset(closeOptions)) {
         try {
-          tableDrops = await cleanupDataset(createClient, resolvedClientOptions);
+          tableDrops = await cleanupDataset(
+            createClient,
+            resolvedClientOptions,
+            resolvedLockingReadMode,
+          );
         } catch (error) {
           failures.push(error);
         }
@@ -812,7 +959,10 @@ async function createLagrangeOltpAdapter(options = {}) {
 }
 
 export {
+  CANONICAL_SCHEMA_SHA256,
+  CANONICAL_TABLE_COLUMNS,
   LOCKING_READ_MODE as PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
+  OLTP_DATASET_RESET_OUTCOME,
   PUBLIC_EXECUTION_PATH as PGWIRE_OLTP_EXECUTION_PATH,
   PUBLIC_PROTOCOL as PGWIRE_OLTP_PROTOCOL,
   NATIVE_LOCKING_READ_MODE as PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,

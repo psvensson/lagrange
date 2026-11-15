@@ -20,6 +20,7 @@ import {
   COMPARATIVE_SMOKE_PROFILE,
   buildComparativeCampaignManifest,
 } from '../comparative-benchmark-campaign-manifest.js';
+import {runComparativeCampaign} from '../comparative-benchmark-campaign-runner.js';
 import {ensureProductImages} from '../comparative-benchmark-host-preparation.js';
 import {
   harnessCommitPusher,
@@ -32,13 +33,21 @@ import {
   installReferenceClient,
   prepareLoadGeneratorCheckout,
 } from '../comparative-benchmark-workload-call-site.js';
+import {removeCampaignContainers} from '../real-product-campaign-cleanup.js';
 import * as deployers from '../real-product-cluster-deployers.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
+  arrayFilter,
+  arrayFindIndex,
   arrayIncludes,
+  arrayIsArray,
+  arrayJoin,
   arrayMap,
   arraySome,
+  dateNow,
   stringIncludes,
+  stringReplace,
+  stringSplit,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 import {createLocalShell} from './comparative-benchmark-local-shell-fixture.js';
@@ -144,6 +153,132 @@ test('storage preparation that fails for a non-foreign reason refuses the node, 
   assert.match(failed.error.diagnostic.output, /No such image: postgres:17-alpine/u);
   assert.equal(failed.started('10.0.0.1'), false);
   assert.equal(fs.existsSync(path.join(failed.campaign, 'lagrange-1')), false);
+});
+
+test('runComparativeCampaign awaits all concurrent joiner startups before removeCampaignContainers, ' +
+  'records delayed joiner roles, and leaves zero unremoved containers in ledger', async () => {
+  const hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
+  const campaignId = 'camp-startup-race';
+  const ledger = createContainerLedger();
+  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
+  const timeline = [];
+  let joiner3ContainerId = null;
+
+  const scripted = createScriptedSsh([
+    [(command, host) => host === '10.0.0.2' && /^docker run --rm .*\/campaign/u.test(command),
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        timeline.push('joiner-2-rejected');
+        return 'foreign 0:0\n__exit_code=3';
+      }],
+    [/^docker run --rm .*\/campaign/u, () => 'owned\n__exit_code=0'],
+    [(command, host) => host === '10.0.0.3' && /^docker run -d /u.test(command),
+      async (command, host) => {
+        timeline.push('joiner-3-start-issued');
+        await new Promise((resolve) => setTimeout(resolve, 35));
+        const output = ledger.run(command, host);
+        joiner3ContainerId = stringTrim(output);
+        timeline.push('joiner-3-settled');
+        return output;
+      }],
+    [/^docker ps -aq --filter label=lagrange\.bench\.campaign=/u, (_command, host) => {
+      timeline.push(`cleanup-ps-${host}`);
+      const ids = [];
+      for (const entry of ledger.containers.values()) {
+        if (entry.host === host && !entry.removed) ids.push(entry.id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [/^docker rm -f /u, (command) => {
+      timeline.push('cleanup-rm');
+      const ids = arrayFilter(
+        arrayMap(stringSplit(stringReplace(command, /^docker rm -f\s+/u, ''), /\s+/u),
+          (part) => stringReplace(stringTrim(part), /^'|'$/gu, '')),
+        Boolean,
+      );
+      for (const id of ids) {
+        const entry = ledger.containers.get(id);
+        if (entry) entry.removed = true;
+        ledger.containers.delete(id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts}),
+  ]);
+
+  const baseManifest = buildComparativeCampaignManifest({
+    campaignId,
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange'],
+  });
+  const manifest = {...baseManifest, runs: [baseManifest.runs[0]]};
+  const header = {
+    executionTarget: 'lab',
+    physicalHosts: arrayMap(hosts, (ip) => ({ip})),
+    harness: {gitCommit: '0'.repeat(40)},
+  };
+  let capturedError = null;
+  const deps = {
+    deployRun: (run) => deployers.deployComparativeTarget(run.targetId, {
+      hosts,
+      clientIp: '10.0.0.9',
+      sshRun: scripted.sshRun,
+      campaignId,
+      sleep: async () => {},
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        storageRoot: '/srv/bench',
+        lagrangeImageContent: content,
+        readiness: {stablePolls: 1, attempts: 2, intervalMs: 0, timeoutMs: 50, pollIntervalMs: 1},
+      },
+    }),
+    teardownRun: () => removeCampaignContainers({
+      hosts,
+      campaignId,
+      sshRun: scripted.sshRun,
+      opts: {},
+    }),
+    executeWorkloadRun: async () => {
+      throw new Error('workload must not run after startup failure');
+    },
+    inspectProducts: async () => [],
+    appendRecords: async () => {},
+    recordOwner: {
+      computeRunObservationsDigest: () => `sha256:${'0'.repeat(64)}`,
+      validateRunRecord: () => {},
+      validateCampaignHeader: () => {},
+    },
+    now: () => dateNow(),
+    deadlineAt: Infinity,
+  };
+
+  try {
+    await runComparativeCampaign({manifest, header, deps});
+  } catch (error) {
+    capturedError = error;
+  }
+
+  assert.equal(capturedError?.code, 'campaign_products_unpinned');
+  const failedRun = capturedError.diagnostic.runs[0];
+  assert.equal(failedRun.failure.code, 'deployment_command_failed');
+  assert.equal(failedRun.failure.diagnostic.reason, 'storage_foreign_owner');
+  assert.ok(joiner3ContainerId, 'delayed joiner 10.0.0.3 must have started its container');
+
+  const joiner2RejectedIdx = arrayFindIndex(timeline, (event) => event === 'joiner-2-rejected');
+  const joiner3SettledIdx = arrayFindIndex(timeline, (event) => event === 'joiner-3-settled');
+  const firstCleanupIdx = arrayFindIndex(timeline, (event) => stringIncludes(event, 'cleanup-'));
+  assert.ok(joiner2RejectedIdx >= 0 && joiner3SettledIdx > joiner2RejectedIdx,
+    `expected joiner 3 to settle after joiner 2 rejected: ${JSON.stringify(timeline)}`);
+  assert.ok(firstCleanupIdx > joiner3SettledIdx,
+    `removeCampaignContainers must not run until joiner 3 startup settles: ${JSON.stringify(timeline)}`);
+
+  const recordedRoles = failedRun.failure.diagnostic.roles;
+  assert.equal(arrayIsArray(recordedRoles), true);
+  assert.equal(arraySome(recordedRoles,
+    (role) => role.host === '10.0.0.3' && role.containerId === joiner3ContainerId), true,
+  '10.0.0.3 container must be recorded in roles when it started before settlement');
+  assert.equal(ledger.containers.size, 0,
+    'zero unremoved campaign containers may remain in ledger.containers after runComparativeCampaign');
 });
 
 test('image presence probe, executed: a present image answers its id; an absent one refuses',

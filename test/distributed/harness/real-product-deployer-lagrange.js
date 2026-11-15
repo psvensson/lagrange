@@ -606,12 +606,37 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     campaignId, index: 0}));
   const joinerIndices = [];
   for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
-  const joinerRoles = await Promise.all(arrayMap(joinerIndices, async (index) => {
+  let cancelled = false;
+  const settledJoiners = await Promise.allSettled(arrayMap(joinerIndices, async (index) => {
     const host = hosts[index];
-    await prepareNodeStorage({sshRun, opts, host, campaignId, index});
-    return startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId, index});
+    try {
+      await prepareNodeStorage({sshRun, opts, host, campaignId, index});
+    } catch (error) {
+      cancelled = true;
+      throw error;
+    }
+    if (cancelled) return null;
+    try {
+      const role = await startLagrangeNode({sshRun, opts, host, seedHost, image, connection,
+        campaignId, index});
+      roles.push(role);
+      return role;
+    } catch (error) {
+      cancelled = true;
+      throw error;
+    }
   }));
-  for (const role of joinerRoles) roles.push(role);
+  const rejectedJoiner = arrayFind(settledJoiners, (entry) => entry.status === 'rejected');
+  if (rejectedJoiner) {
+    const reason = rejectedJoiner.reason;
+    if (reason && typeof reason === 'object') {
+      reason.roles = [...roles];
+      if (reason.diagnostic && typeof reason.diagnostic === 'object') {
+        reason.diagnostic = {...reason.diagnostic, roles: [...roles]};
+      }
+    }
+    throw reason;
+  }
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }

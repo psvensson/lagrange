@@ -24,12 +24,14 @@ import {
 } from '../oltp-scenario-a-semantic-gate.js';
 import {validateRunRecord} from '../raw-observation-record.js';
 import {
+  arrayEvery,
   arrayFilter,
   arrayFind,
   arrayIncludes,
   arrayMap,
   arraySome,
   stringReplace,
+  stringSplit,
   stringStartsWith,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
@@ -43,6 +45,9 @@ import {SQLParser} from '../../../../src/query/sql-parser.js';
 import {withExecutedStatementType} from '../../../../src/query/application-database-result.js';
 import {deriveCommandTag} from '../../../../src/runtime/pgwire-result-mapper.js';
 import {
+  CANONICAL_SCHEMA_SHA256,
+  CANONICAL_TABLE_COLUMNS,
+  OLTP_DATASET_RESET_OUTCOME,
   createLagrangeOltpAdapter,
 } from '../../reference-client/lagrange-oltp-adapter.js';
 
@@ -410,20 +415,52 @@ test('cross-deployment-rejection: different deployment cohort between gate and m
 test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRUNCATE TABLE ' +
   'and restores clean initial dataset counts', async () => {
   const store = new Map();
+  const tableSchemas = new Map();
   const executedSqls = [];
+
+  function verifySchemaSelect(colList, table) {
+    if (!store.has(table)) {
+      throw new Error(`Table not found: ${table}`);
+    }
+    const knownCols = tableSchemas.get(table) || new Set();
+    const requestedCols = arrayMap(stringSplit(colList, ','), (c) => stringTrim(c));
+    for (const col of requestedCols) {
+      if (!knownCols.has(col)) {
+        throw new Error(`Column "${col}" does not exist on table "${table}"`);
+      }
+    }
+    const rows = store.get(table) || [];
+    return {rows: rows.slice(0, 1), rowCount: 0};
+  }
 
   const fakeClient = {
     connect: async () => {},
     query: async (sql, params = []) => {
       executedSqls.push(sql);
       const normalized = stringTrim(sql);
+      const createMatch = /^CREATE\s+TABLE\s+([a-z_]+)/iu.exec(normalized);
+      if (createMatch) {
+        const table = createMatch[1];
+        store.set(table, []);
+        tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
+        return {rows: [], rowCount: 0};
+      }
       if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
         const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
-        const rows = store.get(table) || [];
-        return {rows: [{row_count: rows.length}]};
+        if (!store.has(table)) {
+          throw new Error(`Table not found: ${table}`);
+        }
+        return {rows: [{row_count: store.get(table).length}]};
+      }
+      const schemaSelectMatch = /^SELECT\s+(.+?)\s+FROM\s+([a-z_]+)\s+LIMIT\s+1$/iu.exec(normalized);
+      if (schemaSelectMatch) {
+        return verifySchemaSelect(schemaSelectMatch[1], schemaSelectMatch[2]);
       }
       if (stringStartsWith(normalized, 'TRUNCATE TABLE')) {
         const table = stringReplace(normalized, /^TRUNCATE TABLE\s+/u, '');
+        if (!store.has(table)) {
+          throw new Error(`Table not found: ${table}`);
+        }
         store.set(table, []);
         return {rows: [], rowCount: 0};
       }
@@ -446,6 +483,7 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
   });
 
   assert.equal(typeof adapter.resetDataset, 'function', 'adapter must provide resetDataset capability');
+  assert.equal(adapter.schemaProvisioning.schemaSha256, CANONICAL_SCHEMA_SHA256);
 
   const beforeEvidence = await adapter.getEvidence();
   assert.equal(beforeEvidence.stateCounts.orders, 0);
@@ -457,10 +495,17 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
 
   assert.equal((await adapter.getEvidence()).stateCounts.orders, 1);
 
-  await adapter.resetDataset();
+  const resetReport = await adapter.resetDataset();
+  assert.equal(resetReport.outcome, OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE);
+  assert.equal(resetReport.schemaSha256, CANONICAL_SCHEMA_SHA256);
+  assert.equal(resetReport.tables.length, 9);
+  assert.equal(arrayEvery(resetReport.tables,
+    (entry) => entry.outcome === OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE &&
+      entry.schemaSha256 === CANONICAL_SCHEMA_SHA256 &&
+      entry.states.length >= 1 && entry.states[0].state === 'present'), true);
 
   const truncateCalls = arrayFilter(executedSqls, (s) => stringStartsWith(s, 'TRUNCATE TABLE'));
-  assert.ok(truncateCalls.length >= 5, 'resetDataset must execute TRUNCATE TABLE across tables');
+  assert.ok(truncateCalls.length >= 9, 'resetDataset must execute TRUNCATE TABLE across all 9 tables');
 
   const afterEvidence = await adapter.getEvidence();
   assert.equal(afterEvidence.stateCounts.orders, 0);
@@ -469,21 +514,15 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
 
   await adapter.close();
 
-  // Opening a second adapter against the same cohort (as each semantic-gate
-  // case and the measured workload do) truncates existing tables in place when
-  // DROP TABLE is unsupported, without re-issuing CREATE TABLE on them.
+  // Opening a second adapter against the same preserved cohort (where all 9
+  // tables exist) NEVER issues DROP TABLE or CREATE TABLE, validates the
+  // canonical schema, executes TRUNCATE TABLE across all 9 tables, and records
+  // reset-and-routable with real non-empty state observations.
   const secondSqls = [];
   const lagrangeClient = {
     connect: async () => {},
     query: async (sql, params = []) => {
       secondSqls.push(sql);
-      const normalized = stringTrim(sql);
-      if (stringStartsWith(normalized, 'DROP TABLE')) {
-        throw new Error('Unsupported statement type: DROP_TABLE');
-      }
-      if (stringStartsWith(normalized, 'CREATE TABLE')) {
-        throw new Error('Table already exists');
-      }
       return fakeClient.query(sql, params);
     },
     end: async () => {},
@@ -495,7 +534,76 @@ test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRU
     createClient: () => lagrangeClient,
     workload: {scale: 1, workers: 1},
   });
+  assert.equal(
+    arraySome(secondSqls, (s) => /^(DROP|CREATE)\s+TABLE/iu.test(stringTrim(s))),
+    false,
+    'preserved cohort reset must never issue DROP TABLE or CREATE TABLE',
+  );
+  assert.equal(
+    arrayFilter(secondSqls, (s) => /^SELECT\s+.+\s+FROM\s+[a-z_]+\s+LIMIT\s+1$/iu.test(stringTrim(s))).length,
+    9,
+    'preserved cohort reset must validate canonical schema across all 9 tables',
+  );
+  assert.equal(
+    arrayFilter(secondSqls, (s) => stringStartsWith(stringTrim(s), 'TRUNCATE TABLE')).length,
+    9,
+    'preserved cohort reset must execute TRUNCATE TABLE across all 9 tables',
+  );
+  assert.equal(secondAdapter.schemaProvisioning.schemaSha256, CANONICAL_SCHEMA_SHA256);
+  assert.equal(secondAdapter.schemaProvisioning.tables.length, 9);
+  for (const tableEntry of secondAdapter.schemaProvisioning.tables) {
+    assert.equal(tableEntry.outcome, OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE);
+    assert.equal(tableEntry.schemaSha256, CANONICAL_SCHEMA_SHA256);
+    assert.ok(tableEntry.states.length >= 1, `expected non-empty states for ${tableEntry.table}`);
+    assert.equal(tableEntry.states[0].state, 'present');
+  }
   assert.equal((await secondAdapter.getEvidence()).stateCounts.orders, 0);
-  assert.ok(arrayFilter(secondSqls, (s) => stringStartsWith(stringTrim(s), 'TRUNCATE TABLE')).length >= 9);
   await secondAdapter.close();
+
+  // Mismatched column schema on preserved cohort is refused with schema-mismatch:
+  tableSchemas.get('warehouse').delete('ytd_cents');
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => fakeClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) => error.code === OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH,
+  );
+  tableSchemas.set('warehouse', new Set(CANONICAL_TABLE_COLUMNS.warehouse));
+
+  // Partial schema (1..8 tables present) is refused with schema-mismatch:
+  store.delete('history');
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => fakeClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) => error.code === OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH,
+  );
+  store.set('history', []);
+
+  // Engine that refuses TRUNCATE TABLE on preserved cohort is refused with reset-unsupported:
+  const truncateRefusingClient = {
+    connect: async () => {},
+    query: async (sql, params = []) => {
+      if (stringStartsWith(stringTrim(sql), 'TRUNCATE TABLE')) {
+        throw new Error('Unsupported statement type: TRUNCATE_TABLE');
+      }
+      return fakeClient.query(sql, params);
+    },
+    end: async () => {},
+  };
+  await assert.rejects(
+    createLagrangeOltpAdapter({
+      endpoint: {host: '127.0.0.1', port: 5433},
+      connection: {user: 'bench', database: 'bench'},
+      createClient: () => truncateRefusingClient,
+      workload: {scale: 1, workers: 1},
+    }),
+    (error) => error.code === OLTP_DATASET_RESET_OUTCOME.RESET_UNSUPPORTED,
+  );
 });
