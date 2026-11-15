@@ -64,6 +64,7 @@ import {
   extractColumns,
   extractRowValues,
   isEmptyStatementResult,
+  throwIfProvisioningDeadlineExpired,
 } from './pgwire-result-mapper.js';
 import {readExecutedStatementType} from '../query/application-database-result.js';
 import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
@@ -629,18 +630,7 @@ class PgWireProtocolHandler {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params, this._executionOptions(),
       );
-      if (
-        result?.provisioningDeadlineExpired === true &&
-        typeof result?.jobId === 'string'
-      ) {
-        const error = new Error('Schema provisioning remains active');
-        error.sqlState = PG_ERROR_CODE.LOCK_NOT_AVAILABLE;
-        error.detail = {
-          provisioning_job_id: result.jobId,
-          retry_after_ms: result.retryAfterMs || 0,
-        };
-        throw error;
-      }
+      throwIfProvisioningDeadlineExpired(result);
       if (isEmptyStatementResult(result)) {
         this._socket.write(buildEmptyQueryResponse());
         return;

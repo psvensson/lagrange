@@ -18,7 +18,12 @@ const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_UPDATE = 'UPDATE';
 const LOCAL_STR_DELETE = 'DELETE';
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COLUMN = 'column';
+const LOCAL_STR_SCHEMA_PROVISIONING_ACTIVE =
+  'Schema provisioning remains active';
+const LOCAL_STR_UNAVAILABLE = 'unavailable';
+const NO_WIRE_ERROR_DETAIL = null;
 
 // A DML result that carries no affected-row count has no truthful
 // PostgreSQL command tag (the protocol has no "unknown count" tag), so the
@@ -158,6 +163,81 @@ function resolveFailureSqlState(failure) {
     PG_ERROR_CODE.INTERNAL_ERROR;
 }
 
+function extractParticipantFailureWireDetail(error) {
+  const participantFailures = Array.isArray(error?.participantFailures) ?
+    error.participantFailures.filter(
+      (entry) => entry && typeof entry === LOCAL_STR_OBJECT,
+    ) :
+    [];
+  let firstFailedParticipant = NO_WIRE_ERROR_DETAIL;
+  if (
+    error?.firstFailedParticipant &&
+    typeof error.firstFailedParticipant === LOCAL_STR_OBJECT
+  ) {
+    firstFailedParticipant = error.firstFailedParticipant;
+  } else if (participantFailures.length > 0) {
+    firstFailedParticipant = participantFailures[0];
+  }
+  if (firstFailedParticipant === NO_WIRE_ERROR_DETAIL) {
+    return NO_WIRE_ERROR_DETAIL;
+  }
+  return {
+    participantFailuresOmittedCount: Math.max(
+      0,
+      participantFailures.length - 1,
+    ),
+    firstFailedParticipant,
+  };
+}
+
+/**
+ * Extract the structured PG-wire ErrorResponse detail payload for an engine
+ * error. Preserves explicit `error.detail`, projects distributed participant
+ * failure summaries (`participantFailuresOmittedCount` and
+ * `firstFailedParticipant`), or forwards structured `error.details`.
+ *
+ * @param {Object} error - Thrown error or failed SqlCore result fields.
+ * @return {string|Object|null} ErrorResponse detail value, or null.
+ */
+function extractWireErrorDetail(error) {
+  if (error?.detail !== undefined && error?.detail !== null) {
+    return error.detail;
+  }
+  const participantDetail = extractParticipantFailureWireDetail(error);
+  if (participantDetail !== NO_WIRE_ERROR_DETAIL) {
+    return participantDetail;
+  }
+  if (error?.details && typeof error.details === LOCAL_STR_OBJECT) {
+    return error.details;
+  }
+  return NO_WIRE_ERROR_DETAIL;
+}
+
+/**
+ * Raise a retryable PostgreSQL 55P03 error when a schema provisioning deadline
+ * expires while the durable job remains active.
+ *
+ * @param {Object} result - SqlCore execution result.
+ */
+function throwIfProvisioningDeadlineExpired(result) {
+  if (
+    result?.provisioningDeadlineExpired !== true ||
+    typeof result?.jobId !== LOCAL_STR_STRING
+  ) {
+    return;
+  }
+  const error = new Error(LOCAL_STR_SCHEMA_PROVISIONING_ACTIVE);
+  error.sqlState = PG_ERROR_CODE.LOCK_NOT_AVAILABLE;
+  error.detail = {
+    provisioning_job_id: result.jobId,
+    retry_after_ms:
+      Number.isSafeInteger(result.retryAfterMs) && result.retryAfterMs > 0 ?
+        result.retryAfterMs :
+        LOCAL_STR_UNAVAILABLE,
+  };
+  throw error;
+}
+
 /**
  * Whether a failed SqlCore result is the engine's "the query text holds no
  * statement" answer (PostgreSQL answers it with EmptyQueryResponse).
@@ -207,6 +287,8 @@ export {
   deriveCommandTag,
   extractColumns,
   extractRowValues,
+  extractWireErrorDetail,
   isEmptyStatementResult,
   resolveFailureSqlState,
+  throwIfProvisioningDeadlineExpired,
 };

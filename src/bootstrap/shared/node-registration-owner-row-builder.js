@@ -6,6 +6,7 @@ import {
   NUM,
   SERVICE_TYPE,
   STATE,
+  TABLES,
   TRANSPORT_TYPE,
 } from '../../constants/index.js';
 import {
@@ -501,6 +502,38 @@ function buildRefusedJoinAdmissionWithdrawal(registeredNodeId, transition) {
   };
 }
 
+function collectReusedEndpointEntries(existingMembership) {
+  const metaRows = Array.isArray(existingMembership?.metaEndpointRows) ?
+    existingMembership.metaEndpointRows :
+    [];
+  return [
+    [TABLES.NODE_ENDPOINTS, existingMembership?.endpointRow],
+    ...metaRows.map((row) => [TABLES.SERVICE_ENDPOINTS, row]),
+  ].filter(([, row]) => Boolean(row));
+}
+
+function stampReusedEndpointMembershipIncarnations(
+  existingMembership,
+  bootIncarnation,
+) {
+  if (!existingMembership || typeof existingMembership !== 'object') {
+    return;
+  }
+  if (existingMembership.endpointRow) {
+    existingMembership.endpointRow = {
+      ...existingMembership.endpointRow,
+      [COLUMN.BOOT_INCARNATION]: bootIncarnation,
+    };
+  }
+  const metaRows = Array.isArray(existingMembership.metaEndpointRows) ?
+    existingMembership.metaEndpointRows :
+    [];
+  existingMembership.metaEndpointRows = metaRows.map((row) => ({
+    ...row,
+    [COLUMN.BOOT_INCARNATION]: bootIncarnation,
+  }));
+}
+
 export {
   NON_REUSABLE_NODE_STATUSES,
   buildAuthoritativeRowSourceUnavailableError,
@@ -514,6 +547,7 @@ export {
   buildRefusedJoinAdmissionWithdrawal,
   buildRejectedJoinAdmissionMutationAcceptance,
   canReuseObservedJoinAdmissionNodeRowForAddress,
+  collectReusedEndpointEntries,
   filterAuthoritativeMetaEndpointRows,
   filterAuthoritativeNodeEndpointRow,
   filterAuthoritativePartitionServiceRowsForNode,
@@ -524,5 +558,6 @@ export {
   resolveHighestObservedNodeIncarnation,
   resolveServiceUpdateExpectedIdentity,
   stampEndpointStorageIncarnationMetadata,
+  stampReusedEndpointMembershipIncarnations,
   withOriginHlcStamp,
 };

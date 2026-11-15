@@ -38,7 +38,10 @@ import {
   PG_SEVERITY,
   PG_TRANSACTION_STATE,
 } from './pgwire-protocol-constants.js';
-import {resolveFailureSqlState} from './pgwire-result-mapper.js';
+import {
+  extractWireErrorDetail,
+  resolveFailureSqlState,
+} from './pgwire-result-mapper.js';
 
 const PGWIRE_TRANSACTION_OUTCOME_KIND = Object.freeze({
   // CommandComplete with the statement's tag (optionally after a WARNING).
@@ -242,8 +245,12 @@ function answerFailedStatement({failure, stateBefore, session, write}) {
       outcome.message, outcome.detail));
     return;
   }
-  write(buildErrorResponse(PG_SEVERITY.ERROR, resolveFailureSqlState(failure),
-    failure.message, failure.detail || null));
+  write(buildErrorResponse(
+    PG_SEVERITY.ERROR,
+    resolveFailureSqlState(failure),
+    failure.message,
+    extractWireErrorDetail(failure),
+  ));
 }
 
 function buildPreviousOutcomeUnknownNotice() {

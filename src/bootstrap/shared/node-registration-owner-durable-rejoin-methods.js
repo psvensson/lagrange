@@ -50,6 +50,7 @@ import {
   buildFailedLostStoragePartitionRow,
   buildLostStorageMutationFailureError,
   canReuseObservedJoinAdmissionNodeRowForAddress,
+  collectReusedEndpointEntries,
   filterAuthoritativeMetaEndpointRows,
   filterAuthoritativeNodeEndpointRow,
   filterAuthoritativePartitionServiceRowsForNode,
@@ -57,6 +58,8 @@ import {
   readObservedBootIncarnation,
   readObservedStorageIncarnation,
   resolveHighestObservedNodeIncarnation,
+  stampReusedEndpointMembershipIncarnations,
+  withOriginHlcStamp,
 } from './node-registration-owner-row-builder.js';
 
 const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
@@ -300,28 +303,38 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   // over a newer owner. The cache is then seeded with this boot's rows.
   async advanceReusedEndpointRows(existingMembership) {
     const bootIncarnation = this.getRegistrationBootIncarnation();
-    const reused = [
-      [TABLES.NODE_ENDPOINTS, existingMembership?.endpointRow],
-      ...(existingMembership?.metaEndpointRows || []).map((row) =>
-        [TABLES.SERVICE_ENDPOINTS, row]),
-    ].filter(([, row]) => row);
+    const reused = collectReusedEndpointEntries(existingMembership);
     for (const [tableName, row] of reused) {
-      const result = await this.upsertSystemTableRowWithRetry(tableName, row);
-      if (result?.success === false) {
-        throw new Error(
-          `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`);
-      }
-      if (typeof result?.originHlc === 'string' && result.originHlc.length > 0) {
-        row[COLUMN.UPDATED_AT_HLC] = result.originHlc;
-      }
+      await this.advanceSingleReusedEndpointRow(
+        tableName,
+        row,
+        bootIncarnation,
+      );
     }
-    existingMembership.endpointRow = existingMembership.endpointRow ?
-      {...existingMembership.endpointRow,
-        [COLUMN.BOOT_INCARNATION]: bootIncarnation} :
-      existingMembership.endpointRow;
-    existingMembership.metaEndpointRows =
-      (existingMembership.metaEndpointRows || []).map((row) =>
-        ({...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}));
+    stampReusedEndpointMembershipIncarnations(
+      existingMembership,
+      bootIncarnation,
+    );
+  }
+
+  async advanceSingleReusedEndpointRow(tableName, row, bootIncarnation) {
+    const observedIncarnation = normalizeKnownNodeBootIncarnation(
+      readObservedBootIncarnation(row),
+    );
+    this.assertNodeBootIncarnationNotStale(
+      observedIncarnation,
+      bootIncarnation,
+    );
+    if (observedIncarnation === bootIncarnation) {
+      return;
+    }
+    const result = await this.upsertSystemTableRowWithRetry(tableName, row);
+    if (result?.success === false) {
+      throw new Error(
+        `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`,
+      );
+    }
+    withOriginHlcStamp(row, result?.originHlc);
   }
 
   getRegistrationBootIncarnation() {
@@ -425,15 +438,13 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     } catch (_error) {
       result = null;
     }
-    if (result?.success !== false &&
-        Number(result?.partitionResult?.affectedRows) > 0) {
+    if (
+      result?.success !== false &&
+      Number(result?.partitionResult?.affectedRows) > 0
+    ) {
       const originHlc =
         result?.originHlc || result?.partitionResult?.originHlc;
-      if (typeof originHlc === 'string' && originHlc.length > 0 &&
-          nextNodeRow && typeof nextNodeRow === 'object') {
-        nextNodeRow[COLUMN.UPDATED_AT_HLC] = originHlc;
-      }
-      return nextNodeRow;
+      return withOriginHlcStamp(nextNodeRow, originHlc);
     }
     return this.resolveNodeBootIncarnationAdvanceByReadback(
       nextNodeRow,
