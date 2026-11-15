@@ -190,7 +190,7 @@ async function withAttempt(attempt, step) {
 }
 
 async function measureRun({run, manifest, deps, events, signal}) {
-  const attempt = {deployment: await deps.deployRun(run), workload: null,
+  const attempt = {deployment: await deps.deployRun(run, {signal}), workload: null,
     productsAfter: null, roleObservations: null};
   // The deployment stays in the record (and pins its identity) when refused.
   await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));

@@ -82,6 +82,12 @@ const DEFAULT_READINESS = Object.freeze({
   pollIntervalMs: TIDB_REFERENCE_DEFAULTS.readinessPollIntervalMs,
 });
 
+// Shared wall-clock deadline across all sequential readiness stages of cold
+// 3-node Lagrange formation (420 seconds = 7 minutes, matching
+// FORMATION_BOUND_MS = 420_000 in
+// test/distributed/scenarios/fresh-formation-user-table-routability.js).
+const DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS = 420_000;
+
 class DeploymentFailure extends Error {
   constructor(code, message, diagnostic = null) {
     super(message);
@@ -111,6 +117,8 @@ export {
   BENCH_LABEL,
   isImageId,
   CLAIM_STATUS,
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
+  DEFAULT_READINESS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,

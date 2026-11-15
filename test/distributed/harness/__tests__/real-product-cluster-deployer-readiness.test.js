@@ -19,9 +19,13 @@ import {
   arrayFilter,
   arrayFindIndex,
   arrayIncludes,
+  arrayJoin,
   arrayMap,
   arraySome,
   stringIncludes,
+  stringReplace,
+  stringSplit,
+  stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
 const HOSTS = ['10.0.0.1', '10.0.0.2', '10.0.0.3'];
@@ -313,3 +317,145 @@ test('CL-007: Lagrange cross-host deployment sets 30s transport message timeout 
       assert.match(joinerRun.command, /NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS=240000/u);
     }
   });
+
+function cleanupDockerRules(ledger) {
+  return [
+    [/^docker ps -aq --filter label=lagrange\.bench\.campaign=/u, (_command, host) => {
+      const ids = [];
+      for (const entry of ledger.containers.values()) {
+        if (entry.host === host && !entry.removed) ids.push(entry.id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+    [/^docker rm -f /u, (command) => {
+      const ids = arrayFilter(
+        arrayMap(stringSplit(stringReplace(command, /^docker rm -f\s+/u, ''), /\s+/u),
+          (part) => stringReplace(stringTrim(part), /^'|'$/gu, '')),
+        Boolean,
+      );
+      for (const id of ids) {
+        const entry = ledger.containers.get(id);
+        if (entry) entry.removed = true;
+        ledger.containers.delete(id);
+      }
+      return `${arrayJoin(ids, '\n')}\n`;
+    }],
+  ];
+}
+
+test('shared formation wall-clock deadline: slow probes across sequential readiness stages share ' +
+  'one 420,000 ms deadline and fail closed before attempt 420 with lastObservation and cohort cleanup',
+{timeout: 300000}, async () => {
+  assert.equal(deployers.DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS, 420_000);
+  const ledger = createContainerLedger();
+  let clockMs = 1_000_000;
+  let joiner2Polls = 0;
+  const sleeps = [];
+  const {sshRun} = createScriptedSsh([
+    ...cleanupDockerRules(ledger),
+    [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'), () => {
+      // Seed readiness probe consumes 180s of the shared 420s formation deadline.
+      clockMs += 180_000;
+      return http(200, {ready: true});
+    }],
+    [(command) => stringIncludes(command, 'http://10.0.0.2:8080/readyz'), () => {
+      joiner2Polls += 1;
+      // Each joiner-2 probe consumes 130s; two probes (180s + 130s + 1s + 130s = 441s)
+      // cross the shared 420,000 ms deadline on attempt 2 of 420.
+      clockMs += 130_000;
+      return http(503, {ready: false, phase: 'joining',
+        reasons: [`priority-partition-spread-poll-${joiner2Polls}`]});
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun,
+      campaignId: CAMPAIGN,
+      nowFn: () => clockMs,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        clockMs += ms;
+      },
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.component, 'lagrange-node@10.0.0.2');
+      assert.equal(error.diagnostic.deadlineExpired, true);
+      assert.equal(error.diagnostic.deadlineMs, 420_000);
+      assert.equal(error.diagnostic.attempt, 2,
+        'must fail closed on attempt 2 when shared 420s wall-clock deadline expires, not run 420 attempts');
+      assert.equal(joiner2Polls, 2);
+      assert.deepEqual(sleeps, [1000]);
+      assert.match(JSON.stringify(error.diagnostic.lastObservation),
+        /priority-partition-spread-poll-2/u);
+      assert.equal(error.deployment.readiness.state, 'exhausted');
+      assert.equal(error.deployment.roles.length, HOSTS.length);
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    },
+  );
+  assert.equal(ledger.containers.size, 0,
+    'cohort cleanup must remove all 3 containers after formation deadline expiration');
+});
+
+test('readiness cancellation signal: aborting signal during readiness polling immediately aborts ' +
+  'deployLagrangeCluster with lastObservation and runs full cohort cleanup',
+{timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  const controller = new AbortController();
+  let seedPolls = 0;
+  let sleepStarted = false;
+  const {sshRun} = createScriptedSsh([
+    ...cleanupDockerRules(ledger),
+    [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'), () => {
+      seedPolls += 1;
+      return http(503, {ready: false, phase: 'init', reasons: ['awaiting-quorum']});
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun,
+      campaignId: CAMPAIGN,
+      signal: controller.signal,
+      sleep: () => new Promise((resolve) => {
+        sleepStarted = true;
+        // Abort while pollReadiness is sleeping between attempt 1 and attempt 2;
+        // sleepUntilOrAbort must wake immediately without waiting for the timer.
+        const sleepTimer = setTimeout(resolve, 60_000);
+        sleepTimer.unref?.();
+        setTimeout(() => controller.abort(), 5);
+      }),
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 60_000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.component, 'lagrange-node@10.0.0.1');
+      assert.equal(error.diagnostic.aborted, true);
+      assert.equal(error.diagnostic.attempt, 1);
+      assert.equal(seedPolls, 1, 'no second probe may run after signal aborts during sleep');
+      assert.equal(sleepStarted, true);
+      assert.match(JSON.stringify(error.diagnostic.lastObservation), /awaiting-quorum/u);
+      assert.equal(error.deployment.readiness.state, 'exhausted');
+      assert.equal(error.deployment.roles.length, HOSTS.length);
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    },
+  );
+  assert.equal(ledger.containers.size, 0,
+    'cohort cleanup must remove all 3 containers when readiness polling is aborted');
+});

@@ -271,9 +271,18 @@ test('endpoint bound to a container outside the recorded roles is topology-false
 
 test('watchdog: past the campaign deadline the remaining runs are recorded interrupted',
   async () => {
-    const {deps, records, calls} = harness({deadlineAt: 5000});
+    const receivedSignals = [];
+    const {deps, records, calls} = harness({
+      deadlineAt: 5000,
+      deployRun: async (one, context = {}) => {
+        receivedSignals.push(Boolean(context.signal && typeof context.signal.aborted === 'boolean'));
+        return deployment(one.runId);
+      },
+    });
     const summary = await run(deps);
     assert.equal(calls.workload.length, 1);
+    assert.deepEqual(receivedSignals, [true],
+      'runComparativeCampaign must forward the watchdog AbortSignal into deployRun(run, {signal})');
     const states = arrayMap(records.slice(1), (record) => record.execution.state);
     assert.equal(states[0], 'completed');
     assert.ok(arrayEvery(states.slice(1), (state) => state === 'interrupted'));

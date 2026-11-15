@@ -35,16 +35,20 @@ quest: comparative-campaign-explicit-provisioning
       - `9` existing tables (retained cohort): validates all 9 canonical tables (`SELECT <canonical_cols> FROM <table> LIMIT 1`) AND validates `idx_orders_customer_latest` in `indices` (`index_name`, `table_name = 'orders'`, `column_names = ['warehouse_id', 'district_id', 'customer_id', 'order_id']`, non-failed `state`) BEFORE executing `TRUNCATE TABLE` across all 9 tables, observing real `TABLE_PRESENT` states, and recording `OLTP_DATASET_RESET_OUTCOME.RESET_AND_ROUTABLE` with `schemaSha256: CANONICAL_SCHEMA_SHA256`.
       - Partial table presence (`1..8` tables), missing/mismatched columns, or missing/mismatched `idx_orders_customer_latest` (such as an interrupted initial `CREATE_SCHEMA` that stopped after creating the 9 tables and before `CREATE INDEX`) fails closed with `error.code = OLTP_DATASET_RESET_OUTCOME.SCHEMA_MISMATCH` (`'schema-mismatch'`) without executing any `TRUNCATE TABLE`.
 
-## 3. Readiness Budget & Cold-Formation Transport/Join Constants
+## 3. Readiness Budget, Shared Formation Deadline & Cold-Formation Constants
 
 - **Files:**
   - `test/distributed/harness/real-product-deployment-contract.js`
+  - `test/distributed/harness/real-product-readiness.js`
   - `test/distributed/harness/real-product-deployer-lagrange.js`
+  - `test/distributed/harness/comparative-benchmark-campaign-runner.js`
+  - `docs/benchmarks/cloud/run-comparative-benchmarks.mjs`
   - `src/control-plane/node-ready-lease-authority.js`
   - `src/bootstrap/cluster-bootstrap-constants.js`
   - `src/node/node-joining-constants.js`
   - `src/node/node-execution-constants.js`
 - **Contract:**
   - `src/control-plane/node-ready-lease-authority.js` is preserved at its canonical `0e46d10fc` contract (`leaseLiveness.alive !== false`), keeping lease-liveness decision-neutrality intact.
-  - General `DEFAULT_READINESS.attempts` in `test/distributed/harness/real-product-deployment-contract.js` remains `120` (`60 s` at `500 ms` poll interval), while the Lagrange deployer's cold-formation readiness budget (`FORMATION_ATTEMPTS = 420` in `test/distributed/harness/real-product-deployer-lagrange.js`) matches the 7-minute multi-node cold-formation bound (`210 s` at `500 ms` poll interval).
+  - General `DEFAULT_READINESS.attempts` in `test/distributed/harness/real-product-deployment-contract.js` remains `120` (`120 s` at `1,000 ms` poll interval), while the Lagrange deployer's cold-formation readiness budget (`FORMATION_ATTEMPTS = 420` and `DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS = 420_000` in `test/distributed/harness/real-product-deployment-contract.js` / `test/distributed/harness/real-product-deployer-lagrange.js`) enforces one shared `420,000 ms` (`420 s`, `7 min` at `1,000 ms` poll interval) wall-clock formation deadline across all sequential formation readiness stages (`nodeReady`, `membershipReady`, `publicPgWireReady`, `leadersReady`, `clusterReady`, and `probeWriteReadback`), matching `FORMATION_BOUND_MS = 420_000` in `test/distributed/scenarios/fresh-formation-user-table-routability.js`.
+  - `pollReadiness` (`test/distributed/harness/real-product-readiness.js`) checks `deadlineAtMs` and `signal?.aborted` before and after each probe and caps inter-poll sleeps to the remaining deadline or abort signal, throwing a typed `readiness_exhausted` error with `lastObservation`, `attempt`, `elapsedMs`, `deadlineMs`, `deadlineExpired`, and `aborted`. `runComparativeCampaign` (`test/distributed/harness/comparative-benchmark-campaign-runner.js`) forwards the campaign watchdog `signal` into `deployRun(run, {signal})`.
   - Multi-node cold-formation join/transport constants (`NODE_JOINING_SERVICE_LITERAL`, `BOOTSTRAP_API_WAIT_TIMEOUT_MS = 180000`, `LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000`, `NODE_JOINING_HTTP_TIMEOUT_MS = 60000`, `NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000`) are bounded to the bootstrap/joining path so concurrent 5-node cold formation completes deterministically under 4-vCPU Class A host contention.
