@@ -27,6 +27,7 @@ const {
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
+  ReplicaStatus,
   SERVICE_TYPE,
   classifySystemPartition,
   normalizeReplicaRowNodeIds,
@@ -196,6 +197,7 @@ async function resolvePriorityRecoveryQuorumProjection(
   minReplicaCount,
   completionSafe,
   readPlanningSnapshot,
+  removeSafetyReadiness = null,
 ) {
   const planningSnapshot = await resolveRemoveSafetyPlanningSnapshotReader(
     context, operation, readPlanningSnapshot)();
@@ -206,10 +208,23 @@ async function resolvePriorityRecoveryQuorumProjection(
         operation,
         planningSnapshot,
       );
+    const activeVoterNodeIdSet = new Set(
+      normalizeReplicaRowNodeIds(
+        projectedVoterReadyRows.filter(
+          (row) =>
+            operation?.type !== OperationType.REMOVE ||
+            row?.status === ReplicaStatus.ACTIVE,
+        ),
+      ),
+    );
     recoveryProjectionNodeIds = context.resolvePriorityRemoveSafetyMembershipSnapshot(
       planningSnapshot,
       priorityRecoveryContext,
       projectedVoterReadyRows,
+      {
+        committedNodeFloor: removeSafetyReadiness?.committedNodeFloor || null,
+        activeVoterNodeIdSet,
+      },
     ).recoveryProjectionNodeIds;
   }
   return projectQuorumAfterRemoval({
@@ -547,8 +562,11 @@ async function evaluateRemoveSafety(context, operation) {
     decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
     participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   };
-  const currentVoterReadyRows = criticalReplicaRows.filter((row) =>
-    context.isVoterReadyFloorCountableReplica(row, removeSafetyReadiness),
+  const currentVoterReadyRows = criticalReplicaRows.filter(
+    (row) =>
+      context.isVoterReadyFloorCountableReplica(row, removeSafetyReadiness) &&
+      (operation.type !== OperationType.REMOVE ||
+        row.status === ReplicaStatus.ACTIVE),
   );
 
   const operationReplicaId =
@@ -656,10 +674,8 @@ async function evaluateRemoveSafety(context, operation) {
     }
   }
 
-  if (priorityRecoveryCompletionEvaluation) {
-    if (!requiresSourceLeaderHandoff || !priorityRecoveryCompletionSafe) {
-      return priorityRecoveryCompletionEvaluation;
-    }
+  if (priorityRecoveryCompletionEvaluation && !priorityRecoveryCompletionSafe) {
+    return priorityRecoveryCompletionEvaluation;
   }
 
   const minReplicaCount = await context.getCriticalMinReplicaCount(
@@ -716,8 +732,13 @@ async function evaluateRemoveSafety(context, operation) {
       },
     );
   if (
-    priorityPublicationLeaderRemoveSafetyEvaluation?.classification ===
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE &&
+    priorityPublicationLeaderRemoveSafetyEvaluation &&
+    priorityPublicationLeaderRemoveSafetyEvaluation.classification !==
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE
+  ) {
+    return priorityPublicationLeaderRemoveSafetyEvaluation;
+  }
+  if (
     priorityRecoveryCompletionSafe &&
     classifySystemPartition({
       partitionId: operation?.partitionId,
@@ -731,6 +752,7 @@ async function evaluateRemoveSafety(context, operation) {
         minReplicaCount,
         priorityRecoveryCompletionSafe,
         readRemoveSafetyPlanningSnapshot,
+        removeSafetyReadiness,
       );
     if (!completionSafeFloor.floorSatisfied) {
       return context.buildDeferredRemoveSafetyEvaluationForOperation(
@@ -740,11 +762,6 @@ async function evaluateRemoveSafety(context, operation) {
           ` (${completionSafeFloor.effectiveProjectedVoterReadyCount}/${minReplicaCount})`,
       );
     }
-  }
-  if (priorityPublicationLeaderRemoveSafetyEvaluation &&
-      priorityPublicationLeaderRemoveSafetyEvaluation.classification !==
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE) {
-    return priorityPublicationLeaderRemoveSafetyEvaluation;
   }
 
   const peerPingGuard = await evaluateProjectedPeersContactable(

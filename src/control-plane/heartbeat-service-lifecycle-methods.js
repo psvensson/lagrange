@@ -443,7 +443,7 @@ class HeartbeatServiceLifecycleMethods {
         this.scheduledReconcileObligationEnabled = true;
         await this.membershipPublicationService.reconcileActiveGateMembershipPublication(
           handoffContract,
-          {reconcileAuthoritativeMembershipPublication: true},
+          {...planningSnapshot, reconcileAuthoritativeMembershipPublication: true},
         );
       } else {
         this.scheduledReconcileObligationEnabled = false;

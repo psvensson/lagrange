@@ -61,6 +61,9 @@ const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
 
 function recordPriorityRecoveryTransportGrace(service, context, state) {
   const nodeId = context.nodeId || service.nodeId;
+  if (context.persistSnapshot === false) {
+    return service.projectNodeLiveness(nodeId, service.now());
+  }
   const hasTransportGrace = state?.active === true &&
     service.shouldAllowTransportBackedRecoveryGrace(context);
   return service.nodeLivenessSemanticProjectionOwner

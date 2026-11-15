@@ -8,19 +8,85 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 /**
+ * Check whether a node is ready in the committed node floor when provided.
+ * @param {Object|null} committedNodeFloor
+ * @param {string} nodeId
+ * @returns {boolean}
+ */
+function isNodeReadyInCommittedFloor(committedNodeFloor, nodeId) {
+  if (!committedNodeFloor || typeof committedNodeFloor !== 'object') {
+    return true;
+  }
+  const semanticsMap =
+    committedNodeFloor.nodeSemanticsById instanceof Map ?
+      committedNodeFloor.nodeSemanticsById :
+      committedNodeFloor.readyByNodeId instanceof Map ?
+        committedNodeFloor.readyByNodeId :
+        null;
+  if (!semanticsMap) {
+    return true;
+  }
+  return semanticsMap.get(nodeId)?.readyNow !== false;
+}
+
+/**
  * Build recovery projection node IDs.
  * @param {Object|null} planningSnapshot
+ * @param {Object} [options]
  * @returns {string[]}
  */
-function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
+function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+  planningSnapshot,
+  options = {},
+) {
   if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return [];
   }
-  return normalizeNodeIdList([
+  const candidateNodeIds = normalizeNodeIdList([
     ...normalizeNodeIdList(planningSnapshot.recoveryActiveNodeIds),
     ...normalizeNodeIdList(planningSnapshot.projectedServingNodeIds),
     ...normalizeNodeIdList(planningSnapshot.locallyEligibleNodeIds),
   ]);
+  const committedNodeFloor = options?.committedNodeFloor || null;
+  const activeVoterNodeIdSet =
+    options?.activeVoterNodeIdSet instanceof Set ?
+      options.activeVoterNodeIdSet :
+      null;
+  return candidateNodeIds.filter(
+    (nodeId) =>
+      isNodeReadyInCommittedFloor(committedNodeFloor, nodeId) &&
+      (!activeVoterNodeIdSet || activeVoterNodeIdSet.has(nodeId)),
+  );
+}
+
+/**
+ * Determine whether recovery projection membership should be used.
+ * @param {string[]} recoveryProjectionNodeIds
+ * @param {Set<string>} recoveryProjectionNodeIdSet
+ * @param {string[]} missingPublishedNodeIds
+ * @param {Object|null} priorityRecoveryContext
+ * @returns {boolean}
+ */
+function shouldUseRecoveryProjectionMembership(
+  recoveryProjectionNodeIds,
+  recoveryProjectionNodeIdSet,
+  missingPublishedNodeIds,
+  priorityRecoveryContext,
+) {
+  if (recoveryProjectionNodeIds.length === 0) {
+    return false;
+  }
+  const priorityPartitionSummary =
+    priorityRecoveryContext?.priorityPartitionSummary || null;
+  if (hasPriorityRecoverySpreadGap(priorityPartitionSummary)) {
+    return true;
+  }
+  return (
+    missingPublishedNodeIds.length > 0 &&
+    missingPublishedNodeIds.every((nodeId) =>
+      recoveryProjectionNodeIdSet.has(nodeId),
+    )
+  );
 }
 
 /**
@@ -28,40 +94,38 @@ function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
  * @param {Object|null} planningSnapshot
  * @param {Object|null} priorityRecoveryContext
  * @param {Object[]} projectedVoterReadyRows
+ * @param {Object} [options]
  * @returns {Object}
  */
 function resolvePriorityRemoveSafetyMembershipSnapshot(
   planningSnapshot,
   priorityRecoveryContext,
   projectedVoterReadyRows,
+  options = {},
 ) {
   const publishedActiveNodeIds = normalizeNodeIdList(
     planningSnapshot?.publishedActiveNodeIds,
   );
   const recoveryProjectionNodeIds =
-    buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot);
+    buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+      planningSnapshot,
+      options,
+    );
   const projectedVoterReadyNodeIds = normalizeReplicaRowNodeIds(
     projectedVoterReadyRows,
-  );
-  const priorityPartitionSummary =
-    priorityRecoveryContext?.priorityPartitionSummary || null;
-  const spreadGapPending = hasPriorityRecoverySpreadGap(
-    priorityPartitionSummary,
   );
   const publishedActiveNodeIdSet = new Set(publishedActiveNodeIds);
   const recoveryProjectionNodeIdSet = new Set(recoveryProjectionNodeIds);
   const missingPublishedNodeIds = projectedVoterReadyNodeIds.filter(
     (nodeId) => !publishedActiveNodeIdSet.has(nodeId),
   );
-  const recoveryProjectionCoversProjectedVoters =
-    missingPublishedNodeIds.length > 0 &&
-    recoveryProjectionNodeIds.length > 0 &&
-    missingPublishedNodeIds.every((nodeId) => {
-      return recoveryProjectionNodeIdSet.has(nodeId);
-    });
   const useRecoveryProjectionMembership =
-    recoveryProjectionNodeIds.length > 0 &&
-    (spreadGapPending || recoveryProjectionCoversProjectedVoters);
+    shouldUseRecoveryProjectionMembership(
+      recoveryProjectionNodeIds,
+      recoveryProjectionNodeIdSet,
+      missingPublishedNodeIds,
+      priorityRecoveryContext,
+    );
   const membershipNodeIds = useRecoveryProjectionMembership ?
     recoveryProjectionNodeIds :
     publishedActiveNodeIds;

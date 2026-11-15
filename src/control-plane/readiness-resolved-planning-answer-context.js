@@ -28,6 +28,13 @@ function rememberResolvedNodePlanningAnswer(
   return answer;
 }
 
+function forgetResolvedNodePlanningAnswer(answer) {
+  if (answer && typeof answer === 'object') {
+    resolvedNodePlanningAnswerContext.delete(answer);
+  }
+  return answer;
+}
+
 function isResolvedNodePlanningAnswerForContext(
   owner,
   provided,
@@ -42,6 +49,7 @@ function isResolvedNodePlanningAnswerForContext(
 }
 
 export {
+  forgetResolvedNodePlanningAnswer,
   isResolvedNodePlanningAnswerForContext,
   rememberResolvedNodePlanningAnswer,
 };
