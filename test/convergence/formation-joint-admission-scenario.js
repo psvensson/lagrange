@@ -112,6 +112,14 @@ function voterReadyFloorCounts(world) {
   return counts;
 }
 
+function formatReadyzHealth(health) {
+  const healthy = health?.healthy === true;
+  return {
+    priorityControlPlaneRecoveryHealthy: healthy,
+    reasonCode: healthy ? null : health?.reasonCode || null,
+  };
+}
+
 // The client-facing cluster gates as their owners answer them: the committed
 // serve-eligibility decision per node, and the HARD priority-recovery
 // dependency the /readyz evaluator consumes.
@@ -120,6 +128,7 @@ function clusterGates(driver) {
   const now = driver.world.clock.now();
   const serve = {};
   for (const node of nodeStates(driver.world)) {
+    if (!driver.world.upNodeIds.has(node.nodeId)) continue;
     const answer = readiness.answerServeEligibility(node.nodeId);
     serve[node.nodeId] = {
       decision: answer?.decision || null,
@@ -128,12 +137,10 @@ function clusterGates(driver) {
   }
   const readyz = {};
   for (const [nodeId, hosts] of driver.world.hostsById) {
+    if (!driver.world.upNodeIds.has(nodeId)) continue;
     const health = hosts.controlPlaneReadinessService
       .getPriorityControlPlaneRecoveryHealthSync(nodeId, now);
-    readyz[nodeId] = {
-      priorityControlPlaneRecoveryHealthy: health?.healthy === true,
-      reasonCode: health?.healthy === true ? null : health?.reasonCode || null,
-    };
+    readyz[nodeId] = formatReadyzHealth(health);
   }
   return {serve, readyz};
 }
@@ -458,6 +465,7 @@ function buildArrivalOrderReport({world, driver, observer, rounds, fixpoint}) {
     (membershipRows(world).at(-1)?.members || [])
       .filter((nodeId) => nodeId !== SEED_NODE_ID));
   const stuckJoiners = joiners.filter((joiner) =>
+    world.upNodeIds.has(joiner.nodeId) &&
     admitted.has(joiner.nodeId) && !joiner.readyLease);
   const armedBounds = driver.armedBounds();
   const elapsedMs = world.clock.now() - WORLD_START_MS;
@@ -545,8 +553,16 @@ async function runArrivalOrder(order, options = {}) {
     }
     await driver.settle();
     observeSafety('ready signals started');
-    const {rounds, fixpoint} = await runRoundsToFixpoint(
+    let {rounds, fixpoint} = await runRoundsToFixpoint(
       driver, world, observeSafety, options.rounds || {});
+    if (fixpoint && typeof options.afterFixpoint === 'function') {
+      await options.afterFixpoint(driver, world, observeSafety);
+      observeSafety('after fixpoint action');
+      const next = await runRoundsToFixpoint(
+        driver, world, observeSafety, options.afterFixpointRounds || {});
+      rounds += next.rounds;
+      fixpoint = next.fixpoint;
+    }
     return buildArrivalOrderReport({world, driver, observer, rounds, fixpoint});
   } finally {
     driver.close();

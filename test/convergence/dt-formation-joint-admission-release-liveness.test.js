@@ -35,6 +35,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
+import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   OUTCOME,
   STEPPED_CADENCE_NAMES,
@@ -233,4 +236,260 @@ test('sweep: every arrival order releases every admitted joiner and ' +
   for (const {name, report} of rows) {
     assertSpreadComplete(report, name);
   }
+});
+
+test('dead-ready-node-witnessed: pre-placement and post-placement death ' +
+  'exclude expired READY lease from placement and removal floor', async () => {
+  // 1. Pre-placement death: j2 dies after publishing READY before any placement.
+  const prePlacementReport = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      1: async (driver) => {
+        await driver.killJoiner(J2);
+      },
+    },
+  });
+  process.stdout.write('DEAD-READY-NODE (pre-placement)\n' +
+    `membership=${JSON.stringify(prePlacementReport.membership)}\n` +
+    `placement=${JSON.stringify(prePlacementReport.placement)}\n` +
+    `spread=${JSON.stringify(prePlacementReport.spread)}\n`);
+  assertSafety(prePlacementReport, 'dead-ready-node pre-placement');
+  assert.equal(lowestFloor(prePlacementReport), VOTER_READY_FLOOR);
+  for (const holders of Object.values(prePlacementReport.placement)) {
+    assert.equal(
+      holders.some((holder) => holder.startsWith(`${J2}:`)),
+      false,
+      'dead joiner receives no placement after its READY lease lapses',
+    );
+  }
+
+  // 2. Post-placement death (9e943db3 witness): j1 dies with expired READY
+  // lease after receiving ACTIVE voter replicas on control_plane_publications-p1
+  // and replica_operations-p1 while seed still holds 2 ACTIVE voters on
+  // replica_operations-p1 (surplus voter about to be removed in round 7).
+  // Seed must refuse to remove its surplus voter down to 2 live READY voters
+  // while j1's lease is expired, and converge once j1 recovers (or a
+  // replacement node joins).
+  let seedLedgerVotersBeforeDeath = 0;
+  let seedLedgerVotersWhileDead = 0;
+  const postPlacementReport = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      7: async (driver, world) => {
+        seedLedgerVotersBeforeDeath = world.cache.filter(
+          TABLES.SERVICES,
+          (row) =>
+            row[COLUMN.PARTITION_ID] === 'replica_operations-p1' &&
+            row[COLUMN.NODE_ID] === 'seed' &&
+            row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+            row[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEARNER,
+        ).length;
+        await driver.killJoiner(J1);
+      },
+      9: async (driver, world) => {
+        seedLedgerVotersWhileDead = world.cache.filter(
+          TABLES.SERVICES,
+          (row) =>
+            row[COLUMN.PARTITION_ID] === 'replica_operations-p1' &&
+            row[COLUMN.NODE_ID] === 'seed' &&
+            row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+            row[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEARNER,
+        ).length;
+        await driver.restartJoiner(J1, {wipeDataDir: false});
+      },
+    },
+  });
+  assert.equal(seedLedgerVotersBeforeDeath, 2,
+    'seed holds 2 ACTIVE ledger voters before round 7 removal evaluation');
+  assert.equal(seedLedgerVotersWhileDead, 2,
+    'seed refuses to remove its surplus ledger voter while j1 lease is expired');
+  assertEveryAdmittedJoinerReady(
+    postPlacementReport, 'dead-ready-node post-placement');
+  assertSafety(postPlacementReport, 'dead-ready-node post-placement');
+  assertSpreadComplete(postPlacementReport, 'dead-ready-node post-placement');
+  assert.equal(lowestFloor(postPlacementReport), VOTER_READY_FLOOR);
+});
+
+test('join-core-coupling: durable-rejoin converges to TRAFFIC_READY',
+  async () => {
+    const report = await runArrivalOrder(LOSING_ORDER, {
+      afterFixpoint: async (driver) => {
+        await driver.restartJoiner(J1, {wipeDataDir: false});
+      },
+    });
+    assertEveryAdmittedJoinerReady(report, 'durable-rejoin');
+    assertSafety(report, 'durable-rejoin');
+    assertSpreadComplete(report, 'durable-rejoin');
+    assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
+    for (const nodeId of ['seed', J1, J2]) {
+      assert.equal(report.clusterGates.serve[nodeId]?.decision, 'eligible');
+      assert.equal(
+        report.clusterGates.readyz[nodeId]?.priorityControlPlaneRecoveryHealthy,
+        true,
+      );
+    }
+  });
+
+test('join-core-coupling: rolling-restart-joiner-during-formation converges ' +
+  'to TRAFFIC_READY', async () => {
+  const report = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      4: async (driver) => {
+        await driver.restartJoiner(J1, {wipeDataDir: false});
+      },
+    },
+  });
+  assertEveryAdmittedJoinerReady(
+    report, 'rolling-restart-joiner-during-formation');
+  assertSafety(report, 'rolling-restart-joiner-during-formation');
+  assertSpreadComplete(report, 'rolling-restart-joiner-during-formation');
+  assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
+});
+
+test('join-core-coupling: rolling-restart-seed-during-formation converges ' +
+  'to TRAFFIC_READY', async () => {
+  const report = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      4: async (driver) => {
+        await driver.restartSeed();
+      },
+    },
+  });
+  assertEveryAdmittedJoinerReady(
+    report, 'rolling-restart-seed-during-formation');
+  assertSafety(report, 'rolling-restart-seed-during-formation');
+  assertSpreadComplete(report, 'rolling-restart-seed-during-formation');
+  assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
+});
+
+test('join-core-coupling: joiner-restart-wiped-data-dir re-replicates and ' +
+  'converges to TRAFFIC_READY without deleting REPLICA_OPERATIONS history',
+async () => {
+  let j1ReplicasBeforeWipe = 0;
+  let j1ReplicasAfterWipe = -1;
+  let j1OperationsBeforeWipe = 0;
+  let j1OperationsAfterWipe = -1;
+  let j1BootIncarnationBefore = 0;
+  let j1BootIncarnationAfter = 0;
+  const report = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      7: async (driver, world) => {
+        j1ReplicasBeforeWipe = world.cache.filter(
+          TABLES.SERVICES,
+          (row) => row[COLUMN.NODE_ID] === J1,
+        ).length;
+        j1OperationsBeforeWipe = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        j1BootIncarnationBefore =
+            world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
+        await driver.restartJoiner(J1, {wipeDataDir: true});
+        j1ReplicasAfterWipe = world.cache.filter(
+          TABLES.SERVICES,
+          (row) => row[COLUMN.NODE_ID] === J1,
+        ).length;
+        j1OperationsAfterWipe = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        j1BootIncarnationAfter =
+            world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
+      },
+    },
+  });
+  assert.ok(j1ReplicasBeforeWipe >= 2,
+    'j1 held priority replicas before wiping its data directory');
+  assert.equal(j1ReplicasAfterWipe, 0,
+    'wiped data directory removes all local replicas on j1');
+  assert.ok(j1OperationsBeforeWipe >= 2,
+    'j1 had committed REPLICA_OPERATIONS history before the wipe');
+  assert.equal(j1OperationsAfterWipe, j1OperationsBeforeWipe,
+    'cluster REPLICA_OPERATIONS history is preserved across local disk wipe');
+  assert.ok(j1BootIncarnationAfter > j1BootIncarnationBefore,
+    'restarted joiner registers a strictly newer boot_incarnation');
+  assertEveryAdmittedJoinerReady(report, 'joiner-restart-wiped-data-dir');
+  assertSafety(report, 'joiner-restart-wiped-data-dir');
+  assertSpreadComplete(report, 'joiner-restart-wiped-data-dir');
+  assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
+
+  // Local-disk-only wipe witness: neither SERVICES nor REPLICA_OPERATIONS
+  // rows are deleted by stopNode; the wiped node's SERVICES rows transition
+  // to FAILED and the real MovePlanner + RebalanceCoordinator drive
+  // REMOVE (reason: replica_failed) followed by re-replication.
+  let localWipeServicesBefore = 0;
+  let localWipeFailedServicesAfter = 0;
+  let localWipeOpsBefore = 0;
+  let localWipeOpsAfter = 0;
+  const localWipeReport = await runArrivalOrder(LOSING_ORDER, {
+    rounds: {
+      7: async (driver, world) => {
+        localWipeServicesBefore = world.cache.filter(
+          TABLES.SERVICES,
+          (row) => row[COLUMN.NODE_ID] === J1,
+        ).length;
+        localWipeOpsBefore = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+        await driver.restartJoiner(J1, {
+          wipeDataDir: true,
+          markWipedReplicasFailed: true,
+        });
+        localWipeFailedServicesAfter = world.cache.filter(
+          TABLES.SERVICES,
+          (row) =>
+            row[COLUMN.NODE_ID] === J1 &&
+              (row[COLUMN.STATUS] === ReplicaStatus.FAILED ||
+                row[COLUMN.STATUS] === ReplicaStatus.REMOVING),
+        ).length;
+        localWipeOpsAfter = world.cache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
+        ).length;
+      },
+    },
+  });
+  assert.ok(localWipeServicesBefore >= 2,
+    'j1 held SERVICES rows before local-disk-only wipe');
+  assert.equal(localWipeFailedServicesAfter, localWipeServicesBefore,
+    'SERVICES rows remain in cluster store as FAILED for planner cleanup');
+  assert.equal(localWipeOpsAfter, localWipeOpsBefore,
+    'REPLICA_OPERATIONS rows remain untouched in cluster store');
+  assertEveryAdmittedJoinerReady(
+    localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assertSafety(localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assertSpreadComplete(
+    localWipeReport, 'joiner-restart-local-disk-only-wipe');
+  assert.equal(lowestFloor(localWipeReport), VOTER_READY_FLOOR);
+});
+
+test('join-core-coupling: single-node-operation and ' +
+  'two-nodes-added-at-once-to-formed-three-node-cluster', async () => {
+  const singleNodeReport = await runArrivalOrder([]);
+  assertSafety(singleNodeReport, 'single-node-operation');
+  assertSpreadComplete(singleNodeReport, 'single-node-operation');
+  assert.equal(singleNodeReport.clusterGates.serve.seed?.decision, 'eligible');
+  assert.equal(
+    singleNodeReport.clusterGates.readyz.seed
+      ?.priorityControlPlaneRecoveryHealthy,
+    true,
+  );
+
+  const scaleOutReport = await runArrivalOrder(LOSING_ORDER, {
+    afterFixpoint: async (driver) => {
+      await driver.joinerArrives(J3);
+      await driver.joinerArrives(J4);
+      driver.startReadySignal(J3);
+      driver.startReadySignal(J4);
+      await driver.settle();
+      await driver.membershipDerivation();
+    },
+  });
+  assertEveryAdmittedJoinerReady(
+    scaleOutReport, 'two-nodes-added-at-once-to-formed-three-node-cluster');
+  assert.deepEqual(scaleOutReport.admittedJoiners, [J1, J2, J3, J4]);
+  assertSafety(
+    scaleOutReport, 'two-nodes-added-at-once-to-formed-three-node-cluster');
+  assertSpreadComplete(
+    scaleOutReport, 'two-nodes-added-at-once-to-formed-three-node-cluster');
+  assert.equal(lowestFloor(scaleOutReport), VOTER_READY_FLOOR);
 });
