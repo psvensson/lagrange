@@ -1102,18 +1102,9 @@ test(
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-
       t.equal(deferred, true, 'missing repair remains owned progress');
-      t.same(
-        completedOperationIds,
-        [],
-        'missing capability cannot release terminal workflow state',
-      );
-      t.same(
-        scheduledOperationIds,
-        [TEST_OPERATION_ID],
-        'the owner retains a retry instead of accepting ambiguous absence',
-      );
+      t.same(completedOperationIds, []);
+      t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
     } finally {
       await coordinator.shutdown();
     }
@@ -1247,40 +1238,27 @@ test(
     operation.replicaId = 'replace-replica-legacy-runtime';
     const failedOperationIds = [];
     const sourceRetirementOperationIds = [];
-    coordinator.workflowOwner.failOperation =
-      async (failedOperation) => {
-        failedOperationIds.push(failedOperation.operationId);
-      };
-    coordinator.workflowOwner.reconcileReplaceActualActive =
-      async (replaceOperation) => {
-        sourceRetirementOperationIds.push(replaceOperation.operationId);
-        return true;
-      };
+    coordinator.workflowOwner.failOperation = async (failedOperation) => {
+      failedOperationIds.push(failedOperation.operationId);
+    };
+    coordinator.workflowOwner.reconcileReplaceActualActive = async (
+      replaceOperation,
+    ) => {
+      sourceRetirementOperationIds.push(replaceOperation.operationId);
+      return true;
+    };
 
     try {
       await coordinator.workflowOwner.reconcileActiveReplicaStatus(operation);
-
-      t.same(
-        failedOperationIds,
-        [operation.operationId],
-        'the operation owner fails the invalid legacy workflow',
-      );
-      t.same(
-        sourceRetirementOperationIds,
-        [],
-        'invalid target evidence never starts source retirement',
-      );
+      t.same(failedOperationIds, [operation.operationId]);
+      t.same(sourceRetirementOperationIds, []);
       t.equal(
         coordinator.workflowOwner.isActiveReplaceSourceRetirementObserved(
           operation,
           `${operation.entityId}-r1`,
-          {
-            state: 'present',
-            lifecycleStatus: ReplicaStatus.FAILED,
-          },
+          {state: 'present', lifecycleStatus: ReplicaStatus.FAILED},
         ),
         false,
-        'generic runtime FAILED is not authoritative retirement evidence',
       );
     } finally {
       await coordinator.shutdown();
@@ -1288,9 +1266,6 @@ test(
   },
 );
 
-// Real-consumer witness for the partial-row lifecycle reconciliation measured
-// on ed708dfd: the terminal handoff refresh runs through the production cache
-// repair path, then the priority-spread projection reads the same cache.
 const PEER_NODE_IDS = Object.freeze([
   'active-cache-handoff-peer-1',
   'active-cache-handoff-peer-2',
@@ -1312,8 +1287,6 @@ function seedPrioritySpreadPeers(cache) {
   });
 }
 
-// The projection reports every initial priority partition; the witness reads
-// only the target partition's spread block.
 function projectTargetPartitionSpread(cache) {
   const summary = buildDerivedPriorityPartitionSummary(
     {
@@ -1325,9 +1298,10 @@ function projectTargetPartitionSpread(cache) {
   );
   return {
     missing: summary.missingPartitionIds.includes(TEST_PARTITION_ID),
-    block: summary.blockedPartitions.find(
-      (entry) => entry.partitionId === TEST_PARTITION_ID,
-    ) || null,
+    block:
+      summary.blockedPartitions.find(
+        (entry) => entry.partitionId === TEST_PARTITION_ID,
+      ) || null,
   };
 }
 
@@ -1343,6 +1317,7 @@ async function driveHandoffOverCachedTarget(
   cachedTargetRow,
   authorityRow,
   expectedRow = authorityRow,
+  reconciliationOptions = {},
 ) {
   const cache = new SystemTableCache();
   seedPrioritySpreadPeers(cache);
@@ -1354,16 +1329,15 @@ async function driveHandoffOverCachedTarget(
   t.same(
     projectTargetPartitionSpread(cache).block?.exclusionReasonCounts ?? null,
     expectedExclusionBefore(cachedTargetRow),
-    'before the handoff the projection reads the cached target as cached',
   );
   t.equal(
     areAuthoritativeSystemTableCacheRowsAligned(
       SYSTEM_TABLE_NAME.SERVICES,
       cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID),
       authorityRow,
+      reconciliationOptions,
     ),
     false,
-    'the cached target is not reported aligned before the refresh',
   );
   const coordinator = createTestCoordinator({
     nodeId: TEST_NODE_ID,
@@ -1374,10 +1348,9 @@ async function driveHandoffOverCachedTarget(
   });
   const operation = buildSyncingAddOperation();
   const completedOperationIds = [];
-  coordinator.workflowOwner.completeOperation =
-    async (completedOperation) => {
-      completedOperationIds.push(completedOperation.operationId);
-    };
+  coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+    completedOperationIds.push(completedOperation.operationId);
+  };
   try {
     await coordinator.workflowOwner
       .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
@@ -1386,19 +1359,11 @@ async function driveHandoffOverCachedTarget(
   }
   const targetRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
   const spread = projectTargetPartitionSpread(cache);
-  t.same(
-    completedOperationIds,
-    [TEST_OPERATION_ID],
-    'the handoff completes',
-  );
-  t.same(targetRow, expectedRow, 'the cached target holds the expected row');
-  t.equal(
-    isPrioritySpreadHolderServiceRow(targetRow),
-    true,
-    'the completed target is a priority-spread holder',
-  );
-  t.equal(spread.block, null, 'the projection includes the replica');
-  t.equal(spread.missing, false, 'the target partition reaches its spread');
+  t.same(completedOperationIds, [TEST_OPERATION_ID]);
+  t.same(targetRow, expectedRow);
+  t.equal(isPrioritySpreadHolderServiceRow(targetRow), true);
+  t.equal(spread.block, null);
+  t.equal(spread.missing, false);
 }
 
 test(
@@ -1441,7 +1406,6 @@ test(
   'ACTIVE terminal handoff keeps an owner-local voter seed held under an ' +
     'older label when authority still has no role at a newer version',
   async (t) => {
-    // CL-035 seed: the cached voter role is ahead of the durable row.
     const authorityRow = buildAuthoritativeServiceRow({raft_role: null});
     await driveHandoffOverCachedTarget(
       t,
@@ -1449,5 +1413,80 @@ test(
       authorityRow,
       {...authorityRow, raft_role: 'follower'},
     );
+  },
+);
+
+test(
+  'ACTIVE terminal handoff repairs a stale cached incarnation after owner ' +
+    'restart and wall-clock rollback and fences a delayed read when CDC ' +
+    'installs a newer incarnation in flight',
+  async (t) => {
+    const rebornRow = buildAuthoritativeServiceRow({
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+      create_attempt_token: 'incarnation-after-restart',
+      created_at: 1000,
+      state_entered_at: 1000,
+      updated_at: 1000,
+    });
+    const staleRow = buildAuthoritativeServiceRow({
+      status: 'stopped',
+      raft_role: 'learner',
+      create_attempt_token: 'incarnation-before-restart',
+      created_at: 2000,
+      state_entered_at: 2000,
+      updated_at: 2000,
+    });
+    await driveHandoffOverCachedTarget(t, staleRow, rebornRow, rebornRow, {
+      authoritativeIncarnationSupersedes: true,
+    });
+
+    const cache = new SystemTableCache();
+    const oldRow = buildAuthoritativeServiceRow({
+      status: ReplicaStatus.SYNCING,
+      raft_role: 'learner',
+      create_attempt_token: 'incarnation-old-in-flight',
+      created_at: 1000,
+      state_entered_at: 1000,
+      updated_at: 1000,
+    });
+    const newCdcRow = buildAuthoritativeServiceRow({
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+      create_attempt_token: 'incarnation-new-cdc',
+      created_at: 900,
+      state_entered_at: 900,
+      updated_at: 900,
+      updated_at_hlc: '2000-0-services-owner',
+    });
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {...oldRow, updated_at_hlc: '1000-0-services-owner'},
+    );
+    const host = buildProductionCacheRefreshHost({
+      cache,
+      authoritativeRow: oldRow,
+    });
+    host.executeAuthoritativeSystemTableRead = async () => {
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        CDC_OPERATION.UPSERT,
+        newCdcRow,
+        {sourceLogIndex: 20},
+      );
+      return {
+        success: true,
+        rows: [oldRow],
+        readAuthorityWitness: {appliedIndex: 10, observedAtMs: 1000},
+      };
+    };
+    const aligned = await host.refreshAuthoritativeCacheRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      TEST_REPLICA_ID,
+      {expectedFields: {status: ReplicaStatus.ACTIVE, node_id: TEST_NODE_ID}},
+    );
+    t.equal(aligned, true, 'delayed authoritative read is fenced');
+    t.same(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID), newCdcRow);
   },
 );

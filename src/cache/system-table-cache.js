@@ -405,13 +405,10 @@ class SystemTableCache {
           SYSTEM_TABLE_CACHE_MUTATION_MODE
             .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION
         ) {
-          table.set(
-            key,
+          const replacement =
             buildAuthoritativeServiceLifecycleCacheReplacement(
-              existing,
-              data,
-            ),
-          );
+              existing, data, options);
+          table.set(key, replacement);
         } else if (this.isStaleForExistingRecord(
           tableName,
           existing,
@@ -443,10 +440,10 @@ class SystemTableCache {
             SYSTEM_TABLE_CACHE_MUTATION_MODE
               .AUTHORITATIVE_OBSERVATION_RECONCILIATION
         ) {
-          table.set(
-            key,
-            buildAuthoritativeSystemTableCacheReplacement(existing, data),
-          );
+          const replacement =
+            buildAuthoritativeSystemTableCacheReplacement(
+              existing, data, options);
+          table.set(key, replacement);
         } else {
           table.set(key, this.mergeRecords(tableName, existing, data));
         }

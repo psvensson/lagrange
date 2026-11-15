@@ -8,6 +8,10 @@ import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
   '../../src/cache/cache-constants.js';
 import {areAuthoritativeSystemTableCacheRowsAligned} from
   '../../src/cache/system-table-cache-authoritative-reconciliation.js';
+import {
+  advanceServiceRowCreatedAtFloor,
+  mintServiceRowCreatedAt,
+} from '../../src/node/service-row-incarnation.js';
 
 const SERVICE_ID = 'priority-partition-r4';
 
@@ -167,7 +171,7 @@ function buildLifecycleRow(overrides = {}) {
   };
 }
 
-function reconcileLifecycle(cachedRow, authoritativeRow) {
+function reconcileLifecycle(cachedRow, authoritativeRow, options = {}) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(
     TABLES.SERVICES,
@@ -178,12 +182,14 @@ function reconcileLifecycle(cachedRow, authoritativeRow) {
     TABLES.SERVICES,
     cache.get(TABLES.SERVICES, SERVICE_ID),
     authoritativeRow,
+    options,
   );
   cache.applySystemTableChange(
     TABLES.SERVICES,
     CDC_OPERATIONS.UPSERT,
     authoritativeRow,
     {
+      ...options,
       mutationMode: SYSTEM_TABLE_CACHE_MUTATION_MODE
         .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION,
     },
@@ -196,6 +202,7 @@ function reconcileLifecycle(cachedRow, authoritativeRow) {
       TABLES.SERVICES,
       row,
       authoritativeRow,
+      options,
     ),
   };
 }
@@ -403,7 +410,7 @@ test(
 
     for (const incarnation of [
       {create_attempt_token: 'attempt-2', updated_at: 4000},
-      {created_at: 600},
+      {created_at: 400, updated_at: 4000},
     ]) {
       const otherIncarnation = reconcileLifecycle(
         buildLifecycleRow({raft_role: null, ...incarnation}),
@@ -418,6 +425,7 @@ test(
     for (const olderIncarnation of [
       {create_attempt_token: 'attempt-0'},
       {created_at: 400},
+      {created_at: 600},
     ]) {
       const reconciledOlder = reconcileLifecycle(
         buildLifecycleRow({raft_role: null, ...olderIncarnation}),
@@ -518,6 +526,120 @@ test(
       'strictly newer cached incarnation is preserved against older snapshot',
     );
     t.equal(preservedNewer.alignedAfter, true);
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - lifecycle reconciliation separates incarnation ' +
+    'identity from supersession across owner restart clock rollback and ' +
+    'delayed authoritative reads',
+  (t) => {
+    const staleCachedBeforeRollback = buildLifecycleRow({
+      status: 'stopped',
+      address: 'node-a/partition/svc-p1-r4',
+      port: 9100,
+      created_at: 2000,
+      create_attempt_token: 'incarnation-before-restart',
+      raft_role: 'learner',
+      state_entered_at: 2000,
+      updated_at: 2000,
+    });
+    const rebornAuthoritativeAfterRollback = buildLifecycleRow({
+      status: 'active',
+      address: 'node-b/partition/svc-p1-r4',
+      port: 9200,
+      created_at: 1000,
+      create_attempt_token: 'incarnation-after-restart',
+      raft_role: 'follower',
+      state_entered_at: 1000,
+      updated_at: 1000,
+    });
+    for (const supersessionOptions of [
+      {authoritativeIncarnationSupersedes: true},
+      {cachedSourceLogIndex: 10, authoritativeSourceLogIndex: 20},
+      {
+        cachedOriginHlc: '1000-0-services-p1-r1',
+        authoritativeOriginHlc: '1001-0-services-p1-r1',
+      },
+    ]) {
+      const reconciled = reconcileLifecycle(
+        staleCachedBeforeRollback,
+        rebornAuthoritativeAfterRollback,
+        supersessionOptions,
+      );
+      t.equal(
+        reconciled.alignedBefore,
+        false,
+        'cached incarnation with larger wall-clock created_at is not aligned ' +
+          'when causal supersession proves authority is newer',
+      );
+      t.same(
+        reconciled.row,
+        rebornAuthoritativeAfterRollback,
+        'reborn authoritative incarnation replaces stale cached incarnation ' +
+          'even after owner restart with rolled-back clock',
+      );
+      t.equal(reconciled.alignedAfter, true);
+    }
+
+    const newerCachedAfterRollback = buildLifecycleRow({
+      status: 'active',
+      address: 'node-b/partition/svc-p1-r4',
+      port: 9200,
+      created_at: 900,
+      create_attempt_token: 'incarnation-cdc-newer',
+      raft_role: 'follower',
+      state_entered_at: 900,
+      updated_at: 900,
+    });
+    const delayedAuthoritativeOldIncarnation = buildLifecycleRow({
+      status: 'syncing',
+      address: 'node-a/partition/svc-p1-r4',
+      port: 9100,
+      created_at: 1000,
+      create_attempt_token: 'incarnation-delayed-read',
+      raft_role: 'learner',
+      state_entered_at: 1000,
+      updated_at: 1000,
+    });
+    for (const fenceOptions of [
+      {cachedIncarnationSupersedes: true},
+      {cachedSourceLogIndex: 25, authoritativeSourceLogIndex: 12},
+      {
+        cachedOriginHlc: '2000-0-services-p1-r1',
+        authoritativeOriginHlc: '1500-0-services-p1-r1',
+      },
+    ]) {
+      const fenced = reconcileLifecycle(
+        newerCachedAfterRollback,
+        delayedAuthoritativeOldIncarnation,
+        fenceOptions,
+      );
+      t.equal(
+        fenced.alignedBefore,
+        true,
+        'genuinely newer cached incarnation supersedes delayed read',
+      );
+      t.same(
+        fenced.row,
+        newerCachedAfterRollback,
+        'delayed authoritative read for old incarnation is fenced out',
+      );
+      t.equal(fenced.alignedAfter, true);
+    }
+
+    const observedDurableCreatedAt = mintServiceRowCreatedAt(1000) + 10;
+    t.equal(
+      advanceServiceRowCreatedAtFloor(observedDurableCreatedAt),
+      observedDurableCreatedAt,
+      'observing a durable SERVICES birth timestamp advances the floor',
+    );
+    t.equal(
+      mintServiceRowCreatedAt(1000),
+      observedDurableCreatedAt + 1,
+      'reborn service row after clock rollback mints above durable floor',
+    );
     t.end();
   },
 );

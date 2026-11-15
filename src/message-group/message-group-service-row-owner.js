@@ -12,8 +12,11 @@ import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {durableRowVersion, nextLifecycleStateEntry} from
   '../node/replica-state-machine-lifecycle-observation.js';
-import {isExactServiceRowBirth, mintServiceRowCreatedAt} from
-  '../node/service-row-incarnation.js';
+import {
+  advanceServiceRowCreatedAtFloor,
+  isExactServiceRowBirth,
+  mintServiceRowCreatedAt,
+} from '../node/service-row-incarnation.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
@@ -120,10 +123,9 @@ async function observeMessageGroupService(systemTableWriter, replicaId) {
       },
     );
     const available = read?.success === true && Array.isArray(read.rows);
-    return {
-      available,
-      row: available && read.rows.length === 1 ? read.rows[0] : null,
-    };
+    const row = available && read.rows.length === 1 ? read.rows[0] : null;
+    advanceServiceRowCreatedAtFloor(row?.created_at);
+    return {available, row};
   } catch (_error) {
     return {available: false, row: null};
   }
@@ -404,9 +406,11 @@ class MessageGroupServiceRowOwner {
    * @return {Object} The registration row.
    */
   static buildRegistrationRow(options = {}) {
+    const originalCreatedAt = options.originalRegistration?.birth.created_at;
+    advanceServiceRowCreatedAtFloor(originalCreatedAt);
     return MessageGroupServiceRowOwner.buildServiceRow({
       ...options,
-      timestamp: options.originalRegistration?.birth.created_at ??
+      timestamp: originalCreatedAt ??
         mintServiceRowCreatedAt(options.timestamp ?? Date.now()),
     });
   }
@@ -528,6 +532,7 @@ class MessageGroupServiceRowOwner {
   }
 
   async resolveStatusSource(options) {
+    advanceServiceRowCreatedAtFloor(options.registrationEvidence?.created_at);
     const identity = MessageGroupServiceRowOwner.buildServiceRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),

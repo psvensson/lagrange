@@ -104,5 +104,5 @@ documentClass: generated
 - [runtime-service-message-dispatch.js](runtime-service-message-dispatch.js) - Message envelope dispatch for RuntimeServiceHandler. (importers: one)
 - [runtime-service-request-cell-handler.js](runtime-service-request-cell-handler.js) - A Request Cell invocation arrived (or was re-checked) after its deadline: one wait_bound_spent ERROR with how far... (importers: few)
 - [runtime-service-restart-inventory.js](runtime-service-restart-inventory.js) - One applied startup observation and exact per-creation continuations. (importers: one)
-- [service-row-incarnation.js](service-row-incarnation.js) - Mint one process-lifetime-unique durable SERVICES row incarnation (created_at) for a partition or message-group... (importers: few)
+- [service-row-incarnation.js](service-row-incarnation.js) - Advance the process-local SERVICES row incarnation floor from a durable observation so subsequent rebirths in this... (importers: many)
 - [services-p1-diagnostic-logger.js](services-p1-diagnostic-logger.js) - ServicesP1DiagnosticLogger - Diagnostic logger for services-p1 operations. (importers: one)

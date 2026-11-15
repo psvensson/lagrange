@@ -1,6 +1,7 @@
 import {
   areAuthoritativeSystemTableCacheRowsAligned,
   areAuthoritativeSystemTableCacheRowsEqual,
+  hasDifferentReplicaBirthIncarnation,
 } from '../cache/system-table-cache-authoritative-reconciliation.js';
 import {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
@@ -64,6 +65,7 @@ function cacheRepairSatisfiedAfterApply(options) {
     currentRow: resultingRow,
     authoritativeRow: options.authoritativeRow,
     mutationMode: options.mutationMode,
+    reconciliationOptions: options.reconciliationOptions,
   });
 }
 
@@ -121,6 +123,144 @@ function canonicalizeCompleteAuthoritativeRows(
   return canonicalRows;
 }
 
+function resolveLastCdcSourceLogIndex(service, tableName, key) {
+  const observation =
+    service.cacheMutationTarget?.getLastCdcObservation?.(tableName, key) ??
+    null;
+  return Number.isSafeInteger(observation?.sourceLogIndex) ?
+    observation.sourceLogIndex :
+    null;
+}
+
+function hasValidMutationSnapshotPair(beforeSnapshot, afterSnapshot) {
+  return Boolean(
+    beforeSnapshot &&
+    afterSnapshot &&
+    Number.isFinite(beforeSnapshot.mutationRevision) &&
+    Number.isFinite(afterSnapshot.mutationRevision),
+  );
+}
+
+function didCacheChangeBirthIncarnationDuringRead(
+  beforeSnapshot,
+  afterSnapshot,
+  currentRow,
+) {
+  if (
+    !hasValidMutationSnapshotPair(beforeSnapshot, afterSnapshot) ||
+    beforeSnapshot.mutationRevision === afterSnapshot.mutationRevision ||
+    !currentRow
+  ) {
+    return false;
+  }
+  return !beforeSnapshot.record ||
+    hasDifferentReplicaBirthIncarnation(beforeSnapshot.record, currentRow);
+}
+
+function resolveSourcePositionSupersessionFlags(
+  readAppliedIndex,
+  lastCdcSourceLogIndex,
+) {
+  if (
+    !Number.isSafeInteger(readAppliedIndex) ||
+    !Number.isSafeInteger(lastCdcSourceLogIndex)
+  ) {
+    return {readSupersedesCdc: false, cdcSupersedesRead: false};
+  }
+  return {
+    readSupersedesCdc: readAppliedIndex > lastCdcSourceLogIndex,
+    cdcSupersedesRead: lastCdcSourceLogIndex > readAppliedIndex,
+  };
+}
+
+function hasExplicitIncarnationSupersessionOption(options) {
+  return (
+    typeof options.cachedIncarnationSupersedes === 'boolean' ||
+    typeof options.authoritativeIncarnationSupersedes === 'boolean'
+  );
+}
+
+function buildSourcePositionOptions(lastCdcSourceLogIndex, readAppliedIndex) {
+  const positionOptions = {};
+  if (Number.isSafeInteger(lastCdcSourceLogIndex)) {
+    positionOptions.cachedSourceLogIndex = lastCdcSourceLogIndex;
+  }
+  if (Number.isSafeInteger(readAppliedIndex)) {
+    positionOptions.authoritativeSourceLogIndex = readAppliedIndex;
+  }
+  return positionOptions;
+}
+
+function resolveReadWitnessAppliedIndex(options) {
+  return Number(options?.readAuthorityWitness?.appliedIndex);
+}
+
+function resolvePointRepairSupersessionFlags({
+  beforeReadSnapshot,
+  afterReadSnapshot,
+  currentRow,
+  readAppliedIndex,
+  lastCdcSourceLogIndex,
+}) {
+  const {readSupersedesCdc, cdcSupersedesRead} =
+    resolveSourcePositionSupersessionFlags(
+      readAppliedIndex,
+      lastCdcSourceLogIndex,
+    );
+  const hasSnapshotFence = hasValidMutationSnapshotPair(
+    beforeReadSnapshot,
+    afterReadSnapshot,
+  );
+  const changedIncarnationDuringRead =
+    didCacheChangeBirthIncarnationDuringRead(
+      beforeReadSnapshot,
+      afterReadSnapshot,
+      currentRow,
+    );
+  const cachedIncarnationSupersedes =
+    cdcSupersedesRead ||
+    (changedIncarnationDuringRead && !readSupersedesCdc);
+  const authoritativeIncarnationSupersedes =
+    !cachedIncarnationSupersedes &&
+    (readSupersedesCdc || (hasSnapshotFence && !changedIncarnationDuringRead));
+  return {cachedIncarnationSupersedes, authoritativeIncarnationSupersedes};
+}
+
+function buildAuthoritativePointRepairOptions(
+  service,
+  tableName,
+  key,
+  options = {},
+) {
+  if (hasExplicitIncarnationSupersessionOption(options)) {
+    return options;
+  }
+  const afterReadSnapshot = options.beforeReadSnapshot ?
+    service.cacheMutationTarget?.captureRecordMutationSnapshot?.(
+      tableName,
+      key,
+    ) ?? null :
+    null;
+  const currentRow = afterReadSnapshot?.record ?? null;
+  const lastCdcSourceLogIndex = resolveLastCdcSourceLogIndex(
+    service,
+    tableName,
+    key,
+  );
+  const readAppliedIndex = resolveReadWitnessAppliedIndex(options);
+  return {
+    ...options,
+    ...buildSourcePositionOptions(lastCdcSourceLogIndex, readAppliedIndex),
+    ...resolvePointRepairSupersessionFlags({
+      beforeReadSnapshot: options.beforeReadSnapshot,
+      afterReadSnapshot,
+      currentRow,
+      readAppliedIndex,
+      lastCdcSourceLogIndex,
+    }),
+  };
+}
+
 function applyAuthoritativeCacheRepairRow(
   service,
   tableName,
@@ -143,6 +283,12 @@ function applyAuthoritativeCacheRepairRow(
     operation,
     options.mutationMode,
   );
+  const repairOptions = buildAuthoritativePointRepairOptions(
+    service,
+    tableName,
+    key,
+    options,
+  );
   const currentRow =
     typeof service.cacheMutationTarget.get === 'function' ?
       service.cacheMutationTarget.get(tableName, key) :
@@ -154,6 +300,7 @@ function applyAuthoritativeCacheRepairRow(
       currentRow,
       authoritativeRow: canonicalRow,
       mutationMode,
+      reconciliationOptions: repairOptions,
     });
   if (currentRowSatisfiesRepair) {
     // A complete authoritative observation is already the cache state. Keep
@@ -166,13 +313,21 @@ function applyAuthoritativeCacheRepairRow(
   const mutationOptions = {
     causeId,
     mutationMode,
-    authoritativeObservedAtMs: options.authoritativeObservedAtMs,
+    authoritativeObservedAtMs: repairOptions.authoritativeObservedAtMs,
     authoritativeReadStartedAtMs:
-      options.authoritativeReadStartedAtMs,
+      repairOptions.authoritativeReadStartedAtMs,
+    readAuthorityWitness: repairOptions.readAuthorityWitness || null,
+    cachedSourceLogIndex: repairOptions.cachedSourceLogIndex,
+    authoritativeSourceLogIndex: repairOptions.authoritativeSourceLogIndex,
+    cachedIncarnationSupersedes: repairOptions.cachedIncarnationSupersedes,
+    authoritativeIncarnationSupersedes:
+      repairOptions.authoritativeIncarnationSupersedes,
   };
   const repairRow = Object.assign(
     {},
-    options.originHlc ? {[COLUMN.UPDATED_AT_HLC]: options.originHlc} : null,
+    repairOptions.originHlc ?
+      {[COLUMN.UPDATED_AT_HLC]: repairOptions.originHlc} :
+      null,
     canonicalRow,
   );
   service.cacheMutationTarget.applySystemTableChange(
@@ -188,6 +343,7 @@ function applyAuthoritativeCacheRepairRow(
     authoritativeRow: canonicalRow,
     mutationMode,
     key,
+    reconciliationOptions: repairOptions,
   });
 }
 
@@ -287,6 +443,7 @@ function doesCachedRowSatisfyAuthoritativeRepair({
   currentRow,
   authoritativeRow,
   mutationMode,
+  reconciliationOptions,
 }) {
   if (operation !== CDC_OPERATION.UPSERT || !currentRow) {
     return false;
@@ -300,6 +457,7 @@ function doesCachedRowSatisfyAuthoritativeRepair({
       tableName,
       currentRow,
       authoritativeRow,
+      reconciliationOptions,
     );
   }
   return areAuthoritativeSystemTableCacheRowsEqual(
@@ -323,6 +481,7 @@ export {
   applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
+  buildAuthoritativePointRepairOptions,
   cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
