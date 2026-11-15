@@ -159,13 +159,13 @@ function lagrangeSystemTableRules(nodeIds, hosts) {
   const tableOf = (id) => (stringStartsWith(id, 'p-') ? id.slice(2) : 'system');
   const partitions = arrayMap(partitionIds, (id) => `${id}|${tableOf(id)}|3|${nodeIds[0]}`);
   const services = arrayFlatMap(partitionIds, (id) => arrayMap(nodeIds,
-    (nodeId, index) => `${id}|${nodeId}|active|${index === 0 ? 'leader' : 'follower'}`));
+    (nodeId) => `${id}|${nodeId}|active|follower`));
   const snapshotOf = (command) => {
     const index = arrayFindIndex(hosts, (host) => stringIncludes(command, `//${host}:`));
     const nodeId = nodeIds[index];
     return http(200, {nodeId, replicaOperations: {inFlightCount: 0},
-      controlPlaneDiagnostics: {readinessByNodeId: {[nodeId]: {serveEligible: true,
-        reasonCodes: []}}}});
+      controlPlaneDiagnostics: {readinessByNodeId: {[nodeId]: {
+        dimensions: {serveEligible: true}, reasons: []}}}});
   };
   return [
     [/FROM nodes'/u, () => arrayJoin(

@@ -6,14 +6,17 @@
  * node is an active member with a live ready lease (the product's own
  * isNodeRecordReady, src/node/node-readiness-policy.js) and connection_state
  * `ready`; every required service has a healthy endpoint row; and every
- * partition considered has an active leader replica on an expected node and
- * as many active replicas on distinct nodes as its replica count, including
- * the six priority control-plane partitions; and, from every node's control
- * snapshot (GET /api/admin/control-snapshot,
+ * partition considered (the six priority control-plane partitions during
+ * system-table formation, or the required tables' partitions after canonical
+ * table creation) has a published leader_node_id with an active voter replica
+ * (isVoterRaftRole, src/raft/replica-voter-readiness.js; PartitionServiceRowOwner
+ * collapses leader to follower on services rows) on an expected node and
+ * as many active voter replicas on distinct nodes as its replica count; and,
+ * from every node's control snapshot (GET /api/admin/control-snapshot,
  * src/admin/admin-control-snapshot-local-build-base.js), the serve lane is
- * open (controlPlaneDiagnostics.readinessByNodeId[node].serveEligible with no
- * reason codes) and no replica operation is in flight. Not ready is a list of
- * typed denial codes, the last of which an exhaustion carries.
+ * open (controlPlaneDiagnostics.readinessByNodeId[node].dimensions.serveEligible
+ * with no denial reasons) and no replica operation is in flight. Not ready is
+ * a list of typed denial codes, the last of which an exhaustion carries.
  * (Predicate: product-blocker-first-divergence-2026-11-01.md section 5.)
  */
 import {DEFAULT_READY_LEASE_MS} from '../../../src/control-plane/control-plane-constants.js';
@@ -21,6 +24,7 @@ import {
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../../../src/node/node-readiness-policy.js';
+import {isVoterRaftRole} from '../../../src/raft/replica-voter-readiness.js';
 import {
   arrayFilter,
   arrayFind,
@@ -32,7 +36,6 @@ import {
 
 const ACTIVE = 'active';
 const HEALTHY = 'healthy';
-const LEADER = 'leader';
 const CONNECTION_READY = 'ready';
 // The priority control-plane partitions whose spread gates the serve lane.
 const PRIORITY_PARTITION_IDS = Object.freeze(['control_plane_publications-p1',
@@ -104,9 +107,11 @@ function replicaCountOf(partition) {
 
 function partitionDenials(partition, services, expectedNodeIds) {
   const replicas = arrayFilter(services, (row) => row.partition_id === partition.partition_id &&
-    text(row.status) === ACTIVE && arrayIncludes(expectedNodeIds, row.node_id));
+    text(row.status) === ACTIVE && isVoterRaftRole(row.raft_role) &&
+    arrayIncludes(expectedNodeIds, row.node_id));
   const denials = [];
-  if (!arraySome(replicas, (row) => text(row.raft_role) === LEADER)) {
+  if (!partition.leader_node_id ||
+      !arraySome(replicas, (row) => row.node_id === partition.leader_node_id)) {
     denials.push(`${DENIAL.PARTITION_NOT_ROUTABLE}:${partition.partition_id}`);
   }
   const target = replicaCountOf(partition);
@@ -148,8 +153,9 @@ function serviceEndpointDenials(endpoints, requiredServiceIds) {
 }
 
 // The partitions the verdict considers: the required tables' partitions (each
-// required table must have one), or, for the system tables, every partition
-// with the priority partitions present.
+// required table must have one), or, for the system tables, the priority
+// control-plane partitions (product-blocker-first-divergence-2026-11-01.md
+// section 5.2).
 function partitionScopeOf(partitions, requiredTables) {
   if (requiredTables) {
     const considered = arrayFilter(partitions,
@@ -164,7 +170,9 @@ function partitionScopeOf(partitions, requiredTables) {
       denials.push(`${DENIAL.PRIORITY_PARTITION_MISSING}:${partitionId}`);
     }
   }
-  return {considered: partitions, denials};
+  const considered = arrayFilter(partitions,
+    (row) => arrayIncludes(PRIORITY_PARTITION_IDS, row.partition_id));
+  return {considered, denials};
 }
 
 /**
@@ -188,11 +196,13 @@ function evaluateLagrangeServeLane({snapshots}) {
 function nodeServeDenials(nodeId, snapshot) {
   const denials = [];
   const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
-  if (readiness?.serveEligible !== true) {
+  if (readiness?.dimensions?.serveEligible !== true) {
     denials.push(`${DENIAL.SERVE_NOT_ELIGIBLE}:${nodeId}`);
   }
-  for (const code of Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []) {
-    denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${code}`);
+  for (const reason of Array.isArray(readiness?.reasons) ? readiness.reasons : []) {
+    if (typeof reason?.code === 'string' && reason.code.length > 0) {
+      denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${reason.code}`);
+    }
   }
   const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
   if (!Number.isInteger(inFlight) || inFlight !== 0) {
