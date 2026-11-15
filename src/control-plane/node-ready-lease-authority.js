@@ -55,7 +55,7 @@ function parseLeaseExpiresAt(row) {
     return null;
   }
   const leaseExpiry = Number(raw);
-  if (!Number.isFinite(leaseExpiry) || leaseExpiry <= MIN_LEASE_TIMESTAMP_MS) {
+  if (!Number.isFinite(leaseExpiry) || leaseExpiry === MIN_LEASE_TIMESTAMP_MS) {
     return null;
   }
   return leaseExpiry;

@@ -789,6 +789,7 @@ async function startClusterNodes(mode, nodes, dataRoot) {
     const gcp = await startGcpAffinityCluster({
       verbose: true,
       outputDir: dataRoot,
+      timeoutMs: CLUSTER_FORM_TIMEOUT_MS,
     });
     TARGET = gcp.target;
     LOAD_TARGET = `${gcp.target}?lane=load`;

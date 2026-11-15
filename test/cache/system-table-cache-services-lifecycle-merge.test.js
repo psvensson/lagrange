@@ -402,8 +402,8 @@ test(
     );
 
     for (const incarnation of [
-      {create_attempt_token: 'attempt-0'},
-      {created_at: 400},
+      {create_attempt_token: 'attempt-2', updated_at: 4000},
+      {created_at: 600},
     ]) {
       const otherIncarnation = reconcileLifecycle(
         buildLifecycleRow({raft_role: null, ...incarnation}),
@@ -415,6 +415,109 @@ test(
         `another incarnation (${Object.keys(incarnation)[0]}) keeps its null`,
       );
     }
+    for (const olderIncarnation of [
+      {create_attempt_token: 'attempt-0'},
+      {created_at: 400},
+    ]) {
+      const reconciledOlder = reconcileLifecycle(
+        buildLifecycleRow({raft_role: null, ...olderIncarnation}),
+        buildLifecycleRow(),
+      );
+      t.equal(
+        reconciledOlder.alignedBefore,
+        false,
+        `older incarnation (${Object.keys(olderIncarnation)[0]}) is not aligned`,
+      );
+      t.equal(
+        reconciledOlder.row.raft_role,
+        'follower',
+        `older incarnation (${Object.keys(olderIncarnation)[0]}) reconciles role`,
+      );
+      t.equal(reconciledOlder.row.create_attempt_token, 'attempt-1');
+      t.equal(reconciledOlder.row.created_at, 500);
+      t.equal(reconciledOlder.alignedAfter, true);
+    }
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - lifecycle reconciliation reconciles an older cached ' +
+    'incarnation and preserves a strictly newer cached incarnation',
+  (t) => {
+    const olderCachedRow = buildLifecycleRow({
+      status: 'active',
+      address: 'node-b/partition/svc-p1-r4',
+      port: 9100,
+      created_at: 1000,
+      create_attempt_token: 'old-token',
+      raft_role: null,
+      state_entered_at: 2000,
+      updated_at: 2000,
+    });
+    const newerAuthoritativeRow = buildLifecycleRow({
+      status: 'active',
+      address: 'node-b/partition/svc-p1-r4',
+      port: 9100,
+      created_at: 2000,
+      create_attempt_token: 'new-token',
+      raft_role: 'leader',
+      state_entered_at: 2000,
+      updated_at: 2000,
+    });
+    const reconciledFromOlder = reconcileLifecycle(
+      olderCachedRow,
+      newerAuthoritativeRow,
+    );
+    t.equal(
+      reconciledFromOlder.alignedBefore,
+      false,
+      'older cached incarnation is not aligned before reconciliation',
+    );
+    t.equal(reconciledFromOlder.row.created_at, 2000);
+    t.equal(reconciledFromOlder.row.create_attempt_token, 'new-token');
+    t.equal(reconciledFromOlder.row.raft_role, 'leader');
+    t.equal(reconciledFromOlder.row.status, 'active');
+    t.equal(reconciledFromOlder.row.address, 'node-b/partition/svc-p1-r4');
+    t.equal(reconciledFromOlder.row.port, 9100);
+    t.equal(reconciledFromOlder.row.updated_at, 2000);
+    t.equal(reconciledFromOlder.alignedAfter, true);
+
+    const newerCachedRow = buildLifecycleRow({
+      status: 'active',
+      address: 'node-b/partition/svc-p1-r4',
+      port: 9200,
+      created_at: 3000,
+      create_attempt_token: 'newer-token',
+      raft_role: 'follower',
+      state_entered_at: 3000,
+      updated_at: 3000,
+    });
+    const olderAuthoritativeSnapshot = buildLifecycleRow({
+      status: 'syncing',
+      address: 'node-a/partition/svc-p1-r4',
+      port: 9100,
+      created_at: 2000,
+      create_attempt_token: 'new-token',
+      raft_role: 'leader',
+      state_entered_at: 2000,
+      updated_at: 2000,
+    });
+    const preservedNewer = reconcileLifecycle(
+      newerCachedRow,
+      olderAuthoritativeSnapshot,
+    );
+    t.equal(
+      preservedNewer.alignedBefore,
+      true,
+      'strictly newer cached incarnation is aligned against older authority',
+    );
+    t.same(
+      preservedNewer.row,
+      newerCachedRow,
+      'strictly newer cached incarnation is preserved against older snapshot',
+    );
+    t.equal(preservedNewer.alignedAfter, true);
     t.end();
   },
 );

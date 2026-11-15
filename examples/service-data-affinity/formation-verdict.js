@@ -46,6 +46,7 @@ const FORMATION_VERDICT_REASON = Object.freeze({
   READY_LEASE_INCOMPLETE: 'node_ready_lease_incomplete',
   CRITICAL_SPREAD_OPEN: 'critical_system_spread_open',
   ADMISSION_BLOCKED: 'schema_admission_blocked',
+  FORMATION_INCOMPLETE: 'cluster_formation_incomplete',
   SEED_LOG_UNAVAILABLE: 'seed_log_unavailable',
 });
 
@@ -291,6 +292,9 @@ function decideReason({admission, seedStarved, leaseWaits, spread}) {
   }
   if (Number.isFinite(spread.finalSpreadGap) && spread.finalSpreadGap > 0) {
     return FORMATION_VERDICT_REASON.CRITICAL_SPREAD_OPEN;
+  }
+  if (admission.state === NOT_OBSERVED) {
+    return FORMATION_VERDICT_REASON.FORMATION_INCOMPLETE;
   }
   return FORMATION_VERDICT_REASON.ADMISSION_BLOCKED;
 }

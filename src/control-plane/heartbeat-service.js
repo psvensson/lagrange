@@ -17,6 +17,7 @@ import {
   HEARTBEAT_STATE,
   HEARTBEAT_SUBSYSTEM,
 } from './heartbeat-service-constants.js';
+import {resolveRenewalIntervalMs} from './node-ready-lease-authority.js';
 import {defineHeartbeatServiceLifecycleMethods} from './heartbeat-service-lifecycle-methods.js';
 import {defineHeartbeatServicePublicationMethods} from './heartbeat-service-publication-methods.js';
 import {
@@ -84,10 +85,25 @@ class HeartbeatService extends EventEmitter {
         }).controlPlaneSystemTableGateway :
         null);
     const config = ConfigurationManager.getInstance();
-    this.heartbeatIntervalMs =
-      config.get(HEARTBEAT_CONFIG_KEY.INTERVAL_MS) || HEARTBEAT_DEFAULT.INTERVAL_MS;
+    const configuredReadyLeaseMs =
+      Number.isFinite(options.readyLeaseMs) && options.readyLeaseMs > ZERO ?
+        Math.floor(options.readyLeaseMs) :
+        config.get(HEARTBEAT_CONFIG_KEY.READY_LEASE_MS);
     this.readyLeaseMs =
-      config.get(HEARTBEAT_CONFIG_KEY.READY_LEASE_MS) || HEARTBEAT_DEFAULT.READY_LEASE_MS;
+      Number.isFinite(configuredReadyLeaseMs) && configuredReadyLeaseMs > ZERO ?
+        Math.floor(configuredReadyLeaseMs) :
+        HEARTBEAT_DEFAULT.READY_LEASE_MS;
+    const renewalCadenceMs = resolveRenewalIntervalMs(this.readyLeaseMs);
+    const configuredHeartbeatIntervalMs =
+      Number.isFinite(options.heartbeatIntervalMs) &&
+      options.heartbeatIntervalMs > ZERO ?
+        Math.floor(options.heartbeatIntervalMs) :
+        config.get(HEARTBEAT_CONFIG_KEY.INTERVAL_MS);
+    this.heartbeatIntervalMs =
+      Number.isFinite(configuredHeartbeatIntervalMs) &&
+      configuredHeartbeatIntervalMs > ZERO ?
+        Math.floor(configuredHeartbeatIntervalMs) :
+        Math.min(HEARTBEAT_DEFAULT.INTERVAL_MS, renewalCadenceMs);
     this.endpointRefreshIntervalMs =
       Number.isFinite(options.endpointRefreshIntervalMs) &&
       options.endpointRefreshIntervalMs > ZERO ?
@@ -97,12 +113,18 @@ class HeartbeatService extends EventEmitter {
       Number.isFinite(options.nodeMetadataMinUpdateIntervalMs) &&
       options.nodeMetadataMinUpdateIntervalMs >= ZERO ?
         Math.floor(options.nodeMetadataMinUpdateIntervalMs) :
-        HEARTBEAT_DEFAULT.NODE_METADATA_MIN_UPDATE_INTERVAL_MS;
+        Math.min(
+          HEARTBEAT_DEFAULT.NODE_METADATA_MIN_UPDATE_INTERVAL_MS,
+          renewalCadenceMs,
+        );
     this.nodeMetadataMaxStalenessMs =
       Number.isFinite(options.nodeMetadataMaxStalenessMs) &&
       options.nodeMetadataMaxStalenessMs > ZERO ?
         Math.floor(options.nodeMetadataMaxStalenessMs) :
-        HEARTBEAT_DEFAULT.NODE_METADATA_MAX_STALENESS_MS;
+        Math.min(
+          HEARTBEAT_DEFAULT.NODE_METADATA_MAX_STALENESS_MS,
+          renewalCadenceMs,
+        );
     this.nodeMetadataUsagePercentBucketSize =
       Number.isFinite(options.nodeMetadataUsagePercentBucketSize) &&
       options.nodeMetadataUsagePercentBucketSize > ZERO ?
@@ -222,6 +244,10 @@ function assembleHeartbeatService(options = {}) {
     membershipPublicationService: options.membershipPublicationService || null,
     isNodeLifecycleReady: options.isNodeLifecycleReady,
     nodeLifecyclePublication: options.nodeLifecyclePublication,
+    heartbeatIntervalMs: options.heartbeatIntervalMs,
+    readyLeaseMs: options.readyLeaseMs,
+    nodeMetadataMinUpdateIntervalMs: options.nodeMetadataMinUpdateIntervalMs,
+    nodeMetadataMaxStalenessMs: options.nodeMetadataMaxStalenessMs,
     now: options.now,
     setIntervalFn: options.setIntervalFn,
     clearIntervalFn: options.clearIntervalFn,
