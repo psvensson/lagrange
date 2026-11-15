@@ -5,6 +5,9 @@ import {
   buildOwnerContractOutcome,
 } from '../control-plane/owner-contract-outcome.js';
 import {getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {DurableWorkflowCoordinator} from
   '../workflow/durable-workflow-coordinator.js';
@@ -140,7 +143,8 @@ export function isTransientProvisioningError(error) {
   const message = String(error?.message || '').toLowerCase();
   return TRANSIENT_PROVISIONING_CODES.has(code) ||
     TRANSIENT_CODE_FRAGMENTS.some((fragment) => code.includes(fragment)) ||
-    TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
+    TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment)) ||
+    isRetryableControlPlaneError(error);
 }
 
 function buildProvisioningRefusal(workflow, error) {
@@ -427,6 +431,8 @@ class SchemaProvisioningJobOwner {
         SCHEMA_PROVISIONING_REASON.REPLICA_CONVERGENCE_PENDING,
       ],
       retryAfterMs: this.retryAfterMs,
+    }, {
+      markCommitted: false,
     });
     this.scheduleRetry(intent, executor);
     if ((error?.code || error?.errorCode) ===
@@ -484,6 +490,8 @@ class SchemaProvisioningJobOwner {
       }, {
         status: SCHEMA_PROVISIONING_JOB_STATUS.RUNNING,
         reasonCodes: [SCHEMA_PROVISIONING_REASON.METADATA_PROJECTING],
+      }, {
+        markCommitted: false,
       });
       const result = await executor({
         ...intent,

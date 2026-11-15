@@ -171,11 +171,25 @@ function isRetryableControlPlaneOperationTarget(operation) {
     partitionId: operation.partitionId,
   }).systemTable;
 }
+function isBootstrapPartitionCreateOperation(operation) {
+  return Boolean(
+    operation &&
+    operation.type === OperationType.ADD &&
+    (
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] ||
+      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ||
+      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA]
+    ),
+  );
+}
 function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return isRetryableControlPlaneOperationTarget(operation);
+  return (
+    isRetryableControlPlaneOperationTarget(operation) ||
+    isBootstrapPartitionCreateOperation(operation)
+  );
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {

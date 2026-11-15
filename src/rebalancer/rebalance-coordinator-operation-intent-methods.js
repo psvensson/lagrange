@@ -28,6 +28,7 @@ const LOCAL_STR_FUNCTION = 'function';
 const REUSED_OPERATION_REARM_ACTION = Object.freeze({
   SKIP_NOT_PENDING: 'skip_not_pending',
   SKIP_LIVE_DEFERRED_RETRY: 'skip_live_deferred_retry',
+  SKIP_CALLER_MANAGED_DISPATCH: 'skip_caller_managed_dispatch',
   REARM_DISPATCH: 'rearm_dispatch',
 });
 const LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN = 'Failed to refresh recent operation intent from cache-visible state';
@@ -405,7 +406,7 @@ class RebalanceCoordinatorOperationIntentMethods {
    * @return {Promise<Object|null>}
    * @private
    */
-  async maybeRearmReusedPendingOperation(operation, _options = {}) {
+  async maybeRearmReusedPendingOperation(operation, options = {}) {
     if (!operation) {
       return operation;
     }
@@ -413,6 +414,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const rearmAction = this.resolveReusedOperationRearmAction(
       operation,
       workflowStep,
+      options,
     );
     this.logger.info(
       REBALANCE_COORDINATOR_LOG_MSG.REUSED_IN_FLIGHT_OPERATION,
@@ -444,15 +446,19 @@ class RebalanceCoordinatorOperationIntentMethods {
    * reserved for the missed-handoff state: PENDING with no live timer.
    * @param {Object} operation
    * @param {string} workflowStep
+   * @param {Object} [options={}]
    * @return {string} One REUSED_OPERATION_REARM_ACTION value.
    * @private
    */
-  resolveReusedOperationRearmAction(operation, workflowStep) {
+  resolveReusedOperationRearmAction(operation, workflowStep, options = {}) {
     if (
       this.isOperationTerminal(operation) ||
       workflowStep !== WORKFLOW_STEP.PENDING
     ) {
       return REUSED_OPERATION_REARM_ACTION.SKIP_NOT_PENDING;
+    }
+    if (options?.shouldEmitOperationCreated === false) {
+      return REUSED_OPERATION_REARM_ACTION.SKIP_CALLER_MANAGED_DISPATCH;
     }
     if (this.hasLiveDeferredDispatchRetry(operation)) {
       return REUSED_OPERATION_REARM_ACTION.SKIP_LIVE_DEFERRED_RETRY;

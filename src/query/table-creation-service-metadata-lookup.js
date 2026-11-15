@@ -43,21 +43,17 @@ const METADATA_LOOKUP_METHODS = Object.freeze({
     ) {
       return null;
     }
-    try {
-      const result = await controlPlaneGateway.readRows(
-        TABLES.TABLES,
-        TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME,
-        [tableName],
-        {
-          readProfile: 'table_lifecycle',
-        },
-      );
-      return Array.isArray(result?.rows) && result.rows.length > 0 ?
-        result.rows[0] :
-        null;
-    } catch {
-      return null;
-    }
+    const result = await controlPlaneGateway.readRows(
+      TABLES.TABLES,
+      TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME,
+      [tableName],
+      {
+        readProfile: 'table_lifecycle',
+      },
+    );
+    return Array.isArray(result?.rows) && result.rows.length > 0 ?
+      result.rows[0] :
+      null;
   },
 
   /**
@@ -80,21 +76,17 @@ const METADATA_LOOKUP_METHODS = Object.freeze({
     ) {
       return null;
     }
-    try {
-      const result = await controlPlaneGateway.readRows(
-        TABLES.PARTITIONS,
-        TABLE_CREATION_SQL.SELECT_PARTITION_BY_ID,
-        [partitionId],
-        {
-          readProfile: 'table_lifecycle',
-        },
-      );
-      return Array.isArray(result?.rows) && result.rows.length > 0 ?
-        result.rows[0] :
-        null;
-    } catch {
-      return null;
-    }
+    const result = await controlPlaneGateway.readRows(
+      TABLES.PARTITIONS,
+      TABLE_CREATION_SQL.SELECT_PARTITION_BY_ID,
+      [partitionId],
+      {
+        readProfile: 'table_lifecycle',
+      },
+    );
+    return Array.isArray(result?.rows) && result.rows.length > 0 ?
+      result.rows[0] :
+      null;
   },
 
   /**

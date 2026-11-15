@@ -11,7 +11,9 @@ import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-po
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
   isTerminalSuccessfulCreateOperation,
+  readOperationRecordWorkflowStep,
 } from '../rebalancer/replica-operation-progress.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
 import {
   buildProvisioningCompletionSummary,
 } from './provisioning-completion-summary.js';
@@ -42,6 +44,18 @@ const {
   SERVICE_TYPE,
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function isInFlightOrTerminalCreateOperation(operation) {
+  if (isTerminalSuccessfulCreateOperation(operation)) {
+    return true;
+  }
+  const workflowStep = readOperationRecordWorkflowStep(operation);
+  return (
+    typeof workflowStep === LOCAL_STR_STRING &&
+    workflowStep.length > 0 &&
+    workflowStep !== WORKFLOW_STEP.PENDING
+  );
+}
 
 class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
@@ -489,7 +503,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      if (isTerminalSuccessfulCreateOperation(operation)) {
+      if (isInFlightOrTerminalCreateOperation(operation)) {
         continue;
       }
       operation[ReplicaOperationField.REPLICA_IDS] =
@@ -546,18 +560,19 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
       // A deterministic-intent retry can hand back the prior attempt's
-      // durably terminal-successful operation (collision terminal arm).
-      // The replica already exists: re-stamping and re-executing it is the
-      // round-10 livelock. Keep it in the plan for counting, wait on its
-      // routability like any other create, but never re-dispatch it.
-      if (isTerminalSuccessfulCreateOperation(operation)) {
-        const terminalReplicaId =
+      // in-flight (SENDING/CREATING/SYNCING) or durably terminal-successful
+      // operation. Re-stamping and re-executing it rewinds workflowStep and
+      // invalidates the target node's create-admission CAS. Keep it in the
+      // plan for counting, wait on its routability like any other create,
+      // but never re-dispatch it.
+      if (isInFlightOrTerminalCreateOperation(operation)) {
+        const existingReplicaId =
           operation?.replicaId || operation?.replica_id || null;
         if (
-          typeof terminalReplicaId === LOCAL_STR_STRING &&
-          terminalReplicaId.length > 0
+          typeof existingReplicaId === LOCAL_STR_STRING &&
+          existingReplicaId.length > 0
         ) {
-          metadataWaitReplicaIds.push(terminalReplicaId);
+          metadataWaitReplicaIds.push(existingReplicaId);
         }
         continue;
       }

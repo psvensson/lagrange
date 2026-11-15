@@ -176,7 +176,10 @@ class DurableWorkflowCoordinator {
 
     const workflow = this.requireWorkflow(workflowId);
 
-    if (this.isTransitionIdempotent(workflowId, nextStep)) {
+    if (
+      options.markCommitted !== false &&
+      this.isTransitionIdempotent(workflowId, nextStep)
+    ) {
       return workflow;
     }
 

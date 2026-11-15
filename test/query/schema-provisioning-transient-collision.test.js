@@ -23,6 +23,15 @@ import {
 import {
   applyRebalanceCoordinatorOperationCreationAdmissionMethods,
 } from '../../src/rebalancer/rebalance-coordinator-operation-creation-admission.js';
+import {
+  shouldDeferRetryableDispatchFailure,
+} from '../../src/rebalancer/operation-workflow-dispatch-rearm-evidence.js';
+import {
+  SQLQueryEngine,
+} from '../../src/query/sql-query-engine.js';
+import {
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
 
 class OperationCreationHost {}
 applyRebalanceCoordinatorOperationCreationAdmissionMethods(
@@ -117,4 +126,153 @@ test('the schema-job prologue honors the request deadline', async (t) => {
   t.equal(outcome?.provisioningDeadlineExpired, true,
     'the deadline outcome is an explicit pending/retry contract');
   t.end();
+});
+
+test('in-flight SENDING/CREATING child operations are not re-persisted or ' +
+  're-dispatched on a schema provisioning retry', async (t) => {
+  const persistedIds = [];
+  const executedIds = [];
+  const waitedReplicaIds = [];
+  const operationsByNode = new Map([
+    [
+      'node-a',
+      {
+        operationId: 'job-1:operation:node-a',
+        replicaId: 'job-1:replica:node-a',
+        targetNodeId: 'node-a',
+        type: 'ADD',
+        status: 'creating',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        updatedAt: 1000,
+        replicaIds: [
+          'job-1:replica:node-a',
+          'job-1:replica:node-b',
+        ],
+        peerAddresses: [
+          'node-a/partition/job-1:replica:node-a',
+          'node-b/partition/job-1:replica:node-b',
+        ],
+        stepsHistory: [{step: WORKFLOW_STEP.PENDING}],
+      },
+    ],
+    [
+      'node-b',
+      {
+        operationId: 'job-1:operation:node-b',
+        replicaId: 'job-1:replica:node-b',
+        targetNodeId: 'node-b',
+        type: 'ADD',
+        status: 'pending',
+        workflowStep: WORKFLOW_STEP.PENDING,
+        updatedAt: 1000,
+        stepsHistory: [{step: WORKFLOW_STEP.PENDING}],
+      },
+    ],
+  ]);
+  const engine = Object.create(SQLQueryEngine.prototype);
+  Object.assign(engine, {
+    logger: {debug() {}, info() {}, warn() {}, error() {}},
+    nowFn: () => 2000,
+    tablePartitionProvisioningTimeoutMs: 5000,
+    tablePartitionTargetNodeConvergenceTimeoutMs: 1000,
+    queryExecutor: {defaultRoutingReadinessDimension: null},
+    normalizeTargetNodeIds: (ids) => ids || [],
+    resolveMinimumProvisioningReplicaCount: (_min, target) => target,
+    createControlPlaneTimeoutBudget: () => ({
+      startedAtMs: 1000,
+      budgetMs: 5000,
+    }),
+    resolveProvisionTargetNodeIdsForContext: (ids) => ids,
+    getRoutablePartitionServiceNodeIds: () => [],
+    getPartitionServiceRows: () => [],
+    resolveInitialPartitionBootstrapLeaderNodeId: () => 'node-a',
+    waitForPartitionServiceMetadata: async (replicaId) => {
+      waitedReplicaIds.push(replicaId);
+    },
+    waitForRoutablePartitionServiceCount: async () => ['node-a', 'node-b'],
+    waitForPartitionLeaderService: async () => ({node_id: 'node-a'}),
+    rebalanceCoordinator: {
+      createOperation: async (move) => operationsByNode.get(move.nodeId),
+      dispatchOperation: async () => ({success: true}),
+      persistOperationUpdate: async (operation) => {
+        persistedIds.push(operation.operationId);
+      },
+      executeOperation: async (operation) => {
+        executedIds.push(operation.operationId);
+        return {success: true};
+      },
+    },
+  });
+
+  await engine.provisionInitialTablePartition({
+    partitionId: 'tbl-orders-p1',
+    replicaCount: 2,
+    minimumRoutableReplicaCount: 2,
+    targetNodeIds: ['node-a', 'node-b'],
+    schemaJobId: 'job-1',
+  });
+
+  t.same(
+    persistedIds,
+    ['job-1:operation:node-b'],
+    'only the still-PENDING operation is stamped and persisted',
+  );
+  t.equal(
+    operationsByNode.get('node-a').updatedAt,
+    1000,
+    'in-flight CREATING operation updatedAt is preserved for admission CAS',
+  );
+  t.same(
+    executedIds,
+    ['job-1:operation:node-b'],
+    'only the still-PENDING operation is dispatched via executeOperation',
+  );
+  t.same(
+    waitedReplicaIds.sort(),
+    ['job-1:replica:node-a', 'job-1:replica:node-b'],
+    'both in-flight and newly dispatched replicas are awaited for routability',
+  );
+});
+
+test('bootstrap partition ADD operations defer retryable control-plane ' +
+  'dispatch failures', async (t) => {
+  const deferredError = Object.assign(
+    new Error('Replica create admission deferred'),
+    {
+      errorCode: 'REPLICA_CREATE_ADMISSION_DEFERRED',
+      deferRetry: true,
+    },
+  );
+  const bootstrapOp = {
+    operationId: 'job-1:operation:node-a',
+    type: 'ADD',
+    entityType: 'partition',
+    partitionId: 'tbl-orders-p1',
+    bootstrapMembership: {epoch: 1},
+  };
+  const ordinaryUserOp = {
+    operationId: 'rebalance-op-1',
+    type: 'ADD',
+    entityType: 'partition',
+    partitionId: 'tbl-orders-p1',
+  };
+
+  t.equal(
+    shouldDeferRetryableDispatchFailure(
+      {},
+      bootstrapOp,
+      deferredError,
+    ),
+    true,
+    'bootstrap partition ADD operation defers retryable dispatch failure',
+  );
+  t.equal(
+    shouldDeferRetryableDispatchFailure(
+      {},
+      ordinaryUserOp,
+      deferredError,
+    ),
+    false,
+    'ordinary non-bootstrap user partition move retains existing behavior',
+  );
 });

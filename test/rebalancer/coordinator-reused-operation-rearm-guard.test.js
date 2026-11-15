@@ -201,4 +201,26 @@ test('CL-008: reused-operation rearm guard', async (t) => {
       );
     },
   );
+
+  await t.test(
+    'PENDING reuse with shouldEmitOperationCreated=false skips rearm ' +
+      'so caller-managed bootstrap topology dispatch stays atomic',
+    async (t) => {
+      const coordinator = createTestCoordinator();
+      const calls = installSpies(coordinator, {});
+
+      const result = await coordinator.maybeRearmReusedPendingOperation(
+        buildPendingOperation(),
+        {shouldEmitOperationCreated: false},
+      );
+
+      t.equal(result.operationId, TEST_OPERATION_ID, 'returns the operation');
+      t.equal(calls.armed, 0, 'does not rearm dispatch prematurely');
+      t.equal(
+        calls.reuseLogs[0].rearmAction,
+        'skip_caller_managed_dispatch',
+        'witness log records caller-managed dispatch skip',
+      );
+    },
+  );
 });

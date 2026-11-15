@@ -351,6 +351,30 @@ class SQLQueryEngineProvisionTargetMethods {
     }
 
     for (const operation of plannedOperations) {
+      const existingReplicaIds = Array.isArray(operation?.replicaIds) ?
+        operation.replicaIds :
+        [];
+      for (const existingReplicaId of existingReplicaIds) {
+        if (
+          typeof existingReplicaId === LOCAL_STR_STRING &&
+          existingReplicaId.length > 0 &&
+          !seenReplicaIds.has(existingReplicaId)
+        ) {
+          seenReplicaIds.add(existingReplicaId);
+          replicaIds.push(existingReplicaId);
+        }
+      }
+      const existingPeerAddresses = Array.isArray(operation?.peerAddresses) ?
+        operation.peerAddresses :
+        [];
+      for (const existingPeerAddress of existingPeerAddresses) {
+        if (
+          typeof existingPeerAddress === LOCAL_STR_STRING &&
+          existingPeerAddress.length > 0
+        ) {
+          peerAddresses.push(existingPeerAddress);
+        }
+      }
       const replicaId = operation?.replicaId || null;
       const nodeId = operation?.targetNodeId || operation?.nodeId || null;
       if (
