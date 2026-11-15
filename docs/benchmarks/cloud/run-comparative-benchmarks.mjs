@@ -384,8 +384,9 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};
-  const deployArm = (run) => deployComparativeTarget(run.targetId, {hosts: dataIps,
-    clientIp: client.ip, sshRun, opts: deployOpts, campaignId: manifest.campaignId,
+  const deployArm = (run, {signal} = {}) => deployComparativeTarget(run.targetId, {hosts: dataIps,
+    clientIp: client.ip, sshRun, opts: signal ? {...deployOpts, signal} : deployOpts, signal,
+    campaignId: manifest.campaignId,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))});
   const teardown = () => removeCampaignContainers({hosts: hosts.map((host) => host.ip),
     campaignId: manifest.campaignId, sshRun, opts});

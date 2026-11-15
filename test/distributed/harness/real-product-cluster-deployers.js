@@ -46,6 +46,7 @@ function deployComparativeTarget(targetId, input) {
 }
 
 export {
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,

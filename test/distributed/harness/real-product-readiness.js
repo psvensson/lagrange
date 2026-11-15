@@ -7,6 +7,13 @@
  * nobody saw ready.
  */
 import {
+  DateConstructor,
+  dateNow,
+  dateToISOString,
+  numberIsFinite,
+  numberIsInteger,
+} from './real-product-captured-intrinsics.js';
+import {
   DEPLOYMENT_FAILURE,
   READINESS_STATE,
   deploymentFailure,
@@ -30,36 +37,152 @@ async function probeOnce(component, probe) {
   return outcome;
 }
 
+function resolveClock(now, nowFn) {
+  if (typeof nowFn === 'function') return nowFn;
+  if (typeof now === 'function') return now;
+  return dateNow;
+}
+
+function sleepUntilOrAbort(sleep, sleepMs, signal) {
+  if (!signal) return sleep(sleepMs);
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, {once: true});
+    Promise.resolve(sleep(sleepMs)).then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function buildReadinessExhaustedFailure({
+  component,
+  attempt,
+  maxAttempts,
+  elapsedMs,
+  deadlineMs,
+  deadlineAtMs,
+  aborted,
+  deadlineExpired,
+  last,
+}) {
+  let reasonText = `after ${attempt} attempts`;
+  if (aborted) {
+    reasonText = `aborted after ${attempt} attempts`;
+  } else if (deadlineExpired) {
+    reasonText = `before ${deadlineMs}ms formation deadline after ${attempt} attempts`;
+  }
+  const diagnostic = {
+    component,
+    attempts: attempt,
+    attempt,
+    maxAttempts,
+    elapsedMs,
+    deadlineMs,
+    deadlineAtMs,
+    aborted: Boolean(aborted),
+    deadlineExpired: Boolean(deadlineExpired),
+    last,
+    lastObservation: last,
+  };
+  const failure = deploymentFailure(
+    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+    `${component} did not report ready ${reasonText}`,
+    diagnostic,
+  );
+  failure.attempt = attempt;
+  failure.attempts = attempt;
+  failure.elapsedMs = elapsedMs;
+  failure.deadlineMs = deadlineMs;
+  failure.aborted = Boolean(aborted);
+  failure.deadlineExpired = Boolean(deadlineExpired);
+  failure.lastObservation = last;
+  return failure;
+}
+
 /**
  * @param {{component: string, probe: Function, attempts: number,
- *   intervalMs: number, sleep: Function, now?: Function, stablePolls?: number}} input
+ *   intervalMs: number, sleep: Function, now?: Function, nowFn?: Function,
+ *   stablePolls?: number, deadlineAtMs?: number|null, deadlineMs?: number|null,
+ *   signal?: AbortSignal|null}} input
  *   probe answers {ready: boolean, diagnostic}
  * @return {Promise<{state: string, component: string, attempts: number,
  *   observedAt: string, evidence: *}>}
  */
 async function pollReadiness({component, probe, attempts, intervalMs, sleep,
-  now = Date.now, stablePolls = 1}) {
-  if (!Number.isInteger(attempts) || attempts < 1) {
+  now = dateNow, nowFn, stablePolls = 1, deadlineAtMs = null, deadlineMs = null,
+  signal = null}) {
+  if (!numberIsInteger(attempts) || attempts < 1) {
     throw new Error(`readiness for ${component} needs a positive attempt budget`);
   }
-  const startedAt = now();
+  const clock = resolveClock(now, nowFn);
+  const startedAt = clock();
+  const finiteDeadlineAtMs = numberIsFinite(deadlineAtMs) ? deadlineAtMs : null;
+  const effectiveDeadlineMs = numberIsFinite(deadlineMs) ? deadlineMs :
+    (finiteDeadlineAtMs !== null ? Math.max(0, finiteDeadlineAtMs - startedAt) : null);
   let last = null;
   let consecutive = 0;
+  let completedAttempts = 0;
+  const throwExhausted = ({aborted = false, deadlineExpired = false} = {}) => {
+    throw buildReadinessExhaustedFailure({
+      component,
+      attempt: completedAttempts,
+      maxAttempts: attempts,
+      elapsedMs: clock() - startedAt,
+      deadlineMs: effectiveDeadlineMs,
+      deadlineAtMs: finiteDeadlineAtMs,
+      aborted,
+      deadlineExpired,
+      last,
+    });
+  };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (signal?.aborted) throwExhausted({aborted: true});
+    if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
+      throwExhausted({deadlineExpired: true});
+    }
     const outcome = await probeOnce(component, probe);
+    completedAttempts = attempt;
     last = outcome.diagnostic;
+    if (signal?.aborted) throwExhausted({aborted: true});
     consecutive = outcome.ready ? consecutive + 1 : 0;
     if (consecutive >= stablePolls) {
-      const readyAt = now();
+      const readyAt = clock();
       return {state: READINESS_STATE.READY, component, attempts: attempt, stablePolls,
-        observedAt: new Date(readyAt).toISOString(), timeToReadyMs: readyAt - startedAt,
-        evidence: last};
+        observedAt: dateToISOString(new DateConstructor(readyAt)),
+        timeToReadyMs: readyAt - startedAt, evidence: last};
     }
-    if (attempt < attempts) await sleep(intervalMs);
+    if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
+      throwExhausted({deadlineExpired: true});
+    }
+    if (attempt < attempts) {
+      const remainingMs = finiteDeadlineAtMs !== null ?
+        Math.max(0, finiteDeadlineAtMs - clock()) : intervalMs;
+      const sleepMs = Math.max(0, Math.min(intervalMs, remainingMs));
+      await sleepUntilOrAbort(sleep, sleepMs, signal);
+      if (signal?.aborted) throwExhausted({aborted: true});
+      if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
+        throwExhausted({deadlineExpired: true});
+      }
+    }
   }
-  throw deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
-    `${component} did not report ready after ${attempts} attempts`,
-    {component, attempts, elapsedMs: now() - startedAt, last});
+  return throwExhausted();
 }
 
 /**

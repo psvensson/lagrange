@@ -28,11 +28,16 @@
  */
 import {REQUEST_CELL_AUTH} from './constants.js';
 import {
+  DateConstructor,
   arrayEvery,
   arrayFilter,
   arrayFind,
   arrayFlatMap,
+  arrayIsArray,
   arrayMap,
+  dateNow,
+  dateToISOString,
+  numberIsFinite,
   stringIndexOf,
   stringLastIndexOf,
   stringPadStart,
@@ -40,7 +45,9 @@ import {
   stringStartsWith,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
+import {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 import {
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,
@@ -287,7 +294,9 @@ function getFacts(ctx, host) {
 
 function readinessOf(ctx, component, probe, stablePolls = 1) {
   return pollReadiness({component, probe, attempts: ctx.budget.attempts,
-    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, stablePolls});
+    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, now: ctx.now,
+    stablePolls, deadlineAtMs: ctx.deadlineAtMs ?? null,
+    deadlineMs: ctx.deadlineMs ?? null, signal: ctx.signal ?? null});
 }
 
 function nodeReady(ctx, host) {
@@ -463,11 +472,12 @@ function recordTableRoutability(tableReadyAt, tables, context) {
 
 async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
   const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
-  const startedAt = Date.now();
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const startedAt = clock();
   const tableReadyAt = {};
   const readiness = await readinessOf(ctx, component, async () => {
     const tables = await readSystemTables(query);
-    const now = Date.now();
+    const now = clock();
     recordTableRoutability(tableReadyAt, tables, {requiredTables, expectedNodeIds, now,
       startedAt});
     const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
@@ -493,8 +503,9 @@ function probeVisibility(listenerNodeId, nodeRoles) {
 }
 
 function probeWriteReadback(ctx, sql, campaignId, visibility) {
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
   return readinessOf(ctx, 'lagrange-probe-write-readback', async () => {
-    const id = Date.now();
+    const id = clock();
     const token = `${campaignId}-${id}`;
     await sql.statement(
       `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`);
@@ -553,31 +564,64 @@ async function reportedVersions(ctx, products) {
   return products;
 }
 
+function resolveFormationClock(inputNow, inputNowFn, opts) {
+  if (typeof inputNowFn === 'function') return inputNowFn;
+  if (typeof inputNow === 'function') return inputNow;
+  if (typeof opts?.nowFn === 'function') return opts.nowFn;
+  if (typeof opts?.now === 'function') return opts.now;
+  return dateNow;
+}
+
+function resolveFormationDeadlineMs(opts) {
+  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
+  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
+    return opts.readiness.formationDeadlineMs;
+  }
+  return DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS;
+}
+
 /**
  * @param {{hosts: Array<string>, clientIp: string, sshRun: Function,
- *   opts: Object, campaignId: string, sleep: Function}} input
+ *   opts: Object, campaignId: string, sleep: Function, signal?: AbortSignal|null,
+ *   now?: Function, nowFn?: Function}} input
  * @return {Promise<Object>} the deployment (record fields + `access` and
  *   `operations`, which the record never carries)
  */
-async function deployLagrangeCluster({hosts, clientIp, sshRun, opts, campaignId, sleep}) {
+async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campaignId, sleep,
+  signal = null, now, nowFn}) {
   requireCampaignId(campaignId);
   const rawImage = opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT;
   const image = resolveLagrangeContainerImage(opts);
   const expectedVersion = opts.lagrangeVersion || semverTagOf(rawImage);
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
+  const clock = resolveFormationClock(now, nowFn, opts);
+  const abortSignal = signal ?? opts.signal ?? null;
+  const formationDeadlineMs = resolveFormationDeadlineMs(opts);
   const budget = Object.freeze({...resolveReadinessBudget(opts),
     attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
-  const ctx = {sshRun, opts, clientIp, sleep, budget, connection,
-    expectedVersion};
+  const ctx = {sshRun, opts, clientIp, sleep, now: clock, signal: abortSignal,
+    formationDeadlineMs, deadlineAtMs: null, deadlineMs: formationDeadlineMs,
+    budget, connection, expectedVersion};
   const roles = [];
   const nodeReadiness = [];
   const formed = {listener: null};
-  return describingReadinessExhaustion(() => formLagrangeCluster({ctx, hosts, image, connection,
-    roles, nodeReadiness, formed, campaignId}), (failure) => describeExhaustedDeployment({
-    targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
-    roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
-    readVersions: (products) => reportedVersions(ctx, products), failure}));
+  try {
+    return await describingReadinessExhaustion(() => formLagrangeCluster({ctx, hosts, image,
+      connection, roles, nodeReadiness, formed, campaignId}),
+    (failure) => describeExhaustedDeployment({
+      targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts,
+      roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
+      readVersions: (products) => reportedVersions(ctx, products), failure}));
+  } catch (error) {
+    if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
+      error.roles = [...roles];
+    }
+    if (opts.cleanupOnFailure) {
+      error.cleanup = await removeCampaignContainers({hosts, campaignId, sshRun, opts});
+    }
+    throw error;
+  }
 }
 
 function lagrangeTopology(hosts) {
@@ -644,6 +688,9 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     }
     throw reason;
   }
+  const formationDeadlineAtMs = numberIsFinite(ctx.formationDeadlineMs) ?
+    ctx.now() + ctx.formationDeadlineMs : null;
+  ctx.deadlineAtMs = formationDeadlineAtMs;
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
@@ -683,7 +730,8 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   const endpoint = {protocol: 'postgresql', serviceId: PG_WIRE_SERVICE_ID,
     host: listener.host, port: listener.port, containerId: binding.containerId,
     binding};
-  const observedAt = new Date().toISOString();
+  const observedAt = dateToISOString(new DateConstructor(ctx.now()));
+  const postFormationCtx = {...ctx, deadlineAtMs: null, deadlineMs: null};
   return {
     targetId: 'lagrange',
     topology: lagrangeTopology(hosts),
@@ -699,19 +747,24 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
-        const routable = await clusterReady({...ctx, budget: {...ctx.budget,
+        const routable = await clusterReady({...postFormationCtx, budget: {...ctx.budget,
           attempts: ROUTABLE_ATTEMPTS}},
         'lagrange-canonical-tables-routable', query, nodeRoles,
         arrayMap(CANONICAL_TABLES, (table) => table.name));
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
-          new Date().toISOString()), routable};
+          dateToISOString(new DateConstructor(ctx.now()))), routable};
       },
       // The arm's readiness contract again (after a product restart).
-      awaitReady: async () => ({cluster: await clusterReady(ctx, 'lagrange-system-tables', query,
-        nodeRoles), probe: await probeWriteReadback(ctx, sql, campaignId, visibility)}),
+      awaitReady: async () => ({cluster: await clusterReady(postFormationCtx,
+        'lagrange-system-tables', query, nodeRoles),
+      probe: await probeWriteReadback(postFormationCtx, sql, campaignId, visibility)}),
       observeRoles: async () => ({leaders: await observedLeaders(ctx, seedHost)}),
     },
   };
 }
 
-export {deployLagrangeCluster, resolveLagrangeContainerImage};
+export {
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
+  deployLagrangeCluster,
+  resolveLagrangeContainerImage,
+};
