@@ -178,7 +178,38 @@ function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
   return isLifecycleTimestampRegressing(existingTs, incomingTs);
 }
 
+const BOOT_INCARNATION_ORDERED_TABLES = Object.freeze(new Set([
+  TABLES.NODES,
+  TABLES.NODE_ENDPOINTS,
+  TABLES.SERVICE_ENDPOINTS,
+]));
+
+function compareBootIncarnationOrder(tableName, existing, incoming) {
+  if (!BOOT_INCARNATION_ORDERED_TABLES.has(tableName)) {
+    return 0;
+  }
+  const existingIncarnation = extractPositiveNumber(
+    existing?.[COLUMN.BOOT_INCARNATION],
+  );
+  const incomingIncarnation = extractPositiveNumber(
+    incoming?.[COLUMN.BOOT_INCARNATION],
+  );
+  if (existingIncarnation === null || incomingIncarnation === null) {
+    return 0;
+  }
+  return incomingIncarnation - existingIncarnation;
+}
+
 function isStaleForExistingRecord(tableName, existing, incoming) {
+  const bootIncarnationOrder = compareBootIncarnationOrder(
+    tableName,
+    existing,
+    incoming,
+  );
+  if (bootIncarnationOrder !== 0) {
+    return bootIncarnationOrder < 0;
+  }
+
   // Prefer the origin HLC when both rows carry one: it is a total causal order, so
   // equal-`updated_at` ties resolve deterministically and identically on every replica.
   const existingHlc = getRecordHlc(existing);

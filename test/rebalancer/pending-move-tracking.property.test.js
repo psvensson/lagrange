@@ -564,11 +564,25 @@ test('Property 80: Pending Move Tracking', async (t) => {
         status: ReplicaStatus.ACTIVE,
         workflowStep: WORKFLOW_STEP.ACTIVE,
         completedAt: Date.now(),
+        stepsHistory: [
+          {
+            step: WORKFLOW_STEP.ACTIVE,
+            targetNodeBootIncarnation: 1,
+            targetNodeStorageIncarnation: 1,
+          },
+        ],
       });
       const rebalancer = createTestRebalancer({
         entityId: partitionId,
         entityType: EntityType.PARTITION,
         systemTableCache: createMockCache({
+          nodes: [
+            {
+              node_id: targetNodeId,
+              status: ReplicaStatus.ACTIVE,
+              boot_incarnation: 1,
+            },
+          ],
           services,
           replicaOperations: [operation],
         }),

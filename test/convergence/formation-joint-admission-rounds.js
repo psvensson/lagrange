@@ -398,7 +398,7 @@ function createRoundDriver(world) {
         externalServicesCleanup,
       });
       if (externalServicesCleanup) {
-        world.cache.tombstoneStore?.clearAll?.();
+        world.cache.tombstoneStore.clear();
       }
       await settleWorld(world);
       nextEvaluationInstant(world);

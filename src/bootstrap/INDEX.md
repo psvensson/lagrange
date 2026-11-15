@@ -43,7 +43,7 @@ documentClass: generated
 - [bootstrap-tracker-constants.js](bootstrap-tracker-constants.js) - No leading comment; first export: BOOTSTRAP_TRACKER_SUBSYSTEM. (importers: one)
 - [cache-hydration-gate.js](cache-hydration-gate.js) - CacheHydrationGate - Phase gate that validates cache hydration completeness. (importers: few)
 - [cluster-identity-constants.js](cluster-identity-constants.js) - Cluster identity vocabulary (quest durable-cluster-identity-v2, spec join-path-audit-finding-3-no-cluster-identity). (importers: many)
-- [cluster-incarnation-fence.js](cluster-incarnation-fence.js) - No leading comment; first export: CLUSTER_INCARNATION_FENCE_STATE. (importers: few)
+- [cluster-incarnation-fence.js](cluster-incarnation-fence.js) - No leading comment; first export: CLUSTER_INCARNATION_FENCE_STATE. (importers: many)
 - [control-plane-write-health-owner.js](control-plane-write-health-owner.js) - No leading comment; first export: CONTROL_PLANE_WRITE_HEALTH_STATE. (importers: few)
 - [critical-placement-convergence.js](critical-placement-convergence.js) - Drain a Set through its captured iterator rather than Set.prototype.forEach, which is a seam an ambient callback can... (importers: few)
 - [durable-rejoin-storage-admission.js](durable-rejoin-storage-admission.js) - No leading comment; first export: assertDurableRejoinStorageAdmission. (importers: one)

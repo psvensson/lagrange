@@ -981,6 +981,7 @@ function createFormationWorld() {
       upNodeIds.delete(nodeId);
       if (wipeDataDir) {
         replicaRuntime.wipeNode(nodeId);
+        bootIncarnationByNodeId.delete(nodeId);
         if (externalServicesCleanup) {
           for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
             candidate[COLUMN.NODE_ID] === nodeId)) {
@@ -1078,7 +1079,7 @@ function createFormationWorld() {
       const registrationNow = Number.isFinite(registrationNowMs) ?
         Math.floor(registrationNowMs) :
         time.now();
-      const bootIncarnation = nextBootIncarnation(nodeId);
+      let bootIncarnation = nextBootIncarnation(nodeId);
       const clusterIncarnationFence = buildClusterIncarnationFence(
         durableStateDetected ? {
           durableStateDetected: true,
@@ -1098,6 +1099,17 @@ function createFormationWorld() {
           getLogger: () => hosts.controlPlaneReadinessService.logger,
           getNow: () => () => registrationNow,
           getBootIncarnation: () => bootIncarnation,
+          raiseBootIncarnationFloor: (knownIncarnation) => {
+            if (
+              Number.isSafeInteger(knownIncarnation) &&
+              knownIncarnation > bootIncarnation
+            ) {
+              bootIncarnation = knownIncarnation;
+              bootIncarnationByNodeId.set(nodeId, knownIncarnation);
+              hosts.heartbeatService.bootIncarnation = knownIncarnation;
+            }
+            return bootIncarnation;
+          },
           getNodeCapabilities: () => [],
           getClusterIncarnationFence: async () => clusterIncarnationFence,
           getJoinLifecycleIntentType: () =>
@@ -1109,7 +1121,7 @@ function createFormationWorld() {
           getMessageRouter: () => hosts.messageRouter,
           getSeedNodeId: () => SEED_NODE_ID,
           getNodeStorageBudgetService: () => ({
-            resolveAndPersistForNode: async (nodeRow) => ({
+            resolveBudgetRow: (nodeRow) => ({
               budgetRow: {
                 ...nodeRow,
                 [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
@@ -1117,8 +1129,10 @@ function createFormationWorld() {
                 [COLUMN.STORAGE_BUDGET_UPDATED_AT]: registrationNow,
               },
               resolution: {
+                isValid: true,
                 budgetBytes: STORAGE_BUDGET_BYTES,
                 source: STORAGE_BUDGET_SOURCE,
+                diskBytes: STORAGE_BUDGET_BYTES,
               },
             }),
           }),

@@ -29,6 +29,10 @@ import {
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {NODE_REGISTRATION_OUTCOME} from
   '../../src/control-plane/owners/node-registration-incarnation-write.js';
+import {ServicesOwner} from
+  '../../src/control-plane/owners/services-owner.js';
+import {buildClusterIncarnationFence} from
+  '../../src/bootstrap/cluster-incarnation-fence.js';
 
 const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
@@ -1247,6 +1251,214 @@ test(
       recreated?.[COLUMN.UPDATED_AT_HLC],
       committedAfterObservationHlc,
       'accepted row preserves its authoritative committed originHlc',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner advances wiped-storage bootIncarnation and ' +
+  'storageIncarnation above cluster-observed incarnation when local ' +
+  'boot reservation resets to 1, and updates lost SERVICES rows via ' +
+  '4-argument ServicesOwner.updateService',
+  async (t) => {
+    const publicationCalls = [];
+    const updateWhereCalls = [];
+    const seededRows = [];
+    let currentBootIncarnation = 1;
+    let raisedFloor = null;
+    const servicesOwner = new ServicesOwner({
+      updateWhere: async (whereClause, data, options) => {
+        updateWhereCalls.push({whereClause, data, options});
+        return {
+          success: true,
+          changes: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    });
+    const membershipPublicationRuntimeOwner = {
+      ...buildPublicationOwnerRecorder(publicationCalls),
+      servicesOwner,
+    };
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getBootIncarnation: () => currentBootIncarnation,
+        raiseBootIncarnationFloor: async (nextFloor) => {
+          raisedFloor = nextFloor;
+          currentBootIncarnation = nextFloor;
+        },
+        getJoinLifecycleIntentType: () =>
+          MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
+        getClusterIncarnationFence: () =>
+          buildClusterIncarnationFence({durableStateDetected: false}),
+      },
+    });
+    owner.seedJoinTimeCacheRow = (tableName, row) => {
+      seededRows.push({tableName, row});
+    };
+    stubAuthoritativeViewReads(owner, async (tableName) => {
+      if (tableName === TABLES.NODES) {
+        return {
+          success: true,
+          rows: [
+            {
+              [COLUMN.NODE_ID]: TEST_NODE_ID,
+              [COLUMN.NODE_ADDRESS]: TEST_NODE_ADDRESS,
+              [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+              [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+              [COLUMN.BOOT_INCARNATION]: 1,
+              [COLUMN.CREATED_AT]: TEST_NOW_MS - 5000,
+              [COLUMN.LAST_HEARTBEAT]: TEST_NOW_MS - 1000,
+            },
+          ],
+        };
+      }
+      if (tableName === TABLES.NODE_ENDPOINTS) {
+        return {
+          success: true,
+          rows: [
+            {
+              [COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-ws`,
+              [COLUMN.NODE_ID]: TEST_NODE_ID,
+              [COLUMN.TRANSPORT_TYPE]: 'websocket',
+              [COLUMN.ADDRESS]: `ws://joiner-host:${TEST_WS_PORT}`,
+              [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+              [COLUMN.BOOT_INCARNATION]: 1,
+              [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
+            },
+          ],
+        };
+      }
+      if (tableName === TABLES.SERVICES) {
+        return {
+          success: true,
+          rows: [
+            {
+              [COLUMN.SERVICE_ID]: 'replica_operations-p1-r2',
+              [COLUMN.REPLICA_ID]: 'replica_operations-p1-r2',
+              [COLUMN.PARTITION_ID]: 'replica_operations-p1-r2',
+              [COLUMN.NODE_ID]: TEST_NODE_ID,
+              [COLUMN.SERVICE_TYPE]: 'partition',
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+              [COLUMN.RAFT_ROLE]: 'follower',
+            },
+          ],
+        };
+      }
+      return {success: true, rows: []};
+    });
+
+    const result = await owner.registerNodeInCluster();
+
+    t.equal(
+      raisedFloor,
+      2,
+      'complete data-dir wipe resetting local boot to 1 advances floor to 2',
+    );
+    const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
+    t.equal(
+      nodeCalls.length,
+      1,
+      'wiped-storage registration must not reuse prior boot=1 NODES row',
+    );
+    t.equal(
+      nodeCalls[0]?.row?.[COLUMN.BOOT_INCARNATION],
+      2,
+      'fresh NODES row publishes advanced boot_incarnation = 2',
+    );
+    const endpointCalls = publicationCalls.filter(
+      (call) => call.kind === 'node_endpoint',
+    );
+    t.equal(
+      JSON.parse(endpointCalls[0]?.row?.[COLUMN.METADATA] || '{}')
+        .storageIncarnation,
+      2,
+      'fresh NODE_ENDPOINTS row publishes advanced storageIncarnation = 2',
+    );
+    t.equal(
+      updateWhereCalls.length,
+      1,
+      'real ServicesOwner.updateService executes 4-argument updateWhere once',
+    );
+    t.same(
+      updateWhereCalls[0]?.whereClause,
+      {
+        [COLUMN.SERVICE_ID]: 'replica_operations-p1-r2',
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+        [COLUMN.SERVICE_TYPE]: 'partition',
+      },
+      'ServicesOwner.updateService receives expectedIdentity in WHERE clause',
+    );
+    t.equal(
+      updateWhereCalls[0]?.data?.[COLUMN.STATUS],
+      SERVICE_STATUS.FAILED,
+      'ServicesOwner.updateService receives FAILED row data in 3rd argument',
+    );
+    t.equal(
+      result.lostStorageReplicas.length,
+      1,
+      'lostStorageReplicas reports the reconciled replica',
+    );
+
+    // Verify unapplied ServicesOwner.updateService (changes: 0) throws retryable
+    // deferred error and does not seed local SERVICES cache.
+    const unappliedSeededRows = [];
+    const unappliedServicesOwner = new ServicesOwner({
+      updateWhere: async () => ({
+        success: true,
+        changes: 0,
+        partitionResult: {affectedRows: 0},
+      }),
+    });
+    owner.membershipPublicationRuntimeOwner = {
+      ...buildPublicationOwnerRecorder([]),
+      servicesOwner: unappliedServicesOwner,
+    };
+    owner.seedJoinTimeCacheRow = (tableName, row) => {
+      unappliedSeededRows.push({tableName, row});
+    };
+    let unappliedError = null;
+    try {
+      await owner.reconcileLostStoragePartitionReplicas(TEST_NOW_MS);
+    } catch (error) {
+      unappliedError = error;
+    }
+    t.ok(
+      unappliedError,
+      'unapplied ServicesOwner.updateService result must throw',
+    );
+    t.equal(
+      unappliedError?.deferRetry,
+      true,
+      'unapplied ServicesOwner.updateService error is retryable deferred',
+    );
+    t.equal(
+      unappliedSeededRows.some((entry) => entry.tableName === TABLES.SERVICES),
+      false,
+      'local SERVICES cache is never seeded when authoritative update did not apply',
+    );
+
+    // Verify unavailable authoritative SERVICES read throws typed retryable
+    // error instead of falling back to systemTableCache.
+    stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
+    let unavailableServicesError = null;
+    try {
+      await owner.reconcileLostStoragePartitionReplicas(TEST_NOW_MS);
+    } catch (error) {
+      unavailableServicesError = error;
+    }
+    t.ok(
+      unavailableServicesError,
+      'unavailable authoritative SERVICES read must throw',
+    );
+    t.equal(
+      unavailableServicesError?.authoritativeRowReadState,
+      AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+      'unavailable SERVICES read surfaces typed UNAVAILABLE read state',
     );
   },
 );

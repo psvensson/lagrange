@@ -1,9 +1,7 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   isDisruptiveOperationLedgerSelfMove,
-  readOperationTargetNodeBootIncarnation,
-  readOperationTargetNodeStorageIncarnation,
-  resolveTargetNodeIncarnationSnapshot,
+  preserveOperationTargetNodeIncarnations,
 } from './replica-status.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 import {
@@ -42,28 +40,6 @@ const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
   TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
-
-function normalizeOperationWorkflowTransitionStepsHistory(operation) {
-  if (Array.isArray(operation?.stepsHistory)) {
-    return operation.stepsHistory;
-  }
-  const rawStepsHistory = operation?.steps_history;
-  if (Array.isArray(rawStepsHistory)) {
-    return rawStepsHistory;
-  }
-  if (
-    typeof rawStepsHistory === 'string' &&
-    rawStepsHistory.length > 0
-  ) {
-    try {
-      const parsedStepsHistory = JSON.parse(rawStepsHistory);
-      return Array.isArray(parsedStepsHistory) ? parsedStepsHistory : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
 
 class OperationWorkflowTransitionOrchestration
   extends OperationWorkflowOwnerExecutionLane {
@@ -251,40 +227,7 @@ class OperationWorkflowTransitionOrchestration
     if (readinessSnapshot) {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
     }
-    const currentStepsHistory =
-      normalizeOperationWorkflowTransitionStepsHistory(operation);
-    const targetIncarnationSnapshot = resolveTargetNodeIncarnationSnapshot(
-      this.repository?.systemTableCache,
-      targetNodeId,
-    );
-    let targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
-      operation,
-      currentStepsHistory,
-    );
-    if (targetNodeBootIncarnation === null) {
-      targetNodeBootIncarnation = targetIncarnationSnapshot.bootIncarnation;
-    }
-    let targetNodeStorageIncarnation =
-      readOperationTargetNodeStorageIncarnation(
-        operation,
-        currentStepsHistory,
-      );
-    if (targetNodeStorageIncarnation === null) {
-      targetNodeStorageIncarnation =
-        targetIncarnationSnapshot.storageIncarnation;
-    }
-    if (targetNodeBootIncarnation !== null) {
-      stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-        targetNodeBootIncarnation;
-      operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-        targetNodeBootIncarnation;
-    }
-    if (targetNodeStorageIncarnation !== null) {
-      stepEntry[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-        targetNodeStorageIncarnation;
-      operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-        targetNodeStorageIncarnation;
-    }
+    preserveOperationTargetNodeIncarnations(operation, stepEntry);
     return stepEntry;
   }
 

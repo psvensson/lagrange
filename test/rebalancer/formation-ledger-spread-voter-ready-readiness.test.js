@@ -16,6 +16,13 @@ import {
 import {
   NodeRegistrationOwner,
 } from '../../src/bootstrap/shared/node-registration-owner.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  NODE_REGISTRATION_OUTCOME,
+} from '../../src/control-plane/owners/node-registration-incarnation-write.js';
+import {
+  ServicesOwner,
+} from '../../src/control-plane/owners/services-owner.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -586,12 +593,88 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
   });
   coordinator.initialize();
   try {
-    const cache = coordinator.systemTableCache;
+    const cache = new SystemTableCache();
+    for (const tableName of [
+      TABLES.NODES,
+      TABLES.SERVICES,
+      TABLES.PARTITIONS,
+      TABLES.REPLICA_OPERATIONS,
+    ]) {
+      for (const row of coordinator.systemTableCache.getAll(tableName)) {
+        const key =
+          row[COLUMN.NODE_ID] ||
+          row[COLUMN.SERVICE_ID] ||
+          row[COLUMN.PARTITION_ID] ||
+          row[COLUMN.OPERATION_ID];
+        if (key) {
+          cache.set(tableName, key, {...row});
+        }
+      }
+    }
+
+    const updateWhereCalls = [];
+    const servicesOwner = new ServicesOwner({
+      updateWhere: async (whereClause, data, options) => {
+        updateWhereCalls.push({whereClause, data, options});
+        const existing = cache.get(
+          TABLES.SERVICES,
+          whereClause[COLUMN.SERVICE_ID],
+        );
+        if (
+          !existing ||
+          existing[COLUMN.NODE_ID] !== whereClause[COLUMN.NODE_ID]
+        ) {
+          return {
+            success: true,
+            changes: 0,
+            partitionResult: {affectedRows: 0},
+          };
+        }
+        const updatedRow = {...existing, ...data};
+        cache.set(
+          TABLES.SERVICES,
+          whereClause[COLUMN.SERVICE_ID],
+          updatedRow,
+        );
+        return {
+          success: true,
+          changes: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    });
+    const membershipPublicationRuntimeOwner = {
+      servicesOwner,
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation) => {
+        const nextRow = {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation};
+        cache.set(TABLES.NODES, nextRow[COLUMN.NODE_ID], nextRow);
+        return {
+          outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED,
+          observedRow: null,
+          error: null,
+        };
+      },
+      writeJoinEndpointAtIncarnation: async (
+        tableName,
+        row,
+        bootIncarnation,
+      ) => {
+        const nextRow = {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation};
+        cache.set(tableName, nextRow[COLUMN.ENDPOINT_ID], nextRow);
+        return {outcome: 'applied', result: {success: true}};
+      },
+      advanceJoinNodeBootIncarnation: async (_whereClause, nextNodeRow) => {
+        cache.set(TABLES.NODES, nextNodeRow[COLUMN.NODE_ID], nextNodeRow);
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+    };
+
     const buildRegistrationOwner = ({
       bootIncarnation,
       durableStateDetected,
       nowMs,
     }) => {
+      let localBootIncarnation = bootIncarnation;
       const fence = buildClusterIncarnationFence(
         durableStateDetected ? {
           durableStateDetected: true,
@@ -605,6 +688,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       const owner = new NodeRegistrationOwner({
         nodeId: TEST_JOINER_NODE_ID_B,
         nodeAddress: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
+        membershipPublicationRuntimeOwner,
         delegates: {
           getLogger: () => ({
             info() {},
@@ -613,7 +697,15 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
             debug() {},
           }),
           getNow: () => () => nowMs,
-          getBootIncarnation: () => bootIncarnation,
+          getBootIncarnation: () => localBootIncarnation,
+          raiseBootIncarnationFloor: async (nextFloor) => {
+            if (
+              Number.isSafeInteger(nextFloor) &&
+              nextFloor > localBootIncarnation
+            ) {
+              localBootIncarnation = nextFloor;
+            }
+          },
           getNodeCapabilities: () => [],
           getClusterIncarnationFence: async () => fence,
           getJoinLifecycleIntentType: () =>
@@ -622,7 +714,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
               MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
           getSystemTableCache: () => cache,
           getNodeStorageBudgetService: () => ({
-            resolveAndPersistForNode: async (nodeRow) => ({
+            resolveBudgetRow: (nodeRow) => ({
               budgetRow: {
                 ...nodeRow,
                 [COLUMN.STORAGE_BUDGET_BYTES]: 1024 * 1024 * 1024,
@@ -630,8 +722,10 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
                 [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nowMs,
               },
               resolution: {
+                isValid: true,
                 budgetBytes: 1024 * 1024 * 1024,
                 source: 'configured',
+                diskBytes: 1024 * 1024 * 1024,
               },
             }),
           }),
@@ -647,24 +741,37 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
           ),
         }),
       };
-      owner.upsertSystemTableRowWithRetry = async (tableName, rowData) => {
-        cache.applySystemTableChange(tableName, 'UPSERT', rowData);
-        return {success: true, partitionResult: {affectedRows: 1}};
-      };
-      owner.advanceNodeBootIncarnation = async (_observedRow, nextNodeRow) => {
-        cache.applySystemTableChange(TABLES.NODES, 'UPSERT', nextNodeRow);
-        return nextNodeRow;
+      owner.seedJoinTimeCacheRow = (tableName, row) => {
+        const key =
+          row?.[COLUMN.NODE_ID] && tableName === TABLES.NODES ?
+            row[COLUMN.NODE_ID] :
+            row?.[COLUMN.ENDPOINT_ID] || row?.[COLUMN.SERVICE_ID];
+        if (key) {
+          cache.set(tableName, key, {...row});
+        }
       };
       return owner;
     };
 
     // Initial fresh registration at bootIncarnation = 1, now = 1000.
     cache.delete(TABLES.NODES, TEST_JOINER_NODE_ID_B);
+    const initialServiceRow = createLedgerVoterServiceRow({
+      replicaId: TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      nodeId: TEST_JOINER_NODE_ID_B,
+      raftRole: 'follower',
+    });
+    cache.delete(TABLES.SERVICES, TEST_JOINER_REPLACEMENT_REPLICA_ID);
+    cache.tombstoneStore.clear();
     await buildRegistrationOwner({
       bootIncarnation: 1,
       durableStateDetected: false,
       nowMs: 1000,
     }).registerNodeInCluster();
+    cache.set(
+      TABLES.SERVICES,
+      TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      initialServiceRow,
+    );
 
     // Terminal ADD operation completed at timestamp 2000 for storageIncarnation = 1.
     const terminalAddOperation = {
@@ -744,11 +851,13 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       'durable rejoin does not supersede terminal ADD from the same storageIncarnation',
     );
 
-    // 2. Wiped-disk restart (durableStateDetected: false) at bootIncarnation = 3
-    // while old NODES row is still ACTIVE/CONNECTED and SERVICES row is still
-    // ACTIVE in the cluster store, AND with clock rollback (nowMs = 500 < completed_at = 2000):
+    // 2. Complete data-directory wipe restart (durableStateDetected: false)
+    // where local boot reservation was also lost and reset to 1 (bootIncarnation: 1)
+    // while old NODES row is still ACTIVE/CONNECTED at boot_incarnation = 2 and
+    // SERVICES row is still ACTIVE in the cluster store, AND with clock rollback
+    // (nowMs = 500 < completed_at = 2000):
     await buildRegistrationOwner({
-      bootIncarnation: 3,
+      bootIncarnation: 1,
       durableStateDetected: false,
       nowMs: 500,
     }).registerNodeInCluster();
@@ -756,7 +865,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
     t.equal(
       nodeAfterWipe?.[COLUMN.BOOT_INCARNATION],
       3,
-      'wiped-disk registration advances boot_incarnation to 3',
+      'wiped-disk registration advances boot_incarnation from cluster floor (2 -> 3) even when local boot counter reset to 1',
     );
     t.equal(
       nodeAfterWipe?.[COLUMN.CREATED_AT],
@@ -771,6 +880,11 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       ).storageIncarnation,
       3,
       'wiped-disk registration advances storageIncarnation to 3',
+    );
+    t.equal(
+      updateWhereCalls.length,
+      1,
+      'lost-storage reconciliation invokes 4-argument ServicesOwner.updateService',
     );
     const serviceAfterWipe = cache.get(
       TABLES.SERVICES,
@@ -787,12 +901,30 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       'failed SERVICES row carries node_storage_lost_on_fresh_registration trigger reason',
     );
 
-    // 3 & 4. Delete SERVICES row and clear all cache tombstones while clock is
-    // rolled back (node.created_at = 500 < operation.completed_at = 2000):
-    // storageIncarnation (3 > 1) still supersedes the terminal ADD and prevents
-    // ghost replica projection.
+    // 3 & 4. Delete SERVICES row and clear all cache tombstones via
+    // tombstoneStore.clear() while clock is rolled back
+    // (node.created_at = 500 < operation.completed_at = 2000):
+    // storageIncarnation (3 > 1) still supersedes the terminal ADD, AND a
+    // retained operation lacking storageIncarnation metadata is also refused
+    // when its SERVICES row is absent.
     cache.delete(TABLES.SERVICES, TEST_JOINER_REPLACEMENT_REPLICA_ID);
-    cache.tombstoneStore?.clearAll?.();
+    t.equal(
+      cache.tombstoneStore.isTombstoned(
+        TABLES.SERVICES,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'deleting SERVICES row records a tombstone before clear()',
+    );
+    cache.tombstoneStore.clear();
+    t.equal(
+      cache.tombstoneStore.isTombstoned(
+        TABLES.SERVICES,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      false,
+      'tombstoneStore.clear() removes all SERVICES tombstones',
+    );
     t.equal(
       rebalancer.hasActiveServiceTombstone(TEST_JOINER_REPLACEMENT_REPLICA_ID),
       false,
@@ -806,6 +938,25 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       ),
       true,
       'storageIncarnation supersession (3 > 1) detects wiped-disk restart without tombstones and under clock rollback',
+    );
+    const legacyOperationWithoutStorageIncarnation = {
+      ...terminalAddOperation,
+      operation_id: 'op-add-joiner-b-no-incarnation',
+      steps_history: JSON.stringify([
+        {
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: 2000,
+        },
+      ]),
+    };
+    t.equal(
+      rebalancer.isTerminalCreateSupersededByNodeRegistration(
+        legacyOperationWithoutStorageIncarnation,
+        TEST_JOINER_NODE_ID_B,
+        TEST_JOINER_REPLACEMENT_REPLICA_ID,
+      ),
+      true,
+      'retained terminal operation without storageIncarnation metadata is never synthesized when SERVICES row is absent',
     );
     const projectedReplicas = rebalancer.getCurrentReplicas();
     t.equal(
