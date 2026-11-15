@@ -175,6 +175,10 @@ function controllerRepository(dir) {
     fs.writeFileSync(path.join(where, 'package-lock.json'), lock(name));
   }
   git(dir, ['init', '--quiet']);
+  fs.mkdirSync(path.join(dir, '.git/hooks'), {recursive: true});
+  fs.writeFileSync(path.join(dir, '.git/hooks/pre-push'),
+    '#!/bin/sh\necho "controller pre-push hook must not run on benchmark host placement" >&2\nexit 1\n',
+    {mode: 0o755});
   git(dir, ['add', '-A']);
   git(dir, ['commit', '--quiet', '-m', 'harness']);
   return git(dir, ['rev-parse', 'HEAD']);

@@ -97,7 +97,7 @@ function referenceClientTarballs(lock) {
  * @return {Function} ({host, repoPath, harnessCommit}) => Promise
  */
 function harnessCommitPusher({controllerRoot, sshCommand}) {
-  return ({host, repoPath, harnessCommit}) => execGitAsync(['push', '--quiet',
+  return ({host, repoPath, harnessCommit}) => execGitAsync(['push', '--no-verify', '--quiet',
     `ssh://${host.sshTarget}${repoPath}`, `+${harnessCommit}:refs/bench/harness`],
   {cwd: controllerRoot, bound: GIT_OUTPUT_BOUND.COMMAND,
     env: {...process.env, GIT_SSH_COMMAND: arrayJoin(arrayMap(sshCommand, shellQuote), ' ')}});
