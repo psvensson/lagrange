@@ -34,12 +34,13 @@ function matches(matcher, host, command) {
  */
 function createScriptedSsh(rules = []) {
   const calls = [];
-  async function sshRun(host, _opts, command) {
-    const call = {host, command, text: decodedText(command)};
+  async function sshRun(host, opts, command, timeoutMs) {
+    const call = {host, command, text: decodedText(command), opts, timeoutMs};
     calls.push(call);
     for (const [matcher, answer] of rules) {
       if (!matches(matcher, host, command)) continue;
-      const value = typeof answer === 'function' ? answer(command, host, calls) : answer;
+      const value = typeof answer === 'function' ?
+        answer(command, host, calls, opts, timeoutMs) : answer;
       const settled = await value;
       if (settled instanceof Error) throw settled;
       return settled;

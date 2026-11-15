@@ -24,10 +24,10 @@ import {errorText} from './real-product-remote-shell.js';
 // probe throws, a not-ready attempt whose diagnostic is the error. An answer
 // outside that contract is a harness defect and is raised, never read as a
 // verdict.
-async function probeOnce(component, probe) {
+async function probeOnce(component, probe, probeContext) {
   let outcome;
   try {
-    outcome = await probe();
+    outcome = await probe(probeContext);
   } catch (error) {
     return {ready: false, diagnostic: {error: errorText(error)}};
   }
@@ -41,6 +41,15 @@ function resolveClock(now, nowFn) {
   if (typeof nowFn === 'function') return nowFn;
   if (typeof now === 'function') return now;
   return dateNow;
+}
+
+function isAborted(signal) {
+  return Boolean(signal?.aborted);
+}
+
+function deadlineRemainingMs({nowFn, deadlineAtMs}) {
+  if (!numberIsFinite(deadlineAtMs)) return null;
+  return deadlineAtMs - nowFn();
 }
 
 function sleepUntilOrAbort(sleep, sleepMs, signal) {
@@ -153,14 +162,30 @@ async function pollReadiness({component, probe, attempts, intervalMs, sleep,
     });
   };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    if (signal?.aborted) throwExhausted({aborted: true});
-    if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
+    if (isAborted(signal)) throwExhausted({aborted: true});
+    const preProbeRemainingMs = deadlineRemainingMs({
+      nowFn: clock,
+      deadlineAtMs: finiteDeadlineAtMs,
+    });
+    if (preProbeRemainingMs !== null && preProbeRemainingMs <= 0) {
       throwExhausted({deadlineExpired: true});
     }
-    const outcome = await probeOnce(component, probe);
+    const outcome = await probeOnce(component, probe, {
+      attempt,
+      signal,
+      remainingMs: preProbeRemainingMs,
+      deadlineAtMs: finiteDeadlineAtMs,
+    });
     completedAttempts = attempt;
     last = outcome.diagnostic;
-    if (signal?.aborted) throwExhausted({aborted: true});
+    if (isAborted(signal)) throwExhausted({aborted: true});
+    const postProbeRemainingMs = deadlineRemainingMs({
+      nowFn: clock,
+      deadlineAtMs: finiteDeadlineAtMs,
+    });
+    if (postProbeRemainingMs !== null && postProbeRemainingMs <= 0) {
+      throwExhausted({deadlineExpired: true});
+    }
     consecutive = outcome.ready ? consecutive + 1 : 0;
     if (consecutive >= stablePolls) {
       const readyAt = clock();
@@ -168,16 +193,17 @@ async function pollReadiness({component, probe, attempts, intervalMs, sleep,
         observedAt: dateToISOString(new DateConstructor(readyAt)),
         timeToReadyMs: readyAt - startedAt, evidence: last};
     }
-    if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
-      throwExhausted({deadlineExpired: true});
-    }
     if (attempt < attempts) {
-      const remainingMs = finiteDeadlineAtMs !== null ?
-        Math.max(0, finiteDeadlineAtMs - clock()) : intervalMs;
+      const remainingMs = postProbeRemainingMs !== null ?
+        Math.max(0, postProbeRemainingMs) : intervalMs;
       const sleepMs = Math.max(0, Math.min(intervalMs, remainingMs));
       await sleepUntilOrAbort(sleep, sleepMs, signal);
-      if (signal?.aborted) throwExhausted({aborted: true});
-      if (finiteDeadlineAtMs !== null && clock() >= finiteDeadlineAtMs) {
+      if (isAborted(signal)) throwExhausted({aborted: true});
+      const postSleepRemainingMs = deadlineRemainingMs({
+        nowFn: clock,
+        deadlineAtMs: finiteDeadlineAtMs,
+      });
+      if (postSleepRemainingMs !== null && postSleepRemainingMs <= 0) {
         throwExhausted({deadlineExpired: true});
       }
     }

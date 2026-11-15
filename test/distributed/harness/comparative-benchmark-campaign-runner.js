@@ -71,6 +71,7 @@ const PRODUCTS_UNPINNED = 'campaign_products_unpinned';
 // The deployer's readiness exhaustion as the run's setup failure: the product
 // never answered its readiness contract, so the failure is the product's.
 const READINESS_SETUP_FAILURE_CLASS = 'product_error';
+const INTERRUPTED_SETUP_FAILURE_CLASS = 'interrupted';
 const DEPLOYMENT_EVENT_KINDS = Object.freeze([IDENTITY_EVENT_KIND.RESTART,
   IDENTITY_EVENT_KIND.IMAGE_CHANGE]);
 const REFUSAL_PREFIX = 'refused_';
@@ -80,9 +81,33 @@ function iso(ms) {
   return new Date(ms).toISOString();
 }
 
-function failureOf(error) {
-  return {code: error?.code || UNCLASSIFIED, message: errorText(error),
-    diagnostic: error?.diagnostic ?? null};
+function isInterruptedFailure(error, signal) {
+  return Boolean(error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
+    error?.aborted === true ||
+    error?.diagnostic?.aborted === true ||
+    signal?.aborted === true);
+}
+
+function lastObservationOf(error, attempt) {
+  return error?.lastObservation ?? error?.diagnostic?.lastObservation ??
+    attempt?.deployment?.readiness?.lastObservation ??
+    attempt?.deployment?.readiness?.evidence?.lastObservation ?? null;
+}
+
+function failureOf(error, signal = null) {
+  const interrupted = isInterruptedFailure(error, signal);
+  const isReadiness = error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED;
+  const failureClass = interrupted ? INTERRUPTED_SETUP_FAILURE_CLASS :
+    (isReadiness ? READINESS_SETUP_FAILURE_CLASS : null);
+  const lastObservation = lastObservationOf(error, error?.attempt);
+  return {
+    code: error?.code || (interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : UNCLASSIFIED),
+    message: errorText(error),
+    diagnostic: error?.diagnostic ?? null,
+    ...(failureClass ? {failureClass} : {}),
+    ...(interrupted ? {aborted: true} : {}),
+    ...(lastObservation !== null ? {lastObservation} : {}),
+  };
 }
 
 // A product that never reached its own readiness contract (a typed
@@ -92,12 +117,16 @@ const PRODUCT_FAILURE_CODES = Object.freeze([DEPLOYMENT_FAILURE.READINESS_EXHAUS
 
 function stateOfFailure(failure, attempt) {
   if (stringStartsWith(String(failure.code), REFUSAL_PREFIX)) return RUN_STATE.BLOCKED;
+  if (failure.failureClass === INTERRUPTED_SETUP_FAILURE_CLASS ||
+      failure.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
+      failure.aborted === true) {
+    return RUN_STATE.INTERRUPTED;
+  }
   // A product failure names the product that failed: only a complete record.
   if (arrayIncludes(PRODUCT_FAILURE_CODES, failure.code)) {
     return attempt?.workload ? RUN_STATE.PRODUCT_FAILURE : RUN_STATE.FAILED;
   }
-  return failure.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ? RUN_STATE.INTERRUPTED :
-    RUN_STATE.FAILED;
+  return RUN_STATE.FAILED;
 }
 
 function assertEndpointBound(deployment) {
@@ -272,14 +301,23 @@ function validatedRecord(record, recordOwner, attempt) {
 function runRecord({run, manifest, header, state, failure, attempt, events, closure,
   startedAt, endedAt, recordOwner}) {
   const workload = attempt?.workload ?? null;
+  const deployment = recordedDeployment({attempt, header, events, closure});
+  const failureClass = failure?.failureClass ??
+    (state === RUN_STATE.INTERRUPTED ? INTERRUPTED_SETUP_FAILURE_CLASS : null);
+  const lastObservation = failure?.lastObservation ??
+    deployment?.readiness?.lastObservation ??
+    deployment?.readiness?.evidence?.lastObservation ?? null;
   const record = {recordType: RECORD_TYPE.RUN, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, runId: run.runId, claimKey: run.claimKey,
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
-    execution: {state, failure, startedAt, endedAt},
+    ...(failureClass ? {failureClass} : {}),
+    ...(lastObservation !== null ? {lastObservation} : {}),
+    ...(deployment?.closure ? {cleanup: deployment.closure} : {}),
+    execution: {state, failure, ...(failureClass ? {failureClass} : {}), startedAt, endedAt},
     identity: recordedIdentity(run, header, attempt),
     plan: recordedPlan(run, manifest, workload),
-    deployment: recordedDeployment({attempt, header, events, closure}),
+    deployment,
     observations: workload ? workload.observations : null,
     correctness: workload ? workload.correctness : null,
     harnessEvents: arrayFilter(events,
@@ -301,13 +339,19 @@ function watchdogFor(deps) {
 // the canonical workload records the run unopened (every planned request
 // unissued) under the deployer's setup failure, and the containers are
 // inspected again like after any window.
-async function unmeasuredAttempt({run, manifest, deps, events, error}) {
+async function unmeasuredAttempt({run, manifest, deps, events, error, signal}) {
   const deployment = error.deployment;
+  const interrupted = isInterruptedFailure(error, signal);
+  const failureClass = interrupted ? INTERRUPTED_SETUP_FAILURE_CLASS :
+    READINESS_SETUP_FAILURE_CLASS;
+  const lastObservation = lastObservationOf(error, {deployment});
   const attempt = {deployment, workload: null, productsAfter: null, roleObservations: null};
   attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment,
     signal: null, semanticGate: null,
-    setupFailure: {failureClass: READINESS_SETUP_FAILURE_CLASS, sqlState: null,
-      code: error.code, message: errorText(error)}});
+    setupFailure: {failureClass, sqlState: null,
+      code: error.code, message: errorText(error),
+      ...(interrupted ? {aborted: true} : {}),
+      ...(lastObservation !== null ? {lastObservation} : {})}});
   events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await deps.inspectProducts(deployment);
   events.push(...compareProductIdentity(deployment.identity.products, attempt.productsAfter,
@@ -316,7 +360,10 @@ async function unmeasuredAttempt({run, manifest, deps, events, error}) {
 }
 
 function isDescribedExhaustion(error) {
-  return error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED && Boolean(error.deployment);
+  return Boolean(error?.deployment) &&
+    (error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED ||
+      error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
+      error?.aborted === true);
 }
 
 // Measure the run, or record the deployer's described readiness exhaustion;
@@ -325,10 +372,17 @@ async function settleAttempt({run, manifest, deps, events, signal}) {
   try {
     return {attempt: await measureRun({run, manifest, deps, events, signal}), failure: null};
   } catch (error) {
-    const failure = failureOf(error);
-    if (!isDescribedExhaustion(error)) return {attempt: error?.attempt ?? null, failure};
+    const failure = failureOf(error, signal);
+    if (failure.aborted) {
+      events.push({kind: EVENT.WATCHDOG_STOP, observedAt: iso(deps.now())});
+    }
+    if (!isDescribedExhaustion(error)) {
+      return {attempt: error?.attempt ?? (error?.deployment ? {deployment: error.deployment,
+        workload: null, productsAfter: null, roleObservations: null} : null), failure};
+    }
     try {
-      return {attempt: await unmeasuredAttempt({run, manifest, deps, events, error}), failure};
+      return {attempt: await unmeasuredAttempt({run, manifest, deps, events, error, signal}),
+        failure};
     } catch (unrecorded) {
       return {attempt: unrecorded?.attempt ?? {deployment: error.deployment, workload: null,
         productsAfter: null, roleObservations: null}, failure};

@@ -1,0 +1,19 @@
+{
+ "job": "d646f3de-e8a2-425f-b1bf-ebe4e4c9fe11",
+ "terminal": {
+  "docker_create_attempted": false,
+  "elapsed_s": 381.213,
+  "execution_scope_closed": true,
+  "exit_code": 0,
+  "generation": "2593c0f2-96b2-46f6-a031-785eabe87008",
+  "host": "adam-laptop",
+  "intentDigest": "3b296c1f0198eb2e3afffd62d4c630aec388dd919b6bc057875e62bee7c9e0b6",
+  "job_id": "d646f3de-e8a2-425f-b1bf-ebe4e4c9fe11",
+  "reason": null,
+  "source_execution_started": false,
+  "state": "COMPLETE",
+  "unit": "lagrange-lab3-2593c0f296b246f6a031785eabe87008-d646f3dee8a2425fb1bfebe4e4c9fe11.service",
+  "workload_started": true
+ },
+ "evidence_problems": []
+}
