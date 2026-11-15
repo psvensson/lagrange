@@ -134,7 +134,12 @@ function createSettledWedgeServiceRows() {
  * whole formation cohort so the voter-ready floor is the only
  * readiness-discriminating gate on the drain path under test.
  */
-function createColdFormationReadinessService({denialReasonCodesByNodeId, nodeRows}) {
+function createColdFormationReadinessService({
+  denialReasonCodesByNodeId,
+  nodeRows,
+  prioritySummarySatisfied = false,
+  publicationEpoch = 1,
+}) {
   const cohortNodeIds = Object.freeze([
     TEST_SEED_NODE_ID,
     TEST_JOINER_NODE_ID_B,
@@ -142,19 +147,20 @@ function createColdFormationReadinessService({denialReasonCodesByNodeId, nodeRow
   ]);
   const buildPlanningSnapshot = (nodeId) => ({
     publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+    publicationEpoch,
     publishedActiveNodeIdsPresent: true,
     publishedActiveNodeIds: cohortNodeIds,
     recoveryActiveNodeIds: cohortNodeIds,
     projectedServingNodeIds: cohortNodeIds,
     publishedMembershipIncludesTargetNode: cohortNodeIds.includes(nodeId),
-    // Live formation state: priority recovery is ACTIVE (the ledger spread
-    // has not converged), so the completion-safe short circuit in
-    // evaluateRemoveSafety does not apply and the voter-ready floor is
-    // evaluated — exactly the live gate distribution (floor 318x).
     priorityPartitionSummary: Object.freeze({
-      satisfied: false,
+      satisfied: Boolean(prioritySummarySatisfied),
       requiredDistinctNodeCount: TEST_TARGET_REPLICA_COUNT,
       missingPartitionIds: [],
+      blockedPartitions: [],
+      spreadGap: prioritySummarySatisfied ? 0 : 1,
+      largestSpreadGap: prioritySummarySatisfied ? 0 : 1,
+      totalSpreadGap: prioritySummarySatisfied ? 0 : 1,
     }),
   });
   return createMockControlPlaneReadinessService({
@@ -236,18 +242,34 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
   };
 }
 
-function createWedgeCoordinator({denialReasonCodesByNodeId, committedJoinersReady = false}) {
-  const nodeRows = [createSeedReadyNodeRow(),
+function createWedgeCoordinator({
+  denialReasonCodesByNodeId,
+  committedJoinersReady = false,
+  prioritySummarySatisfied = false,
+  publicationEpoch = 1,
+  serviceRows = null,
+  nodeRowsOverride = null,
+}) {
+  const defaultNodeRows = [createSeedReadyNodeRow(),
     createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_B),
     createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_C)];
   if (committedJoinersReady) {
-    for (const row of nodeRows) row.ready_lease_expires_at = Date.now() + 60000;
+    for (const row of defaultNodeRows) row.ready_lease_expires_at = Date.now() + 60000;
   }
+  const nodeRows = Array.isArray(nodeRowsOverride) ?
+    nodeRowsOverride :
+    defaultNodeRows;
+  const rows = Array.isArray(serviceRows) ?
+    serviceRows :
+    createSettledWedgeServiceRows();
   const coordinator = createTestCoordinator({
     nodeId: TEST_SEED_NODE_ID,
     enableTimeouts: false,
     controlPlaneReadinessService: createColdFormationReadinessService({
-      denialReasonCodesByNodeId, nodeRows,
+      denialReasonCodesByNodeId,
+      nodeRows,
+      prioritySummarySatisfied,
+      publicationEpoch,
     }),
     tablePolicyService: createMockPolicyService({
       getPolicyForPartition: () => ({
@@ -256,12 +278,8 @@ function createWedgeCoordinator({denialReasonCodesByNodeId, committedJoinersRead
       }),
     }),
     cacheData: {
-      nodes: [
-        createSeedReadyNodeRow(),
-        createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_B),
-        createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_C),
-      ],
-      services: createSettledWedgeServiceRows(),
+      nodes: nodeRows.map((row) => ({...row})),
+      services: rows.map((row) => ({...row})),
       partitions: [
         {
           partition_id: TEST_LEDGER_PARTITION_ID,
@@ -273,7 +291,7 @@ function createWedgeCoordinator({denialReasonCodesByNodeId, committedJoinersRead
   });
   installAuthoritativeServicesRead(
     coordinator,
-    () => createSettledWedgeServiceRows(),
+    () => rows.map((row) => ({...row})),
   );
   return coordinator;
 }
@@ -445,4 +463,99 @@ test('coupling sanity: the refused drain is exactly the formation ' +
       'REMOVE refused by the voter-ready floor is the exact missing step',
   );
   t.end();
+});
+
+test('converged priorityPartitionSummary refuses surplus seed REMOVE when a remote voter is SYNCING (projectedVoterReadyCount 2/3)', async (t) => {
+  initializeTestEnvironment();
+  let currentServiceRows = createSettledWedgeServiceRows();
+  const coordinator = createWedgeCoordinator({
+    committedJoinersReady: true,
+    prioritySummarySatisfied: true,
+    denialReasonCodesByNodeId: {},
+  });
+  installAuthoritativeServicesRead(coordinator, () => currentServiceRows);
+  coordinator.initialize();
+  try {
+    const operation = await coordinator.createOperation({
+      type: OperationType.REMOVE,
+      partitionId: TEST_LEDGER_PARTITION_ID,
+      nodeId: TEST_SEED_NODE_ID,
+      replicaId: TEST_SEED_SURPLUS_REPLICA_ID,
+    });
+    currentServiceRows = createSettledWedgeServiceRows().map((row) =>
+      row.node_id === TEST_JOINER_NODE_ID_B ?
+        {...row, status: 'syncing'} :
+        row,
+    );
+    const evaluation =
+      await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+    t.not(
+      evaluation.classification,
+      TEST_SAFE_CLASSIFICATION,
+      'a remote voter in SYNCING must not count toward post-REMOVE active voter floor: ' +
+        describeEvaluation(evaluation),
+    );
+    t.match(
+      String(evaluation?.error || ''),
+      /would drop voter-ready replicas below minimum \(2\/3\)/,
+    );
+  } finally {
+    await coordinator.shutdown();
+    resetTestEnvironment();
+  }
+});
+
+test('converged priorityPartitionSummary refuses surplus seed REMOVE when a remote voter has an expired READY lease (9e943db3 witness, projectedVoterReadyCount 2/3)', async (t) => {
+  initializeTestEnvironment();
+  const nowMs = Date.now();
+  const expiredLeaseNodeRows = [
+    {
+      node_id: TEST_SEED_NODE_ID,
+      status: NODE_STATE.ACTIVE,
+      connection_state: NODE_STATE.READY,
+      ready_lease_expires_at: nowMs + 60000,
+    },
+    {
+      node_id: TEST_JOINER_NODE_ID_B,
+      status: NODE_STATE.ACTIVE,
+      connection_state: NODE_STATE.READY,
+      ready_lease_expires_at: nowMs - 599,
+    },
+    {
+      node_id: TEST_JOINER_NODE_ID_C,
+      status: NODE_STATE.ACTIVE,
+      connection_state: NODE_STATE.READY,
+      ready_lease_expires_at: nowMs + 60000,
+    },
+  ];
+  const coordinator = createWedgeCoordinator({
+    prioritySummarySatisfied: true,
+    publicationEpoch: 9,
+    denialReasonCodesByNodeId: {},
+    nodeRowsOverride: expiredLeaseNodeRows,
+  });
+  coordinator.initialize();
+  try {
+    const operation = await coordinator.createOperation({
+      type: OperationType.REMOVE,
+      partitionId: TEST_LEDGER_PARTITION_ID,
+      nodeId: TEST_SEED_NODE_ID,
+      replicaId: TEST_SEED_SURPLUS_REPLICA_ID,
+    });
+    const evaluation =
+      await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+    t.not(
+      evaluation.classification,
+      TEST_SAFE_CLASSIFICATION,
+      'an expired READY lease on a published-active remote voter must refuse REMOVE at 2/3: ' +
+        describeEvaluation(evaluation),
+    );
+    t.match(
+      String(evaluation?.error || ''),
+      /would drop voter-ready replicas below minimum \(2\/3\)/,
+    );
+  } finally {
+    await coordinator.shutdown();
+    resetTestEnvironment();
+  }
 });

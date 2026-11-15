@@ -6,6 +6,7 @@ import {
   CONTROL_PLANE_READINESS_COLLABORATOR_UNWIRED as UNWIRED,
 } from './control-plane-readiness-constants.js';
 import {
+  forgetResolvedNodePlanningAnswer,
   isResolvedNodePlanningAnswerForContext,
   rememberResolvedNodePlanningAnswer,
 } from './readiness-resolved-planning-answer-context.js';
@@ -700,10 +701,12 @@ function resolveNodeMembershipPublicationPlanningAnswerSync(
       ),
     );
   }
-  return service.resolveAvailableNodePlanningAnswer(
-    nodeId,
-    observedAt,
-    membershipPublication,
+  return forgetResolvedNodePlanningAnswer(
+    service.resolveAvailableNodePlanningAnswer(
+      nodeId,
+      observedAt,
+      membershipPublication,
+    ),
   );
 }
 

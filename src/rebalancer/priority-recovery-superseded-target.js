@@ -46,6 +46,13 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+function readPriorityPartitionSummary(planningSnapshot) {
+  return planningSnapshot.priorityPartitionSummary &&
+    typeof planningSnapshot.priorityPartitionSummary === 'object' ?
+    planningSnapshot.priorityPartitionSummary :
+    null;
+}
+
 class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   buildPriorityRecoveryAssessmentContextForOperation(
     operation,
@@ -60,10 +67,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     }
 
     const priorityPartitionSummary =
-      planningSnapshot.priorityPartitionSummary &&
-      typeof planningSnapshot.priorityPartitionSummary === 'object' ?
-        planningSnapshot.priorityPartitionSummary :
-        null;
+      readPriorityPartitionSummary(planningSnapshot);
     const decisionSnapshot =
       this.buildPriorityRecoveryDecisionSnapshotForOperations(
         operation.partitionId || operation.entityId || '',
@@ -116,11 +120,18 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
 
   /**
    * @param {Object|null} planningSnapshot
+   * @param {Object} [options]
    * @return {string[]}
    * @private
    */
-  buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
-    return buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot);
+  buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+    planningSnapshot,
+    options = {},
+  ) {
+    return buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+      planningSnapshot,
+      options,
+    );
   }
 
   /**
@@ -135,6 +146,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * @param {Object|null} planningSnapshot
    * @param {Object|null} priorityRecoveryContext
    * @param {Object[]} projectedVoterReadyRows
+   * @param {Object} [options]
    * @return {Object}
    * @private
    */
@@ -142,11 +154,13 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     planningSnapshot,
     priorityRecoveryContext,
     projectedVoterReadyRows,
+    options = {},
   ) {
     return resolvePriorityRemoveSafetyMembershipSnapshot(
       planningSnapshot,
       priorityRecoveryContext,
       projectedVoterReadyRows,
+      options,
     );
   }
 

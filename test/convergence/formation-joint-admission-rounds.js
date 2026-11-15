@@ -231,56 +231,13 @@ function createRoundDriver(world) {
   NodeService.getInstance().setSystemCacheProxy(world.cache);
   NodeService.getInstance().getNodeStats = async () => HEARTBEAT_STATS;
   const joiners = new Map();
-  const seed = world.seed;
-  const seedReadiness = seed.controlPlaneReadinessService;
   const handoffTransitions = [];
-  const baseReadinessLogger = seedReadiness.logger;
-  seedReadiness.logger = {
-    debug: () => {},
-    warn: () => {},
-    error: () => {},
-    info(message, details) {
-      if (message === HANDOFF_TRANSITION_MESSAGE) {
-        handoffTransitions.push({...details, atMs: world.clock.now()});
-      }
-    },
-    child: () => baseReadinessLogger,
-  };
-
   // Each planner's own statements: its planning-gate decision and the last
   // thing it said about why it is not acting.
   const plannerStatements = new Map();
   const roundCounter = {number: 0};
   // Every bound an operation owner of a node reported spent.
   const spentBounds = [];
-  for (const [partitionId, rebalancer] of world.seedRebalancers) {
-    const statement = {gate: null, refusals: new Map()};
-    plannerStatements.set(partitionId, statement);
-    const record = (message, details) => {
-      if (message === WAIT_BOUND_SPENT_MESSAGE) {
-        spentBounds.push({nodeId: SEED_NODE_ID, wait: details?.wait || null,
-          subject: details?.subject || partitionId});
-      } else if (message === PLANNING_GATE_MESSAGE) {
-        statement.gate = {
-          winningGate: details.winningGate,
-          bypassState: details.bypassState,
-          operationCreationRequired: details.operationCreationRequired,
-        };
-      } else if (PLANNER_REFUSAL_MESSAGES.has(message)) {
-        // The planner's own refusal of its own move, keyed by the move.
-        statement.refusals.set(
-          `${details.moveType}:${details.moveTargetNodeId}`, {
-            round: roundCounter.number,
-            moveType: details.moveType,
-            targetNodeId: details.moveTargetNodeId,
-            replicaId: details.replicaId || null,
-            reason: details.admissionReason || details.reason || null,
-            error: details.error || null,
-          });
-      }
-    };
-    rebalancer.logger = {debug: record, info: record, warn: record, error: record};
-  }
 
   const boundWatch = (nodeId) => {
     const quiet = () => {};
@@ -305,7 +262,57 @@ function createRoundDriver(world) {
     hosts.rebalanceCoordinator.repository.logger = watch;
     world.dispatchServiceByNodeId.get(hosts.nodeId).logger = watch;
   };
-  watchBounds(seed);
+  const attachSeedInstrumentation = () => {
+    const seedReadiness = world.seed.controlPlaneReadinessService;
+    const baseReadinessLogger = seedReadiness.logger;
+    seedReadiness.logger = {
+      debug: () => {},
+      warn: () => {},
+      error: () => {},
+      info(message, details) {
+        if (message === HANDOFF_TRANSITION_MESSAGE) {
+          handoffTransitions.push({...details, atMs: world.clock.now()});
+        }
+      },
+      child: () => baseReadinessLogger,
+    };
+    for (const [partitionId, rebalancer] of world.seedRebalancers) {
+      const statement = plannerStatements.get(partitionId) ||
+        {gate: null, refusals: new Map()};
+      plannerStatements.set(partitionId, statement);
+      const record = (message, details) => {
+        if (message === WAIT_BOUND_SPENT_MESSAGE) {
+          spentBounds.push({nodeId: SEED_NODE_ID, wait: details?.wait || null,
+            subject: details?.subject || partitionId});
+        } else if (message === PLANNING_GATE_MESSAGE) {
+          statement.gate = {
+            winningGate: details.winningGate,
+            bypassState: details.bypassState,
+            operationCreationRequired: details.operationCreationRequired,
+          };
+        } else if (PLANNER_REFUSAL_MESSAGES.has(message)) {
+          // The planner's own refusal of its own move, keyed by the move.
+          statement.refusals.set(
+            `${details.moveType}:${details.moveTargetNodeId}`, {
+              round: roundCounter.number,
+              moveType: details.moveType,
+              targetNodeId: details.moveTargetNodeId,
+              replicaId: details.replicaId || null,
+              reason: details.admissionReason || details.reason || null,
+              error: details.error || null,
+            });
+        }
+      };
+      rebalancer.logger = {
+        debug: record,
+        info: record,
+        warn: record,
+        error: record,
+      };
+    }
+    watchBounds(world.seed);
+  };
+  attachSeedInstrumentation();
   const stampSteps = new Map();
   const countStamp = (name, steps = 1) =>
     stampSteps.set(name, (stampSteps.get(name) || 0) + steps);
@@ -361,7 +368,46 @@ function createRoundDriver(world) {
       await settleWorld(world);
       // The seed's readiness owner evaluates the new member.
       nextEvaluationInstant(world);
-      await seedReadiness.getNodeReadiness(nodeId);
+      await world.seed.controlPlaneReadinessService.getNodeReadiness(nodeId);
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+    },
+    async killJoiner(nodeId) {
+      nextEvaluationInstant(world);
+      world.stopNode(nodeId, {expireLease: true, wipeDataDir: false});
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+      await world.seed.controlPlaneReadinessService.getNodeReadiness(nodeId);
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+    },
+    async restartJoiner(nodeId, {wipeDataDir = false} = {}) {
+      nextEvaluationInstant(world);
+      world.stopNode(nodeId, {expireLease: true, wipeDataDir});
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+      watchBounds(
+        world.registerJoiner(nodeId, {durableStateDetected: !wipeDataDir}));
+      joiners.set(nodeId, mountJoinReadySignal(world, nodeId));
+      driver.startReadySignal(nodeId);
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+      await world.seed.controlPlaneReadinessService.getNodeReadiness(nodeId);
+      await settleWorld(world);
+      nextEvaluationInstant(world);
+    },
+    async restartSeed() {
+      nextEvaluationInstant(world);
+      world.restartSeed();
+      attachSeedInstrumentation();
+      await settleWorld(world);
+      for (const rebalancer of world.seedRebalancers.values()) {
+        rebalancer.setLeader(true);
+      }
+      for (const nodeId of world.upNodeIds) {
+        nextEvaluationInstant(world);
+        await world.seed.controlPlaneReadinessService.getNodeReadiness(nodeId);
+      }
       await settleWorld(world);
       nextEvaluationInstant(world);
     },
@@ -372,7 +418,7 @@ function createRoundDriver(world) {
       world.setLink(SEED_NODE_ID, nodeId, up);
       await settleWorld(world);
       nextEvaluationInstant(world);
-      await seedReadiness.getNodeReadiness(nodeId);
+      await world.seed.controlPlaneReadinessService.getNodeReadiness(nodeId);
       await settleWorld(world);
       nextEvaluationInstant(world);
     },
@@ -381,18 +427,21 @@ function createRoundDriver(world) {
     async seedFanOutDegrades() {
       world.setJoinerGroupPending(SEED_NODE_ID, true);
       await settleWorld(world);
-      await seedReadiness.getNodeReadiness(SEED_NODE_ID);
+      await world.seed.controlPlaneReadinessService
+        .getNodeReadiness(SEED_NODE_ID);
       await settleWorld(world);
     },
     async seedFanOutRecovers() {
       world.setJoinerGroupPending(SEED_NODE_ID, false);
       await settleWorld(world);
-      await seedReadiness.getNodeReadiness(SEED_NODE_ID);
+      await world.seed.controlPlaneReadinessService
+        .getNodeReadiness(SEED_NODE_ID);
       await settleWorld(world);
     },
     // One read of the seed's own startup authority.
     async readSeedAuthority() {
       nextEvaluationInstant(world);
+      const seedReadiness = world.seed.controlPlaneReadinessService;
       const authority = seedReadiness.getStartupAuthoritySnapshotSync(
         SEED_NODE_ID, world.clock.now());
       // On a tree with the formation-release handoff, the durable
@@ -404,17 +453,19 @@ function createRoundDriver(world) {
     },
     seedAuthority() {
       nextEvaluationInstant(world);
-      return seedReadiness.getStartupAuthoritySnapshotSync(
-        SEED_NODE_ID, world.clock.now());
+      return world.seed.controlPlaneReadinessService
+        .getStartupAuthoritySnapshotSync(SEED_NODE_ID, world.clock.now());
     },
     // One membership derivation on the seed: the heartbeat's scheduled
     // reconcile tick and the owner-membership driver's tick, each once.
     async membershipDerivation() {
       nextEvaluationInstant(world);
       countStamp(STAMP_CADENCES.MEMBERSHIP_TICK);
-      await seed.heartbeatService.runScheduledMembershipPublicationReconcileTick();
+      await world.seed.heartbeatService
+        .runScheduledMembershipPublicationReconcileTick();
       await settleWorld(world);
-      await seed.membershipPublicationService.driveOwnerMembershipReconcile();
+      await world.seed.membershipPublicationService
+        .driveOwnerMembershipReconcile();
       await settleWorld(world);
     },
     // One planning check of every priority partition's planner on the seed.
@@ -439,6 +490,7 @@ function createRoundDriver(world) {
       countStamp(STAMP_CADENCES.COORDINATOR_TICK);
       countStamp(STAMP_CADENCES.ORPHAN_RECONCILE);
       for (const hosts of world.hostsById.values()) {
+        if (!world.upNodeIds.has(hosts.nodeId)) continue;
         const coordinator = hosts.rebalanceCoordinator;
         coordinator.workflowOwner.lastOrphanedOperationReconcileAtMs = 0;
         await coordinator.checkTimeouts();
@@ -458,6 +510,7 @@ function createRoundDriver(world) {
       nextEvaluationInstant(world);
       countStamp(STAMP_CADENCES.BARRIER_POLL, 0);
       for (const joiner of joiners.values()) {
+        if (!world.upNodeIds.has(joiner.nodeId)) continue;
         countStamp(STAMP_CADENCES.BARRIER_POLL, joiner.stepBarrierPoll());
         await settleWorld(world);
       }

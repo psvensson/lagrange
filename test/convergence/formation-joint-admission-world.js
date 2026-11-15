@@ -522,6 +522,20 @@ function createReplicaRuntime(cache, now, reportExecutorOutcome) {
     handled,
     // The replicas whose removal committed: they left their group.
     retiredReplicaIds,
+    wipeNode(nodeId) {
+      for (const [replicaId, learner] of [...learners]) {
+        if (learner.nodeId === nodeId) learners.delete(replicaId);
+      }
+      for (const [replicaId, removal] of [...removals]) {
+        if (removal.nodeId === nodeId) removals.delete(replicaId);
+      }
+      for (const [partitionId, replicaId] of [...transfers]) {
+        const row = cache.get(TABLES.SERVICES, replicaId);
+        if (!row || row[COLUMN.NODE_ID] === nodeId) {
+          transfers.delete(partitionId);
+        }
+      }
+    },
     answer(nodeId, payload) {
       const type = payload?.[ReplicaOperationField.TYPE];
       if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
@@ -824,7 +838,7 @@ function createFormationWorld() {
     [INITIAL_PARTITION_IDS[tableId],
       createPriorityPartitionRebalancer(seed, tableId)]));
 
-  return {
+  const world = {
     cache,
     clock,
     time,
@@ -856,19 +870,128 @@ function createFormationWorld() {
         publicationModeByNodeId.delete(nodeId);
       }
     },
+    reassignStoppedNodeLeadership(nodeId) {
+      if (nodeId === SEED_NODE_ID) return;
+      for (const partition of cache.getAll(TABLES.PARTITIONS)) {
+        if (partition[COLUMN.LEADER_NODE_ID] !== nodeId) continue;
+        const partitionId = partition[COLUMN.PARTITION_ID];
+        const voters = cache.filter(TABLES.SERVICES, (row) =>
+          row[COLUMN.PARTITION_ID] === partitionId &&
+          upNodeIds.has(row[COLUMN.NODE_ID]) &&
+          row[COLUMN.STATUS] === ReplicaStatus.ACTIVE &&
+          row[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEARNER);
+        const nextLeader = voters.find((row) =>
+          row[COLUMN.NODE_ID] === SEED_NODE_ID) || voters[0];
+        if (!nextLeader) continue;
+        for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
+          candidate[COLUMN.PARTITION_ID] === partitionId &&
+          candidate[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER)) {
+          cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE,
+            {...row, [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER});
+        }
+        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE,
+          {...nextLeader, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER});
+        cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPDATE, {
+          ...partition,
+          [COLUMN.LEADER_NODE_ID]: nextLeader[COLUMN.NODE_ID],
+        });
+      }
+    },
+    stopNode(nodeId, {expireLease = false, wipeDataDir = false} = {}) {
+      const existingHosts = hostsById.get(nodeId);
+      if (existingHosts) {
+        existingHosts.heartbeatService.stop();
+        existingHosts.membershipPublicationService.stopOwnerMembershipDriver();
+        existingHosts.rebalanceCoordinator.isShuttingDown = true;
+        existingHosts.controlPlaneReadinessService.shutdown();
+        existingHosts.stopIntervals();
+      }
+      upNodeIds.delete(nodeId);
+      if (wipeDataDir) {
+        replicaRuntime.wipeNode(nodeId);
+        for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
+          candidate[COLUMN.NODE_ID] === nodeId)) {
+          cache.applySystemTableChange(
+            TABLES.SERVICES, CDC_OPERATION.DELETE, row);
+        }
+        for (const op of cache.filter(TABLES.REPLICA_OPERATIONS, (candidate) =>
+          candidate[COLUMN.TARGET_NODE_ID] === nodeId)) {
+          cache.applySystemTableChange(
+            TABLES.REPLICA_OPERATIONS, CDC_OPERATION.DELETE, op);
+        }
+      }
+      this.reassignStoppedNodeLeadership(nodeId);
+      if (expireLease) {
+        const existingNode = cache.get(TABLES.NODES, nodeId);
+        if (existingNode) {
+          const baseHb = Number(
+            existingNode[COLUMN.LAST_HEARTBEAT] || time.now());
+          while (time.now() < baseHb + 3) {
+            clock.advance(1);
+          }
+          insertStoredRow(cache, TABLES.NODES, {
+            ...existingNode,
+            [COLUMN.UPDATED_AT_HLC]: null,
+            [COLUMN.LAST_HEARTBEAT]: baseHb + 1,
+            [COLUMN.READY_LEASE_EXPIRES_AT]: baseHb + 2,
+          });
+        }
+      }
+    },
+    restartSeed() {
+      for (const rebalancer of world.seedRebalancers.values()) {
+        rebalancer.shutdown();
+      }
+      world.stopNode(SEED_NODE_ID);
+      const existingSeed = cache.get(TABLES.NODES, SEED_NODE_ID);
+      const nextHb = Math.max(
+        time.now(), Number(existingSeed?.[COLUMN.LAST_HEARTBEAT] || 0) + 1);
+      while (time.now() < nextHb) {
+        clock.advance(1);
+      }
+      const nextSeed = startNode(SEED_NODE_ID, buildClusterIncarnationFence({
+        durableStateDetected: true,
+        localIdentityMatched: true,
+        peerProofRequired: false,
+      }));
+      insertStoredRow(cache, TABLES.NODES, createNodeEntry(SEED_NODE_ID, {
+        [COLUMN.NODE_ADDRESS]: nodeAddressOf(SEED_NODE_ID),
+        [COLUMN.LAST_HEARTBEAT]: nextHb,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: nextHb + READY_LEASE_MS,
+        [COLUMN.CREATED_AT]: nextHb,
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+        [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
+        [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
+        [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nextHb,
+      }, nextHb));
+      world.seed = nextSeed;
+      world.seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
+        [INITIAL_PARTITION_IDS[tableId],
+          createPriorityPartitionRebalancer(nextSeed, tableId)]));
+      return nextSeed;
+    },
     /**
      * A joiner's process starts and the seed registers it: its node row as
      * the registration owner builds it (JOINING, CONNECTED, no READY lease).
      * @param {string} nodeId
+     * @param {object} [options]
      * @return {object} the joiner's hosts
      */
-    registerJoiner(nodeId) {
-      const hosts = startNode(nodeId, buildClusterIncarnationFence({
-        durableStateDetected: true,
-        localIdentityMatched: true,
-        peerProofRequired: true,
-        peerAddresses: [nodeAddressOf(SEED_NODE_ID)],
-      }));
+    registerJoiner(nodeId, {durableStateDetected = true} = {}) {
+      const existingNode = cache.get(TABLES.NODES, nodeId);
+      const minNow = Number(existingNode?.[COLUMN.LAST_HEARTBEAT] || 0) + 1;
+      while (time.now() < minNow) {
+        clock.advance(1);
+      }
+      const hosts = startNode(nodeId, buildClusterIncarnationFence(
+        durableStateDetected ? {
+          durableStateDetected: true,
+          localIdentityMatched: true,
+          peerProofRequired: true,
+          peerAddresses: [nodeAddressOf(SEED_NODE_ID)],
+        } : {
+          durableStateDetected: false,
+        }));
       insertStoredRow(cache, TABLES.NODES, {
         ...buildNodeRegistrationRow({
           nodeId,
@@ -885,6 +1008,7 @@ function createFormationWorld() {
       return hosts;
     },
   };
+  return world;
 }
 
 export {

@@ -489,6 +489,7 @@ class MembershipPublicationCoordinatorReconcile extends
       const reconcileStartedAtMs = Date.now();
       await Promise.race([
         this.reconcileActiveGateMembershipPublication(handoffContract, {
+          ...planningSnapshot,
           reconcileAuthoritativeMembershipPublication: true,
         }).then(() => {
           timedOut = false;
