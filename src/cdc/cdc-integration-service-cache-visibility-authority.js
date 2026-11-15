@@ -2,6 +2,7 @@ import {
   areAuthoritativeSystemTableCacheRowsAligned,
   areAuthoritativeSystemTableCacheRowsEqual,
   hasDifferentReplicaBirthIncarnation,
+  normalizeSourceLogIndex,
 } from '../cache/system-table-cache-authoritative-reconciliation.js';
 import {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
@@ -127,9 +128,7 @@ function resolveLastCdcSourceLogIndex(service, tableName, key) {
   const observation =
     service.cacheMutationTarget?.getLastCdcObservation?.(tableName, key) ??
     null;
-  return Number.isSafeInteger(observation?.sourceLogIndex) ?
-    observation.sourceLogIndex :
-    null;
+  return normalizeSourceLogIndex(observation?.sourceLogIndex);
 }
 
 function hasValidMutationSnapshotPair(beforeSnapshot, afterSnapshot) {
@@ -161,15 +160,14 @@ function resolveSourcePositionSupersessionFlags(
   readAppliedIndex,
   lastCdcSourceLogIndex,
 ) {
-  if (
-    !Number.isSafeInteger(readAppliedIndex) ||
-    !Number.isSafeInteger(lastCdcSourceLogIndex)
-  ) {
+  const normalizedReadIndex = normalizeSourceLogIndex(readAppliedIndex);
+  const normalizedCdcIndex = normalizeSourceLogIndex(lastCdcSourceLogIndex);
+  if (normalizedReadIndex === null || normalizedCdcIndex === null) {
     return {readSupersedesCdc: false, cdcSupersedesRead: false};
   }
   return {
-    readSupersedesCdc: readAppliedIndex > lastCdcSourceLogIndex,
-    cdcSupersedesRead: lastCdcSourceLogIndex > readAppliedIndex,
+    readSupersedesCdc: normalizedReadIndex > normalizedCdcIndex,
+    cdcSupersedesRead: normalizedCdcIndex > normalizedReadIndex,
   };
 }
 
@@ -182,17 +180,19 @@ function hasExplicitIncarnationSupersessionOption(options) {
 
 function buildSourcePositionOptions(lastCdcSourceLogIndex, readAppliedIndex) {
   const positionOptions = {};
-  if (Number.isSafeInteger(lastCdcSourceLogIndex)) {
-    positionOptions.cachedSourceLogIndex = lastCdcSourceLogIndex;
+  const normalizedCdcIndex = normalizeSourceLogIndex(lastCdcSourceLogIndex);
+  const normalizedReadIndex = normalizeSourceLogIndex(readAppliedIndex);
+  if (normalizedCdcIndex !== null) {
+    positionOptions.cachedSourceLogIndex = normalizedCdcIndex;
   }
-  if (Number.isSafeInteger(readAppliedIndex)) {
-    positionOptions.authoritativeSourceLogIndex = readAppliedIndex;
+  if (normalizedReadIndex !== null) {
+    positionOptions.authoritativeSourceLogIndex = normalizedReadIndex;
   }
   return positionOptions;
 }
 
 function resolveReadWitnessAppliedIndex(options) {
-  return Number(options?.readAuthorityWitness?.appliedIndex);
+  return normalizeSourceLogIndex(options?.readAuthorityWitness?.appliedIndex);
 }
 
 function resolvePointRepairSupersessionFlags({

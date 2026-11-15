@@ -361,17 +361,8 @@ function buildAuthoritativeSystemTableCacheReplacement(
   thirdArg,
   fourthArg,
 ) {
-  const {
-    tableName,
-    existing,
-    authoritative,
-    options,
-  } = resolveReplacementArguments(
-    firstArg,
-    secondArg,
-    thirdArg,
-    fourthArg,
-  );
+  const {tableName, existing, authoritative, options} =
+    resolveReplacementArguments(firstArg, secondArg, thirdArg, fourthArg);
   const incarnationOverride = resolveServiceIncarnationReplacementOverride(
     tableName,
     existing,
@@ -493,6 +484,23 @@ function resolveExplicitIncarnationSupersession(existing, options) {
   return null;
 }
 
+function normalizeSourceLogIndex(rawValue) {
+  if (typeof rawValue === 'number') {
+    return Number.isSafeInteger(rawValue) && rawValue >= 0 ?
+      rawValue :
+      null;
+  }
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!/^\d+$/u.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+  }
+  return null;
+}
+
 function resolveIncarnationSourcePosition(row, optionPosition) {
   const candidates = [
     optionPosition,
@@ -502,8 +510,9 @@ function resolveIncarnationSourcePosition(row, optionPosition) {
     row?.appliedIndex,
   ];
   for (const candidate of candidates) {
-    if (Number.isSafeInteger(candidate) && candidate >= 0) {
-      return candidate;
+    const normalized = normalizeSourceLogIndex(candidate);
+    if (normalized !== null) {
+      return normalized;
     }
   }
   return null;
@@ -784,5 +793,6 @@ export {
   buildAuthoritativeSystemTableCacheReplacement,
   hasCompleteAuthoritativeSystemTableCacheAlignmentRow,
   hasDifferentReplicaBirthIncarnation,
+  normalizeSourceLogIndex,
   omitSystemTableCacheLocalFields,
 };
