@@ -109,6 +109,7 @@ const REMOTE_ACTION = objectFreeze({
   TIDB_DURABILITY_CLEANUP: 'tidb-durability-cleanup',
 });
 const RESTART_GRACE_SECONDS = 1;
+const REMOTE_GATE_ACTION_TIMEOUT_MS = 15 * 60 * 1000;
 const BEFORE_MEASUREMENT = 'before-measurement';
 const DURABILITY_CASE_ID = 'durability';
 const MAX_READINESS_DEPTH = 8;
@@ -435,7 +436,8 @@ async function runRemoteNodeJson(sshRun, opts, host, script, payload) {
   const encoded = Buffer.from(jsonStringify(payload), 'utf8').toString('base64');
   const command = `cd ${shellWord(ownField(host, 'repoPath'))} && ${shellWord(nodeBinary)} ` +
     `--input-type=module -e ${shellWord(script)} ${shellWord(encoded)}`;
-  const stdout = stringTrim(toStringValue(await sshRun(ownField(host, 'ip'), opts, command)));
+  const stdout = stringTrim(toStringValue(await sshRun(
+    ownField(host, 'ip'), opts, command, REMOTE_GATE_ACTION_TIMEOUT_MS)));
   const lines = arrayFilter(stringSplit(stdout, '\n'), (line) => stringTrim(line) !== '');
   return jsonParse(lines[lines.length - 1]);
 }

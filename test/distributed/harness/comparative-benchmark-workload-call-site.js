@@ -333,9 +333,12 @@ async function executedRecord(runWorkload, request, run) {
 }
 
 // Placement after the window, from the deployer's own observation; an unopened
-// run (no window, no ready deployment) observes none.
+// or already-failed run (no window, or setup/workload failed) observes none.
 async function placementAfterWindow(deployment, unopened, outcome) {
-  if (unopened || !deployment.operations?.observePlacement) return null;
+  if (unopened || outcome.productFailure || outcome.failure ||
+      !deployment.operations?.observePlacement) {
+    return null;
+  }
   try {
     return await deployment.operations.observePlacement();
   } catch (error) {
