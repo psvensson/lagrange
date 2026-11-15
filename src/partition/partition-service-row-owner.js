@@ -23,8 +23,11 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {isCleanupTombstoneRow} from
   '../node/replica-cleanup-tombstone-owner.js';
-import {isExactServiceRowBirth, mintServiceRowCreatedAt} from
-  '../node/service-row-incarnation.js';
+import {
+  advanceServiceRowCreatedAtFloor,
+  isExactServiceRowBirth,
+  mintServiceRowCreatedAt,
+} from '../node/service-row-incarnation.js';
 
 
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
@@ -124,8 +127,12 @@ async function observePartitionRegistration(systemTableWriter, replicaId) {
         workClass: CRITICAL_WORK_CLASS,
       },
     );
-    return observation?.success === true && observation.rows?.length === 1 ?
-      observation.rows[0] : null;
+    const row =
+      observation?.success === true && observation.rows?.length === 1 ?
+        observation.rows[0] :
+        null;
+    advanceServiceRowCreatedAtFloor(row?.[COLUMN.CREATED_AT]);
+    return row;
   } catch (_error) {
     return null;
   }
@@ -199,8 +206,9 @@ class PartitionServiceRowOwner {
       replicaId,
     );
 
-    const createdAt = options.originalRegistration?.birth.created_at ??
-      mintServiceRowCreatedAt(timestamp);
+    const originalCreatedAt = options.originalRegistration?.birth.created_at;
+    advanceServiceRowCreatedAtFloor(originalCreatedAt);
+    const createdAt = originalCreatedAt ?? mintServiceRowCreatedAt(timestamp);
     return {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,

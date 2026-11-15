@@ -30,6 +30,46 @@ function resetSharedRowReadStats() {
   sharedRowReadEngagements = 0;
 }
 
+function resolveCachedRowOriginHlc(row) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  return typeof row[COLUMN.UPDATED_AT_HLC] === 'string' ?
+    row[COLUMN.UPDATED_AT_HLC] :
+    row.updatedAtHlc ?? null;
+}
+
+function isMatchingCdcObservation(observation, row) {
+  if (!observation || !row) {
+    return false;
+  }
+  const rowOriginHlc = resolveCachedRowOriginHlc(row);
+  if (
+    Number.isFinite(observation.observedAtMs) &&
+    typeof rowOriginHlc === 'string' &&
+    rowOriginHlc === observation.originHlc
+  ) {
+    return true;
+  }
+  return (
+    Number.isSafeInteger(observation.sourceLogIndex) &&
+    (observation.originHlc === null || rowOriginHlc === observation.originHlc)
+  );
+}
+
+function formatValidCdcObservation(observation, row) {
+  if (!isMatchingCdcObservation(observation, row)) {
+    return null;
+  }
+  return {
+    observedAtMs: observation.observedAtMs,
+    originHlc: observation.originHlc,
+    ...(Number.isSafeInteger(observation.sourceLogIndex) ?
+      {sourceLogIndex: observation.sourceLogIndex} :
+      {}),
+  };
+}
+
 class SystemTableCacheObservationMethods {
   /**
      * Record the latest applied schema version for one system table.
@@ -91,21 +131,7 @@ class SystemTableCacheObservationMethods {
     const observation =
       this.lastCdcObservationByTableName.get(tableName)?.get(key);
     const row = this.tables.get(tableName)?.get(key);
-    const rowOriginHlc =
-      typeof row?.[COLUMN.UPDATED_AT_HLC] === 'string' ?
-        row[COLUMN.UPDATED_AT_HLC] :
-        row?.updatedAtHlc;
-    if (
-      !observation ||
-      typeof rowOriginHlc !== 'string' ||
-      rowOriginHlc !== observation.originHlc
-    ) {
-      return null;
-    }
-    return {
-      observedAtMs: observation.observedAtMs,
-      originHlc: observation.originHlc,
-    };
+    return formatValidCdcObservation(observation, row);
   }
 
   /** @private */

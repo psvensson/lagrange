@@ -14,6 +14,7 @@ import {
   applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
+  buildAuthoritativePointRepairOptions,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
   resolveCacheVisibilityRepairReadAuthority,
@@ -38,6 +39,22 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
+
+function resolveAuthoritativeRefreshMutationMode(tableName) {
+  return tableName === SYSTEM_TABLE_NAME.SERVICES ?
+    SYSTEM_TABLE_CACHE_MUTATION_MODE
+      .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION :
+    SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION;
+}
+
+function extractFirstCanonicalQueryRow(tableName, queryResult) {
+  if (!authoritativeReadRowsAreValid(queryResult)) {
+    return null;
+  }
+  return queryResult.rows.length > 0 ?
+    canonicalizeSystemTableRow(tableName, queryResult.rows[0]) :
+    null;
+}
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
  * the deterministic cache-wait protocol, authoritative cache-visibility-hole
@@ -140,22 +157,21 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return false;
     }
     const primaryKeyField = this.getPrimaryKeyField(tableName);
+    const beforeReadSnapshot = captureCacheRecordBeforeAbsenceRepair(
+      this,
+      tableName,
+      key,
+      false,
+    );
     const queryResult = await this.executeAuthoritativeSystemTableRead(
       tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
       [key],
       {readAuthority: CACHE_REPAIR_READ_AUTHORITY},
     );
-    if (!queryResult?.success) {
-      return false;
-    }
-    const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
-    if (rows.length === 0) {
-      return false;
-    }
-    const authoritativeRow = canonicalizeSystemTableRow(
+    const authoritativeRow = extractFirstCanonicalQueryRow(
       tableName,
-      rows[0],
+      queryResult,
     );
     if (!hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
       tableName,
@@ -163,18 +179,27 @@ class CDCIntegrationServiceCacheVisibilityWait {
     )) {
       return false;
     }
-    const mutationMode = tableName === SYSTEM_TABLE_NAME.SERVICES ?
-      SYSTEM_TABLE_CACHE_MUTATION_MODE
-        .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION :
-      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION;
-    const repairApplied = this.applyAuthoritativeCacheRepair(
+    const repairOptions = buildAuthoritativePointRepairOptions(
+      this,
       tableName,
-      CDC_OPERATION.UPSERT,
-      authoritativeRow,
       key,
-      {mutationMode},
+      {
+        mutationMode: resolveAuthoritativeRefreshMutationMode(tableName),
+        beforeReadSnapshot,
+        readAuthorityWitness: queryResult.readAuthorityWitness || null,
+        authoritativeObservedAtMs:
+          queryResult.readAuthorityWitness?.observedAtMs,
+      },
     );
-    if (repairApplied !== true) {
+    if (
+      this.applyAuthoritativeCacheRepair(
+        tableName,
+        CDC_OPERATION.UPSERT,
+        authoritativeRow,
+        key,
+        repairOptions,
+      ) !== true
+    ) {
       return false;
     }
     const cachedRow = this.getCacheRecord(tableName, key);
@@ -182,6 +207,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       tableName,
       cachedRow,
       authoritativeRow,
+      repairOptions,
     ) && doesCacheRecordMatchExpectedFields(
       cachedRow,
       options?.expectedFields || null,

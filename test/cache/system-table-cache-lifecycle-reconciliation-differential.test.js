@@ -17,6 +17,7 @@
 import {readFileSync} from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
 } from '../../src/cache/cache-constants.js';
@@ -135,30 +136,74 @@ function oracleCompleteOrdinaryServiceRow(row) {
     isFiniteVersion(row[ROW_VERSION_COLUMN]);
 }
 
-function oracleNewerIncarnation(cached, authority) {
-  return oracleCompleteOrdinaryServiceRow(cached) &&
-    oracleCompleteOrdinaryServiceRow(authority) &&
-    isFiniteVersion(cached.created_at) &&
-    isFiniteVersion(authority.created_at) &&
-    Number(cached.created_at) > Number(authority.created_at);
-}
-
-function oracleOlderIncarnation(cached, authority) {
-  if (!oracleCompleteOrdinaryServiceRow(authority)) {
-    return false;
-  }
-  if (
-    isFiniteVersion(cached.created_at) &&
-    isFiniteVersion(authority.created_at) &&
-    Number(cached.created_at) !== Number(authority.created_at)
-  ) {
-    return Number(cached.created_at) < Number(authority.created_at);
-  }
+function oracleDifferentBirthIncarnation(cached, authority) {
   const tokenConflict = isNonEmptyString(cached.create_attempt_token) &&
     isNonEmptyString(authority.create_attempt_token) &&
     cached.create_attempt_token !== authority.create_attempt_token;
-  return tokenConflict &&
-    !isCachedRowVersionBlocking(cached, authority) &&
+  const createdAtConflict = isFiniteVersion(cached.created_at) &&
+    isFiniteVersion(authority.created_at) &&
+    Number(cached.created_at) !== Number(authority.created_at);
+  return tokenConflict || createdAtConflict;
+}
+
+function oracleParseHlc(row) {
+  for (const column of ['updated_at_hlc', 'updatedAtHlc']) {
+    if (row?.[column] === undefined || row?.[column] === null) {
+      continue;
+    }
+    try {
+      return HLCTimestamp.fromString(String(row[column]));
+    } catch {
+      // Try next HLC column candidate.
+    }
+  }
+  return null;
+}
+
+function oracleHlcIncarnationOrder(cached, authority) {
+  const cachedHlc = oracleParseHlc(cached);
+  const authorityHlc = oracleParseHlc(authority);
+  if (!cachedHlc || !authorityHlc) {
+    return 0;
+  }
+  return cachedHlc.compare(authorityHlc);
+}
+
+function oracleNewerIncarnation(cached, authority) {
+  if (
+    !oracleCompleteOrdinaryServiceRow(cached) ||
+    !oracleCompleteOrdinaryServiceRow(authority) ||
+    !oracleDifferentBirthIncarnation(cached, authority)
+  ) {
+    return false;
+  }
+  const hlcOrder = oracleHlcIncarnationOrder(cached, authority);
+  if (hlcOrder !== 0) {
+    return hlcOrder > 0;
+  }
+  const authorityLifecycle = oracleLifecycleVersion(authority);
+  return authorityLifecycle !== null &&
+    isFiniteVersion(cached[authorityLifecycle.column]) &&
+    Number(cached[authorityLifecycle.column]) > authorityLifecycle.value &&
+    isFiniteVersion(cached[ROW_VERSION_COLUMN]) &&
+    isFiniteVersion(authority[ROW_VERSION_COLUMN]) &&
+    Number(cached[ROW_VERSION_COLUMN]) > Number(authority[ROW_VERSION_COLUMN]);
+}
+
+function oracleOlderIncarnation(cached, authority) {
+  if (
+    !cached ||
+    typeof cached !== 'object' ||
+    !oracleCompleteOrdinaryServiceRow(authority) ||
+    !oracleDifferentBirthIncarnation(cached, authority)
+  ) {
+    return false;
+  }
+  const hlcOrder = oracleHlcIncarnationOrder(cached, authority);
+  if (hlcOrder !== 0) {
+    return hlcOrder < 0;
+  }
+  return !isCachedRowVersionBlocking(cached, authority) &&
     !isCachedLifecycleBlocking(cached, authority);
 }
 
@@ -251,7 +296,8 @@ function evaluateIncarnationEquivalence(
   report,
 ) {
   if (newerIncarnation) {
-    if (serializeRow(output) !== serializeRow(cell.cached)) {
+    const expectedCached = JSON.parse(JSON.stringify(cell.cached));
+    if (serializeRow(output) !== serializeRow(expectedCached)) {
       report.q1NotAuthoritative.push(`${label}:newerIncarnation`);
     }
     return oracleBaseCrossIncarnationOutput(cell.cached, cell.authority);

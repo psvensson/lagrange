@@ -5,6 +5,23 @@ const SERVICE_ROW_INCARNATION_EXHAUSTED =
   'Service row incarnation space exhausted';
 
 /**
+ * Advance the process-local SERVICES row incarnation floor from a durable
+ * observation so subsequent rebirths in this owner process always mint a
+ * strictly greater `created_at` even if the local clock regressed.
+ * @param {number} observedTimestamp Durable `created_at` value.
+ * @return {number} Current high-water floor.
+ */
+function advanceServiceRowCreatedAtFloor(observedTimestamp) {
+  if (
+    Number.isSafeInteger(observedTimestamp) &&
+    observedTimestamp > serviceRowCreatedAtHighWater
+  ) {
+    serviceRowCreatedAtHighWater = observedTimestamp;
+  }
+  return serviceRowCreatedAtHighWater;
+}
+
+/**
  * Mint one process-lifetime-unique durable SERVICES row incarnation
  * (created_at) for a partition or message-group replica birth.
  *
@@ -63,4 +80,8 @@ function isExactServiceRowBirth(observed, expected) {
       observed?.[field] === expected?.[field]);
 }
 
-export {mintServiceRowCreatedAt, isExactServiceRowBirth};
+export {
+  advanceServiceRowCreatedAtFloor,
+  isExactServiceRowBirth,
+  mintServiceRowCreatedAt,
+};

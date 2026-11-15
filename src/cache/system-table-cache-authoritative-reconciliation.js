@@ -11,6 +11,7 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
+import {tryParseHLCTimestamp} from './system-table-cache-row-merge.js';
 import {
   SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
@@ -142,6 +143,7 @@ function areAuthoritativeSystemTableCacheRowsAligned(
   tableName,
   cachedRow,
   authoritativeRow,
+  options = {},
 ) {
   if (
     tableName !== TABLES.SERVICES ||
@@ -171,10 +173,10 @@ function areAuthoritativeSystemTableCacheRowsAligned(
       cachedRow.cleanup_token === authoritativeRow.cleanup_token &&
       Number(cachedRow.updated_at) === Number(authoritativeRow.updated_at);
   }
-  if (isCachedServiceIncarnationNewer(cachedRow, authoritativeRow)) {
+  if (isCachedServiceIncarnationNewer(cachedRow, authoritativeRow, options)) {
     return true;
   }
-  if (isCachedServiceIncarnationOlder(cachedRow, authoritativeRow)) {
+  if (isCachedServiceIncarnationOlder(cachedRow, authoritativeRow, options)) {
     return false;
   }
   const identityAligned =
@@ -266,12 +268,18 @@ function shouldPreserveActiveNonLeaderVoterRaftRole(
     !(Number(authoritative.updated_at) > Number(existing.updated_at));
 }
 
-function resolveReplacementArguments(firstArg, secondArg, thirdArg) {
+function resolveReplacementArguments(
+  firstArg,
+  secondArg,
+  thirdArg,
+  fourthArg = {},
+) {
   if (typeof firstArg === 'string') {
     return {
       tableName: firstArg,
       existing: secondArg,
       authoritative: thirdArg,
+      options: fourthArg || {},
     };
   }
   const existing = firstArg;
@@ -281,7 +289,7 @@ function resolveReplacementArguments(firstArg, secondArg, thirdArg) {
       typeof existing?.service_id === 'string' ?
       TABLES.SERVICES :
       null;
-  return {tableName, existing, authoritative};
+  return {tableName, existing, authoritative, options: thirdArg || {}};
 }
 
 function applyPreservedNonLeaderVoterRaftRole(
@@ -322,16 +330,57 @@ function shouldPreserveLocalFieldAcrossAuthoritativeReplacement(
   );
 }
 
+function resolveServiceIncarnationReplacementOverride(
+  tableName,
+  existing,
+  authoritative,
+  options,
+) {
+  if (
+    tableName !== TABLES.SERVICES ||
+    !options ||
+    Object.keys(options).length === 0
+  ) {
+    return null;
+  }
+  if (isCachedServiceIncarnationNewer(existing, authoritative, options)) {
+    return fastJsonClone(existing);
+  }
+  if (
+    options.authoritativeIncarnationSupersedes === true &&
+    isCachedServiceIncarnationOlder(existing, authoritative, options)
+  ) {
+    return buildNewerIncarnationServiceReplacement(existing, authoritative);
+  }
+  return null;
+}
+
 function buildAuthoritativeSystemTableCacheReplacement(
   firstArg,
   secondArg,
   thirdArg,
+  fourthArg,
 ) {
-  const {tableName, existing, authoritative} = resolveReplacementArguments(
+  const {
+    tableName,
+    existing,
+    authoritative,
+    options,
+  } = resolveReplacementArguments(
     firstArg,
     secondArg,
     thirdArg,
+    fourthArg,
   );
+  const incarnationOverride = resolveServiceIncarnationReplacementOverride(
+    tableName,
+    existing,
+    authoritative,
+    options,
+  );
+  if (incarnationOverride !== null) {
+    return incarnationOverride;
+  }
   const replacement = fastJsonClone(authoritative);
   for (const fieldName of SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES) {
     if (
@@ -404,6 +453,17 @@ function hasConflictingCreateAttemptToken(existing, authoritative) {
   );
 }
 
+function hasDifferentCreatedAtIncarnation(existing, authoritative) {
+  return isFiniteSystemTableCacheNumber(existing?.created_at) &&
+    isFiniteSystemTableCacheNumber(authoritative?.created_at) &&
+    Number(existing.created_at) !== Number(authoritative.created_at);
+}
+
+function hasDifferentReplicaBirthIncarnation(existing, authoritative) {
+  return hasDifferentCreatedAtIncarnation(existing, authoritative) ||
+    hasConflictingCreateAttemptToken(existing, authoritative);
+}
+
 function hasCompleteOrdinaryServiceIncarnationRow(row) {
   return hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
     TABLES.SERVICES,
@@ -411,39 +471,186 @@ function hasCompleteOrdinaryServiceIncarnationRow(row) {
   ) && !isPartitionCleanupServiceRow(row);
 }
 
-function isCachedServiceIncarnationNewer(existing, authoritative) {
-  if (
-    !hasCompleteOrdinaryServiceIncarnationRow(existing) ||
-    !hasCompleteOrdinaryServiceIncarnationRow(authoritative)
-  ) {
-    return false;
-  }
-  return isFiniteSystemTableCacheNumber(existing?.created_at) &&
-    isFiniteSystemTableCacheNumber(authoritative?.created_at) &&
-    Number(existing.created_at) > Number(authoritative.created_at);
+const INCARNATION_SUPERSESSION = Object.freeze({
+  NONE: 'none',
+  CACHED: 'cached',
+  AUTHORITATIVE: 'authoritative',
+});
+
+function resolveCachedSupersessionIfComplete(existing) {
+  return hasCompleteOrdinaryServiceIncarnationRow(existing) ?
+    INCARNATION_SUPERSESSION.CACHED :
+    INCARNATION_SUPERSESSION.NONE;
 }
 
-function isCachedServiceIncarnationOlder(existing, authoritative) {
+function resolveExplicitIncarnationSupersession(existing, options) {
+  if (options?.cachedIncarnationSupersedes === true) {
+    return resolveCachedSupersessionIfComplete(existing);
+  }
+  if (options?.authoritativeIncarnationSupersedes === true) {
+    return INCARNATION_SUPERSESSION.AUTHORITATIVE;
+  }
+  return null;
+}
+
+function resolveIncarnationSourcePosition(row, optionPosition) {
+  const candidates = [
+    optionPosition,
+    row?.source_log_index,
+    row?.sourceLogIndex,
+    row?.applied_index,
+    row?.appliedIndex,
+  ];
+  for (const candidate of candidates) {
+    if (Number.isSafeInteger(candidate) && candidate >= 0) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveSourcePositionIncarnationSupersession(
+  existing,
+  authoritative,
+  options,
+) {
+  const cachedPosition = resolveIncarnationSourcePosition(
+    existing,
+    options?.cachedSourceLogIndex,
+  );
+  const authoritativePosition = resolveIncarnationSourcePosition(
+    authoritative,
+    options?.authoritativeSourceLogIndex,
+  );
   if (
-    !existing ||
-    typeof existing !== 'object' ||
-    !hasCompleteOrdinaryServiceIncarnationRow(authoritative)
+    cachedPosition === null ||
+    authoritativePosition === null ||
+    cachedPosition === authoritativePosition
   ) {
-    return false;
+    return null;
+  }
+  return cachedPosition > authoritativePosition ?
+    resolveCachedSupersessionIfComplete(existing) :
+    INCARNATION_SUPERSESSION.AUTHORITATIVE;
+}
+
+function resolveIncarnationOriginHlc(row, optionHlc) {
+  const candidates = [
+    optionHlc,
+    row?.updated_at_hlc,
+    row?.updatedAtHlc,
+    row?.origin_hlc,
+    row?.originHlc,
+  ];
+  for (const candidate of candidates) {
+    const parsed = tryParseHLCTimestamp(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function resolveOriginHlcIncarnationSupersession(
+  existing,
+  authoritative,
+  options,
+) {
+  const cachedHlc = resolveIncarnationOriginHlc(
+    existing,
+    options?.cachedOriginHlc,
+  );
+  const authoritativeHlc = resolveIncarnationOriginHlc(
+    authoritative,
+    options?.authoritativeOriginHlc ?? options?.originHlc,
+  );
+  if (!cachedHlc || !authoritativeHlc) {
+    return null;
+  }
+  const order = cachedHlc.compare(authoritativeHlc);
+  if (order === 0) {
+    return null;
+  }
+  return order > 0 ?
+    resolveCachedSupersessionIfComplete(existing) :
+    INCARNATION_SUPERSESSION.AUTHORITATIVE;
+}
+
+function isCachedServiceStrictVersionNewer(existing, authoritative) {
+  const authoritativeVersion = resolveServiceDurableVersion(authoritative);
+  return Boolean(authoritativeVersion) &&
+    isFiniteSystemTableCacheNumber(existing?.[authoritativeVersion.column]) &&
+    Number(existing[authoritativeVersion.column]) >
+      authoritativeVersion.value &&
+    isFiniteSystemTableCacheNumber(existing?.updated_at) &&
+    isFiniteSystemTableCacheNumber(authoritative?.updated_at) &&
+    Number(existing.updated_at) > Number(authoritative.updated_at);
+}
+
+function resolveUnfencedVersionIncarnationSupersession(
+  existing,
+  authoritative,
+) {
+  if (isCachedServiceStrictVersionNewer(existing, authoritative)) {
+    return resolveCachedSupersessionIfComplete(existing);
   }
   if (
-    isFiniteSystemTableCacheNumber(existing.created_at) &&
-    isFiniteSystemTableCacheNumber(authoritative.created_at) &&
-    Number(existing.created_at) !== Number(authoritative.created_at)
-  ) {
-    return Number(existing.created_at) < Number(authoritative.created_at);
-  }
-  return hasConflictingCreateAttemptToken(existing, authoritative) &&
     !isCachedServiceRowVersionNewerOrAuthorityUnversioned(
       existing,
       authoritative,
     ) &&
-    !isCachedServiceLifecycleVersionNewer(existing, authoritative);
+    !isCachedServiceLifecycleVersionNewer(existing, authoritative)
+  ) {
+    return INCARNATION_SUPERSESSION.AUTHORITATIVE;
+  }
+  return INCARNATION_SUPERSESSION.NONE;
+}
+
+function resolveServiceIncarnationSupersession(
+  existing,
+  authoritative,
+  options = {},
+) {
+  if (
+    !existing ||
+    typeof existing !== 'object' ||
+    !hasCompleteOrdinaryServiceIncarnationRow(authoritative) ||
+    !hasDifferentReplicaBirthIncarnation(existing, authoritative)
+  ) {
+    return INCARNATION_SUPERSESSION.NONE;
+  }
+  return resolveExplicitIncarnationSupersession(existing, options) ??
+    resolveSourcePositionIncarnationSupersession(
+      existing,
+      authoritative,
+      options,
+    ) ??
+    resolveOriginHlcIncarnationSupersession(existing, authoritative, options) ??
+    resolveUnfencedVersionIncarnationSupersession(existing, authoritative);
+}
+
+function isCachedServiceIncarnationNewer(
+  existing,
+  authoritative,
+  options = {},
+) {
+  return resolveServiceIncarnationSupersession(
+    existing,
+    authoritative,
+    options,
+  ) === INCARNATION_SUPERSESSION.CACHED;
+}
+
+function isCachedServiceIncarnationOlder(
+  existing,
+  authoritative,
+  options = {},
+) {
+  return resolveServiceIncarnationSupersession(
+    existing,
+    authoritative,
+    options,
+  ) === INCARNATION_SUPERSESSION.AUTHORITATIVE;
 }
 
 // A cached key holding null or undefined is absent evidence, not a newer
@@ -510,6 +717,7 @@ function buildSameIncarnationBaseReplacement(existing, authoritative) {
 function buildAuthoritativeServiceLifecycleCacheReplacement(
   existing,
   authoritative,
+  options = {},
 ) {
   if (isPartitionCleanupServiceRow(authoritative)) {
     return buildAuthoritativeSystemTableCacheReplacement(
@@ -518,10 +726,10 @@ function buildAuthoritativeServiceLifecycleCacheReplacement(
       authoritative,
     );
   }
-  if (isCachedServiceIncarnationNewer(existing, authoritative)) {
+  if (isCachedServiceIncarnationNewer(existing, authoritative, options)) {
     return fastJsonClone(existing);
   }
-  if (isCachedServiceIncarnationOlder(existing, authoritative)) {
+  if (isCachedServiceIncarnationOlder(existing, authoritative, options)) {
     return buildNewerIncarnationServiceReplacement(existing, authoritative);
   }
   const replacement = buildSameIncarnationBaseReplacement(
@@ -575,5 +783,6 @@ export {
   buildAuthoritativeServiceLifecycleCacheReplacement,
   buildAuthoritativeSystemTableCacheReplacement,
   hasCompleteAuthoritativeSystemTableCacheAlignmentRow,
+  hasDifferentReplicaBirthIncarnation,
   omitSystemTableCacheLocalFields,
 };

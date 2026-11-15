@@ -311,9 +311,20 @@ function updateSystemTableCacheCdcObservation(apply) {
     apply.observationTable.delete(apply.key);
     return;
   }
+  const sourceLogIndex = Number.isSafeInteger(apply.options?.sourceLogIndex) ?
+    apply.options.sourceLogIndex :
+    null;
   const observedAtMs = apply.options.cdcObservedAtMs;
   if (!Number.isFinite(observedAtMs) || observedAtMs < 0) {
-    apply.observationTable.delete(apply.key);
+    if (sourceLogIndex !== null && apply.incomingVersionAccepted) {
+      apply.observationTable.set(apply.key, {
+        observedAtMs: null,
+        originHlc: resolveCdcOriginHlc(apply.resultingRow),
+        sourceLogIndex,
+      });
+    } else if (sourceLogIndex === null) {
+      apply.observationTable.delete(apply.key);
+    }
     return;
   }
   if (!apply.incomingVersionAccepted) {
@@ -325,6 +336,15 @@ function updateSystemTableCacheCdcObservation(apply) {
     apply.observationTable.set(apply.key, {
       observedAtMs: Math.floor(observedAtMs),
       originHlc: incomingOriginHlc,
+      ...(sourceLogIndex !== null ? {sourceLogIndex} : {}),
+    });
+    return;
+  }
+  if (sourceLogIndex !== null) {
+    apply.observationTable.set(apply.key, {
+      observedAtMs: Math.floor(observedAtMs),
+      originHlc: null,
+      sourceLogIndex,
     });
     return;
   }
