@@ -98,6 +98,15 @@ function resolveHeartbeatBudgetFields(cachedRow) {
   return fields;
 }
 
+const STALENESS_JITTER_MARGIN_RATIO = 0.8;
+
+function resolveEffectiveStalenessThresholdMs(maxStalenessMs) {
+  if (!Number.isFinite(maxStalenessMs) || maxStalenessMs <= 0) {
+    return maxStalenessMs;
+  }
+  return Math.max(1, Math.floor(maxStalenessMs * STALENESS_JITTER_MARGIN_RATIO));
+}
+
 function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
   const reporterVisibilityState = options.nodeHeartbeatReporterVisibilityState;
   if (reporterVisibilityState === options.reporterVisibilityState.PENDING) {
@@ -119,18 +128,16 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
     });
   }
   const elapsedMs = now - options.lastNodeHeartbeatWriteAt;
-  if (
-    options.heartbeatConsecutiveFailures > 0 &&
-    options.isHeartbeatEscalatedPublicationMode(
-      options.lastHeartbeatPublicationDecision?.publicationMode,
-    )
-  ) {
+  if (options.heartbeatConsecutiveFailures > 0) {
     return Object.freeze({
       state: options.writeDecisionState.RECOVERY_FAILURE_RETRY,
       elapsedMs,
     });
   }
-  if (elapsedMs >= options.nodeMetadataMaxStalenessMs) {
+  const effectiveStalenessThresholdMs = resolveEffectiveStalenessThresholdMs(
+    options.nodeMetadataMaxStalenessMs,
+  );
+  if (elapsedMs >= effectiveStalenessThresholdMs) {
     return Object.freeze({
       state: options.writeDecisionState.MAX_STALENESS_REFRESH,
       elapsedMs,

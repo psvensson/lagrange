@@ -50,7 +50,7 @@ documentClass: generated
 - [operation-workflow-dispatch-epoch-gate.js](operation-workflow-dispatch-epoch-gate.js) - Dispatch-time membership epoch gate (audit finding 7). (importers: few)
 - [operation-workflow-dispatch-execution.js](operation-workflow-dispatch-execution.js) - Dispatch-time side of the ledger self-move interlock (operation-workflow-dispatch-ledger-self-move-gate.js): a... (importers: one)
 - [operation-workflow-dispatch-ledger-self-move-gate.js](operation-workflow-dispatch-ledger-self-move-gate.js) - Re-arm a parked PENDING self-move through the canonical dispatch retry lane. (importers: few)
-- [operation-workflow-dispatch-rearm-evidence.js](operation-workflow-dispatch-rearm-evidence.js) - No leading comment; first export: buildCoordinatorCreatedDispatchIngress. (importers: few)
+- [operation-workflow-dispatch-rearm-evidence.js](operation-workflow-dispatch-rearm-evidence.js) - No leading comment; first export: buildCoordinatorCreatedDispatchIngress. (importers: many)
 - [operation-workflow-dispatch-reservation-gate.js](operation-workflow-dispatch-reservation-gate.js) - Dispatch-time reservation gate (audit findings 3+11): a storage-increasing operation must never dispatch while its... (importers: few)
 - [operation-workflow-dispatch-response-reconcile.js](operation-workflow-dispatch-response-reconcile.js) - The bounded critical dispatch spent its deadline without a response: one wait_bound_spent ERROR (the deferred retry... (importers: few)
 - [operation-workflow-dispatch-wake-preemption.js](operation-workflow-dispatch-wake-preemption.js) - No leading comment; first export: buildDispatchWakeProgressPreemptEvidence. (importers: one)

@@ -144,13 +144,15 @@ class HeartbeatServicePublicationMethods {
       booleanTypeValue: HEARTBEAT_SERVICE_LITERAL.BOOLEAN,
     });
     const nodeWriteDecision = this.resolveNodeHeartbeatWriteDecision(updateRow, now);
-    this.lastHeartbeatPublicationDecision = nodeWriteDecision;
     const requireDurableVisibility = options.requireDurableVisibility === true;
     // A caller waiting on the publication boundary owns a fresh write and its
     // visibility proof.  Reusing an earlier coalesced heartbeat here would
     // turn "durable" back into a timing-dependent cache observation.
     let shouldWriteNodeHeartbeat =
       requireDurableVisibility || nodeWriteDecision.shouldWrite;
+    if (shouldWriteNodeHeartbeat) {
+      this.lastHeartbeatPublicationDecision = nodeWriteDecision;
+    }
     if (quietModeActive && shouldWriteNodeHeartbeat && !requireDurableVisibility) {
       if (nodeWriteDecision.reason === HEARTBEAT_SERVICE_LITERAL.NO_PREVIOUS_WRITE) {
         incrementHistogramEntry(
@@ -478,6 +480,20 @@ class HeartbeatServicePublicationMethods {
           updateRow,
           reporterDiagnostics,
         );
+        this.lastReporterVisibilityVerifiedAt = this.now();
+        this.lastReporterVisibilityTargetAddress =
+          reporterDiagnostics.targetAddress || null;
+        this.recordReporterHeartbeatSuccess(updateRow, now, reporterDiagnostics);
+        return;
+      }
+      if (
+        this.verifyReporterHeartbeatCompletion(reporterResult, now, {
+          expectedStatus: updateRow.status,
+          expectedConnectionState: updateRow.connection_state,
+        })
+      ) {
+        this.nodeHeartbeatReporterVisibilityState =
+          HEARTBEAT_REPORTER_VISIBILITY_STATE.CONFIRMED;
         this.lastReporterVisibilityVerifiedAt = this.now();
         this.lastReporterVisibilityTargetAddress =
           reporterDiagnostics.targetAddress || null;

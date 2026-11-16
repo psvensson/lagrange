@@ -50,4 +50,4 @@ documentClass: generated
 - [partial-aggregate-combiner.js](partial-aggregate-combiner.js) - Aggregate function names as the parser normalizes them. (importers: one)
 - [residual-predicate-evaluator.js](residual-predicate-evaluator.js) - SQL three-valued-logic evaluator for coordinator-side residual JOIN WHERE conjuncts. (importers: one)
 - [straggler-detector.js](straggler-detector.js) - Straggler Detector - Detects slow partitions and triggers mitigation. (importers: few)
-- [transaction-participant-error-projection.js](transaction-participant-error-projection.js) - No leading comment; first export: isPrepareWriteConflictFailure. (importers: one)
+- [transaction-participant-error-projection.js](transaction-participant-error-projection.js) - No leading comment; first export: isPrepareWriteConflictFailure. (importers: few)

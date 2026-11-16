@@ -568,17 +568,19 @@ class NodeLifecyclePublication {
     };
   }
 
-  // The READY promotion - the write that moves a non-READY row to READY - is
-  // a READY transition whatever cadence the heartbeat asked for: a joiner
-  // becomes placement-eligible on this write, and the spread that waits on
-  // that eligibility must never wait behind the background
+  // The READY promotion - the write that moves a non-READY row to READY or
+  // re-establishes a live READY lease after lease expiry - is a READY
+  // transition whatever cadence the heartbeat asked for: a joiner or
+  // lease-recovering node becomes placement-eligible on this write, and
+  // liveness recovery must never wait behind the background
   // published-convergence admission (V3a, owner decision 2026-10-04). Writes
-  // on a row already READY (lease renewals, telemetry) keep the requested
-  // cadence.
+  // on a row already holding a live READY lease keep the requested cadence.
   resolveWritePublicationMode(plan) {
-    const promotesToReady = plan.nextState === STATE.READY &&
-      readColumn(plan.source, COLUMN.CONNECTION_STATE) !== STATE.READY;
-    return promotesToReady ?
+    const promotesOrRecoversReady = plan.nextState === STATE.READY && (
+      readColumn(plan.source, COLUMN.CONNECTION_STATE) !== STATE.READY ||
+      !this.leaseAuthority.holdsLiveLease(plan.source, plan.heartbeatAt)
+    );
+    return promotesOrRecoversReady ?
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION :
       plan.request.publicationMode;
   }

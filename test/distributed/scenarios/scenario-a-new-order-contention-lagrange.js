@@ -67,10 +67,18 @@ async function executeProof({context, options = {}}) {
 
   const observeState = options.observeState ||
     observeLagrangeNewOrderContentionState;
-  const logicalResults = await Promise.all(
+  const settledResults = await Promise.allSettled(
     OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_OPERATIONS.map((operation) =>
       executeLogicalRequest(adapter, operation)),
   );
+  const firstRejection = settledResults.find(
+    (entry) => entry.status === 'rejected',
+  );
+  if (firstRejection) {
+    await adapter.close();
+    throw firstRejection.reason;
+  }
+  const logicalResults = settledResults.map((entry) => entry.value);
   const observedState = await observeState({
     endpoint: context.endpoint,
     connection: context.connection,

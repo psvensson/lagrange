@@ -20,6 +20,8 @@ import {
   participantFailureOf,
   participantTransactionRequestOf,
 } from './sql-query-engine-participant-wire.js';
+import {projectTransactionParticipantFailure} from
+  './distributed/transaction-participant-error-projection.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
@@ -624,7 +626,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
     if (error?.details && typeof error.details === LOCAL_STR_OBJECT) {
       result.details = {...error.details};
     }
-    return result;
+    return projectTransactionParticipantFailure(result);
   }
 
   /**

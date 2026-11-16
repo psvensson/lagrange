@@ -80,7 +80,8 @@ function projectPgWireExecutionResult(result) {
   const projected = projectTransactionParticipantFailure(result);
   if (
     projected?.success === false &&
-    projected.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT
+    (projected.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT ||
+      projected.errorCode === QUERY_ERROR_CODE.TRANSACTION_CONFLICT)
   ) {
     return {
       ...projected,
