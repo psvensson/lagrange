@@ -10,6 +10,10 @@ import {
   answerParticipantQueryIdentityRefusal,
   answerParticipantSessionQuery,
 } from './partition-participant-transaction-request.js';
+import {PARTICIPANT_TRANSACTION_FAILURE_CODE as PARTICIPANT_CODE} from
+  './partition-participant-transaction-constants.js';
+import {waitForConflictingRowKeyHolderToSettle} from
+  './partition-participant-transaction-session.js';
 import {coordinatorTableSchemaRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
@@ -337,7 +341,17 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       resolveSystemTableSchemaRefusal(this, payload) : null;
     if (ddlSchemaRefusal !== null) return ddlSchemaRefusal;
     const participantAnswer = answerParticipantSessionQuery(this, payload);
-    if (participantAnswer !== null) return participantAnswer;
+    if (participantAnswer !== null) {
+      if (participantAnswer.failureCode === PARTICIPANT_CODE.ALREADY_ACTIVE &&
+          typeof participantAnswer.detail === 'string') {
+        await waitForConflictingRowKeyHolderToSettle(
+          this,
+          payload,
+          participantAnswer.detail,
+        );
+      }
+      return participantAnswer;
+    }
     const readAuthorityWitness =
       this.buildRemoteReadAuthorityWitness(isWriteOperation);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {

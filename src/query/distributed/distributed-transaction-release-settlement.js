@@ -41,6 +41,20 @@ const NO_RELEASE_AUTHORITY = null;
 const RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
   'decisionDigest', 'terminalStatus', 'participantIds']);
 
+function readSettledTransactionResult(service, transactionId) {
+  return service?._settledReleaseTransactions?.get(transactionId) ?? null;
+}
+
+function recordSettledTransactionResult(service, transactionId, settledEntry) {
+  if (!service || typeof service !== 'object' || !settledEntry) {
+    return;
+  }
+  if (!(service._settledReleaseTransactions instanceof Map)) {
+    service._settledReleaseTransactions = new Map();
+  }
+  service._settledReleaseTransactions.set(transactionId, settledEntry);
+}
+
 function exactKeys(value, fields) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
     Object.keys(value).length === fields.length &&
@@ -217,8 +231,12 @@ async function settleTransactionReleaseRows({engine, service, census, now = Date
       !Array.isArray(census.recoverableTransactionIds)) return null;
   const transactions = [];
   for (const transactionId of census.recoverableTransactionIds) {
-    const result = await settleOne(engine, service, transactionId, now);
+    const existing = readSettledTransactionResult(service, transactionId);
+    const result = existing ?? await settleOne(engine, service, transactionId, now);
     if (result === null) return null;
+    if (existing === null) {
+      recordSettledTransactionResult(service, transactionId, result);
+    }
     transactions.push(result);
   }
   return Object.freeze(transactions);

@@ -36,6 +36,7 @@ const PREPARED_PARTICIPANT_ROW_KEYS = new WeakMap();
 const SCOPED_COMMIT_GENERATIONS = new WeakMap();
 const GRANULARITY_ROW_KEY = 'row-key';
 const ROW_KEY_SEPARATOR = '|';
+const DEFAULT_CONFLICT_SETTLE_WAIT_MS = 5000;
 const EMPTY_PK_METADATA = Object.freeze({pkCols: Object.freeze([]), allCols: Object.freeze([])});
 const SQL_INSERT_PREFIX = /^\s*INSERT\b/iu;
 const SQL_INSERT_COLS_RE = /^\s*INSERT\s+INTO\s+[^\s(]+\s*\(([^)]+)\)/iu;
@@ -183,7 +184,78 @@ function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
       return true;
     }
   }
-  return false;
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  return isRowKeyHeldByOtherPreparedParticipant(
+    preparedMap,
+    session?.identity?.participantId,
+    rowKey,
+  );
+}
+
+function rowKeySettlementWaitersOf(service) {
+  if (!(service._rowKeySettlementWaiters instanceof Set)) {
+    service._rowKeySettlementWaiters = new Set();
+  }
+  return service._rowKeySettlementWaiters;
+}
+
+function notifyRowKeySettlementWaiters(service) {
+  const waiters = service?._rowKeySettlementWaiters;
+  if (!(waiters instanceof Set) || waiters.size === 0) {
+    return;
+  }
+  for (const waiter of [...waiters]) {
+    if (!hasRowKeyConflictWithOtherSession(service, waiter.session, waiter.rowKey)) {
+      waiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
+}
+
+function waitForConflictingRowKeyHolderToSettle(
+  service,
+  payload,
+  rowKey,
+  timeoutMs = DEFAULT_CONFLICT_SETTLE_WAIT_MS,
+) {
+  if (!isRowKeyConcurrencyEnabled(service) ||
+      !service?.cdcIntegrationService ||
+      typeof rowKey !== 'string' ||
+      rowKey.length === 0) {
+    return Promise.resolve();
+  }
+  const session = findParticipantSession(service, {
+    transactionId: payload?.transactionId,
+    participantId: payload?.participantId,
+  });
+  if (!hasRowKeyConflictWithOtherSession(service, session, rowKey)) {
+    return Promise.resolve();
+  }
+  if (session?.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0) {
+    session.touchedRowKeys.clear();
+    notifyRowKeySettlementWaiters(service);
+  }
+  const boundedWaitMs = Math.max(1, Math.min(timeoutMs, DEFAULT_CONFLICT_SETTLE_WAIT_MS));
+  return new Promise((resolve) => {
+    const waiters = rowKeySettlementWaitersOf(service);
+    let timer = null;
+    const waiter = {
+      session,
+      rowKey,
+      resolve() {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        waiters.delete(waiter);
+        resolve();
+      },
+    };
+    waiters.add(waiter);
+    timer = setTimeout(() => {
+      waiter.resolve();
+    }, boundedWaitMs);
+  });
 }
 
 function checkAndRecordSessionRowKey(service, session, params, sql = '') {
@@ -218,6 +290,7 @@ function stagePreparedParticipantRowKeys(
 function clearPreparedParticipantRowKeys(service, participantId) {
   if (!service || !participantId) return;
   PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.delete(participantId);
+  notifyRowKeySettlementWaiters(service);
 }
 
 function perServiceSet(store, service) {
@@ -235,6 +308,7 @@ function recordCommittedParticipantRowKeys(service, participantId, generation) {
   const entry = preparedMap?.get(participantId);
   preparedMap?.delete(participantId);
   if (!entry || entry.hasUnscopedWrite || entry.rowKeys.size === 0) {
+    notifyRowKeySettlementWaiters(service);
     return;
   }
   perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
@@ -242,6 +316,7 @@ function recordCommittedParticipantRowKeys(service, participantId, generation) {
   for (const rk of entry.rowKeys) {
     committedGenMap.set(rk, generation);
   }
+  notifyRowKeySettlementWaiters(service);
 }
 
 function areIntermediateGenerationsScoped(service, fromGen, toGen) {
@@ -411,6 +486,7 @@ function endParticipantSession(service, session) {
   const sessions = SESSIONS.get(service);
   if (sessions?.get(session.identity.participantId) === session) {
     sessions.delete(session.identity.participantId);
+    notifyRowKeySettlementWaiters(service);
   }
 }
 
@@ -423,12 +499,14 @@ function discardParticipantSessions(service) {
   const sessions = SESSIONS.get(service);
   if (sessions === undefined || sessions.size === 0) {
     reconcilePreparedParticipantRowKeys(service);
+    notifyRowKeySettlementWaiters(service);
     return;
   }
   service.logger.info(LOG_MSG.SESSIONS_DISCARDED, {
     partitionId: service.partitionId, sessionCount: sessions.size});
   sessions.clear();
   reconcilePreparedParticipantRowKeys(service);
+  notifyRowKeySettlementWaiters(service);
 }
 
 // Discard the sessions held past the hold window (design 4, hold sweep): an
@@ -452,6 +530,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
   }
   if (discarded > 0) {
     reconcilePreparedParticipantRowKeys(service);
+    notifyRowKeySettlementWaiters(service);
   }
   return discarded;
 }
@@ -514,10 +593,12 @@ export {
   endParticipantSession,
   findParticipantSession,
   hasParticipantSession,
+  notifyRowKeySettlementWaiters,
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
   recordCommittedParticipantRowKeys,
   stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,
+  waitForConflictingRowKeyHolderToSettle,
 };

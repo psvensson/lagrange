@@ -28,9 +28,16 @@ import {configureParticipantDeterminismSelfCheck} from
 import {TRANSACTION_ENVELOPE_SERVICE_METHODS} from
   './partition-transaction-execution-envelope.js';
 
+const DEFAULT_CLUSTER_CONCURRENCY_GRANULARITY = 'row-key';
+
 class PartitionService extends PartitionServiceSplitAccessorBase {
   constructor(options = {}) {
     super(options);
+    this.concurrencyGranularity =
+      options.concurrencyGranularity ??
+      (options.bootstrapReadinessState !== undefined ?
+        DEFAULT_CLUSTER_CONCURRENCY_GRANULARITY :
+        null);
     // The leader's determinism self-check (TX1 design 3.3): the construction
     // option transactionDeterminismSelfCheck, else the classifier owner's.
     configureParticipantDeterminismSelfCheck(this,

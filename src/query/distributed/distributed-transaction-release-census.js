@@ -7,6 +7,8 @@ import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} 
   './distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
+import {readPartitionWriteOrigin} from
+  '../../partition/partition-participant-transaction-store.js';
 import {TRANSACTION_STATUS} from './distributed-transaction-coordinator-constants.js';
 
 const TRANSACTION_RELEASE_SEMANTIC_VERSION = 'tx1-query-set-v1';
@@ -33,6 +35,15 @@ function censusResult(state, rowGenerationDigest = null, legacy = [], recoverabl
     recoverableTransactionIds: Object.freeze(recoverable)});
 }
 
+function isPostOriginUndecidedRow(row, postOriginEnforced) {
+  return postOriginEnforced &&
+    (row?.status === TRANSACTION_STATUS.ACTIVE ||
+      row?.status === TRANSACTION_STATUS.PREPARING) &&
+    row?.decision === null &&
+    row?.decision_text === null &&
+    row?.decision_digest === null;
+}
+
 function readTransactionReleaseCensus(database) {
   try {
     const enforcement = readTransactionSchemaEnforcement(database);
@@ -40,8 +51,12 @@ function readTransactionReleaseCensus(database) {
       TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED].includes(enforcement.state)) {
       return censusResult(TRANSACTION_RELEASE_CENSUS_STATE.UNAVAILABLE, null, [], [], enforcement);
     }
+    const postOriginEnforced =
+      enforcement.state === TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED &&
+      readPartitionWriteOrigin(database) !== null;
     const columns = new Set(database.prepare(CENSUS_SCHEMA_SQL).all().map((row) => row.name));
-    const rows = database.prepare(CENSUS_ROWS_SQL).all();
+    const allRows = database.prepare(CENSUS_ROWS_SQL).all();
+    const rows = allRows.filter((row) => !isPostOriginUndecidedRow(row, postOriginEnforced));
     const canonicalRows = rows.map((row) => Object.fromEntries(
       Object.keys(row).sort().map((key) => [key, row[key]])));
     const digest = createHash('sha256').update(JSON.stringify(canonicalRows)).digest('hex');

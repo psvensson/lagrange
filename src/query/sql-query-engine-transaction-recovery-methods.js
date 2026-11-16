@@ -7,6 +7,12 @@ import {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const SWEEP_FROZEN_STATE = 'FROZEN';
+const SWEEP_STATUS_COMMITTED = 'COMMITTED';
+const SWEEP_DECISION_COMMIT = 'COMMIT';
+const SWEEP_STATUS_ROLLED_BACK = 'ROLLED_BACK';
+const SWEEP_DECISION_ROLLBACK = 'ROLLBACK';
 
 const {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -20,6 +26,27 @@ const TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES = new Set([
   TABLES.SQL_TRANSACTIONS,
   TABLES.SQL_TRANSACTION_PARTICIPANTS,
 ]);
+
+function isTerminalSweepTransactionRow(row) {
+  const status = row?.status;
+  const decision = row?.decision;
+  const setState = row?.participant_set_state;
+  return setState === SWEEP_FROZEN_STATE && (
+    (status === SWEEP_STATUS_COMMITTED && decision === SWEEP_DECISION_COMMIT) ||
+    (status === SWEEP_STATUS_ROLLED_BACK && decision === SWEEP_DECISION_ROLLBACK)
+  );
+}
+
+function isSweepEligibleTransactionRow(row, now) {
+  if (!row || typeof row !== LOCAL_STR_OBJECT) {
+    return true;
+  }
+  if (isTerminalSweepTransactionRow(row)) {
+    return false;
+  }
+  const deadline = Number(row.timeout_deadline);
+  return !Number.isFinite(deadline) || deadline <= 0 || deadline <= now;
+}
 
 class SQLQueryEngineTransactionRecoveryMethods
   extends SQLQueryEngineWriteFailureMethods {
@@ -150,12 +177,29 @@ class SQLQueryEngineTransactionRecoveryMethods
    * @private
    */
   loadDistributedTransactionRecoveryState() {
+    const now = this.transactionCoordinator.now();
+    const transactions = this.loadSystemTableRows(
+      TABLES.SQL_TRANSACTIONS,
+    ).filter((row) => isSweepEligibleTransactionRow(row, now));
+    const eligibleIds = new Set(
+      transactions
+        .map((row) => row?.transaction_id)
+        .filter((id) => typeof id === LOCAL_STR_STRING && id.length > 0),
+    );
+    const matchesEligibleTransaction = (row) => {
+      const txId = row?.transaction_id;
+      return typeof txId !== LOCAL_STR_STRING ||
+        txId.length === 0 ||
+        eligibleIds.has(txId);
+    };
     return {
-      transactions: this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS),
+      transactions,
       participants: this.loadSystemTableRows(
         TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      ),
-      writeOperations: this.loadSystemTableRows(TABLES.SQL_WRITE_OPERATIONS),
+      ).filter(matchesEligibleTransaction),
+      writeOperations: this.loadSystemTableRows(
+        TABLES.SQL_WRITE_OPERATIONS,
+      ).filter(matchesEligibleTransaction),
     };
   }
 
