@@ -1,7 +1,21 @@
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  createTimeoutBudget,
+  createTimeoutBudgetError,
+  getRemainingBudgetMs,
+} from '../control-plane/timeout-budget.js';
+import {
+  awaitWithTimeoutBudget,
+  buildLocalServeLaneControlSnapshot,
+  runSingleFlightLocalSnapshot,
+} from './admin-control-snapshot-serve-lane.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const SINGLE_FLIGHT_KEY_FULL_BOUNDED = 'full:bounded';
+const LOCAL_NESTED_OPERATION_CONTROL_SNAPSHOT =
+  'admin_control_snapshot_query';
 const CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD =
   'deferInlineOwnerCommand';
 const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL = Symbol(
@@ -609,6 +623,10 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
      * @param {Object} [options={}]
      * @return {Object}
      */
+    async buildLocalServeLaneControlSnapshot(options = {}) {
+      return buildLocalServeLaneControlSnapshot(this, options);
+    }
+
     async buildControlSnapshotQueryResult(options = {}) {
       const resolveOptions = buildControlSnapshotResolveOptions(options);
       const snapshot =
@@ -626,42 +644,79 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       if (resolveOptions.forceAuthoritativeRepair === true) {
         return this.resolveLocalControlSnapshot(resolveOptions);
       }
+      if (
+        resolveOptions.allowAuthoritativeRepair === false &&
+        resolveOptions.allowAuthoritativeReadinessRefresh !== true &&
+        resolveOptions.boundedObservationProbe === true
+      ) {
+        return awaitWithTimeoutBudget(
+          runSingleFlightLocalSnapshot(
+            this,
+            SINGLE_FLIGHT_KEY_FULL_BOUNDED,
+            () => this.resolveLocalControlSnapshot(resolveOptions),
+            resolveOptions,
+          ),
+          resolveOptions.queryTimeoutMs,
+        );
+      }
       const deadlineMs = resolveBoundedSnapshotProbeDeadlineMs(
         resolveOptions.queryTimeoutMs,
       );
       if (deadlineMs <= 0) {
         return this.resolveLocalControlSnapshot(resolveOptions);
       }
+      const overallBudget = createTimeoutBudget({
+        configuredBudgetMs: Math.floor(resolveOptions.queryTimeoutMs),
+        now: Date.now,
+      });
       let deadlineTimer = null;
       const probeStartedAtMs = Date.now();
       const resolvePromise = Promise.resolve(
         this.resolveLocalControlSnapshot(resolveOptions),
       );
-      resolvePromise.catch(() => {});
+      resolvePromise.catch((_error) => {
+        void _error;
+      });
       const deadlinePromise = new Promise((resolve) => {
-        deadlineTimer = setTimeout(() => {
-          resolve(BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL);
-        }, deadlineMs);
+        deadlineTimer = setTimeout(
+          () => resolve(BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL),
+          deadlineMs,
+        );
       });
       try {
         const raced = await Promise.race([resolvePromise, deadlinePromise]);
-        if (raced !== BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL) {
-          return raced;
-        }
+        if (raced !== BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL) return raced;
         reportBoundedSnapshotProbeSpent(this, deadlineMs, probeStartedAtMs);
-        const boundedSnapshot = await this.buildLocalControlSnapshot({
-          ...resolveOptions,
-          boundedObservationProbe: true,
-          skipAuthoritativeSnapshotRowRefresh: true,
-        });
-        return await this.scheduleBoundedMembershipPublicationReconcile(
-          boundedSnapshot,
-          resolveOptions,
+        const remainingMs = getRemainingBudgetMs(overallBudget, {now: Date.now});
+        if (remainingMs <= 0) {
+          throw createTimeoutBudgetError({
+            message: ADMIN_ERROR_MESSAGE.queryTimeout(overallBudget.configuredBudgetMs),
+            budget: overallBudget,
+            classification: TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
+            nestedOperation: LOCAL_NESTED_OPERATION_CONTROL_SNAPSHOT,
+            now: Date.now,
+          });
+        }
+        const boundedPromise = Promise.resolve(
+          this.buildLocalControlSnapshot({
+            ...resolveOptions,
+            boundedObservationProbe: true,
+            skipAuthoritativeSnapshotRowRefresh: true,
+          }),
+        ).then((boundedSnapshot) =>
+          this.scheduleBoundedMembershipPublicationReconcile(
+            boundedSnapshot,
+            resolveOptions,
+          ),
+        );
+        return await awaitWithTimeoutBudget(
+          boundedPromise,
+          remainingMs,
+          Date.now,
+          overallBudget,
         );
       } finally {
-        if (deadlineTimer) {
-          clearTimeout(deadlineTimer);
-        }
+        if (deadlineTimer) clearTimeout(deadlineTimer);
       }
     }
 
@@ -714,52 +769,6 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     );
   }
 }
-function projectServeLaneReadinessByNodeId(rawReadinessByNodeId) {
-  if (!rawReadinessByNodeId || typeof rawReadinessByNodeId !== 'object') {
-    return {};
-  }
-  const projected = {};
-  for (const [nodeId, entry] of Object.entries(rawReadinessByNodeId)) {
-    if (!entry || typeof entry !== 'object') {
-      continue;
-    }
-    projected[nodeId] = {
-      ...(entry.dimensions && typeof entry.dimensions === 'object' ?
-        {dimensions: {serveEligible: entry.dimensions.serveEligible === true}} :
-        {}),
-      ...(Array.isArray(entry.reasons) ? {reasons: entry.reasons} : {}),
-    };
-  }
-  return projected;
-}
-
-function projectServeLaneControlSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object') {
-    return snapshot;
-  }
-  const rawInFlightCount = snapshot.replicaOperations?.inFlightCount;
-  const replicaOperations =
-    typeof rawInFlightCount === 'number' && Number.isFinite(rawInFlightCount) ?
-      {inFlightCount: rawInFlightCount} :
-      {};
-  return {
-    schemaVersion: snapshot.schemaVersion,
-    nodeId: snapshot.nodeId,
-    capturedAt: snapshot.capturedAt,
-    nodes: Array.isArray(snapshot.nodes) ? snapshot.nodes : [],
-    ...(snapshot.observationMode !== undefined ?
-      {observationMode: snapshot.observationMode} :
-      {}),
-    controlPlaneDiagnostics: {
-      readinessByNodeId: projectServeLaneReadinessByNodeId(
-        snapshot.controlPlaneDiagnostics?.readinessByNodeId,
-      ),
-    },
-    replicaOperations,
-  };
-}
-
 export {
   assignAdminControlSnapshotLocalDiagnosticsMethods,
-  projectServeLaneControlSnapshot,
 };

@@ -12,10 +12,19 @@
  * substitute. A description that cannot be made (a container gone) leaves
  * the exhaustion undescribed: `deploymentUnobservable` names why.
  */
-import {arrayMap} from './real-product-captured-intrinsics.js';
 import {
+  DateConstructor,
+  arrayMap,
+  dateNow,
+  dateToISOString,
+} from './real-product-captured-intrinsics.js';
+import {
+  DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   READINESS_STATE,
+  resolveOperationWindow,
+  stripTransientExecutionOptions,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   classifyStorage,
@@ -44,10 +53,24 @@ async function readVersionsOrRecord(products, readVersions) {
  * @return {Promise<Object>} the deployment fields of the record
  */
 async function describeExhaustedDeployment({targetId, topology, sshRun, opts, roles, endpoint,
-  dataDir, readVersions, failure}) {
-  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
+  dataDir, readVersions, failure, deadlineAtMs = null, now = dateNow}) {
+  const clock = typeof now === 'function' ? now : dateNow;
+  const diagWindow = resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
+    callerDeadlineAtMs: deadlineAtMs,
+    callerSignal: null,
+  });
+  const postFailureOpts = withExplicitSignalOption(stripTransientExecutionOptions(opts), null);
   const products = await readVersionsOrRecord(
-    await inspectProducts({sshRun, opts: postFailureOpts, roles}),
+    await inspectProducts({
+      sshRun,
+      opts: postFailureOpts,
+      roles,
+      signal: null,
+      deadlineAtMs: diagWindow.deadlineAtMs,
+      now: clock,
+    }),
     readVersions,
   );
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));
@@ -60,7 +83,8 @@ async function describeExhaustedDeployment({targetId, topology, sshRun, opts, ro
   const aborted = Boolean(failure?.aborted || failure?.diagnostic?.aborted ||
     failure?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED);
   return {targetId, topology, roles: [...roles], storage, runClass: runClassOf(storage),
-    readiness: {state: READINESS_STATE.EXHAUSTED, observedAt: new Date().toISOString(),
+    readiness: {state: READINESS_STATE.EXHAUSTED,
+      observedAt: dateToISOString(new DateConstructor(clock())),
       aborted, lastObservation,
       ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
       ...(lastProbeError !== null ? {lastProbeError} : {}),

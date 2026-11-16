@@ -7,6 +7,8 @@
  */
 import {
   arrayFilter,
+  arrayFind,
+  arrayIncludes,
   arrayJoin,
   arrayMap,
   stringSplit,
@@ -17,7 +19,11 @@ import {
   POSTGRES_IMAGE_DEFAULT,
   requireCampaignId,
 } from './real-product-deployment-contract.js';
-import {errorText, shellWord} from './real-product-remote-shell.js';
+import {
+  errorText,
+  settleConcurrentBatch,
+  shellWord,
+} from './real-product-remote-shell.js';
 
 const CLEANUP_SSH_TIMEOUT_MS = 15000;
 const STORAGE_SUBDIR_PATTERN = /^[A-Za-z0-9._-]+$/u;
@@ -126,8 +132,11 @@ async function closeHost({host, campaignId, sshRun, opts}) {
 async function removeCampaignContainers({hosts, campaignId, sshRun, opts}) {
   requireCampaignId(campaignId);
   const cleanupOpts = cleanupCallOpts(opts);
-  const outcomes = await Promise.all(arrayMap([...new Set(hosts)],
-    (host) => closeHost({host, campaignId, sshRun, opts: cleanupOpts})));
+  const uniqueHosts = [...new Set(hosts)];
+  const outcomes = await settleConcurrentBatch(
+    uniqueHosts,
+    (host) => closeHost({host, campaignId, sshRun, opts: cleanupOpts}),
+  );
   const removed = arrayMap(arrayFilter(outcomes, (one) => one.removed), (one) => one.removed);
   const unclosed = arrayMap(arrayFilter(outcomes, (one) => one.unclosed),
     (one) => one.unclosed);
@@ -135,7 +144,15 @@ async function removeCampaignContainers({hosts, campaignId, sshRun, opts}) {
     arrayFilter(outcomes, (one) => one.confirmedClosed),
     (one) => one.host,
   );
-  return {complete: unclosed.length === 0, removed, unclosed, confirmedClosedHosts};
+  const containersClosed = unclosed.length === 0;
+  return {
+    complete: containersClosed,
+    containersClosed,
+    storageClosed: true,
+    removed,
+    unclosed,
+    confirmedClosedHosts,
+  };
 }
 
 async function cleanupConfirmedClosedHostStorage({
@@ -149,13 +166,14 @@ async function cleanupConfirmedClosedHostStorage({
   const removedHosts = [];
   const deferredHosts = [];
   const errors = [];
+  const helperLaunchedHosts = [];
   if (!storageRoot || !(pendingStorageByHost instanceof Map) || pendingStorageByHost.size === 0) {
-    return {removedHosts, deferredHosts, errors};
+    return {removedHosts, deferredHosts, errors, helperLaunchedHosts};
   }
   const cleanupOpts = cleanupCallOpts(opts);
   const closedSet = new Set(Array.isArray(confirmedClosedHosts) ? confirmedClosedHosts : []);
   const entries = [...pendingStorageByHost.entries()];
-  await Promise.all(arrayMap(entries, async ([hostIp, subDirs]) => {
+  await settleConcurrentBatch(entries, async ([hostIp, subDirs]) => {
     if (!(subDirs instanceof Set) || subDirs.size === 0) return;
     const dirs = [...subDirs];
     if (!closedSet.has(hostIp)) {
@@ -175,14 +193,56 @@ async function cleanupConfirmedClosedHostStorage({
         `${shellWord(POSTGRES_IMAGE_DEFAULT)} -ceu ` +
         '\'for d in "$@"; do rm -rf -- "/bench-cleanup/$d"; done\' sh ' +
         arrayJoin(arrayMap(safeDirs, shellWord), ' ');
+      helperLaunchedHosts.push(hostIp);
       await sshRun(hostIp, cleanupOpts, command, cleanupOpts.timeoutMs);
       subDirs.clear();
       removedHosts.push({host: hostIp, subDirs: safeDirs});
     } catch (error) {
       errors.push({host: hostIp, subDirs: dirs, error: errorText(error)});
     }
-  }));
-  return {removedHosts, deferredHosts, errors};
+  });
+  return {removedHosts, deferredHosts, errors, helperLaunchedHosts};
+}
+
+function mergePostHelperContainerClosure(hosts, initialClosed, postHelperClosed) {
+  const uniqueHosts = [...new Set(hosts)];
+  const helperHostSet = new Set([
+    ...arrayMap(postHelperClosed.removed, (entry) => entry.host),
+    ...arrayMap(postHelperClosed.unclosed, (entry) => entry.host),
+    ...postHelperClosed.confirmedClosedHosts,
+  ]);
+  const removed = [];
+  const unclosed = [];
+  const confirmedClosedHosts = [];
+  for (const host of uniqueHosts) {
+    const initialRemoved = arrayFind(initialClosed.removed, (one) => one.host === host);
+    const postRemoved = arrayFind(postHelperClosed.removed, (one) => one.host === host);
+    const combinedRemovedIds = [
+      ...new Set([
+        ...(initialRemoved?.containerIds || []),
+        ...(postRemoved?.containerIds || []),
+      ]),
+    ];
+    if (combinedRemovedIds.length > 0) {
+      removed.push({host, containerIds: combinedRemovedIds});
+    }
+    if (helperHostSet.has(host)) {
+      const postUnclosed = arrayFind(postHelperClosed.unclosed, (one) => one.host === host);
+      if (postUnclosed) {
+        unclosed.push(postUnclosed);
+      } else if (arrayIncludes(postHelperClosed.confirmedClosedHosts, host)) {
+        confirmedClosedHosts.push(host);
+      }
+    } else {
+      const initialUnclosed = arrayFind(initialClosed.unclosed, (one) => one.host === host);
+      if (initialUnclosed) {
+        unclosed.push(initialUnclosed);
+      } else if (arrayIncludes(initialClosed.confirmedClosedHosts, host)) {
+        confirmedClosedHosts.push(host);
+      }
+    }
+  }
+  return {removed, unclosed, confirmedClosedHosts};
 }
 
 async function teardownCampaignDeployment({
@@ -195,7 +255,12 @@ async function teardownCampaignDeployment({
 }) {
   const closed = await removeCampaignContainers({hosts, campaignId, sshRun, opts});
   if (!storageRoot || !(pendingStorageByHost instanceof Map) || pendingStorageByHost.size === 0) {
-    return closed;
+    return {
+      ...closed,
+      containersClosed: closed.complete,
+      storageClosed: true,
+      complete: closed.complete,
+    };
   }
   let storageCleanup;
   try {
@@ -212,9 +277,36 @@ async function teardownCampaignDeployment({
       removedHosts: [],
       deferredHosts: [],
       errors: [{host: null, subDirs: [], error: errorText(error)}],
+      helperLaunchedHosts: [],
     };
   }
-  return {...closed, storageCleanup};
+  const helperLaunchedHosts = storageCleanup.helperLaunchedHosts || [];
+  let finalClosure = {
+    removed: closed.removed,
+    unclosed: closed.unclosed,
+    confirmedClosedHosts: closed.confirmedClosedHosts,
+  };
+  if (helperLaunchedHosts.length > 0) {
+    const postHelperClosed = await removeCampaignContainers({
+      hosts: helperLaunchedHosts,
+      campaignId,
+      sshRun,
+      opts,
+    });
+    finalClosure = mergePostHelperContainerClosure(hosts, closed, postHelperClosed);
+  }
+  const containersClosed = finalClosure.unclosed.length === 0;
+  const storageClosed = storageCleanup.errors.length === 0 &&
+    storageCleanup.deferredHosts.length === 0;
+  return {
+    complete: containersClosed && storageClosed,
+    containersClosed,
+    storageClosed,
+    removed: finalClosure.removed,
+    unclosed: finalClosure.unclosed,
+    confirmedClosedHosts: finalClosure.confirmedClosedHosts,
+    storageCleanup,
+  };
 }
 
 export {

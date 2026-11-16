@@ -49,13 +49,19 @@ import {
 import {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 import {
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
+  DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
+  DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+  DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
   deploymentFailure,
   requireCampaignId,
+  resolveOperationWindow,
   resolveReadinessBudget,
+  stripTransientExecutionOptions,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   classifyStorage,
@@ -84,6 +90,7 @@ import {
   reportedVersions,
 } from './real-product-lagrange-observations.js';
 import {
+  classifyRemoteCommandError,
   createTrackedSshRun,
   dockerRunDetached,
   dockerRunOnceCommand,
@@ -120,7 +127,6 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // 15 polls a minute for 15 minutes (5.6x the one routable observation); it is
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
-const ROUTABLE_DEADLINE_MS = 900000;
 // Cold 3-node formation requires all 6 priority control-plane partitions to
 // spread across 3 distinct nodes before joiners' /readyz opens; matches
 // FORMATION_BOUND_MS = 420_000 (420 polls at 1000 ms) in
@@ -131,7 +137,6 @@ const FORMATION_ATTEMPTS = 420;
 const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
 const JOINING_HTTP_TIMEOUT_MS = 60000;
 const JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000;
-const mathMax = Math.max;
 
 function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(stringOf(index + 1), NODE_ID_WIDTH, '0')}`;
@@ -316,47 +321,68 @@ function resolveFormationDeadlineMs(opts) {
   return DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS;
 }
 
-function resolveAwaitReadyWindow(postFormationCtx, {
-  signal: readySignal,
-  deadlineAtMs: readyDeadlineAtMs,
-  deadlineMs: readyDeadlineMs,
-} = {}) {
-  const signal = readySignal !== undefined ? readySignal : postFormationCtx.signal;
-  const clock = typeof postFormationCtx.now === 'function' ? postFormationCtx.now : dateNow;
-  const requestedDeadlineMs = numberIsFinite(readyDeadlineMs) ?
-    readyDeadlineMs : postFormationCtx.formationDeadlineMs;
-  if (numberIsFinite(readyDeadlineAtMs)) {
-    const remainingMs = mathMax(0, readyDeadlineAtMs - clock());
-    if (numberIsFinite(requestedDeadlineMs) && requestedDeadlineMs < remainingMs) {
-      return {
-        signal,
-        deadlineAtMs: clock() + requestedDeadlineMs,
-        deadlineMs: requestedDeadlineMs,
-      };
-    }
-    return {
-      signal,
-      deadlineAtMs: readyDeadlineAtMs,
-      deadlineMs: remainingMs,
-    };
-  }
-  const deadlineMs = numberIsFinite(requestedDeadlineMs) ? requestedDeadlineMs : null;
-  return {
-    signal,
-    deadlineAtMs: deadlineMs !== null ? clock() + deadlineMs : null,
-    deadlineMs,
+function isFormationTerminalError(error) {
+  return error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED ||
+    error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED;
+}
+
+function hasAbortedFlag(error, classified, opCtx) {
+  return Boolean(error?.aborted || classified.aborted || opCtx?.signal?.aborted);
+}
+
+function hasDeadlineExpiredFlag(error, classified, opCtx) {
+  return Boolean(error?.deadlineExpired || classified.deadlineExpired ||
+    (numberIsFinite(opCtx?.deadlineAtMs) && opCtx.now() >= opCtx.deadlineAtMs));
+}
+
+function toReadinessExhausted(component, error, opCtx) {
+  const classified = classifyRemoteCommandError(error);
+  const aborted = hasAbortedFlag(error, classified, opCtx);
+  const deadlineExpired = hasDeadlineExpiredFlag(error, classified, opCtx);
+  const observerInfrastructure = !aborted && !deadlineExpired &&
+    Boolean(error?.observerInfrastructure || classified.observerInfrastructure);
+  const lastProbeError = {
+    error: classified.message, aborted, deadlineExpired,
+    transportError: Boolean(error?.transportError || classified.transportError),
+    observerInfrastructure,
   };
+  const diagnostic = {
+    component, aborted, deadlineExpired, observerInfrastructure,
+    last: lastProbeError, lastObservation: lastProbeError, lastProbeError,
+  };
+  const failure = deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+    `${component} did not complete: ${classified.message}`, diagnostic);
+  return Object.assign(failure, {
+    aborted, deadlineExpired, observerInfrastructure,
+    lastProbeError, lastObservation: lastProbeError,
+  });
+}
+
+function wrapFormationFailure(ctx, component, error) {
+  if (isFormationTerminalError(error)) return error;
+  const classified = classifyRemoteCommandError(error);
+  if (!hasAbortedFlag(error, classified, ctx) &&
+      !hasDeadlineExpiredFlag(error, classified, ctx)) {
+    return error;
+  }
+  return toReadinessExhausted(component, error, ctx);
+}
+
+function remainingFormationMs(ctx) {
+  if (!numberIsFinite(ctx.deadlineAtMs)) return null;
+  return ctx.deadlineAtMs - ctx.now();
 }
 
 /**
  * @param {{hosts: Array<string>, clientIp: string, sshRun: Function,
  *   opts: Object, campaignId: string, sleep: Function, signal?: AbortSignal|null,
+ *   deadlineAtMs?: number|null, deadlineMs?: number|null,
  *   now?: Function, nowFn?: Function}} input
  * @return {Promise<Object>} the deployment (record fields + `access` and
  *   `operations`, which the record never carries)
  */
 async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campaignId, sleep,
-  signal = null, now, nowFn}) {
+  signal = null, deadlineAtMs = null, deadlineMs = null, now, nowFn}) {
   requireCampaignId(campaignId);
   const rawImage = opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT;
   const image = resolveLagrangeContainerImage(opts);
@@ -365,16 +391,34 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
     database: REQUEST_CELL_AUTH.DATABASE};
   const clock = resolveFormationClock(now, nowFn, opts);
   const abortSignal = signal ?? opts.signal ?? null;
+  const cleanOpts = stripTransientExecutionOptions(opts);
   const formationDeadlineMs = resolveFormationDeadlineMs(opts);
+  const formationWindow = resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: formationDeadlineMs,
+    callerDeadlineAtMs: deadlineAtMs ?? opts.deadlineAtMs,
+    callerDeadlineMs: deadlineMs ?? opts.deadlineMs,
+    callerSignal: abortSignal,
+  });
   const budget = Object.freeze({...resolveReadinessBudget(opts),
     attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
-  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
-  const ctx = {sshRun: trackedSshRun, settleInFlight, opts, clientIp, sleep, now: clock,
-    signal: abortSignal, formationDeadlineMs, deadlineAtMs: null,
-    deadlineMs: formationDeadlineMs, budget, connection, expectedVersion};
-  const postFailureOpts = {...opts, signal: null, deadlineAtMs: null, deadlineMs: null};
-  const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null,
-    deadlineAtMs: null, deadlineMs: null};
+  const formationTracker = createTrackedSshRun(sshRun, formationWindow.signal);
+  const ctx = {
+    sshRun: formationTracker.trackedSshRun,
+    settleInFlight: formationTracker.settleInFlight,
+    opts: cleanOpts,
+    clientIp,
+    sleep,
+    now: clock,
+    signal: formationWindow.signal,
+    formationDeadlineMs,
+    deadlineAtMs: formationWindow.deadlineAtMs,
+    deadlineMs: formationWindow.deadlineMs,
+    budget,
+    connection,
+    expectedVersion,
+  };
+  const postFailureTracker = createTrackedSshRun(sshRun, null);
   const roles = [];
   const nodeReadiness = [];
   const formed = {listener: null};
@@ -382,28 +426,62 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
     return await describingReadinessExhaustion(
       async () => {
         try {
-          return await formLagrangeCluster({ctx, hosts, image, connection,
+          return await formLagrangeCluster({ctx, rawSshRun: sshRun, hosts, image, connection,
             roles, nodeReadiness, formed, campaignId});
+        } catch (error) {
+          throw wrapFormationFailure(ctx, 'lagrange-formation', error);
         } finally {
-          await settleInFlight();
+          await formationTracker.settleInFlight();
         }
       },
-      (failure) => describeExhaustedDeployment({
-        targetId: 'lagrange', topology: lagrangeTopology(hosts), sshRun, opts: postFailureOpts,
-        roles: [...roles], endpoint: exhaustedEndpoint(formed.listener, roles), dataDir: DATA_DIR,
-        readVersions: (products) => reportedVersions(postFailureCtx, products), failure}),
+      (failure) => {
+        const diagWindow = resolveOperationWindow({
+          clock,
+          defaultDeadlineMs: DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
+          callerSignal: null,
+        });
+        const postFailureOpts = withExplicitSignalOption(cleanOpts, null);
+        const postFailureCtx = {
+          ...ctx,
+          sshRun: postFailureTracker.trackedSshRun,
+          settleInFlight: postFailureTracker.settleInFlight,
+          opts: postFailureOpts,
+          signal: null,
+          deadlineAtMs: diagWindow.deadlineAtMs,
+          deadlineMs: diagWindow.deadlineMs,
+        };
+        return describeExhaustedDeployment({
+          targetId: 'lagrange',
+          topology: lagrangeTopology(hosts),
+          sshRun: postFailureTracker.trackedSshRun,
+          opts: postFailureOpts,
+          deadlineAtMs: diagWindow.deadlineAtMs,
+          now: clock,
+          roles: [...roles],
+          endpoint: exhaustedEndpoint(formed.listener, roles),
+          dataDir: DATA_DIR,
+          readVersions: async (products) => {
+            try {
+              return await reportedVersions(postFailureCtx, products);
+            } finally {
+              await postFailureTracker.settleInFlight();
+            }
+          },
+          failure,
+        });
+      },
     );
   } catch (error) {
-    await settleInFlight();
+    await formationTracker.settleInFlight();
     if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
       error.roles = [...roles];
     }
     if (opts.cleanupOnFailure) {
       error.cleanup = await removeCampaignContainers({
-        hosts,
+        hosts: clientIp ? [...hosts, clientIp] : hosts,
         campaignId,
         sshRun,
-        opts: postFailureOpts,
+        opts: cleanOpts,
       });
     }
     throw error;
@@ -434,7 +512,7 @@ async function startLagrangeNode({sshRun, opts, host, seedHost, image, connectio
   return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
 }
 
-async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeReadiness,
+async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, roles, nodeReadiness,
   formed, campaignId}) {
   const {sshRun, opts} = ctx;
   const seedHost = hosts[0];
@@ -475,9 +553,6 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     throw reason;
   }
   ctx.watchedRoles = [...roles];
-  const formationDeadlineAtMs = numberIsFinite(ctx.formationDeadlineMs) ?
-    ctx.now() + ctx.formationDeadlineMs : null;
-  ctx.deadlineAtMs = formationDeadlineAtMs;
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
@@ -493,8 +568,16 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
   const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, nodeRoles);
   const visibility = probeVisibility(listener.nodeId, roles);
   const probe = await probeWriteReadback(ctx, sql, campaignId, visibility);
+  const inspectedProducts = await inspectProducts({
+    sshRun,
+    opts,
+    roles,
+    signal: ctx.signal,
+    deadlineAtMs: ctx.deadlineAtMs,
+    now: ctx.now,
+  });
   const products = verifyProductIdentity(
-    await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles})),
+    await reportedVersions(ctx, inspectedProducts),
     {[NODE_ROLE]: {imageRef: image, contentIdentity: opts.lagrangeImageContent ?? null,
       versionPattern: versionPatternOf(image, ctx.expectedVersion),
       expectedSrcFingerprint: opts.lagrangeSrcFingerprint || opts.expectedSrcFingerprint || null,
@@ -508,9 +591,24 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
         {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
     }
   }
-  const binding = await bindEndpointToContainer({sshRun, opts, campaignId,
+  const bindRemainingMs = remainingFormationMs(ctx);
+  if (bindRemainingMs !== null && bindRemainingMs <= 0) {
+    throw toReadinessExhausted(
+      'lagrange-endpoint-bind',
+      Object.assign(new Error('readiness probe formation deadline expired'),
+        {deadlineExpired: true}),
+      ctx,
+    );
+  }
+  const binding = await bindEndpointToContainer({
+    sshRun,
+    opts,
+    campaignId,
     endpoint: {host: listener.host, port: listener.port},
-    candidates: arrayFilter(roles, (role) => role.host === listener.host)});
+    candidates: arrayFilter(roles, (role) => role.host === listener.host),
+    signal: ctx.signal,
+    timeoutMs: bindRemainingMs ?? undefined,
+  });
   roles.push({role: LISTENER_ROLE, host: listener.host, containerId: binding.containerId,
     nodeId: listener.nodeId});
   const storage = arrayMap(products, (product) => classifyStorage(product, DATA_DIR));
@@ -518,7 +616,34 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     host: listener.host, port: listener.port, containerId: binding.containerId,
     binding};
   const observedAt = dateToISOString(new DateConstructor(ctx.now()));
-  const postFormationCtx = {...ctx, deadlineAtMs: null, deadlineMs: null, watchedRoles: nodeRoles};
+  const placement = placementOf(await readPartitions(ctx, seedHost), roles, observedAt);
+  const postTracker = createTrackedSshRun(rawSshRun, null);
+  const postSqlTarget = {
+    sshRun: postTracker.trackedSshRun,
+    opts,
+    from: ctx.clientIp,
+    campaignId,
+    endpoint: {host: listener.host, port: listener.port},
+    connection,
+  };
+  const postQuery = createPsqlQueryReader(postSqlTarget);
+  const postSql = {query: postQuery, statement: createPsqlStatementRunner(postSqlTarget)};
+  const basePostFormationCtx = {
+    sshRun: postTracker.trackedSshRun,
+    settleInFlight: postTracker.settleInFlight,
+    opts,
+    clientIp: ctx.clientIp,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: null,
+    formationDeadlineMs: ctx.formationDeadlineMs,
+    deadlineAtMs: null,
+    deadlineMs: null,
+    budget: ctx.budget,
+    connection: ctx.connection,
+    expectedVersion: ctx.expectedVersion,
+    watchedRoles: nodeRoles,
+  };
   return {
     targetId: 'lagrange',
     topology: lagrangeTopology(hosts),
@@ -527,51 +652,81 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       evidence: {nodes: nodeReadiness, membership, publicPgWire: listener, leaders, cluster,
         probe}},
     identity: {products},
-    placement: placementOf(await readPartitions(ctx, seedHost), roles, observedAt),
+    placement,
     endpoint,
     access: {connection},
     operations: {
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
-      observePlacement: async () => {
-        const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+      observePlacement: async ({signal: callSignal, deadlineAtMs: callDeadlineAtMs,
+        deadlineMs: callDeadlineMs} = {}) => {
+        const win = resolveOperationWindow({
+          clock: ctx.now,
+          defaultDeadlineMs: DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+          callerDeadlineAtMs: callDeadlineAtMs,
+          callerDeadlineMs: callDeadlineMs,
+          callerSignal: callSignal,
+        });
         const routableCtx = {
-          ...postFormationCtx,
-          deadlineAtMs: clock() + ROUTABLE_DEADLINE_MS,
-          deadlineMs: ROUTABLE_DEADLINE_MS,
+          ...basePostFormationCtx,
+          signal: win.signal,
+          deadlineAtMs: win.deadlineAtMs,
+          deadlineMs: win.deadlineMs,
           budget: {...ctx.budget, attempts: ROUTABLE_ATTEMPTS},
         };
-        const routable = await clusterReady(
-          routableCtx,
-          'lagrange-canonical-tables-routable',
-          query,
-          nodeRoles,
-          arrayMap(CANONICAL_TABLES, (table) => table.name),
-        );
-        return {...placementOf(await readPartitions(ctx, seedHost), roles,
-          dateToISOString(new DateConstructor(clock()))), routable};
+        try {
+          const routable = await clusterReady(
+            routableCtx,
+            'lagrange-canonical-tables-routable',
+            postQuery,
+            nodeRoles,
+            arrayMap(CANONICAL_TABLES, (table) => table.name),
+          );
+          const partitionsAnswer = await readPartitions(routableCtx, seedHost);
+          return {
+            ...placementOf(partitionsAnswer, roles,
+              dateToISOString(new DateConstructor(ctx.now()))),
+            routable,
+          };
+        } finally {
+          await postTracker.settleInFlight();
+        }
       },
       // The arm's readiness contract again (after a product restart).
       awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
         deadlineMs: readyDeadlineMs} = {}) => {
-        const window = resolveAwaitReadyWindow(postFormationCtx, {
-          signal: readySignal,
-          deadlineAtMs: readyDeadlineAtMs,
-          deadlineMs: readyDeadlineMs,
+        const win = resolveOperationWindow({
+          clock: ctx.now,
+          defaultDeadlineMs: ctx.formationDeadlineMs,
+          callerDeadlineAtMs: readyDeadlineAtMs,
+          callerDeadlineMs: readyDeadlineMs,
+          callerSignal: readySignal,
         });
         const readyCtx = {
-          ...postFormationCtx,
-          ...window,
+          ...basePostFormationCtx,
+          signal: win.signal,
+          deadlineAtMs: win.deadlineAtMs,
+          deadlineMs: win.deadlineMs,
           watchedRoles: nodeRoles,
         };
         try {
           const systemReady = await clusterReady(
             readyCtx,
             'lagrange-system-tables',
-            query,
+            postQuery,
             nodeRoles,
           );
-          const tables = await readSystemTables(query, readyCtx);
+          let tables;
+          try {
+            tables = await readSystemTables(postQuery, readyCtx);
+          } catch (error) {
+            if (error?.code) throw error;
+            if (error?.aborted === true || error?.deadlineExpired === true ||
+                readyCtx.signal?.aborted) {
+              throw toReadinessExhausted('lagrange-system-tables', error, readyCtx);
+            }
+            throw error;
+          }
           const presentCanonical = arrayFilter(
             arrayMap(CANONICAL_TABLES, (table) => table.name),
             (name) => arraySome(tables.partitions, (row) => row.table_name === name),
@@ -580,20 +735,40 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
             await clusterReady(
               readyCtx,
               'lagrange-canonical-tables-routable',
-              query,
+              postQuery,
               nodeRoles,
               presentCanonical,
             ) :
             systemReady;
           return {
             cluster,
-            probe: await probeWriteReadback(readyCtx, sql, campaignId, visibility),
+            probe: await probeWriteReadback(readyCtx, postSql, campaignId, visibility),
           };
         } finally {
-          await ctx.settleInFlight();
+          await postTracker.settleInFlight();
         }
       },
-      observeRoles: async () => ({leaders: await observedLeaders(ctx, seedHost)}),
+      observeRoles: async ({signal: callSignal, deadlineAtMs: callDeadlineAtMs,
+        deadlineMs: callDeadlineMs} = {}) => {
+        const win = resolveOperationWindow({
+          clock: ctx.now,
+          defaultDeadlineMs: DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
+          callerDeadlineAtMs: callDeadlineAtMs,
+          callerDeadlineMs: callDeadlineMs,
+          callerSignal: callSignal,
+        });
+        const rolesCtx = {
+          ...basePostFormationCtx,
+          signal: win.signal,
+          deadlineAtMs: win.deadlineAtMs,
+          deadlineMs: win.deadlineMs,
+        };
+        try {
+          return {leaders: await observedLeaders(rolesCtx, seedHost)};
+        } finally {
+          await postTracker.settleInFlight();
+        }
+      },
     },
   };
 }

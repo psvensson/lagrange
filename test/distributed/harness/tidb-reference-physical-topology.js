@@ -306,29 +306,40 @@ function createTiDbReferencePhysicalRoutingProvider(options = {}) {
         physicalHost: role.placement.host,
       };
     },
-    async inspectContainer(containerId) {
-      return ownerFor(containerId).provider.inspectContainer(containerId);
+    async inspectContainer(containerId, callOptions = undefined) {
+      const provider = ownerFor(containerId).provider;
+      return callOptions !== undefined ?
+        provider.inspectContainer(containerId, callOptions) :
+        provider.inspectContainer(containerId);
     },
-    async inspectContainerState(containerId) {
+    async inspectContainerState(containerId, callOptions = undefined) {
       const provider = ownerFor(containerId).provider;
       if (typeof provider.inspectContainerState === TYPE_FUNCTION) {
-        return provider.inspectContainerState(containerId);
+        return callOptions !== undefined ?
+          provider.inspectContainerState(containerId, callOptions) :
+          provider.inspectContainerState(containerId);
       }
-      const inspected = await provider.inspectContainer(containerId);
+      const inspected = callOptions !== undefined ?
+        await provider.inspectContainer(containerId, callOptions) :
+        await provider.inspectContainer(containerId);
       return inspected?.State ?? null;
     },
-    async inspectContainerIfExists(containerId) {
+    async inspectContainerIfExists(containerId, callOptions = undefined) {
       const owner = ownerFor(containerId);
       if (typeof owner.provider.inspectContainerIfExists !== TYPE_FUNCTION) {
         try {
-          return await owner.provider.inspectContainer(containerId);
+          return callOptions !== undefined ?
+            await owner.provider.inspectContainer(containerId, callOptions) :
+            await owner.provider.inspectContainer(containerId);
         } catch {
           return null;
         }
       }
-      return owner.provider.inspectContainerIfExists(containerId);
+      return callOptions !== undefined ?
+        owner.provider.inspectContainerIfExists(containerId, callOptions) :
+        owner.provider.inspectContainerIfExists(containerId);
     },
-    async execInContainer(containerId, command) {
+    async execInContainer(containerId, command, callOptions = undefined) {
       const owner = ownerFor(containerId);
       let rewritten = command;
       if (owner.kind === 'readiness') {
@@ -343,7 +354,9 @@ function createTiDbReferencePhysicalRoutingProvider(options = {}) {
           `--port=${topology.ports.tidbPort}`,
         );
       }
-      return owner.provider.execInContainer(containerId, rewritten);
+      return callOptions !== undefined ?
+        owner.provider.execInContainer(containerId, rewritten, callOptions) :
+        owner.provider.execInContainer(containerId, rewritten);
     },
     async stopContainer(containerId) {
       return ownerFor(containerId).provider.stopContainer(containerId);
@@ -404,6 +417,9 @@ async function startTiDbReferencePhysicalCluster(options = {}) {
     readinessResourceLimits: options.readinessResourceLimits || {},
     readinessTimeoutMs: options.readinessTimeoutMs,
     readinessPollIntervalMs: options.readinessPollIntervalMs,
+    signal: options.signal ?? null,
+    deadlineAtMs: options.deadlineAtMs ?? null,
+    now: options.now ?? options.nowFn,
   });
 
   return {

@@ -8,6 +8,10 @@
  * when stream A's admission owner lands, CLAIM_STATUS is re-exported from it.
  */
 import {
+  dateNow,
+  numberIsFinite,
+} from './real-product-captured-intrinsics.js';
+import {
   TIDB_REFERENCE_DEFAULTS,
 } from './tidb-reference-lifecycle.js';
 
@@ -87,6 +91,47 @@ const DEFAULT_READINESS = Object.freeze({
 // FORMATION_BOUND_MS = 420_000 in
 // test/distributed/scenarios/fresh-formation-user-table-routability.js).
 const DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS = 420_000;
+const DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS = 900_000;
+const DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS = 15_000;
+const DEFAULT_TIDB_FORMATION_DEADLINE_MS = 240_000;
+const DEFAULT_TIDB_PLACEMENT_DEADLINE_MS = 120_000;
+const DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS = 30_000;
+const DEFAULT_POSTGRES_FORMATION_DEADLINE_MS = 240_000;
+const DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS = 30_000;
+const DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS = 30_000;
+const DEFAULT_INSPECT_TIMEOUT_MS = 10_000;
+
+function stripTransientExecutionOptions(opts) {
+  const copy = {...(opts || {})};
+  delete copy.signal;
+  delete copy.deadlineAtMs;
+  delete copy.deadlineMs;
+  delete copy.timeoutMs;
+  return copy;
+}
+
+function withExplicitSignalOption(baseOpts, signal) {
+  return signal === undefined ? {...(baseOpts || {})} : {...(baseOpts || {}), signal};
+}
+
+function intersectDeadlineAtMs(callerDeadlineAtMs, ownDeadlineAtMs) {
+  if (!numberIsFinite(callerDeadlineAtMs)) return ownDeadlineAtMs;
+  if (ownDeadlineAtMs === null) return callerDeadlineAtMs;
+  return Math.min(callerDeadlineAtMs, ownDeadlineAtMs);
+}
+
+function resolveOperationWindow(input = {}) {
+  const clock = input.clock ?? dateNow;
+  const startedAtMs = clock();
+  const signal = input.callerSignal ?? null;
+  const budgetMs = numberIsFinite(input.callerDeadlineMs) ?
+    input.callerDeadlineMs :
+    (input.defaultDeadlineMs ?? null);
+  const ownDeadlineAtMs = numberIsFinite(budgetMs) ? startedAtMs + budgetMs : null;
+  const deadlineAtMs = intersectDeadlineAtMs(input.callerDeadlineAtMs, ownDeadlineAtMs);
+  const deadlineMs = deadlineAtMs !== null ? Math.max(0, deadlineAtMs - startedAtMs) : null;
+  return {signal, startedAtMs, deadlineAtMs, deadlineMs};
+}
 
 class DeploymentFailure extends Error {
   constructor(code, message, diagnostic = null) {
@@ -117,8 +162,17 @@ export {
   BENCH_LABEL,
   isImageId,
   CLAIM_STATUS,
+  DEFAULT_INSPECT_TIMEOUT_MS,
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
+  DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
+  DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
+  DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
+  DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   DEFAULT_READINESS,
+  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
+  DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
+  DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
   PD_IMAGE_DEFAULT,
@@ -132,5 +186,8 @@ export {
   TIKV_IMAGE_DEFAULT,
   deploymentFailure,
   requireCampaignId,
+  resolveOperationWindow,
   resolveReadinessBudget,
+  stripTransientExecutionOptions,
+  withExplicitSignalOption,
 };

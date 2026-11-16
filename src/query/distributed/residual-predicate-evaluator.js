@@ -1,6 +1,13 @@
 import {EXPR_TYPE} from '../parser-constants.js';
 import {QUERY_OPERATOR} from '../query-constants.js';
-import {lexPartitionStatement} from '../../partition/partition-statement-admission-lexer.js';
+import {
+  PARTITION_STATEMENT_CHAR,
+  PARTITION_STATEMENT_TOKEN,
+} from '../../partition/partition-statement-admission-constants.js';
+import {
+  asciiLower,
+  lexPartitionStatement,
+} from '../../partition/partition-statement-admission-lexer.js';
 
 /**
  * SQL three-valued-logic evaluator for coordinator-side residual JOIN
@@ -45,40 +52,23 @@ const INT_TYPE_TOKEN = 'INT';
 const SQLITE_NUMERIC_TEXT_RE = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*$/u;
 const SQLITE_INTEGER_TEXT_RE = /^[+-]?\d+$/u;
 const NUMERIC_TYPE_TOKENS = Object.freeze([
-  'NUM',
-  'DEC',
-  'REAL',
-  'FLOA',
-  'DOUB',
-  'BOOL',
-  'SERIAL',
+  'NUM', 'DEC', 'REAL', 'FLOA', 'DOUB', 'BOOL', 'SERIAL',
 ]);
 const TEXT_TYPE_TOKENS = Object.freeze(['CHAR', 'CLOB', 'TEXT']);
-const NONE_TYPE_TOKENS = Object.freeze(['BLOB', 'BYTEA', 'NONE']);
+const NONE_TYPE_TOKENS = Object.freeze(['BLOB', 'BYTEA']);
 
 const CONSTRAINT_START_TOKENS = new Set([
-  'PRIMARY',
-  'UNIQUE',
-  'CHECK',
-  'FOREIGN',
-  'CONSTRAINT',
-  'NOT',
-  'NULL',
-  'DEFAULT',
-  'COLLATE',
-  'REFERENCES',
-  'GENERATED',
-  'AS',
-  'AUTOINCREMENT',
+  'PRIMARY', 'UNIQUE', 'CHECK', 'FOREIGN', 'CONSTRAINT', 'NOT', 'NULL',
+  'DEFAULT', 'COLLATE', 'REFERENCES', 'GENERATED', 'AS', 'AUTOINCREMENT',
 ]);
 const TABLE_CONSTRAINT_HEADS = new Set([
-  'PRIMARY',
-  'UNIQUE',
-  'CHECK',
-  'FOREIGN',
-  'CONSTRAINT',
+  'PRIMARY', 'UNIQUE', 'CHECK', 'FOREIGN', 'CONSTRAINT',
 ]);
-const DECLARED_TYPE_TOKEN_TYPES = new Set(['word', 'ident']);
+const SQLITE_NAME_TOKEN_TYPES = new Set([
+  PARTITION_STATEMENT_TOKEN.WORD,
+  PARTITION_STATEMENT_TOKEN.QUOTED,
+  PARTITION_STATEMENT_TOKEN.STRING,
+]);
 
 const STORAGE_RANK_INVALID = 0;
 const STORAGE_RANK_NUMBER = 1;
@@ -86,9 +76,6 @@ const STORAGE_RANK_TEXT = 2;
 const STORAGE_RANK_BLOB = 3;
 const SQLITE_MASTER_DDL_SQL =
   'SELECT sql FROM sqlite_master WHERE type = \'table\' AND lower(name) = lower(?)';
-const OPEN_PAREN_CHAR = '(';
-const COMMA_CHAR = ',';
-const SPACE_STR = ' ';
 const EMPTY_STR = '';
 
 function isNullValue(value) {
@@ -161,10 +148,16 @@ function classifyAffinityFromTypeString(rawType) {
 
 function resolveOperandComparisonAffinity(node) {
   if (typeof node === 'string') {
+    if (Object.values(SQL_COMPARISON_AFFINITY).includes(node)) {
+      return node;
+    }
     return classifyAffinityFromTypeString(node) || SQL_COMPARISON_AFFINITY.NONE;
   }
   if (!isAffinityCarryingNode(node)) {
     return SQL_COMPARISON_AFFINITY.NONE;
+  }
+  if (Object.values(SQL_COMPARISON_AFFINITY).includes(node.affinity)) {
+    return node.affinity;
   }
   return (
     classifyAffinityFromTypeString(resolveExplicitTypeName(node)) ||
@@ -518,15 +511,16 @@ function evaluateResidualPredicate(node, row) {
 }
 
 function stripIdentifierQuotes(rawName) {
-  return String(rawName || EMPTY_STR)
-    .trim()
-    .replace(/^["'`[]|["'`\]]$/gu, EMPTY_STR)
-    .toLowerCase();
+  return asciiLower(
+    String(rawName || EMPTY_STR)
+      .trim()
+      .replace(/^["'`[]|["'`\]]$/gu, EMPTY_STR),
+  );
 }
 
 function splitTopLevelCreateTableItems(tokens) {
   const openIdx = tokens.findIndex(
-    (tok) => tok.depth === 0 && tok.text === OPEN_PAREN_CHAR,
+    (tok) => tok.depth === 0 && tok.text === PARTITION_STATEMENT_CHAR.OPEN_PAREN,
   );
   if (openIdx < 0) return [];
   const closeIdx = tokens[openIdx].close;
@@ -534,7 +528,7 @@ function splitTopLevelCreateTableItems(tokens) {
   const items = [];
   let start = openIdx + 1;
   for (let i = openIdx + 1; i < closeIdx; i += 1) {
-    if (tokens[i].depth === 1 && tokens[i].text === COMMA_CHAR) {
+    if (tokens[i].depth === 1 && tokens[i].text === PARTITION_STATEMENT_CHAR.COMMA) {
       items.push(tokens.slice(start, i));
       start = i + 1;
     }
@@ -543,20 +537,36 @@ function splitTopLevelCreateTableItems(tokens) {
   return items;
 }
 
-function isColumnConstraintToken(tok) {
-  return tok.depth === 1 && tok.upper !== null && CONSTRAINT_START_TOKENS.has(tok.upper);
+function isColumnConstraintToken(tok, expectedDepth) {
+  return (
+    tok.depth === expectedDepth &&
+    tok.upper !== null &&
+    CONSTRAINT_START_TOKENS.has(tok.upper)
+  );
 }
 
-function collectDeclaredTypeTokens(itemTokens) {
+function extractDeclaredTypeFromTokens(tokens, startIndex, sourceSql, expectedDepth) {
   const typeTokens = [];
-  for (let i = 1; i < itemTokens.length; i += 1) {
-    const tok = itemTokens[i];
-    if (isColumnConstraintToken(tok)) break;
-    if (tok.depth === 1 && DECLARED_TYPE_TOKEN_TYPES.has(tok.type)) {
-      typeTokens.push(tok.value);
+  for (let i = startIndex; i < tokens.length; i += 1) {
+    const tok = tokens[i];
+    if (tok.depth !== expectedDepth) continue;
+    if (tok.text === PARTITION_STATEMENT_CHAR.OPEN_PAREN) break;
+    if (isColumnConstraintToken(tok, expectedDepth)) break;
+    if (SQLITE_NAME_TOKEN_TYPES.has(tok.type)) {
+      typeTokens.push(tok);
     }
   }
-  return typeTokens.join(SPACE_STR);
+  if (typeTokens.length === 0) return EMPTY_STR;
+  const firstType = typeTokens[0];
+  if (firstType.type !== PARTITION_STATEMENT_TOKEN.WORD) {
+    return firstType.value;
+  }
+  const lastType = typeTokens[typeTokens.length - 1];
+  return sourceSql.slice(firstType.start, lastType.start + lastType.text.length);
+}
+
+function extractDeclaredTypeString(itemTokens, sourceSql) {
+  return extractDeclaredTypeFromTokens(itemTokens, 1, sourceSql, 1);
 }
 
 function affinityFromRawTypeString(rawType) {
@@ -569,31 +579,33 @@ function affinityFromRawTypeString(rawType) {
  * or `null` when the item is a table-level constraint.
  *
  * `lexPartitionStatement` populates `tok.upper` only for ASCII-letter/underscore
- * keyword candidates (`KEYWORD = /^[A-Za-z_]+$/u`), so `tok.upper` is used to
- * recognize table/column constraint keywords while `tok.value` on `word`/`ident`
- * tokens is used to reconstruct the declared type name (including digit-bearing
- * type names such as `INT8`, `INT2`, `FLOAT8`).
+ * keyword candidates (`KEYWORD = /^[A-Za-z_]+$/`), so `tok.upper` recognizes
+ * table/column constraint keywords while `SQLITE_NAME_TOKEN_TYPES` tokens
+ * supply SQLite 3.49.2-exact declared type extraction.
  *
  * @param {Array<Object>} itemTokens
+ * @param {string} sourceSql
  * @return {[string, string]|null}
  */
-function parseSingleColumnTokens(itemTokens) {
+function parseSingleColumnTokens(itemTokens, sourceSql) {
   if (itemTokens.length === 0) return null;
   const first = itemTokens[0];
   if (first.upper !== null && TABLE_CONSTRAINT_HEADS.has(first.upper)) {
     return null;
   }
-  const colName = stripIdentifierQuotes(first.value);
+  if (!SQLITE_NAME_TOKEN_TYPES.has(first.type)) return null;
+  const colName = first.identifier ?? asciiLower(first.value);
   if (colName.length === 0) return null;
-  const rawType = collectDeclaredTypeTokens(itemTokens);
+  const rawType = extractDeclaredTypeString(itemTokens, sourceSql);
   return [colName, affinityFromRawTypeString(rawType)];
 }
 
 function parseCreateTableColumnAffinities(createSql) {
   const map = new Map();
-  const {tokens} = lexPartitionStatement(String(createSql || EMPTY_STR));
+  const sourceSql = String(createSql || EMPTY_STR);
+  const {tokens} = lexPartitionStatement(sourceSql);
   for (const itemTokens of splitTopLevelCreateTableItems(tokens)) {
-    const parsed = parseSingleColumnTokens(itemTokens);
+    const parsed = parseSingleColumnTokens(itemTokens, sourceSql);
     if (parsed !== null) map.set(parsed[0], parsed[1]);
   }
   return map;
@@ -605,7 +617,11 @@ function buildColumnAffinityMapFromColumns(columns) {
   for (const col of columns) {
     const colName = stripIdentifierQuotes(col?.name);
     if (colName.length === 0) continue;
-    const rawType = String(col?.type || EMPTY_STR).trim();
+    const rawSource = String(col?.type || EMPTY_STR).trim();
+    const rawType = rawSource.length > 0 ?
+      extractDeclaredTypeFromTokens(
+        lexPartitionStatement(rawSource).tokens, 0, rawSource, 0,
+      ) : EMPTY_STR;
     map.set(colName, affinityFromRawTypeString(rawType));
   }
   return map;

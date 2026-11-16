@@ -50,6 +50,7 @@ import {
   RUN_CLASS,
   STORAGE_KIND,
   deploymentFailure,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {inspectProducts, runClassOf} from './real-product-identity.js';
 import {
@@ -1328,11 +1329,24 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
         (one) => ownField(one, 'containerId') === target.containerId) ?? null;
       const beforeStartedAt = ownField(beforeProduct, 'startedAt') ?? null;
       const restartedAt = at();
+      const stepOpts = () => {
+        const timeoutMs = numberIsFinite(effectiveDeadlineAtMs) ?
+          Math.max(1, effectiveDeadlineAtMs - now()) : undefined;
+        return {
+          timeoutMs,
+          opts: withExplicitSignalOption({
+            ...opts,
+            ...(timeoutMs !== undefined ? {timeoutMs} : {}),
+          }, effectiveSignal),
+        };
+      };
+      const restartStep = stepOpts();
       await awaitWithGateSignal(
         () => trackedSshRun(
           target.host,
-          effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
+          restartStep.opts,
           `docker restart -t ${RESTART_GRACE_SECONDS} ${shellWord(target.containerId)}`,
+          restartStep.timeoutMs,
         ),
         {...gateControl, stage: 'product-restart'},
       );
@@ -1347,12 +1361,13 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
       );
       const inspectControl = {...gateControl, stage: 'product-restart-inspect'};
       assertSemanticGateActive(inspectControl);
+      const inspectStep = stepOpts();
       const previousByContainer = indexProductsByContainer(current.identity.products);
       current.identity.products = arrayMap(
         await awaitWithGateSignal(
           () => inspectProducts({
             sshRun: trackedSshRun,
-            opts: effectiveSignal ? {...opts, signal: effectiveSignal} : opts,
+            opts: inspectStep.opts,
             roles: current.identity.products,
           }),
           inspectControl,

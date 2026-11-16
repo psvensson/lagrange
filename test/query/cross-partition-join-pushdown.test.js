@@ -27,6 +27,7 @@ import {
 } from '../../src/query/distributed/parallel-query-coordinator.js';
 import {
   areSqlScalarsEqualWithAffinity,
+  buildColumnAffinityMapFromColumns,
   compareSqlScalarsWithAffinity,
   residualPredicateAdmitsRow,
 } from '../../src/query/distributed/residual-predicate-evaluator.js';
@@ -942,6 +943,77 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
       .map((r) => r.id),
     'ALTER TABLE added INT8 column n8 with bound text parameter "01" preserves NUMERIC affinity and returns [1, 2]',
   );
+
+  // End-to-end PG-dialect witness for quoted "INT8" type in ALTER TABLE:
+  const alterPgQn8Ast = new SQLParser(
+    'ALTER TABLE b ADD COLUMN qn8 "INT8" DEFAULT 1;',
+    {dialect: 'postgresql'},
+  ).parse();
+  const alterPgQn8Spec = new MigrationPipeline({migrationCoordinator: {}}).buildAlterSpec(
+    alterPgQn8Ast,
+  );
+  t.equal(
+    buildColumnAffinityMapFromColumns([
+      {name: alterPgQn8Spec.columnName, type: alterPgQn8Spec.dataType},
+    ]).get('qn8'),
+    'NUMERIC',
+    'buildColumnAffinityMapFromColumns maps PG-dialect quoted "INT8" to NUMERIC',
+  );
+  for (const db of [rightDb, oracleDb]) {
+    db.exec(alterPgQn8Spec.sql);
+  }
+  const qn8ParamSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.qn8 = $1 ORDER BY a.id';
+  const qn8OracleSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.qn8 = ? ORDER BY a.id';
+  const qn8TextOracle = oracleDb.prepare(qn8OracleSql).all('01').map((r) => r.id);
+  t.same(qn8TextOracle, [1, 2], 'oracle returns [1, 2] for quoted "INT8" vs bound "01"');
+  t.same(
+    await execJoin(qn8ParamSql, ['01'], {dialect: 'postgresql'}),
+    qn8TextOracle,
+    'PG-dialect ALTER TABLE quoted "INT8" column qn8 with bound "01" returns [1, 2]',
+  );
+  const qn8NumOracle = oracleDb.prepare(qn8OracleSql).all(1).map((r) => r.id);
+  t.same(qn8NumOracle, [1, 2], 'oracle returns [1, 2] for quoted "INT8" vs bound 1');
+  t.same(
+    await execJoin(qn8ParamSql, [1], {dialect: 'postgresql'}),
+    qn8NumOracle,
+    'PG-dialect ALTER TABLE quoted "INT8" column qn8 with bound 1 returns [1, 2]',
+  );
+
+  // SQLite 3.49.2 oracle parity matrix for quoted/split/NONE datatype names:
+  const quotedTypeMatrix = [
+    ['q_dq', '"INT8" DEFAULT 1', [1, 2], 'quoted "INT8"'],
+    ['q_bt', '`INT8` DEFAULT 1', [1, 2], 'backtick `INT8`'],
+    ['q_br', '[INT8] DEFAULT 1', [1, 2], 'bracket [INT8]'],
+    ['q_sq', '\'INT8\' DEFAULT 1', [1, 2], 'single-quoted INT8'],
+    ['q_esc', '"INT""8" DEFAULT 1', [1, 2], 'escaped-quote "INT""8"'],
+    ['q_vp', '"VARCHAR"(32) DEFAULT 1', [], 'quoted "VARCHAR"(32)'],
+    ['q_dp', '"DOUBLE" "PRECISION" DEFAULT 1', [1, 2], 'quoted "DOUBLE" "PRECISION"'],
+    ['q_ci_q', '"CHAR" "INT" DEFAULT 1', [], 'quoted "CHAR" "INT" (TEXT)'],
+    ['q_ci_b', 'CHAR INT DEFAULT 1', [1, 2], 'unquoted CHAR INT (NUMERIC)'],
+    ['q_bi_q', '"BLOB" "INT" DEFAULT 1', [], 'quoted "BLOB" "INT" (NONE)'],
+    ['q_vi_q', 'VARYING "INT" DEFAULT 1', [1, 2], 'mixed VARYING "INT" (NUMERIC)'],
+    ['q_def', '"DEFAULT" DEFAULT 1', [1, 2], 'quoted "DEFAULT"'],
+    ['q_pri', '"PRIMARY" "INT8" DEFAULT 1', [1, 2], 'quoted "PRIMARY" "INT8"'],
+    ['q_none', 'NONE DEFAULT 1', [1, 2], 'declared NONE (NUMERIC)'],
+  ];
+  for (const [col, def, expectedIds, label] of quotedTypeMatrix) {
+    for (const db of [rightDb, oracleDb]) {
+      db.exec(`ALTER TABLE b ADD COLUMN ${col} ${def}`);
+    }
+    const pgSql =
+      `SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.${col} = $1 ORDER BY a.id`;
+    const sqliteSql =
+      `SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.${col} = ? ORDER BY a.id`;
+    const oracleIds = oracleDb.prepare(sqliteSql).all('01').map((r) => r.id);
+    t.same(oracleIds, expectedIds, `SQLite oracle matches expected for ${label}`);
+    t.same(
+      await execJoin(pgSql, ['01'], {dialect: 'postgresql'}),
+      oracleIds,
+      `parity matrix matches SQLite oracle for ${label}`,
+    );
+  }
 
   // Counterexample 8 (Schema-read failure propagation and finite-failure recovery):
   let failSchemaReads = true;

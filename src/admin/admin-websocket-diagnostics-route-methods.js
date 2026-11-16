@@ -8,7 +8,10 @@ import {
   getRemainingBudgetMs,
 } from '../control-plane/timeout-budget.js';
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
-import {projectServeLaneControlSnapshot} from './admin-control-snapshot-local-diagnostics-methods.js';
+import {
+  awaitSnapshotWithRequestLifecycle,
+  runSingleFlightLocalSnapshot,
+} from './admin-control-snapshot-serve-lane.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
@@ -16,6 +19,7 @@ const SNAPSHOT_RETRY_LOG_MSG =
   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
 const LOCAL_NESTED_OPERATION_ADMIN_CONTROL_SNAPSHOT =
   'admin_control_snapshot_query';
+const CONTROL_SNAPSHOT_SINGLE_FLIGHT_KEY_FULL_DEFAULT = 'full:default';
 const CONTROL_SNAPSHOT_RETRY_BUDGET_MODE = Object.freeze({
   CALLER_DEADLINE: 'caller_deadline',
   DEFAULT: 'default',
@@ -157,6 +161,35 @@ function resolveSpentControlSnapshotRetry(
     retryBudgetState,
     owner.nowFn,
   );
+}
+
+function createControlSnapshotViewPromise(api, view, timeoutMs) {
+  if (view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_SERVE_LANE) {
+    return api.buildLocalServeLaneControlSnapshot();
+  }
+  if (timeoutMs === undefined) {
+    return runSingleFlightLocalSnapshot(
+      api.controlSnapshot,
+      CONTROL_SNAPSHOT_SINGLE_FLIGHT_KEY_FULL_DEFAULT,
+      () => api.buildLocalControlSnapshot(),
+    );
+  }
+  return api.resolveBoundedLocalControlSnapshot({
+    allowAuthoritativeRepair: false,
+    allowAuthoritativeReadinessRefresh: false,
+    boundedObservationProbe: true,
+    queryTimeoutMs: timeoutMs,
+  });
+}
+
+function resolveControlSnapshotRequestTimeoutMs(view, requestedTimeoutMs) {
+  if (
+    view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_SERVE_LANE &&
+    requestedTimeoutMs === undefined
+  ) {
+    return ADMIN_CONTROL_SNAPSHOT.DEFAULT_SERVE_LANE_QUERY_TIMEOUT_MS;
+  }
+  return requestedTimeoutMs;
 }
 
 const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
@@ -314,35 +347,30 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
       reply.code(HTTP_STATUS.BAD_REQUEST).send({error: timeoutCheck.error});
       return;
     }
-    await this.serveControlSnapshotView(reply, viewCheck.view, timeoutCheck.requestedTimeoutMs);
+    await this.serveControlSnapshotView(
+      request,
+      reply,
+      viewCheck.view,
+      timeoutCheck.requestedTimeoutMs,
+    );
   },
 
-  async serveControlSnapshotView(reply, view, requestedTimeoutMs) {
+  async serveControlSnapshotView(request, reply, view, requestedTimeoutMs) {
     try {
-      if (
-        view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_FULL &&
-        requestedTimeoutMs === undefined
-      ) {
-        const snapshot = await this.buildLocalControlSnapshot();
-        reply.code(HTTP_STATUS.OK).send(snapshot);
+      const timeoutMs =
+        resolveControlSnapshotRequestTimeoutMs(view, requestedTimeoutMs);
+      const lifecycleResult = await awaitSnapshotWithRequestLifecycle(
+        createControlSnapshotViewPromise(this, view, timeoutMs),
+        {request, reply, timeoutMs},
+      );
+      if (lifecycleResult.disconnected) {
         return;
       }
-      const queryTimeoutMs =
-        requestedTimeoutMs === undefined ?
-          ADMIN_CONTROL_SNAPSHOT.DEFAULT_SERVE_LANE_QUERY_TIMEOUT_MS :
-          requestedTimeoutMs;
-      const snapshot = await this.resolveBoundedLocalControlSnapshot({
-        allowAuthoritativeRepair: false,
-        allowAuthoritativeReadinessRefresh: false,
-        boundedObservationProbe: true,
-        queryTimeoutMs,
-      });
-      const payload =
-        view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_SERVE_LANE ?
-          projectServeLaneControlSnapshot(snapshot) :
-          snapshot;
-      reply.code(HTTP_STATUS.OK).send(payload);
+      reply.code(HTTP_STATUS.OK).send(lifecycleResult.snapshot);
     } catch (error) {
+      if (reply?.raw?.destroyed === true || request?.raw?.destroyed === true) {
+        return;
+      }
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
         error: error.message,
       });
@@ -502,6 +530,10 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
 
   buildLocalCdcDiagnostics() {
     return this.controlSnapshot.buildLocalCdcDiagnostics();
+  },
+
+  async buildLocalServeLaneControlSnapshot(options = {}) {
+    return this.controlSnapshot.buildLocalServeLaneControlSnapshot(options);
   },
 
   async resolveBoundedLocalControlSnapshot(options = {}) {

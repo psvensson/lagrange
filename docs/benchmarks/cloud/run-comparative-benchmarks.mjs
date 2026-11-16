@@ -23,12 +23,10 @@
  */
 
 import {randomBytes} from 'node:crypto';
-import {execFile} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
-import {promisify} from 'node:util';
 
 import {EXIT_CODES} from '../../../test/distributed/harness/constants.js';
 import {
@@ -90,9 +88,15 @@ import {
   teardownCampaignDeployment,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
 import {
+  DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
   deploymentFailure,
+  stripTransientExecutionOptions,
 } from '../../../test/distributed/harness/real-product-deployment-contract.js';
+import {
+  createSshCommandRunner,
+  sshOptions,
+} from '../../../test/distributed/harness/real-product-remote-shell.js';
 import {
   resolveLagrangeContainerImage,
 } from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
@@ -103,7 +107,6 @@ import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
 
-const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const TARGET = Object.freeze({LAB: 'lab', GCP: 'gcp'});
 const PROFILES = Object.freeze({smoke: COMPARATIVE_SMOKE_PROFILE,
@@ -299,24 +302,9 @@ function gcpHosts(opts, dataHostCount) {
     host(ips.length - 1, 'client')];
 }
 
-function sshOptions(opts) {
-  return ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
-    ...(opts.sshKey ? ['-i', opts.sshKey] : [])];
-}
-
 function createSshRun(hosts, opts) {
-  const targetOf = new Map(hosts.map((host) => [host.ip, host.sshTarget]));
-  return async (ip, callOpts, command, timeoutMs = SSH_TIMEOUT_MS) => {
-    const target = targetOf.get(ip);
-    if (!target) throw new Error(`host ${ip} is not part of this campaign`);
-    const signal = callOpts && Object.hasOwn(callOpts, 'signal') ?
-      callOpts.signal : opts?.signal;
-    const boundedTimeoutMs = Number.isFinite(callOpts?.timeoutMs) ?
-      Math.max(1, Math.min(timeoutMs, Math.floor(callOpts.timeoutMs))) : timeoutMs;
-    const {stdout} = await execFileAsync('ssh', [...sshOptions(opts), target, command],
-      {timeout: boundedTimeoutMs, maxBuffer: SSH_MAX_BUFFER, ...(signal ? {signal} : {})});
-    return String(stdout || '').trim();
-  };
+  return createSshCommandRunner({hosts, opts, defaultTimeoutMs: SSH_TIMEOUT_MS,
+    maxBuffer: SSH_MAX_BUFFER});
 }
 
 // The harness identity the campaign header carries (stream A's same-harness
@@ -406,20 +394,25 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     proofClientIps: controllerIp ? [controllerIp] : []};
   let deploymentSeq = 0;
   const pendingStorageByHost = new Map();
-  const deployArm = (run, {signal} = {}) => {
+  const deployArm = (run, {signal = null, deadlineAtMs = null} = {}) => {
     deploymentSeq += 1;
     const subDir = opts.storageRoot ? `${run.runId}-d${deploymentSeq}` : null;
     const targetHostCount = TARGET_DATA_HOSTS[run.targetId] ?? dataIps.length;
     recordPendingStorageSubdir(pendingStorageByHost, dataIps.slice(0, targetHostCount), subDir);
-    const runOpts = {
+    const cleanOpts = stripTransientExecutionOptions({
       ...deployOpts,
       ...(subDir ? {storageRoot: `${opts.storageRoot}/${subDir}`} : {}),
-      ...(signal ? {signal} : {}),
-    };
-    return deployComparativeTarget(run.targetId, {hosts: dataIps,
-      clientIp: client.ip, sshRun, opts: runOpts, signal,
+    });
+    return deployComparativeTarget(run.targetId, {
+      hosts: dataIps,
+      clientIp: client.ip,
+      sshRun,
+      opts: cleanOpts,
+      signal,
+      deadlineAtMs,
       campaignId: manifest.campaignId,
-      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))});
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
   };
   const teardown = async () => teardownCampaignDeployment({
     hosts: hosts.map((host) => host.ip),
@@ -431,16 +424,19 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
   });
   const semanticGate = createSemanticGateStage({journey: runScenarioASemanticProofJourney,
     sshRun, opts, loadGeneratorHost, now: Date.now,
-    redeploy: async (run, {signal} = {}) => {
+    redeploy: async (run, {signal = null, deadlineAtMs = null} = {}) => {
       const closed = await teardown();
       if (!closed.complete) {
+        const message = closed.containersClosed === false ?
+          'cannot redeploy while prior campaign containers remain unclosed' :
+          'cannot redeploy while prior campaign storage cleanup is incomplete';
         throw deploymentFailure(
           DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
-          'cannot redeploy while prior campaign containers remain unclosed',
+          message,
           {closure: closed},
         );
       }
-      return deployArm(run, {signal});
+      return deployArm(run, {signal, deadlineAtMs});
     },
     evidenceDirOf: (run) => path.resolve(REPO_ROOT,
       `test-output/bench/${manifest.campaignId}/${run.runId}/semantic-gate`)});
@@ -457,14 +453,31 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
     now: Date.now,
     deadlineAt: Date.now() + manifest.campaignBudgetMinutes * MS_PER_MINUTE,
     deployRun: deployArm,
-    executeWorkloadRun: createWorkloadRunExecutor({clientHost: client.ip,
-      runWorkload: createRemoteWorkloadRunner({sshRun, opts, host: loadGeneratorHost,
-        harnessCommit: harness.gitCommit, campaignId: manifest.campaignId}),
-      evidenceDirOf: (run) => `test-output/bench/${manifest.campaignId}/${run.runId}/evidence`,
-      describeLoadGenerator: () => describeLoadGenerator({host: client,
-        hostFacts: facts[hosts.indexOf(client)]})}),
-    inspectProducts: (deployment) => observeProductsAfterWindow({sshRun, opts,
-      products: deployment.identity.products}),
+    executeWorkloadRun: (() => {
+      const remoteRunner = createRemoteWorkloadRunner({
+        sshRun,
+        opts,
+        host: loadGeneratorHost,
+        harnessCommit: harness.gitCommit,
+        campaignId: manifest.campaignId,
+      });
+      return createWorkloadRunExecutor({
+        clientHost: client.ip,
+        runWorkload: (request, run, callOpts = {}) => remoteRunner(request, run, callOpts),
+        evidenceDirOf: (run) =>
+          `test-output/bench/${manifest.campaignId}/${run.runId}/evidence`,
+        describeLoadGenerator: () => describeLoadGenerator({
+          host: client,
+          hostFacts: facts[hosts.indexOf(client)],
+        }),
+      });
+    })(),
+    inspectProducts: (deployment) => observeProductsAfterWindow({
+      sshRun,
+      opts,
+      products: deployment.identity.products,
+      timeoutMs: DEFAULT_INSPECT_TIMEOUT_MS,
+    }),
     teardownRun: teardown,
     appendRecords: (records) => appendRecords(
       path.resolve(REPO_ROOT, opts.rawObservationsPath), records),

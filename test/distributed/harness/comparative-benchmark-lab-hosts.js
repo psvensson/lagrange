@@ -34,7 +34,7 @@ import {
   deploymentFailure,
   requireCampaignId,
 } from './real-product-deployment-contract.js';
-import {errorText, shellQuote} from './real-product-remote-shell.js';
+import {errorText, settleConcurrentBatch, shellQuote} from './real-product-remote-shell.js';
 
 const HARNESS_ROLE = 'harness';
 const LINUX = 'linux';
@@ -344,7 +344,7 @@ function plannedLabLocks(hosts, campaignId) {
 }
 
 function releaseLabBenchmarkHosts(sessions) {
-  return Promise.all(arrayMap(sessions, (session) => session.release()));
+  return settleConcurrentBatch(sessions, (session) => session.release());
 }
 
 /**

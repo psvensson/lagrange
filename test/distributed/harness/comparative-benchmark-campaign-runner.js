@@ -40,6 +40,7 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  dateNow,
   stringStartsWith,
 } from './real-product-captured-intrinsics.js';
 import {
@@ -217,12 +218,34 @@ function recordedDeployment({attempt, header, events, closure}) {
     closure: closureOf(closure), roleObservations: attempt.roleObservations};
 }
 
-async function observeRolesSafely(deployment, events, now) {
+function recordRoleObservationFailure(events, error, phase, clock) {
+  const eventRecord = {
+    kind: EVENT.ROLE_OBSERVATION_FAILED,
+    error: errorText(error),
+    observedAt: iso(clock()),
+  };
+  if (phase) eventRecord.phase = phase;
+  events.push(eventRecord);
+}
+
+function isAbortError(signal, error) {
+  if (signal?.aborted) return true;
+  return Boolean(error?.aborted);
+}
+
+async function observeRolesSafely(deployment, events, phase,
+  {signal = null, deadlineAtMs = null, now = dateNow} = {}) {
+  const clock = typeof now === 'function' ? now : dateNow;
+  const observe = deployment?.operations?.observeRoles;
+  if (typeof observe !== 'function') return null;
   try {
-    return await deployment.operations?.observeRoles?.() ?? null;
+    const roles = await observe({signal, deadlineAtMs});
+    return roles ?? null;
   } catch (error) {
-    events.push({kind: EVENT.ROLE_OBSERVATION_FAILED, error: errorText(error),
-      observedAt: iso(now())});
+    if (isAbortError(signal, error)) {
+      throw error;
+    }
+    recordRoleObservationFailure(events, error, phase, clock);
     return null;
   }
 }
@@ -271,8 +294,14 @@ async function withAttempt(attempt, step) {
 }
 
 async function measureRun({run, manifest, deps, events, signal}) {
-  const attempt = {deployment: await deps.deployRun(run, {signal}), workload: null,
-    semanticGate: null, productsAfter: null, roleObservations: null};
+  const deadlineAtMs = deps.deadlineAt ?? null;
+  const attempt = {
+    deployment: await deps.deployRun(run, {signal, deadlineAtMs}),
+    workload: null,
+    semanticGate: null,
+    productsAfter: null,
+    roleObservations: null,
+  };
   // The deployment stays in the record (and pins its identity) when refused.
   await withAttempt(attempt, () => assertEndpointBound(attempt.deployment));
   const staged = await withAttempt(attempt, () => semanticGateStage({run, manifest, deps,
@@ -281,15 +310,23 @@ async function measureRun({run, manifest, deps, events, signal}) {
   attempt.semanticGate = staged.gate ?? null;
   const deployment = attempt.deployment;
   assertEndpointBound(deployment);
-  const rolesBefore = await observeRolesSafely(deployment, events, deps.now);
-  attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment, signal,
-    semanticGate: staged.gate});
+  const rolesBefore = await withAttempt(attempt, () => observeRolesSafely(deployment, events,
+    'before-window', {signal, deadlineAtMs, now: deps.now}));
+  attempt.workload = await withAttempt(attempt, () => deps.executeWorkloadRun({
+    run,
+    manifest,
+    deployment,
+    signal,
+    deadlineAtMs,
+    semanticGate: staged.gate,
+  }));
   events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await withAttempt(attempt, () => deps.inspectProducts(deployment));
   const identityEvents = compareProductIdentity(deployment.identity.products,
     attempt.productsAfter, iso(deps.now()));
   events.push(...identityEvents);
-  const rolesAfter = await observeRolesSafely(deployment, events, deps.now);
+  const rolesAfter = await withAttempt(attempt, () => observeRolesSafely(deployment, events,
+    'after-window', {signal, deadlineAtMs, now: deps.now}));
   attempt.roleObservations = {before: rolesBefore, after: rolesAfter};
   if (rolesBefore && rolesAfter && canonicalJson(rolesBefore) !== canonicalJson(rolesAfter)) {
     events.push({kind: EVENT.ROLE_CHANGED, before: rolesBefore, after: rolesAfter,
@@ -302,8 +339,13 @@ async function measureRun({run, manifest, deps, events, signal}) {
   }
   const workloadFailure = attempt.workload.failure;
   if (workloadFailure) {
-    throw Object.assign(deploymentFailure(workloadFailure.code, workloadFailure.message,
-      workloadFailure.diagnostic ?? null), {attempt});
+    const err = deploymentFailure(workloadFailure.code, workloadFailure.message,
+      workloadFailure.diagnostic ?? null);
+    err.aborted = Boolean(workloadFailure.aborted);
+    err.deadlineExpired = Boolean(workloadFailure.deadlineExpired);
+    err.observerInfrastructure = Boolean(workloadFailure.observerInfrastructure);
+    err.lastObservation = workloadFailure.lastObservation ?? null;
+    throw Object.assign(err, {attempt});
   }
   if (signal.aborted) {
     throw Object.assign(deploymentFailure(DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,

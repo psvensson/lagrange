@@ -13,6 +13,7 @@
 import {randomBytes} from 'node:crypto';
 
 import {
+  DateConstructor,
   arrayEvery,
   arrayFilter,
   arrayFlatMap,
@@ -20,16 +21,23 @@ import {
   arrayMap,
   arraySome,
   dateNow,
+  dateToISOString,
   numberIsFinite,
   objectHasOwn,
   stringSplit,
   stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
+  DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
+  DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
   requireCampaignId,
+  resolveOperationWindow,
   resolveReadinessBudget,
+  stripTransientExecutionOptions,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   classifyStorage,
@@ -117,21 +125,41 @@ function standbyScript({primaryHost, name, password}) {
       (setting) => `-c ${setting}`), ' ')}`], '\n');
 }
 
+function resolveCallSignal(ctx, pollContext) {
+  const hasPollSignal = Boolean(pollContext && objectHasOwn(pollContext, 'signal'));
+  const signal = hasPollSignal ? pollContext.signal :
+    (objectHasOwn(ctx, 'signal') ? ctx.signal : undefined);
+  if (signal?.aborted) {
+    const err = new Error('PostgreSQL operation aborted');
+    err.aborted = true;
+    throw err;
+  }
+  return signal;
+}
+
+function resolveRemainingTimeoutMs(ctx, pollContext, maxTimeoutMs) {
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const deadlineAtMs = numberIsFinite(pollContext?.deadlineAtMs) ? pollContext.deadlineAtMs :
+    (numberIsFinite(ctx.deadlineAtMs) ? ctx.deadlineAtMs : null);
+  const remainingMs = numberIsFinite(pollContext?.remainingMs) ? pollContext.remainingMs :
+    (deadlineAtMs !== null ? deadlineAtMs - clock() : null);
+  if (remainingMs !== null && remainingMs <= 0) {
+    const err = new Error('PostgreSQL operation deadline expired');
+    err.deadlineExpired = true;
+    throw err;
+  }
+  return remainingMs !== null ?
+    Math.max(1, Math.min(maxTimeoutMs, Math.floor(remainingMs))) : maxTimeoutMs;
+}
+
 function callOptsFor(
   ctx,
   pollContext = null,
-  defaultTimeoutMs = DEFAULT_POSTGRES_PROBE_TIMEOUT_MS,
+  maxTimeoutMs = DEFAULT_POSTGRES_PROBE_TIMEOUT_MS,
 ) {
-  const hasPollSignal = Boolean(pollContext && objectHasOwn(pollContext, 'signal'));
-  const signal = hasPollSignal ? pollContext.signal : ctx.signal;
-  const timeoutMs = numberIsFinite(pollContext?.remainingMs) ?
-    Math.max(1, Math.min(defaultTimeoutMs, Math.floor(pollContext.remainingMs))) :
-    defaultTimeoutMs;
-  return {
-    ...(ctx.opts || {}),
-    ...(signal !== undefined && signal !== null ? {signal} : {}),
-    timeoutMs,
-  };
+  const signal = resolveCallSignal(ctx, pollContext);
+  const timeoutMs = resolveRemainingTimeoutMs(ctx, pollContext, maxTimeoutMs);
+  return withExplicitSignalOption({...stripTransientExecutionOptions(ctx.opts), timeoutMs}, signal);
 }
 
 function rethrowClassifiedPostgresError(error) {
@@ -185,8 +213,21 @@ async function query(ctx, role, sql, pollContext = null) {
     timeoutMs - PG_STATEMENT_TIMEOUT_MARGIN_MS :
     Math.max(MIN_PG_STATEMENT_TIMEOUT_MS, Math.floor(timeoutMs * PG_STATEMENT_SHORT_RATIO));
   try {
-    return stringTrim(String(await ctx.sshRun(role.host, callOpts,
+    const out = stringTrim(String(await ctx.sshRun(role.host, callOpts,
       adminSql(role.containerId, sql, statementTimeoutMs), timeoutMs)));
+    const activeSignal = objectHasOwn(callOpts, 'signal') ? callOpts.signal : ctx.signal;
+    if (activeSignal?.aborted) {
+      const err = new Error('PostgreSQL operation aborted');
+      err.aborted = true;
+      throw err;
+    }
+    const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+    if (pollContext === null && numberIsFinite(ctx.deadlineAtMs) && clock() >= ctx.deadlineAtMs) {
+      const err = new Error('PostgreSQL operation deadline expired');
+      err.deadlineExpired = true;
+      throw err;
+    }
+    return out;
   } catch (error) {
     return rethrowClassifiedPostgresError(error);
   }
@@ -205,8 +246,18 @@ async function configureAccess(ctx, primary, {clientIps, standbyHosts, passwords
   await query(ctx, primary,
     `CREATE ROLE ${REPLICATION_USER} REPLICATION LOGIN PASSWORD '${passwords.replication}'`);
   const encoded = Buffer.from(hbaFile({clientIps, standbyHosts}), 'utf8').toString('base64');
-  await ctx.sshRun(primary.host, ctx.opts, `docker exec ${shellWord(primary.containerId)} ` +
-    `sh -c ${shellQuote(`echo ${encoded} | base64 -d > "$PGDATA/pg_hba.conf"`)}`);
+  const hbaOpts = callOptsFor(ctx);
+  try {
+    await ctx.sshRun(
+      primary.host,
+      hbaOpts,
+      `docker exec ${shellWord(primary.containerId)} ` +
+        `sh -c ${shellQuote(`echo ${encoded} | base64 -d > "$PGDATA/pg_hba.conf"`)}`,
+      hbaOpts.timeoutMs,
+    );
+  } catch (error) {
+    return rethrowClassifiedPostgresError(error);
+  }
   await query(ctx, primary, 'SELECT pg_reload_conf()');
   return stringSplit(await query(ctx, primary, 'SELECT type, database, user_name, address, ' +
     'auth_method FROM pg_hba_file_rules WHERE error IS NULL ORDER BY line_number'), '\n');
@@ -287,27 +338,66 @@ function resolvePostgresClock(now, nowFn, opts) {
   return dateNow;
 }
 
+function resolvePostgresDefaultDeadlineMs(opts) {
+  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
+  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
+    return opts.readiness.formationDeadlineMs;
+  }
+  return DEFAULT_POSTGRES_FORMATION_DEADLINE_MS;
+}
+
+function resolvePostgresFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs) {
+  return resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: resolvePostgresDefaultDeadlineMs(opts),
+    callerDeadlineAtMs: deadlineAtMs ?? opts?.deadlineAtMs,
+    callerDeadlineMs: deadlineMs ?? opts?.deadlineMs,
+    callerSignal: signal ?? opts?.signal ?? null,
+  });
+}
+
+function buildPostgresFormationCtx({sshRun, opts, sleep, clock, signal, deadlineAtMs,
+  deadlineMs}) {
+  const window = resolvePostgresFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs);
+  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, window.signal);
+  return {sshRun: trackedSshRun, settleInFlight, opts, sleep, now: clock,
+    signal: window.signal, deadlineAtMs: window.deadlineAtMs, budget: resolveReadinessBudget(opts)};
+}
+
+function describePostgresFailure({targetId, sshRun, clock, ctx, postFailureOpts, formed,
+  failure}) {
+  const postFailureWindow = resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
+    callerSignal: null,
+  });
+  const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null,
+    deadlineAtMs: postFailureWindow.deadlineAtMs};
+  return describeExhaustedDeployment({
+    targetId, topology: postgresTopology(targetId), sshRun, opts: postFailureOpts,
+    roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_ROOT,
+    deadlineAtMs: postFailureWindow.deadlineAtMs, now: clock,
+    readVersions: (products) => reportedVersions(postFailureCtx, products), failure});
+}
+
 /**
  * @param {{targetId: string, hosts: Array<string>, clientIp: string,
  *   sshRun: Function, opts: Object, campaignId: string, sleep: Function,
- *   signal?: AbortSignal|null, now?: Function, nowFn?: Function}} input
+ *   signal?: AbortSignal|null, deadlineAtMs?: number|null,
+ *   deadlineMs?: number|null, now?: Function, nowFn?: Function}} input
  * @return {Promise<Object>}
  */
 async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts = {}, campaignId,
-  sleep, signal = null, now, nowFn}) {
+  sleep, signal = null, deadlineAtMs = null, deadlineMs = null, now, nowFn}) {
   requireCampaignId(campaignId);
   if (targetId !== TARGET.SINGLE && targetId !== TARGET.SYNC_HA) {
     throw new Error(`unknown PostgreSQL comparative target ${targetId}`);
   }
   const image = opts.postgresImage || POSTGRES_IMAGE_DEFAULT;
   const clock = resolvePostgresClock(now, nowFn, opts);
-  const abortSignal = signal ?? opts?.signal ?? null;
-  const deadlineAtMs = numberIsFinite(opts?.deadlineAtMs) ? opts.deadlineAtMs : null;
-  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
-  const ctx = {sshRun: trackedSshRun, settleInFlight, opts, sleep, now: clock,
-    signal: abortSignal, deadlineAtMs, budget: resolveReadinessBudget(opts)};
-  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
-  const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null, deadlineAtMs: null};
+  const ctx = buildPostgresFormationCtx({sshRun, opts, sleep, clock, signal, deadlineAtMs,
+    deadlineMs});
+  const postFailureOpts = withExplicitSignalOption(stripTransientExecutionOptions(opts), null);
   const passwords = {superuser: generatedPassword(), app: generatedPassword(),
     replication: generatedPassword()};
   const formed = {roles: [], endpoint: null};
@@ -315,19 +405,17 @@ async function deployPostgresCluster({targetId, hosts, clientIp, sshRun, opts = 
     return await describingReadinessExhaustion(
       async () => {
         try {
-          return await formPostgresCluster({ctx, targetId, hosts,
+          return await formPostgresCluster({ctx, rawSshRun: sshRun, targetId, hosts,
             clientIp, campaignId, image, passwords, formed});
         } finally {
-          await settleInFlight();
+          await ctx.settleInFlight();
         }
       },
-      (failure) => describeExhaustedDeployment({
-        targetId, topology: postgresTopology(targetId), sshRun, opts: postFailureOpts,
-        roles: [...formed.roles], endpoint: formed.endpoint, dataDir: DATA_ROOT,
-        readVersions: (products) => reportedVersions(postFailureCtx, products), failure}),
+      (failure) => describePostgresFailure({targetId, sshRun, clock, ctx, postFailureOpts,
+        formed, failure}),
     );
   } finally {
-    await settleInFlight();
+    await ctx.settleInFlight();
   }
 }
 
@@ -348,7 +436,7 @@ async function reportedVersions(ctx, products) {
   return products;
 }
 
-async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, image,
+async function formPostgresCluster({ctx, rawSshRun, targetId, hosts, clientIp, campaignId, image,
   passwords, formed}) {
   const {sshRun, opts} = ctx;
   const standbyHosts = targetId === TARGET.SYNC_HA ? hosts.slice(1, 1 + STANDBY_NAMES.length) :
@@ -380,37 +468,97 @@ async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, 
     await query(ctx, primary, 'SELECT pg_reload_conf()');
     readiness.synchronous = await synchronousReady(ctx, primary, setting);
   }
-  const products = await reportedVersions(ctx, await inspectProducts({sshRun, opts, roles}));
+  const products = await reportedVersions(ctx, await inspectProducts({
+    sshRun,
+    opts,
+    roles,
+    signal: ctx.signal,
+    deadlineAtMs: ctx.deadlineAtMs,
+    now: ctx.now,
+  }));
   const expectation = {imageRef: image,
     versionPattern: pinnedVersionPattern(image, MAJOR_TAG, versionPatternOfMajor)};
   verifyProductIdentity(products, {[ROLE.PRIMARY]: expectation, [ROLE.STANDBY]: expectation});
-  const binding = await bindEndpointToContainer({sshRun, opts, campaignId,
-    endpoint: {host: primary.host, port: PORT}, candidates: [primary]});
+  const bindRemainingMs = numberIsFinite(ctx.deadlineAtMs) ?
+    Math.max(0, ctx.deadlineAtMs - ctx.now()) : undefined;
+  const binding = await bindEndpointToContainer({
+    sshRun,
+    opts,
+    campaignId,
+    endpoint: {host: primary.host, port: PORT},
+    candidates: [primary],
+    signal: ctx.signal,
+    timeoutMs: bindRemainingMs,
+    settleInFlight: ctx.settleInFlight,
+  });
   const storage = arrayMap(products, (product) => classifyStorage(product, DATA_ROOT));
   const connection = {user: APP_USER, password: passwords.app, database: DATABASE};
   const endpoint = {protocol: 'postgresql', host: primary.host, port: PORT,
     containerId: binding.containerId, binding};
+  const cleanOpts = stripTransientExecutionOptions(opts);
+  const postTracker = createTrackedSshRun(rawSshRun, null);
+  const basePostFormationCtx = {
+    sshRun: postTracker.trackedSshRun,
+    settleInFlight: postTracker.settleInFlight,
+    opts: cleanOpts,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: null,
+    deadlineAtMs: null,
+    budget: ctx.budget,
+  };
+  const formationObservedAt = dateToISOString(new DateConstructor(ctx.now()));
+  const observeWithWindow = async ({signal: opSignal, deadlineAtMs: opDeadlineAtMs,
+    deadlineMs: opDeadlineMs} = {}) => {
+    const window = resolveOperationWindow({
+      clock: basePostFormationCtx.now,
+      defaultDeadlineMs: DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
+      callerDeadlineAtMs: opDeadlineAtMs,
+      callerDeadlineMs: opDeadlineMs,
+      callerSignal: opSignal,
+    });
+    const opCtx = {
+      ...basePostFormationCtx,
+      signal: window.signal ?? null,
+      deadlineAtMs: window.deadlineAtMs,
+    };
+    try {
+      return await observeRoles(opCtx, roles);
+    } finally {
+      await basePostFormationCtx.settleInFlight();
+    }
+  };
   return {
     targetId,
     topology: postgresTopology(targetId),
     roles, storage, runClass: runClassOf(storage),
-    readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
+    readiness: {state: READINESS_STATE.READY, observedAt: formationObservedAt,
       evidence: readiness},
     access: {connection, hbaRules},
     accessEvidence: {authMethod: 'scram-sha-256', hbaRules},
     identity: {products},
-    placement: {observedAt: new Date().toISOString(),
+    placement: {observedAt: formationObservedAt,
       source: 'pg_is_in_recovery + pg_stat_replication', ...(await observeRoles(ctx, roles))},
     endpoint,
     operations: {
-      observePlacement: async () => observeRoles(ctx, roles),
-      observeRoles: async () => observeRoles(ctx, roles),
+      observePlacement: observeWithWindow,
+      observeRoles: observeWithWindow,
       // The arm's readiness contract again (after a product restart).
-      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs} = {}) => {
+      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
+        deadlineMs: readyDeadlineMs} = {}) => {
+        const defaultDeadlineMs = opts?.formationDeadlineMs ??
+          opts?.readiness?.formationDeadlineMs ?? DEFAULT_POSTGRES_FORMATION_DEADLINE_MS;
+        const window = resolveOperationWindow({
+          clock: basePostFormationCtx.now,
+          defaultDeadlineMs,
+          callerDeadlineAtMs: readyDeadlineAtMs,
+          callerDeadlineMs: readyDeadlineMs,
+          callerSignal: readySignal,
+        });
         const readyCtx = {
-          ...ctx,
-          signal: readySignal !== undefined ? readySignal : ctx.signal,
-          deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : ctx.deadlineAtMs,
+          ...basePostFormationCtx,
+          signal: window.signal ?? null,
+          deadlineAtMs: window.deadlineAtMs,
         };
         try {
           const again = {servers: []};
@@ -420,7 +568,7 @@ async function formPostgresCluster({ctx, targetId, hosts, clientIp, campaignId, 
           }
           return again;
         } finally {
-          await ctx.settleInFlight();
+          await basePostFormationCtx.settleInFlight();
         }
       },
     },

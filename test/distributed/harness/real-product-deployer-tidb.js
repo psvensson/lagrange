@@ -24,11 +24,13 @@ import {
   waitForPhysicalTablePlacement,
 } from './tidb-reference-physical-placement-proof.js';
 import {
+  DateConstructor,
   arrayEvery,
   arrayFilter,
   arrayFind,
   arrayMap,
   dateNow,
+  dateToISOString,
   numberIsFinite,
   objectHasOwn,
   stringSplit,
@@ -36,6 +38,10 @@ import {
   stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
+  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
+  DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
+  DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
   PD_IMAGE_DEFAULT,
   READINESS_STATE,
@@ -44,7 +50,10 @@ import {
   TIKV_IMAGE_DEFAULT,
   deploymentFailure,
   requireCampaignId,
+  resolveOperationWindow,
   resolveReadinessBudget,
+  stripTransientExecutionOptions,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   classifyStorage,
@@ -142,36 +151,66 @@ function readinessClientCommand(ctx, verb, callOpts = ctx.opts) {
   );
 }
 
+function remainingOpTimeoutMs(ctx, maxMs = DEFAULT_TIDB_OP_TIMEOUT_MS) {
+  if (!numberIsFinite(ctx.deadlineAtMs)) return maxMs;
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const remaining = Math.floor(ctx.deadlineAtMs - clock());
+  return Math.max(1, Math.min(maxMs, remaining));
+}
+
 // Stop the readiness client and observe that it exited: the record says so
 // from the container's own state, never by assumption.
 async function stopReadinessClient(ctx) {
-  const stopOpts = {
-    ...(ctx.opts || {}),
-    signal: null,
-    deadlineAtMs: null,
-    deadlineMs: null,
-    timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS,
-  };
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const hasDeadline = numberIsFinite(ctx.deadlineAtMs);
+  const remainingStop = hasDeadline ?
+    Math.floor(ctx.deadlineAtMs - clock()) : DEFAULT_TIDB_OP_TIMEOUT_MS;
+  const stopTimeoutMs = remainingStop > 0 ?
+    Math.max(1, Math.min(DEFAULT_TIDB_OP_TIMEOUT_MS, remainingStop)) :
+    DEFAULT_TIDB_OP_TIMEOUT_MS;
+  const cleanOpts = stripTransientExecutionOptions(ctx.opts);
+  const stopOpts = withExplicitSignalOption({...cleanOpts, timeoutMs: stopTimeoutMs}, null);
   await readinessClientCommand(ctx, 'docker stop -t 0', stopOpts);
+  const remainingInspect = hasDeadline ?
+    Math.floor(ctx.deadlineAtMs - clock()) : DEFAULT_TIDB_OP_TIMEOUT_MS;
+  const inspectTimeoutMs = remainingInspect > 0 ?
+    Math.max(1, Math.min(DEFAULT_TIDB_OP_TIMEOUT_MS, remainingInspect)) :
+    DEFAULT_TIDB_OP_TIMEOUT_MS;
   const inspected = await ctx.provider.inspectContainer(
     ctx.sqlClient.containerId,
-    {signal: null, timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS},
+    {signal: null, timeoutMs: inspectTimeoutMs},
   );
   if (inspected?.State?.Status !== EXITED) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
       `TiDB readiness client ${ctx.sqlClient.containerId} did not exit ` +
       `(${inspected?.State?.Status})`, {containerId: ctx.sqlClient.containerId});
   }
-  return {imageId: inspected.Image ?? null, observedAt: new Date().toISOString()};
+  return {
+    imageId: inspected.Image ?? null,
+    observedAt: dateToISOString(new DateConstructor(clock())),
+  };
 }
 
 // A read after deployment: the readiness client runs only for its duration.
 async function withReadinessClient(ctx, read) {
-  const startOpts = {
-    ...(ctx.opts || {}),
-    ...(ctx.signal ? {signal: ctx.signal} : {}),
-    timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS,
-  };
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  if (ctx.signal?.aborted) {
+    const err = new Error('TiDB readiness client operation aborted');
+    err.aborted = true;
+    throw err;
+  }
+  if (numberIsFinite(ctx.deadlineAtMs) && clock() >= ctx.deadlineAtMs) {
+    const err = new Error('TiDB readiness client operation deadline expired');
+    err.deadlineExpired = true;
+    throw err;
+  }
+  const startTimeoutMs = remainingOpTimeoutMs(ctx, DEFAULT_TIDB_OP_TIMEOUT_MS);
+  const hasCtxSignal = objectHasOwn(ctx, 'signal');
+  const cleanOpts = stripTransientExecutionOptions(ctx.opts);
+  const startOpts = withExplicitSignalOption(
+    {...cleanOpts, timeoutMs: startTimeoutMs},
+    hasCtxSignal ? ctx.signal : undefined,
+  );
   await readinessClientCommand(ctx, 'docker start', startOpts);
   try {
     return await read();
@@ -181,16 +220,38 @@ async function withReadinessClient(ctx, read) {
   }
 }
 
+function resolveSqlSignal(ctx, callOptions) {
+  if (callOptions && objectHasOwn(callOptions, 'signal')) return callOptions.signal;
+  return objectHasOwn(ctx, 'signal') ? ctx.signal : undefined;
+}
+
+function assertSqlOperationActive(ctx, signal, clock) {
+  if (signal?.aborted) {
+    const err = new Error('TiDB SQL operation aborted');
+    err.aborted = true;
+    throw err;
+  }
+  if (numberIsFinite(ctx.deadlineAtMs) && clock() >= ctx.deadlineAtMs) {
+    const err = new Error('TiDB SQL operation deadline expired');
+    err.deadlineExpired = true;
+    throw err;
+  }
+}
+
 async function sql(ctx, endpoint, statement, callOptions = undefined) {
-  const boundedOptions = {
-    ...(ctx.signal && callOptions?.signal === undefined ? {signal: ctx.signal} : {}),
-    ...(callOptions || {}),
-    timeoutMs: numberIsFinite(callOptions?.timeoutMs) ?
-      Math.max(1, Math.min(DEFAULT_TIDB_OP_TIMEOUT_MS, callOptions.timeoutMs)) :
-      DEFAULT_TIDB_OP_TIMEOUT_MS,
-  };
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const effectiveSignal = resolveSqlSignal(ctx, callOptions);
+  assertSqlOperationActive(ctx, effectiveSignal, clock);
+  const maxMs = remainingOpTimeoutMs(ctx, DEFAULT_TIDB_OP_TIMEOUT_MS);
+  const timeoutMs = numberIsFinite(callOptions?.timeoutMs) ?
+    Math.max(1, Math.min(maxMs, Math.floor(callOptions.timeoutMs))) : maxMs;
+  const boundedOptions = withExplicitSignalOption(
+    {...(callOptions || {}), timeoutMs},
+    effectiveSignal,
+  );
   const result = await ctx.provider.execInContainer(ctx.sqlClient.containerId,
     buildTiDbPhysicalMysqlCommand(endpoint, statement), boundedOptions);
+  assertSqlOperationActive(ctx, effectiveSignal, clock);
   if (result.exitCode !== 0) throw new Error(`mysql exited ${result.exitCode}`);
   return result.stdout;
 }
@@ -235,29 +296,109 @@ function resolveTiDbClock(now, nowFn, opts) {
   return dateNow;
 }
 
+function resolveOpTimeoutMs(opts, budget, window, hasCallerDeadline) {
+  const windowMs = numberIsFinite(window.deadlineMs) ? window.deadlineMs : budget.timeoutMs;
+  if (hasCallerDeadline) return windowMs;
+  const hasExplicitTimeout = numberIsFinite(opts?.readiness?.timeoutMs);
+  const hasFormationOverride = numberIsFinite(opts?.formationDeadlineMs) ||
+    numberIsFinite(opts?.readiness?.formationDeadlineMs);
+  return hasExplicitTimeout && !hasFormationOverride ?
+    Math.min(budget.timeoutMs, windowMs) : windowMs;
+}
+
+function resolveTiDbDefaultDeadlineMs(opts) {
+  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
+  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
+    return opts.readiness.formationDeadlineMs;
+  }
+  return DEFAULT_TIDB_FORMATION_DEADLINE_MS;
+}
+
+function resolveTiDbFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs) {
+  return resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: resolveTiDbDefaultDeadlineMs(opts),
+    callerDeadlineAtMs: deadlineAtMs ?? opts?.deadlineAtMs,
+    callerDeadlineMs: deadlineMs ?? opts?.deadlineMs,
+    callerSignal: signal ?? opts?.signal ?? null,
+  });
+}
+
+function buildTiDbFormationCtx({sshRun, opts, clientIp, sleep, clock, campaignId, signal,
+  deadlineAtMs, deadlineMs}) {
+  const hostByContainer = new Map();
+  const window = resolveTiDbFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs);
+  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, window.signal);
+  return {
+    sshRun: trackedSshRun,
+    settleInFlight,
+    opts,
+    clientIp,
+    sleep,
+    now: clock,
+    signal: window.signal,
+    deadlineAtMs: window.deadlineAtMs,
+    campaignId,
+    budget: resolveReadinessBudget(opts),
+    hostByContainer,
+    provider: createRemoteDockerProvider({
+      sshRun: trackedSshRun,
+      opts,
+      hostOf: (containerId) => hostByContainer.get(containerId),
+    }),
+  };
+}
+
+function describeTiDbFailure({sshRun, clock, ctx, postFailureOpts, formed, failure}) {
+  const postFailureWindow = resolveOperationWindow({
+    clock,
+    defaultDeadlineMs: DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
+    callerSignal: null,
+  });
+  const postFailureCtx = {
+    ...ctx,
+    sshRun,
+    opts: postFailureOpts,
+    signal: null,
+    deadlineAtMs: postFailureWindow.deadlineAtMs,
+    provider: createRemoteDockerProvider({
+      sshRun,
+      opts: postFailureOpts,
+      hostOf: (containerId) => ctx.hostByContainer.get(containerId),
+    }),
+  };
+  return describeExhaustedDeployment({
+    targetId: 'tidb-tikv',
+    topology: TOPOLOGY,
+    sshRun,
+    opts: postFailureOpts,
+    roles: [...formed.roles],
+    endpoint: formed.endpoint,
+    dataDir: DATA_DIR,
+    deadlineAtMs: postFailureWindow.deadlineAtMs,
+    now: clock,
+    readVersions: (products) => reportedVersions(postFailureCtx, formed.endpoint, products),
+    failure,
+  });
+}
+
 /**
  * @param {{hosts: Array<string>, clientIp: string, sshRun: Function,
  *   opts: Object, campaignId: string, sleep: Function, signal?: AbortSignal|null,
+ *   deadlineAtMs?: number|null, deadlineMs?: number|null,
  *   now?: Function, nowFn?: Function}} input
  * @return {Promise<Object>}
  */
 async function deployTiDbCluster({hosts, clientIp, sshRun, opts = {}, campaignId, sleep,
-  signal = null, now, nowFn}) {
+  signal = null, deadlineAtMs = null, deadlineMs = null, now, nowFn}) {
   requireCampaignId(campaignId);
   if (hosts.length < STORE_COUNT) {
     throw new Error(`TiDB arm needs ${STORE_COUNT} data hosts, got ${hosts.length}`);
   }
-  const hostByContainer = new Map();
-  const budget = resolveReadinessBudget(opts);
   const clock = resolveTiDbClock(now, nowFn, opts);
-  const abortSignal = signal ?? opts?.signal ?? null;
-  const deadlineAtMs = numberIsFinite(opts?.deadlineAtMs) ? opts.deadlineAtMs : null;
-  const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, abortSignal);
-  const postFailureOpts = {...(opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
-  const ctx = {sshRun: trackedSshRun, settleInFlight, opts, clientIp, sleep, now: clock,
-    signal: abortSignal, deadlineAtMs, campaignId, budget, hostByContainer,
-    provider: createRemoteDockerProvider({sshRun: trackedSshRun, opts,
-      hostOf: (containerId) => hostByContainer.get(containerId)})};
+  const ctx = buildTiDbFormationCtx({sshRun, opts, clientIp, sleep, clock, campaignId, signal,
+    deadlineAtMs, deadlineMs});
+  const postFailureOpts = withExplicitSignalOption(stripTransientExecutionOptions(opts), null);
   const images = {pd: opts.pdImage || PD_IMAGE_DEFAULT, tikv: opts.tikvImage || TIKV_IMAGE_DEFAULT,
     tidb: opts.tidbImage || TIDB_IMAGE_DEFAULT};
   const formed = {roles: [], endpoint: null};
@@ -265,28 +406,19 @@ async function deployTiDbCluster({hosts, clientIp, sshRun, opts = {}, campaignId
     return await describingReadinessExhaustion(
       async () => {
         try {
-          return await formTiDbCluster({ctx, hosts, images, formed});
+          return await formTiDbCluster({ctx, rawSshRun: sshRun, hosts, images, formed});
         } finally {
-          await settleInFlight();
+          await ctx.settleInFlight();
         }
       },
-      (failure) => {
-        const postFailureCtx = {...ctx, sshRun, opts: postFailureOpts, signal: null,
-          deadlineAtMs: null, provider: createRemoteDockerProvider({sshRun, opts: postFailureOpts,
-            hostOf: (containerId) => hostByContainer.get(containerId)})};
-        return describeExhaustedDeployment({targetId: 'tidb-tikv', topology: TOPOLOGY,
-          sshRun, opts: postFailureOpts, roles: [...formed.roles], endpoint: formed.endpoint,
-          dataDir: DATA_DIR,
-          readVersions: (products) => reportedVersions(postFailureCtx, formed.endpoint, products),
-          failure});
-      },
+      (failure) => describeTiDbFailure({sshRun, clock, ctx, postFailureOpts, formed, failure}),
     );
   } finally {
-    await settleInFlight();
+    await ctx.settleInFlight();
   }
 }
 
-async function formTiDbCluster({ctx, hosts, images, formed}) {
+async function formTiDbCluster({ctx, rawSshRun, hosts, images, formed}) {
   const {sshRun, opts, campaignId, budget} = ctx;
   const roles = formed.roles;
   const pdHost = hosts[0];
@@ -316,42 +448,81 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
   ctx.sqlClient = await start(ctx, ROLE.READINESS_CLIENT, tidb.host, 1, TIDB_SQL_CLIENT_IMAGE,
     ['--entrypoint', 'sleep'], [String(SQL_CLIENT_LIFETIME_SECONDS)]);
   const endpoint = {host: tidb.host, port: P.tidbPort};
-  const sqlReady = (readyCtx = ctx) => typedReadiness('tidb-sql-3-up-stores', () =>
-    waitForTiDbReferenceSqlReady(readyCtx.provider, readyCtx.sqlClient.containerId, endpoint, {
-      timeoutMs: budget.timeoutMs,
-      pollIntervalMs: budget.pollIntervalMs,
-      signal: readyCtx.signal ?? null,
-      deadlineAtMs: readyCtx.deadlineAtMs ?? null,
-      now: readyCtx.now,
-      readinessSql: buildTiDbReferenceReadinessSql(STORE_COUNT),
-      watchedContainers: arrayMap(roles, (role) => ({role: role.role,
-        containerId: role.containerId})),
-    }));
+  const sqlReady = (readyCtx = ctx, readyTimeoutMs = budget.timeoutMs) =>
+    typedReadiness('tidb-sql-3-up-stores', () =>
+      waitForTiDbReferenceSqlReady(readyCtx.provider, readyCtx.sqlClient.containerId, endpoint, {
+        timeoutMs: readyTimeoutMs,
+        pollIntervalMs: budget.pollIntervalMs,
+        signal: readyCtx.signal ?? null,
+        deadlineAtMs: readyCtx.deadlineAtMs ?? null,
+        now: readyCtx.now,
+        readinessSql: buildTiDbReferenceReadinessSql(STORE_COUNT),
+        watchedContainers: arrayMap(roles, (role) => ({role: role.role,
+          containerId: role.containerId})),
+      }));
   const sqlReadiness = await sqlReady(ctx);
   const products = await reportedVersions(ctx, endpoint,
-    await inspectProducts({sshRun, opts, roles}));
+    await inspectProducts({
+      sshRun,
+      opts,
+      roles,
+      signal: ctx.signal,
+      deadlineAtMs: ctx.deadlineAtMs,
+      now: ctx.now,
+    }));
   verifyProductIdentity(products, {
     [ROLE.PD]: {imageRef: images.pd, versionPattern: versionPatternOf(images.pd)},
     [ROLE.TIKV]: {imageRef: images.tikv, versionPattern: versionPatternOf(images.tikv)},
     [ROLE.TIDB]: {imageRef: images.tidb, versionPattern: versionPatternOf(images.tidb)},
   });
-  const binding = await bindEndpointToContainer({sshRun, opts, campaignId, endpoint,
-    candidates: arrayFilter(roles, (role) => role.host === endpoint.host)});
+  const bindRemainingMs = numberIsFinite(ctx.deadlineAtMs) ?
+    Math.max(0, ctx.deadlineAtMs - ctx.now()) : undefined;
+  const binding = await bindEndpointToContainer({
+    sshRun,
+    opts,
+    campaignId,
+    endpoint,
+    candidates: arrayFilter(roles, (role) => role.host === endpoint.host),
+    signal: ctx.signal,
+    timeoutMs: bindRemainingMs,
+    settleInFlight: ctx.settleInFlight,
+  });
   const storage = arrayMap(arrayFilter(products, (product) => product.role !== ROLE.TIDB),
     (product) => classifyStorage(product, DATA_DIR));
   const databaseName = opts.tidbDatabase || DEFAULT_DATABASE;
-  const placement = () => typedReadiness('tidb-physical-placement', () =>
-    waitForPhysicalTablePlacement({provider: ctx.provider,
-      clientContainerId: ctx.sqlClient.containerId, endpoint, replicaTarget: STORE_COUNT,
-      expectedAddresses: arrayMap(hosts.slice(0, STORE_COUNT),
-        (host) => `${host}:${P.tikvPort}`),
-      databaseName, tableName: PLACEMENT_TABLE, timeoutMs: budget.timeoutMs,
-      pollIntervalMs: budget.pollIntervalMs,
-      signal: ctx.signal ?? null,
-      deadlineAtMs: ctx.deadlineAtMs ?? null,
-      now: ctx.now}));
+  const runPlacement = (opCtx, placementTimeoutMs = budget.timeoutMs) =>
+    typedReadiness('tidb-physical-placement', () =>
+      waitForPhysicalTablePlacement({provider: opCtx.provider,
+        clientContainerId: opCtx.sqlClient.containerId, endpoint, replicaTarget: STORE_COUNT,
+        expectedAddresses: arrayMap(hosts.slice(0, STORE_COUNT),
+          (host) => `${host}:${P.tikvPort}`),
+        databaseName, tableName: PLACEMENT_TABLE, timeoutMs: placementTimeoutMs,
+        pollIntervalMs: budget.pollIntervalMs,
+        signal: opCtx.signal ?? null,
+        deadlineAtMs: opCtx.deadlineAtMs ?? null,
+        now: opCtx.now}));
   const stopped = await stopReadinessClient(ctx);
-  const postFormationCtx = {...ctx, deadlineAtMs: null};
+  const cleanOpts = stripTransientExecutionOptions(opts);
+  const postTracker = createTrackedSshRun(rawSshRun, null);
+  const postBaseCtx = {
+    sshRun: postTracker.trackedSshRun,
+    settleInFlight: postTracker.settleInFlight,
+    opts: cleanOpts,
+    clientIp: ctx.clientIp,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    signal: null,
+    deadlineAtMs: null,
+    campaignId,
+    budget,
+    hostByContainer: ctx.hostByContainer,
+    sqlClient: ctx.sqlClient,
+    provider: createRemoteDockerProvider({
+      sshRun: postTracker.trackedSshRun,
+      opts: cleanOpts,
+      hostOf: (containerId) => ctx.hostByContainer.get(containerId),
+    }),
+  };
   const readinessClient = {...ctx.sqlClient, imageRef: TIDB_SQL_CLIENT_IMAGE,
     imageId: stopped.imageId, measured: false, stateBeforeMeasurement: EXITED,
     stoppedAt: stopped.observedAt};
@@ -359,33 +530,99 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
     targetId: 'tidb-tikv',
     topology: TOPOLOGY,
     roles: [...roles, readinessClient], storage, runClass: runClassOf(storage),
-    readiness: {state: READINESS_STATE.READY, observedAt: new Date().toISOString(),
+    readiness: {state: READINESS_STATE.READY,
+      observedAt: dateToISOString(new DateConstructor(ctx.now())),
       evidence: {pd: pdReadiness, sql: sqlReadiness}},
     identity: {products},
     placement: null,
     endpoint: {protocol: 'mysql', ...endpoint, containerId: binding.containerId, binding},
     access: {connection: {user: 'root', database: databaseName}},
     operations: {
-      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs} = {}) => {
+      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
+        deadlineMs: readyDeadlineMs} = {}) => {
+        const defaultDeadlineMs = opts?.formationDeadlineMs ??
+          opts?.readiness?.formationDeadlineMs ?? DEFAULT_TIDB_FORMATION_DEADLINE_MS;
+        const window = resolveOperationWindow({
+          clock: postBaseCtx.now,
+          defaultDeadlineMs,
+          callerDeadlineAtMs: readyDeadlineAtMs,
+          callerDeadlineMs: readyDeadlineMs,
+          callerSignal: readySignal,
+        });
         const readyCtx = {
-          ...ctx,
-          signal: readySignal !== undefined ? readySignal : ctx.signal,
-          deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : ctx.deadlineAtMs,
+          ...postBaseCtx,
+          signal: window.signal ?? null,
+          deadlineAtMs: window.deadlineAtMs,
         };
+        const readyTimeoutMs = resolveOpTimeoutMs(
+          opts,
+          budget,
+          window,
+          readyDeadlineAtMs !== undefined || readyDeadlineMs !== undefined,
+        );
         try {
-          return await withReadinessClient(readyCtx, async () => ({
-            pd: await pdReady(readyCtx, pdHost),
-            sql: await sqlReady(readyCtx),
-          }));
+          return await typedReadiness('tidb-readiness', () =>
+            withReadinessClient(readyCtx, async () => ({
+              pd: await pdReady(readyCtx, pdHost),
+              sql: await sqlReady(readyCtx, readyTimeoutMs),
+            })));
         } finally {
-          await ctx.settleInFlight();
+          await postBaseCtx.settleInFlight();
         }
       },
-      observePlacement: () => withReadinessClient(postFormationCtx, async () => ({
-        observedAt: new Date().toISOString(),
-        source: 'tidb-reference-physical-placement-proof', ...(await placement())})),
-      observeRoles: () => withReadinessClient(postFormationCtx, async () => ({
-        stores: await observeStores(postFormationCtx, endpoint)})),
+      observePlacement: async ({signal: opSignal, deadlineAtMs: opDeadlineAtMs,
+        deadlineMs: opDeadlineMs} = {}) => {
+        const window = resolveOperationWindow({
+          clock: postBaseCtx.now,
+          defaultDeadlineMs: DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
+          callerDeadlineAtMs: opDeadlineAtMs,
+          callerDeadlineMs: opDeadlineMs,
+          callerSignal: opSignal,
+        });
+        const opCtx = {
+          ...postBaseCtx,
+          signal: window.signal ?? null,
+          deadlineAtMs: window.deadlineAtMs,
+        };
+        const placementTimeoutMs = resolveOpTimeoutMs(
+          opts,
+          budget,
+          window,
+          opDeadlineAtMs !== undefined || opDeadlineMs !== undefined,
+        );
+        try {
+          return await typedReadiness('tidb-physical-placement', () =>
+            withReadinessClient(opCtx, async () => ({
+              observedAt: dateToISOString(new DateConstructor(opCtx.now())),
+              source: 'tidb-reference-physical-placement-proof',
+              ...(await runPlacement(opCtx, placementTimeoutMs)),
+            })));
+        } finally {
+          await postBaseCtx.settleInFlight();
+        }
+      },
+      observeRoles: async ({signal: opSignal, deadlineAtMs: opDeadlineAtMs,
+        deadlineMs: opDeadlineMs} = {}) => {
+        const window = resolveOperationWindow({
+          clock: postBaseCtx.now,
+          defaultDeadlineMs: DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
+          callerDeadlineAtMs: opDeadlineAtMs,
+          callerDeadlineMs: opDeadlineMs,
+          callerSignal: opSignal,
+        });
+        const opCtx = {
+          ...postBaseCtx,
+          signal: window.signal ?? null,
+          deadlineAtMs: window.deadlineAtMs,
+        };
+        try {
+          return await withReadinessClient(opCtx, async () => ({
+            stores: await observeStores(opCtx, endpoint),
+          }));
+        } finally {
+          await postBaseCtx.settleInFlight();
+        }
+      },
     },
   };
 }

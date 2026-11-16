@@ -108,24 +108,64 @@ function sleepUntilOrAbort(sleep, sleepMs, signal) {
   });
 }
 
+function computeObserverInfrastructureAttribution({
+  aborted,
+  maxAttempts,
+  stablePolls,
+  everHadNegativeProduct,
+  hasReadySinceNegativeProduct,
+  firstReadyAttemptSinceNegativeProduct,
+  observerInfraSinceNegativeProduct,
+}) {
+  if (aborted || observerInfraSinceNegativeProduct <= 0) {
+    return false;
+  }
+  const windowReachableWithoutObserverFailure = !everHadNegativeProduct ?
+    maxAttempts >= stablePolls :
+    (hasReadySinceNegativeProduct &&
+      firstReadyAttemptSinceNegativeProduct !== null &&
+      (maxAttempts - firstReadyAttemptSinceNegativeProduct + 1) >= stablePolls);
+  return Boolean(windowReachableWithoutObserverFailure);
+}
+
 function buildReadinessExhaustedFailure({
   component,
   attempt,
   completedAttempts,
+  readyAttempts,
+  deniedAttempts,
+  productProbeFailureAttempts,
+  observerInfraAttempts,
   maxAttempts,
+  stablePolls,
   elapsedMs,
   deadlineMs,
   deadlineAtMs,
   aborted,
   deadlineExpired,
+  lastCompletedReady,
+  lastDeniedObservation,
   lastCompletedObservation,
   lastProbeError,
+  lastObserverInfraError,
+  everHadNegativeProduct,
+  hasReadySinceNegativeProduct,
+  firstReadyAttemptSinceNegativeProduct,
+  observerInfraSinceNegativeProduct,
 }) {
-  const effectiveLast = lastCompletedObservation !== null ?
-    lastCompletedObservation : lastProbeError;
-  const observerInfrastructure = Boolean(
-    !aborted && completedAttempts === 0 && lastProbeError?.observerInfrastructure === true,
-  );
+  const preferProbeError = lastCompletedReady === true && lastProbeError !== null;
+  const effectiveLast = preferProbeError ?
+    lastProbeError :
+    (lastCompletedObservation !== null ? lastCompletedObservation : lastProbeError);
+  const observerInfrastructure = computeObserverInfrastructureAttribution({
+    aborted,
+    maxAttempts,
+    stablePolls,
+    everHadNegativeProduct,
+    hasReadySinceNegativeProduct,
+    firstReadyAttemptSinceNegativeProduct,
+    observerInfraSinceNegativeProduct,
+  });
   let reasonText = `after ${attempt} attempts`;
   if (aborted) {
     reasonText = `aborted after ${attempt} attempts`;
@@ -137,17 +177,25 @@ function buildReadinessExhaustedFailure({
     attempts: attempt,
     attempt,
     completedAttempts,
+    readyAttempts,
+    deniedAttempts,
+    productProbeFailureAttempts,
+    observerInfraAttempts,
     maxAttempts,
+    stablePolls,
     elapsedMs,
     deadlineMs,
     deadlineAtMs,
     aborted: Boolean(aborted),
     deadlineExpired: Boolean(deadlineExpired),
     observerInfrastructure,
+    lastCompletedReady,
+    lastDeniedObservation,
     last: effectiveLast,
     lastObservation: effectiveLast,
     lastCompletedObservation,
     lastProbeError,
+    lastObserverInfraError,
   };
   const failure = deploymentFailure(
     DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
@@ -157,15 +205,116 @@ function buildReadinessExhaustedFailure({
   failure.attempt = attempt;
   failure.attempts = attempt;
   failure.completedAttempts = completedAttempts;
+  failure.readyAttempts = readyAttempts;
+  failure.deniedAttempts = deniedAttempts;
+  failure.productProbeFailureAttempts = productProbeFailureAttempts;
+  failure.observerInfraAttempts = observerInfraAttempts;
   failure.elapsedMs = elapsedMs;
   failure.deadlineMs = deadlineMs;
   failure.aborted = Boolean(aborted);
   failure.deadlineExpired = Boolean(deadlineExpired);
   failure.observerInfrastructure = observerInfrastructure;
+  failure.lastCompletedReady = lastCompletedReady;
+  failure.lastDeniedObservation = lastDeniedObservation;
   failure.lastObservation = effectiveLast;
   failure.lastCompletedObservation = lastCompletedObservation;
   failure.lastProbeError = lastProbeError;
+  failure.lastObserverInfraError = lastObserverInfraError;
   return failure;
+}
+
+function createPollAttributionState() {
+  return {
+    lastCompletedObservation: null,
+    lastCompletedReady: null,
+    lastDeniedObservation: null,
+    lastProbeError: null,
+    lastObserverInfraError: null,
+    consecutive: 0,
+    attemptedPolls: 0,
+    completedAttempts: 0,
+    readyAttempts: 0,
+    deniedAttempts: 0,
+    productProbeFailureAttempts: 0,
+    observerInfraAttempts: 0,
+    everHadNegativeProduct: false,
+    hasReadySinceNegativeProduct: false,
+    firstReadyAttemptSinceNegativeProduct: null,
+    observerInfraSinceNegativeProduct: 0,
+  };
+}
+
+function recordNegativeProductSignal(state) {
+  state.everHadNegativeProduct = true;
+  state.hasReadySinceNegativeProduct = false;
+  state.firstReadyAttemptSinceNegativeProduct = null;
+  state.observerInfraSinceNegativeProduct = 0;
+}
+
+function recordIncompleteProbeAttempt(state, outcome, attempt) {
+  const diag = outcome.diagnostic && typeof outcome.diagnostic === 'object' ?
+    outcome.diagnostic : {error: errorText(outcome.diagnostic)};
+  state.lastProbeError = {...diag, attempt};
+  state.consecutive = 0;
+  if (diag.aborted === true || diag.deadlineExpired === true) return;
+  if (diag.observerInfrastructure === true) {
+    state.observerInfraAttempts += 1;
+    state.observerInfraSinceNegativeProduct += 1;
+    state.lastObserverInfraError = state.lastProbeError;
+    return;
+  }
+  state.productProbeFailureAttempts += 1;
+  recordNegativeProductSignal(state);
+}
+
+function recordCompletedProbeAttempt(state, outcome, attempt) {
+  state.completedAttempts += 1;
+  state.lastCompletedObservation = outcome.diagnostic;
+  if (outcome.ready) {
+    state.readyAttempts += 1;
+    state.lastCompletedReady = true;
+    state.consecutive += 1;
+    if (!state.hasReadySinceNegativeProduct) {
+      state.hasReadySinceNegativeProduct = true;
+      state.firstReadyAttemptSinceNegativeProduct = attempt;
+    }
+    return;
+  }
+  state.deniedAttempts += 1;
+  state.lastCompletedReady = false;
+  state.lastDeniedObservation = outcome.diagnostic;
+  state.consecutive = 0;
+  recordNegativeProductSignal(state);
+}
+
+function checkPollCutoff({signal, clock, finiteDeadlineAtMs, throwExhausted}) {
+  if (isAborted(signal)) throwExhausted({aborted: true});
+  const remainingMs = deadlineRemainingMs({nowFn: clock, deadlineAtMs: finiteDeadlineAtMs});
+  if (remainingMs !== null && remainingMs <= 0) {
+    throwExhausted({deadlineExpired: true});
+  }
+  return remainingMs;
+}
+
+function resolveEffectiveDeadlineMs(deadlineMs, finiteDeadlineAtMs, startedAt) {
+  if (numberIsFinite(deadlineMs)) return deadlineMs;
+  if (finiteDeadlineAtMs !== null) return Math.max(0, finiteDeadlineAtMs - startedAt);
+  return null;
+}
+
+function applyProbeOutcomeToState(state, outcome, attempt) {
+  state.attemptedPolls = attempt;
+  if (isIncompleteProbeOutcome(outcome)) {
+    recordIncompleteProbeAttempt(state, outcome, attempt);
+  } else {
+    recordCompletedProbeAttempt(state, outcome, attempt);
+  }
+}
+
+function assertPositiveAttemptBudget(component, attempts) {
+  if (!numberIsInteger(attempts) || attempts < 1) {
+    throw new Error(`readiness for ${component} needs a positive attempt budget`);
+  }
 }
 
 /**
@@ -177,93 +326,67 @@ function buildReadinessExhaustedFailure({
  * @return {Promise<{state: string, component: string, attempts: number,
  *   observedAt: string, evidence: *}>}
  */
-async function pollReadiness({component, probe, attempts, intervalMs, sleep,
-  now = dateNow, nowFn, stablePolls = 1, deadlineAtMs = null, deadlineMs = null,
-  signal = null}) {
-  if (!numberIsInteger(attempts) || attempts < 1) {
-    throw new Error(`readiness for ${component} needs a positive attempt budget`);
-  }
+async function pollReadiness(input) {
+  const {component, probe, attempts, intervalMs, sleep, now = dateNow, nowFn,
+    stablePolls = 1, deadlineAtMs = null, deadlineMs = null, signal = null} = input;
+  assertPositiveAttemptBudget(component, attempts);
   const clock = resolveClock(now, nowFn);
   const startedAt = clock();
   const finiteDeadlineAtMs = numberIsFinite(deadlineAtMs) ? deadlineAtMs : null;
-  const effectiveDeadlineMs = numberIsFinite(deadlineMs) ? deadlineMs :
-    (finiteDeadlineAtMs !== null ? Math.max(0, finiteDeadlineAtMs - startedAt) : null);
-  let lastCompletedObservation = null;
-  let lastProbeError = null;
-  let consecutive = 0;
-  let attemptedPolls = 0;
-  let completedAttempts = 0;
+  const effectiveDeadlineMs = resolveEffectiveDeadlineMs(deadlineMs, finiteDeadlineAtMs, startedAt);
+  const state = createPollAttributionState();
   const throwExhausted = ({aborted = false, deadlineExpired = false} = {}) => {
     throw buildReadinessExhaustedFailure({
-      component,
-      attempt: attemptedPolls,
-      completedAttempts,
-      maxAttempts: attempts,
-      elapsedMs: clock() - startedAt,
-      deadlineMs: effectiveDeadlineMs,
-      deadlineAtMs: finiteDeadlineAtMs,
-      aborted,
-      deadlineExpired,
-      lastCompletedObservation,
-      lastProbeError,
+      ...state, component, attempt: state.attemptedPolls, maxAttempts: attempts,
+      stablePolls, elapsedMs: clock() - startedAt, deadlineMs: effectiveDeadlineMs,
+      deadlineAtMs: finiteDeadlineAtMs, aborted, deadlineExpired,
     });
   };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    if (isAborted(signal)) throwExhausted({aborted: true});
-    const preProbeRemainingMs = deadlineRemainingMs({
-      nowFn: clock,
-      deadlineAtMs: finiteDeadlineAtMs,
+    const preProbeRemainingMs = checkPollCutoff({
+      signal, clock, finiteDeadlineAtMs, throwExhausted,
     });
-    if (preProbeRemainingMs !== null && preProbeRemainingMs <= 0) {
-      throwExhausted({deadlineExpired: true});
-    }
     const outcome = await probeOnce(component, probe, {
-      attempt,
-      signal,
-      remainingMs: preProbeRemainingMs,
-      deadlineAtMs: finiteDeadlineAtMs,
+      attempt, signal, remainingMs: preProbeRemainingMs, deadlineAtMs: finiteDeadlineAtMs,
     });
-    attemptedPolls = attempt;
-    if (isIncompleteProbeOutcome(outcome)) {
-      const diag = outcome.diagnostic && typeof outcome.diagnostic === 'object' ?
-        outcome.diagnostic : {error: errorText(outcome.diagnostic)};
-      lastProbeError = {...diag, attempt};
-      consecutive = 0;
-    } else {
-      completedAttempts += 1;
-      lastCompletedObservation = outcome.diagnostic;
-      consecutive = outcome.ready ? consecutive + 1 : 0;
-    }
-    if (isAborted(signal)) throwExhausted({aborted: true});
-    const postProbeRemainingMs = deadlineRemainingMs({
-      nowFn: clock,
-      deadlineAtMs: finiteDeadlineAtMs,
+    applyProbeOutcomeToState(state, outcome, attempt);
+    const postProbeRemainingMs = checkPollCutoff({
+      signal, clock, finiteDeadlineAtMs, throwExhausted,
     });
-    if (postProbeRemainingMs !== null && postProbeRemainingMs <= 0) {
-      throwExhausted({deadlineExpired: true});
-    }
-    if (consecutive >= stablePolls) {
+    if (state.consecutive >= stablePolls) {
       const readyAt = clock();
       return {state: READINESS_STATE.READY, component, attempts: attempt, stablePolls,
         observedAt: dateToISOString(new DateConstructor(readyAt)),
-        timeToReadyMs: readyAt - startedAt, evidence: lastCompletedObservation};
+        timeToReadyMs: readyAt - startedAt, evidence: state.lastCompletedObservation};
     }
     if (attempt < attempts) {
-      const remainingMs = postProbeRemainingMs !== null ?
-        Math.max(0, postProbeRemainingMs) : intervalMs;
-      const sleepMs = Math.max(0, Math.min(intervalMs, remainingMs));
-      await sleepUntilOrAbort(sleep, sleepMs, signal);
-      if (isAborted(signal)) throwExhausted({aborted: true});
-      const postSleepRemainingMs = deadlineRemainingMs({
-        nowFn: clock,
-        deadlineAtMs: finiteDeadlineAtMs,
-      });
-      if (postSleepRemainingMs !== null && postSleepRemainingMs <= 0) {
-        throwExhausted({deadlineExpired: true});
-      }
+      const remainingMs = postProbeRemainingMs ?? intervalMs;
+      await sleepUntilOrAbort(sleep, Math.max(0, Math.min(intervalMs, remainingMs)), signal);
+      checkPollCutoff({signal, clock, finiteDeadlineAtMs, throwExhausted});
     }
   }
   return throwExhausted();
+}
+
+function resolveTypedObserverInfrastructure(error, classified, aborted, deadlineExpired) {
+  if (aborted || error?.hadProductDenial === true) return false;
+  if (typeof error?.observerInfrastructure === 'boolean') {
+    return error.observerInfrastructure;
+  }
+  return Boolean(!deadlineExpired && classified.observerInfrastructure);
+}
+
+function buildTypedProbeError(error, classified, {aborted, deadlineExpired,
+  observerInfrastructure}) {
+  return {
+    error: classified.message,
+    aborted,
+    deadlineExpired,
+    transportError: classified.transportError,
+    observerInfrastructure,
+    ...(error?.lastResult !== undefined ? {lastResult: error.lastResult} : {}),
+    ...(error?.lastError !== undefined ? {lastError: error.lastError} : {}),
+  };
 }
 
 /**
@@ -278,40 +401,23 @@ async function typedReadiness(component, run) {
     const classified = classifyRemoteCommandError(error);
     const aborted = Boolean(error?.aborted || classified.aborted);
     const deadlineExpired = Boolean(error?.deadlineExpired || classified.deadlineExpired);
-    const observerInfrastructure = Boolean(
-      !aborted && !deadlineExpired && classified.observerInfrastructure,
+    const observerInfrastructure = resolveTypedObserverInfrastructure(
+      error, classified, aborted, deadlineExpired,
     );
     const lastCompletedObservation = error?.lastEvaluation ?? null;
-    const lastProbeError = {
-      error: classified.message,
-      aborted,
-      deadlineExpired,
-      transportError: classified.transportError,
-      observerInfrastructure,
-      ...(error?.lastResult !== undefined ? {lastResult: error.lastResult} : {}),
-      ...(error?.lastError !== undefined ? {lastError: error.lastError} : {}),
-    };
-    const effectiveLast = lastCompletedObservation !== null ?
-      lastCompletedObservation : lastProbeError;
+    const lastProbeError = buildTypedProbeError(error, classified, {
+      aborted, deadlineExpired, observerInfrastructure,
+    });
+    const effectiveLast = lastCompletedObservation ?? lastProbeError;
     const failure = deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
       `${component} readiness failed: ${classified.message}`,
-      {
-        component,
-        aborted,
-        deadlineExpired,
-        observerInfrastructure,
-        last: effectiveLast,
-        lastObservation: effectiveLast,
-        lastCompletedObservation,
-        lastProbeError,
-      });
-    failure.aborted = aborted;
-    failure.deadlineExpired = deadlineExpired;
-    failure.observerInfrastructure = observerInfrastructure;
-    failure.lastObservation = effectiveLast;
-    failure.lastCompletedObservation = lastCompletedObservation;
-    failure.lastProbeError = lastProbeError;
-    throw failure;
+      {component, aborted, deadlineExpired, observerInfrastructure,
+        last: effectiveLast, lastObservation: effectiveLast,
+        lastCompletedObservation, lastProbeError});
+    throw Object.assign(failure, {
+      aborted, deadlineExpired, observerInfrastructure,
+      lastObservation: effectiveLast, lastCompletedObservation, lastProbeError,
+    });
   }
 }
 

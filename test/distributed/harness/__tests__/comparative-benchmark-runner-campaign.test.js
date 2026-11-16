@@ -18,6 +18,13 @@ import {
   runTiDbSemanticGate,
 } from '../comparative-benchmark-semantic-gate.js';
 import * as deployers from '../real-product-cluster-deployers.js';
+import {
+  DEPLOYMENT_FAILURE,
+  deploymentFailure,
+} from '../real-product-deployment-contract.js';
+import {
+  createWorkloadRunExecutor,
+} from '../comparative-benchmark-workload-call-site.js';
 import {runScenarioASemanticProofJourney} from '../../scenarios/scenario-a-semantic-proof-journey.js';
 import {
   COMPARATIVE_SMOKE_PROFILE,
@@ -60,6 +67,7 @@ function product(containerId, startedAt = '2026-11-01T10:00:00Z') {
 function deployment(runId) {
   return {targetId: runId, runClass: 'smoke', roles: [{role: 'node', host: '10.0.0.1',
     containerId: 'c1'}], endpoint: {host: '10.0.0.1', port: 5432, containerId: 'c1'},
+  access: {connection: {user: 'postgres', database: 'postgres'}},
   storage: [], hosts: [], readiness: {state: 'ready'}, placement: null,
   identity: {products: [product('c1')]}};
 }
@@ -996,4 +1004,296 @@ test('pure observer-infrastructure readiness exhaustion classifies as infrastruc
   assert.equal(secondRun.failureClass, 'infrastructure_error');
   assert.equal(secondRun.execution.state, 'failed');
   assert.equal(secondRun.cleanup?.status, 'complete');
+});
+
+test('campaign run crossing t = 450_000ms during workload measurement succeeds in ' +
+  'placementAfterWindow and rolesAfter with execution.state completed and 0 ' +
+  'role-observation-failed events', async () => {
+  const manifest = buildComparativeCampaignManifest({
+    campaignId: 'camp-crossing-deadline-01',
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange'],
+  });
+  let clock = 100_000;
+  let placementObservedAt = null;
+  let rolesObservedAfterAt = null;
+  const targetRun = manifest.runs[0];
+  const {deps} = harness({
+    now: () => clock,
+    deadlineAt: 1_000_000,
+    deployRun: async () => ({
+      ...deployment(targetRun.runId),
+      operations: {
+        observePlacement: async ({signal: _signal, deadlineAtMs: _deadlineAtMs}) => {
+          placementObservedAt = clock;
+          return {partitions: ['p0']};
+        },
+        observeRoles: async ({signal: _signal, deadlineAtMs: _deadlineAtMs}) => {
+          if (clock > 420_000) {
+            rolesObservedAfterAt = clock;
+          }
+          return [{host: '10.0.0.1', role: 'node'}];
+        },
+      },
+    }),
+    executeWorkloadRun: createWorkloadRunExecutor({
+      clientHost: '10.0.0.9',
+      describeLoadGenerator: async () => ({
+        hostname: 'node-client',
+        nodeVersion: 'v22',
+        nativeClients: {},
+        checkout: {commit: 'f'.repeat(40), clean: true},
+      }),
+      runWorkload: async () => {
+        // Cross t = 450_000ms (> 420_000ms formation deadline) during workload measurement:
+        clock = 450_000;
+        return {
+          recordKind: 'benchmark-workload-record',
+          dispatch: {status: 'executed'},
+          observations: {accounting: {offered: 1}},
+          correctness: {},
+          plan: {
+            datasetDigest: manifest.plan.datasetDigest,
+            profileClass: 'smoke',
+          },
+          deployment: {
+            endpoint: {host: '10.0.0.1', port: 5432},
+            dataset: {verification: {status: 'verified'}},
+          },
+          identity: {harness: {}},
+          loadGenerator: {
+            hostname: 'node-client',
+            nodeVersion: 'v22',
+            nativeClients: {},
+            checkout: {commit: 'f'.repeat(40), clean: true},
+          },
+        };
+      },
+    }),
+  });
+
+  const summary = await runComparativeCampaign({
+    manifest,
+    header: HEADER,
+    deps,
+  });
+
+  const runRecord = summary.records[0];
+  assert.equal(runRecord.execution.state, 'completed');
+  assert.equal(placementObservedAt, 450_000);
+  assert.equal(rolesObservedAfterAt, 450_000);
+  const roleObsFailedEvents = arrayFilter(
+    runRecord.harnessEvents,
+    (e) => e.kind === 'role-observation-failed',
+  );
+  assert.equal(roleObsFailedEvents.length, 0);
+});
+
+test('campaign watchdog signal firing during placementAfterWindow or observeRoles classifies ' +
+  'the run as interrupted, never workload_failed or role-observation-failed', async () => {
+  const manifest = buildComparativeCampaignManifest({
+    campaignId: 'camp-watchdog-post-window-01',
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange'],
+  });
+  const targetRun = manifest.runs[0];
+
+  // Subcase A: signal fires during placementAfterWindow
+  {
+    const {deps} = harness({
+      deployRun: async () => ({
+        ...deployment(targetRun.runId),
+        operations: {
+          observePlacement: async () => {
+            throw Object.assign(new Error('watchdog fired during placement observation'), {
+              code: DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+              aborted: true,
+            });
+          },
+        },
+      }),
+      executeWorkloadRun: createWorkloadRunExecutor({
+        clientHost: '10.0.0.9',
+        describeLoadGenerator: async () => ({
+          hostname: 'node-client',
+          nodeVersion: 'v22',
+          nativeClients: {},
+          checkout: {commit: 'f'.repeat(40), clean: true},
+        }),
+        runWorkload: async () => ({
+          recordKind: 'benchmark-workload-record',
+          dispatch: {status: 'executed'},
+          observations: {accounting: {offered: 1}},
+          correctness: {},
+          plan: {
+            datasetDigest: manifest.plan.datasetDigest,
+            profileClass: 'smoke',
+          },
+          deployment: {
+            endpoint: {host: '10.0.0.1', port: 5432},
+            dataset: {verification: {status: 'verified'}},
+          },
+          identity: {harness: {}},
+          loadGenerator: {
+            hostname: 'node-client',
+            nodeVersion: 'v22',
+            nativeClients: {},
+            checkout: {commit: 'f'.repeat(40), clean: true},
+          },
+        }),
+      }),
+    });
+
+    const summary = await runComparativeCampaign({
+      manifest,
+      header: HEADER,
+      deps,
+    });
+
+    const runRecord = summary.records[0];
+    assert.equal(runRecord.execution.state, 'interrupted');
+    assert.equal(runRecord.failureClass, 'interrupted');
+    assert.notEqual(runRecord.execution.failure?.code, 'workload_failed');
+    const roleFailedEvents = arrayFilter(
+      runRecord.harnessEvents,
+      (e) => e.kind === 'role-observation-failed',
+    );
+    assert.equal(roleFailedEvents.length, 0);
+  }
+
+  // Subcase B: signal fires during observeRoles
+  {
+    let rolesCalls = 0;
+    const {deps} = harness({
+      deployRun: async () => ({
+        ...deployment(targetRun.runId),
+        operations: {
+          observeRoles: async () => {
+            if (rolesCalls === 0) {
+              rolesCalls += 1;
+              return [{host: '10.0.0.1', role: 'node'}];
+            }
+            throw Object.assign(new Error('watchdog aborted during role observation'), {
+              code: DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+              aborted: true,
+            });
+          },
+        },
+      }),
+    });
+
+    const summary = await runComparativeCampaign({
+      manifest,
+      header: HEADER,
+      deps,
+    });
+
+    const runRecord = summary.records[0];
+    assert.equal(runRecord.execution.state, 'interrupted');
+    assert.equal(runRecord.failureClass, 'interrupted');
+    const roleFailedEvents = arrayFilter(
+      runRecord.harnessEvents,
+      (e) => e.kind === 'role-observation-failed',
+    );
+    assert.equal(roleFailedEvents.length, 0);
+  }
+});
+
+test('post-window observePlacement throwing readiness_exhausted with observerInfrastructure ' +
+  'true classifies as infrastructure_error and failed, not product_error', async () => {
+  const manifest = buildComparativeCampaignManifest({
+    campaignId: 'camp-placement-infra-01',
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange'],
+  });
+  const targetRun = manifest.runs[0];
+  const {deps} = harness({
+    deployRun: async () => ({
+      ...deployment(targetRun.runId),
+      operations: {
+        observePlacement: async () => {
+          throw Object.assign(
+            deploymentFailure(
+              DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+              'ssh connection lost during post-window placement observation',
+            ),
+            {observerInfrastructure: true},
+          );
+        },
+      },
+    }),
+    executeWorkloadRun: createWorkloadRunExecutor({
+      clientHost: '10.0.0.9',
+      describeLoadGenerator: async () => ({
+        hostname: 'node-client',
+        nodeVersion: 'v22',
+        nativeClients: {},
+        checkout: {commit: 'f'.repeat(40), clean: true},
+      }),
+      runWorkload: async () => ({
+        recordKind: 'benchmark-workload-record',
+        dispatch: {status: 'executed'},
+        observations: {accounting: {offered: 1}},
+        correctness: {},
+        plan: {
+          datasetDigest: manifest.plan.datasetDigest,
+          profileClass: 'smoke',
+        },
+        deployment: {
+          endpoint: {host: '10.0.0.1', port: 5432},
+          dataset: {verification: {status: 'verified'}},
+        },
+        identity: {harness: {}},
+        loadGenerator: {
+          hostname: 'node-client',
+          nodeVersion: 'v22',
+          nativeClients: {},
+          checkout: {commit: 'f'.repeat(40), clean: true},
+        },
+      }),
+    }),
+  });
+
+  const summary = await runComparativeCampaign({
+    manifest,
+    header: HEADER,
+    deps,
+  });
+
+  const runRecord = summary.records[0];
+  assert.equal(runRecord.execution.state, 'failed');
+  assert.equal(runRecord.failureClass, 'infrastructure_error');
+  assert.notEqual(runRecord.failureClass, 'product_error');
+});
+
+test('teardown returning containersClosed true and storageClosed false projects closure ' +
+  'incomplete and closureComplete false', async () => {
+  const manifest = buildComparativeCampaignManifest({
+    campaignId: 'camp-teardown-storage-01',
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange'],
+  });
+  const {deps} = harness({
+    teardownRun: async () => ({
+      complete: false,
+      containersClosed: true,
+      storageClosed: false,
+      removed: [{host: '10.0.0.1', containerIds: ['c1']}],
+      unclosed: [],
+      storageCleanup: {errors: ['permission denied removing /var/lib/lagrange/storage']},
+    }),
+  });
+
+  const summary = await runComparativeCampaign({
+    manifest,
+    header: HEADER,
+    deps,
+  });
+
+  assert.equal(summary.attempted[0].closureComplete, false);
+  const runRecord = summary.records[0];
+  assert.equal(runRecord.deployment.closure.status, 'incomplete');
+  assert.deepEqual(runRecord.deployment.closure.storageCleanup, {
+    errors: ['permission denied removing /var/lib/lagrange/storage'],
+  });
 });

@@ -1,3 +1,21 @@
+import {
+  arrayEvery,
+  arrayFilter,
+  arrayMap,
+  arraySome,
+  dateNow,
+  numberIsFinite,
+  numberIsInteger,
+  objectHasOwn,
+  stringSplit,
+  stringTrim,
+} from './real-product-captured-intrinsics.js';
+import {withExplicitSignalOption} from './real-product-deployment-contract.js';
+import {
+  classifyRemoteCommandError,
+  errorText,
+} from './real-product-remote-shell.js';
+
 const ZERO = 0;
 const ONE = 1;
 const DEFAULT_REPLICA_TARGET = 3;
@@ -5,13 +23,6 @@ const DEFAULT_TIMEOUT_MS = 90000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_PLACEMENT_OP_TIMEOUT_MS = 10000;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
-
-const arrayEvery = Function.call.bind(Array.prototype.every);
-const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayMap = Function.call.bind(Array.prototype.map);
-const arraySome = Function.call.bind(Array.prototype.some);
-const stringSplit = Function.call.bind(String.prototype.split);
-const stringTrim = Function.call.bind(String.prototype.trim);
 
 function sleep(ms, signal = null) {
   if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
@@ -215,7 +226,12 @@ function evaluatePhysicalPlacement(options = {}) {
   };
 }
 
-function resolvePlacementOptions(options = {}) {
+function resolvePlacementClock(options) {
+  if (typeof options.now === 'function') return options.now;
+  return typeof options.nowFn === 'function' ? options.nowFn : dateNow;
+}
+
+function resolvePlacementTarget(options) {
   const provider = options.provider;
   if (!provider || typeof provider.execInContainer !== 'function') {
     throw new Error('TiDB physical placement proof requires provider.execInContainer');
@@ -229,50 +245,38 @@ function resolvePlacementOptions(options = {}) {
     throw new Error('TiDB physical placement proof requires endpoint');
   }
   const replicaTarget = options.replicaTarget ?? DEFAULT_REPLICA_TARGET;
-  const expectedAddresses = normalizeExpectedAddresses(
-    options.expectedAddresses,
-    replicaTarget,
-  );
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  const signal = options.signal ?? null;
-  const deadlineAtMs = Number.isFinite(options.deadlineAtMs) ? options.deadlineAtMs : null;
-  const now = typeof options.now === 'function' ? options.now : Date.now;
+  if (!numberIsInteger(replicaTarget) || replicaTarget < ONE) {
+    throw new Error('TiDB physical placement requires positive replicaTarget');
+  }
   return {
-    provider,
-    clientContainerId,
-    endpoint,
-    replicaTarget,
-    expectedAddresses,
-    timeoutMs,
-    pollIntervalMs,
-    signal,
-    deadlineAtMs,
-    now,
+    provider, clientContainerId, endpoint, replicaTarget,
+    expectedAddresses: normalizeExpectedAddresses(options.expectedAddresses, replicaTarget),
   };
 }
 
-async function executePlacementAttempt(
-  provider,
-  clientContainerId,
-  endpoint,
-  options,
-  callOptions = undefined,
-) {
-  const lastStoreResult = await provider.execInContainer(
-    clientContainerId,
-    mysqlCommand(endpoint, storeStatusSql()),
-    callOptions,
-  );
-  const lastPeerResult = await provider.execInContainer(
-    clientContainerId,
-    mysqlCommand(
-      endpoint,
-      regionPeerPlacementSql(options.databaseName, options.tableName),
-    ),
-    callOptions,
-  );
-  return {lastStoreResult, lastPeerResult};
+function resolvePlacementOptions(options = {}) {
+  const target = resolvePlacementTarget(options);
+  return {
+    ...target,
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    pollIntervalMs: options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+    hasExplicitSignal: objectHasOwn(options, 'signal'),
+    signal: options.signal ?? null,
+    deadlineAtMs: numberIsFinite(options.deadlineAtMs) ? options.deadlineAtMs : null,
+    now: resolvePlacementClock(options),
+    peerSql: regionPeerPlacementSql(options.databaseName, options.tableName),
+  };
+}
+
+function isObserverInfraPlacementResult(result) {
+  if (!result || result.exitCode === null || result.exitCode === undefined) {
+    return true;
+  }
+  const classified = classifyRemoteCommandError({
+    exitCode: result.exitCode,
+    message: result.stderr || result.stdout || '',
+  });
+  return classified.observerInfrastructure;
 }
 
 function evaluatePlacementAttempt(
@@ -297,83 +301,131 @@ function formatPlacementTimeoutError(
   lastStoreResult,
   lastPeerResult,
   lastEvaluation,
+  lastError = null,
 ) {
   const storesExit = lastStoreResult?.exitCode ?? 'unknown';
   const peersExit = lastPeerResult?.exitCode ?? 'unknown';
   const evaluation = JSON.stringify(lastEvaluation);
+  const errorSuffix = lastError ? ` lastError=${errorText(lastError)}` : '';
   return new Error(
     `TiDB physical table placement did not converge within ${timeoutMs}ms; ` +
-    `storesExit=${storesExit} peersExit=${peersExit} evaluation=${evaluation}`,
+    `storesExit=${storesExit} peersExit=${peersExit} evaluation=${evaluation}${errorSuffix}`,
   );
 }
 
-async function waitForPhysicalTablePlacement(options = {}) {
-  const {
-    provider,
-    clientContainerId,
-    endpoint,
-    replicaTarget,
-    expectedAddresses,
-    timeoutMs,
-    pollIntervalMs,
-    signal,
-    deadlineAtMs,
-    now,
-  } = resolvePlacementOptions(options);
-
-  const started = now();
-  let attempts = ZERO;
-  let lastEvaluation = null;
-  let lastStoreResult = null;
-  let lastPeerResult = null;
-
-  while (now() - started < timeoutMs) {
-    if (signal?.aborted) break;
-    const remainingDeadlineMs = deadlineAtMs !== null ? deadlineAtMs - now() : null;
-    if (remainingDeadlineMs !== null && remainingDeadlineMs <= ZERO) break;
-    const boundedOpTimeoutMs = remainingDeadlineMs !== null ?
-      Math.max(ONE, Math.min(DEFAULT_PLACEMENT_OP_TIMEOUT_MS, Math.floor(remainingDeadlineMs))) :
-      DEFAULT_PLACEMENT_OP_TIMEOUT_MS;
-    const callOptions = signal ?
-      {signal, timeoutMs: boundedOpTimeoutMs} : {timeoutMs: boundedOpTimeoutMs};
-    attempts += ONE;
-    const attemptResults = await executePlacementAttempt(
-      provider,
-      clientContainerId,
-      endpoint,
-      options,
-      callOptions,
-    );
-    lastStoreResult = attemptResults.lastStoreResult;
-    lastPeerResult = attemptResults.lastPeerResult;
-    const evaluation = evaluatePlacementAttempt(
-      lastStoreResult,
-      lastPeerResult,
-      expectedAddresses,
-      replicaTarget,
-    );
-    if (evaluation) {
-      lastEvaluation = evaluation;
-      if (lastEvaluation.ready) {
-        return {...lastEvaluation, attempts};
-      }
-    }
-    const sleepMs = deadlineAtMs !== null ?
-      Math.max(ZERO, Math.min(pollIntervalMs, deadlineAtMs - now())) :
-      pollIntervalMs;
-    await sleep(sleepMs, signal);
-  }
-
-  const failure = formatPlacementTimeoutError(
-    timeoutMs,
-    lastStoreResult,
-    lastPeerResult,
-    lastEvaluation,
+function buildPlacementCallOptions(cfg, effectiveEndMs) {
+  if (cfg.signal?.aborted) return null;
+  const remainingMs = effectiveEndMs - cfg.now();
+  if (remainingMs <= ZERO) return null;
+  const opMs = Math.max(ONE, Math.min(DEFAULT_PLACEMENT_OP_TIMEOUT_MS, Math.floor(remainingMs)));
+  return withExplicitSignalOption(
+    {timeoutMs: opMs},
+    cfg.hasExplicitSignal ? cfg.signal : undefined,
   );
-  failure.aborted = Boolean(signal?.aborted);
-  failure.deadlineExpired = Boolean(deadlineAtMs !== null && now() >= deadlineAtMs);
-  failure.lastEvaluation = lastEvaluation;
-  throw failure;
+}
+
+function recordNonReadyPlacementResult(state, storeResult, peerResult) {
+  if (isObserverInfraPlacementResult(storeResult) ||
+      isObserverInfraPlacementResult(peerResult)) {
+    state.observerInfraCount += ONE;
+  } else {
+    state.hadProductDenial = true;
+  }
+}
+
+function recordPlacementAttemptError(state, error, cfg, effectiveEndMs) {
+  state.lastError = error;
+  const classified = classifyRemoteCommandError(error);
+  if (cfg.signal?.aborted || classified.aborted) {
+    state.abortedByError = true;
+    return false;
+  }
+  if (classified.deadlineExpired || error?.deadlineExpired === true) {
+    state.deadlineExpiredByError = true;
+    return false;
+  }
+  if (classified.observerInfrastructure) state.observerInfraCount += ONE;
+  else state.hadProductDenial = true;
+  return cfg.now() < effectiveEndMs;
+}
+
+async function runPlacementAttempt(cfg, state, storeSql, effectiveEndMs) {
+  const storeCallOptions = buildPlacementCallOptions(cfg, effectiveEndMs);
+  if (!storeCallOptions) return {stop: true, evaluation: null};
+  state.attempts += ONE;
+  const storeResult = await cfg.provider.execInContainer(
+    cfg.clientContainerId, mysqlCommand(cfg.endpoint, storeSql), storeCallOptions,
+  );
+  state.lastStoreResult = storeResult;
+  const peerCallOptions = buildPlacementCallOptions(cfg, effectiveEndMs);
+  if (!peerCallOptions) {
+    if (storeResult?.exitCode !== ZERO) {
+      recordNonReadyPlacementResult(state, storeResult, {exitCode: ZERO});
+    }
+    return {stop: true, evaluation: null};
+  }
+  const peerResult = await cfg.provider.execInContainer(
+    cfg.clientContainerId, mysqlCommand(cfg.endpoint, cfg.peerSql), peerCallOptions,
+  );
+  state.lastPeerResult = peerResult;
+  const evaluation = evaluatePlacementAttempt(
+    storeResult, peerResult, cfg.expectedAddresses, cfg.replicaTarget,
+  );
+  if (evaluation) {
+    state.lastEvaluation = evaluation;
+    if (!evaluation.ready) state.hadProductDenial = true;
+  } else {
+    recordNonReadyPlacementResult(state, storeResult, peerResult);
+  }
+  if (cfg.signal?.aborted || cfg.now() >= effectiveEndMs) return {stop: true, evaluation: null};
+  return {stop: Boolean(evaluation?.ready), evaluation};
+}
+
+function buildPlacementFailure(cfg, state, started) {
+  const aborted = Boolean(cfg.signal?.aborted || state.abortedByError);
+  const pastDeadline = cfg.deadlineAtMs !== null && cfg.now() >= cfg.deadlineAtMs;
+  const deadlineExpired = Boolean(!aborted && (state.deadlineExpiredByError || pastDeadline));
+  const timedOut = Boolean(!aborted && !deadlineExpired && cfg.now() - started >= cfg.timeoutMs);
+  const observerInfrastructure = Boolean(
+    !aborted && !state.hadProductDenial && state.observerInfraCount > ZERO,
+  );
+  const failure = formatPlacementTimeoutError(
+    cfg.timeoutMs, state.lastStoreResult, state.lastPeerResult,
+    state.lastEvaluation, state.lastError,
+  );
+  failure.aborted = aborted;
+  failure.deadlineExpired = deadlineExpired;
+  failure.timedOut = timedOut;
+  failure.hadProductDenial = state.hadProductDenial;
+  failure.observerInfrastructure = observerInfrastructure;
+  failure.lastEvaluation = state.lastEvaluation;
+  if (state.lastError) failure.lastError = errorText(state.lastError);
+  return failure;
+}
+
+async function waitForPhysicalTablePlacement(options = {}) {
+  const cfg = resolvePlacementOptions(options);
+  const started = cfg.now();
+  const effectiveEndMs = cfg.deadlineAtMs !== null ?
+    Math.min(started + cfg.timeoutMs, cfg.deadlineAtMs) : started + cfg.timeoutMs;
+  const storeSql = storeStatusSql();
+  const state = {
+    attempts: ZERO, lastEvaluation: null, lastStoreResult: null, lastPeerResult: null,
+    lastError: null, hadProductDenial: false, observerInfraCount: ZERO,
+    abortedByError: false, deadlineExpiredByError: false,
+  };
+  while (cfg.now() < effectiveEndMs && !cfg.signal?.aborted) {
+    try {
+      const outcome = await runPlacementAttempt(cfg, state, storeSql, effectiveEndMs);
+      if (outcome.evaluation?.ready) return {...outcome.evaluation, attempts: state.attempts};
+      if (outcome.stop) break;
+    } catch (error) {
+      if (!recordPlacementAttemptError(state, error, cfg, effectiveEndMs)) break;
+    }
+    const waitMs = Math.max(ZERO, Math.min(cfg.pollIntervalMs, effectiveEndMs - cfg.now()));
+    if (waitMs > ZERO) await sleep(waitMs, cfg.signal);
+  }
+  throw buildPlacementFailure(cfg, state, started);
 }
 
 export {

@@ -15,6 +15,9 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  dateNow,
+  numberIsFinite,
+  objectHasOwn,
   stringIncludes,
   stringIndexOf,
   stringLastIndexOf,
@@ -22,15 +25,19 @@ import {
   stringSplit,
   stringStartsWith,
   stringTrim,
+  toStringValue as stringOf,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
   RUN_CLASS,
   STORAGE_KIND,
   deploymentFailure,
   isImageId,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
+  classifyRemoteCommandError,
   errorText,
   inspectContainerCommand,
   shellWord,
@@ -79,17 +86,64 @@ function inspectedField(inspection, path, subject) {
 // Docker's own answer that the object does not exist.
 const NO_SUCH_OBJECT = /\bNo such (?:container|object)\b/u;
 
-async function inspectJson({sshRun, opts, host, command, subject}) {
+function inspectCallConfig({opts, signal, deadlineAtMs, now, subject, host}) {
+  let effectiveSignal;
+  if (signal !== undefined) {
+    effectiveSignal = signal;
+  } else if (opts && objectHasOwn(opts, 'signal')) {
+    effectiveSignal = opts.signal;
+  }
+  if (effectiveSignal?.aborted) {
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `${subject} aborted`, {host, aborted: true});
+    failure.aborted = true;
+    throw failure;
+  }
+  let timeoutMs = numberIsFinite(opts?.timeoutMs) ?
+    Math.min(DEFAULT_INSPECT_TIMEOUT_MS, Math.max(1, Math.floor(opts.timeoutMs))) :
+    DEFAULT_INSPECT_TIMEOUT_MS;
+  if (numberIsFinite(deadlineAtMs)) {
+    const clock = typeof now === 'function' ? now : dateNow;
+    const remainingMs = deadlineAtMs - clock();
+    if (remainingMs <= 0) {
+      const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+        `${subject} deadline expired`, {host, deadlineExpired: true});
+      failure.deadlineExpired = true;
+      throw failure;
+    }
+    timeoutMs = Math.min(timeoutMs, Math.max(1, Math.floor(remainingMs)));
+  }
+  const callOpts = {...withExplicitSignalOption(opts, effectiveSignal), timeoutMs};
+  return {callOpts, timeoutMs};
+}
+
+async function inspectJson({sshRun, opts, host, command, subject, signal, deadlineAtMs, now}) {
+  const {callOpts, timeoutMs} = inspectCallConfig({
+    opts, signal, deadlineAtMs, now, subject, host,
+  });
   try {
-    return JSON.parse(String(await sshRun(host, opts, command)));
+    return JSON.parse(stringOf(await sshRun(host, callOpts, command, timeoutMs)));
   } catch (error) {
+    if (error?.code) throw error;
     const text = errorText(error);
     if (NO_SUCH_OBJECT.test(text)) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.CONTAINER_ABSENT,
         `${subject}: docker answered ${text}`, {host});
     }
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `${subject} could not be inspected: ${text}`, {host});
+    const classified = classifyRemoteCommandError(error);
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `${subject} could not be inspected: ${text}`, {
+        host,
+        aborted: classified.aborted,
+        deadlineExpired: classified.deadlineExpired,
+        transportError: classified.transportError,
+        observerInfrastructure: classified.observerInfrastructure,
+      });
+    failure.aborted = classified.aborted;
+    failure.deadlineExpired = classified.deadlineExpired;
+    failure.transportError = classified.transportError;
+    failure.observerInfrastructure = classified.observerInfrastructure;
+    throw failure;
   }
 }
 
@@ -114,9 +168,24 @@ function imageStoreOf(info) {
     IMAGE_STORE.UNKNOWN;
 }
 
-async function readImageStore({sshRun, opts, host}) {
-  return imageStoreOf(await sshRun(host, opts,
-    'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\''));
+async function readImageStore({sshRun, opts, host, signal, deadlineAtMs, now}) {
+  const {callOpts, timeoutMs} = inspectCallConfig({
+    opts, signal, deadlineAtMs, now, subject: `docker info on ${host}`, host,
+  });
+  try {
+    return imageStoreOf(await sshRun(host, callOpts,
+      'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\'', timeoutMs));
+  } catch (error) {
+    if (error?.code) throw error;
+    const classified = classifyRemoteCommandError(error);
+    if (error && typeof error === 'object') {
+      error.aborted = classified.aborted;
+      error.deadlineExpired = classified.deadlineExpired;
+      error.transportError = classified.transportError;
+      error.observerInfrastructure = classified.observerInfrastructure;
+    }
+    throw error;
+  }
 }
 
 // Labels are optional image metadata: an image that declares none (a
@@ -133,9 +202,9 @@ function declaredLabels(config, subject) {
 // Image facts of the running container's image id: its repo digests (empty
 // for an image that was `docker load`ed, which is recorded as such, never
 // filled in), its build labels and creation time.
-async function readImageFacts({sshRun, opts, host, imageId, imageRef}) {
+async function readImageFacts({sshRun, opts, host, imageId, imageRef, signal, deadlineAtMs, now}) {
   const subject = `image ${imageId} of a running container on ${host}`;
-  const image = await inspectJson({sshRun, opts, host, subject,
+  const image = await inspectJson({sshRun, opts, host, subject, signal, deadlineAtMs, now,
     command: `docker image inspect --format '{{json .}}' ${shellWord(imageId)}`});
   const field = (path) => inspectedField(image, path, subject);
   const repoDigests = field(['RepoDigests']);
@@ -167,9 +236,10 @@ function mountsOf(mounts, subject) {
  * Inspect one running product container. Absent or stopped is
  * identity_unverified: dead-process evidence is never identity (D15).
  */
-async function inspectRunningContainer({sshRun, opts, host, containerId, role}) {
+async function inspectRunningContainer({sshRun, opts, host, containerId, role,
+  signal, deadlineAtMs, now}) {
   const subject = `${role} container ${containerId} on ${host}`;
-  const inspect = await inspectJson({sshRun, opts, host, subject,
+  const inspect = await inspectJson({sshRun, opts, host, subject, signal, deadlineAtMs, now,
     command: inspectContainerCommand(containerId)});
   const field = (path) => inspectedField(inspect, path, subject);
   if (field(['State', 'Running']) !== true) {
@@ -182,7 +252,7 @@ async function inspectRunningContainer({sshRun, opts, host, containerId, role}) 
     role, host, containerId: field(['Id']),
     name: stringReplace(String(field(['Name'])), /^\//u, ''),
     imageRef, imageId,
-    ...await readImageFacts({sshRun, opts, host, imageId, imageRef}),
+    ...await readImageFacts({sshRun, opts, host, imageId, imageRef, signal, deadlineAtMs, now}),
     entrypoint: field(['Config', 'Entrypoint']),
     cmd: field(['Config', 'Cmd']),
     startedAt: field(['State', 'StartedAt']),
@@ -193,10 +263,10 @@ async function inspectRunningContainer({sshRun, opts, host, containerId, role}) 
 
 // At identity time a container docker says does not exist is an unverified
 // identity of the deployment (dead-process evidence is never identity, D15).
-async function inspectedAtIdentityTime({sshRun, opts, role}) {
+async function inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs, now}) {
   try {
     return await inspectRunningContainer({sshRun, opts, host: role.host,
-      containerId: role.containerId, role: role.role});
+      containerId: role.containerId, role: role.role, signal, deadlineAtMs, now});
   } catch (error) {
     if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED, error.message,
@@ -205,15 +275,18 @@ async function inspectedAtIdentityTime({sshRun, opts, role}) {
 }
 
 /** Inspect every role's container, in role order. */
-async function inspectProducts({sshRun, opts, roles}) {
+async function inspectProducts({sshRun, opts, roles, signal, deadlineAtMs, now}) {
   const products = [];
   const stores = new Map();
   for (const role of roles) {
     if (!stores.has(role.host)) {
-      stores.set(role.host, await readImageStore({sshRun, opts, host: role.host}));
+      stores.set(role.host, await readImageStore({
+        sshRun, opts, host: role.host, signal, deadlineAtMs, now,
+      }));
     }
-    products.push({...await inspectedAtIdentityTime({sshRun, opts, role}),
-      imageStore: stores.get(role.host)});
+    products.push({...await inspectedAtIdentityTime({
+      sshRun, opts, role, signal, deadlineAtMs, now,
+    }), imageStore: stores.get(role.host)});
   }
   return products;
 }
@@ -225,15 +298,15 @@ async function inspectProducts({sshRun, opts, roles}) {
  * failure (ssh, an unreadable inspection, a stopped container) is the
  * harness's identity_unverified and propagates: it is never read as absence.
  */
-async function observeProductsAfterWindow({sshRun, opts, products}) {
+async function observeProductsAfterWindow({sshRun, opts, products, signal, deadlineAtMs, now}) {
   const observed = [];
   for (const product of products) {
     try {
-      const now = await inspectRunningContainer({sshRun, opts, host: product.host,
-        containerId: product.containerId, role: product.role});
+      const nowState = await inspectRunningContainer({sshRun, opts, host: product.host,
+        containerId: product.containerId, role: product.role, signal, deadlineAtMs, now});
       // The window does not change what the product answered: its version and,
       // where it answered none, the reason travel together (D33).
-      observed.push({...now, reportedVersion: product.reportedVersion,
+      observed.push({...nowState, reportedVersion: product.reportedVersion,
         ...(product.reportedVersion === null ?
           {reportedVersionError: product.reportedVersionError ?? null} : {}),
         ...(product.bootProvenance !== undefined ?

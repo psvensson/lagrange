@@ -32,6 +32,7 @@ const objectFreeze = Object.freeze;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
+const promiseAllSettled = Promise.allSettled.bind(Promise);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringIndexOf = Function.call.bind(String.prototype.indexOf);
@@ -74,6 +75,7 @@ export {
   objectGetPrototypeOf,
   objectHasOwn,
   objectKeys,
+  promiseAllSettled,
   stringEndsWith,
   stringIncludes,
   stringIndexOf,

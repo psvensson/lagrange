@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 121,
+    "admin-diagnostics": 122,
     "architecture-governance": 21,
     "bootstrap-membership": 345,
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
     "convergence-topology": 83,
-    "distributed-harness": 220,
+    "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 280,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2657,
-  "digest": "fnv1a32-e1eb3591",
+  "censusSize": 2661,
+  "digest": "fnv1a32-de7c1285",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f8f6a1a0",
+  "observationDigest": "fnv1a32-aaa5f0ad",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -56,6 +56,7 @@
     "test/admin/admin-control-snapshot-readiness-sync-first.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-response-contract.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-retry-decision.test.js": "admin-diagnostics",
+    "test/admin/admin-control-snapshot-serve-lane-and-single-flight.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-served-handoff-coverage.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot.test.js": "admin-diagnostics",
@@ -1006,6 +1007,9 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-recovery.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-lagrange-operation-deadlines.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-tidb-postgres-operation-deadlines.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-lagrange-wire-facts.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-outcomes.test.js": "distributed-harness",
@@ -2767,6 +2771,11 @@
     "test/admin/admin-control-snapshot-retry-decision.test.js": {
       "files": [
         "src/control-plane/timeout-budget.js"
+      ]
+    },
+    "test/admin/admin-control-snapshot-serve-lane-and-single-flight.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js"
       ]
     },
     "test/admin/admin-control-snapshot.test.js": {
@@ -7412,7 +7421,8 @@
         "test/distributed/reference-client/tidb-oltp-state-snapshot.js"
       ],
       "directories": [
-        "src"
+        "src",
+        "test/distributed/reference-client"
       ],
       "env": [
         "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
@@ -8250,8 +8260,26 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": {
       "files": [
         "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": {
@@ -8310,6 +8338,20 @@
       ]
     },
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-lagrange-operation-deadlines.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
+      ]
+    },
+    "test/distributed/harness/__tests__/real-product-tidb-postgres-operation-deadlines.test.js": {
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",

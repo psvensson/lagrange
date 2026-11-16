@@ -22,8 +22,10 @@ import {
   toStringValue as stringOf,
 } from './real-product-captured-intrinsics.js';
 import {
+  DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
   deploymentFailure,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   evaluateLagrangeClusterReadiness,
@@ -35,6 +37,7 @@ import {
   errorText,
   httpFromHost,
   inspectContainerStateCommand,
+  settleConcurrentBatch,
   shellWord,
 } from './real-product-remote-shell.js';
 
@@ -61,17 +64,29 @@ const PROBE_TABLE = 'bench_readiness_probe';
 const PROBE_VISIBILITY_SINGLE_LISTENER = 'single-listener';
 const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 const NO_SUCH_CONTAINER_PATTERN = /\bNo such (?:container|object)\b/u;
-const INSPECT_TIMEOUT_MS = 10000;
+const INSPECT_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
+const DEFAULT_HTTP_PROBE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS = 5000;
-const BOOT_PROVENANCE_TIMEOUT_MS = 10000;
+const BOOT_PROVENANCE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const BOOT_PROVENANCE_MAX_BYTES = 4096;
 
 function tagProbeError(message, flags) {
   return Object.assign(new Error(message), flags);
 }
 
-function probeCallOptions(ctx, pollContext = null) {
-  const signal = pollContext?.signal !== undefined ? pollContext.signal : (ctx?.signal ?? null);
+function resolveProbeSignal(ctx, pollContext) {
+  if (pollContext?.signal !== undefined) return pollContext.signal;
+  if (ctx?.signal !== undefined) return ctx.signal;
+  return undefined;
+}
+
+function resolveProbeDeadlineAtMs(ctx, pollContext) {
+  return pollContext?.deadlineAtMs !== undefined ?
+    pollContext.deadlineAtMs : (ctx?.deadlineAtMs ?? null);
+}
+
+function probeCallOptions(ctx, pollContext = null, maxTimeoutMs = DEFAULT_HTTP_PROBE_TIMEOUT_MS) {
+  const signal = resolveProbeSignal(ctx, pollContext);
   if (signal?.aborted) {
     throw tagProbeError('readiness probe aborted', {
       aborted: true,
@@ -80,22 +95,24 @@ function probeCallOptions(ctx, pollContext = null) {
       observerInfrastructure: false,
     });
   }
-  const deadlineAtMs = pollContext?.deadlineAtMs !== undefined ?
-    pollContext.deadlineAtMs : (ctx?.deadlineAtMs ?? null);
+  const deadlineAtMs = resolveProbeDeadlineAtMs(ctx, pollContext);
   if (!numberIsFinite(deadlineAtMs)) {
-    return {signal: signal ?? undefined, timeoutMs: undefined};
+    return {signal, timeoutMs: numberIsFinite(maxTimeoutMs) ? maxTimeoutMs : undefined};
   }
   const clock = typeof ctx?.now === 'function' ? ctx.now : dateNow;
   const remainingMs = deadlineAtMs - clock();
   if (remainingMs <= 0) {
-    throw tagProbeError('readiness probe formation deadline expired', {
+    throw tagProbeError('readiness probe deadline expired', {
       aborted: false,
       deadlineExpired: true,
       transportError: false,
       observerInfrastructure: false,
     });
   }
-  return {signal: signal ?? undefined, timeoutMs: remainingMs};
+  const timeoutMs = numberIsFinite(maxTimeoutMs) ?
+    boundedTimeoutMs(remainingMs, maxTimeoutMs) :
+    Math.max(1, Math.floor(remainingMs));
+  return {signal, timeoutMs};
 }
 
 function boundedTimeoutMs(requestedMs, defaultMs) {
@@ -201,8 +218,7 @@ function parseInspectState(raw) {
 async function inspectWatchedRole(ctx, component, role, pollContext, callOptions) {
   const timeoutMs = boundedTimeoutMs(callOptions.timeoutMs, INSPECT_TIMEOUT_MS);
   const inspectOpts = {
-    ...(ctx.opts || {}),
-    ...(callOptions.signal !== undefined ? {signal: callOptions.signal} : {}),
+    ...withExplicitSignalOption(ctx.opts, callOptions.signal),
     timeoutMs,
   };
   let raw;
@@ -240,18 +256,23 @@ async function assertWatchedRolesRunning(ctx, component, pollContext) {
   if (!arrayIsArray(ctx.watchedRoles) || ctx.watchedRoles.length === 0) return;
   const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
     probeCallOptions(ctx, null);
-  await Promise.all(arrayMap(
+  await settleConcurrentBatch(
     ctx.watchedRoles,
     (role) => inspectWatchedRole(ctx, component, role, pollContext, callOptions),
-  ));
+    ctx.settleInFlight ?? null,
+  );
 }
 
 function readinessOf(ctx, component, probe, stablePolls = 1) {
   return pollReadiness({
     component,
     probe: async (pollContext) => {
-      await assertWatchedRolesRunning(ctx, component, pollContext);
-      return probe(pollContext);
+      try {
+        await assertWatchedRolesRunning(ctx, component, pollContext);
+        return await probe(pollContext);
+      } finally {
+        if (ctx.settleInFlight) await ctx.settleInFlight();
+      }
     },
     attempts: ctx.budget.attempts,
     intervalMs: ctx.budget.intervalMs,
@@ -361,8 +382,57 @@ function deploymentHostOf(roles, nodeId) {
   return role === undefined ? null : role.host;
 }
 
+function partitionDiagnosticsFailure(message, answer) {
+  const aborted = answer?.aborted === true;
+  const deadlineExpired = answer?.deadlineExpired === true;
+  const transportError = answer?.transportError === true;
+  const observerInfrastructure = answer?.observerInfrastructure === true;
+  const code = aborted || deadlineExpired ?
+    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED :
+    DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED;
+  const failure = deploymentFailure(code, message, {
+    answer,
+    aborted,
+    deadlineExpired,
+    transportError,
+    observerInfrastructure,
+  });
+  failure.aborted = aborted;
+  failure.deadlineExpired = deadlineExpired;
+  failure.transportError = transportError;
+  failure.observerInfrastructure = observerInfrastructure;
+  return failure;
+}
+
+function isOkDiagnosticsAnswer(answer) {
+  return Boolean(
+    answer && answer.status === HTTP_OK && !answer.aborted &&
+      !answer.deadlineExpired && answer.parseError === null,
+  );
+}
+
+function assertDiagnosticsWindowOpen(ctx, answer) {
+  if (ctx?.signal?.aborted) {
+    throw partitionDiagnosticsFailure('readiness probe aborted', {
+      ...(answer || {}),
+      aborted: true,
+    });
+  }
+  if (numberIsFinite(ctx?.deadlineAtMs)) {
+    const clock = typeof ctx?.now === 'function' ? ctx.now : dateNow;
+    if (clock() >= ctx.deadlineAtMs) {
+      throw partitionDiagnosticsFailure('readiness probe deadline expired', {
+        ...(answer || {}),
+        deadlineExpired: true,
+      });
+    }
+  }
+}
+
 function placementOf(answer, roles, observedAt) {
-  if (answer.status !== HTTP_OK) return null;
+  if (!isOkDiagnosticsAnswer(answer)) {
+    throw partitionDiagnosticsFailure('partition diagnostics did not answer', answer);
+  }
   const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
   return {
     observedAt,
@@ -381,9 +451,23 @@ function placementOf(answer, roles, observedAt) {
   };
 }
 
-function readPartitions(ctx, seedHost, pollContext = null) {
-  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
-    pollContext);
+async function readPartitions(ctx, seedHost, pollContext = null) {
+  let answer;
+  try {
+    answer = await getJson(
+      ctx,
+      `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
+      pollContext,
+    );
+  } catch (error) {
+    if (error?.code) throw error;
+    throw partitionDiagnosticsFailure(errorText(error), error);
+  }
+  assertDiagnosticsWindowOpen(ctx, answer);
+  if (!isOkDiagnosticsAnswer(answer)) {
+    throw partitionDiagnosticsFailure('partition diagnostics did not answer', answer);
+  }
+  return answer;
 }
 
 function readPartitionLeaders(ctx, seedHost, pollContext = null) {
@@ -395,10 +479,16 @@ function readPartitionLeaders(ctx, seedHost, pollContext = null) {
 }
 
 async function observedLeaders(ctx, seedHost) {
-  const answer = await readPartitionLeaders(ctx, seedHost);
-  if (answer.status !== HTTP_OK) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      'partition diagnostics did not answer', {answer});
+  let answer;
+  try {
+    answer = await readPartitionLeaders(ctx, seedHost);
+  } catch (error) {
+    if (error?.code) throw error;
+    throw partitionDiagnosticsFailure(errorText(error), error);
+  }
+  assertDiagnosticsWindowOpen(ctx, answer);
+  if (!isOkDiagnosticsAnswer(answer)) {
+    throw partitionDiagnosticsFailure('partition diagnostics did not answer', answer);
   }
   return partitionField(answer.json, 'leaders');
 }
@@ -421,26 +511,50 @@ function leadersReady(ctx, seedHost) {
 }
 
 async function readSystemTables(query, ctx = null, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-    (ctx ? probeCallOptions(ctx, null) : {});
-  const entries = await Promise.all(
-    arrayMap(Object.entries(SYSTEM_TABLE_QUERIES), async ([name, sql]) => {
-      const rows = await query(sql, callOptions);
-      return [name, rows];
-    }),
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext, null) :
+    (ctx ? probeCallOptions(ctx, null, null) : {});
+  const entries = await settleConcurrentBatch(
+    Object.entries(SYSTEM_TABLE_QUERIES),
+    async ([name, sql]) => [name, await query(sql, callOptions)],
+    ctx?.settleInFlight ?? null,
   );
   return Object.fromEntries(entries);
 }
 
+function isFailedControlSnapshotAnswer(answer) {
+  return Boolean(
+    answer.aborted || answer.deadlineExpired || answer.observerInfrastructure ||
+      answer.parseError !== null || answer.status === null,
+  );
+}
+
+function toControlSnapshotEntry(role, answer) {
+  if (isFailedControlSnapshotAnswer(answer)) {
+    throw tagProbeError(
+      `control-snapshot probe for ${role.nodeId} failed: ${answer.error || answer.parseError}`,
+      {
+        aborted: answer.aborted === true,
+        deadlineExpired: answer.deadlineExpired === true,
+        transportError: answer.transportError === true,
+        observerInfrastructure: answer.observerInfrastructure === true,
+        parseError: answer.parseError,
+      },
+    );
+  }
+  return {
+    nodeId: role.nodeId,
+    snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null,
+  };
+}
+
 async function controlSnapshots(ctx, roles, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-    probeCallOptions(ctx, null);
+  const callOptions = probeCallOptions(ctx, pollContext);
   const snapshotTimeoutMs = boundedTimeoutMs(
     callOptions.timeoutMs, CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS);
   const queryUrlForRole = (role) =>
     `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot` +
     `?scope=local&view=serve-lane&timeoutMs=${snapshotTimeoutMs}`;
-  const answers = await Promise.all(arrayMap(roles, async (role) => ({
+  const answers = await settleConcurrentBatch(roles, async (role) => ({
     role,
     answer: await httpFromHost({
       sshRun: ctx.sshRun,
@@ -450,36 +564,16 @@ async function controlSnapshots(ctx, roles, pollContext = null) {
       signal: callOptions.signal,
       timeoutMs: callOptions.timeoutMs,
     }),
-  })));
-  const snapshots = [];
-  for (const {role, answer} of answers) {
-    if (answer.aborted || answer.deadlineExpired || answer.observerInfrastructure ||
-        answer.parseError !== null || answer.status === null) {
-      throw tagProbeError(
-        `control-snapshot probe for ${role.nodeId} failed: ${answer.error || answer.parseError}`,
-        {
-          aborted: answer.aborted === true,
-          deadlineExpired: answer.deadlineExpired === true,
-          transportError: answer.transportError === true,
-          observerInfrastructure: answer.observerInfrastructure === true,
-          parseError: answer.parseError,
-        },
-      );
-    }
-    snapshots.push({
-      nodeId: role.nodeId,
-      snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null,
-    });
-  }
-  return snapshots;
+  }), ctx.settleInFlight ?? null);
+  return arrayMap(answers, ({role, answer}) => toControlSnapshotEntry(role, answer));
 }
 
 async function tableRoutingDenials(query, requiredTables, ctx = null, pollContext = null) {
   const denials = [];
   if (requiredTables === null) return denials;
   for (const table of requiredTables) {
-    const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-      (ctx ? probeCallOptions(ctx, null) : {});
+    const callOptions = pollContext ? probeCallOptions(ctx, pollContext, null) :
+      (ctx ? probeCallOptions(ctx, null, null) : {});
     try {
       await query(`SELECT COUNT(*) AS row_count FROM ${table}`, callOptions);
     } catch (error) {
@@ -564,15 +658,15 @@ function probeWriteReadback(ctx, sql, campaignId, visibility) {
     const token = `${campaignId}-${id}`;
     await sql.statement(
       `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`,
-      probeCallOptions(ctx, pollContext),
+      probeCallOptions(ctx, pollContext, null),
     );
     const insert = await sql.statement(
       `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`,
-      probeCallOptions(ctx, pollContext),
+      probeCallOptions(ctx, pollContext, null),
     );
     const rows = await sql.query(
       `SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`,
-      probeCallOptions(ctx, pollContext),
+      probeCallOptions(ctx, pollContext, null),
     );
     return {
       ready: insert.rowCount === 1 && rows.length === 1 && rows[0].token === token,
@@ -592,26 +686,41 @@ function bootLogField(parsed, key) {
   return parsed[key];
 }
 
+function parseBootProvenanceLine(line, facts) {
+  const parsed = jsonParse(stringSlice(line, stringIndexOf(line, '{')));
+  const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
+  const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
+  return {
+    version: bootLogField(parsed, 'version'),
+    bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
+    subsystem: bootLogField(parsed, 'subsystem'),
+    ...(typeof gitCommit === 'string' && gitCommit !== '' ? {gitCommit} : {}),
+  };
+}
+
+function isAbortOrDeadlineError(error) {
+  if (error?.aborted === true || error?.deadlineExpired === true) return true;
+  const classified = classifyRemoteCommandError(error);
+  return classified.aborted || classified.deadlineExpired;
+}
+
 async function bootProvenance(ctx, product, facts = null) {
   try {
+    const callOpts = probeCallOptions(ctx, null, BOOT_PROVENANCE_TIMEOUT_MS);
     const cmd = `docker logs ${shellWord(product.containerId)} 2>&1 | ` +
       `grep -m 1 ${BOOT_PROVENANCE_MARKER} | head -c ${BOOT_PROVENANCE_MAX_BYTES}`;
     const line = stringOf(await ctx.sshRun(
       product.host,
-      {...(ctx.opts || {}), timeoutMs: BOOT_PROVENANCE_TIMEOUT_MS},
+      {
+        ...withExplicitSignalOption(ctx.opts, callOpts.signal),
+        timeoutMs: callOpts.timeoutMs,
+      },
       cmd,
-      BOOT_PROVENANCE_TIMEOUT_MS,
+      callOpts.timeoutMs,
     ));
-    const parsed = jsonParse(stringSlice(line, stringIndexOf(line, '{')));
-    const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
-    const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
-    return {
-      version: bootLogField(parsed, 'version'),
-      bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
-      subsystem: bootLogField(parsed, 'subsystem'),
-      ...(typeof gitCommit === 'string' && gitCommit !== '' ? {gitCommit} : {}),
-    };
+    return parseBootProvenanceLine(line, facts);
   } catch (error) {
+    if (isAbortOrDeadlineError(error)) throw error;
     return {unavailable: errorText(error)};
   }
 }
@@ -632,11 +741,11 @@ function reportedVersionOf(facts) {
 }
 
 async function reportedVersions(ctx, products) {
-  await Promise.all(arrayMap(products, async (product) => {
+  await settleConcurrentBatch(products, async (product) => {
     const facts = await getFacts(ctx, product.host);
     Object.assign(product, reportedVersionOf(facts));
     product.bootProvenance = await bootProvenance(ctx, product, facts);
-  }));
+  }, ctx.settleInFlight ?? null);
   return products;
 }
 

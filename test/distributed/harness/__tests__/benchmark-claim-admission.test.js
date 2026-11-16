@@ -1035,5 +1035,45 @@ describe('readinessDenialOf structured extraction', () => {
       assert.equal(exitedDenial.phase, 'container-exited');
       assert.equal(exitedDenial.state, 'exited');
       assert.deepEqual(exitedDenial.reasons, ['container_exited:lagrange-node:137']);
+
+      const postReadyProbeFailure = readinessDenialOf({
+        deployment: {readiness: {evidence: {diagnostic: {
+          component: 'lagrange-system-tables',
+          attempts: 3,
+          elapsedMs: 4000,
+          lastCompletedReady: true,
+          lastCompletedObservation: {denials: []},
+          lastObservation: {error: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out'},
+          lastProbeError: {error: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out'},
+        }}}},
+      });
+      assert.deepEqual(postReadyProbeFailure, {
+        component: 'lagrange-system-tables',
+        attempts: 3,
+        elapsedMs: 4000,
+        phase: null,
+        state: 'probe-failed',
+        reasons: ['ssh: connect to host 10.0.0.1 port 22: Connection timed out'],
+        lastProbeError: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out',
+      });
+
+      const postReadyJsonDeadline = readinessDenialOf({
+        deployment: {readiness: {evidence: {diagnostic: {
+          component: 'lagrange-node@10.0.0.1',
+          attempts: 2,
+          elapsedMs: 420000,
+          deadlineExpired: true,
+          lastCompletedReady: true,
+          last: {status: 200, json: {ready: true, phase: 'ready', state: 'ready', reasons: []}},
+        }}}},
+      });
+      assert.deepEqual(postReadyJsonDeadline, {
+        component: 'lagrange-node@10.0.0.1',
+        attempts: 2,
+        elapsedMs: 420000,
+        phase: null,
+        state: 'deadline-expired',
+        reasons: ['formation_deadline_expired'],
+      });
     });
 });

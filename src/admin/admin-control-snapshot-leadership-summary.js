@@ -277,6 +277,10 @@ function countPostPublicationStaleInFlightDiscounts(
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
 class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReconcile {
+  constructor(deps = {}) {
+    super(deps);
+    this.inFlightLocalSnapshotByKey = new Map();
+  }
   buildControlSnapshotLeaderSummary(
     partitionRows = [],
     serviceRows = [],

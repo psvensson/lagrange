@@ -27,6 +27,8 @@ import {
   arrayIncludes,
   arrayJoin,
   arrayMap,
+  dateNow,
+  numberIsFinite,
   stringIncludes,
   stringLastIndexOf,
   stringReplace,
@@ -36,6 +38,7 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
+  withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
   errorText,
@@ -121,39 +124,95 @@ function workloadRequestOf({run, manifest, deployment, evidenceDir, setupFailure
     evidenceDir};
 }
 
+function resolveRunTarget(request, runOrOpts) {
+  if (runOrOpts?.runId) return runOrOpts;
+  if (runOrOpts?.targetId) return runOrOpts;
+  return request?.run || request || {};
+}
+
+function extractCallerOptions(runOrOpts, perRunOpts) {
+  if (runOrOpts?.runId || runOrOpts?.targetId) {
+    return perRunOpts || {};
+  }
+  return runOrOpts || {};
+}
+
+function resolveRunTimeoutMs(deadlineAtMs, clock) {
+  if (!numberIsFinite(deadlineAtMs)) return WORKLOAD_TIMEOUT_MS;
+  const remaining = deadlineAtMs - clock();
+  return Math.max(1, Math.min(WORKLOAD_TIMEOUT_MS, remaining));
+}
+
+function resolveSettleFunction(callOpts, defaultSettle, opts) {
+  if (typeof callOpts?.settleInFlight === 'function') return callOpts.settleInFlight;
+  if (typeof defaultSettle === 'function') return defaultSettle;
+  if (typeof opts?.settleInFlight === 'function') return opts.settleInFlight;
+  return null;
+}
+
+async function assertCheckoutAtHarnessCommit({sshRun, host, cd, effectiveOpts, timeoutMs,
+  harnessCommit}) {
+  const commit = stringTrim(String(await sshRun(host.ip, effectiveOpts,
+    `${cd} && git rev-parse HEAD`, timeoutMs)));
+  if (commit !== harnessCommit) {
+    throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} checkout ` +
+      `is at ${commit}, the campaign records ${harnessCommit}`, {commit, harnessCommit});
+  }
+}
+
+async function stageLoadGeneratorRequest({sshRun, host, cd, effectiveOpts, timeoutMs,
+  dir, request}) {
+  const encoded = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
+  await sshRun(host.ip, effectiveOpts, `${cd} && mkdir -p ${shellQuote(dir)} && printf %s ` +
+    `${shellQuote(encoded)} | base64 -d > ${shellQuote(`${dir}/request.json`)}`, timeoutMs);
+}
+
+async function runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, timeoutMs,
+  signal, dir}) {
+  const stderrLog = `${dir}/stderr.log`;
+  const result = await execWithStatus(sshRun, host.ip, effectiveOpts, `${cd} && ` +
+    `${shellQuote(host.nodePath)} ${LOAD_GENERATOR_CLI} --manifest ` +
+    `${shellQuote(`${dir}/request.json`)} --out ${shellQuote(`${dir}/records.ndjson`)}` +
+    ` 2> ${shellQuote(stderrLog)}`,
+  timeoutMs, signal);
+  if (!arrayIncludes(Object.values(LOAD_GENERATOR_EXIT), result.exitCode)) {
+    const stderr = String(await sshRun(host.ip, effectiveOpts,
+      `${cd} && tail -n ${LOAD_GENERATOR_STDERR_TAIL_LINES} ${shellQuote(stderrLog)}`,
+      timeoutMs));
+    throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+      `load generator exited ${result.exitCode}`, {stdout: result.stdout, stderr});
+  }
+  return JSON.parse(String(await sshRun(host.ip, effectiveOpts,
+    `${cd} && tail -n 1 ${shellQuote(`${dir}/records.ndjson`)}`, timeoutMs)));
+}
+
 /**
  * Run B1's load-generator CLI on the load-generator host, from its checkout,
  * after proving that checkout is at the harness commit.
  */
-function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId}) {
+function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId,
+  now = dateNow, settleInFlight = null}) {
   const cd = `cd ${shellQuote(host.repoPath)}`;
-  return async (request, run) => {
-    if (request.system === TIDB_SYSTEM) refuseWithoutDrivers(host);
-    const commit = stringTrim(String(await sshRun(host.ip, opts, `${cd} && git rev-parse HEAD`)));
-    if (commit !== harnessCommit) {
-      throw deploymentFailure(FAILURE.COMMIT_MISMATCH, `load generator ${host.ip} checkout ` +
-        `is at ${commit}, the campaign records ${harnessCommit}`, {commit, harnessCommit});
+  const clock = typeof now === 'function' ? now : dateNow;
+  return async (request, runOrOpts = {}, perRunOpts = {}) => {
+    const run = resolveRunTarget(request, runOrOpts);
+    const callOpts = extractCallerOptions(runOrOpts, perRunOpts);
+    const signal = callOpts.signal ?? runOrOpts?.signal ?? null;
+    const deadlineAtMs = callOpts.deadlineAtMs ?? runOrOpts?.deadlineAtMs ?? null;
+    const settle = resolveSettleFunction(callOpts, settleInFlight, opts);
+    const effectiveOpts = withExplicitSignalOption(opts, signal);
+    const timeoutMs = resolveRunTimeoutMs(deadlineAtMs, clock);
+    try {
+      if (request.system === TIDB_SYSTEM) refuseWithoutDrivers(host);
+      await assertCheckoutAtHarnessCommit({sshRun, host, cd, effectiveOpts, timeoutMs,
+        harnessCommit});
+      const dir = `test-output/bench/${campaignId}/${run.runId}`;
+      await stageLoadGeneratorRequest({sshRun, host, cd, effectiveOpts, timeoutMs, dir, request});
+      return await runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, timeoutMs,
+        signal, dir});
+    } finally {
+      if (settle) await settle();
     }
-    const dir = `test-output/bench/${campaignId}/${run.runId}`;
-    const encoded = Buffer.from(JSON.stringify(request), 'utf8').toString('base64');
-    await sshRun(host.ip, opts, `${cd} && mkdir -p ${shellQuote(dir)} && printf %s ` +
-      `${shellQuote(encoded)} | base64 -d > ${shellQuote(`${dir}/request.json`)}`);
-    // The CLI reports a harness error on stderr, which the ssh seam does not
-    // return: it is kept in the run directory and read back on failure.
-    const stderrLog = `${dir}/stderr.log`;
-    const result = await execWithStatus(sshRun, host.ip, opts, `${cd} && ` +
-      `${shellQuote(host.nodePath)} ${LOAD_GENERATOR_CLI} --manifest ` +
-      `${shellQuote(`${dir}/request.json`)} --out ${shellQuote(`${dir}/records.ndjson`)}` +
-      ` 2> ${shellQuote(stderrLog)}`,
-    WORKLOAD_TIMEOUT_MS);
-    if (!arrayIncludes(Object.values(LOAD_GENERATOR_EXIT), result.exitCode)) {
-      const stderr = String(await sshRun(host.ip, opts,
-        `${cd} && tail -n ${LOAD_GENERATOR_STDERR_TAIL_LINES} ${shellQuote(stderrLog)}`));
-      throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-        `load generator exited ${result.exitCode}`, {stdout: result.stdout, stderr});
-    }
-    return JSON.parse(String(await sshRun(host.ip, opts,
-      `${cd} && tail -n 1 ${shellQuote(`${dir}/records.ndjson`)}`)));
   };
 }
 
@@ -309,9 +368,9 @@ function productHostsOf(deployment) {
   return [...new Set(arrayMap(deployment.roles, (role) => role.host))];
 }
 
-async function workloadRecord(runWorkload, request, run) {
+async function workloadRecord(runWorkload, request, run, callOpts = {}) {
   try {
-    return await runWorkload(request, run);
+    return await runWorkload(request, run, callOpts);
   } catch (error) {
     if (error?.code) throw error;
     throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
@@ -320,8 +379,8 @@ async function workloadRecord(runWorkload, request, run) {
 }
 
 // B1's record from the load generator; refusals and non-executions are typed.
-async function executedRecord(runWorkload, request, run) {
-  const record = await workloadRecord(runWorkload, request, run);
+async function executedRecord(runWorkload, request, run, callOpts = {}) {
+  const record = await workloadRecord(runWorkload, request, run, callOpts);
   if (record.recordKind === REFUSED_RECORD_KIND) {
     throw deploymentFailure(FAILURE.DISPATCH_REFUSED, record.reason, record.dispatch);
   }
@@ -332,19 +391,40 @@ async function executedRecord(runWorkload, request, run) {
   return record;
 }
 
+function shouldObservePlacement(deployment, outcome, unopened) {
+  if (unopened) return false;
+  if (outcome?.productFailure || outcome?.failure) return false;
+  return typeof deployment?.operations?.observePlacement === 'function';
+}
+
+function assignErrorAttribution(target, error, signal) {
+  target.aborted = Boolean(error?.aborted || signal?.aborted);
+  target.deadlineExpired = Boolean(error?.deadlineExpired);
+  target.observerInfrastructure = Boolean(error?.observerInfrastructure);
+  target.lastObservation = error?.lastObservation ?? null;
+}
+
+function recordPlacementFailure(outcome, error, signal) {
+  const failure = outcome.failure || {
+    code: error?.code || DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+    message: `placement after the window: ${errorText(error)}`,
+    diagnostic: error?.diagnostic ?? null,
+  };
+  assignErrorAttribution(failure, error, signal);
+  outcome.failure = failure;
+}
+
 // Placement after the window, from the deployer's own observation; an unopened
 // or already-failed run (no window, or setup/workload failed) observes none.
-async function placementAfterWindow(deployment, unopened, outcome) {
-  if (unopened || outcome.productFailure || outcome.failure ||
-      !deployment.operations?.observePlacement) {
+async function placementAfterWindow(deployment, outcome,
+  {signal = null, deadlineAtMs = null, unopened = false} = {}) {
+  if (!shouldObservePlacement(deployment, outcome, unopened)) {
     return null;
   }
   try {
-    return await deployment.operations.observePlacement();
+    return await deployment.operations.observePlacement({signal, deadlineAtMs});
   } catch (error) {
-    outcome.failure = outcome.failure ?? {code: error?.code || DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-      message: `placement after the window: ${errorText(error)}`,
-      diagnostic: error?.diagnostic ?? null};
+    recordPlacementFailure(outcome, error, signal);
     return null;
   }
 }
@@ -367,7 +447,8 @@ async function recordedLoadGenerator({describeLoadGenerator, clientHost, product
  */
 function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHost,
   evidenceDirOf = (run) => `test-output/bench/${run.runId}`}) {
-  return async ({run, manifest, deployment, semanticGate = null, setupFailure = null}) => {
+  return async ({run, manifest, deployment, semanticGate = null, setupFailure = null,
+    signal = null, deadlineAtMs = null}) => {
     const productHosts = productHostsOf(deployment);
     if (arrayIncludes(productHosts, clientHost)) {
       throw deploymentFailure(DEPLOYMENT_FAILURE.LOAD_GENERATOR_COLOCATED,
@@ -375,9 +456,10 @@ function createWorkloadRunExecutor({runWorkload, describeLoadGenerator, clientHo
     }
     const unopened = setupFailure !== null;
     const record = await executedRecord(runWorkload, workloadRequestOf({run, manifest,
-      deployment, evidenceDir: evidenceDirOf(run), setupFailure}), run);
+      deployment, evidenceDir: evidenceDirOf(run), setupFailure}), run, {signal, deadlineAtMs});
     const outcome = outcomeOf(record, manifest, deployment, unopened);
-    const placement = await placementAfterWindow(deployment, unopened, outcome);
+    const placement = await placementAfterWindow(deployment, outcome,
+      {signal, deadlineAtMs, unopened});
     return {
       observations: record.observations,
       correctness: {...record.correctness, semanticGate},

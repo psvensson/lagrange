@@ -8,6 +8,8 @@
  * decoding `clusterReady` `{denials}`, `containerExited`, and preserved
  * `lastProbeError` entries.
  */
+import {arrayIsArray} from './real-product-captured-intrinsics.js';
+
 function textOrNull(value) {
   return typeof value === 'string' ? value : null;
 }
@@ -24,41 +26,116 @@ function denialFromJsonLast(diagnostic, lastJson) {
     elapsedMs: fieldOrNull(diagnostic, 'elapsedMs'),
     phase: textOrNull(fieldOrNull(lastJson, 'phase')),
     state: textOrNull(fieldOrNull(lastJson, 'state')),
-    reasons: Array.isArray(reasons) ? [...reasons] : [],
+    reasons: arrayIsArray(reasons) ? [...reasons] : [],
   };
 }
 
-function resolveFallbackObservation(diagnostic, last) {
+function resolveLastObservation(diagnostic, last) {
   return fieldOrNull(diagnostic, 'lastCompletedObservation') ??
     fieldOrNull(diagnostic, 'lastObservation') ??
     last;
 }
 
-function denialFromObservation(base, obs, lastProbeErrorMsg) {
-  const probeExtra = lastProbeErrorMsg ? {lastProbeError: lastProbeErrorMsg} : {};
-  if (Array.isArray(obs?.denials)) {
-    return {...base, phase: 'cluster-readiness', state: 'denied', reasons: [...obs.denials], ...probeExtra};
-  }
-  if (obs?.containerExited === true) {
-    const roleText = obs.role ?? 'unknown';
-    const exitText = obs.exitCode ?? 'null';
+function denialFromPostReadyFailure(diagnostic, base, lastProbeErrorMsg) {
+  if (lastProbeErrorMsg) {
     return {
       ...base,
-      phase: 'container-exited',
-      state: textOrNull(obs.status) ?? 'exited',
-      reasons: [`container_exited:${roleText}:${exitText}`],
+      phase: null,
+      state: 'probe-failed',
+      reasons: [lastProbeErrorMsg],
+      lastProbeError: lastProbeErrorMsg,
+    };
+  }
+  const deniedObs = fieldOrNull(diagnostic, 'lastDeniedObservation');
+  const deniedJson = fieldOrNull(deniedObs, 'json');
+  if (deniedJson && typeof deniedJson === 'object' && deniedJson.ready !== true) {
+    return denialFromJsonLast(diagnostic, deniedJson);
+  }
+  if (arrayIsArray(deniedObs?.denials) && deniedObs.denials.length > 0) {
+    return {
+      ...base,
+      phase: 'cluster-readiness',
+      state: 'denied',
+      reasons: [...deniedObs.denials],
+    };
+  }
+  if (diagnostic?.deadlineExpired === true) {
+    return {
+      ...base,
+      phase: null,
+      state: 'deadline-expired',
+      reasons: ['formation_deadline_expired'],
+    };
+  }
+  if (diagnostic?.aborted === true) {
+    return {
+      ...base,
+      phase: null,
+      state: 'aborted',
+      reasons: ['readiness_poll_aborted'],
+    };
+  }
+  return {...base, phase: null, state: null, reasons: []};
+}
+
+function denialFromExitedObservation(base, obs, probeExtra) {
+  const roleText = obs.role ?? 'unknown';
+  const exitText = obs.exitCode ?? 'null';
+  return {
+    ...base,
+    phase: 'container-exited',
+    state: textOrNull(obs.status) ?? 'exited',
+    reasons: [`container_exited:${roleText}:${exitText}`],
+    ...probeExtra,
+  };
+}
+
+function isPostReadyObservation(diagnostic, obs) {
+  if (diagnostic?.lastCompletedReady === true) return true;
+  return arrayIsArray(obs?.denials) && obs.denials.length === 0;
+}
+
+function denialFromUnclassifiedObservation(diagnostic, base, obs, lastProbeErrorMsg) {
+  const errorReason = textOrNull(fieldOrNull(obs, 'error')) ?? lastProbeErrorMsg;
+  if (!errorReason && diagnostic?.deadlineExpired === true) {
+    return {
+      ...base,
+      phase: null,
+      state: 'deadline-expired',
+      reasons: ['formation_deadline_expired'],
+    };
+  }
+  return {...base, phase: null, state: null, reasons: errorReason ? [errorReason] : []};
+}
+
+function denialFromObservation(diagnostic, base, obs, lastProbeErrorMsg) {
+  if (isPostReadyObservation(diagnostic, obs)) {
+    return denialFromPostReadyFailure(diagnostic, base, lastProbeErrorMsg);
+  }
+  const probeExtra = lastProbeErrorMsg ? {lastProbeError: lastProbeErrorMsg} : {};
+  if (arrayIsArray(obs?.denials)) {
+    return {
+      ...base,
+      phase: 'cluster-readiness',
+      state: 'denied',
+      reasons: [...obs.denials],
       ...probeExtra,
     };
   }
-  const errorReason = textOrNull(fieldOrNull(obs, 'error')) ?? lastProbeErrorMsg;
-  return {...base, phase: null, state: null, reasons: errorReason ? [errorReason] : []};
+  if (obs?.containerExited === true) {
+    return denialFromExitedObservation(base, obs, probeExtra);
+  }
+  return denialFromUnclassifiedObservation(diagnostic, base, obs, lastProbeErrorMsg);
 }
 
 function readinessDenialOf(run) {
   const diagnostic = fieldOrNull(run?.deployment?.readiness?.evidence, 'diagnostic');
   const last = fieldOrNull(diagnostic, 'last');
   const lastJson = fieldOrNull(last, 'json');
-  if (lastJson && typeof lastJson === 'object') {
+  const lastProbeErrorMsg = textOrNull(
+    fieldOrNull(fieldOrNull(diagnostic, 'lastProbeError'), 'error'),
+  );
+  if (lastJson && typeof lastJson === 'object' && lastJson.ready !== true) {
     return denialFromJsonLast(diagnostic, lastJson);
   }
   const base = {
@@ -66,11 +143,11 @@ function readinessDenialOf(run) {
     attempts: fieldOrNull(diagnostic, 'attempts'),
     elapsedMs: fieldOrNull(diagnostic, 'elapsedMs'),
   };
-  const obs = resolveFallbackObservation(diagnostic, last);
-  const lastProbeErrorMsg = textOrNull(
-    fieldOrNull(fieldOrNull(diagnostic, 'lastProbeError'), 'error'),
-  );
-  return denialFromObservation(base, obs, lastProbeErrorMsg);
+  if (lastJson?.ready === true) {
+    return denialFromPostReadyFailure(diagnostic, base, lastProbeErrorMsg);
+  }
+  const obs = resolveLastObservation(diagnostic, last);
+  return denialFromObservation(diagnostic, base, obs, lastProbeErrorMsg);
 }
 
 export {readinessDenialOf};
