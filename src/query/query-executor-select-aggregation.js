@@ -1,5 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
+  SQL_COMPARISON_AFFINITY,
   areSqlScalarsEqualWithAffinity,
   compareSqlScalarsWithAffinity,
   resolveOperandComparisonAffinity,
@@ -452,13 +453,13 @@ const queryExecutorSelectAggregationMethods = {
    */
   evaluateIn(row, expr, params = []) {
     const value = this.evaluateExpression(row, expr.expression, params);
-    const exprAffinity = resolveOperandComparisonAffinity(expr.expression, value);
+    const exprAffinity = resolveOperandComparisonAffinity(expr.expression);
     const matches = expr.values.some((v) =>
       areSqlScalarsEqualWithAffinity(
         value,
         this.evaluateExpression(row, v, params),
         exprAffinity,
-        v,
+        SQL_COMPARISON_AFFINITY.NONE,
       ),
     );
     return expr.negated ? !matches : matches;

@@ -98,15 +98,6 @@ function resolveHeartbeatBudgetFields(cachedRow) {
   return fields;
 }
 
-const STALENESS_JITTER_MARGIN_RATIO = 0.8;
-
-function resolveEffectiveStalenessThresholdMs(maxStalenessMs) {
-  if (!Number.isFinite(maxStalenessMs) || maxStalenessMs <= 0) {
-    return maxStalenessMs;
-  }
-  return Math.max(1, Math.floor(maxStalenessMs * STALENESS_JITTER_MARGIN_RATIO));
-}
-
 function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
   const reporterVisibilityState = options.nodeHeartbeatReporterVisibilityState;
   if (reporterVisibilityState === options.reporterVisibilityState.PENDING) {
@@ -134,10 +125,7 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
       elapsedMs,
     });
   }
-  const effectiveStalenessThresholdMs = resolveEffectiveStalenessThresholdMs(
-    options.nodeMetadataMaxStalenessMs,
-  );
-  if (elapsedMs >= effectiveStalenessThresholdMs) {
+  if (elapsedMs >= options.nodeMetadataMaxStalenessMs) {
     return Object.freeze({
       state: options.writeDecisionState.MAX_STALENESS_REFRESH,
       elapsedMs,

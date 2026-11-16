@@ -633,53 +633,59 @@ async (t) => {
   );
 
   // Safe-integer boundary and SQLite Section 4.2 affinity controls:
-  const evalColVsLiteralEq = (colVal, literalVal) =>
+  const evalColVsLiteralEq = (colVal, literalVal, affinity = 'NUMERIC') =>
     executor.evaluateBinary(
       {a: colVal},
       {
         type: 'binary',
         operator: '=',
-        left: {type: 'column_ref', column: 'a'},
+        left: {type: 'column_ref', column: 'a', affinity},
         right: {type: 'literal', value: literalVal},
       },
     );
-  const evalResidualColVsLiteralEq = (colVal, literalVal) =>
+  const evalResidualColVsLiteralEq = (colVal, literalVal, affinity = 'NUMERIC') =>
     residualPredicateAdmitsRow(
       {
         type: 'binary',
         operator: '=',
-        left: {type: 'column_ref', column: 'a'},
+        left: {type: 'column_ref', column: 'a', affinity},
         right: {type: 'literal', value: literalVal},
       },
       {a: colVal},
     );
-  for (const [colVal, literalVal, label] of [
-    ['9007199254740993', 9007199254740992, 'unsafe 64-bit integer string vs rounded number'],
-    ['1.0', 1, 'TEXT column "1.0" vs integer literal 1'],
-    ['01', '1', 'leading-zero string vs canonical string'],
-    ['abc', 'def', 'distinct non-numeric strings'],
-    [null, 1, 'null vs number'],
-    [undefined, '1', 'undefined vs string'],
-    [true, '1', 'boolean true vs string 1'],
-    [false, '0', 'boolean false vs string 0'],
-    [NaN, '0', 'NaN vs string 0'],
+  for (const [colVal, literalVal, affinity, label] of [
+    ['9007199254740993', 9007199254740992, 'NUMERIC', 'unsafe 64-bit integer string vs rounded number'],
+    ['1.0', 1, 'TEXT', 'TEXT column "1.0" vs integer literal 1'],
+    ['01', '1', 'TEXT', 'leading-zero string vs canonical string'],
+    [1, '01', 'BLOB', 'BLOB column holding numeric 1 vs bound text "01"'],
+    ['abc', 'def', 'TEXT', 'distinct non-numeric strings'],
+    [null, 1, 'NUMERIC', 'null vs number'],
+    [undefined, '1', 'TEXT', 'undefined vs string'],
+    [true, '1', 'NUMERIC', 'boolean true vs string 1'],
+    [false, '0', 'NUMERIC', 'boolean false vs string 0'],
+    [NaN, '0', 'NUMERIC', 'NaN vs string 0'],
   ]) {
-    t.equal(evalColVsLiteralEq(colVal, literalVal), false, `evaluateBinary rejects ${label}`);
+    t.equal(evalColVsLiteralEq(colVal, literalVal, affinity), false, `evaluateBinary rejects ${label}`);
     t.equal(
-      evalResidualColVsLiteralEq(colVal, literalVal),
+      evalResidualColVsLiteralEq(colVal, literalVal, affinity),
       false,
       `residualPredicateAdmitsRow rejects ${label}`,
     );
   }
   t.equal(
-    evalColVsLiteralEq(1, '01'),
+    evalColVsLiteralEq(1, '01', 'NUMERIC'),
     true,
     'evaluateBinary coerces numeric text "01" against NUMERIC column 1',
   );
   t.equal(
-    evalResidualColVsLiteralEq(1, '01'),
+    evalResidualColVsLiteralEq(1, '01', 'NUMERIC'),
     true,
     'residualPredicateAdmitsRow coerces numeric text "01" against NUMERIC column 1',
+  );
+  t.equal(
+    evalColVsLiteralEq(1, '01', null),
+    false,
+    'unannotated column_ref defaults to NONE affinity, never runtime typeof inference',
   );
   t.equal(
     areSqlScalarsEqualWithAffinity('01', 1, 'NONE', 'NONE'),
@@ -694,39 +700,162 @@ async (t) => {
 });
 
 test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
-  'TEXT "1.0" = 1 -> [] vs INTEGER 1 = "01" -> [1]', async (t) => {
-  const cluster = buildJoinCluster({
-    users_p1: {
-      table: 'users',
-      rows: [
-        [1, 'alice', 35, 'east'],
-      ],
-    },
-    orders_p1: {
-      table: 'orders',
-      rows: [
-        [10, 1, 5, '1.0'],
-      ],
-    },
+  'declared column affinity, IN list right-hand NONE affinity, and aggregate NONE affinity', async (t) => {
+  const leftDb = new Database(':memory:');
+  const rightDb = new Database(':memory:');
+  const oracleDb = new Database(':memory:');
+  t.after(() => {
+    leftDb.close();
+    rightDb.close();
+    oracleDb.close();
   });
 
-  // 1) TEXT column o.status holding '1.0' compared to integer literal 1 on a LEFT JOIN residual WHERE:
-  const textSql =
-    'SELECT u.id FROM users AS u LEFT JOIN orders AS o ' +
-    'ON u.id = o.user_id WHERE o.status = 1';
-  const textRows = (await runJoin(cluster, textSql)).map((r) => r.id);
-  const textOracle = cluster.oracle.prepare(textSql).all().map((r) => r.id);
-  t.same(textOracle, [], 'better-sqlite3 oracle returns [] for TEXT "1.0" = 1');
-  t.same(textRows, textOracle, 'distributed residual evaluator matches oracle for TEXT "1.0" = 1');
+  const ddl = `
+    CREATE TABLE a (
+      id INTEGER PRIMARY KEY,
+      label TEXT
+    );
+    CREATE TABLE b (
+      id INTEGER PRIMARY KEY,
+      a_id INTEGER,
+      blob_col BLOB,
+      mixed NUMERIC,
+      t TEXT,
+      n INTEGER
+    );
+  `;
+  for (const db of [leftDb, rightDb, oracleDb]) {
+    db.exec(ddl);
+  }
+  for (const db of [leftDb, oracleDb]) {
+    db.prepare('INSERT INTO a VALUES (?, ?)').run(1, 'row-1');
+    db.prepare('INSERT INTO a VALUES (?, ?)').run(2, 'row-2');
+  }
+  for (const db of [rightDb, oracleDb]) {
+    // Row 1: blob_col holds numeric 1, mixed holds '1x', t holds '01', n holds 1
+    db.prepare('INSERT INTO b VALUES (?, ?, ?, ?, ?, ?)').run(10, 1, 1, '1x', '01', 1);
+    // Row 2 (positive control row): blob_col holds Buffer('1'), mixed holds 1, t holds '1', n holds 1
+    db.prepare('INSERT INTO b VALUES (?, ?, ?, ?, ?, ?)').run(20, 2, Buffer.from('1'), 1, '1', 1);
+  }
 
-  // 2) INTEGER column o.user_id holding 1 compared to numeric text '01' on a LEFT JOIN residual WHERE:
-  const intSql =
-    'SELECT u.id FROM users AS u LEFT JOIN orders AS o ' +
-    'ON u.id = o.user_id WHERE o.user_id = \'01\'';
-  const intRows = (await runJoin(cluster, intSql)).map((r) => r.id);
-  const intOracle = cluster.oracle.prepare(intSql).all().map((r) => r.id);
-  t.same(intOracle, [1], 'better-sqlite3 oracle returns [1] for INTEGER 1 = "01"');
-  t.same(intRows, intOracle, 'distributed residual evaluator matches oracle for INTEGER 1 = "01"');
+  const partitionDbs = new Map([
+    ['a_p1', leftDb],
+    ['b_p1', rightDb],
+  ]);
+  const messageRouter = {
+    async deliver(address, message) {
+      if (message.type !== 'QUERY') {
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
+      }
+      const partitionId = address.split('/')[2];
+      const db = partitionDbs.get(partitionId);
+      const rows = db.prepare(message.sql).all(...(message.params || []));
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: true,
+        rows,
+        count: rows.length,
+        partitionId,
+      });
+    },
+  };
+  const services = [...partitionDbs.keys()].map((partitionId) => ({
+    service_id: partitionId,
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: 'test-node',
+    raft_role: 'leader',
+    address: `test-node/partition/${partitionId}`,
+    status: 'active',
+  }));
+  const systemCache = {
+    services,
+    filter(type, predicate) {
+      return type === 'services' ? this.services.filter(predicate) : [];
+    },
+    get() {
+      return null;
+    },
+    getAll(type) {
+      return type === 'services' ? this.services : [];
+    },
+  };
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter,
+    systemCache,
+  });
+  const tablePlans = new Map([['b', {partitions: ['b_p1']}]]);
+
+  const execJoin = async (sql, params = []) => {
+    const ast = new SQLParser(sql).parse();
+    const res = await executor.executeSelect(
+      ast,
+      ['a_p1'],
+      params,
+      {distributedPlan: {tablePlans}},
+    );
+    t.equal(res.success, true, `executeSelect succeeds for: ${sql}`);
+    return res.rows.map((r) => r.id);
+  };
+
+  // Counterexample 1: BLOB column containing numeric 1 compared with bound text '01'
+  const blobSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.blob_col = ?';
+  const blobOracle = oracleDb.prepare(blobSql).all('01').map((r) => r.id);
+  t.same(blobOracle, [], 'SQLite oracle rejects BLOB column holding numeric 1 vs bound text "01"');
+  t.same(await execJoin(blobSql, ['01']), blobOracle,
+    'candidate matches SQLite oracle for BLOB column holding numeric 1 vs "01"');
+
+  // Counterexample 2: NUMERIC column containing text '1x' evaluated with mixed < 2
+  const mixedSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.mixed < 2';
+  const mixedOracle = oracleDb.prepare(mixedSql).all().map((r) => r.id);
+  t.same(mixedOracle, [2], 'SQLite oracle excludes row 1 ("1x" < 2 is false) and keeps control row 2');
+  t.same(await execJoin(mixedSql), mixedOracle,
+    'candidate matches SQLite oracle for NUMERIC column holding "1x" with mixed < 2');
+
+  // Counterexample 3: TEXT column '01' evaluated with t IN (n) where INTEGER column n contains 1
+  const inSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.t IN (b.n)';
+  const inOracle = oracleDb.prepare(inSql).all().map((r) => r.id);
+  t.same(inOracle, [2], 'SQLite oracle excludes row 1 ("01" IN (1)) and keeps control row 2 ("1" IN (1))');
+  t.same(await execJoin(inSql), inOracle,
+    'candidate matches SQLite oracle for TEXT column in IN (INTEGER column)');
+
+  // Counterexample 4: HAVING SUM(b.n) = '01' where group sum is 1
+  const havingSql =
+    'SELECT a.id, SUM(b.n) AS total FROM a LEFT JOIN b ON a.id = b.a_id ' +
+    'GROUP BY a.id HAVING SUM(b.n) = \'01\'';
+  const havingOracle = oracleDb.prepare(havingSql).all().map((r) => r.id);
+  t.same(havingOracle, [], 'SQLite oracle returns [] for HAVING SUM(b.n) = "01" when sum is 1');
+  t.same(await execJoin(havingSql), havingOracle,
+    'candidate matches SQLite oracle for HAVING SUM(b.n) = "01"');
+
+  // Positive controls: TEXT '1.0' = 1 -> [], INTEGER 1 = '1' -> [1, 2], INTEGER 1 = '01' -> [1, 2], BLOB binding
+  const intEqOneSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n = \'1\' ORDER BY a.id';
+  t.same(await execJoin(intEqOneSql), oracleDb.prepare(intEqOneSql).all().map((r) => r.id),
+    'INTEGER 1 = "1" positive control matches oracle');
+
+  const intEqZeroOneSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n = \'01\' ORDER BY a.id';
+  t.same(await execJoin(intEqZeroOneSql), oracleDb.prepare(intEqZeroOneSql).all().map((r) => r.id),
+    'INTEGER 1 = "01" positive control matches oracle');
+
+  const blobBindOnIntSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n = ?';
+  t.same(
+    await execJoin(blobBindOnIntSql, [Buffer.from('1')]),
+    oracleDb.prepare(blobBindOnIntSql).all(Buffer.from('1')).map((r) => r.id),
+    'numeric BLOB binding against INTEGER column matches oracle ([])',
+  );
+  const blobBindOnBlobSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.blob_col = ?';
+  t.same(
+    await execJoin(blobBindOnBlobSql, [Buffer.from('1')]),
+    oracleDb.prepare(blobBindOnBlobSql).all(Buffer.from('1')).map((r) => r.id),
+    'BLOB binding against BLOB column matches oracle ([2])',
+  );
 });
 
 test('transactional reads redirect from follower replicas, pin session ' +

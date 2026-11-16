@@ -910,18 +910,21 @@ function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
 }
 
 function readOriginalAllocationRightsRow(db, groupId, replicaIdentity, lifecycle, declaration) {
-  const members = declaration.declaration?.members;
-  const member = Array.isArray(members) ?
-    members.find((entry) => entry?.replicaId === replicaIdentity) : null;
-  if (member && lifecycle.state === LIFECYCLE_STATE.ACTIVE &&
-      lifecycle.incarnation === member.incarnation) {
-    return readOriginalAllocationRow({db, member});
+  const member = declaration.declaration?.members?.find((entry) =>
+    entry?.groupId === groupId && entry?.replicaId === replicaIdentity);
+  const validState = lifecycle.state === LIFECYCLE_STATE.ACTIVE ||
+    (lifecycle.state === LIFECYCLE_STATE.RETIRED && lifecycle.retirementEvidence !== null);
+  if (!member || !validState || lifecycle.incarnation !== member.incarnation) {
+    throw originalAllocationError(ORIGINAL_REASON.IDENTITY, replicaIdentity);
   }
-  const present = lifecycleColumns(db);
-  const cols = [ORIGINAL_COLUMN.SERVICE_RIGHT,
-    ...(present.has(ORIGINAL_COLUMN.IDENTITY_RIGHT) ? [ORIGINAL_COLUMN.IDENTITY_RIGHT] : [])];
-  return db.prepare(`SELECT ${cols.join(SQL_LIST_SEPARATOR)} FROM ${REPLICA_LIFECYCLE_TABLE}
-    WHERE group_id = ? AND replica_identity = ? LIMIT 1`).get(groupId, replicaIdentity);
+  if (lifecycle.state === LIFECYCLE_STATE.ACTIVE) return readOriginalAllocationRow({db, member});
+  const row = db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ? AND incarnation = ?`)
+    .get(member.groupId, member.peerId, member.replicaId, member.incarnation);
+  if (row?.[ORIGINAL_COLUMN.MEMBER] !== JSON.stringify(member)) {
+    throw originalAllocationError(ORIGINAL_REASON.IDENTITY, replicaIdentity);
+  }
+  return row;
 }
 
 function inspectOriginalAllocationDb(dbPath, groupId, replicaIdentity, isAnchor, lifecycle) {

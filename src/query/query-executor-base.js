@@ -484,6 +484,21 @@ class QueryExecutorBase {
     }
 
     // Aggregate results
+    if (ast.having) {
+      await this.ensureQueryColumnAffinities(
+        ast,
+        [],
+        [
+          {
+            tableName,
+            alias: ast.from?.alias || tableName,
+            partitions: partitionIds,
+          },
+        ],
+        queryTimestamp,
+        options,
+      );
+    }
     const mergeStartTimeMs = Date.now();
     const aggregated = this.mergeEngine.mergePartitionResults(
       results,

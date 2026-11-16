@@ -788,6 +788,35 @@ test('TX1 inc3 F1: an origin naming another partition is consumed without record
     'an origin is this partition\'s own or nothing');
   }, {generationOrigin: false}));
 
+function instrumentParticipantStatementExecutions(db) {
+  const counts = {prepares: 0, executions: 0};
+  const StatementProto = Object.getPrototypeOf(db.prepare('SELECT 1'));
+  if (!StatementProto.__participantListeners) {
+    StatementProto.__participantListeners = new Map();
+    for (const method of ['get', 'all', 'run', 'iterate']) {
+      if (typeof StatementProto[method] === 'function') {
+        const origMethod = StatementProto[method];
+        StatementProto[method] = function wrappedStatementMethod(...args) {
+          const listener = StatementProto.__participantListeners.get(this?.database);
+          if (listener && String(this?.source).includes('_participant_transactions')) {
+            listener.executions += 1;
+          }
+          return origMethod.apply(this, args);
+        };
+      }
+    }
+  }
+  StatementProto.__participantListeners.set(db, counts);
+  const origPrepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    if (String(sql).includes('_participant_transactions')) {
+      counts.prepares += 1;
+    }
+    return origPrepare(sql);
+  };
+  return counts;
+}
+
 test('participant transaction store skips repeated SQLite queries on idle DBs ' +
   'and never caches a stale negative across inserts or rollbacks', async () => {
   const {
@@ -799,54 +828,61 @@ test('participant transaction store skips repeated SQLite queries on idle DBs ' 
   } = await import('../../src/partition/partition-participant-transaction-store.js');
 
   await onReplica(async (replica) => {
-    let participantQueries = 0;
-    const origPrepare = replica.db.prepare.bind(replica.db);
-    replica.db.prepare = (sql) => {
-      if (String(sql).includes('_participant_transactions')) {
-        participantQueries += 1;
-      }
-      return origPrepare(sql);
-    };
+    const counts = instrumentParticipantStatementExecutions(replica.db);
 
-    // First idle query outside a tx checks and caches clean negative.
-    assert.deepEqual(readPreparedParticipantIds(replica.db), []);
-    const afterFirstRead = participantQueries;
+    // Negative control: executing an already-prepared statement increments
+    // counts.executions even when db.prepare is not called again.
+    const cachedProbe = replica.db.prepare(
+      'SELECT 1 FROM _participant_transactions LIMIT 1',
+    );
+    const preparesAfterProbeCompile = counts.prepares;
+    const executionsBeforeProbeRun = counts.executions;
+    cachedProbe.get();
+    cachedProbe.pluck().get();
+    assert.equal(counts.prepares, preparesAfterProbeCompile,
+      're-running a cached statement does not call db.prepare');
+    assert.equal(counts.executions, executionsBeforeProbeRun + 2,
+      'execution counter tracks every .get() on a cached statement');
+
+    // openParticipantTransactionStore already established the idle empty state:
+    // repeated checks execute zero SQLite statements.
+    const afterProbe = counts.executions;
     for (let i = 0; i < 5; i += 1) {
       assert.deepEqual(readPreparedParticipantIds(replica.db), []);
       assert.equal(isPartitionReserved(replica.db), false);
       assert.equal(isParticipantSessionPrepared(replica.db, 's1'), false);
     }
-    assert.equal(participantQueries, afterFirstRead,
-      'idle connection hits owner-held fast path with zero SQLite queries');
+    assert.equal(counts.executions, afterProbe,
+      'idle connection hits owner-held fast path with zero SQLite statement executions');
 
     const tx = identityOf('weakset-tx');
     const prepare = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
     applyCommitted(replica, prepare);
     assert.equal(isPartitionReserved(replica.db), true);
     assert.deepEqual(readPreparedParticipantIds(replica.db), [prepare.participantId]);
-    assert.ok(participantQueries > afterFirstRead, 'PREPARED row activates queries');
+    assert.ok(counts.executions > afterProbe, 'PREPARED row executes SQLite queries');
 
     applyCommitted(replica, commitDecision(tx, prepare));
     assert.deepEqual(readPreparedParticipantIds(replica.db), []);
-    const afterDecisionCleared = participantQueries;
+    const afterDecisionCleared = counts.executions;
     for (let i = 0; i < 5; i += 1) {
       assert.deepEqual(readPreparedParticipantIds(replica.db), []);
       assert.equal(isPartitionReserved(replica.db), false);
     }
-    assert.equal(participantQueries, afterDecisionCleared,
-      'empty verification outside transaction restores 0-query fast path');
+    assert.equal(counts.executions, afterDecisionCleared,
+      'empty verification outside transaction restores 0-execution fast path');
   });
 
   const db = new Database(':memory:');
   try {
+    const counts = instrumentParticipantStatementExecutions(db);
     openParticipantTransactionStore(db);
-    let queries = 0;
-    const origPrepare = db.prepare.bind(db);
-    db.prepare = (sql) => {
-      if (String(sql).includes('_participant_transactions')) queries += 1;
-      return origPrepare(sql);
-    };
+    assert.ok(counts.executions >= 1,
+      'openParticipantTransactionStore executes initial reservation check');
+    const afterOpen = counts.executions;
     assert.deepEqual(readPreparedParticipantIds(db), []);
+    assert.equal(counts.executions, afterOpen,
+      'idle read after open executes zero SQLite statements');
     assert.throws(() => db.transaction(() => {
       insertParticipantTransactionRow(db, {
         transactionId: 'tx-rb',
@@ -858,10 +894,12 @@ test('participant transaction store skips repeated SQLite queries on idle DBs ' 
       throw new Error('force-rollback');
     })(), /force-rollback/u);
     assert.equal(isPartitionReserved(db), false);
-    const afterClear = queries;
+    assert.ok(counts.executions > afterOpen,
+      'first check after rollback re-verifies SQLite state');
+    const afterClear = counts.executions;
     assert.deepEqual(readPreparedParticipantIds(db), []);
-    assert.equal(queries, afterClear,
-      'post-rollback outside-tx verification safely restores 0-query skip');
+    assert.equal(counts.executions, afterClear,
+      'post-rollback outside-tx verification safely restores 0-execution skip');
   } finally {
     db.close();
   }

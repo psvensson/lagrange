@@ -9,8 +9,12 @@ import {
   resolveResidualConjunctForRow,
 } from './distributed/join-pushdown-plan.js';
 import {
+  ensureExecutorQueryColumnAffinities,
   residualPredicateAdmitsRow,
 } from './distributed/residual-predicate-evaluator.js';
+import {
+  getSchemaByTableName,
+} from '../bootstrap/system-table-schemas-constants.js';
 
 const {
   QUERY_AST_NODE,
@@ -116,6 +120,25 @@ const queryExecutorJoinExecutionMethods = {
 
     let resultRows = mainFetch.rows;
     let leftTableRef = ast.from.alias || ast.from.name;
+    const tableBindings = [
+      {
+        tableName: ast.from?.name,
+        alias: ast.from?.alias || ast.from?.name,
+        partitions: mainPartitionIds,
+      },
+      ...(ast.joins || []).map((join) => ({
+        tableName: join.table?.name,
+        alias: join.table?.alias || join.table?.name,
+        partitions: joinPartitions.get(join.table?.name) || [],
+      })),
+    ];
+    await this.ensureQueryColumnAffinities(
+      ast,
+      pushdownPlan.residualConjuncts,
+      tableBindings,
+      queryTimestamp,
+      options,
+    );
     for (const [edgeIndex, join] of ast.joins.entries()) {
       const edgePlan = pushdownPlan.joins[edgeIndex];
       const rightTableRef = join.table.alias || join.table.name;
@@ -343,6 +366,24 @@ const queryExecutorJoinExecutionMethods = {
     );
   },
 
+  ensureQueryColumnAffinities(
+    ast,
+    residualConjuncts = [],
+    tableBindings = [],
+    queryTimestamp = null,
+    options = {},
+  ) {
+    return ensureExecutorQueryColumnAffinities(
+      this,
+      ast,
+      residualConjuncts,
+      tableBindings,
+      queryTimestamp,
+      options,
+      getSchemaByTableName,
+    );
+  },
+
   /**
    * Perform an in-memory JOIN between two result sets.
    * @param {Array} leftRows - Left table rows.
@@ -377,6 +418,9 @@ const queryExecutorJoinExecutionMethods = {
     const rightIndex = new Map();
     for (const row of rightRows) {
       const key = row[rightColumn];
+      if (key === null || key === undefined) {
+        continue;
+      }
       if (!rightIndex.has(key)) {
         rightIndex.set(key, []);
       }
@@ -386,7 +430,8 @@ const queryExecutorJoinExecutionMethods = {
     const matchedRight = new Set();
     for (const leftRow of leftRows) {
       const key = leftRow[leftColumn];
-      const matches = rightIndex.get(key) || [];
+      const matches =
+        key === null || key === undefined ? [] : rightIndex.get(key) || [];
       if (matches.length > 0) {
         for (const rightRow of matches) {
           result.push(

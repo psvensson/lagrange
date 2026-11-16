@@ -55,25 +55,87 @@ const NUMERIC_TYPE_TOKENS = Object.freeze([
 const TEXT_TYPE_TOKENS = Object.freeze(['CHAR', 'CLOB', 'TEXT']);
 const NONE_TYPE_TOKENS = Object.freeze(['BLOB', 'BYTEA', 'NONE']);
 
+const CONSTRAINT_START_TOKENS = new Set([
+  'PRIMARY',
+  'UNIQUE',
+  'CHECK',
+  'FOREIGN',
+  'CONSTRAINT',
+  'NOT',
+  'NULL',
+  'DEFAULT',
+  'COLLATE',
+  'REFERENCES',
+  'GENERATED',
+  'AS',
+  'AUTOINCREMENT',
+]);
+const TABLE_CONSTRAINT_HEADS = new Set([
+  'PRIMARY',
+  'UNIQUE',
+  'CHECK',
+  'FOREIGN',
+  'CONSTRAINT',
+]);
+
+const STORAGE_RANK_INVALID = 0;
+const STORAGE_RANK_NUMBER = 1;
+const STORAGE_RANK_TEXT = 2;
+const STORAGE_RANK_BLOB = 3;
+const SQLITE_MASTER_DDL_SQL =
+  'SELECT sql FROM sqlite_master WHERE type = \'table\' AND lower(name) = lower(?)';
+const OPEN_PAREN_CHAR = '(';
+const CLOSE_PAREN_CHAR = ')';
+const COMMA_CHAR = ',';
+const SPACE_STR = ' ';
+const EMPTY_STR = '';
+
 function isNullValue(value) {
   return value === null || value === undefined;
 }
 
-function isValidComparableScalar(value) {
+function scalarStorageRank(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return STORAGE_RANK_NUMBER;
+  }
   if (typeof value === 'string') {
+    return STORAGE_RANK_TEXT;
+  }
+  if (value instanceof Uint8Array) {
+    return STORAGE_RANK_BLOB;
+  }
+  return STORAGE_RANK_INVALID;
+}
+
+function compareByteArrays(left, right) {
+  const minLen = Math.min(left.byteLength, right.byteLength);
+  for (let i = 0; i < minLen; i += 1) {
+    if (left[i] !== right[i]) {
+      return left[i] < right[i] ? -1 : 1;
+    }
+  }
+  if (left.byteLength === right.byteLength) {
+    return 0;
+  }
+  return left.byteLength < right.byteLength ? -1 : 1;
+}
+
+function isAffinityCarryingNode(node) {
+  const type = node?.type;
+  if (type === EXPR_TYPE.COLUMN_REF || type === EXPR_TYPE.COLUMN) {
     return true;
   }
-  return typeof value === 'number' && Number.isFinite(value);
+  return String(type || '').toLowerCase() === CAST_NODE_TYPE;
 }
 
 function resolveExplicitTypeName(node) {
   if (!node || typeof node !== 'object') {
-    return '';
+    return EMPTY_STR;
   }
-  const candidate = node.affinity;
+  const candidate = node.affinity ?? node.targetType;
   return typeof candidate === 'string' ?
     candidate :
-    String(candidate?.name || '');
+    String(candidate?.name || EMPTY_STR);
 }
 
 function classifyAffinityFromTypeString(rawType) {
@@ -96,32 +158,17 @@ function classifyAffinityFromTypeString(rawType) {
   return SQL_COMPARISON_AFFINITY.NUMERIC;
 }
 
-function isColumnOrAggregateNode(node) {
-  const type = node?.type;
-  return (
-    type === EXPR_TYPE.COLUMN_REF ||
-    type === EXPR_TYPE.COLUMN ||
-    type === EXPR_TYPE.AGGREGATE
-  );
-}
-
-function resolveOperandComparisonAffinity(node, value) {
+function resolveOperandComparisonAffinity(node) {
   if (typeof node === 'string') {
     return classifyAffinityFromTypeString(node) || SQL_COMPARISON_AFFINITY.NONE;
   }
-  const explicit = classifyAffinityFromTypeString(resolveExplicitTypeName(node));
-  if (explicit !== null) {
-    return explicit;
+  if (!isAffinityCarryingNode(node)) {
+    return SQL_COMPARISON_AFFINITY.NONE;
   }
-  if (isColumnOrAggregateNode(node)) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return SQL_COMPARISON_AFFINITY.NUMERIC;
-    }
-    if (typeof value === 'string') {
-      return SQL_COMPARISON_AFFINITY.TEXT;
-    }
-  }
-  return SQL_COMPARISON_AFFINITY.NONE;
+  return (
+    classifyAffinityFromTypeString(resolveExplicitTypeName(node)) ||
+    SQL_COMPARISON_AFFINITY.NONE
+  );
 }
 
 function coerceStringToNumericAffinity(value) {
@@ -161,8 +208,8 @@ function applySqlComparisonAffinity(value, affinity) {
 }
 
 function coercePairWithAffinity(left, right, leftNodeOrAffinity, rightNodeOrAffinity) {
-  const leftAffinity = resolveOperandComparisonAffinity(leftNodeOrAffinity, left);
-  const rightAffinity = resolveOperandComparisonAffinity(rightNodeOrAffinity, right);
+  const leftAffinity = resolveOperandComparisonAffinity(leftNodeOrAffinity);
+  const rightAffinity = resolveOperandComparisonAffinity(rightNodeOrAffinity);
   if (leftAffinity === SQL_COMPARISON_AFFINITY.NUMERIC ||
       rightAffinity === SQL_COMPARISON_AFFINITY.NUMERIC) {
     return [
@@ -187,7 +234,7 @@ function areSqlScalarsEqualWithAffinity(
   leftNodeOrAffinity = SQL_COMPARISON_AFFINITY.NONE,
   rightNodeOrAffinity = SQL_COMPARISON_AFFINITY.NONE,
 ) {
-  if (!isValidComparableScalar(left) || !isValidComparableScalar(right)) {
+  if (scalarStorageRank(left) === 0 || scalarStorageRank(right) === 0) {
     return false;
   }
   const [coercedLeft, coercedRight] = coercePairWithAffinity(
@@ -196,7 +243,15 @@ function areSqlScalarsEqualWithAffinity(
     leftNodeOrAffinity,
     rightNodeOrAffinity,
   );
-  return typeof coercedLeft === typeof coercedRight && coercedLeft === coercedRight;
+  const rankLeft = scalarStorageRank(coercedLeft);
+  const rankRight = scalarStorageRank(coercedRight);
+  if (rankLeft === STORAGE_RANK_INVALID || rankLeft !== rankRight) {
+    return false;
+  }
+  if (rankLeft === STORAGE_RANK_BLOB) {
+    return compareByteArrays(coercedLeft, coercedRight) === 0;
+  }
+  return coercedLeft === coercedRight;
 }
 
 function compareSqlScalarsWithAffinity(
@@ -205,7 +260,8 @@ function compareSqlScalarsWithAffinity(
   leftNodeOrAffinity = SQL_COMPARISON_AFFINITY.NONE,
   rightNodeOrAffinity = SQL_COMPARISON_AFFINITY.NONE,
 ) {
-  if (!isValidComparableScalar(left) || !isValidComparableScalar(right)) {
+  if (scalarStorageRank(left) === STORAGE_RANK_INVALID ||
+      scalarStorageRank(right) === STORAGE_RANK_INVALID) {
     return UNKNOWN;
   }
   const [coercedLeft, coercedRight] = coercePairWithAffinity(
@@ -214,13 +270,21 @@ function compareSqlScalarsWithAffinity(
     leftNodeOrAffinity,
     rightNodeOrAffinity,
   );
-  if (typeof coercedLeft === typeof coercedRight) {
-    if (coercedLeft === coercedRight) {
-      return 0;
-    }
-    return coercedLeft < coercedRight ? -1 : 1;
+  const rankLeft = scalarStorageRank(coercedLeft);
+  const rankRight = scalarStorageRank(coercedRight);
+  if (rankLeft === STORAGE_RANK_INVALID || rankRight === STORAGE_RANK_INVALID) {
+    return UNKNOWN;
   }
-  return typeof coercedLeft === 'number' ? -1 : 1;
+  if (rankLeft !== rankRight) {
+    return rankLeft < rankRight ? -1 : 1;
+  }
+  if (rankLeft === STORAGE_RANK_BLOB) {
+    return compareByteArrays(coercedLeft, coercedRight);
+  }
+  if (coercedLeft === coercedRight) {
+    return 0;
+  }
+  return coercedLeft < coercedRight ? -1 : 1;
 }
 
 function threeValuedComparison(operator, left, right, leftNode, rightNode) {
@@ -303,7 +367,7 @@ function evaluateIn(node, row) {
     // NULL IN (...) and NULL NOT IN (...) are both UNKNOWN.
     return UNKNOWN;
   }
-  const exprAffinity = resolveOperandComparisonAffinity(node.expression, value);
+  const exprAffinity = resolveOperandComparisonAffinity(node.expression);
   let sawNull = false;
   for (const candidate of node.values || []) {
     const candidateValue = evaluateResidualValue(candidate, row);
@@ -311,7 +375,14 @@ function evaluateIn(node, row) {
       sawNull = true;
       continue;
     }
-    if (areSqlScalarsEqualWithAffinity(value, candidateValue, exprAffinity, candidate)) {
+    if (
+      areSqlScalarsEqualWithAffinity(
+        value,
+        candidateValue,
+        exprAffinity,
+        SQL_COMPARISON_AFFINITY.NONE,
+      )
+    ) {
       return node.negated ? false : true;
     }
   }
@@ -445,6 +516,181 @@ function evaluateResidualPredicate(node, row) {
   }
 }
 
+function stripIdentifierQuotes(rawName) {
+  return String(rawName || EMPTY_STR)
+    .trim()
+    .replace(/^["'`[]|["'`\]]$/gu, EMPTY_STR)
+    .toLowerCase();
+}
+
+function splitTopLevelCommaItems(body) {
+  const items = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] === OPEN_PAREN_CHAR) depth += 1;
+    else if (body[i] === CLOSE_PAREN_CHAR && depth > 0) depth -= 1;
+    else if (body[i] === COMMA_CHAR && depth === 0) {
+      items.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  items.push(body.slice(start));
+  return items;
+}
+
+function parseSingleColumnDefinition(defText) {
+  const tokens = String(defText || EMPTY_STR).trim().split(/\s+/u).filter(Boolean);
+  if (tokens.length === 0 || TABLE_CONSTRAINT_HEADS.has(tokens[0].toUpperCase())) {
+    return null;
+  }
+  const colName = stripIdentifierQuotes(tokens[0]);
+  if (colName.length === 0) return null;
+  const typeTokens = [];
+  for (let i = 1; i < tokens.length; i += 1) {
+    if (CONSTRAINT_START_TOKENS.has(tokens[i].toUpperCase().replace(/\(.*/u, EMPTY_STR))) {
+      break;
+    }
+    typeTokens.push(tokens[i]);
+  }
+  const rawType = typeTokens.join(SPACE_STR);
+  const affinity = rawType.length === 0 ? SQL_COMPARISON_AFFINITY.NONE :
+    classifyAffinityFromTypeString(rawType) || SQL_COMPARISON_AFFINITY.NONE;
+  return [colName, affinity];
+}
+
+function parseCreateTableColumnAffinities(createSql) {
+  const map = new Map();
+  const sql = String(createSql || EMPTY_STR);
+  const openIdx = sql.indexOf(OPEN_PAREN_CHAR);
+  const closeIdx = sql.lastIndexOf(CLOSE_PAREN_CHAR);
+  if (openIdx < 0 || closeIdx <= openIdx) return map;
+  for (const item of splitTopLevelCommaItems(sql.slice(openIdx + 1, closeIdx))) {
+    const parsed = parseSingleColumnDefinition(item);
+    if (parsed !== null) map.set(parsed[0], parsed[1]);
+  }
+  return map;
+}
+
+function buildColumnAffinityMapFromColumns(columns) {
+  const map = new Map();
+  if (!Array.isArray(columns)) return map;
+  for (const col of columns) {
+    const colName = stripIdentifierQuotes(col?.name);
+    if (colName.length === 0) continue;
+    const rawType = String(col?.type || EMPTY_STR).trim();
+    map.set(colName, rawType.length === 0 ? SQL_COMPARISON_AFFINITY.NONE :
+      classifyAffinityFromTypeString(rawType) || SQL_COMPARISON_AFFINITY.NONE);
+  }
+  return map;
+}
+
+function hasUnannotatedColumnRefs(node) {
+  if (!node || typeof node !== 'object') return false;
+  if ((node.type === EXPR_TYPE.COLUMN_REF || node.type === EXPR_TYPE.COLUMN) &&
+      typeof node.affinity !== 'string') {
+    return true;
+  }
+  return (Array.isArray(node.values) && node.values.some(hasUnannotatedColumnRefs)) ||
+    [node.left, node.right, node.operand, node.expression, node.low, node.high]
+      .some(hasUnannotatedColumnRefs);
+}
+
+function resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef) {
+  const colKey = stripIdentifierQuotes(node.column);
+  if (colKey.length === 0 || !(affinitiesByTable instanceof Map)) return null;
+  const tableKey = stripIdentifierQuotes(node.table || defaultTableRef || EMPTY_STR);
+  if (tableKey.length > 0 && affinitiesByTable.get(tableKey)?.has(colKey)) {
+    return affinitiesByTable.get(tableKey).get(colKey);
+  }
+  let matched = null;
+  for (const tableMap of affinitiesByTable.values()) {
+    if (!tableMap?.has(colKey)) continue;
+    const candidate = tableMap.get(colKey);
+    if (matched !== null && matched !== candidate) return null;
+    matched = candidate;
+  }
+  return matched;
+}
+
+function annotateExpressionColumnAffinities(node, affinitiesByTable, defaultTableRef = null) {
+  if (!node || typeof node !== 'object') return;
+  if ((node.type === EXPR_TYPE.COLUMN_REF || node.type === EXPR_TYPE.COLUMN) &&
+      typeof node.affinity !== 'string') {
+    const resolved = resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef);
+    if (resolved !== null) node.affinity = resolved;
+    return;
+  }
+  for (const entry of node.values || []) {
+    annotateExpressionColumnAffinities(entry, affinitiesByTable, defaultTableRef);
+  }
+  for (const child of [node.left, node.right, node.operand, node.expression, node.low, node.high]) {
+    annotateExpressionColumnAffinities(child, affinitiesByTable, defaultTableRef);
+  }
+}
+
+async function resolveExecutorTableColumnAffinities(
+  executor, tableName, partitions, queryTimestamp, options = {}, getSchemaByTableName = null,
+) {
+  if (typeof tableName !== 'string' || tableName.length === 0) return new Map();
+  const systemSchema = getSchemaByTableName?.(tableName);
+  if (Array.isArray(systemSchema?.columns)) {
+    return buildColumnAffinityMapFromColumns(systemSchema.columns);
+  }
+  if (!Array.isArray(partitions) || partitions.length === 0) return new Map();
+  if (!(executor.tableColumnAffinities instanceof Map)) {
+    executor.tableColumnAffinities = new Map();
+  }
+  const bindingKey = `${partitions[0]}::${tableName.toLowerCase()}`;
+  if (executor.tableColumnAffinities.has(bindingKey)) {
+    return executor.tableColumnAffinities.get(bindingKey);
+  }
+  const ddlResults = await executor.executeOnPartitions(
+    [partitions[0]],
+    SQLITE_MASTER_DDL_SQL,
+    [tableName], queryTimestamp, true, options.preferLeader === true,
+    options.preferSameLatencyGroup === true, {
+      sessionId: options.sessionId, transactionIdentity: options.transactionIdentity,
+      deliveryPriority: options.deliveryPriority,
+      routingReadinessDimension: options.routingReadinessDimension,
+      timeoutMs: options.timeoutMs, timeoutBudget: options.timeoutBudget || null,
+      cancellationToken: options.cancellationToken || null, tableName});
+  const createSql = ddlResults?.[0]?.rows?.[0]?.sql;
+  const parsed = typeof createSql === 'string' && createSql.length > 0 ?
+    parseCreateTableColumnAffinities(createSql) : new Map();
+  if (parsed.size > 0) executor.tableColumnAffinities.set(bindingKey, parsed);
+  return parsed;
+}
+
+async function ensureExecutorQueryColumnAffinities(
+  executor, ast, residualConjuncts = [], tableBindings = [],
+  queryTimestamp = null, options = {}, getSchemaByTableName = null,
+) {
+  const joinConditions = (ast?.joins || []).map((join) => join?.condition).filter(Boolean);
+  const exprs = [
+    ...(Array.isArray(residualConjuncts) ? residualConjuncts : []),
+    ...joinConditions,
+    ...(ast?.having ? [ast.having] : []),
+  ].filter(hasUnannotatedColumnRefs);
+  if (exprs.length === 0) return;
+  const affinitiesByTable = new Map();
+  for (const binding of tableBindings) {
+    if (!binding?.tableName) continue;
+    const colMap = await resolveExecutorTableColumnAffinities(executor,
+      binding.tableName, binding.partitions, queryTimestamp, options, getSchemaByTableName);
+    if (colMap.size > 0) {
+      affinitiesByTable.set(binding.tableName.toLowerCase(), colMap);
+      if (binding.alias) affinitiesByTable.set(binding.alias.toLowerCase(), colMap);
+    }
+  }
+  if (affinitiesByTable.size === 0) return;
+  const defaultTableRef = tableBindings.length === 1 ?
+    tableBindings[0].alias || tableBindings[0].tableName : null;
+  for (const expr of exprs) {
+    annotateExpressionColumnAffinities(expr, affinitiesByTable, defaultTableRef);
+  }
+}
+
 /**
  * SQL WHERE row admission: only a predicate that is exactly TRUE keeps
  * the row; FALSE and UNKNOWN both filter it.
@@ -458,9 +704,14 @@ function residualPredicateAdmitsRow(node, row) {
 
 export {
   SQL_COMPARISON_AFFINITY,
+  annotateExpressionColumnAffinities,
   applySqlComparisonAffinity,
   areSqlScalarsEqualWithAffinity,
+  buildColumnAffinityMapFromColumns,
   compareSqlScalarsWithAffinity,
+  ensureExecutorQueryColumnAffinities,
+  hasUnannotatedColumnRefs,
+  parseCreateTableColumnAffinities,
   residualPredicateAdmitsRow,
   resolveOperandComparisonAffinity,
 };

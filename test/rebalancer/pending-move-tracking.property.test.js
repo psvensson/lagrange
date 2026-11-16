@@ -581,6 +581,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
               node_id: targetNodeId,
               status: ReplicaStatus.ACTIVE,
               boot_incarnation: 1,
+              storage_incarnation: 1,
             },
           ],
           services,
