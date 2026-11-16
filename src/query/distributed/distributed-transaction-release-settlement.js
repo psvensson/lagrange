@@ -44,6 +44,8 @@ import {TRANSACTION_RELEASE_CENSUS_STATE,
   './distributed-transaction-release-census.js';
 import {participantAnswerSnapshotOf} from
   '../sql-query-engine-participant-wire.js';
+import {transactionReleaseProofValid} from
+  '../../partition/partition-participant-release-contract.js';
 
 const RELEASE_PROOF_KIND = 'transaction_release_invocation_v1';
 // No readable release authority: the transaction is not settled this turn.
@@ -53,8 +55,7 @@ const SETTLEMENT_BATCH_SIZE = 16;
 const PROMISE_SETTLED_FULFILLED = 'fulfilled';
 const SETTLED_RELEASE_TRANSACTIONS = new WeakMap([]);
 const SETTLED_ROW_SQL =
-  'SELECT participant_set_state, participant_set_text, status, decision, ' +
-  'decision_digest FROM sql_transactions WHERE transaction_id = ?';
+  'SELECT * FROM sql_transactions WHERE transaction_id = ?';
 const RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
   'decisionDigest', 'terminalStatus', 'participantIds']);
 
@@ -82,20 +83,35 @@ function readSettledRow(db, transactionId) {
   }
 }
 
-function readSettledTransactionResult(service, transactionId) {
+function isSettledEntryValidForAuthority(entry, validated) {
+  if (!validated ||
+      validated.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+      validated.row.status !== entry.result.terminalStatus ||
+      validated.row.participant_set_text !== entry.participantSetText) {
+    return false;
+  }
+  return validated.decision.state === RECORDED_DECISION_STATE.RECORDED &&
+    validated.decision.decision === entry.result.decision &&
+    validated.decision.decisionText === entry.decisionText &&
+    validated.decision.decisionDigest === entry.result.decisionDigest;
+}
+
+function readSettledTransactionResult(service, transactionId, now = Date.now()) {
   const db = settledTransactionMapKey(service);
   const settled = db ? SETTLED_RELEASE_TRANSACTIONS.get(db) : undefined;
   const entry = settled ? settled.get(transactionId) : undefined;
   if (!entry) return NO_RELEASE_AUTHORITY;
   const row = readSettledRow(db, transactionId);
-  if (
-    !row ||
-    row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
-    row.status !== entry.result.terminalStatus ||
-    row.decision !== entry.result.decision ||
-    row.decision_digest !== entry.result.decisionDigest ||
-    row.participant_set_text !== entry.participantSetText
-  ) {
+  const validated = releaseRowOf(
+    {
+      state: TRANSACTION_AUTHORITY_STATE.AVAILABLE,
+      transaction: row,
+      participants: [],
+    },
+    transactionId,
+    now,
+  );
+  if (!isSettledEntryValidForAuthority(entry, validated)) {
     settled.delete(transactionId);
     return NO_RELEASE_AUTHORITY;
   }
@@ -120,6 +136,7 @@ function recordSettledTransactionResult(service, transactionId, settledEntry) {
   }
   settled.set(transactionId, Object.freeze({
     result: settledEntry.result,
+    decisionText: settledEntry.decisionText,
     participantSetText: settledEntry.participantSetText,
   }));
 }
@@ -130,36 +147,63 @@ function exactKeys(value, fields) {
     fields.every((field) => Object.hasOwn(value, field));
 }
 
+function isReleaseRowHeaderValid(row, transactionId) {
+  if (!row || row.transaction_id !== transactionId) return false;
+  if (typeof row.session_id !== 'string' || row.session_id.length === 0) return false;
+  return isCanonicalTransactionEpoch(row.transaction_epoch) &&
+    Number.isFinite(row.timeout_deadline) && row.timeout_deadline >= 0 &&
+    Object.values(TRANSACTION_MODE).includes(row.transaction_mode);
+}
+
+function isReleaseParticipantSetConsistent(row, pairs) {
+  const frozen = row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN;
+  if (!frozen && row.participant_set_state !== PARTICIPANT_SET_STATE.OPEN) {
+    return false;
+  }
+  const expectedMode = frozen ? COMMIT_MODE.TWO_PHASE_COMMIT : COMMIT_MODE.NOT_SELECTED;
+  const expectedCount = frozen ? pairs.length : 0;
+  return row.commit_mode === expectedMode && row.frozen_participant_count === expectedCount;
+}
+
+function isReleaseDecisionConsistent(decision, frozen, pairs) {
+  if (decision.state === RECORDED_DECISION_STATE.INVALID) return false;
+  if (decision.state === RECORDED_DECISION_STATE.ABSENT) return true;
+  return frozen &&
+    decision.participants.length === pairs.length &&
+    decision.participants.every(([id], index) => id === pairs[index][0]);
+}
+
+function isValidReleaseRowState(row, transactionId, pairs, decision) {
+  return Boolean(
+    isReleaseRowHeaderValid(row, transactionId) &&
+    pairs &&
+    isReleaseParticipantSetConsistent(row, pairs) &&
+    isReleaseDecisionConsistent(decision,
+      row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN, pairs),
+  );
+}
+
 function releaseRowOf(payload, transactionId, now) {
-  if (payload?.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE ||
-      !Array.isArray(payload.participants)) return null;
+  if (!payload || payload.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE ||
+      !Array.isArray(payload.participants)) {
+    return null;
+  }
   const row = payload.transaction;
-  if (row?.transaction_id !== transactionId ||
-      typeof row.session_id !== 'string' || row.session_id.length === 0 ||
-      !isCanonicalTransactionEpoch(row.transaction_epoch) ||
-      !Number.isFinite(row.timeout_deadline) || row.timeout_deadline < 0 ||
-      !Object.values(TRANSACTION_MODE).includes(row.transaction_mode)) return null;
-  const pairs = readParticipantSet(transactionId, row.participant_set_text);
-  if (!pairs) return null;
+  const pairs = readParticipantSet(transactionId, row?.participant_set_text);
+  const decision = decisionRecordOfRow(row, transactionId);
+  if (!isValidReleaseRowState(row, transactionId, pairs, decision)) {
+    return null;
+  }
   const admitted = new Map(pairs);
   const participantRows = new Map();
   for (const participant of payload.participants) {
-    if (participant?.transaction_id !== transactionId ||
+    if (!participant || participant.transaction_id !== transactionId ||
         admitted.get(participant.participant_id) !== participant.partition_id ||
-        participantRows.has(participant.participant_id)) return null;
+        participantRows.has(participant.participant_id)) {
+      return null;
+    }
     participantRows.set(participant.participant_id, participant);
   }
-  const frozen = row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN;
-  if ((!frozen && row.participant_set_state !== PARTICIPANT_SET_STATE.OPEN) ||
-      row.commit_mode !== (frozen ? COMMIT_MODE.TWO_PHASE_COMMIT :
-        COMMIT_MODE.NOT_SELECTED) ||
-      row.frozen_participant_count !== (frozen ? pairs.length : 0)) return null;
-  const decision = decisionRecordOfRow(row, transactionId);
-  if (decision.state === RECORDED_DECISION_STATE.INVALID ||
-      (decision.state === RECORDED_DECISION_STATE.RECORDED && !frozen)) return null;
-  if (decision.state === RECORDED_DECISION_STATE.RECORDED &&
-      (decision.participants.length !== pairs.length ||
-        decision.participants.some(([id], index) => id !== pairs[index][0]))) return null;
   return {row, pairs, participantRows, decision,
     expired: row.timeout_deadline <= now};
 }
@@ -320,25 +364,35 @@ async function settleOne(engine, service, transactionId, now) {
     participantIds: Object.freeze(participantIds)});
   recordSettledTransactionResult(service, transactionId, {
     result,
+    decisionText: after.decision.decisionText,
     participantSetText: after.row.participant_set_text,
   });
   return result;
 }
 
+function isHeldRecoverableCensus(census) {
+  return Boolean(
+    census &&
+    census.state === TRANSACTION_RELEASE_CENSUS_STATE.HELD &&
+    census.legacyTransactionIds?.length === 0 &&
+    Array.isArray(census.recoverableTransactionIds),
+  );
+}
+
 async function settleTransactionReleaseRows({engine, service, census, now = Date.now()}) {
-  if (!engine || typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
+  if (!engine || !service || !isHeldRecoverableCensus(census) ||
+      typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
       typeof engine.deliverTransactionOperation !== 'function' ||
-      !service || typeof service.handleApplicationMessage !== 'function' ||
-      census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
-      census.legacyTransactionIds?.length !== 0 ||
-      !Array.isArray(census.recoverableTransactionIds)) return null;
+      typeof service.handleApplicationMessage !== 'function') {
+    return null;
+  }
   pruneSettledTransactions(service, census.recoverableTransactionIds);
   const transactions = [];
   const ids = census.recoverableTransactionIds;
   for (let start = 0; start < ids.length; start += SETTLEMENT_BATCH_SIZE) {
     const batch = ids.slice(start, start + SETTLEMENT_BATCH_SIZE);
     const settledBatch = await Promise.all(batch.map((transactionId) =>
-      readSettledTransactionResult(service, transactionId) ??
+      readSettledTransactionResult(service, transactionId, now) ??
       settleOne(engine, service, transactionId, now),
     ));
     if (settledBatch.includes(null)) return null;
@@ -347,24 +401,28 @@ async function settleTransactionReleaseRows({engine, service, census, now = Date
   return Object.freeze(transactions);
 }
 
+function areProofEntriesShaped(transactions) {
+  return Array.isArray(transactions) &&
+    transactions.every(
+      (entry) => exactKeys(entry, RESULT_FIELDS) && Array.isArray(entry.participantIds),
+    );
+}
+
 function transactionReleaseProofOf({release, attempt, census, transactions}) {
-  if (typeof release?.releaseId !== 'string' || !Number.isSafeInteger(attempt?.term) ||
-      typeof attempt?.leaderReplicaId !== 'string' ||
-      census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
-      census.legacyTransactionIds?.length !== 0 || !Array.isArray(transactions)) return null;
-  const expected = census.recoverableTransactionIds;
-  if (transactions.length !== expected.length || transactions.some((entry, index) =>
-    !exactKeys(entry, RESULT_FIELDS) || entry.transactionId !== expected[index] ||
-    !Object.values(DECISION).includes(entry.decision) ||
-    typeof entry.decisionDigest !== 'string' ||
-    entry.terminalStatus !== TERMINAL_STATUS[entry.decision] ||
-    !Array.isArray(entry.participantIds))) return null;
-  return deepFreeze({kind: RELEASE_PROOF_KIND, releaseId: release.releaseId,
+  if (!release || !attempt || !census || !areProofEntriesShaped(transactions)) {
+    return null;
+  }
+  if (census.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
+      census.legacyTransactionIds?.length !== 0) {
+    return null;
+  }
+  const proof = deepFreeze({kind: RELEASE_PROOF_KIND, releaseId: release.releaseId,
     term: attempt.term, leaderReplicaId: attempt.leaderReplicaId,
     schemaVersion: census.schemaVersion, semanticVersion: census.semanticVersion,
     rowGenerationDigest: census.rowGenerationDigest,
     transactions: transactions.map((entry) => ({...entry,
       participantIds: [...entry.participantIds]}))});
+  return transactionReleaseProofValid(proof, {release, attempt, census}) ? proof : null;
 }
 
 export {

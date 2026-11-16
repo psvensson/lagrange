@@ -27,7 +27,7 @@ documentClass: generated
 - [raft-operation-port-request.js](raft-operation-port-request.js) - What a consensus group hands the rs-raft operation port when it opens the group it will run on. (importers: hub)
 - [raft-operation-port.js](raft-operation-port.js) - Whether a port status names its group held by its host failure (the port's recovery outcome): at open it is a... (importers: hub)
 - [raft-packet-utils.js](raft-packet-utils.js) - Consensus transport envelope utilities. (importers: many)
-- [raft-rs-application-transaction-owner.js](raft-rs-application-transaction-owner.js) - Apply one committed entry and advance the durable applied state in one SQLite transaction. (importers: few)
+- [raft-rs-application-transaction-owner.js](raft-rs-application-transaction-owner.js) - Select the next contiguous application slice starting at `startIndex`. (importers: few)
 - [raft-rs-binding-owner.js](raft-rs-binding-owner.js) - Private native loading owner. (importers: one)
 - [raft-rs-bootstrap-membership.js](raft-rs-bootstrap-membership.js) - What an rs-raft partition port opens its group from when the replica holds no durable record (owner decision O1,... (importers: few)
 - [raft-rs-committed-membership-context.js](raft-rs-committed-membership-context.js) - The encoded admission context of a host-proposed ADD. (importers: many)

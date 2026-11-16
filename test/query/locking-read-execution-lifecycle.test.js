@@ -14,9 +14,32 @@ import {
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {
+  canAdvanceRowKeySessionGeneration,
+  checkAndRecordSessionRowKey,
+  endParticipantSession,
   openParticipantSession,
+  recordCommittedParticipantRowKeys,
+  stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,
 } from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  getStagingReplayStats,
+  runParticipantSessionStatement,
+} from '../../src/partition/partition-participant-transaction-staging.js';
+import {
+  MAX_SCOPED_FOOTPRINT_TUPLES,
+  encodeCanonicalPkTupleKey,
+  extractStatementWriteFootprint,
+} from '../../src/partition/partition-write-footprint-contract.js';
+import Database from 'better-sqlite3';
+import {
+  openParticipantTransactionStore,
+  recordPartitionWriteOrigin,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  PARTICIPANT_CONCURRENCY_GRANULARITY,
+} from '../../src/partition/partition-participant-transaction-constants.js';
+import {runDeterminismSelfCheck} from '../../src/partition/partition-transaction-determinism.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 ConfigurationManager.getInstance().initialize();
@@ -592,4 +615,356 @@ test('B5: pgwire result mapper maps LOCK_NOT_AVAILABLE to 55P03 and NO_TRANSACTI
   assert.equal(resolveFailureSqlState({code: 'LOCK_NOT_AVAILABLE'}), '55P03');
   assert.equal(resolveFailureSqlState({errorCode: 'NO_TRANSACTION'}), '25P01');
   assert.equal(resolveFailureSqlState({errorCode: 'UNSUPPORTED_SQL_FEATURE'}), '0A000');
+});
+
+test('P1 composite PK tuple key encoding avoids separator collision and detects matching lock conflict', async () => {
+  assert.equal(encodeCanonicalPkTupleKey(['a|b', 'c']), '["a|b","c"]');
+  assert.equal(encodeCanonicalPkTupleKey(['a', 'b|c']), '["a","b|c"]');
+  assert.notEqual(
+    encodeCanonicalPkTupleKey(['a|b', 'c']),
+    encodeCanonicalPkTupleKey(['a', 'b|c']),
+  );
+  assert.equal(encodeCanonicalPkTupleKey([10]), '10');
+  assert.equal(encodeCanonicalPkTupleKey(['10']), '10');
+
+  const fp1 = extractStatementWriteFootprint({
+    sql: 'UPDATE composite_items SET val = 2 WHERE k1 = ? AND k2 = ?',
+    params: ['a|b', 'c'],
+    pkCols: ['k1', 'k2'],
+  });
+  const fp2 = extractStatementWriteFootprint({
+    sql: 'UPDATE composite_items SET val = 2 WHERE k1 = ? AND k2 = ?',
+    params: ['a', 'b|c'],
+    pkCols: ['k1', 'k2'],
+  });
+  assert.equal(fp1.scoped, true);
+  assert.equal(fp2.scoped, true);
+  assert.deepEqual(fp1.rowKeys, ['["a|b","c"]']);
+  assert.deepEqual(fp2.rowKeys, ['["a","b|c"]']);
+
+  const harness = createTestHarness({
+    tables: [
+      {
+        table_name: 'composite_items',
+        primaryKey: ['k1', 'k2'],
+        partition_key_type: 'COMPOSITE',
+      },
+    ],
+    partitions: [
+      {
+        table_name: 'composite_items',
+        partition_id: 'composite-p1',
+        partition_key_start: null,
+        partition_key_end: null,
+        partition_key_type: 'COMPOSITE',
+      },
+    ],
+  });
+  try {
+    const {engine} = harness;
+    engine.messageRouter.deliver = async (_address, message) => {
+      if (message.type === 'TRANSACTION') {
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          answerParticipantTransactionRequest(message),
+        );
+      }
+      return buildDeliveryEnvelope(
+        {acknowledged: true},
+        {
+          success: true,
+          rows: [{k1: 'a|b', k2: 'c', val: 1}],
+          affectedRows: 1,
+        },
+      );
+    };
+
+    const tx1 = await engine.transactionCoordinator.begin('s-comp-1');
+    const lockRes = await engine.executeQuery(
+      'SELECT k1, k2, val FROM composite_items WHERE k1 = ? AND k2 = ? FOR UPDATE',
+      ['a|b', 'c'],
+      {sessionId: 's-comp-1'},
+    );
+    assert.equal(lockRes.success, true, lockRes.error);
+    const reservations = getTransactionReservations(tx1.transactionId);
+    assert.equal(reservations.length, 1);
+    assert.equal(reservations[0].rowKey, 'composite_items:composite-p1:["a|b","c"]');
+
+    // Disjoint composite key ["a", "b|c"] must NOT collide with ["a|b", "c"]
+    await engine.transactionCoordinator.begin('s-comp-2');
+    const disjointUpdate = await engine.executeQuery(
+      'UPDATE composite_items SET val = 20 WHERE k1 = ? AND k2 = ?',
+      ['a', 'b|c'],
+      {sessionId: 's-comp-2'},
+    );
+    assert.equal(disjointUpdate.success, true, disjointUpdate.error);
+
+    // Matching composite key ["a|b", "c"] must conflict with 55P03
+    await engine.transactionCoordinator.begin('s-comp-3');
+    const conflictingUpdate = await engine.executeQuery(
+      'UPDATE composite_items SET val = 30 WHERE k1 = ? AND k2 = ?',
+      ['a|b', 'c'],
+      {sessionId: 's-comp-3'},
+    );
+    assert.equal(conflictingUpdate.success, false);
+    assert.equal(conflictingUpdate.errorCode, 'LOCK_NOT_AVAILABLE');
+    assert.equal(conflictingUpdate.sqlState, '55P03');
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('P1 INSERT OR REPLACE is unscoped and conflicts with active FOR UPDATE reservation on table', async () => {
+  const replaceFootprint = extractStatementWriteFootprint({
+    sql: 'INSERT OR REPLACE INTO orders (id, total) VALUES (20, 999)',
+    pkCols: ['id'],
+  });
+  assert.equal(replaceFootprint.scoped, false);
+  assert.deepEqual(replaceFootprint.rowKeys, []);
+
+  const astWithOrReplace = extractStatementWriteFootprint({
+    ast: {
+      type: 'INSERT',
+      orReplace: true,
+      columns: ['id', 'total'],
+      values: [[{type: 'literal', value: 20}, {type: 'literal', value: 999}]],
+    },
+    pkCols: ['id'],
+  });
+  assert.equal(astWithOrReplace.scoped, false);
+
+  const harness = createTestHarness();
+  try {
+    const {engine} = harness;
+    await engine.transactionCoordinator.begin('s-lock-holder');
+    const lockRes = await engine.executeQuery(
+      'SELECT id, total FROM orders WHERE id = 10 FOR UPDATE',
+      [],
+      {sessionId: 's-lock-holder'},
+    );
+    assert.equal(lockRes.success, true);
+
+    // Secondary-UNIQUE conflict scenario: INSERT OR REPLACE with PK 20 while PK 10 is locked FOR UPDATE
+    await engine.transactionCoordinator.begin('s-replace-writer');
+    const replaceRes = await engine.executeQuery(
+      'INSERT OR REPLACE INTO orders (id, total) VALUES (20, 999)',
+      [],
+      {sessionId: 's-replace-writer'},
+    );
+    assert.equal(replaceRes.success, false);
+    assert.equal(replaceRes.errorCode, 'LOCK_NOT_AVAILABLE');
+    assert.equal(replaceRes.sqlState, '55P03');
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('P2 Cartesian bound enforces MAX_SCOPED_FOOTPRINT_TUPLES (64) before allocation', () => {
+  assert.equal(MAX_SCOPED_FOOTPRINT_TUPLES, 64);
+
+  const eightVals = Array.from({length: 8}, (_, i) => i + 1).join(', ');
+  const scoped64 = extractStatementWriteFootprint({
+    sql: `UPDATE items SET val = 1 WHERE k1 IN (${eightVals}) AND k2 IN (${eightVals})`,
+    pkCols: ['k1', 'k2'],
+  });
+  assert.equal(scoped64.scoped, true);
+  assert.equal(scoped64.rowKeys.length, 64);
+
+  const nineVals = Array.from({length: 9}, (_, i) => i + 1).join(', ');
+  const unscoped81 = extractStatementWriteFootprint({
+    sql: `UPDATE items SET val = 1 WHERE k1 IN (${nineVals}) AND k2 IN (${nineVals})`,
+    pkCols: ['k1', 'k2'],
+  });
+  assert.equal(unscoped81.scoped, false);
+  assert.deepEqual(unscoped81.rowKeys, []);
+
+  const vals32A = Array.from({length: 32}, (_, i) => i + 1).join(', ');
+  const vals32B = Array.from({length: 32}, (_, i) => i + 33).join(', ');
+  const vals33B = Array.from({length: 33}, (_, i) => i + 33).join(', ');
+  const orScoped64 = extractStatementWriteFootprint({
+    sql: `DELETE FROM items WHERE id IN (${vals32A}) OR id IN (${vals32B})`,
+    pkCols: ['id'],
+  });
+  assert.equal(orScoped64.scoped, true);
+  assert.equal(orScoped64.rowKeys.length, 64);
+
+  const orUnscoped65 = extractStatementWriteFootprint({
+    sql: `DELETE FROM items WHERE id IN (${vals32A}) OR id IN (${vals33B})`,
+    pkCols: ['id'],
+  });
+  assert.equal(orUnscoped65.scoped, false);
+  assert.deepEqual(orUnscoped65.rowKeys, []);
+});
+
+test('inherited SQL key equivalence: non-canonical numeric text is unscoped and conflicts with FOR UPDATE', async () => {
+  for (const canonical of [1, -42, '1', '-42', 'alpha']) {
+    const fp = extractStatementWriteFootprint({
+      sql: 'UPDATE orders SET total = 1 WHERE id = ?',
+      params: [canonical],
+      pkCols: ['id'],
+    });
+    assert.equal(fp.scoped, true, `expected canonical PK scalar ${String(canonical)} to be scoped`);
+  }
+
+  for (const nonCanonical of ['01', '+1', '1.0', ' 1 ', '1e2', '-0', '9007199254740993', 1.5]) {
+    const fp = extractStatementWriteFootprint({
+      sql: 'UPDATE orders SET total = 1 WHERE id = ?',
+      params: [nonCanonical],
+      pkCols: ['id'],
+    });
+    assert.equal(
+      fp.scoped,
+      false,
+      `expected non-canonical PK scalar ${String(nonCanonical)} to be unscoped`,
+    );
+  }
+
+  const harness = createTestHarness();
+  try {
+    const {engine} = harness;
+    await engine.transactionCoordinator.begin('s-eq-1');
+    const lockRes = await engine.executeQuery(
+      'SELECT id, total FROM orders WHERE id = 10 FOR UPDATE',
+      [],
+      {sessionId: 's-eq-1'},
+    );
+    assert.equal(lockRes.success, true);
+
+    await engine.transactionCoordinator.begin('s-eq-2');
+    const updateRes = await engine.executeQuery(
+      'UPDATE orders SET total = 99 WHERE id = ?',
+      ['010'],
+      {sessionId: 's-eq-2'},
+    );
+    assert.equal(updateRes.success, false);
+    assert.equal(updateRes.errorCode, 'LOCK_NOT_AVAILABLE');
+    assert.equal(updateRes.sqlState, '55P03');
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('hasUnscopedWrite disables direct-validation shortcut and 0-write ROW_KEY session refuses generation advance', () => {
+  const db = new Database(':memory:');
+  try {
+    openParticipantTransactionStore(db);
+    db.exec('CREATE TABLE items (id TEXT PRIMARY KEY, val INTEGER NOT NULL)');
+    recordPartitionWriteOrigin(db, {index: 1, term: 1});
+    runDeterminismSelfCheck(db, 'items');
+    db.prepare('INSERT INTO items (id, val) VALUES (?, ?)').run('row-1', 10);
+
+    const service = {
+      partitionId: 'items-p1',
+      replicaId: 'items-p1-r1',
+      tableName: 'items',
+      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+      db,
+      logger: {info() {}, warn() {}, debug() {}, error() {}},
+      timeSource: {now: () => 1000},
+    };
+
+    // 1) 0-write ROW_KEY session must NOT advance past concurrent scoped commit,
+    // whereas a disjoint 1-write ROW_KEY session CAN advance.
+    const lockOnlySession = openParticipantSession(
+      service,
+      {
+        sessionId: 's-lock-only',
+        transactionId: 'tx-lock-only',
+        participantId: 'tx-lock-only:items-p1',
+        commitMode: 'TWO_PHASE_COMMIT',
+        transactionEpoch: 1,
+      },
+      {generationBase: 0, originIndex: 1},
+    );
+    const disjointWriterSession = openParticipantSession(
+      service,
+      {
+        sessionId: 's-disjoint',
+        transactionId: 'tx-disjoint',
+        participantId: 'tx-disjoint:items-p1',
+        commitMode: 'TWO_PHASE_COMMIT',
+        transactionEpoch: 1,
+      },
+      {generationBase: 0, originIndex: 1},
+    );
+    checkAndRecordSessionRowKey(
+      service,
+      disjointWriterSession,
+      ['row-2'],
+      'UPDATE items SET val = 30 WHERE id = ?',
+    );
+    const writerSession = openParticipantSession(
+      service,
+      {
+        sessionId: 's-writer',
+        transactionId: 'tx-writer',
+        participantId: 'tx-writer:items-p1',
+        commitMode: 'TWO_PHASE_COMMIT',
+        transactionEpoch: 1,
+      },
+      {generationBase: 0, originIndex: 1},
+    );
+    checkAndRecordSessionRowKey(
+      service,
+      writerSession,
+      ['row-1'],
+      'UPDATE items SET val = 20 WHERE id = ?',
+    );
+    stagePreparedParticipantRowKeys(
+      service,
+      'tx-writer:items-p1',
+      writerSession.touchedRowKeys,
+      false,
+    );
+    recordCommittedParticipantRowKeys(service, 'tx-writer:items-p1', 1);
+    endParticipantSession(service, writerSession);
+
+    assert.equal(
+      canAdvanceRowKeySessionGeneration(service, disjointWriterSession, 1),
+      true,
+      'disjoint 1-write ROW_KEY session can advance past concurrent scoped commit',
+    );
+    assert.equal(
+      canAdvanceRowKeySessionGeneration(service, lockOnlySession, 1),
+      false,
+      '0-write ROW_KEY session must not advance past concurrent commit',
+    );
+    endParticipantSession(service, disjointWriterSession);
+    endParticipantSession(service, lockOnlySession);
+
+    // 2) Once a session stages an unscoped write, subsequent scoped writes must replay rather than direct-validate
+    const mixedSession = openParticipantSession(
+      service,
+      {
+        sessionId: 's-mixed',
+        transactionId: 'tx-mixed',
+        participantId: 'tx-mixed:items-p1',
+        commitMode: 'TWO_PHASE_COMMIT',
+        transactionEpoch: 1,
+      },
+      {generationBase: 0, originIndex: 1},
+    );
+    const firstWrite = runParticipantSessionStatement(service, mixedSession, {
+      sql: 'DELETE FROM items WHERE val > 0',
+      params: [],
+    });
+    assert.equal(firstWrite.success, true);
+    assert.equal(mixedSession.hasUnscopedWrite, true);
+
+    // Re-inserting id = 'row-1' succeeds ONLY if the prior unscoped DELETE is replayed during validation;
+    // direct validation against committed state (where 'row-1' still exists) would fail with UNIQUE constraint!
+    const secondWrite = runParticipantSessionStatement(service, mixedSession, {
+      sql: 'INSERT INTO items (id, val) VALUES (?, ?)',
+      params: ['row-1', 50],
+    });
+    assert.equal(secondWrite.success, true, JSON.stringify(secondWrite));
+    const stats = getStagingReplayStats(service);
+    assert.equal(
+      stats.disjointDirectValidations,
+      0,
+      'direct validation shortcut must be disabled when session.hasUnscopedWrite === true',
+    );
+  } finally {
+    db.close();
+  }
 });

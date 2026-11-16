@@ -9,6 +9,8 @@ import {admitExpectedTransaction, STATEMENT_ADMISSION} from
   '../sql-query-engine-statement-admission.js';
 import {statementTransactionIdentityOf} from
   './distributed-transaction-identity.js';
+import {PARTICIPANT_ENLISTMENT_MODE} from
+  './distributed-transaction-coordinator-constants.js';
 import {resolveNowMs} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
@@ -103,9 +105,13 @@ const distributedTransactionStatementMethods = {
         return {success: false, operation: QUERY_OPERATION.SELECT,
           errorCode: QUERY_ERROR_CODE.TIMEOUT, error: QUERY_ERROR_MSG.QUERY_TIMEOUT};
       }
-      return executeRead({identity: statementTransactionIdentityOf(tx),
-        enlist: (partitionIds) =>
-          this.enlistParticipantsOwned(sessionId, partitionIds)});
+      return executeRead({
+        identity: statementTransactionIdentityOf(tx),
+        enlist: (
+          partitionIds,
+          enlistmentMode = PARTICIPANT_ENLISTMENT_MODE.VOLATILE_READ,
+        ) => this.enlistParticipantsOwned(sessionId, partitionIds, enlistmentMode),
+      });
     });
   },
 

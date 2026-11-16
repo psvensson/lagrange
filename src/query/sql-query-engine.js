@@ -129,6 +129,15 @@ function buildPriorityControlPlaneTransactionDeliveryIdentity({
   });
 }
 
+function resolveDirectErrorCode(error) {
+  if (!error) return null;
+  const code = error.errorCode || error.code;
+  if (typeof code === LOCAL_STR_STRING && code.length > 0) {
+    return code;
+  }
+  return error.timeoutClassification ? QUERY_ERROR_CODE.TIMEOUT : null;
+}
+
 class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   /**
    * Persist a distributed write operation not associated with a transaction.
@@ -540,13 +549,9 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * @private
    */
   getErrorCode(error) {
-    if (typeof error?.errorCode === LOCAL_STR_STRING &&
-        error.errorCode.length > 0) {
-      return error.errorCode;
-    }
-    if (typeof error?.code === LOCAL_STR_STRING &&
-        error.code.length > 0) {
-      return error.code;
+    const directCode = resolveDirectErrorCode(error);
+    if (directCode) {
+      return directCode;
     }
     const message = error.message.toLowerCase();
 

@@ -15,6 +15,7 @@ import {
   FUNCTION_LOG_MSG,
   FUNCTION_SUBSYSTEM,
 } from './function-constants.js';
+import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const FUNCTION_QUERY_WAIT = Object.freeze({
@@ -55,6 +56,7 @@ function reportFunctionQueryTimeoutSpent(executor, spent) {
       sqlChars: spent.sql.length,
     }),
   });
+  spent.error.errorCode = QUERY_ERROR_CODE.TIMEOUT;
   spent.error.waitBoundSpentReported = true;
   return spent.error;
 }

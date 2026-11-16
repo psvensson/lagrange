@@ -37,6 +37,7 @@ const {
   CONTROL_PLANE_READ_LEADER_MODE,
   ERRORS,
   LOG_MSG,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
@@ -173,6 +174,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         lastFailureDetails,
       ),
     });
+    const buildTimeoutFailureDetails = () => (lastFailureDetails?.errorCode ?
+      lastFailureDetails :
+      {...(lastFailureDetails || {}), errorCode: QUERY_ERROR_CODE.TIMEOUT});
+    const buildDeadlineSpentFailureResult = () => ({
+      ...buildFailureResult(
+        lastError || QUERY_ERROR_MSG.QUERY_TIMEOUT,
+        buildTimeoutFailureDetails(),
+      ),
+    });
     // An unresolved write's re-deliveries back off (the redelivery owner).
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
       unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
@@ -204,7 +214,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
       if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
         attemptBudget.reportDeadlineSpentBeforeAttempt();
-        return buildLastFailureResult();
+        return buildDeadlineSpentFailureResult();
       }
       let {candidates: serviceCandidates, routingSnapshot} =
         resolveAttemptCandidates();
@@ -248,10 +258,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           });
           if (canRetryWrite) {
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-              return buildPreSubmissionRouteFailureResult(
-                lastError,
-                lastFailureDetails,
-              );
+              return buildPreSubmissionRouteFailureResult(lastError ||
+                QUERY_ERROR_MSG.QUERY_TIMEOUT, buildTimeoutFailureDetails());
             }
             continue;
           }
@@ -277,7 +285,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
         if (hasPartitionRecord && attempt < currentMaxAttempts) {
           if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-            return {...buildFailureResult(lastError, lastFailureDetails)};
+            return buildDeadlineSpentFailureResult();
           }
           continue;
         }
@@ -376,12 +384,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             attemptedAddresses,
           );
           if (attemptRouterDeliveryOptions === null) {
-            return {
-              ...buildFailureResult(
-                lastError || ERRORS.QUERY_FAILED,
-                lastFailureDetails,
-              ),
-            };
+            return buildDeadlineSpentFailureResult();
           }
           deliverySubmitted = true;
           unknownOutcome.recordDelivery();
@@ -428,7 +431,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               attemptedAddresses,
             );
             if (redirectRouterDeliveryOptions === null) {
-              return buildLastFailureResult();
+              return buildDeadlineSpentFailureResult();
             }
             deliverySubmitted = true;
             unknownOutcome.recordDelivery();
@@ -747,7 +750,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
       if (attempt < currentMaxAttempts && !(await waitForLeaderRetryBudget())) {
-        return buildLastFailureResult();
+        return buildDeadlineSpentFailureResult();
       }
     }
     return returnReadAttemptsSpent();

@@ -2,10 +2,28 @@ import Database from 'better-sqlite3';
 import {readdir, readFile, stat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {COLUMN, TABLES} from '../constants/index.js';
-import {DURABLE_EVIDENCE_STATE, REJOIN_HINTS_FILENAME} from
-  './rejoin-hints-constants.js';
+import {
+  inspectReplicaLifecycleForOriginalAllocation,
+} from '../raft/raft-rs-replica-lifecycle-owner.js';
+import {
+  getMessageGroupDbPath,
+  getPartitionDbPath,
+} from '../storage/data-directory-manager.js';
+import {
+  DURABLE_EVIDENCE_STATE,
+  ORIGINAL_SEED_ALLOCATION_STATE,
+  REJOIN_HINTS_FILENAME,
+} from './rejoin-hints-constants.js';
 import {extractPeerAddresses, normalizeAddress} from
   './rejoin-hints-addresses.js';
+import {originalSeedAnchor} from
+  './seed-original-allocation-declaration.js';
+import {
+  INITIAL_MESSAGE_GROUP_ID,
+  INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+  INITIAL_PARTITION_IDS,
+  getInitialReplicaIds,
+} from './system-table-schemas-constants.js';
 
 const PARTITIONS_DIRNAME = 'partitions';
 const SQLITE_DB_SUFFIX = '.db';
@@ -420,13 +438,15 @@ async function readDurableNodesTableSnapshot(options = {}) {
     hasDurableNodesTable: false,
     matchedLocalIdentity: false,
     conflictingReplicaEvidence: false,
+    durableEvidenceUnreadable:
+      replicaDbPaths.state === DURABLE_EVIDENCE_STATE.UNREADABLE,
   };
   const rowsByNodeId = new Map();
 
   for (const dbPath of replicaDbPaths.dbPaths) {
     const replicaRead = readNodesRowsFromReplicaDbOutcome(dbPath);
     if (replicaRead.state !== DURABLE_EVIDENCE_STATE.READABLE) {
-      snapshot.hasDurableNodesTable = true;
+      snapshot.durableEvidenceUnreadable = true;
       continue;
     }
     foldReplicaRowsIntoAddressMap(rowsByNodeId, replicaRead.rows, snapshot);
@@ -446,14 +466,94 @@ async function readDurableNodesTableSnapshot(options = {}) {
     identityMismatch:
       snapshot.hasDurableNodesTable && !snapshot.matchedLocalIdentity,
     conflictingReplicaEvidence: snapshot.conflictingReplicaEvidence,
-    durableEvidenceUnreadable:
-      replicaDbPaths.state === DURABLE_EVIDENCE_STATE.UNREADABLE,
+    durableEvidenceUnreadable: snapshot.durableEvidenceUnreadable,
   };
+}
+
+function buildOriginalSeedAllocationCandidates(dataDir) {
+  const anchor = originalSeedAnchor(dataDir);
+  const candidates = [
+    {
+      groupId: anchor.groupId,
+      replicaId: anchor.replicaId,
+      dbPath: anchor.dbPath,
+      isAnchor: true,
+    },
+  ];
+  for (const [tableName, groupId] of Object.entries(INITIAL_PARTITION_IDS)) {
+    for (const replicaId of getInitialReplicaIds(tableName) || []) {
+      if (replicaId === anchor.replicaId) {
+        continue;
+      }
+      candidates.push({
+        groupId,
+        replicaId,
+        dbPath: getPartitionDbPath(dataDir, groupId, replicaId),
+        isAnchor: false,
+      });
+    }
+  }
+  for (const replicaId of INITIAL_MESSAGE_GROUP_REPLICA_IDS) {
+    candidates.push({
+      groupId: INITIAL_MESSAGE_GROUP_ID,
+      replicaId,
+      dbPath: getMessageGroupDbPath(
+        dataDir,
+        INITIAL_MESSAGE_GROUP_ID,
+        replicaId,
+      ),
+      isAnchor: false,
+    });
+  }
+  return candidates;
+}
+
+async function resolveOriginalSeedAllocationState(dataDir) {
+  const normalizedDataDir = normalizeAddress(dataDir);
+  if (!normalizedDataDir) {
+    return ORIGINAL_SEED_ALLOCATION_STATE.MISSING;
+  }
+  let observedTransferred = false;
+  let observedUntransferred = false;
+  for (const candidate of buildOriginalSeedAllocationCandidates(
+    normalizedDataDir,
+  )) {
+    const {state} = inspectReplicaLifecycleForOriginalAllocation(candidate);
+    if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE) {
+      return ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE;
+    }
+    if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) {
+      observedUntransferred = true;
+    } else if (state === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED) {
+      observedTransferred = true;
+    }
+  }
+  if (observedUntransferred) {
+    return ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED;
+  }
+  if (observedTransferred) {
+    return ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED;
+  }
+  return ORIGINAL_SEED_ALLOCATION_STATE.MISSING;
+}
+
+/**
+ * Read the durable original-seed allocation rights across the full founder
+ * candidate set (`INITIAL_PARTITION_IDS` + `mg-1-r1..3`) through the canonical
+ * replica lifecycle owner. Because the rebalancer can unlink drained founder
+ * replicas, observing transferred rights on any surviving founder proves the
+ * seed completed its original registration handoff.
+ * @param {string} dataDir - Data directory holding the partition/group DBs.
+ * @return {Promise<{state: string}>}
+ */
+async function readOriginalSeedAllocationOutcome(dataDir) {
+  return {state: await resolveOriginalSeedAllocationState(dataDir)};
 }
 
 export {
   readDurableNodesTableSnapshot,
   readDurableServicesIdentitySnapshot,
+  readOriginalSeedAllocationOutcome,
   readRejoinHints,
   readRejoinHintsOutcome,
 };

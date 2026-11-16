@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.921Z",
-  "rawViolationCount": 1691,
+  "generatedAt": "2026-11-16T14:05:09.562Z",
+  "rawViolationCount": 1690,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1049,7 +1049,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-delegate-bundles.js",
-      "line": 63,
+      "line": 171,
       "column": 8,
       "functionName": "getSqlQueryEngine",
       "kind": "two_source_fallback_reads",
@@ -1058,7 +1058,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-delegate-bundles.js",
-      "line": 257,
+      "line": 365,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1094,7 +1094,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 390,
+      "line": 391,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotActiveNodeIds",
       "kind": "two_source_fallback_reads",
@@ -1103,7 +1103,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 399,
+      "line": 400,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotEpoch",
       "kind": "two_source_fallback_reads",
@@ -1112,7 +1112,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 472,
+      "line": 471,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1121,7 +1121,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 547,
+      "line": 546,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1472,7 +1472,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/create-message-group-phase.js",
-      "line": 761,
+      "line": 745,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -1625,7 +1625,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 490,
+      "line": 469,
       "column": 6,
       "functionName": "waitForPartitionLeadership",
       "kind": "two_source_fallback_reads",
@@ -1634,7 +1634,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 496,
+      "line": 475,
       "column": 16,
       "functionName": "waitForPartitionLeadership",
       "kind": "two_source_fallback_reads",
@@ -1688,7 +1688,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js",
-      "line": 393,
+      "line": 447,
       "column": 8,
       "functionName": "advanceNodeBootIncarnation",
       "kind": "two_source_fallback_reads",
@@ -1697,7 +1697,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-publication-methods.js",
-      "line": 234,
+      "line": 129,
       "column": 20,
       "functionName": "normalizeEndpointOutcomeResult",
       "kind": "two_source_fallback_reads",
@@ -1706,7 +1706,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner.js",
-      "line": 144,
+      "line": 147,
       "column": 10,
       "functionName": "registerNodeInCluster",
       "kind": "two_source_fallback_reads",
@@ -1850,7 +1850,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-row-merge.js",
-      "line": 267,
+      "line": 298,
       "column": 25,
       "functionName": "buildDeletedRowTombstoneSource",
       "kind": "two_source_fallback_reads",
@@ -1859,7 +1859,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-row-merge.js",
-      "line": 274,
+      "line": 305,
       "column": 17,
       "functionName": "shouldUsePublicationMerge",
       "kind": "two_source_fallback_reads",
@@ -1877,7 +1877,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 540,
+      "line": 537,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "two_source_fallback_reads",
@@ -2516,7 +2516,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 78,
+      "line": 79,
       "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2525,7 +2525,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 96,
+      "line": 97,
       "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2534,7 +2534,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 158,
+      "line": 159,
       "column": 23,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -2543,7 +2543,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 230,
+      "line": 231,
       "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2552,7 +2552,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 254,
+      "line": 255,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2561,7 +2561,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 266,
+      "line": 267,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2570,7 +2570,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 277,
+      "line": 278,
       "column": 10,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2579,7 +2579,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 290,
+      "line": 291,
       "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2588,7 +2588,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 301,
+      "line": 302,
       "column": 4,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2597,7 +2597,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 342,
+      "line": 343,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2606,7 +2606,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 358,
+      "line": 359,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2615,7 +2615,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 362,
+      "line": 363,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2624,7 +2624,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 367,
+      "line": 368,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2633,7 +2633,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 372,
+      "line": 373,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2642,7 +2642,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 378,
+      "line": 379,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2651,7 +2651,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 384,
+      "line": 385,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2660,7 +2660,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 394,
+      "line": 395,
       "column": 8,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -2669,7 +2669,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 398,
+      "line": 399,
       "column": 6,
       "functionName": "resolveMembershipPublicationPlanningSnapshot",
       "kind": "two_source_fallback_reads",
@@ -4955,7 +4955,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-resolved-planning-answer-context.js",
-      "line": 39,
+      "line": 46,
       "column": 32,
       "functionName": "isResolvedNodePlanningAnswerForContext",
       "kind": "two_source_fallback_reads",
@@ -5279,7 +5279,7 @@
     },
     {
       "filePath": "src/control-plane/timeout-budget.js",
-      "line": 141,
+      "line": 142,
       "column": 24,
       "functionName": "createChildTimeoutBudget",
       "kind": "two_source_fallback_reads",
@@ -6170,7 +6170,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 155,
+      "line": 157,
       "column": 20,
       "functionName": "executeQuery",
       "kind": "two_source_fallback_reads",
@@ -6179,7 +6179,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 191,
+      "line": 193,
       "column": 18,
       "functionName": "executeQuery",
       "kind": "two_source_fallback_reads",
@@ -6188,7 +6188,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 228,
+      "line": 230,
       "column": 22,
       "functionName": "executeQueryWithCallback",
       "kind": "two_source_fallback_reads",
@@ -8051,7 +8051,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-ledger.js",
-      "line": 170,
+      "line": 257,
       "column": 11,
       "functionName": "readOwedCdcObligations",
       "kind": "two_source_fallback_reads",
@@ -8060,7 +8060,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation.js",
-      "line": 72,
+      "line": 74,
       "column": 9,
       "functionName": "resolveServiceWritableCache",
       "kind": "two_source_fallback_reads",
@@ -8105,7 +8105,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-staging.js",
-      "line": 226,
+      "line": 229,
       "column": 18,
       "functionName": "doomSession",
       "kind": "two_source_fallback_reads",
@@ -8114,7 +8114,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-staging.js",
-      "line": 228,
+      "line": 231,
       "column": 20,
       "functionName": "doomSession",
       "kind": "two_source_fallback_reads",
@@ -8123,7 +8123,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-staging.js",
-      "line": 346,
+      "line": 352,
       "column": 20,
       "functionName": "readInSession",
       "kind": "two_source_fallback_reads",
@@ -8132,7 +8132,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-store.js",
-      "line": 412,
+      "line": 462,
       "column": 13,
       "functionName": "participantOutcomeOf",
       "kind": "two_source_fallback_reads",
@@ -8879,7 +8879,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 414,
+      "line": 415,
       "column": 21,
       "functionName": "recordWriteOperation",
       "kind": "two_source_fallback_reads",
@@ -8888,7 +8888,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 466,
+      "line": 467,
       "column": 8,
       "functionName": "markWriteOperationResult",
       "kind": "two_source_fallback_reads",
@@ -8897,7 +8897,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 484,
+      "line": 485,
       "column": 34,
       "functionName": "commit",
       "kind": "two_source_fallback_reads",
@@ -8906,7 +8906,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 522,
+      "line": 524,
       "column": 34,
       "functionName": "rollback",
       "kind": "two_source_fallback_reads",
@@ -8915,7 +8915,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-decision-protocol.js",
-      "line": 250,
+      "line": 338,
       "column": 13,
       "functionName": "driveTransactionDecision",
       "kind": "two_source_fallback_reads",
@@ -8924,7 +8924,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-protocol.js",
-      "line": 174,
+      "line": 178,
       "column": 13,
       "functionName": "reportTransactionBudgetSpent",
       "kind": "two_source_fallback_reads",
@@ -8960,7 +8960,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 125,
+      "line": 163,
       "column": 27,
       "functionName": "recoveryObligationStageRefusal",
       "kind": "two_source_fallback_reads",
@@ -8969,7 +8969,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 702,
+      "line": 740,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -8978,7 +8978,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 703,
+      "line": 741,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -8987,7 +8987,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-telemetry.js",
-      "line": 80,
+      "line": 86,
       "column": 19,
       "functionName": "snapshotTransactionTelemetry",
       "kind": "two_source_fallback_reads",
@@ -8996,7 +8996,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-telemetry.js",
-      "line": 81,
+      "line": 87,
       "column": 15,
       "functionName": "snapshotTransactionTelemetry",
       "kind": "two_source_fallback_reads",
@@ -9005,16 +9005,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-write-coordinator.js",
-      "line": 272,
-      "column": 19,
-      "functionName": "executePlan",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-write-coordinator.js",
-      "line": 329,
+      "line": 340,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9050,7 +9041,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 86,
+      "line": 87,
       "column": 18,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -9059,7 +9050,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 478,
+      "line": 482,
       "column": 20,
       "functionName": "executeOnPartitionWithMetrics",
       "kind": "two_source_fallback_reads",
@@ -9131,7 +9122,7 @@
     },
     {
       "filePath": "src/query/pg/postgres-wire-adapter.js",
-      "line": 172,
+      "line": 173,
       "column": 8,
       "functionName": "authenticate",
       "kind": "two_source_fallback_reads",
@@ -9140,7 +9131,7 @@
     },
     {
       "filePath": "src/query/pg/postgres-wire-adapter.js",
-      "line": 228,
+      "line": 229,
       "column": 8,
       "functionName": "execute",
       "kind": "two_source_fallback_reads",
@@ -9158,7 +9149,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 45,
+      "line": 39,
       "column": 17,
       "functionName": "participantFailureAnswerOf",
       "kind": "two_source_fallback_reads",
@@ -9167,7 +9158,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 46,
+      "line": 40,
       "column": 17,
       "functionName": "participantFailureAnswerOf",
       "kind": "two_source_fallback_reads",
@@ -9176,7 +9167,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 117,
+      "line": 111,
       "column": 11,
       "functionName": "buildParticipantFailureEntry",
       "kind": "two_source_fallback_reads",
@@ -9221,7 +9212,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 73,
+      "line": 74,
       "column": 6,
       "functionName": "executeOnPartition",
       "kind": "two_source_fallback_reads",
@@ -9230,7 +9221,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 466,
+      "line": 472,
       "column": 14,
       "functionName": "executeOnPartition",
       "kind": "two_source_fallback_reads",
@@ -9239,7 +9230,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 532,
+      "line": 538,
       "column": 14,
       "functionName": "executeOnPartition",
       "kind": "two_source_fallback_reads",
@@ -9248,7 +9239,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 563,
+      "line": 569,
       "column": 31,
       "functionName": "executeOnPartition",
       "kind": "two_source_fallback_reads",
@@ -9293,7 +9284,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 162,
+      "line": 247,
       "column": 13,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9302,7 +9293,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 196,
+      "line": 280,
       "column": 20,
       "functionName": "computeGroupAggregates",
       "kind": "two_source_fallback_reads",
@@ -9311,7 +9302,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 523,
+      "line": 530,
       "column": 20,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9428,7 +9419,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-owner.js",
-      "line": 235,
+      "line": 239,
       "column": 19,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -9437,7 +9428,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-owner.js",
-      "line": 236,
+      "line": 240,
       "column": 24,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -9446,7 +9437,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-owner.js",
-      "line": 306,
+      "line": 310,
       "column": 18,
       "functionName": "scheduleRetry",
       "kind": "two_source_fallback_reads",
@@ -9455,7 +9446,7 @@
     },
     {
       "filePath": "src/query/schema-provisioning-job-owner.js",
-      "line": 393,
+      "line": 397,
       "column": 22,
       "functionName": "buildOutcome",
       "kind": "two_source_fallback_reads",
@@ -9482,7 +9473,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 75,
+      "line": 64,
       "column": 7,
       "functionName": "resolvePartitionDb",
       "kind": "two_source_fallback_reads",
@@ -9491,7 +9482,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 276,
+      "line": 272,
       "column": 19,
       "functionName": "tryResolveCanonicalPkTuples",
       "kind": "two_source_fallback_reads",
@@ -9500,7 +9491,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 277,
+      "line": 273,
       "column": 18,
       "functionName": "tryResolveCanonicalPkTuples",
       "kind": "two_source_fallback_reads",
@@ -9509,7 +9500,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 293,
+      "line": 284,
       "column": 30,
       "functionName": "executeLockingReadReservations",
       "kind": "two_source_fallback_reads",
@@ -9518,7 +9509,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 297,
+      "line": 288,
       "column": 17,
       "functionName": "executeLockingReadReservations",
       "kind": "two_source_fallback_reads",
@@ -9527,7 +9518,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 489,
+      "line": 389,
       "column": 14,
       "functionName": "checkInsertReservations",
       "kind": "two_source_fallback_reads",
@@ -9536,7 +9527,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 551,
+      "line": 467,
       "column": 17,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "two_source_fallback_reads",
@@ -9545,7 +9536,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 552,
+      "line": 468,
       "column": 16,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "two_source_fallback_reads",
@@ -9554,7 +9545,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 585,
+      "line": 502,
       "column": 14,
       "functionName": "checkUpdateOrDeleteReservations",
       "kind": "two_source_fallback_reads",
@@ -9563,7 +9554,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 709,
+      "line": 633,
       "column": 14,
       "functionName": "stageWriteReservationsAfterExecution",
       "kind": "two_source_fallback_reads",
@@ -9572,7 +9563,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 738,
+      "line": 662,
       "column": 9,
       "functionName": "extractWriteWhereClause",
       "kind": "two_source_fallback_reads",
@@ -9581,7 +9572,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 749,
+      "line": 673,
       "column": 18,
       "functionName": "createCandidateReadError",
       "kind": "two_source_fallback_reads",
@@ -9590,7 +9581,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 750,
+      "line": 674,
       "column": 17,
       "functionName": "createCandidateReadError",
       "kind": "two_source_fallback_reads",
@@ -9698,7 +9689,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 579,
+      "line": 594,
       "column": 12,
       "functionName": "provisionInitialTablePartition",
       "kind": "two_source_fallback_reads",
@@ -9851,7 +9842,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 90,
+      "line": 132,
       "column": 8,
       "functionName": "allocateControlPlaneTimeoutBudget",
       "kind": "two_source_fallback_reads",
@@ -9860,7 +9851,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 125,
+      "line": 167,
       "column": 12,
       "functionName": "waitForCondition",
       "kind": "two_source_fallback_reads",
@@ -9869,7 +9860,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 128,
+      "line": 170,
       "column": 12,
       "functionName": "waitForCondition",
       "kind": "two_source_fallback_reads",
@@ -9878,7 +9869,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 161,
+      "line": 203,
       "column": 8,
       "functionName": "waitForCondition",
       "kind": "two_source_fallback_reads",
@@ -9887,7 +9878,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 206,
+      "line": 248,
       "column": 21,
       "functionName": "executeSelect",
       "kind": "two_source_fallback_reads",
@@ -10004,7 +9995,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 190,
+      "line": 209,
       "column": 6,
       "functionName": "buildDistributedTransactionMutationOptions",
       "kind": "two_source_fallback_reads",
@@ -10058,7 +10049,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 335,
+      "line": 382,
       "column": 22,
       "functionName": "bindTransactionToPartition",
       "kind": "two_source_fallback_reads",
@@ -10067,7 +10058,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 353,
+      "line": 403,
       "column": 11,
       "functionName": "resolveTransactionOperationRoutingReadinessDimension",
       "kind": "two_source_fallback_reads",
@@ -10076,7 +10067,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 411,
+      "line": 465,
       "column": 11,
       "functionName": "resolveTableRoutingReadinessDimension",
       "kind": "two_source_fallback_reads",
@@ -10310,7 +10301,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 274,
+      "line": 257,
       "column": 8,
       "functionName": "admission",
       "kind": "two_source_fallback_reads",
@@ -10319,7 +10310,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 386,
+      "line": 389,
       "column": 23,
       "functionName": "coreCallFailure",
       "kind": "two_source_fallback_reads",
@@ -10328,7 +10319,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 614,
+      "line": 617,
       "column": 12,
       "functionName": "runtimeRecoveryOutcome",
       "kind": "two_source_fallback_reads",
@@ -10337,7 +10328,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 874,
+      "line": 877,
       "column": 29,
       "functionName": "triggerAnswerAfterReplacement",
       "kind": "two_source_fallback_reads",
@@ -10346,7 +10337,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 937,
+      "line": 940,
       "column": 27,
       "functionName": "settleReconstruction",
       "kind": "two_source_fallback_reads",
@@ -10355,7 +10346,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1947,
+      "line": 1927,
       "column": 11,
       "functionName": "estimateInboundEnvelopeBytes",
       "kind": "two_source_fallback_reads",
@@ -10706,7 +10697,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 388,
+      "line": 400,
       "column": 4,
       "functionName": "resolveDispatchRearmFromProgressReconcileState",
       "kind": "two_source_fallback_reads",
@@ -10733,7 +10724,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 239,
+      "line": 233,
       "column": 6,
       "functionName": "resolveExecutorFailureReconcileState",
       "kind": "two_source_fallback_reads",
@@ -11138,7 +11129,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 181,
+      "line": 182,
       "column": 6,
       "functionName": "resolveTimeoutIncompleteVisibilitySupplementMode",
       "kind": "two_source_fallback_reads",
@@ -11147,7 +11138,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 793,
+      "line": 764,
       "column": 6,
       "functionName": "resolvePriorityRecoveryOperationDrainSettleState",
       "kind": "two_source_fallback_reads",
@@ -11156,7 +11147,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 919,
+      "line": 890,
       "column": 8,
       "functionName": "decidePriorityRecoveryOperationDrainRelease",
       "kind": "two_source_fallback_reads",
@@ -11165,7 +11156,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 988,
+      "line": 959,
       "column": 6,
       "functionName": "buildPriorityRecoveryOperationDrainReleaseEvidence",
       "kind": "two_source_fallback_reads",
@@ -11255,7 +11246,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 390,
+      "line": 371,
       "column": 28,
       "functionName": "updateStep",
       "kind": "two_source_fallback_reads",
@@ -11399,7 +11390,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 74,
+      "line": 78,
       "column": 6,
       "functionName": "buildPriorityRecoveryAssessmentContextForOperation",
       "kind": "two_source_fallback_reads",
@@ -11408,7 +11399,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 309,
+      "line": 323,
       "column": 8,
       "functionName": "buildDeferredRemoveSafetyEvaluation",
       "kind": "two_source_fallback_reads",
@@ -11417,7 +11408,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 411,
+      "line": 425,
       "column": 8,
       "functionName": "evaluateRemoveSafety",
       "kind": "two_source_fallback_reads",
@@ -11606,7 +11597,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 448,
+      "line": 451,
       "column": 8,
       "functionName": "createOperationInternal",
       "kind": "two_source_fallback_reads",
@@ -11615,7 +11606,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 806,
+      "line": 781,
       "column": 6,
       "functionName": "createOperationRecordInternal",
       "kind": "two_source_fallback_reads",
@@ -11624,7 +11615,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 529,
+      "line": 535,
       "column": 6,
       "functionName": "getRecentOperationIntentTtlMs",
       "kind": "two_source_fallback_reads",
@@ -11633,7 +11624,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 556,
+      "line": 562,
       "column": 6,
       "functionName": "resolveRecentOperationMissReuseSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11822,7 +11813,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
-      "line": 583,
+      "line": 590,
       "column": 6,
       "functionName": "buildReservationOrphanReconcileSnapshot",
       "kind": "two_source_fallback_reads",
@@ -12020,7 +12011,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-progress.js",
-      "line": 686,
+      "line": 688,
       "column": 9,
       "functionName": "resolveReplicaOperationSemanticPhase",
       "kind": "two_source_fallback_reads",
@@ -12623,7 +12614,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 368,
+      "line": 374,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "two_source_fallback_reads",
@@ -12632,7 +12623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 505,
+      "line": 569,
       "column": 6,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12641,7 +12632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 515,
+      "line": 579,
       "column": 8,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12650,7 +12641,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 533,
+      "line": 597,
       "column": 6,
       "functionName": "getReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12659,7 +12650,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 546,
+      "line": 610,
       "column": 6,
       "functionName": "getReplicaIdFromServiceRow",
       "kind": "two_source_fallback_reads",
@@ -12668,7 +12659,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 691,
+      "line": 755,
       "column": 6,
       "functionName": "getNormalizedOperationType",
       "kind": "two_source_fallback_reads",
@@ -12929,7 +12920,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 127,
+      "line": 128,
       "column": 21,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -12938,7 +12929,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 128,
+      "line": 129,
       "column": 20,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -12947,7 +12938,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 650,
+      "line": 640,
       "column": 10,
       "functionName": "_executeAndSend",
       "kind": "two_source_fallback_reads",
@@ -15125,7 +15116,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 425,
+      "line": 428,
       "column": 20,
       "functionName": "recover",
       "kind": "two_source_fallback_reads",
@@ -15134,7 +15125,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 554,
+      "line": 557,
       "column": 6,
       "functionName": "createParticipantRecord",
       "kind": "two_source_fallback_reads",

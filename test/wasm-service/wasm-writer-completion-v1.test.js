@@ -14,7 +14,7 @@ import {WRITER_REASON as R} from '../../src/wasm-service/wasm-writer-profile.js'
 import {WASM_SERVICE_REPLICA_STATE as STATE, WRITE_CONSISTENCY_MODE} from
   '../../src/wasm-service/wasm-service-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {applyCommittedEntryTransaction} from
+import {applyCommittedEntrySliceTransaction} from
   '../../src/raft/raft-rs-application-transaction-owner.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -62,9 +62,9 @@ function openComponent(path) {
   };
   function apply(command) {
     index += 1;
-    return applyCommittedEntryTransaction({store, groupId: SERVICE,
-      entry: {entryType: RAFT_RS_ENTRY_TYPE.NORMAL, index: String(index), term: '1',
-        data: Buffer.from(JSON.stringify(command)).toString('base64')}, confState: CONF,
+    return applyCommittedEntrySliceTransaction({store, groupId: SERVICE,
+      entries: [{entryType: RAFT_RS_ENTRY_TYPE.NORMAL, index: String(index), term: '1',
+        data: Buffer.from(JSON.stringify(command)).toString('base64')}], confState: CONF,
       applyCommittedEntry: (bytes, position) => replica.applyCommittedEntry({
         command: JSON.parse(bytes), ...position,
         index: Number(position.index), term: Number(position.term)}),

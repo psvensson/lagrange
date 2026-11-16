@@ -29,29 +29,12 @@ const SNAPSHOT_RECEIVER_REASON = Object.freeze({
 const SNAPSHOT_RECEIVER_JOURNALS = Object.freeze(['-wal', '-journal']);
 const FILE_ABSENT_CODE = 'ENOENT';
 
-// Columns added after the table first shipped: an older database gains them
-// (NULL for its existing rows) the first time a lifecycle owner opens it.
-// `incarnation` is the replica incarnation stamp: minted once, when the row
-// is born (or, for a row born before the column existed, the first time its
-// owner opens it), never replaced and never reused by a later replica of the
-// same name (a later replica is a new row: its database was deleted, or its
-// row removed, before it could be born). `retirement_evidence` is the
-// verified group-retirement evidence a retirement recorded with the row.
+// Columns added after the table first shipped (`incarnation` minted once at
+// birth; `retirement_evidence` recorded on group retirement).
 const LIFECYCLE_ADDED_COLUMNS = Object.freeze(['incarnation',
   'retirement_evidence', 'native_history_state']);
-// Durable lifecycle generation is the persistent authority. Runtime-instance
-// identity is the exact process-local projection of that generation: the
-// registry holds one entry per opened runtime (the frozen operation port a
-// replica generation opened), never per logical (group, replica) name.
-// Every operation here is exact-runtime; a missing exact runtime is a
-// terminal stale result for that work item and is never resolved to
-// whichever runtime currently serves the name. No current-runtime
-// observation exists in this registry; one would have to be a separately
-// named, non-destructive read. A reused logical name opens a new
-// runtime and a new entry; work that belongs to the old runtime can reach
-// only the old entry, and removing an entry removes only that runtime's own.
-// Nothing here is durable: the durable lifecycle row recreates the right
-// runtime through the existing recovery owner after a restart.
+// Process-local registry keyed by exact opened runtime (never logical name).
+// Durable lifecycle row in SQLite is the persistent recovery authority.
 const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_CLAIM_REFUSED = 'REPLICA_LIFECYCLE_CLAIM_REFUSED';
@@ -275,10 +258,7 @@ class RaftRsReplicaLifecycleOwner {
   }
 
   /**
-   * Admit one turn against retirement. `work` answers a named turn
-   * (raft-rs-turn-answer.js); the replica stays held for exactly as long as
-   * that turn: released at once when it settled, after its promise when it
-   * is pending. A refused admission is a settled turn naming the refusal.
+   * Admit one turn against retirement; holds replica while turn is active.
    * @param {function(): Object} work - The admitted work; answers a turn.
    * @return {Object} The work's turn, or the settled refusal.
    */
@@ -303,11 +283,9 @@ class RaftRsReplicaLifecycleOwner {
   }
 
   /**
-   * Retire this replica generation durably. A row already retired keeps its
-   * state, reason and evidence (a reseed hold is never overwritten).
+   * Retire this replica generation durably.
    * @param {string} reason - Why its logical identity is terminal.
-   * @param {Object|null} [evidence] - The verified group-retirement evidence
-   *   of a retirement with its whole group, recorded with the row.
+   * @param {Object|null} [evidence] - Verified group-retirement evidence.
    * @return {Promise<Object>} Frozen outcome.
    */
   async retire(reason, evidence = null) {
@@ -323,14 +301,10 @@ class RaftRsReplicaLifecycleOwner {
     if (this.#activeCount > 0) {
       await new Promise((resolve) => this.#waiters.push(resolve));
     }
-    // A turn that was running while this retirement waited may have held
-    // the replica for a reseed: that row and its reason stay (the evidence
-    // of lost history is never overwritten by a later retirement).
     if (this.#state !== LIFECYCLE_STATE.ACTIVE) {
       return frozenResult(
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, this.#refusalReason);
     }
-    // The reason and the evidence are written by the one UPDATE.
     this.#writeRetired(String(reason || LIFECYCLE_REASON.RETIRED), evidence);
     this.#state = LIFECYCLE_STATE.RETIRED;
     this.#refusalReason = LIFECYCLE_REASON.RETIRED;
@@ -339,10 +313,7 @@ class RaftRsReplicaLifecycleOwner {
   }
 
   /**
-   * Hold this replica for a reseed, durably and at once: called from inside
-   * the runtime turn that proved its history lost, so it does not wait for
-   * that turn. Every later execution is refused RESEED_REQUIRED, and a
-   * restart reads the same refusal from the row.
+   * Hold this replica for a reseed, durably and at once.
    * @return {Object} Frozen outcome.
    */
   holdForReseed() {
@@ -357,27 +328,15 @@ class RaftRsReplicaLifecycleOwner {
       RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RESEED_REQUIRED);
   }
 
-
-  /**
-   * The one retired-row UPDATE: state, reason, changed_at and the
-   * retirement evidence (null for a reseed hold) are written together.
-   * @param {string} reason - The durable reason.
-   * @param {Object|null} [evidence] - Verified group-retirement evidence.
-   */
   #writeRetired(reason, evidence = null) {
     commitDurably(this.#db, () => this.#db.prepare(`
       UPDATE ${REPLICA_LIFECYCLE_TABLE}
       SET state = 'retired', reason = ?, changed_at = ?,
         retirement_evidence = ?
       WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-    `).run(
-      reason,
-      new Date().toISOString(),
+    `).run(reason, new Date().toISOString(),
       evidence ? JSON.stringify(evidence) : null,
-      this.#groupId,
-      this.#peerId,
-      this.#replicaIdentity,
-    ));
+      this.#groupId, this.#peerId, this.#replicaIdentity));
   }
 
   #release() {
@@ -392,33 +351,23 @@ class RaftRsReplicaLifecycleOwner {
 }
 
 /**
- * Prepare only the receiver-local lifecycle record in a validated snapshot's
- * private staging database. The snapshot owner retains CREATE authorization,
- * staging-file custody and atomic installation; this owner retains identity,
- * incarnation creation and the refusal of retired/conflicting generations.
- * No owner, runtime handle, registration or retirement capability is returned.
- * An exact active row is idempotent and keeps its incarnation.
+ * Prepare receiver-local lifecycle record in a validated snapshot's staging DB.
  * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
  * @return {Object} Immutable lifecycle outcome, never install permission.
  */
 function prepareReplicaLifecycleForSnapshot(request) {
   const retained = request.receiverIncarnation ?? null;
   const {db, groupId, peerId, replicaIdentity} = request;
-  // A retained receiver incarnation is born (or stamped) here by this owner
-  // before its class opens the row; the class never takes a caller's mint.
   if (retained !== null) {
     openLifecycleRecord(db, {groupId, peerId, replicaIdentity}, String(retained));
   }
   const owner = new RaftRsReplicaLifecycleOwner({db, groupId, peerId, replicaIdentity});
-  // Synchronous work: the admitted turn settles in this run.
   return turnChainValue(owner.execute(() => {
     const incarnation = owner.incarnation;
     if (retained !== null && retained !== incarnation) {
       return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
         LIFECYCLE_REASON.IDENTITY_MISMATCH));
     }
-    // A snapshot is imported history. Never publish a staged lifecycle row
-    // that could later authorize fresh genesis if the installed log is lost.
     commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
     return settledTurn(frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
       LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation})));
@@ -426,15 +375,7 @@ function prepareReplicaLifecycleForSnapshot(request) {
 }
 
 /**
- * Birth the lifecycle row of one founder of an original seed allocation,
- * before any native effect and inside the caller's open transaction (the
- * original-allocation preparation commits it with its peer-identity rows).
- * This owner mints the incarnation; the caller supplies only the identity,
- * and the declaration consumes the returned stamp. Birth is once: any row
- * already holding this identity, in any state, is refused and left
- * unchanged, as is durable native history without a row. The row is born
- * NEVER_OPENED and is never marked established here. No owner, runtime
- * handle, registration or retirement capability is returned.
+ * Birth the lifecycle row of one founder of an original seed allocation.
  * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
  * @return {Object} Frozen {outcome, reason, detail: {incarnation}|null}.
  */
@@ -799,17 +740,8 @@ function unregisterRuntimeLifecycle(runtime, owner) {
 }
 
 /**
- * Retire exactly the runtime generation the caller owns. A runtime that is
- * no longer registered (closed, or never opened) is a typed stale result:
- * the lookup never falls back to whatever runtime now serves the same
- * logical (group, replica) name.
- * @param {Object} request
- * @param {Object} request.runtime - The exact operation port to retire.
- * @param {string} request.groupId
- * @param {string} request.replicaIdentity
- * @param {string} request.reason
- * @param {Object|null} [request.evidence] - Verified group-retirement
- *   evidence recorded with the retired row.
+ * Retire the exact runtime generation the caller owns (never by logical name).
+ * @param {Object} request - {runtime, groupId, replicaIdentity, reason, evidence}.
  * @return {Promise<Object>} Frozen outcome.
  */
 async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
@@ -917,6 +849,12 @@ const DURABLE_LIFECYCLE_READ = Object.freeze({
     reason: 'lifecycle-database-unreadable', incarnation: null,
     retirementEvidence: null}),
 });
+const ORIGINAL_SEED_LIFECYCLE = Object.freeze({
+  MISSING: 'missing',
+  UNTRANSFERRED: 'untransferred',
+  TRANSFERRED: 'transferred',
+  UNREADABLE: 'unreadable',
+});
 
 // The recorded evidence, or null (none, or one that cannot be parsed).
 function retirementEvidenceOf(raw) {
@@ -949,15 +887,11 @@ function lifecycleRowOf(db, groupId, replicaIdentity) {
 }
 
 /**
- * The durable lifecycle row of exactly one (group, replica identity), read
- * read-only from a replica database file without opening a runtime or
- * creating anything: {state, reason, incarnation, retirementEvidence} (a row
- * born before the stamp, never opened since, reads incarnation null). A missing file or row is ABSENT, a
- * database that cannot be read is UNREADABLE - never a lifecycle state.
+ * Read the durable lifecycle row of one (group, replica identity) read-only.
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
- * @return {Object} Frozen {state, reason, incarnation,retirementEvidence}.
+ * @return {Object} Frozen {state, reason, incarnation, retirementEvidence}.
  */
 function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
   try {
@@ -975,20 +909,80 @@ function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
   }
 }
 
+function readOriginalAllocationRightsRow(db, groupId, replicaIdentity, lifecycle, declaration) {
+  const members = declaration.declaration?.members;
+  const member = Array.isArray(members) ?
+    members.find((entry) => entry?.replicaId === replicaIdentity) : null;
+  if (member && lifecycle.state === LIFECYCLE_STATE.ACTIVE &&
+      lifecycle.incarnation === member.incarnation) {
+    return readOriginalAllocationRow({db, member});
+  }
+  const present = lifecycleColumns(db);
+  const cols = [ORIGINAL_COLUMN.SERVICE_RIGHT,
+    ...(present.has(ORIGINAL_COLUMN.IDENTITY_RIGHT) ? [ORIGINAL_COLUMN.IDENTITY_RIGHT] : [])];
+  return db.prepare(`SELECT ${cols.join(SQL_LIST_SEPARATOR)} FROM ${REPLICA_LIFECYCLE_TABLE}
+    WHERE group_id = ? AND replica_identity = ? LIMIT 1`).get(groupId, replicaIdentity);
+}
+
+function inspectOriginalAllocationDb(dbPath, groupId, replicaIdentity, isAnchor, lifecycle) {
+  const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+  try {
+    const declaration = readOriginalAllocationDeclaration({db, groupId, replicaIdentity});
+    const present = lifecycleColumns(db);
+    if (declaration.state === ORIGINAL.ABSENT || !present.has(ORIGINAL_COLUMN.SERVICE_RIGHT)) {
+      return Object.freeze({state: ORIGINAL_SEED_LIFECYCLE.MISSING});
+    }
+    const row = readOriginalAllocationRightsRow(
+      db, groupId, replicaIdentity, lifecycle, declaration);
+    const transferred = row?.[ORIGINAL_COLUMN.SERVICE_RIGHT] === ORIGINAL.TRANSFERRED &&
+      (!isAnchor || (present.has(ORIGINAL_COLUMN.IDENTITY_RIGHT) &&
+        row?.[ORIGINAL_COLUMN.IDENTITY_RIGHT] === ORIGINAL.TRANSFERRED));
+    return Object.freeze({
+      state: transferred ?
+        ORIGINAL_SEED_LIFECYCLE.TRANSFERRED :
+        ORIGINAL_SEED_LIFECYCLE.UNTRANSFERRED,
+    });
+  } finally {
+    db.close();
+  }
+}
+
+function inspectReplicaLifecycleForOriginalAllocation(request) {
+  try {
+    const {dbPath, groupId, isAnchor = false} = request;
+    const replicaIdentity = request.replicaIdentity ?? request.replicaId;
+    const stat = snapshotFileStat(dbPath);
+    if (!stat) {
+      const hasSidecar = SNAPSHOT_RECEIVER_JOURNALS.some(
+        (suffix) => snapshotFileStat(`${dbPath}${suffix}`) !== null);
+      return Object.freeze({state: hasSidecar ?
+        ORIGINAL_SEED_LIFECYCLE.UNREADABLE : ORIGINAL_SEED_LIFECYCLE.MISSING});
+    }
+    if (!stat.isFile() || SNAPSHOT_RECEIVER_JOURNALS.some((suffix) => {
+      const journal = snapshotFileStat(`${dbPath}${suffix}`);
+      return journal !== null && !journal.isFile();
+    })) {
+      return Object.freeze({state: ORIGINAL_SEED_LIFECYCLE.UNREADABLE});
+    }
+    const lifecycle = readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity);
+    if (lifecycle.state === DURABLE_LIFECYCLE_READ.UNREADABLE.state) {
+      return Object.freeze({state: ORIGINAL_SEED_LIFECYCLE.UNREADABLE});
+    }
+    if (lifecycle.state === DURABLE_LIFECYCLE_READ.ABSENT.state) {
+      return Object.freeze({state: ORIGINAL_SEED_LIFECYCLE.MISSING});
+    }
+    return inspectOriginalAllocationDb(dbPath, groupId, replicaIdentity, isAnchor, lifecycle);
+  } catch (_error) {
+    return Object.freeze({state: ORIGINAL_SEED_LIFECYCLE.UNREADABLE});
+  }
+}
+
 export {
-  DURABLE_LIFECYCLE_READ,
-  RaftRsReplicaLifecycleOwner,
-  readDurableReplicaLifecycle,
-  prepareReplicaLifecycleForSnapshot,
-  prepareReplicaLifecycleForOriginalAllocation,
-  prepareOriginalAllocationRow,
-  markOriginalAllocationIssued,
-  transitionOriginalRight,
-  readOriginalAllocationRow,
-  readOriginalAllocationDeclaration,
-  inspectReplicaLifecycleForSnapshot,
-  registerRuntimeLifecycle,
-  retireReplicaLifecycle,
-  withReplicaLifecycleClaim,
+  DURABLE_LIFECYCLE_READ, RaftRsReplicaLifecycleOwner, readDurableReplicaLifecycle,
+  prepareReplicaLifecycleForSnapshot, prepareReplicaLifecycleForOriginalAllocation,
+  prepareOriginalAllocationRow, markOriginalAllocationIssued, transitionOriginalRight,
+  readOriginalAllocationRow, readOriginalAllocationDeclaration,
+  inspectReplicaLifecycleForSnapshot, inspectReplicaLifecycleForOriginalAllocation,
+  registerRuntimeLifecycle, retireReplicaLifecycle, withReplicaLifecycleClaim,
   unregisterRuntimeLifecycle,
 };

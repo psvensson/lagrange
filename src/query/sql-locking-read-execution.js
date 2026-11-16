@@ -368,6 +368,14 @@ async function failConflict(engine, statement, writeTransaction, transactionId, 
   });
 }
 
+function findUnscopedInsertConflict(engine, tableName, transactionId, candidatePartitions) {
+  const conflicting = getConflictingReservations(engine, tableName, transactionId);
+  if (Array.isArray(candidatePartitions) && candidatePartitions.length > 0) {
+    return conflicting.find((rec) => candidatePartitions.includes(rec.partitionId)) || null;
+  }
+  return conflicting[0] || null;
+}
+
 /**
  * Check row reservations for an INSERT statement.
  * @param {Object} ctx - Write statement context.
@@ -379,18 +387,32 @@ async function checkInsertReservations(ctx) {
     statement, writeTransaction, transactionId,
   } = ctx;
   const ast = statement.writePlan?.ast || statement.ast;
-  for (const pkValues of extractInsertPkValues(ast, pkColumns, statement.params)) {
-    const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    const check = checkRowReservationConflict({
+  const footprint = extractStatementWriteFootprint({
+    sql: statement.sql || '',
+    ast,
+    params: statement.params || [],
+    pkCols: pkColumns,
+  });
+  const tuples = footprint.pkTuples.length > 0 ?
+    footprint.pkTuples :
+    extractInsertPkValues(ast, pkColumns, statement.params);
+  for (const pkValues of tuples) {
+    const conflict = await checkSinglePkConflict(ctx, [...pkValues]);
+    if (conflict) return conflict;
+  }
+  if (!footprint.scoped) {
+    const match = findUnscopedInsertConflict(
+      engine,
       tableName,
-      partitionId,
-      pkValues,
       transactionId,
-      db: resolvePartitionDb(engine, partitionId),
-      onlyForUpdate: true,
-    });
-    if (check.conflict) {
-      return failConflict(engine, statement, writeTransaction, transactionId, check);
+      candidatePartitions,
+    );
+    if (match) {
+      return failConflict(engine, statement, writeTransaction, transactionId, {
+        conflict: true,
+        rowKey: match.rowKey,
+        conflictingTransactionId: match.transactionId,
+      });
     }
   }
   return null;

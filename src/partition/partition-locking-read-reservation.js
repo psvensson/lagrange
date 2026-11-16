@@ -21,6 +21,7 @@ import {
   LOCKING_READ_LOCAL_EXPIRY,
   LOCKING_READ_RESERVATION_OUTCOME,
 } from '../query/sql-locking-read-constants.js';
+import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
 
 export {
   LOCKING_READ_RESERVATION_KIND,
@@ -133,8 +134,7 @@ function ensureTableInitialized(db) {
  * @return {string} Canonical row lock key.
  */
 function deriveRowLockKey(tableName, partitionId, pkValues) {
-  const normalizedValues = Array.isArray(pkValues) ? pkValues : [pkValues];
-  return `${tableName}:${partitionId}:${JSON.stringify(normalizedValues)}`;
+  return `${tableName}:${partitionId}:${encodeCanonicalPkTupleKey(pkValues)}`;
 }
 
 /**

@@ -113,6 +113,17 @@ const DURABLE_EVIDENCE_STATE = Object.freeze({
 });
 
 /**
+ * Typed read outcome for the seed's original allocation rights across
+ * [originalSeedAnchor, mg-1-r1..3].
+ */
+const ORIGINAL_SEED_ALLOCATION_STATE = Object.freeze({
+  MISSING: 'missing',
+  UNTRANSFERRED: 'untransferred',
+  TRANSFERRED: 'transferred',
+  UNREADABLE: 'unreadable',
+});
+
+/**
  * Typed read outcome for one authoritative control-plane table read. Mirrors
  * DURABLE_EVIDENCE_STATE: absence (READABLE with zero rows) must be
  * positively proven; a source that could not answer the read is UNAVAILABLE,
@@ -153,6 +164,7 @@ export {
   MEMBERSHIP_OWNER_EVIDENCE_SOURCE,
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
   MEMBERSHIP_OWNER_REASON,
+  ORIGINAL_SEED_ALLOCATION_STATE,
   REJOIN_HINTS_FILENAME,
   REJOIN_HINTS_WRITE_INTERVAL_MS,
   STARTUP_JOIN_MODE,

@@ -13,6 +13,11 @@ const TRANSACTION_STATUS = Object.freeze({
 
 const PARTICIPANT_STATUS = TRANSACTION_STATUS;
 
+const PARTICIPANT_ENLISTMENT_MODE = Object.freeze({
+  AUTHORITATIVE: 'AUTHORITATIVE',
+  VOLATILE_READ: 'VOLATILE_READ',
+});
+
 const WRITE_OPERATION_STATUS = Object.freeze({
   PENDING: 'PENDING',
   SUCCEEDED: 'SUCCEEDED',
@@ -100,12 +105,15 @@ const TRANSACTION_DECISION_LOG_MSG = Object.freeze({
     'the recorded decision is read',
   COMMIT_REFUSED_BY_PARTICIPANT: 'Distributed transaction participant ' +
     'refused a recorded COMMIT decision (atomicity alarm)',
+  VOLATILE_READ_CLEANUP_FAILED:
+    'Volatile read-only participant cleanup failed',
 });
 
 export {
   IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES,
   PARTICIPANT_ANSWER_DISPOSITION,
   PARTICIPANT_ANSWER_DISPOSITION_FIELD,
+  PARTICIPANT_ENLISTMENT_MODE,
   PARTICIPANT_RETRY_DEFAULT,
   PARTICIPANT_RETRY_LOG_MSG,
   PARTICIPANT_STATUS,

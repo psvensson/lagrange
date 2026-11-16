@@ -11,6 +11,8 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {coordinatorTableParticipantRefusal} from
   './distributed/distributed-transaction-participant-admission.js';
+import {PARTICIPANT_ENLISTMENT_MODE} from
+  './distributed/distributed-transaction-coordinator-constants.js';
 import {
   executeLockingReadReservations,
   isLockingReadAst,
@@ -55,6 +57,46 @@ const {
   getSchemaByTableName,
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
+
+async function enlistTransactionSelectParticipants(
+  ast,
+  distributedPlan,
+  transactionRead,
+) {
+  if (!transactionRead) return null;
+  const allParticipants = Array.from(distributedPlan.tablePlans.values())
+    .flatMap((plan) => plan.partitions);
+  const enlisted = await transactionRead.enlist(
+    allParticipants,
+    isLockingReadAst(ast) ?
+      PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE :
+      PARTICIPANT_ENLISTMENT_MODE.VOLATILE_READ,
+  );
+  return enlisted.success === true ? null : enlisted;
+}
+
+function buildSelectExecutionEnvelope(
+  result,
+  tableName,
+  dualWriteMode,
+  distributedPlan,
+  planningDurationMs,
+  executionDurationMs,
+) {
+  return {
+    ...result,
+    tableName,
+    dualWriteMode,
+    distributedPlan,
+    distributedDiagnostics: distributedPlan.diagnostics,
+    distributedMetrics: {
+      planningDurationMs,
+      executionDurationMs,
+      fanout: result.distributedMetrics?.fanout || null,
+      mergeDurationMs: result.distributedMetrics?.mergeDurationMs || 0,
+    },
+  };
+}
 
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
   async refreshTableRoutingMetadataFromAuthority(tableName, queryOptions = {}) {
@@ -347,12 +389,12 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       preferSameLatencyGroup,
     );
 
-    if (transactionRead) {
-      const allParticipants = Array.from(distributedPlan.tablePlans.values())
-        .flatMap((plan) => plan.partitions);
-      const enlisted = await transactionRead.enlist(allParticipants);
-      if (enlisted.success !== true) return enlisted;
-    }
+    const enlistmentFailure = await enlistTransactionSelectParticipants(
+      ast,
+      distributedPlan,
+      transactionRead,
+    );
+    if (enlistmentFailure) return enlistmentFailure;
 
     const executionStartTimeMs = Date.now();
     const deliveryPriority = this.resolveRoutedDeliveryPriority(
@@ -387,19 +429,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       if (lockingFailure) return lockingFailure;
     }
 
-    return {
-      ...result,
+    return buildSelectExecutionEnvelope(
+      result,
       tableName,
       dualWriteMode,
       distributedPlan,
-      distributedDiagnostics: distributedPlan.diagnostics,
-      distributedMetrics: {
-        planningDurationMs,
-        executionDurationMs,
-        fanout: result.distributedMetrics?.fanout || null,
-        mergeDurationMs: result.distributedMetrics?.mergeDurationMs || 0,
-      },
-    };
+      planningDurationMs,
+      executionDurationMs,
+    );
   }
 
   /**

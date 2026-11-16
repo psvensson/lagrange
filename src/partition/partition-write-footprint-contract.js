@@ -19,12 +19,14 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const FOOTPRINT_FIELD_COUNT = 3;
+const MAX_SCOPED_FOOTPRINT_TUPLES = 64;
 
 const FOOTPRINT_FIELD_SCOPED = 'scoped';
 const FOOTPRINT_FIELD_ROW_KEYS = 'rowKeys';
 const FOOTPRINT_FIELD_PK_TUPLES = 'pkTuples';
 
 const ROW_KEY_SEPARATOR = '|';
+const SQLITE_NUMERIC_TEXT_RE = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*$/u;
 
 const TYPE_STRING = 'string';
 const TYPE_BOOLEAN = 'boolean';
@@ -54,6 +56,7 @@ const OP_MINUS = '-';
 
 const DIALECT_POSTGRESQL = 'postgresql';
 const DIALECT_SQLITE = 'sqlite';
+const CONFLICT_MODE_REPLACE = 'replace';
 const PG_PARAM_PATTERN = /\$[1-9]\d*/u;
 
 const ERROR_PREFIX_RECORD_NOT_OBJECT =
@@ -65,33 +68,14 @@ const ERROR_PREFIX_MISSING_PROPERTY =
 const ERROR_PREFIX_INVALID_PROPERTY_TYPE =
   'StatementWriteFootprintRecord invalid type or invariant for property: ';
 
-/**
- * Exactly 3 canonical statement write-footprint fields.
- */
 const STATEMENT_WRITE_FOOTPRINT_KEYS = objectFreeze([
   FOOTPRINT_FIELD_SCOPED,
   FOOTPRINT_FIELD_ROW_KEYS,
   FOOTPRINT_FIELD_PK_TUPLES,
 ]);
 
-/**
- * @typedef {Object} StatementWriteFootprintRecord
- * @property {boolean} scoped
- * @property {readonly string[]} rowKeys
- * @property {readonly ReadonlyArray<string | number>[]} pkTuples
- */
-
-/**
- * @typedef {Object} WhereFootprintEval
- * @property {boolean} scoped
- * @property {Map<string, Array<string | number>> | null} colMap
- * @property {Array<Array<string | number>> | null} tuples
- */
-
 function isPlainObject(value) {
-  if (value === null || typeof value !== TYPE_OBJECT || Array.isArray(value)) {
-    return false;
-  }
+  if (value === null || typeof value !== TYPE_OBJECT || Array.isArray(value)) return false;
   const proto = objectGetPrototypeOf(value);
   return proto === objectPrototype || proto === null;
 }
@@ -103,6 +87,28 @@ function isNonEmptyString(value) {
 function isScalarPkValue(value) {
   return typeof value === TYPE_STRING ||
     (typeof value === TYPE_NUMBER && Number.isFinite(value));
+}
+
+function isCanonicalPkScalar(value) {
+  if (typeof value === TYPE_NUMBER) return Number.isSafeInteger(value);
+  if (typeof value !== TYPE_STRING || value.length === NUM_ZERO) return false;
+  if (!SQLITE_NUMERIC_TEXT_RE.test(value)) return true;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && String(parsed) === value;
+}
+
+function normalizePkScalar(value) {
+  if (typeof value === TYPE_NUMBER) {
+    return Object.is(value, -0) ? NUM_ZERO : value;
+  }
+  return value;
+}
+
+function encodeCanonicalPkTupleKey(tuple) {
+  const items = Array.isArray(tuple) ? tuple : [tuple];
+  if (items.length === NUM_ZERO) return '';
+  const parts = items.map((item) => String(normalizePkScalar(item)));
+  return parts.length === NUM_ONE ? parts[NUM_ZERO] : JSON.stringify(parts);
 }
 
 function isValidPkTupleArray(pkTuples, expectedLength) {
@@ -254,20 +260,20 @@ function normalizeColumnList(cols) {
 }
 
 function buildScopedFootprintFromTuples(tuples) {
-  if (!Array.isArray(tuples) || tuples.length === NUM_ZERO) {
+  if (!Array.isArray(tuples) ||
+      tuples.length === NUM_ZERO ||
+      tuples.length > MAX_SCOPED_FOOTPRINT_TUPLES) {
     return UNSCOPED_WRITE_FOOTPRINT;
   }
   const seenKeys = new Set();
-  /** @type {string[]} */
   const rowKeys = [];
-  /** @type {Array<Array<string | number>>} */
   const pkTuples = [];
   for (let i = NUM_ZERO; i < tuples.length; i += NUM_ONE) {
     const tuple = tuples[i];
     if (!Array.isArray(tuple) || tuple.length === NUM_ZERO) {
       return UNSCOPED_WRITE_FOOTPRINT;
     }
-    const rk = tuple.map(String).join(ROW_KEY_SEPARATOR);
+    const rk = encodeCanonicalPkTupleKey(tuple);
     if (rk.length === NUM_ZERO) {
       return UNSCOPED_WRITE_FOOTPRINT;
     }
@@ -277,7 +283,7 @@ function buildScopedFootprintFromTuples(tuples) {
       pkTuples.push(tuple);
     }
   }
-  return rowKeys.length > NUM_ZERO ?
+  return rowKeys.length > NUM_ZERO && rowKeys.length <= MAX_SCOPED_FOOTPRINT_TUPLES ?
     createStatementWriteFootprintRecord({scoped: true, rowKeys, pkTuples}) :
     UNSCOPED_WRITE_FOOTPRINT;
 }
@@ -295,7 +301,7 @@ function resolveParameterScalar(node, params, ast) {
     return undefined;
   }
   const val = params[paramIdx];
-  return isScalarPkValue(val) ? val : undefined;
+  return isCanonicalPkScalar(val) ? normalizePkScalar(val) : undefined;
 }
 
 function resolveUnaryScalar(node) {
@@ -310,7 +316,8 @@ function resolveUnaryScalar(node) {
       !Number.isFinite(inner.value)) {
     return undefined;
   }
-  return op === OP_MINUS ? -inner.value : inner.value;
+  const rawVal = op === OP_MINUS ? -inner.value : inner.value;
+  return isCanonicalPkScalar(rawVal) ? normalizePkScalar(rawVal) : undefined;
 }
 
 function extractScalarValueFromNode(node, params, ast) {
@@ -319,7 +326,7 @@ function extractScalarValueFromNode(node, params, ast) {
   }
   const nodeType = String(node.type ?? '').toLowerCase();
   if (nodeType === NODE_TYPE_LITERAL) {
-    return isScalarPkValue(node.value) ? node.value : undefined;
+    return isCanonicalPkScalar(node.value) ? normalizePkScalar(node.value) : undefined;
   }
   if (nodeType === NODE_TYPE_UNARY) {
     return resolveUnaryScalar(node);
@@ -330,123 +337,106 @@ function extractScalarValueFromNode(node, params, ast) {
   return undefined;
 }
 
+const ALLOWED_COLUMN_NODE_TYPES = objectFreeze([
+  NODE_TYPE_COLUMN,
+  NODE_TYPE_COLUMN_REF,
+  '',
+]);
+
 function extractColumnIdentifierFromNode(node) {
-  if (!node || typeof node !== TYPE_OBJECT) {
-    return null;
-  }
-  const nodeType = String(node.type ?? '').toLowerCase();
-  if (nodeType === NODE_TYPE_LITERAL ||
-      nodeType === NODE_TYPE_PARAMETER ||
-      nodeType === NODE_TYPE_UNARY ||
-      nodeType === NODE_TYPE_BINARY ||
-      nodeType === NODE_TYPE_IN ||
-      nodeType === NODE_TYPE_SUBQUERY ||
-      nodeType === NODE_TYPE_EXISTS) {
-    return null;
-  }
-  if (nodeType !== NODE_TYPE_COLUMN &&
-      nodeType !== NODE_TYPE_COLUMN_REF &&
-      nodeType !== '') {
-    return null;
-  }
-  const raw = node.column ?? node.name;
-  if (typeof raw !== TYPE_STRING || raw.length === NUM_ZERO) {
-    return null;
-  }
-  const stripped = raw.includes('.') ? raw.split('.').at(-1) ?? raw : raw;
+  if (!node || typeof node !== TYPE_OBJECT) return null;
+  const nodeType = String(node.type || '').toLowerCase();
+  if (!ALLOWED_COLUMN_NODE_TYPES.includes(nodeType)) return null;
+  const raw = node.column || node.name;
+  if (typeof raw !== TYPE_STRING || raw.length === NUM_ZERO) return null;
+  const parts = raw.split('.');
+  const stripped = parts[parts.length - NUM_ONE];
   const cleaned = stripped.trim().replace(/^["'`]|["'`]$/gu, '').toLowerCase();
   return cleaned.length > NUM_ZERO ? cleaned : null;
 }
 
+function hasReplaceModeText(ast) {
+  const mode = String(ast.conflictResolution || ast.insertMode || '').toLowerCase();
+  const prefix = String(ast.prefix || '').toLowerCase();
+  return mode === CONFLICT_MODE_REPLACE || prefix.includes(CONFLICT_MODE_REPLACE);
+}
+
 function hasOnConflictMutation(ast) {
-  return Boolean(ast?.onConflict || ast?.conflict);
+  if (!ast) return false;
+  if (ast.orReplace || ast.onConflict || ast.conflict || ast.upsert) return true;
+  return hasReplaceModeText(ast);
+}
+
+function extractInsertRowTuple(row, targetColCount, columnOffsets, params, ast) {
+  if (!Array.isArray(row) || row.length !== targetColCount) return null;
+  const tuple = [];
+  for (let k = NUM_ZERO; k < columnOffsets.length; k += NUM_ONE) {
+    const scalar = extractScalarValueFromNode(row[columnOffsets[k]], params, ast);
+    if (scalar === undefined) return null;
+    tuple.push(scalar);
+  }
+  return tuple;
+}
+
+function resolveInsertTargetCols(ast, allCols) {
+  const hasExplicitCols = Array.isArray(ast.columns) && ast.columns.length > NUM_ZERO;
+  return hasExplicitCols ? normalizeColumnList(ast.columns) : allCols;
 }
 
 function extractInsertFootprint(ast, params, pkCols, allCols) {
+  const values = ast.values;
   if (hasOnConflictMutation(ast) ||
-      !Array.isArray(ast.values) ||
-      ast.values.length === NUM_ZERO) {
+      !Array.isArray(values) ||
+      values.length === NUM_ZERO ||
+      values.length > MAX_SCOPED_FOOTPRINT_TUPLES) {
     return UNSCOPED_WRITE_FOOTPRINT;
   }
-  const hasExplicitCols = Array.isArray(ast.columns) && ast.columns.length > NUM_ZERO;
-  const targetCols = hasExplicitCols ?
-    normalizeColumnList(ast.columns) :
-    allCols;
-  if (targetCols.length === NUM_ZERO) {
-    return UNSCOPED_WRITE_FOOTPRINT;
-  }
+  const targetCols = resolveInsertTargetCols(ast, allCols);
   const columnOffsets = pkCols.map((pkCol) => targetCols.indexOf(pkCol));
-  if (columnOffsets.some((idx) => idx < NUM_ZERO)) {
+  if (targetCols.length === NUM_ZERO || columnOffsets.some((idx) => idx < NUM_ZERO)) {
     return UNSCOPED_WRITE_FOOTPRINT;
   }
-  /** @type {Array<Array<string | number>>} */
   const tuples = [];
-  for (let r = NUM_ZERO; r < ast.values.length; r += NUM_ONE) {
-    const row = ast.values[r];
-    if (!Array.isArray(row) || row.length !== targetCols.length) {
-      return UNSCOPED_WRITE_FOOTPRINT;
-    }
-    /** @type {Array<string | number>} */
-    const tuple = [];
-    for (let k = NUM_ZERO; k < columnOffsets.length; k += NUM_ONE) {
-      const scalar = extractScalarValueFromNode(row[columnOffsets[k]], params, ast);
-      if (scalar === undefined) {
-        return UNSCOPED_WRITE_FOOTPRINT;
-      }
-      tuple.push(scalar);
-    }
+  for (let r = NUM_ZERO; r < values.length; r += NUM_ONE) {
+    const tuple = extractInsertRowTuple(values[r], targetCols.length, columnOffsets, params, ast);
+    if (tuple === null) return UNSCOPED_WRITE_FOOTPRINT;
     tuples.push(tuple);
   }
   return buildScopedFootprintFromTuples(tuples);
 }
 
-function containsSubqueryNode(node) {
-  if (!node || typeof node !== TYPE_OBJECT) {
-    return false;
-  }
-  if (Array.isArray(node)) {
-    return node.some(containsSubqueryNode);
-  }
-  const nodeType = String(node.type ?? '').toLowerCase();
-  if (nodeType === NODE_TYPE_SUBQUERY ||
-      nodeType === NODE_TYPE_EXISTS ||
-      Boolean(node.subquery) ||
-      Boolean(node.query)) {
-    return true;
-  }
-  const children = [
-    node.left,
-    node.right,
-    node.operand,
-    node.expression,
-    node.expr,
-    node.low,
-    node.high,
-    node.pattern,
-    node.elseExpr,
-    node.values,
-    node.args,
-  ];
-  for (let i = NUM_ZERO; i < children.length; i += NUM_ONE) {
-    if (containsSubqueryNode(children[i])) {
+function isDirectSubqueryNode(node) {
+  const nodeType = String(node.type || '').toLowerCase();
+  return nodeType === NODE_TYPE_SUBQUERY ||
+    nodeType === NODE_TYPE_EXISTS ||
+    Boolean(node.subquery) ||
+    Boolean(node.query);
+}
+
+function containsSubqueryInConditions(conditions) {
+  if (!Array.isArray(conditions)) return false;
+  for (let i = NUM_ZERO; i < conditions.length; i += NUM_ONE) {
+    const cond = conditions[i];
+    if (cond && (containsSubqueryNode(cond.when) || containsSubqueryNode(cond.thenExpression))) {
       return true;
-    }
-  }
-  if (Array.isArray(node.conditions)) {
-    for (let i = NUM_ZERO; i < node.conditions.length; i += NUM_ONE) {
-      const cond = node.conditions[i];
-      if (containsSubqueryNode(cond?.when) ||
-          containsSubqueryNode(cond?.thenExpression)) {
-        return true;
-      }
     }
   }
   return false;
 }
 
+function containsSubqueryNode(node) {
+  if (!node || typeof node !== TYPE_OBJECT) return false;
+  if (Array.isArray(node)) return node.some(containsSubqueryNode);
+  if (isDirectSubqueryNode(node)) return true;
+  const children = [
+    node.left, node.right, node.operand, node.expression, node.expr,
+    node.low, node.high, node.pattern, node.elseExpr, node.values, node.args,
+  ];
+  return children.some(containsSubqueryNode) || containsSubqueryInConditions(node.conditions);
+}
+
 function deduplicateScalars(values) {
   const seen = new Set();
-  /** @type {Array<string | number>} */
   const out = [];
   for (let i = NUM_ZERO; i < values.length; i += NUM_ONE) {
     const v = values[i];
@@ -460,14 +450,20 @@ function deduplicateScalars(values) {
 }
 
 function buildCartesianTuples(pkCols, colMap) {
-  /** @type {Array<Array<string | number>>} */
-  let acc = [[]];
+  let expectedCount = NUM_ONE;
   for (let i = NUM_ZERO; i < pkCols.length; i += NUM_ONE) {
     const colValues = colMap.get(pkCols[i]);
     if (!colValues || colValues.length === NUM_ZERO) {
       return null;
     }
-    /** @type {Array<Array<string | number>>} */
+    expectedCount *= colValues.length;
+    if (expectedCount > MAX_SCOPED_FOOTPRINT_TUPLES) {
+      return null;
+    }
+  }
+  let acc = [[]];
+  for (let i = NUM_ZERO; i < pkCols.length; i += NUM_ONE) {
+    const colValues = colMap.get(pkCols[i]);
     const next = [];
     for (let a = NUM_ZERO; a < acc.length; a += NUM_ONE) {
       for (let v = NUM_ZERO; v < colValues.length; v += NUM_ONE) {
@@ -518,7 +514,6 @@ function evaluateInNode(node, params, pkCols, ast) {
   }
   const col = extractColumnIdentifierFromNode(node.expression ?? node.expr ?? node.left);
   if (col === null) return UNSCOPED_WHERE_EVAL;
-  /** @type {Array<string | number>} */
   const scalars = [];
   for (let i = NUM_ZERO; i < node.values.length; i += NUM_ONE) {
     const val = extractScalarValueFromNode(node.values[i], params, ast);
@@ -550,8 +545,8 @@ function mergeAndColMaps(leftMap, rightMap) {
 }
 
 function intersectTupleLists(leftTuples, rightTuples) {
-  const rightKeys = new Set(rightTuples.map((t) => t.map(String).join(ROW_KEY_SEPARATOR)));
-  return leftTuples.filter((t) => rightKeys.has(t.map(String).join(ROW_KEY_SEPARATOR)));
+  const rightKeys = new Set(rightTuples.map(encodeCanonicalPkTupleKey));
+  return leftTuples.filter((t) => rightKeys.has(encodeCanonicalPkTupleKey(t)));
 }
 
 function filterTuplesByColMap(tuples, pkCols, colMap) {
@@ -565,6 +560,16 @@ function filterTuplesByColMap(tuples, pkCols, colMap) {
   });
 }
 
+function hasScopedTuples(evalResult) {
+  return Boolean(evalResult.scoped && evalResult.tuples);
+}
+
+function wrapNonEmptyTuples(tuples, colMap) {
+  return tuples && tuples.length > NUM_ZERO ?
+    {scoped: true, colMap, tuples} :
+    UNSCOPED_WHERE_EVAL;
+}
+
 function evaluateAndNode(leftEval, rightEval, pkCols) {
   const {contradiction, colMap} = mergeAndColMaps(leftEval.colMap, rightEval.colMap);
   if (contradiction) return UNSCOPED_WHERE_EVAL;
@@ -572,60 +577,67 @@ function evaluateAndNode(leftEval, rightEval, pkCols) {
   if (cartesian !== null && cartesian.length > NUM_ZERO) {
     return {scoped: true, colMap, tuples: cartesian};
   }
-  if (leftEval.scoped && leftEval.tuples && rightEval.scoped && rightEval.tuples) {
-    const both = intersectTupleLists(leftEval.tuples, rightEval.tuples);
-    return both.length > NUM_ZERO ? {scoped: true, colMap, tuples: both} : UNSCOPED_WHERE_EVAL;
+  if (hasScopedTuples(leftEval) && hasScopedTuples(rightEval)) {
+    return wrapNonEmptyTuples(intersectTupleLists(leftEval.tuples, rightEval.tuples), colMap);
   }
-  if (leftEval.scoped && leftEval.tuples) {
-    const filtered = filterTuplesByColMap(leftEval.tuples, pkCols, rightEval.colMap);
-    return filtered.length > NUM_ZERO ?
-      {scoped: true, colMap, tuples: filtered} : UNSCOPED_WHERE_EVAL;
+  if (hasScopedTuples(leftEval)) {
+    return wrapNonEmptyTuples(
+      filterTuplesByColMap(leftEval.tuples, pkCols, rightEval.colMap),
+      colMap,
+    );
   }
-  if (rightEval.scoped && rightEval.tuples) {
-    const filtered = filterTuplesByColMap(rightEval.tuples, pkCols, leftEval.colMap);
-    return filtered.length > NUM_ZERO ?
-      {scoped: true, colMap, tuples: filtered} : UNSCOPED_WHERE_EVAL;
+  if (hasScopedTuples(rightEval)) {
+    return wrapNonEmptyTuples(
+      filterTuplesByColMap(rightEval.tuples, pkCols, leftEval.colMap),
+      colMap,
+    );
   }
   return {scoped: false, colMap, tuples: null};
 }
 
 function unionTupleLists(leftTuples, rightTuples) {
   const seen = new Set();
-  /** @type {Array<Array<string | number>>} */
   const out = [];
   for (const list of [leftTuples, rightTuples]) {
     for (let i = NUM_ZERO; i < list.length; i += NUM_ONE) {
       const tuple = list[i];
-      const key = tuple.map(String).join(ROW_KEY_SEPARATOR);
+      const key = encodeCanonicalPkTupleKey(tuple);
       if (!seen.has(key)) {
         seen.add(key);
         out.push(tuple);
+        if (out.length > MAX_SCOPED_FOOTPRINT_TUPLES) {
+          return null;
+        }
       }
     }
   }
   return out;
 }
 
-function evaluateOrNode(leftEval, rightEval, pkCols) {
-  if (leftEval.scoped && leftEval.tuples && rightEval.scoped && rightEval.tuples) {
-    const combined = unionTupleLists(leftEval.tuples, rightEval.tuples);
-    return combined.length > NUM_ZERO ?
-      {scoped: true, colMap: null, tuples: combined} : UNSCOPED_WHERE_EVAL;
+function buildSharedOrColMap(leftMap, rightMap) {
+  const sharedColMap = new Map();
+  if (!leftMap || !rightMap) return sharedColMap;
+  for (const [col, leftVals] of leftMap.entries()) {
+    const rightVals = rightMap.get(col);
+    if (rightVals) {
+      sharedColMap.set(col, deduplicateScalars([...leftVals, ...rightVals]));
+    }
   }
-  if (leftEval.colMap && rightEval.colMap) {
-    const sharedColMap = new Map();
-    for (const [col, leftVals] of leftEval.colMap.entries()) {
-      const rightVals = rightEval.colMap.get(col);
-      if (rightVals) sharedColMap.set(col, deduplicateScalars([...leftVals, ...rightVals]));
-    }
-    if (sharedColMap.size > NUM_ZERO) {
-      const tuples = buildCartesianTuples(pkCols, sharedColMap);
-      return {
-        scoped: tuples !== null && tuples.length > NUM_ZERO,
-        colMap: sharedColMap,
-        tuples,
-      };
-    }
+  return sharedColMap;
+}
+
+function evaluateOrNode(leftEval, rightEval, pkCols) {
+  if (hasScopedTuples(leftEval) && hasScopedTuples(rightEval)) {
+    return wrapNonEmptyTuples(unionTupleLists(leftEval.tuples, rightEval.tuples), null);
+  }
+  const sharedColMap = buildSharedOrColMap(leftEval.colMap, rightEval.colMap);
+  if (sharedColMap.size > NUM_ZERO) {
+    const tuples = buildCartesianTuples(pkCols, sharedColMap);
+    return {
+      scoped: tuples !== null && tuples.length > NUM_ZERO,
+      colMap: sharedColMap,
+      tuples,
+    };
   }
   return UNSCOPED_WHERE_EVAL;
 }
@@ -697,30 +709,10 @@ function parseSqlAstSafely(sql) {
   }
 }
 
-/**
- * Extract the canonical primary-key write footprint from a SQL statement or AST.
- *
- * @param {Object} [options]
- * @param {string} [options.sql]
- * @param {any} [options.ast]
- * @param {Array<unknown>} [options.params]
- * @param {string[]} [options.pkCols]
- * @param {string[]} [options.allCols]
- * @return {StatementWriteFootprintRecord}
- */
-function extractStatementWriteFootprint({
-  sql = '', ast = null, params = [], pkCols = [], allCols = [],
-} = {}) {
-  if (!Array.isArray(pkCols) || pkCols.length === NUM_ZERO) return UNSCOPED_WRITE_FOOTPRINT;
-  const normalizedPkCols = normalizeColumnList(pkCols);
-  if (normalizedPkCols.length !== pkCols.length) return UNSCOPED_WRITE_FOOTPRINT;
-  const normalizedAllCols = normalizeColumnList(allCols);
-  const resolvedAst = ast ?? parseSqlAstSafely(sql);
-  if (!resolvedAst || typeof resolvedAst !== TYPE_OBJECT) return UNSCOPED_WRITE_FOOTPRINT;
-  const safeParams = Array.isArray(params) ? params : [];
-  const statementKind = String(resolvedAst.type ?? '').toUpperCase();
+function dispatchFootprintByStatementKind(resolvedAst, safeParams, normalizedPkCols, allCols) {
+  const statementKind = String(resolvedAst.type || '').toUpperCase();
   if (statementKind === AST_KIND_INSERT) {
-    return extractInsertFootprint(resolvedAst, safeParams, normalizedPkCols, normalizedAllCols);
+    return extractInsertFootprint(resolvedAst, safeParams, normalizedPkCols, allCols);
   }
   if (statementKind === AST_KIND_UPDATE) {
     return extractUpdateOrDeleteFootprint(resolvedAst, safeParams, normalizedPkCols, true);
@@ -731,11 +723,30 @@ function extractStatementWriteFootprint({
   return UNSCOPED_WRITE_FOOTPRINT;
 }
 
+function extractStatementWriteFootprint(options) {
+  if (!options || typeof options !== TYPE_OBJECT) return UNSCOPED_WRITE_FOOTPRINT;
+  const pkCols = options.pkCols;
+  if (!Array.isArray(pkCols) || pkCols.length === NUM_ZERO) return UNSCOPED_WRITE_FOOTPRINT;
+  const normalizedPkCols = normalizeColumnList(pkCols);
+  if (normalizedPkCols.length !== pkCols.length) return UNSCOPED_WRITE_FOOTPRINT;
+  const resolvedAst = options.ast || parseSqlAstSafely(options.sql);
+  if (!resolvedAst || typeof resolvedAst !== TYPE_OBJECT) return UNSCOPED_WRITE_FOOTPRINT;
+  const safeParams = Array.isArray(options.params) ? options.params : [];
+  return dispatchFootprintByStatementKind(
+    resolvedAst,
+    safeParams,
+    normalizedPkCols,
+    normalizeColumnList(options.allCols),
+  );
+}
+
 export {
+  MAX_SCOPED_FOOTPRINT_TUPLES,
   ROW_KEY_SEPARATOR,
   STATEMENT_WRITE_FOOTPRINT_KEYS,
   assertStatementWriteFootprintConformance,
   createStatementWriteFootprintRecord,
+  encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
   isStatementWriteFootprintRecord,
 };

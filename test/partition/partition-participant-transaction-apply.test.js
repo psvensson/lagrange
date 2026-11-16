@@ -787,3 +787,82 @@ test('TX1 inc3 F1: an origin naming another partition is consumed without record
       afterOwn: {origin: appliedBefore + 2, generation: 0}},
     'an origin is this partition\'s own or nothing');
   }, {generationOrigin: false}));
+
+test('participant transaction store skips repeated SQLite queries on idle DBs ' +
+  'and never caches a stale negative across inserts or rollbacks', async () => {
+  const {
+    openParticipantTransactionStore,
+    readPreparedParticipantIds,
+    isPartitionReserved,
+    isParticipantSessionPrepared,
+    insertParticipantTransactionRow,
+  } = await import('../../src/partition/partition-participant-transaction-store.js');
+
+  await onReplica(async (replica) => {
+    let participantQueries = 0;
+    const origPrepare = replica.db.prepare.bind(replica.db);
+    replica.db.prepare = (sql) => {
+      if (String(sql).includes('_participant_transactions')) {
+        participantQueries += 1;
+      }
+      return origPrepare(sql);
+    };
+
+    // First idle query outside a tx checks and caches clean negative.
+    assert.deepEqual(readPreparedParticipantIds(replica.db), []);
+    const afterFirstRead = participantQueries;
+    for (let i = 0; i < 5; i += 1) {
+      assert.deepEqual(readPreparedParticipantIds(replica.db), []);
+      assert.equal(isPartitionReserved(replica.db), false);
+      assert.equal(isParticipantSessionPrepared(replica.db, 's1'), false);
+    }
+    assert.equal(participantQueries, afterFirstRead,
+      'idle connection hits owner-held fast path with zero SQLite queries');
+
+    const tx = identityOf('weakset-tx');
+    const prepare = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
+    applyCommitted(replica, prepare);
+    assert.equal(isPartitionReserved(replica.db), true);
+    assert.deepEqual(readPreparedParticipantIds(replica.db), [prepare.participantId]);
+    assert.ok(participantQueries > afterFirstRead, 'PREPARED row activates queries');
+
+    applyCommitted(replica, commitDecision(tx, prepare));
+    assert.deepEqual(readPreparedParticipantIds(replica.db), []);
+    const afterDecisionCleared = participantQueries;
+    for (let i = 0; i < 5; i += 1) {
+      assert.deepEqual(readPreparedParticipantIds(replica.db), []);
+      assert.equal(isPartitionReserved(replica.db), false);
+    }
+    assert.equal(participantQueries, afterDecisionCleared,
+      'empty verification outside transaction restores 0-query fast path');
+  });
+
+  const db = new Database(':memory:');
+  try {
+    openParticipantTransactionStore(db);
+    let queries = 0;
+    const origPrepare = db.prepare.bind(db);
+    db.prepare = (sql) => {
+      if (String(sql).includes('_participant_transactions')) queries += 1;
+      return origPrepare(sql);
+    };
+    assert.deepEqual(readPreparedParticipantIds(db), []);
+    assert.throws(() => db.transaction(() => {
+      insertParticipantTransactionRow(db, {
+        transactionId: 'tx-rb',
+        participantId: 'tx-rb:p1',
+        commitMode: 'durable',
+        transactionEpoch: 1,
+        state: V3.STATE.PREPARED,
+      });
+      throw new Error('force-rollback');
+    })(), /force-rollback/u);
+    assert.equal(isPartitionReserved(db), false);
+    const afterClear = queries;
+    assert.deepEqual(readPreparedParticipantIds(db), []);
+    assert.equal(queries, afterClear,
+      'post-rollback outside-tx verification safely restores 0-query skip');
+  } finally {
+    db.close();
+  }
+});

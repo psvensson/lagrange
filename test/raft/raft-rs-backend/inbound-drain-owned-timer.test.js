@@ -447,3 +447,133 @@ test('a failed timer clear is typed without skipping actual native group close',
     assert.equal(owned.clock.pendingTimerCount(), baseline,
       'the old finite timeout retires with no new work');
   }));
+
+test('scheduled inbound drain bounds batches to 32 entries per turn and avoids ' +
+  '0ms spin when an attempt does not succeed with CORE_OK', async () => {
+  const {RAFT_RS_MESSAGE_TYPE} = await import(
+    '../../../src/raft/raft-rs-ingress-constants.js'
+  );
+  const REPLICAS = ['drain-a', 'drain-b', 'drain-c'];
+  const [A, B] = REPLICAS;
+  const setupBoundedDrainCluster = () => {
+    const clocks = new Map(REPLICAS.map((id) =>
+      [id, new VirtualTimeSource({startMs: 1000})]));
+    let holdB = false;
+    const heldB = [];
+    const cluster = new PartitionNodeCluster({
+      partitionId: 'bounded-inbound-drain',
+      replicaIds: REPLICAS,
+      substrateFor: (id) => ({timeSource: clocks.get(id)}),
+      sendFor: (from) => {
+        if (from !== B || !holdB) return undefined;
+        const gate = Promise.withResolvers();
+        heldB.push(gate);
+        return gate.promise;
+      },
+    });
+    assert.equal(cluster.settle(() => cluster.leaderReplicaId() === A), true);
+    let heartbeat = null;
+    for (let round = 0; round < 12 && !heartbeat; round += 1) {
+      cluster.node(A).tick();
+      const inbox = cluster.replica(B).inbox;
+      const idx = inbox.findIndex((item) =>
+        item.message.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT);
+      if (idx !== -1) heartbeat = inbox.splice(idx, 1)[0];
+    }
+    assert.ok(heartbeat, 'setup: captured heartbeat envelope');
+    for (const clock of clocks.values()) clock.advance(0);
+    return {
+      cluster,
+      clockB: clocks.get(B),
+      heartbeat,
+      heldB,
+      setHold: (next) => {
+        holdB = next;
+      },
+    };
+  };
+
+  const ctx = setupBoundedDrainCluster();
+  const peerB = ctx.cluster.raftPeerIdOf(B);
+  let bCoreSteps = 0;
+  let trapStep = false;
+  const drainTurns = [];
+  const origSetTimeout = ctx.clockB.setTimeout.bind(ctx.clockB);
+  ctx.clockB.setTimeout = (fn, ms, ...args) => origSetTimeout((...cbArgs) => {
+    const startSteps = bCoreSteps;
+    try {
+      return fn(...cbArgs);
+    } finally {
+      if (ms === 0) {
+        drainTurns.push(bCoreSteps - startSteps);
+      }
+    }
+  }, ms, ...args);
+  setCoreFaultInjector((groupId, operation, args) => {
+    if (groupId !== ctx.cluster.partitionId || operation !== 'step') return;
+    if (args[0]?.to === peerB) {
+      bCoreSteps += 1;
+    }
+    if (trapStep) {
+      throw new globalThis.WebAssembly.RuntimeError('drain-step-trap');
+    }
+  });
+  try {
+    ctx.setHold(true);
+    const firstTurn = turnChainValue(ctx.cluster.node(B).propose({seq: 'hold-1'}));
+    for (let i = 0; i < 64 && ctx.heldB.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+    assert.equal(ctx.heldB.length, 1, 'setup: B owner turn held on send');
+    for (let i = 0; i < 40; i += 1) {
+      ctx.cluster.node(B).step(ctx.heartbeat);
+    }
+    ctx.setHold(false);
+    ctx.heldB.splice(0).forEach((gate) => gate.resolve());
+    assert.equal((await firstTurn).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+
+    const beforeTurn1 = bCoreSteps;
+    ctx.clockB.advance(0);
+    assert.deepEqual(drainTurns, [32, 8],
+      '40 queued entries drain in bounded turns of 32 and 8 via successor 0ms wake');
+    assert.equal(bCoreSteps - beforeTurn1, 40,
+      'all 40 queued inbound entries completed across the two bounded turns');
+
+    // Non-CORE_OK drain must not spin a 0ms timer loop.
+    drainTurns.length = 0;
+    ctx.setHold(true);
+    const secondTurn = turnChainValue(ctx.cluster.node(B).propose({seq: 'hold-2'}));
+    for (let i = 0; i < 64 && ctx.heldB.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+    assert.equal(ctx.heldB.length, 1);
+    for (let i = 0; i < 5; i += 1) {
+      ctx.cluster.node(B).step(ctx.heartbeat);
+    }
+    ctx.setHold(false);
+    ctx.heldB.splice(0).forEach((gate) => gate.resolve());
+    assert.equal((await secondTurn).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+
+    const prevConsoleError = console.error;
+    try {
+      console.error = () => undefined;
+      trapStep = true;
+      const beforeTrap = ctx.cluster.coreEntryCount();
+      ctx.clockB.advance(0);
+      const afterTrap = ctx.cluster.coreEntryCount();
+      assert.ok(afterTrap > beforeTrap, 'trap attempt entered core once');
+      assert.deepEqual(drainTurns, [1],
+        'non-CORE_OK drain executes one turn and reschedules zero successor wakes');
+      ctx.clockB.advance(0);
+      assert.equal(ctx.cluster.coreEntryCount(), afterTrap,
+        'failed drain batch does not spin another 0ms scheduled inbound wake');
+    } finally {
+      console.error = prevConsoleError;
+      trapStep = false;
+    }
+  } finally {
+    setCoreFaultInjector(null);
+    setActualCoreEntryObserver(null);
+    ctx.cluster.dispose();
+  }
+});

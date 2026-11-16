@@ -20,6 +20,24 @@ const {
 
 const AUTH_REJECTED_EVENT = 'authenticationRejected';
 
+function isUnidentifiedPlaceholderSocket(connection, connectionId) {
+  return (
+    connection.nodeId === null &&
+    connection.connectionId === connectionId &&
+    connection.ws.readyState === undefined
+  );
+}
+
+function doesConnectionBelongToSocket(connection, connectionId, ws) {
+  if (!connection || connection.retired === true) {
+    return false;
+  }
+  if (!connection.ws || connection.ws === ws) {
+    return true;
+  }
+  return isUnidentifiedPlaceholderSocket(connection, connectionId);
+}
+
 /**
  * Inbound dispatch for the message router: parse incoming frames, record peer
  * liveness, route control frames (IDENTIFY/PING/PONG/ACK), adopt or rekey
@@ -177,241 +195,179 @@ class MessageRouterInboundDispatch {
     }
     return true;
   }
-  /**
-   * Handle identification message from remote node.
-   * @param {string} connectionId - Connection ID.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - Identification message.
-   * @private
-   */
-  handleIdentification(connectionId, ws, message) {
-    const nodeId = message?.nodeId;
-    const nodeAddress = message?.nodeAddress || message?.address;
-    const bootIncarnation = this.connectionAuthorityOwner
-      .readIncomingBootIncarnation(message);
-    if (!nodeId || !nodeAddress) {
-      this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
-        connectionId,
-        hasNodeId: !!nodeId,
-        hasNodeAddress: !!nodeAddress,
+  bindIncomingConnectionAddress(connection, ws, nodeId, normalizedAddress) {
+    connection.nodeId = nodeId;
+    connection.nodeAddress = normalizedAddress;
+    connection.configuredAddress = normalizedAddress;
+    this.rememberReconnectAddress(connection, ws, normalizedAddress);
+  }
+  rejectRefusedIncomingConnection(connectionId, connection, ws, nodeId) {
+    this.retireConnection(connection);
+    this.nodeConnections.delete(connectionId);
+    this.nodeInboundActivityAt.delete(connectionId);
+    try {
+      ws.terminate();
+    } catch (error) {
+      this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {nodeId, error: error.message});
+    }
+  }
+  applyIncomingAdoptionDecision(
+    connectionId, connection, ws, nodeId, normalizedAddress, bootIncarnation,
+  ) {
+    const adoptionDecision = this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
+      nodeId, bootIncarnation,
+    );
+    const existing = adoptionDecision.existing;
+    if (adoptionDecision.state === INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION) {
+      this.bindIncomingConnectionAddress(connection, ws, nodeId, normalizedAddress);
+      this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        nodeId, existing, bootIncarnation,
+      );
+      this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
+        connectionId, nodeId, reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+      });
+      return true;
+    }
+    if (adoptionDecision.state === INCOMING_CONNECTION_ADOPTION.ADOPT_INCOMING) {
+      this.bindIncomingConnectionAddress(connection, ws, nodeId, normalizedAddress);
+      if (existing === connection && connection.ws === ws &&
+          this.nodeConnections.get(nodeId) === connection) {
+        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+          nodeId, connection, bootIncarnation,
+        );
+      } else {
+        this.terminateReplacedIncomingConnection(nodeId, connectionId, existing);
+        this.rekeyAdoptedIncomingConnection(connectionId, nodeId, connection, bootIncarnation);
+        this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
+          connectionId, nodeId, localNodeId: this.nodeId,
+        });
+        this.sendIdentification(connection);
+        this.startPingInterval(connection);
+      }
+      return true;
+    }
+    this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
+      connectionId, nodeId, reason: MESSAGE_ROUTER_LITERAL.STRING_EXISTING_CONNECTION_PREFERRED,
+    });
+    this.rejectRefusedIncomingConnection(connectionId, connection, ws, nodeId);
+    return false;
+  }
+  handleIncomingIdentification(
+    connectionId, connection, ws, message, nodeId, nodeAddress, bootIncarnation,
+  ) {
+    if (!this.externalAdmissionEnabled && nodeId !== this.nodeId) {
+      connection.state = ConnectionState.CLOSED;
+      this.retireConnection(connection);
+      this.nodeConnections.delete(connectionId);
+      this.nodeInboundActivityAt.delete(connectionId);
+      this.logger.info(
+        MESSAGE_ROUTER_LITERAL.STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED,
+        {connectionId, remoteNodeId: nodeId, localNodeId: this.nodeId},
+      );
+      this.closeUnidentifiedSocket(connectionId, ws, false);
+      return false;
+    }
+    if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+      this.adoptBulkChannelSocket(connectionId, ws, nodeId);
+      return false;
+    }
+    if (this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
+      nodeId, bootIncarnation,
+    )) {
+      this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
+        connectionId, remoteNodeId: nodeId, localNodeId: this.nodeId, bootIncarnation,
+      });
+      this.rejectRefusedIncomingConnection(connectionId, connection, ws, nodeId);
+      return false;
+    }
+    const normalizedAddress = normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
+    return this.applyIncomingAdoptionDecision(
+      connectionId, connection, ws, nodeId, normalizedAddress, bootIncarnation,
+    );
+  }
+  handleOutboundIdentificationReply(connectionId, connection, ws, nodeId, bootIncarnation) {
+    if (this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
+      nodeId, bootIncarnation,
+    )) {
+      this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
+        connectionId, remoteNodeId: nodeId, localNodeId: this.nodeId, bootIncarnation,
       });
       try {
-        ws.close();
+        ws.terminate();
       } catch (error) {
-        this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
-          connectionId,
-          error: error.message,
-        });
-        throw error;
+        this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {nodeId, error: error.message});
       }
+      return;
+    }
+    this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+      nodeId, connection, bootIncarnation,
+    );
+  }
+  closeUnidentifiedSocket(connectionId, ws, rethrow) {
+    try {
+      ws.close();
+    } catch (error) {
+      this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
+        connectionId, error: error.message,
+      });
+      if (rethrow) throw error;
+    }
+  }
+  dispatchIdentifiedConnection(
+    connectionId, connection, ws, message, nodeId, nodeAddress, bootIncarnation,
+  ) {
+    if (connection.isIncoming) {
+      return this.handleIncomingIdentification(
+        connectionId, connection, ws, message, nodeId, nodeAddress, bootIncarnation,
+      );
+    }
+    if (connection.ws === ws) {
+      this.handleOutboundIdentificationReply(
+        connectionId, connection, ws, nodeId, bootIncarnation,
+      );
+      return false;
+    }
+    return true;
+  }
+  terminateDisownedSocket(ws) {
+    try {
+      ws?.terminate?.();
+    } catch (_err) {
+      void _err;
+    }
+  }
+  handleIdentification(connectionId, ws, message) {
+    const nodeId = message ? message.nodeId : null;
+    const nodeAddress = message ? message.nodeAddress || message.address : null;
+    const bootIncarnation = this.connectionAuthorityOwner.readIncomingBootIncarnation(message);
+    if (!nodeId || !nodeAddress) {
+      this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
+        connectionId, hasNodeId: Boolean(nodeId), hasNodeAddress: Boolean(nodeAddress),
+      });
+      this.closeUnidentifiedSocket(connectionId, ws, true);
       return;
     }
     const connection = this.nodeConnections.get(connectionId);
-    if (!this.verifyIncomingIdentifyTrust(connectionId, connection, ws, message)) {
+    if (!doesConnectionBelongToSocket(connection, connectionId, ws)) {
+      this.terminateDisownedSocket(ws);
       return;
     }
+    if (!this.verifyIncomingIdentifyTrust(connectionId, connection, ws, message)) return;
     this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_RECEIVED, {
-      connectionId,
-      remoteNodeId: nodeId,
-      remoteNodeAddress: nodeAddress,
-      localNodeId: this.nodeId,
-      existingConnectionForNode: this.nodeConnections.has(nodeId),
+      connectionId, remoteNodeId: nodeId, remoteNodeAddress: nodeAddress,
+      localNodeId: this.nodeId, existingConnectionForNode: this.nodeConnections.has(nodeId),
     });
-    if (connection && connection.isIncoming) {
-      if (!this.externalAdmissionEnabled && nodeId !== this.nodeId) {
-        connection.state = ConnectionState.CLOSED;
-        this.retireConnection(connection);
-        this.nodeConnections.delete(connectionId);
-        this.nodeInboundActivityAt.delete(connectionId);
-        this.logger.info(
-          MESSAGE_ROUTER_LITERAL.STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED,
-          {
-            connectionId,
-            remoteNodeId: nodeId,
-            localNodeId: this.nodeId,
-          },
-        );
-        try {
-          ws.close();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
-            connectionId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-      // Bulk-channel fork: AFTER the external-admission gate, BEFORE any
-      // record mutation. The socket is handed to the bulk channel registry;
-      // the primary per-peer connection is never rekeyed, evicted, or
-      // reconnect-fought, and no NODE_CONNECTED/NODE_IDENTIFIED is emitted.
-      if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
-        this.adoptBulkChannelSocket(connectionId, ws, nodeId);
-        return;
-      }
-      // Incarnation fence: a stale-incarnation (zombie) IDENTIFY must never
-      // rekey the peer slot. Refuse the adoption BEFORE the adoption decision
-      // and BEFORE any record mutation: terminate the incoming socket, keep
-      // the existing connection. UNKNOWN incarnation never fences.
-      if (
-        this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
-          nodeId,
-          bootIncarnation,
-        )
-      ) {
-        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
-          connectionId,
-          remoteNodeId: nodeId,
-          localNodeId: this.nodeId,
-          bootIncarnation,
-        });
-        this.retireConnection(connection);
-        this.nodeConnections.delete(connectionId);
-        this.nodeInboundActivityAt.delete(connectionId);
-        try {
-          ws.terminate();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-            nodeId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-      const normalizedAddress =
-        normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
-      connection.nodeId = nodeId;
-      connection.nodeAddress = normalizedAddress;
-      connection.configuredAddress = normalizedAddress;
-      this.rememberReconnectAddress(connection, ws, normalizedAddress);
-      const adoptionDecision =
-        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
-          nodeId,
-          bootIncarnation,
-        );
-      const existing = adoptionDecision.existing;
-      if (
-        adoptionDecision.state ===
-        INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION
-      ) {
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-          nodeId,
-          existing,
-          bootIncarnation,
-        );
-        this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
-          connectionId,
-          nodeId,
-          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
-        });
-      } else if (
-        adoptionDecision.state === INCOMING_CONNECTION_ADOPTION.ADOPT_INCOMING
-      ) {
-        if (
-          existing === connection &&
-          connection.ws === ws &&
-          this.nodeConnections.get(nodeId) === connection
-        ) {
-          this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-            nodeId,
-            connection,
-            bootIncarnation,
-          );
-        } else {
-          this.terminateReplacedIncomingConnection(nodeId, connectionId, existing);
-          this.rekeyAdoptedIncomingConnection(
-            connectionId,
-            nodeId,
-            connection,
-            bootIncarnation,
-          );
-          this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
-            oldKey: connectionId,
-            newKey: nodeId,
-            localNodeId: this.nodeId,
-          });
-          this.sendIdentification(connection);
-          this.startPingInterval(connection);
-        }
-      } else {
-        this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
-          connectionId,
-          nodeId,
-          reason: MESSAGE_ROUTER_LITERAL.STRING_EXISTING_CONNECTION_PREFERRED,
-        });
-        this.retireConnection(connection);
-        this.nodeConnections.delete(connectionId);
-        this.nodeInboundActivityAt.delete(connectionId);
-        try {
-          ws.terminate();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-            nodeId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-    } else if (connection && connection.ws === ws) {
-      // The acceptor's IDENTIFY reply on this side's outbound primary. A
-      // stale reply is fenced exactly like a stale inbound IDENTIFY (the
-      // socket is terminated); a live one binds the peer's incarnation to
-      // the outbound record. The reply is never answered and never re-emits
-      // NODE_CONNECTED/NODE_IDENTIFIED: CONNECTION_ESTABLISHED already
-      // announced this dial.
-      if (
-        this.connectionAuthorityOwner
-          .shouldRefuseStaleBootIncarnationIdentification(
-            nodeId,
-            bootIncarnation,
-          )
-      ) {
-        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
-          connectionId,
-          remoteNodeId: nodeId,
-          localNodeId: this.nodeId,
-          bootIncarnation,
-        });
-        try {
-          ws.terminate();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-            nodeId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-      this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-        nodeId,
-        connection,
-        bootIncarnation,
-      );
+    if (!this.dispatchIdentifiedConnection(
+      connectionId, connection, ws, message, nodeId, nodeAddress, bootIncarnation,
+    )) {
       return;
     }
     if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
-      // A bulk-channel IDENTIFY that did not match an incoming record above
-      // has nothing to adopt and is never a primary identification.
-      try {
-        ws.close();
-      } catch (error) {
-        this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
-          connectionId,
-          error: error.message,
-        });
-      }
+      this.closeUnidentifiedSocket(connectionId, ws, false);
       return;
     }
-    this.emit(TRANSPORT_EVENT.NODE_CONNECTED, {
-      nodeId,
-      nodeAddress,
-      connectionId,
-    });
-    this.emit(TRANSPORT_EVENT.NODE_IDENTIFIED, {
-      nodeId,
-      nodeAddress,
-      connectionId,
-    });
+    this.emit(TRANSPORT_EVENT.NODE_CONNECTED, {nodeId, nodeAddress, connectionId});
+    this.emit(TRANSPORT_EVENT.NODE_IDENTIFIED, {nodeId, nodeAddress, connectionId});
   }
   terminateReplacedIncomingConnection(nodeId, connectionId, existing) {
     if (existing && existing.ws && existing.connectionId !== connectionId) {

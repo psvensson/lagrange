@@ -123,15 +123,35 @@ test('query release census: post-origin open undecided rows stay clear while dig
     assert.deepEqual(malformedManifest.legacyTransactionIds, [txId]);
     assert.deepEqual(malformedManifest.recoverableTransactionIds, []);
 
-    // Post-origin PREPARING (FROZEN) undecided row is held in recoverableTransactionIds.
+    // Post-origin PREPARING / PREPARED / ACTIVE (FROZEN) undecided 2PC rows stay clear
+    // when frozen_participant_count matches pairs.length, while advancing rowGenerationDigest.
     const admittedManifest = JSON.stringify([[`${txId}:p1`, 'p1']]);
+    for (const status of ['ACTIVE', 'PREPARING', 'PREPARED']) {
+      gateway.db.prepare(
+        'UPDATE sql_transactions SET status = ?, participant_set_state = ?, ' +
+        'participant_set_text = ?, commit_mode = ?, frozen_participant_count = ? ' +
+        'WHERE transaction_id = ?',
+      ).run(status, 'FROZEN', admittedManifest, 'TWO_PHASE_COMMIT', 1, txId);
+      const inFlight = readTransactionReleaseCensus(gateway.db);
+      assert.equal(inFlight.state, 'clear', `expected post-origin ${status} undecided 2PC row to be clear`);
+      assert.deepEqual(inFlight.legacyTransactionIds, []);
+      assert.deepEqual(inFlight.recoverableTransactionIds, []);
+    }
+
+    // Mismatched frozen_participant_count on a FROZEN undecided row is held in recoverableTransactionIds.
     gateway.db.prepare(
-      'UPDATE sql_transactions SET status = ?, participant_set_state = ?, ' +
-      'participant_set_text = ?, commit_mode = ?, frozen_participant_count = ? ' +
-      'WHERE transaction_id = ?',
-    ).run('PREPARING', 'FROZEN', admittedManifest, 'TWO_PHASE_COMMIT', 1, txId);
-    const preparing = readTransactionReleaseCensus(gateway.db);
-    assert.equal(preparing.state, 'held');
-    assert.deepEqual(preparing.legacyTransactionIds, []);
-    assert.deepEqual(preparing.recoverableTransactionIds, [txId]);
+      'UPDATE sql_transactions SET status = ?, frozen_participant_count = ? WHERE transaction_id = ?',
+    ).run('PREPARING', 2, txId);
+    const mismatchedCount = readTransactionReleaseCensus(gateway.db);
+    assert.equal(mismatchedCount.state, 'held');
+    assert.deepEqual(mismatchedCount.recoverableTransactionIds, [txId]);
+
+    // Post-origin COMMITTING (FROZEN) row is held in recoverableTransactionIds.
+    gateway.db.prepare(
+      'UPDATE sql_transactions SET status = ?, frozen_participant_count = ? WHERE transaction_id = ?',
+    ).run('COMMITTING', 1, txId);
+    const committing = readTransactionReleaseCensus(gateway.db);
+    assert.equal(committing.state, 'held');
+    assert.deepEqual(committing.legacyTransactionIds, []);
+    assert.deepEqual(committing.recoverableTransactionIds, [txId]);
   });

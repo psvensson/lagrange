@@ -1007,3 +1007,92 @@ test('createOperation - reservation estimate equals the admission-time ' +
   );
   t.end();
 });
+
+test('reconcileReservations logs no-op sweeps at debug and mutations at info, ' +
+  'while checkTimeouts throttles via resolveTimeoutCheckNowMs', async (t) => {
+  initializeConfig();
+  const {coordinator, sqlEngine} = createCoordinatorWithStorage();
+  const captured = [];
+  const origQuery = sqlEngine.executeQuery;
+  let reservationReconciles = 0;
+  sqlEngine.executeQuery = async (sql, params) => {
+    if (sql.includes('FROM storage_reservations') &&
+        sql.includes('expires_at <= ?')) {
+      reservationReconciles += 1;
+    }
+    return origQuery(sql, params);
+  };
+  coordinator.logger = {
+    info: (msg, meta) => captured.push({level: 'info', msg, meta}),
+    debug: (msg, meta) => captured.push({level: 'debug', msg, meta}),
+    warn: (msg, meta) => captured.push({level: 'warn', msg, meta}),
+    error: (msg, meta) => captured.push({level: 'error', msg, meta}),
+  };
+
+  const noopResult = await coordinator.reconcileReservations();
+  t.same(noopResult, {expired: 0, orphansReleased: 0});
+  t.equal(
+    captured.filter((entry) => entry.level === 'info').length,
+    0,
+    'no-op reconciliation emits zero info logs',
+  );
+  t.equal(
+    captured.filter((entry) => entry.level === 'debug').length,
+    2,
+    'no-op start and completed logs downgrade to debug',
+  );
+
+  captured.length = 0;
+  const op = await coordinator.createOperation({
+    type: OperationType.ADD,
+    partitionId: 'p-log-test',
+    nodeId: 'target-node',
+  });
+  sqlEngine.operations.delete(op.operationId);
+  captured.length = 0;
+  const orphanResult = await coordinator.reconcileReservations();
+  t.equal(orphanResult.orphansReleased, 1);
+  t.equal(
+    captured.some(
+      (entry) => entry.level === 'debug' &&
+        entry.msg === 'Starting storage reservation reconciliation',
+    ),
+    true,
+    'reconcile start stays at debug even when work occurs',
+  );
+  t.equal(
+    captured.some(
+      (entry) => entry.level === 'info' &&
+        entry.msg === 'Storage reservation reconciliation completed',
+    ),
+    true,
+    'completed log upgrades to info when orphansReleased > 0',
+  );
+
+  await coordinator.createOperation({
+    type: OperationType.ADD,
+    partitionId: 'p-throttle',
+    nodeId: 'target-node',
+  });
+  let fakeNowMs = 100_000;
+  coordinator.workflowOwner.timeSource = {now: () => fakeNowMs};
+  coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
+  reservationReconciles = 0;
+  await coordinator.checkTimeouts();
+  t.equal(reservationReconciles, 1, 'first checkTimeouts invokes reconcile');
+
+  fakeNowMs += 1000;
+  await coordinator.checkTimeouts();
+  fakeNowMs += 28_999;
+  await coordinator.checkTimeouts();
+  t.equal(
+    reservationReconciles,
+    1,
+    'subsequent ticks < 30s throttle reconcile',
+  );
+
+  fakeNowMs += 1;
+  await coordinator.checkTimeouts();
+  t.equal(reservationReconciles, 2, 'checkTimeouts fires reconcile again at 30s');
+  t.end();
+});

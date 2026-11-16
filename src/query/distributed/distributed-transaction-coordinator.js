@@ -368,6 +368,7 @@ class DistributedTransactionCoordinator {
       participantSetFrozenAt: 0,
       decisionTrace: [],
       participants: new Map(),
+      readOnlyParticipants: new Map(),
       writeOperations: [],
       telemetry: createTransactionTelemetry(transactionId, sessionId),
       createdAt: now,
@@ -509,6 +510,7 @@ class DistributedTransactionCoordinator {
       await this.freezeParticipantSet(tx);
       return withCommitPoint(await this.runCommitProtocol(tx), tx);
     } catch (error) {
+      await this.releaseReadOnlyParticipants(tx);
       throw stampThrownCommitPoint(error, tx);
     }
   }
@@ -723,11 +725,29 @@ class DistributedTransactionCoordinator {
   }
 
   getOrderedParticipantIds(tx) {
-    return getOrderedParticipantIds.call(this, tx);
+    const ids = new Set(getOrderedParticipantIds.call(this, tx));
+    if (tx?.readOnlyParticipants instanceof Map) {
+      for (const partitionId of tx.readOnlyParticipants.keys()) {
+        ids.add(partitionId);
+      }
+    }
+    return Array.from(ids).sort();
   }
 
   getOrderedParticipantDetails(tx) {
-    return getOrderedParticipantDetails.call(this, tx);
+    const details = new Map(
+      getOrderedParticipantDetails.call(this, tx)
+        .map((entry) => [entry.partitionId, entry]),
+    );
+    if (tx?.readOnlyParticipants instanceof Map) {
+      for (const [partitionId, participant] of tx.readOnlyParticipants.entries()) {
+        if (!details.has(partitionId)) {
+          details.set(partitionId, {...participant});
+        }
+      }
+    }
+    return Array.from(details.values())
+      .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
   }
 }
 

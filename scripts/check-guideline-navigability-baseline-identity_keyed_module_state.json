@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.916Z",
+  "generatedAt": "2026-11-16T14:05:09.523Z",
   "rawViolationCount": 86,
   "violations": [
     {
@@ -284,7 +284,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 32,
+      "line": 33,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 35,
+      "line": 36,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -302,7 +302,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 38,
+      "line": 39,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -311,7 +311,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 41,
+      "line": 42,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -320,7 +320,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 44,
+      "line": 45,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -365,25 +365,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-session.js",
-      "line": 29,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-participant-transaction-session.js",
-      "line": 32,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-participant-transaction-session.js",
-      "line": 33,
+      "line": 31,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -418,8 +400,26 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 37,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-session.js",
+      "line": 38,
+      "column": 6,
+      "functionName": "<anonymous>",
+      "kind": "identity_keyed_module_state",
+      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/partition/partition-participant-transaction-staging.js",
-      "line": 68,
+      "line": 70,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 59,
+      "line": 62,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -572,7 +572,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 55,
+      "line": 38,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -581,7 +581,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 160,
+      "line": 163,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -590,7 +590,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 162,
+      "line": 165,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

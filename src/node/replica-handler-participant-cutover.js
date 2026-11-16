@@ -10,8 +10,8 @@ import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../partition/partition-participant-transaction-store.js';
-import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityOf,
-  releaseIdentityValid, releaseMemberIds} from
+import {isReleaseDrained, releaseAnswer, releaseCensusDefect,
+  releaseIdentityOf, releaseIdentityValid, releaseMemberIds} from
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';

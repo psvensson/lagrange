@@ -58,6 +58,7 @@ import {
 } from './distributed-transaction-telemetry.js';
 
 const {COMMIT, ROLLBACK} = PARTICIPANT_TRANSACTION_DECISION;
+const NO_PARTICIPANT_FAILURES = Object.freeze([]);
 const PREPARE_SENT_TRANSACTION_STATUS = Object.freeze(new Set([
   TRANSACTION_STATUS.PREPARING,
   TRANSACTION_STATUS.PREPARED,
@@ -94,6 +95,18 @@ function rolledBackCommitFailure(preparation) {
       error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE};
 }
 
+function commitSuccessResult(coordinator, tx) {
+  return {
+    success: true,
+    operation: QUERY_OPERATION.COMMIT,
+    transactionId: tx.transactionId,
+    participants: coordinator.getOrderedParticipantIds(tx),
+    transactionMode: tx.transactionMode,
+    commitMode: tx.commitMode,
+    decisionTrace: tx.decisionTrace.map((entry) => ({...entry})),
+  };
+}
+
 function endTransaction(coordinator, tx) {
   finalizeTransactionTelemetry(coordinator, tx, tx.status);
   if (coordinator.transactionsBySession.get(tx.sessionId) === tx) {
@@ -101,6 +114,48 @@ function endTransaction(coordinator, tx) {
     coordinator.endedTransactions?.record(tx);
   }
   releaseTransactionReservations(tx.transactionId);
+}
+
+async function settleInDoubtRollback(coordinator, tx) {
+  await coordinator.releaseReadOnlyParticipants(tx);
+  if (tx.participants.size === 0) {
+    endTransaction(coordinator, tx);
+    return {
+      success: true,
+      operation: QUERY_OPERATION.ROLLBACK,
+      transactionId: tx.transactionId,
+      participants: coordinator.getOrderedParticipantIds(tx),
+      failedParticipants: NO_PARTICIPANT_FAILURES,
+      participantFailures: NO_PARTICIPANT_FAILURES,
+      firstFailedParticipant: null,
+    };
+  }
+  return {
+    ...coordinator.buildDecisionInDoubtResult(tx),
+    operation: QUERY_OPERATION.ROLLBACK,
+  };
+}
+
+async function prepareEnlistedParticipantsForDecision(coordinator, tx,
+  recovering, timedOut) {
+  if (!PREPARE_SENT_TRANSACTION_STATUS.has(tx.status)) {
+    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
+  }
+  const failedParticipants = await coordinator.runPrepareStage(tx,
+    {skipBudgetEnforcement: recovering});
+  if (failedParticipants.length > 0) {
+    return {decision: ROLLBACK, stage: TRANSACTION_STATUS.PREPARING,
+      failedParticipants,
+      timedOut: coordinator.hasTimeoutFailure(failedParticipants)};
+  }
+  if (!recovering && coordinator.isTransactionBudgetExceeded(tx)) {
+    return timedOut();
+  }
+  if (tx.status !== TRANSACTION_STATUS.PREPARED) {
+    await coordinator.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
+  }
+  return {decision: COMMIT, stage: TRANSACTION_STATUS.PREPARED,
+    failedParticipants: [], timedOut: false};
 }
 
 const distributedTransactionDecisionProtocolMethods = {
@@ -159,6 +214,46 @@ const distributedTransactionDecisionProtocolMethods = {
     }
   },
 
+  async releaseReadOnlyParticipants(tx) {
+    const entries = tx?.readOnlyParticipants instanceof Map ?
+      Array.from(tx.readOnlyParticipants.values()).filter(
+        (participant) => participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
+      ) :
+      [];
+    if (entries.length === 0) return;
+    const settled = await Promise.allSettled(
+      entries.map((participant) =>
+        this.executeParticipantOperationWithRetry(
+          tx,
+          PARTICIPANT_STATUS.ROLLING_BACK,
+          participant.partitionId,
+          () => this.rollbackParticipant(
+            tx.sessionId,
+            participant.partitionId,
+            participantIdentityOf(tx, participant.partitionId),
+          ),
+          {skipBudgetEnforcement: true},
+        ),
+      ),
+    );
+    for (let index = 0; index < settled.length; index += 1) {
+      if (settled[index].status === 'fulfilled') {
+        entries[index].status = PARTICIPANT_STATUS.ROLLED_BACK;
+        entries[index].updatedAt = this.now();
+      } else {
+        this.logger?.warn?.(
+          TRANSACTION_DECISION_LOG_MSG.VOLATILE_READ_CLEANUP_FAILED,
+          {
+            transactionId: tx.transactionId,
+            partitionId: entries[index].partitionId,
+            error: settled[index].reason?.message ??
+              String(settled[index].reason),
+          },
+        );
+      }
+    }
+  },
+
   /**
    * Prepare every participant and say which decision the evidence allows:
    * COMMIT only when every participant's PREPARE resolved, ROLLBACK when any
@@ -178,24 +273,12 @@ const distributedTransactionDecisionProtocolMethods = {
     if (!recovering && this.isTransactionBudgetExceeded(tx)) {
       return timedOut();
     }
-    if (!PREPARE_SENT_TRANSACTION_STATUS.has(tx.status)) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
+    if (tx.participants.size === 0) {
+      return {decision: COMMIT, stage: tx.status, failedParticipants: [],
+        timedOut: false};
     }
-    const failedParticipants = await this.runPrepareStage(tx,
-      {skipBudgetEnforcement: recovering});
-    if (failedParticipants.length > 0) {
-      return {decision: ROLLBACK, stage: TRANSACTION_STATUS.PREPARING,
-        failedParticipants,
-        timedOut: this.hasTimeoutFailure(failedParticipants)};
-    }
-    if (!recovering && this.isTransactionBudgetExceeded(tx)) {
-      return timedOut();
-    }
-    if (tx.status !== TRANSACTION_STATUS.PREPARED) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
-    }
-    return {decision: COMMIT, stage: TRANSACTION_STATUS.PREPARED,
-      failedParticipants: [], timedOut: false};
+    return prepareEnlistedParticipantsForDecision(this, tx, recovering,
+      timedOut);
   },
 
   /**
@@ -214,6 +297,7 @@ const distributedTransactionDecisionProtocolMethods = {
       // COMMITTING proves a decision may exist, never what it contains.
       if (await adoptRecordedTransactionDecision(this, tx) !==
           TRANSACTION_DECISION_RECORDING.RECORDED) {
+        await this.releaseReadOnlyParticipants(tx);
         return this.buildDecisionInDoubtResult(tx);
       }
     }
@@ -223,6 +307,7 @@ const distributedTransactionDecisionProtocolMethods = {
     const preparation = await this.prepareForDecision(tx, {recovering});
     if (await this.recordTransactionDecision(tx, preparation.decision) !==
         TRANSACTION_DECISION_RECORDING.RECORDED) {
+      await this.releaseReadOnlyParticipants(tx);
       return this.buildDecisionInDoubtResult(tx);
     }
     return this.driveTransactionDecision(tx, preparation);
@@ -240,12 +325,15 @@ const distributedTransactionDecisionProtocolMethods = {
       return this.completeCommitDecision(tx);
     }
     const rollback = await this.completeRollbackDecision(tx);
+    const failedParticipants = preparation?.failedParticipants || [];
     return {
       success: false,
       operation: QUERY_OPERATION.COMMIT,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: preparation?.failedParticipants || [],
+      failedParticipants,
+      participantFailures: failedParticipants,
+      firstFailedParticipant: failedParticipants[0] ?? null,
       rollbackFailedParticipants: rollback.failedParticipants || [],
       stage: preparation?.stage ?? tx.status,
       ...rolledBackCommitFailure(preparation),
@@ -260,6 +348,13 @@ const distributedTransactionDecisionProtocolMethods = {
    * @return {Promise<Object>} Commit result.
    */
   async completeCommitDecision(tx) {
+    if (tx.participants.size === 0) {
+      tx[COMMIT_POINT_REACHED_FIELD] = false;
+      await this.releaseReadOnlyParticipants(tx);
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+      endTransaction(this, tx);
+      return commitSuccessResult(this, tx);
+    }
     if (tx.status !== TRANSACTION_STATUS.COMMITTING) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
     }
@@ -285,6 +380,7 @@ const distributedTransactionDecisionProtocolMethods = {
     }
     if (failedParticipants.length > 0) {
       this.reportRefusedCommitDecision(tx, failedParticipants);
+      await this.releaseReadOnlyParticipants(tx);
       return {
         ...this.buildParticipantFailureResult(
           tx,
@@ -296,17 +392,10 @@ const distributedTransactionDecisionProtocolMethods = {
         commitMode: tx.commitMode,
       };
     }
+    await this.releaseReadOnlyParticipants(tx);
     await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
     endTransaction(this, tx);
-    return {
-      success: true,
-      operation: QUERY_OPERATION.COMMIT,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      transactionMode: tx.transactionMode,
-      commitMode: tx.commitMode,
-      decisionTrace: tx.decisionTrace.map((entry) => ({...entry})),
-    };
+    return commitSuccessResult(this, tx);
   },
 
   /**
@@ -349,6 +438,20 @@ const distributedTransactionDecisionProtocolMethods = {
    * @return {Promise<Object>} Rollback result.
    */
   async runRollbackStage(tx, requestOf) {
+    if (tx.participants.size === 0) {
+      await this.releaseReadOnlyParticipants(tx);
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      endTransaction(this, tx);
+      return {
+        success: true,
+        operation: QUERY_OPERATION.ROLLBACK,
+        transactionId: tx.transactionId,
+        participants: this.getOrderedParticipantIds(tx),
+        failedParticipants: NO_PARTICIPANT_FAILURES,
+        participantFailures: NO_PARTICIPANT_FAILURES,
+        firstFailedParticipant: null,
+      };
+    }
     if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
@@ -361,6 +464,7 @@ const distributedTransactionDecisionProtocolMethods = {
         requestOf(partitionId)),
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
+    await this.releaseReadOnlyParticipants(tx);
     if (tx?.telemetry) {
       tx.telemetry.rollbackPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
     }
@@ -376,6 +480,8 @@ const distributedTransactionDecisionProtocolMethods = {
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
       failedParticipants: rollbackFailures,
+      participantFailures: rollbackFailures,
+      firstFailedParticipant: rollbackFailures[0] ?? null,
       errorCode:
         rollbackFailures.length > 0 ?
           QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
@@ -400,15 +506,13 @@ const distributedTransactionDecisionProtocolMethods = {
         tx[COMMIT_POINT_REACHED_FIELD]) &&
         await adoptRecordedTransactionDecision(this, tx) !==
           TRANSACTION_DECISION_RECORDING.RECORDED) {
-      return {...this.buildDecisionInDoubtResult(tx),
-        operation: QUERY_OPERATION.ROLLBACK};
+      return settleInDoubtRollback(this, tx);
     }
     if (!tx.decision) await this.freezeParticipantSet(tx);
     if (!tx.decision &&
         await this.recordTransactionDecision(tx, ROLLBACK) !==
           TRANSACTION_DECISION_RECORDING.RECORDED) {
-      return {...this.buildDecisionInDoubtResult(tx),
-        operation: QUERY_OPERATION.ROLLBACK};
+      return settleInDoubtRollback(this, tx);
     }
     if (tx.decision?.decision === COMMIT) {
       await this.completeCommitDecision(tx);
@@ -417,7 +521,9 @@ const distributedTransactionDecisionProtocolMethods = {
         operation: QUERY_OPERATION.ROLLBACK,
         transactionId: tx.transactionId,
         participants: this.getOrderedParticipantIds(tx),
-        failedParticipants: [],
+        failedParticipants: NO_PARTICIPANT_FAILURES,
+        participantFailures: NO_PARTICIPANT_FAILURES,
+        firstFailedParticipant: null,
         errorCode: QUERY_ERROR_CODE.TRANSACTION_COMMIT_DECIDED,
         error: QUERY_ERROR_MSG.TRANSACTION_COMMIT_DECIDED,
       };
@@ -442,7 +548,9 @@ const distributedTransactionDecisionProtocolMethods = {
       operation: QUERY_OPERATION.COMMIT,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: [],
+      failedParticipants: NO_PARTICIPANT_FAILURES,
+      participantFailures: NO_PARTICIPANT_FAILURES,
+      firstFailedParticipant: null,
       stage: tx.status,
       deferred: true,
       decisionReadState: tx.decisionReadState,

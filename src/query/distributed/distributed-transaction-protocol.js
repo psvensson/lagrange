@@ -50,6 +50,8 @@ const SCHEMA_MIGRATION_CUTOVER_SESSION_PREFIX = 'schema-migration-cutover-';
  * @private
  */
 
+const NO_PARTICIPANT_FAILURES = Object.freeze([]);
+
 function hasTimeoutFailure(failedParticipants) {
   return failedParticipants.some((entry) =>
     TIMEOUT_ERROR_MESSAGES.has(entry.error),
@@ -88,7 +90,8 @@ function getPrepareParticipantKeys(tx) {
 function getCommitParticipantKeys(tx) {
   return Array.from(tx.participants.values())
     .filter(
-      (participant) => participant.status !== PARTICIPANT_STATUS.COMMITTED,
+      (participant) =>
+        participant.status !== PARTICIPANT_STATUS.COMMITTED,
     )
     .map((participant) => participant.partitionId)
     .sort();
@@ -104,7 +107,8 @@ function getCommitParticipantKeys(tx) {
 function getRollbackParticipantKeys(tx) {
   return Array.from(tx.participants.values())
     .filter(
-      (participant) => participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
+      (participant) =>
+        participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
     )
     .map((participant) => participant.partitionId)
     .sort();
@@ -151,9 +155,9 @@ function isParticipantCommitMiss(stage, error) {
  * @private
  */
 
-function countParticipantStatuses(tx) {
+function countParticipantStatuses(owner, tx) {
   const counts = {};
-  for (const participant of tx.participants?.values?.() || []) {
+  for (const participant of owner.getOrderedParticipantDetails(tx)) {
     counts[participant.status] = (counts[participant.status] || 0) + 1;
   }
   return counts;
@@ -179,7 +183,7 @@ function reportTransactionBudgetSpent(owner, tx, stage) {
       status: tx.status,
       commitMode: tx.commitMode,
       remainingBudgetMs: owner.getRemainingTransactionBudgetMs(tx),
-      participantStatuses: countParticipantStatuses(tx),
+      participantStatuses: countParticipantStatuses(owner, tx),
     }),
     scope: {transactionId: tx.transactionId, sessionId: tx.sessionId},
   });
@@ -335,7 +339,9 @@ const distributedTransactionProtocolMethods = {
       operation: QUERY_OPERATION.COMMIT,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: [],
+      failedParticipants: NO_PARTICIPANT_FAILURES,
+      participantFailures: NO_PARTICIPANT_FAILURES,
+      firstFailedParticipant: null,
       rollbackFailedParticipants: rollbackResult.failedParticipants || [],
       stage,
       errorCode: QUERY_ERROR_CODE.TIMEOUT,
@@ -361,6 +367,8 @@ const distributedTransactionProtocolMethods = {
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
       failedParticipants,
+      participantFailures: failedParticipants,
+      firstFailedParticipant: failedParticipants[0] ?? null,
       stage,
       errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
       error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,

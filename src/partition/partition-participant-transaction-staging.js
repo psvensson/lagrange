@@ -205,6 +205,7 @@ function validateDirectDisjointWrite(service, session, run) {
 
 function canDirectValidateDisjoint(service, session, rowKeyCheck) {
   if (session.operations.length === ZERO ||
+      session.hasUnscopedWrite === true ||
       rowKeyCheck.scoped !== true ||
       rowKeyCheck.alreadyTouchedInSession !== false ||
       rowKeyCheck.rowKey === null) {

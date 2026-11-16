@@ -180,4 +180,52 @@ test('event loop gap watchdog', async (t) => {
     }
     t.equal(thrown?.message, 'boom', 'exception propagated');
   });
+
+  await t.test('healthy ticks advance snapshot and ELU baselines so healthy ' +
+    'sync work does not leak into a later gap report', async (t) => {
+    const mod = await import('../../src/diagnostics/event-loop-gap-watchdog.js');
+    const origNow = Date.now;
+    let fakeNowMs = 1_000_000;
+    let syncNowMs = 0;
+    Date.now = () => fakeNowMs;
+    mod.configureSharedSyncSectionClock(() => syncNowMs);
+    const watchdog = new mod.EventLoopGapWatchdog();
+    watchdog.lastMemorySampleAtMs = fakeNowMs;
+    const emitted = [];
+    watchdog.logConsoleOnly = (level, msg, ctx) => emitted.push({level, msg, ctx});
+    try {
+      watchdog.expectedAtMs = fakeNowMs + watchdog.intervalMs;
+      fakeNowMs += watchdog.intervalMs;
+      const eluBeforeHealthy = watchdog.lastEluSample;
+      mod.trackSyncSection('healthy_only_site', () => {
+        syncNowMs += 40;
+      });
+      watchdog.tick();
+      t.equal(watchdog.gapCount, 0, 'healthy tick does not increment gapCount');
+      t.equal(emitted.length, 0, 'healthy tick emits no gap report');
+      t.not(watchdog.lastEluSample, eluBeforeHealthy,
+        'healthy tick advances lastEluSample');
+      t.ok(watchdog.lastRegistrySnapshot.sites.healthy_only_site?.totalMs >= 40,
+        'healthy tick advances lastRegistrySnapshot');
+
+      mod.trackSyncSection('gap_only_site', () => {
+        syncNowMs += 25;
+      });
+      fakeNowMs += watchdog.intervalMs + watchdog.thresholdMs + 50;
+      watchdog.tick();
+      t.equal(watchdog.gapCount, 1, 'later exceeded tick increments gapCount');
+      const report = emitted[emitted.length - 1];
+      t.ok(report, 'gap report emitted on exceeded tick');
+      t.same(
+        report.ctx.siteDeltas.map((entry) => entry.site),
+        ['gap_only_site'],
+        'siteDeltas contains only gap-interval work, excluding earlier healthy tick',
+      );
+      t.equal(report.ctx.siteDeltas[0].totalMs, 25,
+        'gap-interval tagged totalMs reflects only gap window');
+    } finally {
+      Date.now = origNow;
+      mod.configureSharedSyncSectionClock(null);
+    }
+  });
 });

@@ -18,7 +18,9 @@ import {
 import {
   arrayEvery,
   arrayFilter,
+  arrayFind,
   arrayFindIndex,
+  arrayFlatMap,
   arrayIncludes,
   arrayJoin,
   arrayMap,
@@ -312,10 +314,12 @@ test('CL-007: Lagrange cross-host deployment sets 30s transport message timeout 
     assert.equal(runs.length, HOSTS.length);
     for (const run of runs) {
       assert.match(run.command, /LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS=30000/u);
+      assert.match(run.command, /NODE_JOINING_HTTP_TIMEOUT_MS=60000/u);
+      assert.match(run.command, /NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS=240000/u);
     }
+    assert.equal(/SEED_NODE_ADDRESS=/u.test(runs[0].command), false);
     for (const joinerRun of runs.slice(1)) {
-      assert.match(joinerRun.command, /NODE_JOINING_HTTP_TIMEOUT_MS=60000/u);
-      assert.match(joinerRun.command, /NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS=240000/u);
+      assert.match(joinerRun.command, /SEED_NODE_ADDRESS=/u);
     }
   });
 
@@ -775,4 +779,292 @@ test('Review #6: Postgres and TiDB deployers forward signal, settle in-flight ss
       return true;
     },
   );
+});
+
+test('system-table readiness checks all system partitions, not only the 6 priority ' +
+  'partitions', () => {
+  const now = Date.now();
+  const expectedNodeIds = ['n1', 'n2', 'n3'];
+  const priorityIds = [
+    'control_plane_publications-p1',
+    'replica_operations-p1',
+    'schema_operations-p1',
+    'sql_transaction_participants-p1',
+    'sql_transactions-p1',
+    'sql_write_operations-p1',
+  ];
+  const allIds = [...priorityIds, 'tables-p1'];
+  const nodes = arrayMap(expectedNodeIds, (nodeId) => ({
+    node_id: nodeId,
+    status: 'active',
+    connection_state: 'ready',
+    ready_lease_expires_at: String(now + 1000),
+    last_heartbeat: String(now - 10),
+  }));
+  const partitions = arrayMap(allIds, (partitionId) => ({
+    partition_id: partitionId,
+    table_name: 'system',
+    replica_count: '3',
+    leader_node_id: 'n1',
+  }));
+  const partialServices = [
+    ...arrayFlatMap(priorityIds, (partitionId) => arrayMap(expectedNodeIds, (nodeId) => ({
+      partition_id: partitionId,
+      node_id: nodeId,
+      status: 'active',
+      raft_role: 'follower',
+    }))),
+    {partition_id: 'tables-p1', node_id: 'n1', status: 'active', raft_role: 'follower'},
+  ];
+
+  const partial = evaluateLagrangeClusterReadiness({
+    nodes,
+    endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
+    partitions,
+    services: partialServices,
+    expectedNodeIds,
+    requiredServiceIds: ['sys-postgres-wire'],
+    requiredTables: null,
+    now,
+  });
+  assert.equal(partial.ready, false);
+  assert.deepEqual(partial.denials, ['partition_under_replicated:tables-p1']);
+
+  const fullServices = arrayFlatMap(allIds, (partitionId) => arrayMap(expectedNodeIds,
+    (nodeId) => ({
+      partition_id: partitionId,
+      node_id: nodeId,
+      status: 'active',
+      raft_role: 'follower',
+    })));
+  const complete = evaluateLagrangeClusterReadiness({
+    nodes,
+    endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
+    partitions,
+    services: fullServices,
+    expectedNodeIds,
+    requiredServiceIds: ['sys-postgres-wire'],
+    requiredTables: null,
+    now,
+  });
+  assert.equal(complete.ready, true);
+  assert.deepEqual(complete.denials, []);
+});
+
+test('pollReadiness immediately aborts without retrying when probe throws error.terminal = true',
+  async () => {
+    const {pollReadiness} = await import('../real-product-readiness.js');
+    let probeCalls = 0;
+    let sleepCalls = 0;
+    const fatal = new Error('container exited permanently');
+    fatal.terminal = true;
+
+    await assert.rejects(
+      pollReadiness({
+        component: 'lagrange-system-tables',
+        attempts: 420,
+        intervalMs: 1000,
+        sleep: async () => {
+          sleepCalls += 1;
+        },
+        probe: async () => {
+          probeCalls += 1;
+          throw fatal;
+        },
+      }),
+      (error) => error === fatal,
+    );
+    assert.equal(probeCalls, 1);
+    assert.equal(sleepCalls, 0);
+
+    let retryProbeCalls = 0;
+    await assert.rejects(
+      pollReadiness({
+        component: 'lagrange-system-tables',
+        attempts: 3,
+        intervalMs: 0,
+        sleep: async () => {},
+        probe: async () => {
+          retryProbeCalls += 1;
+          throw new Error('transient error');
+        },
+      }),
+      (error) => error.code === 'readiness_exhausted',
+    );
+    assert.equal(retryProbeCalls, 3);
+  });
+
+test('watched container exit aborts deployLagrangeCluster and awaitReady immediately without ' +
+  'polling 420 attempts', {timeout: 300000}, async () => {
+  const formationLedger = createContainerLedger();
+  const formationSleeps = [];
+  const formationSsh = createScriptedSsh([
+    ...cleanupDockerRules(formationLedger),
+    [/docker inspect --type container/u, (command) => {
+      const id = stringSplit(stringTrim(command), /\s+/u).pop();
+      const entry = formationLedger.containers.get(id);
+      if (entry && entry.host === '10.0.0.2') {
+        entry.running = false;
+        return JSON.stringify({
+          Id: entry.id,
+          Name: `/${entry.name}`,
+          Image: 'sha256:' + 'a'.repeat(64),
+          State: {Running: false, Status: 'exited', ExitCode: 1, OOMKilled: false},
+          Config: {Image: entry.image, Entrypoint: ['/nodejs/bin/node'], Cmd: ['serve']},
+          Mounts: entry.mounts,
+        });
+      }
+      return formationLedger.inspect(command);
+    }],
+    ...lagrangeHealthyRules(formationLedger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun: formationSsh.sshRun,
+      campaignId: CAMPAIGN,
+      sleep: async (ms) => {
+        formationSleeps.push(ms);
+      },
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.terminal, true);
+      assert.equal(error.containerExited, true);
+      assert.equal(error.attempt, 1);
+      assert.equal(error.diagnostic.exitedRole.host, '10.0.0.2');
+      assert.equal(error.diagnostic.exitedRole.status, 'exited');
+      assert.equal(error.diagnostic.exitedRole.exitCode, 1);
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    },
+  );
+  assert.deepEqual(formationSleeps, []);
+  assert.equal(formationLedger.containers.size, 0);
+
+  const ledger = createContainerLedger();
+  let nodeQueryCallsAfterExit = 0;
+  let crashedNode1 = false;
+  const awaitSleeps = [];
+  const {sshRun} = createScriptedSsh([
+    [/FROM nodes'/u, () => {
+      if (crashedNode1) nodeQueryCallsAfterExit += 1;
+      return arrayJoin([
+        'node_id|status|connection_state|ready_lease_expires_at|last_heartbeat',
+        ...arrayMap(
+          ['00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000002',
+            '00000000-0000-4000-8000-000000000003'],
+          (nodeId) => `${nodeId}|active|ready|${Date.now() + 3600000}|${Date.now() - 1000}`,
+        ),
+      ], '\n');
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  const deployment = await deployers.deployLagrangeCluster({
+    hosts: HOSTS,
+    clientIp: CLIENT,
+    sshRun,
+    campaignId: CAMPAIGN,
+    sleep: async (ms) => {
+      awaitSleeps.push(ms);
+    },
+    opts: {
+      lagrangeImage: LAGRANGE_IMAGE,
+      readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+    },
+  });
+  crashedNode1 = true;
+  awaitSleeps.length = 0;
+  const node1Role = arrayFind(deployment.roles, (role) => role.host === '10.0.0.1');
+  ledger.containers.get(node1Role.containerId).running = false;
+  await assert.rejects(
+    deployment.operations.awaitReady({deadlineAtMs: null}),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.terminal, true);
+      assert.equal(error.containerExited, true);
+      assert.equal(error.attempt, 1);
+      assert.equal(error.diagnostic.component, 'lagrange-system-tables');
+      assert.equal(error.diagnostic.exitedRole.host, '10.0.0.1');
+      assert.equal(error.diagnostic.exitedRole.status, 'exited');
+      return true;
+    },
+  );
+  assert.deepEqual(awaitSleeps, []);
+  assert.equal(nodeQueryCallsAfterExit, 0);
+});
+
+test('awaitReady preserves bounded formation deadline when deadlineAtMs is omitted or null ' +
+  'and honors tighter caller deadlines', {timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  let clockMs = 2_000_000;
+  let stallAwaitReady = false;
+  let stalledPolls = 0;
+  const {sshRun} = createScriptedSsh([
+    [/FROM nodes'/u, () => {
+      if (stallAwaitReady) {
+        stalledPolls += 1;
+        clockMs += 150_000;
+        return new Error('connection refused');
+      }
+      return arrayJoin([
+        'node_id|status|connection_state|ready_lease_expires_at|last_heartbeat',
+        ...arrayMap(
+          ['00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000002',
+            '00000000-0000-4000-8000-000000000003'],
+          (nodeId) => `${nodeId}|active|ready|${clockMs + 3600000}|${clockMs - 1000}`,
+        ),
+      ], '\n');
+    }],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  const deployment = await deployers.deployLagrangeCluster({
+    hosts: HOSTS,
+    clientIp: CLIENT,
+    sshRun,
+    campaignId: CAMPAIGN,
+    nowFn: () => clockMs,
+    sleep: async (ms) => {
+      clockMs += ms;
+    },
+    opts: {
+      lagrangeImage: LAGRANGE_IMAGE,
+      formationDeadlineMs: 420_000,
+      readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
+    },
+  });
+
+  stallAwaitReady = true;
+  await assert.rejects(
+    deployment.operations.awaitReady({deadlineAtMs: null}),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.deadlineExpired, true);
+      assert.equal(error.diagnostic.deadlineMs, 420_000);
+      assert.equal(error.diagnostic.attempt, 3);
+      return true;
+    },
+  );
+  assert.equal(stalledPolls, 3);
+
+  stalledPolls = 0;
+  await assert.rejects(
+    deployment.operations.awaitReady({deadlineAtMs: clockMs + 50_000}),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.deadlineExpired, true);
+      assert.equal(error.diagnostic.deadlineMs, 50_000);
+      assert.equal(error.diagnostic.attempt, 1);
+      return true;
+    },
+  );
+  assert.equal(stalledPolls, 1);
 });

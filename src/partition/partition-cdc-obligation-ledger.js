@@ -47,19 +47,22 @@ function restoreUnverifiedEntryBytes(tally) {
   tally.unverifiedTerm = null;
 }
 
+function isUnverifiedEntryCommitted(db, tally, lastEventKey) {
+  return (readCdcObligationProgress(db)?.advancedIndex ?? 0) >= tally.unverifiedIndex ||
+    readCdcObligation(db, lastEventKey)?.delivered === true;
+}
+
 function settleUnverifiedEntryBytes(db, tally, byLogIndex = null, logIndex = null) {
   if (tally.unverified.size === 0) return;
   let lastEventKey = null;
   for (const eventKey of tally.unverified.keys()) {
     lastEventKey = eventKey;
   }
-  const committed =
-    (readCdcObligationProgress(db)?.advancedIndex ?? 0) >= tally.unverifiedIndex ||
-    readCdcObligation(db, lastEventKey)?.delivered === true;
-  if (!committed) {
+  if (!isUnverifiedEntryCommitted(db, tally, lastEventKey)) {
     restoreUnverifiedEntryBytes(tally);
     return;
   }
+  if (db.inTransaction) return;
   tally.unverified.clear();
   tally.unverifiedIndex = null;
   tally.unverifiedTerm = null;

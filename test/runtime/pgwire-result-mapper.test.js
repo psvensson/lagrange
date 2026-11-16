@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {
   deriveCommandTag,
+  extractWireErrorDetail,
   resolveFailureSqlState,
 } from '../../src/runtime/pgwire-result-mapper.js';
 import {PgWireProtocolHandler} from
@@ -160,6 +161,17 @@ describe('resolveFailureSqlState', () => {
         INTERNAL_ERROR_SQLSTATE);
       assert.equal(resolveFailureSqlState(new Error('x')),
         INTERNAL_ERROR_SQLSTATE);
+      assert.equal(resolveFailureSqlState({errorCode: 'TIMEOUT'}), '25P04');
+      assert.equal(resolveFailureSqlState({
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        participantFailures: [{partitionId: 'p1', errorCode: 'TIMEOUT'}],
+      }), '25P04');
+      assert.deepEqual(extractWireErrorDetail({
+        participantFailures: [{partitionId: 'p1', errorCode: 'TIMEOUT'}],
+      }), {
+        participantFailuresOmittedCount: 0,
+        firstFailedParticipant: {partitionId: 'p1', errorCode: 'TIMEOUT'},
+      });
     });
 });
 

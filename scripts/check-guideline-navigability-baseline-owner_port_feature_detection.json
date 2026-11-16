@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T07:12:50.834Z",
+  "generatedAt": "2026-11-16T14:05:09.502Z",
   "rawViolationCount": 2013,
   "violations": [
     {
@@ -2453,8 +2453,8 @@
     },
     {
       "filePath": "src/bootstrap/phases/create-message-group-phase.js",
-      "line": 691,
-      "column": 8,
+      "line": 674,
+      "column": 10,
       "functionName": "registerCreateSelfHostedMetadata",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -2462,7 +2462,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/create-message-group-phase.js",
-      "line": 740,
+      "line": 724,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -2867,7 +2867,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 130,
+      "line": 132,
       "column": 14,
       "functionName": "readCachedClusterId",
       "kind": "owner_port_feature_detection",
@@ -2876,7 +2876,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 141,
+      "line": 143,
       "column": 19,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -2885,7 +2885,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 166,
+      "line": 168,
       "column": 17,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -2894,7 +2894,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 207,
+      "line": 209,
       "column": 17,
       "functionName": "buildBootstrapRejoinHintsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -2903,7 +2903,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 682,
+      "line": 671,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -2912,7 +2912,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 685,
+      "line": 674,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -2921,7 +2921,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 704,
+      "line": 693,
       "column": 8,
       "functionName": "start",
       "kind": "owner_port_feature_detection",
@@ -8015,7 +8015,7 @@
     },
     {
       "filePath": "src/diagnostics/event-loop-gap-watchdog.js",
-      "line": 756,
+      "line": 758,
       "column": 6,
       "functionName": "logConsoleOnly",
       "kind": "owner_port_feature_detection",
@@ -8222,7 +8222,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 237,
+      "line": 239,
       "column": 8,
       "functionName": "executeQueryWithCallback",
       "kind": "owner_port_feature_detection",
@@ -11417,7 +11417,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-protocol.js",
-      "line": 524,
+      "line": 532,
       "column": 8,
       "functionName": "resolveParticipantCommitMiss",
       "kind": "owner_port_feature_detection",
@@ -11426,7 +11426,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-protocol.js",
-      "line": 544,
+      "line": 552,
       "column": 8,
       "functionName": "emitParticipantRetryDiagnostic",
       "kind": "owner_port_feature_detection",
@@ -11435,7 +11435,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-protocol.js",
-      "line": 550,
+      "line": 558,
       "column": 8,
       "functionName": "emitParticipantRetryDiagnostic",
       "kind": "owner_port_feature_detection",
@@ -11453,16 +11453,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
-      "line": 298,
-      "column": 17,
-      "functionName": "settleTransactionReleaseRows",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
-      "line": 299,
+      "line": 384,
       "column": 6,
       "functionName": "settleTransactionReleaseRows",
       "kind": "owner_port_feature_detection",
@@ -11471,8 +11462,17 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
-      "line": 300,
-      "column": 18,
+      "line": 385,
+      "column": 6,
+      "functionName": "settleTransactionReleaseRows",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
+      "line": 386,
+      "column": 6,
       "functionName": "settleTransactionReleaseRows",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -11489,7 +11489,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 162,
+      "line": 163,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11498,7 +11498,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 165,
+      "line": 166,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11507,7 +11507,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 173,
+      "line": 174,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11516,7 +11516,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 532,
+      "line": 535,
       "column": 8,
       "functionName": "executeQueryOnService",
       "kind": "owner_port_feature_detection",
@@ -11525,7 +11525,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 559,
+      "line": 562,
       "column": 6,
       "functionName": "createCancellationPromise",
       "kind": "owner_port_feature_detection",
@@ -11534,7 +11534,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 568,
+      "line": 571,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -11543,7 +11543,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 570,
+      "line": 573,
       "column": 23,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -11696,7 +11696,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 66,
+      "line": 67,
       "column": 18,
       "functionName": "now",
       "kind": "owner_port_feature_detection",
@@ -11705,7 +11705,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 775,
+      "line": 778,
       "column": 6,
       "functionName": "notifyHedgeDeliveryObserver",
       "kind": "owner_port_feature_detection",
@@ -12128,7 +12128,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 680,
+      "line": 702,
       "column": 24,
       "functionName": "queryMatchingPkRows",
       "kind": "owner_port_feature_detection",
@@ -14333,7 +14333,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 196,
+      "line": 197,
       "column": 22,
       "functionName": "resolveTimeoutCheckNowMs",
       "kind": "owner_port_feature_detection",
@@ -14342,7 +14342,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 451,
+      "line": 422,
       "column": 8,
       "functionName": "touchOwnerLease",
       "kind": "owner_port_feature_detection",
@@ -14351,7 +14351,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 750,
+      "line": 721,
       "column": 19,
       "functionName": "isConcurrentOperationTargetUncontactable",
       "kind": "owner_port_feature_detection",
@@ -14360,7 +14360,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 959,
+      "line": 930,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationDrainReleaseEligibleReplace",
       "kind": "owner_port_feature_detection",
@@ -15224,7 +15224,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
-      "line": 139,
+      "line": 146,
       "column": 6,
       "functionName": "hasStorageReservationSupport",
       "kind": "owner_port_feature_detection",
@@ -15233,7 +15233,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
-      "line": 280,
+      "line": 287,
       "column": 8,
       "functionName": "createReservationForOperation",
       "kind": "owner_port_feature_detection",
@@ -15242,7 +15242,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
-      "line": 525,
+      "line": 532,
       "column": 6,
       "functionName": "getReservationOperationVisibilityObservation",
       "kind": "owner_port_feature_detection",

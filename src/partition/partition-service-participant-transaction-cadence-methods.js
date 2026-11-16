@@ -2,12 +2,14 @@
 // session/durable PREPARED owner performs the hold sweep; durability fitness
 // and snapshot cadence retain the same tick and lifecycle.
 import {trackStuckTransactionHeal} from '../diagnostics/raft-churn-sync-sections.js';
+import {readPartitionAppliedIndex} from './partition-committed-log.js';
 import {sweepParticipantTransactionHolds} from
   './partition-participant-transaction-session.js';
 import {getStagingReplayStats} from
   './partition-participant-transaction-staging.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  RAFT_SNAPSHOT_CADENCE_OUTCOME,
   createPartitionSnapshotCadence,
   evaluatePartitionSnapshotCadence,
 } from './partition-snapshot-cadence.js';
@@ -16,6 +18,13 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
 } = PARTITION_SERVICE_SHARED;
+
+function readOpenPartitionAppliedIndex(service) {
+  if (!service?.db?.open || typeof service.partitionId !== 'string') {
+    return null;
+  }
+  return readPartitionAppliedIndex(service);
+}
 
 const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze({
   /**
@@ -51,7 +60,13 @@ const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze(
     if (!this.snapshotCadence) {
       this.snapshotCadence = createPartitionSnapshotCadence({service: this});
     }
-    return this.snapshotCadence.tick(nowMs);
+    const appliedIndex = readOpenPartitionAppliedIndex(this);
+    return Promise.resolve(this.snapshotCadence.tick(nowMs)).then((result) => {
+      if (result?.outcome === RAFT_SNAPSHOT_CADENCE_OUTCOME.BELOW_THRESHOLD) {
+        this.lastPeriodicSnapshotCadenceAppliedIndex = appliedIndex;
+      }
+      return result;
+    });
   },
 
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
@@ -72,7 +87,11 @@ const PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS = Object.freeze(
       const nowMs = this.timeSource.now();
       this.enforcePreparedStateHoldTimeouts(nowMs);
       this.enforceLeaderDurabilityFitness?.(nowMs);
-      void this.runSnapshotCadenceTick?.(nowMs);
+      const appliedIndex = readOpenPartitionAppliedIndex(this);
+      if (appliedIndex === null ||
+          appliedIndex !== this.lastPeriodicSnapshotCadenceAppliedIndex) {
+        void this.runSnapshotCadenceTick?.(nowMs);
+      }
     }, this.preparedStateHoldSweepIntervalMs);
     this.preparedStateHoldTimer.unref?.();
   },

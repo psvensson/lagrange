@@ -38,6 +38,7 @@ import {
   arraySome,
   dateNow,
   dateToISOString,
+  jsonParse,
   numberIsFinite,
   stringIndexOf,
   stringLastIndexOf,
@@ -45,6 +46,7 @@ import {
   stringReplace,
   stringStartsWith,
   stringTrim,
+  toStringValue as stringOf,
 } from './real-product-captured-intrinsics.js';
 import {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 import {
@@ -81,6 +83,7 @@ import {
   errorText,
   execWithStatus,
   httpFromHost,
+  inspectContainerCommand,
   shellWord,
 } from './real-product-remote-shell.js';
 import {
@@ -137,9 +140,10 @@ const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
 const JOINING_HTTP_TIMEOUT_MS = 60000;
 const JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000;
+const mathMax = Math.max;
 
 function nodeIdOf(index) {
-  return `${NODE_ID_PREFIX}${stringPadStart(String(index + 1), NODE_ID_WIDTH, '0')}`;
+  return `${NODE_ID_PREFIX}${stringPadStart(stringOf(index + 1), NODE_ID_WIDTH, '0')}`;
 }
 
 function nodeEnv({nodeId, host, seedHost, connection}) {
@@ -149,13 +153,13 @@ function nodeEnv({nodeId, host, seedHost, connection}) {
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
     LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS: HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS,
+    NODE_JOINING_HTTP_TIMEOUT_MS: JOINING_HTTP_TIMEOUT_MS,
+    NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS: JOINING_LEADERSHIP_WAIT_TIMEOUT_MS,
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
   if (seedHost !== host) {
     env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
-    env.NODE_JOINING_HTTP_TIMEOUT_MS = JOINING_HTTP_TIMEOUT_MS;
-    env.NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = JOINING_LEADERSHIP_WAIT_TIMEOUT_MS;
   }
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
@@ -211,7 +215,7 @@ async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
 }
 
 function normalizeImageDigest(digest, image) {
-  const text = stringTrim(String(digest ?? ''));
+  const text = stringTrim(stringOf(digest ?? ''));
   const normalized = stringStartsWith(text, '@') ? text.slice(1) : text;
   if (!SHA256_DIGEST_PATTERN.test(normalized)) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
@@ -221,7 +225,7 @@ function normalizeImageDigest(digest, image) {
 }
 
 function imageRepositoryOf(imageRef) {
-  const text = stringTrim(String(imageRef || ''));
+  const text = stringTrim(stringOf(imageRef || ''));
   const digestAt = stringIndexOf(text, '@');
   const name = digestAt === -1 ? text : text.slice(0, digestAt);
   const tagAt = stringLastIndexOf(name, ':');
@@ -229,7 +233,7 @@ function imageRepositoryOf(imageRef) {
 }
 
 function semverTagOf(imageRef) {
-  const text = stringTrim(String(imageRef || ''));
+  const text = stringTrim(stringOf(imageRef || ''));
   const digestAt = stringIndexOf(text, '@');
   const name = digestAt === -1 ? text : text.slice(0, digestAt);
   const match = SEMVER_TAG.exec(name);
@@ -237,7 +241,7 @@ function semverTagOf(imageRef) {
 }
 
 function rawImageOf(opts) {
-  return stringTrim(String(opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT));
+  return stringTrim(stringOf(opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT));
 }
 
 function digestOptionOf(opts) {
@@ -315,11 +319,117 @@ function getFacts(ctx, host, pollContext = null) {
     signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
 }
 
+const NO_SUCH_CONTAINER_PATTERN = /\bNo such (?:container|object)\b/u;
+
+function stateFieldOrNull(record, key) {
+  return record[key] ?? null;
+}
+
+function exitedContainerObservation(role, state) {
+  const inspectState = state && typeof state === 'object' ? state : {};
+  return {
+    containerExited: true,
+    host: role.host,
+    role: role.role,
+    nodeId: stateFieldOrNull(role, 'nodeId'),
+    containerId: role.containerId,
+    status: stateFieldOrNull(inspectState, 'Status'),
+    running: inspectState.Running === true,
+    exitCode: stateFieldOrNull(inspectState, 'ExitCode'),
+    oomKilled: stateFieldOrNull(inspectState, 'OOMKilled'),
+    finishedAt: stateFieldOrNull(inspectState, 'FinishedAt'),
+    error: inspectState.Error || null,
+  };
+}
+
+function buildExitedContainerFailure({component, role, state, pollContext}) {
+  const observation = exitedContainerObservation(role, state);
+  const attempt = pollContext?.attempt ?? 1;
+  const diagnostic = {
+    component,
+    attempt,
+    attempts: attempt,
+    containerExited: true,
+    exitedRole: observation,
+    last: observation,
+    lastObservation: observation,
+  };
+  const failure = deploymentFailure(
+    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+    `${component} aborted: ${role.role} on ${role.host} (${role.containerId}) ` +
+      `exited (status=${observation.status}, exitCode=${observation.exitCode})`,
+    diagnostic,
+  );
+  failure.terminal = true;
+  failure.containerExited = true;
+  failure.attempt = attempt;
+  failure.attempts = attempt;
+  failure.lastObservation = observation;
+  return failure;
+}
+
+function parseInspectState(raw) {
+  const parsed = jsonParse(stringOf(raw ?? ''));
+  if (!parsed || typeof parsed !== 'object' ||
+      !parsed.State || typeof parsed.State !== 'object') {
+    throw new Error('docker inspect answered without container State');
+  }
+  return parsed.State;
+}
+
+async function inspectWatchedRole(ctx, component, role, pollContext) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    {signal: ctx.signal, timeoutMs: undefined};
+  const inspectOpts = callOptions.signal === undefined ? ctx.opts :
+    {...(ctx.opts || {}), signal: callOptions.signal};
+  let raw;
+  try {
+    raw = await ctx.sshRun(
+      role.host,
+      inspectOpts,
+      inspectContainerCommand(role.containerId),
+      callOptions.timeoutMs,
+    );
+  } catch (error) {
+    if (NO_SUCH_CONTAINER_PATTERN.test(errorText(error))) {
+      throw buildExitedContainerFailure({
+        component,
+        role,
+        state: {Running: false, Status: 'absent', ExitCode: null, Error: errorText(error)},
+        pollContext,
+      });
+    }
+    throw error;
+  }
+  const state = parseInspectState(raw);
+  if (state.Running !== true) {
+    throw buildExitedContainerFailure({component, role, state, pollContext});
+  }
+}
+
+async function assertWatchedRolesRunning(ctx, component, pollContext) {
+  if (!arrayIsArray(ctx.watchedRoles) || ctx.watchedRoles.length === 0) return;
+  for (const role of ctx.watchedRoles) {
+    await inspectWatchedRole(ctx, component, role, pollContext);
+  }
+}
+
 function readinessOf(ctx, component, probe, stablePolls = 1) {
-  return pollReadiness({component, probe, attempts: ctx.budget.attempts,
-    intervalMs: ctx.budget.intervalMs, sleep: ctx.sleep, now: ctx.now,
-    stablePolls, deadlineAtMs: ctx.deadlineAtMs ?? null,
-    deadlineMs: ctx.deadlineMs ?? null, signal: ctx.signal ?? null});
+  return pollReadiness({
+    component,
+    probe: async (pollContext) => {
+      await assertWatchedRolesRunning(ctx, component, pollContext);
+      return probe(pollContext);
+    },
+    attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    stablePolls,
+    deadlineAtMs: ctx.deadlineAtMs ?? null,
+    deadlineMs: ctx.deadlineMs ?? null,
+    signal: ctx.signal ?? null,
+  });
 }
 
 function nodeReady(ctx, host) {
@@ -339,8 +449,8 @@ function membershipReady(ctx, seedHost, nodeCount) {
 }
 
 function healthyListener(services, roles) {
-  const replicas = arrayFlatMap(Array.isArray(services) ? services : [],
-    (service) => (Array.isArray(service?.replicas) ? service.replicas : []));
+  const replicas = arrayFlatMap(arrayIsArray(services) ? services : [],
+    (service) => (arrayIsArray(service?.replicas) ? service.replicas : []));
   const replica = arrayFind(replicas, (one) => one?.serviceId === PG_WIRE_SERVICE_ID &&
     one?.healthStatus === HEALTHY && Number.isInteger(Number(one?.port)) && one?.port > 0);
   const node = replica && arrayFind(roles, (role) => role.nodeId === replica.nodeId);
@@ -561,9 +671,9 @@ function bootLogField(parsed, key) {
 // state of a node whose log does not carry it.
 async function bootProvenance(ctx, product, facts = null) {
   try {
-    const line = String(await ctx.sshRun(product.host, ctx.opts,
+    const line = stringOf(await ctx.sshRun(product.host, ctx.opts,
       `docker logs ${shellWord(product.containerId)} 2>&1 | grep -m 1 ${BOOT_PROVENANCE_MARKER}`));
-    const parsed = JSON.parse(line.slice(stringIndexOf(line, '{')));
+    const parsed = jsonParse(line.slice(stringIndexOf(line, '{')));
     const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
     const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
     return {version: bootLogField(parsed, 'version'),
@@ -610,6 +720,38 @@ function resolveFormationDeadlineMs(opts) {
     return opts.readiness.formationDeadlineMs;
   }
   return DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS;
+}
+
+function resolveAwaitReadyWindow(postFormationCtx, {
+  signal: readySignal,
+  deadlineAtMs: readyDeadlineAtMs,
+  deadlineMs: readyDeadlineMs,
+} = {}) {
+  const signal = readySignal !== undefined ? readySignal : postFormationCtx.signal;
+  const clock = typeof postFormationCtx.now === 'function' ? postFormationCtx.now : dateNow;
+  const requestedDeadlineMs = numberIsFinite(readyDeadlineMs) ?
+    readyDeadlineMs : postFormationCtx.formationDeadlineMs;
+  if (numberIsFinite(readyDeadlineAtMs)) {
+    const remainingMs = mathMax(0, readyDeadlineAtMs - clock());
+    if (numberIsFinite(requestedDeadlineMs) && requestedDeadlineMs < remainingMs) {
+      return {
+        signal,
+        deadlineAtMs: clock() + requestedDeadlineMs,
+        deadlineMs: requestedDeadlineMs,
+      };
+    }
+    return {
+      signal,
+      deadlineAtMs: readyDeadlineAtMs,
+      deadlineMs: remainingMs,
+    };
+  }
+  const deadlineMs = numberIsFinite(requestedDeadlineMs) ? requestedDeadlineMs : null;
+  return {
+    signal,
+    deadlineAtMs: deadlineMs !== null ? clock() + deadlineMs : null,
+    deadlineMs,
+  };
 }
 
 /**
@@ -738,6 +880,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     }
     throw reason;
   }
+  ctx.watchedRoles = [...roles];
   const formationDeadlineAtMs = numberIsFinite(ctx.formationDeadlineMs) ?
     ctx.now() + ctx.formationDeadlineMs : null;
   ctx.deadlineAtMs = formationDeadlineAtMs;
@@ -781,7 +924,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     host: listener.host, port: listener.port, containerId: binding.containerId,
     binding};
   const observedAt = dateToISOString(new DateConstructor(ctx.now()));
-  const postFormationCtx = {...ctx, deadlineAtMs: null, deadlineMs: null};
+  const postFormationCtx = {...ctx, deadlineAtMs: null, deadlineMs: null, watchedRoles: nodeRoles};
   return {
     targetId: 'lagrange',
     topology: lagrangeTopology(hosts),
@@ -805,11 +948,17 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
           dateToISOString(new DateConstructor(ctx.now()))), routable};
       },
       // The arm's readiness contract again (after a product restart).
-      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs} = {}) => {
+      awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
+        deadlineMs: readyDeadlineMs} = {}) => {
+        const window = resolveAwaitReadyWindow(postFormationCtx, {
+          signal: readySignal,
+          deadlineAtMs: readyDeadlineAtMs,
+          deadlineMs: readyDeadlineMs,
+        });
         const readyCtx = {
           ...postFormationCtx,
-          signal: readySignal !== undefined ? readySignal : postFormationCtx.signal,
-          deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : null,
+          ...window,
+          watchedRoles: nodeRoles,
         };
         try {
           const systemReady = await clusterReady(

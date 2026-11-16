@@ -5,34 +5,22 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {QueryExecutor} from '../../src/query/query-executor.js';
+import {extractWireErrorDetail, resolveFailureSqlState} from
+  '../../src/runtime/pgwire-result-mapper.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-  QUERY_ERROR_CODE,
-} from '../../src/query/query-constants.js';
-import {
-  TABLES,
-} from '../../src/constants/index.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-} from '../../src/control-plane/control-plane-readiness-service.js';
-import {
-} from '../../src/partition/partition-constants.js';
-import {
-} from '../../src/control-plane/timeout-budget.js';
-import {
-  PRESSURE_WORK_CLASS,
-} from '../../src/control-plane/pressure-governor.js';
-import {
-} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
-import {
-} from '../../src/control-plane/owner-contract-outcome.js';
-import {
-} from './routing-repair-test-helpers.js';
+import {PRESSURE_WORK_CLASS} from '../../src/control-plane/pressure-governor.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -371,7 +359,7 @@ async (t) => {
     },
     async executePlan() {
       const error = new Error('Message timeout');
-      error.code = 'QUERY_TIMEOUT';
+      error.code = QUERY_ERROR_CODE.TIMEOUT;
       error.retryAfterMs = 25;
       throw error;
     },
@@ -454,7 +442,7 @@ async (t) => {
   );
   t.equal(
     result.errorCode,
-    'QUERY_TIMEOUT',
+    QUERY_ERROR_CODE.TIMEOUT,
     'canonical deferred result should preserve the original retryable error code',
   );
   t.equal(
@@ -639,7 +627,7 @@ test('SQLQueryEngine preserves lower-path retryable failures for critical ' +
   'control-plane mutations while non-critical publication recovery still ' +
   'defers', async (t) => {
   const RETRYABLE_ERROR_MESSAGE = 'Message timeout';
-  const RETRYABLE_ERROR_CODE = 'QUERY_TIMEOUT';
+  const RETRYABLE_ERROR_CODE = QUERY_ERROR_CODE.TIMEOUT;
   const EXPECTED_REASON_CODE = 'control_plane_publication_pending';
   const EXPECTED_RETRY_AFTER_MS = 175;
   const ROUTING_READINESS_DIMENSION =
@@ -1416,4 +1404,93 @@ async (t) => {
       `${call.tableName} authoritative read must preserve CRITICAL workClass`,
     );
   }
+});
+
+test('volatile readOnly fast-path and zero-write commit safety', async (t) => {
+  const ops = [];
+  const gateway = createTransactionPersistenceGateway();
+  t.after(() => gateway.db.close());
+  const cache = createMockSystemCache(
+    [{table_name: 'warehouse', primaryKey: 'id'}, {table_name: 'district', primaryKey: 'id'}],
+    [{table_name: 'warehouse', partition_id: 'w-p1'}, {table_name: 'district', partition_id: 'd-p1'}]
+      .map((p) => ({...p, partition_key_start: null, partition_key_end: null})));
+  const ack = {acknowledged: true};
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: cache, controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false,
+    messageRouter: {async deliver(address, msg) {
+      const pid = address.split('/').at(-1);
+      if (msg.type !== 'TRANSACTION') return buildDeliveryEnvelope(ack, {success: true, rows: [{id: '1'}]});
+      ops.push({partitionId: pid, op: msg.operation, hasDigest: Boolean(msg.decisionDigest)});
+      return buildDeliveryEnvelope(ack, answerParticipantTransactionRequest(msg, pid));
+    }},
+  });
+  await engine.executeQuery('BEGIN', [], {sessionId: 'ro-s'});
+  t.equal((await engine.executeQuery('SELECT id FROM warehouse', [], {sessionId: 'ro-s'})).success, true);
+  t.same(engine.transactionCoordinator.getTransaction('ro-s').participants, ['w-p1']);
+  t.equal((await engine.executeQuery('COMMIT', [], {sessionId: 'ro-s'})).success, true);
+  t.equal(ops.filter((e) => e.op === 'PREPARE').length, 0);
+  t.same(ops.filter((e) => e.op === 'ROLLBACK'), [{partitionId: 'w-p1', op: 'ROLLBACK', hasDigest: false}]);
+  t.equal(gateway.rows('sql_transaction_participants').length, 0);
+  ops.length = 0;
+  await engine.executeQuery('BEGIN', [], {sessionId: 'mix-s'});
+  await engine.executeQuery('SELECT id FROM warehouse', [], {sessionId: 'mix-s'});
+  await engine.transactionCoordinator.executeWriteStatement('mix-s',
+    {operationId: 'op-d1', sql: 'UPDATE district SET v = 1 WHERE id = 1', partitionIds: ['d-p1']},
+    async () => ({success: true, affectedRows: 1}));
+  t.equal((await engine.executeQuery('COMMIT', [], {sessionId: 'mix-s'})).success, true);
+  t.same(ops.filter((e) => e.op === 'PREPARE').map((e) => e.partitionId), ['d-p1']);
+  t.same(ops.filter((e) => e.op === 'ROLLBACK'), [{partitionId: 'w-p1', op: 'ROLLBACK', hasDigest: false}]);
+  ops.length = 0;
+  await engine.executeQuery('BEGIN', [], {sessionId: 'promo-s'});
+  await engine.executeQuery('SELECT id FROM warehouse', [], {sessionId: 'promo-s'});
+  await engine.transactionCoordinator.executeWriteStatement('promo-s',
+    {operationId: 'op-w1', sql: 'UPDATE warehouse SET v = 1 WHERE id = 1', partitionIds: ['w-p1']},
+    async () => ({success: true, affectedRows: 1}));
+  t.equal((await engine.executeQuery('COMMIT', [], {sessionId: 'promo-s'})).success, true);
+  t.equal(ops.filter((e) => e.partitionId === 'w-p1' && e.op === 'BEGIN').length, 1);
+  t.same(ops.filter((e) => e.op === 'PREPARE').map((e) => e.partitionId), ['w-p1']);
+  ops.length = 0;
+  await engine.executeQuery('BEGIN', [], {sessionId: 'fu-s'});
+  t.equal((await engine.executeQuery('SELECT id FROM warehouse FOR UPDATE', [], {sessionId: 'fu-s'})).success, true);
+  t.equal((await engine.executeQuery('COMMIT', [], {sessionId: 'fu-s'})).success, true);
+  t.same(ops.filter((e) => e.op === 'PREPARE').map((e) => e.partitionId), ['w-p1']);
+  engine.transactionCoordinator.persistTransactionDecision = async () => {
+    throw new Error('decision_write_unavailable');
+  };
+  await engine.executeQuery('BEGIN', [], {sessionId: 'ro-fail'});
+  await engine.executeQuery('SELECT id FROM warehouse', [], {sessionId: 'ro-fail'});
+  const failedRo = await engine.executeQuery('COMMIT', [], {sessionId: 'ro-fail'});
+  t.equal(failedRo.success, false);
+  t.equal(failedRo.commitPointReached, false);
+  t.equal((await engine.executeQuery('ROLLBACK', [], {sessionId: 'ro-fail'})).success, true);
+  t.equal(engine.hasActiveTransaction('ro-fail'), false);
+  await engine.shutdown();
+});
+
+test('deadline-spent attempt 1 returns TIMEOUT and pgwire maps failures', async (t) => {
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter: {async deliver() {
+      throw new Error('unexpected deliver');
+    }},
+    systemCache: createMockSystemCache(['users'], [{table_name: 'users',
+      partition_id: 'u-p1', partition_key_start: null, partition_key_end: null}]),
+  });
+  const timedOut = await executor.executeOnPartition('u-p1', 'SELECT id FROM users',
+    [], true, false, false, {timeoutBudget: {deadlineMs: 0}});
+  t.equal(timedOut.success, false);
+  t.equal(timedOut.errorCode, QUERY_ERROR_CODE.TIMEOUT);
+  t.equal(resolveFailureSqlState(timedOut), '25P04');
+  t.equal(resolveFailureSqlState({errorCode: QUERY_ERROR_CODE.TIMEOUT}), '25P04');
+  t.equal(resolveFailureSqlState({errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+    firstFailedParticipant: {errorCode: QUERY_ERROR_CODE.TIMEOUT}}), '25P04');
+  const conflictEntry = {partitionId: 'p1',
+    failureCode: 'participant_transaction_prepare_refused', refusalCause: 'conflict'};
+  const conflict = {errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+    failedParticipants: [conflictEntry], participantFailures: [conflictEntry]};
+  t.equal(resolveFailureSqlState(conflict), '40001');
+  t.same(extractWireErrorDetail(conflict), {
+    participantFailuresOmittedCount: 0, firstFailedParticipant: conflictEntry});
 });

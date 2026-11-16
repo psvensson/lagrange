@@ -88,7 +88,7 @@ documentClass: generated
 - [operation-workflow-recovery-reconcile-shared.js](operation-workflow-recovery-reconcile-shared.js) - No leading comment; first export: OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED. (importers: hub)
 - [operation-workflow-recovery-reconcile.js](operation-workflow-recovery-reconcile.js) - Census every operation still owing a membership obligation and recover the exact learner outcome through the... (importers: one)
 - [operation-workflow-recovery-status-reconcile.js](operation-workflow-recovery-status-reconcile.js) - An operation's step timeout or the enclosing rebalance budget is spent and the operation is failed for it: one... (importers: one)
-- [operation-workflow-recovery-timeout.js](operation-workflow-recovery-timeout.js) - Level-triggered operation-liveness reconciler - the holistic safety net for the whole ORPHANED-OPERATION class, not... (importers: few)
+- [operation-workflow-recovery-timeout.js](operation-workflow-recovery-timeout.js) - Periodic reservation reconciliation (Req 4.4), throttled via the owner's timeout-check clock so active sweeps do not... (importers: few)
 - [operation-workflow-remove-safety-entity-tier.js](operation-workflow-remove-safety-entity-tier.js) - Remove safety for replicated entities that are not partitions. (importers: few)
 - [operation-workflow-remove-safety-evaluator.js](operation-workflow-remove-safety-evaluator.js) - Project the distinct-node spread floor for one serialized removal. (importers: few)
 - [operation-workflow-remove-safety-membership.js](operation-workflow-remove-safety-membership.js) - Check whether a node is ready in the committed node floor when provided. (importers: few)

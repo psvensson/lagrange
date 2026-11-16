@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.917Z",
+  "generatedAt": "2026-11-16T14:05:09.536Z",
   "rawViolationCount": 57,
   "violations": [
     {
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
-      "line": 60,
+      "line": 62,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -167,7 +167,7 @@
     },
     {
       "filePath": "src/partition/partition-service-assembly.js",
-      "line": 31,
+      "line": 33,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -257,7 +257,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 46,
+      "line": 60,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 59,
+      "line": 101,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 24,
+      "line": 26,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -320,7 +320,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 95,
+      "line": 141,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -383,7 +383,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 135,
+      "line": 136,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -437,7 +437,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 49,
+      "line": 56,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 71,
+      "line": 77,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

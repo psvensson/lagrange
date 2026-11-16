@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.926Z",
-  "rawViolationCount": 597,
+  "generatedAt": "2026-11-16T14:05:09.603Z",
+  "rawViolationCount": 596,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 145,
+      "line": 146,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 147,
+      "line": 148,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -464,7 +464,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 149,
+      "line": 150,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 170,
+      "line": 171,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 176,
+      "line": 177,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 195,
+      "line": 196,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 206,
+      "line": 207,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -752,7 +752,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/create-message-group-phase.js",
-      "line": 740,
+      "line": 724,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "typeof_dual_paths",
@@ -788,7 +788,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/query-system-state-phase.js",
-      "line": 344,
+      "line": 346,
       "column": 6,
       "functionName": "resolveSnapshotBackfillPlan",
       "kind": "typeof_dual_paths",
@@ -797,7 +797,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/query-system-state-phase.js",
-      "line": 590,
+      "line": 592,
       "column": 10,
       "functionName": "registerNodeInCluster",
       "kind": "typeof_dual_paths",
@@ -806,7 +806,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 283,
+      "line": 261,
       "column": 10,
       "functionName": "createBootstrapPartitionReplica",
       "kind": "typeof_dual_paths",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 628,
+      "line": 607,
       "column": 6,
       "functionName": "canBypassLocalPriorityPartitionLeadership",
       "kind": "typeof_dual_paths",
@@ -824,7 +824,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 649,
+      "line": 628,
       "column": 18,
       "functionName": "canBypassDirectBootstrapPriorityPartitionLeadership",
       "kind": "typeof_dual_paths",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 657,
+      "line": 636,
       "column": 6,
       "functionName": "canBypassDirectBootstrapPriorityPartitionLeadership",
       "kind": "typeof_dual_paths",
@@ -842,7 +842,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 670,
+      "line": 649,
       "column": 6,
       "functionName": "canBypassCanonicalPartitionLeadership",
       "kind": "typeof_dual_paths",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-partitions-phase.js",
-      "line": 672,
+      "line": 651,
       "column": 8,
       "functionName": "canBypassCanonicalPartitionLeadership",
       "kind": "typeof_dual_paths",
@@ -896,7 +896,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 130,
+      "line": 132,
       "column": 14,
       "functionName": "readCachedClusterId",
       "kind": "typeof_dual_paths",
@@ -905,7 +905,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 141,
+      "line": 143,
       "column": 19,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -914,7 +914,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 166,
+      "line": 168,
       "column": 17,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -923,7 +923,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 207,
+      "line": 209,
       "column": 17,
       "functionName": "buildBootstrapRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -932,7 +932,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 682,
+      "line": 671,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -941,7 +941,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 685,
+      "line": 674,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1472,7 +1472,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-authority.js",
-      "line": 76,
+      "line": 79,
       "column": 4,
       "functionName": "captureAuthoritativeCacheSweepSnapshot",
       "kind": "typeof_dual_paths",
@@ -1481,7 +1481,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-authority.js",
-      "line": 80,
+      "line": 83,
       "column": 9,
       "functionName": "captureAuthoritativeCacheSweepSnapshot",
       "kind": "typeof_dual_paths",
@@ -1490,7 +1490,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-authority.js",
-      "line": 147,
+      "line": 293,
       "column": 4,
       "functionName": "applyAuthoritativeCacheRepairRow",
       "kind": "typeof_dual_paths",
@@ -1499,7 +1499,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-authority.js",
-      "line": 248,
+      "line": 404,
       "column": 4,
       "functionName": "captureCacheRecordBeforeAbsenceRepair",
       "kind": "typeof_dual_paths",
@@ -2012,7 +2012,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 56,
+      "line": 57,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2021,7 +2021,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 61,
+      "line": 62,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2030,7 +2030,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 65,
+      "line": 66,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2039,7 +2039,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 67,
+      "line": 68,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2048,7 +2048,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 69,
+      "line": 70,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2057,7 +2057,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 71,
+      "line": 72,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2066,7 +2066,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 73,
+      "line": 74,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2327,7 +2327,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 608,
+      "line": 609,
       "column": 6,
       "functionName": "startOwnerMembershipDriver",
       "kind": "typeof_dual_paths",
@@ -2336,7 +2336,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 612,
+      "line": 613,
       "column": 6,
       "functionName": "startOwnerMembershipDriver",
       "kind": "typeof_dual_paths",
@@ -2345,7 +2345,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 626,
+      "line": 627,
       "column": 8,
       "functionName": "stopOwnerMembershipDriver",
       "kind": "typeof_dual_paths",
@@ -2732,7 +2732,7 @@
     },
     {
       "filePath": "src/control-plane/timeout-budget.js",
-      "line": 31,
+      "line": 32,
       "column": 9,
       "functionName": "resolveNow",
       "kind": "typeof_dual_paths",
@@ -2993,7 +2993,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-row-owner.js",
-      "line": 343,
+      "line": 345,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3263,7 +3263,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 268,
+      "line": 277,
       "column": 20,
       "functionName": "resolveReplicaCreateGroupId",
       "kind": "typeof_dual_paths",
@@ -3533,7 +3533,7 @@
     },
     {
       "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 167,
+      "line": 174,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3650,7 +3650,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 569,
+      "line": 573,
       "column": 23,
       "functionName": "<anonymous>",
       "kind": "typeof_dual_paths",
@@ -3677,7 +3677,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 66,
+      "line": 67,
       "column": 18,
       "functionName": "now",
       "kind": "typeof_dual_paths",
@@ -3776,7 +3776,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 73,
+      "line": 62,
       "column": 21,
       "functionName": "resolvePartitionDb",
       "kind": "typeof_dual_paths",
@@ -3785,7 +3785,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 219,
+      "line": 232,
       "column": 2,
       "functionName": "rollbackConflictingSession",
       "kind": "typeof_dual_paths",
@@ -3794,7 +3794,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 565,
+      "line": 580,
       "column": 8,
       "functionName": "provisionInitialTablePartition",
       "kind": "typeof_dual_paths",
@@ -4000,17 +4000,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/raft/raft-rs-application-transaction-owner.js",
-      "line": 84,
-      "column": 4,
-      "functionName": "applyCommittedEntryTransaction",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2409,
+      "line": 2404,
       "column": 28,
       "functionName": "setActualCoreEntryObserver",
       "kind": "typeof_dual_paths",
@@ -4019,7 +4010,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2413,
+      "line": 2408,
       "column": 31,
       "functionName": "setNativeInboundStageObserver",
       "kind": "typeof_dual_paths",
@@ -4028,7 +4019,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 2422,
+      "line": 2417,
       "column": 22,
       "functionName": "setCoreFaultInjector",
       "kind": "typeof_dual_paths",
@@ -4316,7 +4307,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 451,
+      "line": 422,
       "column": 8,
       "functionName": "touchOwnerLease",
       "kind": "typeof_dual_paths",
@@ -5243,7 +5234,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 456,
+      "line": 459,
       "column": 30,
       "functionName": "restoreRecoveredParticipantRow",
       "kind": "typeof_dual_paths",
@@ -5252,7 +5243,7 @@
     },
     {
       "filePath": "src/workflow/durable-workflow-coordinator.js",
-      "line": 611,
+      "line": 614,
       "column": 27,
       "functionName": "restoreRecoveredWorkflowRow",
       "kind": "typeof_dual_paths",

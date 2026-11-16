@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.931Z",
-  "rawViolationCount": 2838,
+  "generatedAt": "2026-11-16T14:05:09.615Z",
+  "rawViolationCount": 2837,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -1346,7 +1346,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-replica-registration-methods.js",
-      "line": 61,
+      "line": 63,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -1355,7 +1355,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-replica-registration-methods.js",
-      "line": 204,
+      "line": 207,
       "column": 16,
       "functionName": "attachCdcPropagation",
       "kind": "legacy_term_identifiers",
@@ -1652,7 +1652,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 303,
+      "line": 304,
       "column": 8,
       "functionName": "constructor",
       "kind": "legacy_term_identifiers",
@@ -3128,7 +3128,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 635,
+      "line": 632,
       "column": 23,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -3137,7 +3137,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 636,
+      "line": 633,
       "column": 9,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -3146,7 +3146,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 637,
+      "line": 634,
       "column": 9,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -3686,16 +3686,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 25,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 36,
+      "line": 26,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -3713,34 +3704,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 261,
-      "column": 23,
-      "functionName": "repairCacheVisibilityHole",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 318,
-      "column": 11,
-      "functionName": "repairCacheVisibilityHole",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 323,
-      "column": 17,
-      "functionName": "repairCacheVisibilityHole",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 366,
+      "line": 38,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -3749,7 +3713,43 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 368,
+      "line": 287,
+      "column": 23,
+      "functionName": "repairCacheVisibilityHole",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 344,
+      "column": 11,
+      "functionName": "repairCacheVisibilityHole",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 349,
+      "column": 17,
+      "functionName": "repairCacheVisibilityHole",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 392,
+      "column": 2,
+      "functionName": "<anonymous>",
+      "kind": "legacy_term_identifiers",
+      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "line": 394,
       "column": 13,
       "functionName": "resolveAuthoritativeFallbackPhase",
       "kind": "legacy_term_identifiers",
@@ -3758,7 +3758,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 371,
+      "line": 397,
       "column": 13,
       "functionName": "resolveAuthoritativeFallbackPhase",
       "kind": "legacy_term_identifiers",
@@ -3767,7 +3767,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 373,
+      "line": 399,
       "column": 11,
       "functionName": "resolveAuthoritativeFallbackPhase",
       "kind": "legacy_term_identifiers",
@@ -9239,7 +9239,7 @@
     },
     {
       "filePath": "src/control-plane/timeout-budget.js",
-      "line": 34,
+      "line": 35,
       "column": 41,
       "functionName": "normalizePositiveInteger",
       "kind": "legacy_term_identifiers",
@@ -9248,7 +9248,7 @@
     },
     {
       "filePath": "src/control-plane/timeout-budget.js",
-      "line": 37,
+      "line": 38,
       "column": 4,
       "functionName": "normalizePositiveInteger",
       "kind": "legacy_term_identifiers",
@@ -14243,7 +14243,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 20,
+      "line": 24,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -14252,7 +14252,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 27,
+      "line": 31,
       "column": 57,
       "functionName": "censusResult",
       "kind": "legacy_term_identifiers",
@@ -14261,7 +14261,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 32,
+      "line": 36,
       "column": 4,
       "functionName": "censusResult",
       "kind": "legacy_term_identifiers",
@@ -14270,7 +14270,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 32,
+      "line": 36,
       "column": 40,
       "functionName": "censusResult",
       "kind": "legacy_term_identifiers",
@@ -14279,7 +14279,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 53,
+      "line": 98,
       "column": 10,
       "functionName": "readTransactionReleaseCensus",
       "kind": "legacy_term_identifiers",
@@ -14288,8 +14288,8 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 62,
-      "column": 46,
+      "line": 105,
+      "column": 8,
       "functionName": "readTransactionReleaseCensus",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -14297,8 +14297,8 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-census.js",
-      "line": 65,
-      "column": 53,
+      "line": 113,
+      "column": 54,
       "functionName": "readTransactionReleaseCensus",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -17600,7 +17600,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-failure.js",
-      "line": 236,
+      "line": 239,
       "column": 57,
       "functionName": "resolveRedirectParticipantNodeId",
       "kind": "legacy_term_identifiers",
@@ -17609,7 +17609,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-failure.js",
-      "line": 239,
+      "line": 242,
       "column": 54,
       "functionName": "resolveRedirectParticipantNodeId",
       "kind": "legacy_term_identifiers",
@@ -17618,7 +17618,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-failure.js",
-      "line": 240,
+      "line": 243,
       "column": 4,
       "functionName": "resolveRedirectParticipantNodeId",
       "kind": "legacy_term_identifiers",
@@ -17627,7 +17627,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-routing-candidates.js",
-      "line": 140,
+      "line": 143,
       "column": 13,
       "functionName": "addService",
       "kind": "legacy_term_identifiers",
@@ -17951,7 +17951,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 342,
+      "line": 356,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -17960,7 +17960,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 345,
+      "line": 359,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -17969,7 +17969,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 347,
+      "line": 361,
       "column": 19,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18086,7 +18086,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 467,
+      "line": 504,
       "column": 8,
       "functionName": "tryExecuteAuthoritativeSystemTableSelect",
       "kind": "legacy_term_identifiers",
@@ -18230,7 +18230,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-durable-store.js",
-      "line": 754,
+      "line": 733,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18239,7 +18239,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-durable-store.js",
-      "line": 759,
+      "line": 738,
       "column": 13,
       "functionName": "recordCompatibility",
       "kind": "legacy_term_identifiers",
@@ -18248,7 +18248,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-durable-store.js",
-      "line": 762,
+      "line": 741,
       "column": 29,
       "functionName": "recordCompatibility",
       "kind": "legacy_term_identifiers",
@@ -18257,7 +18257,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-durable-store.js",
-      "line": 763,
+      "line": 742,
       "column": 6,
       "functionName": "recordCompatibility",
       "kind": "legacy_term_identifiers",
@@ -18365,7 +18365,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 67,
+      "line": 50,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18374,7 +18374,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 76,
+      "line": 59,
       "column": 9,
       "functionName": "retiredRefusalReason",
       "kind": "legacy_term_identifiers",
@@ -18383,7 +18383,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 174,
+      "line": 157,
       "column": 54,
       "functionName": "openLifecycleRecord",
       "kind": "legacy_term_identifiers",
@@ -18392,7 +18392,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 687,
+      "line": 628,
       "column": 61,
       "functionName": "validateReceiverLifecycleRow",
       "kind": "legacy_term_identifiers",
@@ -18428,7 +18428,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 297,
+      "line": 300,
       "column": 8,
       "functionName": "readOpeningRecord",
       "kind": "legacy_term_identifiers",
@@ -18437,7 +18437,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 298,
+      "line": 301,
       "column": 33,
       "functionName": "readOpeningRecord",
       "kind": "legacy_term_identifiers",
@@ -19085,7 +19085,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 419,
+      "line": 431,
       "column": 4,
       "functionName": "deferDispatchRetry",
       "kind": "legacy_term_identifiers",
@@ -19094,7 +19094,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 493,
+      "line": 505,
       "column": 2,
       "functionName": "getDeferredDispatchRetryOperation",
       "kind": "legacy_term_identifiers",
@@ -19103,7 +19103,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 502,
+      "line": 514,
       "column": 4,
       "functionName": "getDeferredDispatchRetryOperation",
       "kind": "legacy_term_identifiers",
@@ -19112,7 +19112,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 508,
+      "line": 520,
       "column": 2,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19121,7 +19121,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 513,
+      "line": 525,
       "column": 48,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19130,7 +19130,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 517,
+      "line": 529,
       "column": 38,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19175,8 +19175,8 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 202,
-      "column": 4,
+      "line": 200,
+      "column": 48,
       "functionName": "buildExecutorFailureOutcomeErrorLike",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -19184,7 +19184,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 205,
+      "line": 202,
       "column": 57,
       "functionName": "buildExecutorFailureOutcomeErrorLike",
       "kind": "legacy_term_identifiers",
@@ -19940,7 +19940,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 38,
+      "line": 41,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -19949,7 +19949,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 450,
+      "line": 453,
       "column": 10,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19958,7 +19958,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 451,
+      "line": 454,
       "column": 17,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19967,7 +19967,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 455,
+      "line": 458,
       "column": 8,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19976,7 +19976,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 456,
+      "line": 459,
       "column": 30,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19985,7 +19985,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 881,
+      "line": 856,
       "column": 39,
       "functionName": "createOperationRecordInternal",
       "kind": "legacy_term_identifiers",
@@ -21497,7 +21497,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 254,
+      "line": 260,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21506,7 +21506,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 271,
+      "line": 277,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21515,7 +21515,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 290,
+      "line": 296,
       "column": 11,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21524,7 +21524,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 350,
+      "line": 356,
       "column": 10,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21533,7 +21533,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 350,
+      "line": 356,
       "column": 35,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21542,7 +21542,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 363,
+      "line": 369,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21551,7 +21551,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 563,
+      "line": 627,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21560,7 +21560,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 564,
+      "line": 628,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21569,7 +21569,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 586,
+      "line": 650,
       "column": 12,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21578,7 +21578,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 590,
+      "line": 654,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21587,7 +21587,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 591,
+      "line": 655,
       "column": 8,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21596,7 +21596,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 591,
+      "line": 655,
       "column": 30,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21605,7 +21605,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 594,
+      "line": 658,
       "column": 11,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21614,7 +21614,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 602,
+      "line": 666,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21623,7 +21623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 604,
+      "line": 668,
       "column": 10,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21632,7 +21632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 604,
+      "line": 668,
       "column": 35,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21641,7 +21641,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 605,
+      "line": 669,
       "column": 8,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21650,7 +21650,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 612,
+      "line": 676,
       "column": 9,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -23765,16 +23765,7 @@
     },
     {
       "filePath": "src/transport/message-router-inbound-dispatch.js",
-      "line": 346,
-      "column": 10,
-      "functionName": "handleIdentification",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/transport/message-router-inbound-dispatch.js",
-      "line": 606,
+      "line": 576,
       "column": 10,
       "functionName": "handleServiceResponse",
       "kind": "legacy_term_identifiers",
@@ -23783,7 +23774,7 @@
     },
     {
       "filePath": "src/transport/message-router-inbound-dispatch.js",
-      "line": 611,
+      "line": 581,
       "column": 8,
       "functionName": "handleServiceResponse",
       "kind": "legacy_term_identifiers",
@@ -23792,7 +23783,7 @@
     },
     {
       "filePath": "src/transport/message-router-inbound-dispatch.js",
-      "line": 613,
+      "line": 583,
       "column": 8,
       "functionName": "handleServiceResponse",
       "kind": "legacy_term_identifiers",

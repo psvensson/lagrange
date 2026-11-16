@@ -622,7 +622,10 @@ class EventLoopGapWatchdog {
         },
       );
     }
+    const snapshot = this.registry.snapshot();
     if (gapMs < this.thresholdMs) {
+      this.lastRegistrySnapshot = snapshot;
+      this.lastEluSample = performance.eventLoopUtilization();
       return;
     }
 
@@ -632,7 +635,6 @@ class EventLoopGapWatchdog {
       this.maxGapMs = gapMs;
     }
 
-    const snapshot = this.registry.snapshot();
     const previous = this.lastRegistrySnapshot || snapshot;
     this.lastRegistrySnapshot = snapshot;
 

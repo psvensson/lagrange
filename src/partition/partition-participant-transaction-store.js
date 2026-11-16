@@ -36,6 +36,33 @@ const ONE_ROW = 1;
 // reservation read runs on every committed statement and on the leader's
 // request path).
 const READ_STATEMENTS = new WeakMap();
+// Databases known to have zero PREPARED rows track an owner-held state
+// (cleared when verified empty outside an open transaction, or closed).
+const PREPARED_STATE_KEY = Symbol('participantPreparedObservation');
+const PREPARED_OBSERVATION = Object.freeze({
+  MAYBE_PREPARED: 'maybe_prepared',
+  EMPTY: 'empty',
+});
+
+function canSkipPreparedRead(db) {
+  if (!db || typeof db !== 'object') {
+    return false;
+  }
+  if (db.open === false) {
+    delete db[PREPARED_STATE_KEY];
+    return false;
+  }
+  return db[PREPARED_STATE_KEY] === PREPARED_OBSERVATION.EMPTY;
+}
+
+function recordPreparedObservation(db, hasPrepared) {
+  if (!db || typeof db !== 'object' || db.inTransaction || !Object.isExtensible(db)) {
+    return;
+  }
+  db[PREPARED_STATE_KEY] = hasPrepared ?
+    PREPARED_OBSERVATION.MAYBE_PREPARED :
+    PREPARED_OBSERVATION.EMPTY;
+}
 
 function readStatementOf(db, sql) {
   let statements = READ_STATEMENTS.get(db);
@@ -89,6 +116,11 @@ function openParticipantTransactionStore(db) {
     }
   }
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
+  recordPreparedObservation(
+    db,
+    readStatementOf(db, SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
+      undefined,
+  );
 }
 
 function generationRowOf(db) {
@@ -271,7 +303,13 @@ function advancePartitionWriteGeneration(db) {
  * @return {boolean} Whether some transaction is PREPARED here.
  */
 function isPartitionReserved(db) {
-  return readStatementOf(db, SQL.SELECT_RESERVATION).get(STATE.PREPARED) !== undefined;
+  if (canSkipPreparedRead(db)) {
+    return false;
+  }
+  const reserved = readStatementOf(db, SQL.SELECT_RESERVATION)
+    .get(STATE.PREPARED) !== undefined;
+  recordPreparedObservation(db, reserved);
+  return reserved;
 }
 
 /**
@@ -282,6 +320,9 @@ function isPartitionReserved(db) {
  * @return {boolean} Whether a PREPARED row names it.
  */
 function isParticipantSessionPrepared(db, sessionId) {
+  if (canSkipPreparedRead(db)) {
+    return false;
+  }
   return readStatementOf(db, SQL.SELECT_SESSION_PREPARED).get(sessionId, STATE.PREPARED) !==
     undefined;
 }
@@ -292,8 +333,13 @@ function isParticipantSessionPrepared(db, sessionId) {
  * @return {Array<string>} Their participantIds.
  */
 function readPreparedParticipantIds(db) {
-  return readStatementOf(db, SQL.SELECT_PREPARED_PARTICIPANTS).all(STATE.PREPARED)
-    .map((row) => row.participantId);
+  if (canSkipPreparedRead(db)) {
+    return [];
+  }
+  const rows = readStatementOf(db, SQL.SELECT_PREPARED_PARTICIPANTS)
+    .all(STATE.PREPARED);
+  recordPreparedObservation(db, rows.length > 0);
+  return rows.map((row) => row.participantId);
 }
 
 /**
@@ -341,6 +387,10 @@ function textOrNull(value) {
  * @param {Object} row - The row, in the command's field names.
  */
 function insertParticipantTransactionRow(db, row) {
+  if (row.state === STATE.PREPARED && db && typeof db === 'object' &&
+      Object.isExtensible(db)) {
+    db[PREPARED_STATE_KEY] = PREPARED_OBSERVATION.MAYBE_PREPARED;
+  }
   db.prepare(SQL.INSERT_ROW).run({
     transactionId: row.transactionId,
     participantId: row.participantId,

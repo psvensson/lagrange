@@ -12,6 +12,10 @@ import {
 } from '../query/application-database-result.js';
 import {AST_TYPE} from '../query/parser-constants.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../query/query-constants.js';
+import {isPrepareWriteConflictFailure} from
+  '../query/distributed/transaction-participant-error-projection.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../transport/transport-error-codes.js';
 import {SERVICE_LIFECYCLE_SQL_COMMAND} from
   '../query/service-lifecycle-sql-contract.js';
 import {PG_ERROR_CODE} from './pgwire-protocol-constants.js';
@@ -150,29 +154,64 @@ const SQLSTATE_BY_ENGINE_ERROR_CODE = new Map([
     PG_ERROR_CODE.SERIALIZATION_FAILURE],
   [QUERY_ERROR_CODE.WRITE_CONFLICT,
     PG_ERROR_CODE.SERIALIZATION_FAILURE],
+  [QUERY_ERROR_CODE.TIMEOUT,
+    PG_ERROR_CODE.TRANSACTION_TIMEOUT],
+  [ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+    PG_ERROR_CODE.TRANSACTION_TIMEOUT],
 ]);
+
+const EMPTY_PARTICIPANT_LIST = Object.freeze([]);
+
+function rawParticipantArray(error) {
+  return Array.isArray(error?.participantFailures) ?
+    error.participantFailures.filter(
+      (entry) => entry && typeof entry === LOCAL_STR_OBJECT,
+    ) :
+    EMPTY_PARTICIPANT_LIST;
+}
+
+function failureEntriesOf(failure) {
+  const entries = rawParticipantArray(failure);
+  return failure?.firstFailedParticipant &&
+    typeof failure.firstFailedParticipant === LOCAL_STR_OBJECT ?
+    [failure.firstFailedParticipant, ...entries] :
+    entries;
+}
+
+function hasConflictFailure(failure) {
+  return isPrepareWriteConflictFailure(failure) ||
+    failureEntriesOf(failure).some(isPrepareWriteConflictFailure);
+}
+
+function resolveParticipantEntrySqlState(failure) {
+  for (const entry of failureEntriesOf(failure)) {
+    const entryCode = entry?.errorCode || entry?.code;
+    const mapped = SQLSTATE_BY_ENGINE_ERROR_CODE.get(entryCode);
+    if (mapped) return mapped;
+  }
+  return PG_ERROR_CODE.INTERNAL_ERROR;
+}
 
 /**
  * The SQLSTATE an ErrorResponse carries for a failure: the failure's own
- * sqlState, else the PostgreSQL condition its engine error code names,
- * else XX000.
+ * sqlState, else the PostgreSQL condition its engine error code or participant
+ * failures name (including write conflicts and timeouts), else XX000.
  *
  * @param {Object} failure - Thrown error or failed SqlCore result fields.
  * @return {string} SQLSTATE.
  */
 function resolveFailureSqlState(failure) {
   if (typeof failure?.sqlState === LOCAL_STR_STRING) return failure.sqlState;
+  if (hasConflictFailure(failure)) {
+    return PG_ERROR_CODE.SERIALIZATION_FAILURE;
+  }
   const lookupKey = failure?.errorCode || failure?.code;
   return SQLSTATE_BY_ENGINE_ERROR_CODE.get(lookupKey) ??
-    PG_ERROR_CODE.INTERNAL_ERROR;
+    resolveParticipantEntrySqlState(failure);
 }
 
 function extractParticipantFailureWireDetail(error) {
-  const participantFailures = Array.isArray(error?.participantFailures) ?
-    error.participantFailures.filter(
-      (entry) => entry && typeof entry === LOCAL_STR_OBJECT,
-    ) :
-    [];
+  const participantFailures = rawParticipantArray(error);
   let firstFailedParticipant = NO_WIRE_ERROR_DETAIL;
   if (
     error?.firstFailedParticipant &&

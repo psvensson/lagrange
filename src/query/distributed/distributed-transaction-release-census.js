@@ -37,13 +37,41 @@ function censusResult(state, rowGenerationDigest = null, legacy = [], recoverabl
     recoverableTransactionIds: Object.freeze(recoverable)});
 }
 
-function isPostOriginOpenUndecidedRow(row, postOriginEnforced, record) {
-  return postOriginEnforced &&
-    row?.status === TRANSACTION_STATUS.ACTIVE &&
-    row?.participant_set_state === PARTICIPANT_SET_STATE.OPEN &&
-    row?.commit_mode === COMMIT_MODE.NOT_SELECTED &&
-    row?.frozen_participant_count === 0 &&
-    record?.state === RECORDED_DECISION_STATE.ABSENT;
+const IN_FLIGHT_UNDECIDED_FROZEN_STATUSES = Object.freeze([
+  TRANSACTION_STATUS.ACTIVE,
+  TRANSACTION_STATUS.PREPARING,
+  TRANSACTION_STATUS.PREPARED,
+]);
+
+function isPostOriginFrozenUndecidedRow(row, pairs) {
+  return row?.participant_set_state === PARTICIPANT_SET_STATE.FROZEN &&
+    row?.commit_mode === COMMIT_MODE.TWO_PHASE_COMMIT &&
+    Array.isArray(pairs) &&
+    row?.frozen_participant_count === pairs.length &&
+    IN_FLIGHT_UNDECIDED_FROZEN_STATUSES.includes(row?.status);
+}
+
+function isPostOriginOpenUndecidedRow(row, postOriginEnforced, record, pairs) {
+  if (!postOriginEnforced || record?.state !== RECORDED_DECISION_STATE.ABSENT) {
+    return false;
+  }
+  if (row?.status === TRANSACTION_STATUS.ACTIVE &&
+      row?.participant_set_state === PARTICIPANT_SET_STATE.OPEN &&
+      row?.commit_mode === COMMIT_MODE.NOT_SELECTED &&
+      row?.frozen_participant_count === 0) {
+    return true;
+  }
+  return isPostOriginFrozenUndecidedRow(row, pairs);
+}
+
+function hasValidCensusDecision(record, pairs) {
+  if (record.state === RECORDED_DECISION_STATE.INVALID) return false;
+  if (record.state === RECORDED_DECISION_STATE.ABSENT) return true;
+  return Boolean(
+    pairs &&
+    record.participants.length === pairs.length &&
+    record.participants.every(([id], index) => id === pairs[index][0]),
+  );
 }
 
 function readTransactionReleaseCensus(database) {
@@ -73,14 +101,10 @@ function readTransactionReleaseCensus(database) {
     for (const row of allRows) {
       const pairs = readParticipantSet(row.transaction_id, row.participant_set_text);
       const record = decisionRecordOfRow(row, row.transaction_id);
-      const validDecision = record.state !== RECORDED_DECISION_STATE.INVALID &&
-        (record.state === RECORDED_DECISION_STATE.ABSENT ||
-          (pairs && record.participants.length === pairs.length &&
-            record.participants.every(([id], index) => id === pairs[index][0])));
-      if (!pairs || !validDecision) {
+      if (!pairs || !hasValidCensusDecision(record, pairs)) {
         legacy.push(row.transaction_id);
         held = true;
-      } else if (!isPostOriginOpenUndecidedRow(row, postOriginEnforced, record)) {
+      } else if (!isPostOriginOpenUndecidedRow(row, postOriginEnforced, record, pairs)) {
         recoverable.push(row.transaction_id);
         held = true;
       }

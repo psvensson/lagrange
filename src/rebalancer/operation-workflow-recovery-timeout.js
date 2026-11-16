@@ -56,6 +56,7 @@ function extendOrphanSweepWithFencedAdoptions({
 }
 
 const REPLACE_TIMEOUT_REENTRY_BOUNDARY = 'replace_timeout_reentry';
+const RESERVATION_RECONCILE_INTERVAL_MS = 30_000;
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -214,62 +215,42 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   async checkTimeouts() {
-    if (this.isShuttingDown || !this.isInitialized) {
-      return;
-    }
-
+    if (this.isShuttingDown || !this.isInitialized) return;
+    await this.reconcilePeriodicReservations();
     const now = this.resolveTimeoutCheckNowMs();
-    if (
-      this.lastEmptyIncompleteOperationQueryAtMs > 0 &&
-      now - this.lastEmptyIncompleteOperationQueryAtMs <
-        this.incompleteOperationQueryEmptyBackoffMs
-    ) {
+    if (this.lastEmptyIncompleteOperationQueryAtMs > 0 &&
+        now - this.lastEmptyIncompleteOperationQueryAtMs <
+          this.incompleteOperationQueryEmptyBackoffMs) {
       return;
     }
-
-    const canUseCacheObservationBoundary =
+    const canUseCache =
       this.repository.hasReplicaOperationCacheObservationBoundary();
-    const cachedIncompleteOps = canUseCacheObservationBoundary ?
-      await this.repository.queryCachedIncompleteOperations() :
-      [];
+    const cachedIncompleteOps = canUseCache ?
+      await this.repository.queryCachedIncompleteOperations() : [];
     if (cachedIncompleteOps.length > 0) {
       this.clearEmptyIncompleteOperationQueryDelay();
-    } else if (
-      canUseCacheObservationBoundary &&
-      this.shouldDelayEmptyIncompleteOperationQuery(now)
-    ) {
+    } else if (canUseCache && this.shouldDelayEmptyIncompleteOperationQuery(now)) {
       return;
     }
-
-    const incompleteOperationObservation =
+    const observation =
       await this.repository.getIncompleteOperationVisibilityObservation({
         cachedOperations: cachedIncompleteOps,
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
         visibilitySupplementMode:
           this.resolveTimeoutIncompleteVisibilitySupplementMode(
-            cachedIncompleteOps,
-          ),
+            cachedIncompleteOps),
       });
-    const incompleteOps = Array.isArray(
-      incompleteOperationObservation?.operations,
-    ) ?
-      incompleteOperationObservation.operations :
-      [];
-    if (
-      incompleteOperationObservation.state ===
-      INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY
-    ) {
+    if (observation.state === INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
       return;
     }
     this.clearEmptyIncompleteOperationQueryDelay();
-    if (
-      incompleteOperationObservation.state ===
-      INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED
-    ) {
+    if (observation.state === INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED) {
       return;
     }
+    const incompleteOps = Array.isArray(observation?.operations) ?
+      observation.operations : [];
 
     const timeoutReconcileTasks = [];
 
@@ -361,8 +342,25 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (timeoutReconcileTasks.length > 0) {
       await Promise.all(timeoutReconcileTasks);
     }
+  }
 
-    // Periodic reservation reconciliation (Req 4.4)
+  /**
+   * Periodic reservation reconciliation (Req 4.4), throttled via the owner's
+   * timeout-check clock so active sweeps do not poll at 1 Hz.
+   * @return {Promise<void>}
+   */
+  async reconcilePeriodicReservations() {
+    const nowMs = this.resolveTimeoutCheckNowMs();
+    const lastAtMs = this.lastReservationReconcileAtMs;
+    const intervalMs = this.config?.reservationReconcileIntervalMs ??
+      Math.min(
+        this.config?.periodicCheckIntervalMs ?? RESERVATION_RECONCILE_INTERVAL_MS,
+        RESERVATION_RECONCILE_INTERVAL_MS,
+      );
+    if (Number.isFinite(lastAtMs) && nowMs - lastAtMs < intervalMs) {
+      return;
+    }
+    this.lastReservationReconcileAtMs = nowMs;
     await this.reconcileReservations().catch((error) => {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
@@ -372,40 +370,13 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   /**
-   * Level-triggered operation-liveness reconciler — the holistic safety net for
-   * the whole ORPHANED-OPERATION class, not one shape of it.
-   *
-   * Operation progress is normally EDGE-triggered (an in-memory executor-outcome
-   * event + dispatch-pending re-entry triggers on the owner). Those edges are
-   * LOST across owner/leadership churn, and each ad-hoc re-drive path is gated on
-   * a narrow phase/step predicate (phase===DISPATCH_PENDING, step===SYNCING, ...),
-   * so an op stuck in any off-predicate state is orphaned forever — the recovery
-   * reconcile never fires. We kept discovering this one shape at a time
-   * (phantom-SYNCING; then the persisted-not-dispatched terminal-phase zombie).
-   *
-   * Instead of another per-shape sibling, this drives the existing level-triggered
-   * reconcile-to-truth core (reconcileOperationLifecycle) for EVERY locally-owned
-   * non-terminal op that ground truth says is actionable, on the coordinator's
-   * periodic timer — independent of which edge was supposed to fire. It uses the
-   * NON-DESTRUCTIVE PROGRESS cause (never RECOVERY), so the pre-sync FAIL semantics
-   * that make startup handleRecovery destructive can never fire here. It is bounded
-   * to be a SAFETY NET, not a competitor to the edge path:
-   *   - locally-owned + single-flight (re-reads under the op lock → idempotent, no
-   *     double-dispatch, preserves the single-writer guarantee);
-   *   - self-throttled to the empty-scan backoff cadence (no SQL hammering);
-   *   - its own authoritative-preferred discovery, so an orphan invisible to the
-   *     cache-bounded checkTimeouts sweep is still found;
-   *   - acts ONLY on an op whose replica has reached an actionable terminal/active
-   *     truth the row has not applied (prompt — e.g. phantom-SYNCING), OR that is
-   *     STALE past its step timeout (the edge path is demonstrably not driving it —
-   *     e.g. a never-dispatched surplus REMOVE). A genuinely in-flight op that is
-   *     still progressing within its step budget is left untouched.
-   * Quorum/remove-safety is enforced inside reconcileOperationLifecycle (drain
-   * snapshot + evaluateRemoveSafety) before any action, so this inherits it.
-   *
-   * Scope: the orphaned-EXISTING-op class. It does NOT manufacture ops the planner
-   * never created, nor fix transport/2PC dispatch failures — those are distinct.
-   *
+   * Level-triggered safety net for orphaned existing operations whose edge
+   * triggers were lost across owner/leadership churn. Drives the
+   * non-destructive PROGRESS reconcileOperationLifecycle path (inheriting
+   * single-flight locking and quorum/remove-safety) for locally-owned
+   * non-terminal ops that are stale past step timeout or behind actionable
+   * replica truth, throttled to empty-scan backoff cadence. Does not create
+   * ops or fix transport/2PC dispatch failures.
    * @return {Promise<void>}
    */
   async reconcileOrphanedOperations() {

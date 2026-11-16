@@ -106,6 +106,13 @@ function reservationWriteSubject(reservationId) {
   return [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS, reservationId];
 }
 
+function logReservationReconcileCompleted(logger, counts) {
+  const logCompleted = counts.expired > 0 || counts.orphansReleased > 0 ?
+    logger.info : logger.debug;
+  logCompleted.call(logger,
+    REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_COMPLETED, counts);
+}
+
 class RebalanceCoordinatorReservationLifecycleMethods {
   // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
 
@@ -226,7 +233,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       const cleanup = await this.transitionActiveReservationById(
         reservationId,
         RESERVATION_STATUS.RELEASED,
-        Date.now(),
+        this.nowFn(),
         {ownerId: operation.operationId, timeoutBudget},
       );
       if (!cleanup.success) {
@@ -640,11 +647,44 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @return {Promise<Object>} Reconciliation result counts.
    * @private
    */
-  async runReservationReconcileSweep() {
-    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_START);
-
-    const now = Date.now();
+  async expireStaleActiveReservations(staleResult, now) {
     let expired = 0;
+    if (staleResult.success && Array.isArray(staleResult.rows)) {
+      for (const row of staleResult.rows) {
+        const expirySnapshot = await this.buildReservationExpirySnapshot(
+          row.operation_id);
+        if (expirySnapshot.action !==
+            RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
+          continue;
+        }
+        const transition = await this.transitionActiveReservationById(
+          row.reservation_id, RESERVATION_STATUS.EXPIRED, now);
+        if (!transition.success) {
+          this.logger.warn(
+            REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+            {operationId: row.operation_id, reservationId: row.reservation_id,
+              error: transition.error});
+          continue;
+        }
+        if (transition.changed) expired++;
+      }
+    } else if (!staleResult.success) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+        {operationId: null, reservationId: null, error: staleResult.error});
+    }
+    if (expired > 0) {
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_EXPIRED,
+        {count: expired});
+    }
+    return expired;
+  }
+
+  async runReservationReconcileSweep() {
+    this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_START);
+
+    const now = this.nowFn();
     let orphansReleased = 0;
 
     const staleResult = await readAuthoritativeControlPlaneRows(
@@ -654,61 +694,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       [RESERVATION_STATUS.ACTIVE, now],
       STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
-    if (staleResult.success && Array.isArray(staleResult.rows)) {
-      for (const row of staleResult.rows) {
-        // A TTL-expired reservation must not be expired out from under a
-        // LIVE operation (audit finding 4): nothing ever renews expires_at,
-        // so a long-running non-terminal operation would otherwise lose its
-        // admission witness mid-flight. Consult operation state the same way
-        // the orphan arm does — KEEP_ACTIVE unless the operation is visible
-        // and terminal — so only a truly finished operation's reservation
-        // expires.
-        const expirySnapshot = await this.buildReservationExpirySnapshot(
-          row.operation_id,
-        );
-        if (
-          expirySnapshot.action !==
-          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
-        ) {
-          continue;
-        }
-        const transition = await this.transitionActiveReservationById(
-          row.reservation_id,
-          RESERVATION_STATUS.EXPIRED,
-          now,
-        );
-        if (!transition.success) {
-          this.logger.warn(
-            REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-            {
-              operationId: row.operation_id,
-              reservationId: row.reservation_id,
-              error: transition.error,
-            },
-          );
-          continue;
-        }
-        if (transition.changed) {
-          expired++;
-        }
-      }
-    } else if (!staleResult.success) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-        {
-          operationId: null,
-          reservationId: null,
-          error: staleResult.error,
-        },
-      );
-    }
-
-    if (expired > 0) {
-      this.logger.info(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_EXPIRED,
-        {count: expired},
-      );
-    }
+    const expired = await this.expireStaleActiveReservations(staleResult, now);
 
     const activeResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
@@ -763,10 +749,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
     this.stats.reservationsReconciled += expired + orphansReleased;
 
-    this.logger.info(
-      REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_COMPLETED,
-      {expired, orphansReleased},
-    );
+    logReservationReconcileCompleted(this.logger, {expired, orphansReleased});
 
     this.emit(REBALANCE_COORDINATOR_EVENT.RESERVATION_RECONCILED, {
       expired,

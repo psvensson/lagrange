@@ -1,5 +1,6 @@
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
+const TIMEOUT_ERROR_CODE = 'TIMEOUT';
 
 const TIMEOUT_BUDGET_CLASSIFICATION = Object.freeze({
   LOCAL_SCHEDULER_STARVATION: 'local_scheduler_starvation',
@@ -161,6 +162,7 @@ function createChildTimeoutBudget(parentBudget, options = {}) {
 
 function createTimeoutBudgetError(options = {}) {
   const error = new Error(options.message);
+  error.errorCode = TIMEOUT_ERROR_CODE;
   error.timeoutClassification = buildTimeoutClassification({
     budget: options.budget,
     classification: options.classification,

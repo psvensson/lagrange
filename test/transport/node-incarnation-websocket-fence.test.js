@@ -1048,7 +1048,7 @@ t.test(
       'acceptor observes dialer bootIncarnation = 2 over existing socket',
     );
     t.equal(
-      acceptor.nodeConnections.get(JOINER_NODE_ID)?.state,
+      acceptor.nodeConnections.get(JOINER_NODE_ID).state,
       ConnectionState.CONNECTED,
       'incoming primary socket on acceptor remains CONNECTED',
     );
@@ -1071,10 +1071,10 @@ t.test(
         JOINER_NODE_ID,
         acceptorConn.ws,
       );
-    t.equal(d2OnAcceptor?.senderBootIncarnation, 2);
-    t.equal(d2OnAcceptor?.connectionId, acceptorConnectionId);
+    t.equal(d2OnAcceptor.senderBootIncarnation, 2);
+    t.equal(d2OnAcceptor.connectionId, acceptorConnectionId);
     t.equal(
-      d2OnAcceptor?.isCurrent(),
+      d2OnAcceptor.isCurrent(),
       true,
       'new-incarnation delivery on the same acceptor connection is current',
     );
@@ -1085,8 +1085,8 @@ t.test(
         SEED_NODE_ID,
         dialerConn.ws,
       );
-    t.equal(d1OnDialer?.senderBootIncarnation, 1);
-    t.equal(d1OnDialer?.isCurrent(), true);
+    t.equal(d1OnDialer.senderBootIncarnation, 1);
+    t.equal(d1OnDialer.isCurrent(), true);
 
     acceptor.syncBootIncarnation(2);
     t.equal(
@@ -1099,7 +1099,7 @@ t.test(
       'dialer observes acceptor bootIncarnation = 2 over existing socket',
     );
     t.equal(
-      dialer.nodeConnections.get(SEED_NODE_ID)?.state,
+      dialer.nodeConnections.get(SEED_NODE_ID).state,
       ConnectionState.CONNECTED,
       'outbound primary socket on dialer remains CONNECTED',
     );
@@ -1122,12 +1122,90 @@ t.test(
         SEED_NODE_ID,
         dialerConn.ws,
       );
-    t.equal(d2OnDialer?.senderBootIncarnation, 2);
-    t.equal(d2OnDialer?.connectionId, dialerConnectionId);
+    t.equal(d2OnDialer.senderBootIncarnation, 2);
+    t.equal(d2OnDialer.connectionId, dialerConnectionId);
     t.equal(
-      d2OnDialer?.isCurrent(),
+      d2OnDialer.isCurrent(),
       true,
       'new-incarnation delivery on the same dialer connection is current',
+    );
+
+    t.end();
+  },
+);
+
+t.test(
+  'a late IDENTIFY on a replaced or retired socket terminates the old socket ' +
+    'and preserves the live primary connection without mutating refused nodeId',
+  async (t) => {
+    initializeTestEnvironment();
+    t.teardown(cleanupTestEnvironment);
+
+    // Use a local nodeId < REMOTE_NODE_ID ('a-remote-node') or an existing preferred
+    // incoming primary so a duplicate incoming connection is refused.
+    const router = new MessageRouter({
+      nodeId: LOCAL_NODE_ID,
+      bootIncarnation: SEED_BOOT_INCARNATION,
+    });
+    await router.initialize({startServer: false});
+    t.teardown(async () => {
+      await router.shutdown().catch(() => {});
+    });
+
+    const liveWs = createIdentifyRecordingWsStub();
+    registerExistingPeerConnection(router, 'live-primary-conn', liveWs, 8);
+    router.nodeBootIncarnationWatermarks.set(REMOTE_NODE_ID, 8);
+
+    // 1) Refused incoming duplicate socket must never acquire connection.nodeId = REMOTE_NODE_ID
+    const refusedWs = createIdentifyRecordingWsStub();
+    registerIncomingConnection(router, 'incoming-refused', refusedWs);
+    const refusedConn = router.nodeConnections.get('incoming-refused');
+    router.handleIdentification(
+      'incoming-refused',
+      refusedWs,
+      buildIdentifyMessage({bootIncarnation: 8}),
+    );
+    t.equal(refusedWs.terminateCalled, true, 'refused duplicate socket is terminated');
+    t.equal(
+      refusedConn.nodeId,
+      null,
+      'refused incoming connection record never acquires nodeId',
+    );
+    t.equal(
+      router.nodeConnections.get(REMOTE_NODE_ID)?.connectionId,
+      'live-primary-conn',
+      'live primary remains in the peer slot',
+    );
+
+    // 2) Late IDENTIFY arriving with connectionId = REMOTE_NODE_ID on a replaced socket
+    // (where router.nodeConnections.get(REMOTE_NODE_ID) points to liveWs !== replacedWs)
+    // must terminate replacedWs and leave the live primary connection untouched!
+    const replacedWs = createIdentifyRecordingWsStub();
+    router.handleIdentification(
+      REMOTE_NODE_ID,
+      replacedWs,
+      buildIdentifyMessage({bootIncarnation: 2}),
+    );
+    t.equal(replacedWs.terminateCalled, true, 'late IDENTIFY on replaced socket terminates it');
+    t.equal(liveWs.terminateCalled, false, 'live primary socket is not terminated');
+    t.equal(
+      router.nodeConnections.get(REMOTE_NODE_ID)?.connectionId,
+      'live-primary-conn',
+      'live primary connection is not deleted or retired by replaced-socket IDENTIFY',
+    );
+    t.equal(
+      router.nodeConnections.get(REMOTE_NODE_ID)?.retired ?? false,
+      false,
+      'live primary connection remains unretired',
+    );
+    t.same(
+      router.getCurrentPrimaryConnectionBootIncarnation(REMOTE_NODE_ID),
+      {
+        nodeId: REMOTE_NODE_ID,
+        bootIncarnation: 8,
+        connectionId: 'live-primary-conn',
+      },
+      'live primary boot incarnation authority is preserved',
     );
 
     t.end();

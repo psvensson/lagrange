@@ -294,3 +294,86 @@ test('release settlement holds an unexpired FROZEN+ABSENT (PREPARING) row and se
     assert.equal(settled[0].terminalStatus, 'ROLLED_BACK');
     assert.equal(f.deliveries.length, 1);
   });
+
+test('release settlement validates full live row via releaseRowOf and validates proof via transactionReleaseProofValid',
+  async (t) => {
+    const decision = buildDecisionRecord(TX, 'COMMIT', [[PARTICIPANT, 'prepared']]);
+    const f = fixture(t, baseRow({
+      status: 'COMMITTED',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE_COMMIT',
+      frozen_participant_count: 1,
+      decision: decision.decision,
+      decision_text: decision.decisionText,
+      decision_digest: decision.decisionDigest,
+    }), () => ({success: true, state: 'COMMITTED', outcome: 'COMMITTED'}));
+
+    const census = readTransactionReleaseCensus(f.gateway.db);
+    const first = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.equal(first.length, 1);
+    assert.equal(f.deliveries.length, 1);
+
+    // Corrupting decision_text (while keeping decision_digest unchanged) invalidates the memo via releaseRowOf
+    f.gateway.db.prepare(
+      'UPDATE sql_transactions SET decision_text = ? WHERE transaction_id = ?',
+    ).run('{"corrupted":true}', TX);
+    const corruptedResult = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.equal(corruptedResult, null, 'corrupted decision_text invalidates memo and fails releaseRowOf');
+    assert.equal(f.deliveries.length, 1);
+
+    // Restore valid decision_text, re-settle, then corrupt frozen_participant_count
+    f.gateway.db.prepare(
+      'UPDATE sql_transactions SET decision_text = ? WHERE transaction_id = ?',
+    ).run(decision.decisionText, TX);
+    const restored = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.equal(restored.length, 1);
+    assert.equal(f.deliveries.length, 2);
+
+    f.gateway.db.prepare(
+      'UPDATE sql_transactions SET frozen_participant_count = ? WHERE transaction_id = ?',
+    ).run(99, TX);
+    const badCountResult = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.equal(badCountResult, null, 'corrupted frozen_participant_count invalidates memo via releaseRowOf');
+
+    // transactionReleaseProofOf enforces transactionReleaseProofValid (e.g. rejects non-hex decisionDigest or empty participantId)
+    const release = {releaseId: 'release-id'};
+    const attempt = {term: 4, leaderReplicaId: 'r1'};
+    assert.equal(
+      transactionReleaseProofOf({
+        release,
+        attempt,
+        census,
+        transactions: [{...first[0], decisionDigest: 'not-a-sha256-digest'}],
+      }),
+      null,
+    );
+    assert.equal(
+      transactionReleaseProofOf({
+        release,
+        attempt,
+        census,
+        transactions: [{...first[0], participantIds: ['']}],
+      }),
+      null,
+    );
+  });

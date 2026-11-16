@@ -25,7 +25,7 @@ import {
 } from '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../src/raft/raft-operation-port-request.js';
-import {applyCommittedEntryTransaction} from
+import {applyCommittedEntrySliceTransaction} from
   '../../src/raft/raft-rs-application-transaction-owner.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
@@ -100,15 +100,15 @@ function resolveLeaderAddressStatus(leaderId, leaderAddress, explicitStatus) {
  */
 export function applyCommandThroughApplicationOwner({database, groupId, index,
   term, command, applyCommittedEntry}) {
-  applyCommittedEntryTransaction({
+  applyCommittedEntrySliceTransaction({
     store: new RaftRsDurableStore(database),
     groupId,
-    entry: {
+    entries: [{
       index: String(index),
       term: String(term),
       entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
       data: Buffer.from(encodeProposal(command)).toString('base64'),
-    },
+    }],
     confState: {},
     applyCommittedEntry: (bytes, position) => applyCommittedEntry(
       Object.freeze({

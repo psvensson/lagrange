@@ -21,6 +21,7 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const RUNTIME_OWNER = 'src/raft/raft-rs-runtime-owner.js';
+const RAFT_SOURCE_PREFIX = 'src/raft/';
 const BINDING_OWNER = 'src/raft/raft-rs-binding-owner.js';
 const CORE_LOADER = 'src/raft/raft-rs-core.js';
 const LIFECYCLE_OWNER =
@@ -42,6 +43,14 @@ const ORIGINAL_ALLOCATION_ISSUE = 'markOriginalAllocationIssued';
 const ORIGINAL_ALLOCATION_ROW_READ = 'readOriginalAllocationRow';
 const ORIGINAL_ALLOCATION_DECLARATION_READ = 'readOriginalAllocationDeclaration';
 const ORIGINAL_ALLOCATION_RIGHT_TRANSITION = 'transitionOriginalRight';
+const REJOIN_HINTS_DURABLE_EVIDENCE =
+  'src/bootstrap/rejoin-hints-durable-evidence.js';
+const ORIGINAL_ALLOCATION_LIFECYCLE_INSPECT =
+  'inspectReplicaLifecycleForOriginalAllocation';
+const ORIGINAL_ALLOCATION_CONSTANTS =
+  'src/raft/raft-rs-original-allocation-constants.js';
+const LIFECYCLE_CONSTANTS =
+  'src/raft/raft-rs-replica-lifecycle-constants.js';
 // Each declared caller and one named lifecycle operation it may import, one
 // row per (caller, operation): a symbol missing here is refused there.
 const LIFECYCLE_OPERATION_CALLERS = Object.freeze([
@@ -53,6 +62,10 @@ const LIFECYCLE_OPERATION_CALLERS = Object.freeze([
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_ROW_READ]),
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_DECLARATION_READ]),
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_RIGHT_TRANSITION]),
+  Object.freeze([
+    REJOIN_HINTS_DURABLE_EVIDENCE,
+    ORIGINAL_ALLOCATION_LIFECYCLE_INSPECT,
+  ]),
 ]);
 const LIFECYCLE_ADMIN =
   'src/raft/raft-rs-lifecycle-administration.js';
@@ -136,6 +149,8 @@ const LIFECYCLE_SQL_DETAIL_LIMIT = 80;
 // A schema or row write naming a lifecycle table, whatever binding spells it.
 const LIFECYCLE_WRITE_SQL =
   /\b(?:INSERT|UPDATE|DELETE|REPLACE|ALTER|CREATE|DROP)\b[\s\S]*_raft_rs_(?:retirement|replica_lifecycle)\b/iu;
+const LIFECYCLE_QUERY_SQL =
+  /\b(?:SELECT|PRAGMA)\b[\s\S]*_raft_rs_(?:retirement|replica_lifecycle)\b/iu;
 
 function javascriptFiles(directory) {
   if (!fs.existsSync(directory)) {
@@ -408,7 +423,7 @@ function sqlPart(node, constants) {
 
 // Every lifecycle-table write in one module's SQL, at its outermost string
 // expression only (a concatenation's operands are not reported again).
-function lifecycleSqlWrites(tree, constants) {
+function lifecycleSqlStatements(tree, constants, pattern = LIFECYCLE_WRITE_SQL) {
   const nested = new Set();
   const writes = [];
   walk(tree, (node) => {
@@ -423,11 +438,15 @@ function lifecycleSqlWrites(tree, constants) {
   });
   walk(tree, (node) => {
     const text = nested.has(node) ? null : sqlText(node, constants);
-    if (typeof text === 'string' && LIFECYCLE_WRITE_SQL.test(text)) {
+    if (typeof text === 'string' && pattern.test(text)) {
       arrayPush(writes, stringTrim(text).slice(0, LIFECYCLE_SQL_DETAIL_LIMIT));
     }
   });
   return writes;
+}
+
+function lifecycleSqlWrites(tree, constants) {
+  return lifecycleSqlStatements(tree, constants, LIFECYCLE_WRITE_SQL);
 }
 
 function moduleConstants(tree, file, tables) {
@@ -481,14 +500,114 @@ function isLifecycleOperationImport(fileName, node) {
         caller === fileName && entry.imported.name === operation));
 }
 
+function addDestructuredPrimitiveAliases(idNode, runtimePrimitives, constants, aliases) {
+  if (idNode?.type !== AUDIT_AST.OBJECT_PATTERN) return;
+  for (const property of idNode.properties) {
+    const primitive = property.key?.name || literalValue(property.key, constants);
+    const alias = property.value?.name;
+    if (runtimePrimitives.has(primitive) && alias) aliases.add(alias);
+  }
+}
+
+function collectPrimitiveAliases(tree, runtimePrimitives, constants) {
+  const primitiveAliases = new Set();
+  walk(tree, (node) => {
+    if (node.type !== AUDIT_AST.VARIABLE_DECLARATOR) return;
+    if (node.id?.type === AUDIT_AST.IDENTIFIER &&
+        runtimePrimitives.has(memberName(node.init, constants))) {
+      primitiveAliases.add(node.id.name);
+      return;
+    }
+    addDestructuredPrimitiveAliases(
+      node.id, runtimePrimitives, constants, primitiveAliases);
+  });
+  return primitiveAliases;
+}
+
+function checkImportTargetRules(file, fileName, specifier, targets, violations) {
+  const rules = [
+    [targets.coreLoader, [RUNTIME_OWNER, CORE_LOADER],
+      AUDIT_VIOLATION.BINDING_IMPORT_OUTSIDE_OWNER],
+    [targets.runtimeOwner, [PORT_CONSTRUCTOR],
+      AUDIT_VIOLATION.RUNTIME_OWNER_IMPORT_BYPASS],
+    [targets.bindingOwner, [RUNTIME_OWNER],
+      AUDIT_VIOLATION.BINDING_OWNER_IMPORT_BYPASS],
+    [targets.lifecycleAdmin, [LIFECYCLE_COORDINATOR],
+      AUDIT_VIOLATION.LIFECYCLE_ADMIN_IMPORT_BYPASS],
+    [targets.membershipAdmin, [PORT_CONSTRUCTOR, MEMBERSHIP_COORDINATOR, MEMBERSHIP_ADMIN],
+      AUDIT_VIOLATION.MEMBERSHIP_ADMIN_IMPORT_BYPASS],
+  ];
+  for (const [target, allowed, code] of rules) {
+    if (resolvesTo(file, specifier, target) && !arrayIncludes(allowed, fileName)) {
+      violations.push(violation(fileName, code, String(specifier)));
+    }
+  }
+}
+
+function checkLifecycleImportViolations(file, fileName, node, specifier, targets, violations) {
+  if (typeof specifier === 'string' && DIRECT_BINDING_PATTERN.test(specifier) &&
+      fileName !== BINDING_OWNER) {
+    violations.push(violation(fileName, AUDIT_VIOLATION.DIRECT_BINDING_IMPORT, specifier));
+  }
+  if (resolvesTo(file, specifier, targets.lifecycleOwner) &&
+      !arrayIncludes([PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER], fileName) &&
+      !isLifecycleOperationImport(fileName, node)) {
+    violations.push(violation(fileName, AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
+      String(specifier)));
+  }
+  if (fileName === REJOIN_HINTS_DURABLE_EVIDENCE &&
+      (resolvesTo(file, specifier, targets.originalAllocationConstants) ||
+        resolvesTo(file, specifier, targets.lifecycleConstants))) {
+    violations.push(violation(fileName, AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
+      String(specifier)));
+  }
+}
+
+function checkCallExpressionViolations(
+  fileName, node, constants, runtimePrimitives, primitiveAliases, violations,
+) {
+  const calledMember = memberName(node.callee, constants);
+  const raftRsModule = /^src\/raft\/raft-rs-/u.test(fileName);
+  if (runtimePrimitives.has(calledMember) && fileName !== RUNTIME_OWNER &&
+      (raftRsModule || receiverLooksLikeCore(node.callee, constants))) {
+    violations.push(violation(fileName,
+      AUDIT_VIOLATION.CORE_INVOCATION_OUTSIDE_OWNER, calledMember));
+  }
+  if (node.callee?.type === AUDIT_AST.IDENTIFIER &&
+      primitiveAliases.has(node.callee.name) && fileName !== RUNTIME_OWNER) {
+    violations.push(violation(fileName,
+      AUDIT_VIOLATION.CORE_ALIAS_INVOCATION_OUTSIDE_OWNER, node.callee.name));
+  }
+  if (arrayIncludes(LIFECYCLE_WRITE_METHODS, calledMember) &&
+      !arrayIncludes(LIFECYCLE_WRITERS, fileName)) {
+    violations.push(violation(fileName,
+      AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER, calledMember));
+  }
+}
+
+function checkExportLoaderReexport(fileName, node, violations) {
+  if (node.type !== AUDIT_AST.EXPORT_NAMED_DECLARATION || fileName === BINDING_OWNER) {
+    return;
+  }
+  const names = arrayMap(node.specifiers, (entry) => entry.local?.name);
+  if (arraySome(names, (name) => arrayIncludes(BINDING_LOADER_EXPORTS, name))) {
+    violations.push(violation(fileName, AUDIT_VIOLATION.BINDING_LOADER_REEXPORT,
+      names.join(AUDIT_SYNTAX.LIST_SEPARATOR)));
+  }
+}
+
 function auditRaftRsOperationBoundary({root}) {
   const sourceRoot = path.join(root, 'src');
-  const coreLoader = path.join(root, CORE_LOADER);
-  const runtimeOwner = path.join(root, RUNTIME_OWNER);
-  const bindingOwner = path.join(root, BINDING_OWNER);
-  const lifecycleAdmin = path.join(root, LIFECYCLE_ADMIN);
-  const lifecycleOwner = path.join(root, LIFECYCLE_OWNER);
-  const membershipAdmin = path.join(root, MEMBERSHIP_ADMIN);
+  const targets = {
+    coreLoader: path.join(root, CORE_LOADER),
+    runtimeOwner: path.join(root, RUNTIME_OWNER),
+    bindingOwner: path.join(root, BINDING_OWNER),
+    lifecycleAdmin: path.join(root, LIFECYCLE_ADMIN),
+    lifecycleOwner: path.join(root, LIFECYCLE_OWNER),
+    originalAllocationConstants: path.join(root, ORIGINAL_ALLOCATION_CONSTANTS),
+    lifecycleConstants: path.join(root, LIFECYCLE_CONSTANTS),
+    membershipAdmin: path.join(root, MEMBERSHIP_ADMIN),
+  };
   const runtimePrimitives = primitiveNames(root);
   const violations = [];
   const modules = moduleTables();
@@ -498,119 +617,29 @@ function auditRaftRsOperationBoundary({root}) {
     const source = fs.readFileSync(file, 'utf8');
     const tree = parseModule(file, modules);
     const constants = moduleConstants(tree, file, modules);
-    const primitiveAliases = new Set();
-    walk(tree, (node) => {
-      if (node.type !== AUDIT_AST.VARIABLE_DECLARATOR) {
-        return;
-      }
-      if (node.id?.type === AUDIT_AST.IDENTIFIER &&
-          runtimePrimitives.has(memberName(node.init, constants))) {
-        primitiveAliases.add(node.id.name);
-      }
-      if (node.id?.type === AUDIT_AST.OBJECT_PATTERN) {
-        for (const property of node.id.properties) {
-          const primitive = property.key?.name ||
-            literalValue(property.key, constants);
-          const alias = property.value?.name;
-          if (runtimePrimitives.has(primitive) && alias) {
-            primitiveAliases.add(alias);
-          }
-        }
-      }
-    });
+    const primitiveAliases = collectPrimitiveAliases(tree, runtimePrimitives, constants);
     walk(tree, (node) => {
       const specifier = importSource(node, constants);
-      if (typeof specifier === 'string' &&
-          DIRECT_BINDING_PATTERN.test(specifier) &&
-          fileName !== BINDING_OWNER) {
-        violations.push(violation(
-          fileName, AUDIT_VIOLATION.DIRECT_BINDING_IMPORT,
-          specifier));
-      }
-      if (resolvesTo(file, specifier, coreLoader) &&
-        !arrayIncludes([RUNTIME_OWNER, CORE_LOADER], fileName)) {
-        violations.push(violation(
-          fileName, AUDIT_VIOLATION.BINDING_IMPORT_OUTSIDE_OWNER,
-          String(specifier)));
-      }
-      if (resolvesTo(file, specifier, runtimeOwner) &&
-        fileName !== PORT_CONSTRUCTOR) {
-        violations.push(violation(
-          fileName, AUDIT_VIOLATION.RUNTIME_OWNER_IMPORT_BYPASS,
-          String(specifier)));
-      }
-      if (resolvesTo(file, specifier, bindingOwner) &&
-          fileName !== RUNTIME_OWNER) {
-        violations.push(violation(
-          fileName, AUDIT_VIOLATION.BINDING_OWNER_IMPORT_BYPASS,
-          String(specifier)));
-      }
-      if (resolvesTo(file, specifier, lifecycleAdmin) &&
-        fileName !== LIFECYCLE_COORDINATOR) {
-        violations.push(violation(fileName,
-          AUDIT_VIOLATION.LIFECYCLE_ADMIN_IMPORT_BYPASS,
-          String(specifier)));
-      }
-      if (resolvesTo(file, specifier, lifecycleOwner) &&
-        !arrayIncludes(
-          [PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER],
-          fileName,
-        ) && !isLifecycleOperationImport(fileName, node)) {
-        violations.push(violation(fileName,
-          AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
-          String(specifier)));
-      }
-      if (resolvesTo(file, specifier, membershipAdmin) &&
-        !arrayIncludes(
-          [PORT_CONSTRUCTOR, MEMBERSHIP_COORDINATOR, MEMBERSHIP_ADMIN],
-          fileName,
-        )) {
-        violations.push(violation(fileName,
-          AUDIT_VIOLATION.MEMBERSHIP_ADMIN_IMPORT_BYPASS,
-          String(specifier)));
-      }
+      checkImportTargetRules(file, fileName, specifier, targets, violations);
+      checkLifecycleImportViolations(file, fileName, node, specifier, targets, violations);
       if (node.type === AUDIT_AST.CALL_EXPRESSION) {
-        const calledMember = memberName(node.callee, constants);
-        const raftRsModule = /^src\/raft\/raft-rs-/u.test(fileName);
-        if (runtimePrimitives.has(calledMember) && fileName !== RUNTIME_OWNER &&
-          (raftRsModule || receiverLooksLikeCore(node.callee, constants))) {
-          violations.push(violation(fileName,
-            AUDIT_VIOLATION.CORE_INVOCATION_OUTSIDE_OWNER, calledMember));
-        }
-        if (node.callee?.type === AUDIT_AST.IDENTIFIER &&
-          primitiveAliases.has(node.callee.name) &&
-          fileName !== RUNTIME_OWNER) {
-          violations.push(violation(fileName,
-            AUDIT_VIOLATION.CORE_ALIAS_INVOCATION_OUTSIDE_OWNER,
-            node.callee.name));
-        }
-        if (arrayIncludes(LIFECYCLE_WRITE_METHODS, calledMember) &&
-          !arrayIncludes(LIFECYCLE_WRITERS, fileName)) {
-          violations.push(violation(fileName,
-            AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER, calledMember));
-        }
+        checkCallExpressionViolations(
+          fileName, node, constants, runtimePrimitives, primitiveAliases, violations);
       }
-      if (node.type === AUDIT_AST.EXPORT_NAMED_DECLARATION &&
-        fileName !== BINDING_OWNER) {
-        const names = arrayMap(
-          node.specifiers, (entry) => entry.local?.name);
-        if (arraySome(names, (name) =>
-          arrayIncludes(BINDING_LOADER_EXPORTS, name))) {
-          violations.push(violation(
-            fileName,
-            AUDIT_VIOLATION.BINDING_LOADER_REEXPORT,
-            names.join(AUDIT_SYNTAX.LIST_SEPARATOR),
-          ));
-        }
-      }
+      checkExportLoaderReexport(fileName, node, violations);
     });
     if (fileName !== LIFECYCLE_OWNER) {
       arrayPush(violations, ...arrayMap(lifecycleSqlWrites(tree, constants),
         (text) => violation(fileName, AUDIT_VIOLATION.LIFECYCLE_SQL_OUTSIDE_OWNER, text)));
-      arrayPush(violations, ...lifecycleReexports(tree, file, fileName, lifecycleOwner));
+      if (!stringStartsWith(fileName, RAFT_SOURCE_PREFIX)) {
+        arrayPush(violations, ...arrayMap(
+          lifecycleSqlStatements(tree, constants, LIFECYCLE_QUERY_SQL),
+          (text) => violation(fileName, AUDIT_VIOLATION.LIFECYCLE_SQL_OUTSIDE_OWNER, text)));
+      }
+      arrayPush(violations, ...lifecycleReexports(tree, file, fileName, targets.lifecycleOwner));
     }
     arrayPush(violations, ...nativeRetirementCensus(source,
-      {file, fileName, lifecycleAdmin}));
+      {file, fileName, lifecycleAdmin: targets.lifecycleAdmin}));
   }
   return Object.freeze(violations);
 }
@@ -686,6 +715,16 @@ function nativeRetirementCensus(source, {file, fileName, lifecycleAdmin}) {
       AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER, NATIVE_RETIREMENT_METHOD)),
     ...arrayMap(census.violations, (entry) => violation(fileName, unfollowed, entry.reason)),
   ];
+}
+
+if (process.argv[1] &&
+    path.resolve(process.argv[1]) ===
+      path.resolve(new URL(import.meta.url).pathname)) {
+  const violations = auditRaftRsOperationBoundary({root: process.cwd()});
+  if (violations.length > 0) {
+    console.error(JSON.stringify(violations, null, 2));
+    process.exitCode = 1;
+  }
 }
 
 export {

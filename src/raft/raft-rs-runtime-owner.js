@@ -99,8 +99,11 @@ import {answerCommittedMembership, answerCommittedLearnerAction} from
   './raft-rs-committed-membership-read.js';
 import {committedMembershipContext} from
   './raft-rs-committed-membership-context.js';
-import {applyCommittedEntryTransaction} from
-  './raft-rs-application-transaction-owner.js';
+import {
+  MAX_NORMAL_APPLY_SLICE,
+  applyCommittedEntrySliceTransaction,
+  nextCommittedEntrySlice,
+} from './raft-rs-application-transaction-owner.js';
 import {
   persistenceAdmitted,
   whenPersistenceAdmitted,
@@ -119,12 +122,12 @@ import {proposeMembershipTransition} from
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
+const MAX_SCHEDULED_INBOUND_DRAIN_BATCH = 32;
 // A group holds no cached usable status answer (a discarded core's answers
 // are never reused).
 const NO_STATUS_OBSERVATION = null;
 // The shared replacement attempt has recorded no failure yet.
 const NO_REPLACEMENT_FAILURE = null;
-
 
 let core = null;
 let runtimeHealth = HEALTHY;
@@ -1129,16 +1132,9 @@ function enqueue(group, work) {
   return answered;
 }
 
-// The configuration a committed entry leaves the core holding, in the core
-// call's own shape on every path: {ok: true, value, decoded?} once a
-// conf-change entry is applied (or the configuration of any other entry is
-// read), {ok: false, result} naming the core call that failed.
-// A joiner opens from the committed configuration at its bootstrap index j
-// (C_j, itself a learner in it); the configuration entries at or below j are
-// history C_j already contains, so they are not applied to the core again:
-// replayed onto C_j they would walk it through configurations the group
-// never held (a transient sole voter, or no voter at all - which raft-rs
-// refuses) instead of leaving it at C_j. A founder's bootstrap index is 0.
+// ConfState held after applying a committed entry. A joiner opens at bootstrap
+// index j (C_j, itself a learner); entries <= j are history already in C_j, so
+// replaying them onto C_j would walk invalid configurations (e.g., zero voters).
 function foldedIntoBootstrap(group, entry) {
   return group.gate !== null && group.gate.bootstrapIndex > 0n &&
     BigInt(entry.index) <= group.gate.bootstrapIndex;
@@ -1146,47 +1142,32 @@ function foldedIntoBootstrap(group, entry) {
 
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
   if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
-    const decoded = invokeCoreAt(
-      group, expectedGeneration,
+    const decoded = invokeCoreAt(group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
-    if (!decoded.ok) {
-      return decoded;
-    }
+    if (!decoded.ok) return decoded;
     const membershipContext = committedMembershipContext(decoded.value);
     if (foldedIntoBootstrap(group, entry)) {
       // Replay origin provenance without replaying historical ConfState over C_j.
       return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
         membershipContext};
     }
-    const applied = invokeCoreAt(
-      group, expectedGeneration, 'apply_conf_change', decoded.value);
-    if (!applied.ok) {
-      return applied;
-    }
-    const set = invokeCoreAt(
-      group, expectedGeneration, 'set_conf_state', applied.value);
-    if (!set.ok) {
-      return set;
-    }
+    const applied = invokeCoreAt(group, expectedGeneration, 'apply_conf_change', decoded.value);
+    if (!applied.ok) return applied;
+    const set = invokeCoreAt(group, expectedGeneration, 'set_conf_state', applied.value);
+    if (!set.ok) return set;
     return {...applied, decoded: decoded.value, membershipContext};
   }
-  return invokeCoreAt(
-    group, expectedGeneration, CORE_OPERATION.CONF_STATE);
+  return invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE);
 }
 
-// A committed entry the core refused to resolve (raft-rs refusing to apply a
-// committed configuration change: "removed all voters") cannot be applied,
-// and the Ready that carried it was taken: the group's own application
-// failure, held and reconstructed from its durable record like a failed
-// application callback. A core failure (the runtime is replaced) or a stale
-// continuation is answered as it is.
+// Refused committed conf-change resolution becomes this group's application
+// failure (held/reconstructed); core traps or stale generations stay as-is.
 function unresolvedCommittedEntry(group, failed) {
   return failed.outcome === CORE_REFUSED ?
     groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       {message: failed.reason, detail: {coreOperation: failed.phase}}) :
     failed;
 }
-
 
 function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
   try {
@@ -1197,68 +1178,67 @@ function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
   }
 }
 
+function applyEntrySliceFailure(group, error) {
+  return {
+    ok: false,
+    result: groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
+      applicationFailureOf(error)),
+  };
+}
 
-function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
+function applyEntrySliceDurablyOrFailure({group, entries, resolvedConfState,
   nextMembershipGeneration, admitted}) {
   try {
-    applyCommittedEntryTransaction({
-      store: group.store,
-      groupId: group.groupId,
-      entry,
+    applyCommittedEntrySliceTransaction({
+      store: group.store, groupId: group.groupId, entries,
       confState: resolvedConfState.value,
       membershipGenerationIndex: String(nextMembershipGeneration),
-      applyCommittedEntry: group.applyCommittedEntry,
-      admitted,
+      applyCommittedEntry: group.applyCommittedEntry, admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
-      applyCommittedMembershipContext:
-        group.applyCommittedMembershipContext,
+      applyCommittedMembershipContext: group.applyCommittedMembershipContext,
       runApplySlice: group.runApplySlice,
     });
     return ENTRY_APPLY_DURABLE_OK;
   } catch (error) {
     group.applyTransactionRolledBack?.();
-    return {ok: false, result: groupHostFailure(group,
-      RUNTIME_PHASE.APPLICATION, applicationFailureOf(error))};
+    return applyEntrySliceFailure(group, error);
   }
 }
 
-function applyOneEntry(group, expectedGeneration, entry) {
+function applyCommittedSlice(group, expectedGeneration, slice) {
+  const leadEntry = slice[0];
   const resolvedConfState = resolveEntryConfStateOrFailure(
-    group, expectedGeneration, entry);
+    group, expectedGeneration, leadEntry);
   if (!resolvedConfState.ok) {
     return {ok: false, result: unresolvedCommittedEntry(group, resolvedConfState.result)};
   }
   const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
-    group.peerId, BigInt(entry.index));
+    group.peerId, BigInt(leadEntry.index));
   if (resolvedConfState.decoded !== undefined) {
     group.confChangeEntriesApplied = (group.confChangeEntriesApplied ?? 0) + 1;
   }
   const priorMembershipGeneration = group.membershipGenerationIndex;
   const nextMembershipGeneration = resolvedConfState.decoded !== undefined &&
-      !foldedIntoBootstrap(group, entry) &&
-      BigInt(entry.index) > priorMembershipGeneration ?
-    BigInt(entry.index) : priorMembershipGeneration;
-  const applyFailure = applyEntryDurablyOrFailure({
-    group, entry, resolvedConfState, nextMembershipGeneration, admitted,
+      !foldedIntoBootstrap(group, leadEntry) &&
+      BigInt(leadEntry.index) > priorMembershipGeneration ?
+    BigInt(leadEntry.index) : priorMembershipGeneration;
+  const applyFailure = applyEntrySliceDurablyOrFailure({
+    group, entries: slice, resolvedConfState, nextMembershipGeneration, admitted,
   });
-  if (!applyFailure.ok) {
-    return {ok: false, result: applyFailure.result};
-  }
+  if (!applyFailure.ok) return {ok: false, result: applyFailure.result};
   group.membershipGenerationIndex = nextMembershipGeneration;
-  if (resolvedConfState.decoded !== undefined) {
-    group.membershipGenerationKnown = true;
-  }
-  // The runtime's own applied index (the entry whose configuration the core
-  // now holds, durable with it) and the participation gate it moves.
-  recordAppliedEntry(group, BigInt(entry.index), admitted);
+  if (resolvedConfState.decoded !== undefined) group.membershipGenerationKnown = true;
+  recordAppliedEntry(group, BigInt(slice[slice.length - 1].index), admitted);
   return {ok: true};
 }
 
-// Each committed entry applies synchronously inside its own SQLite
-// transaction (applyOneEntry answers {ok} on every path).
+// Contiguous NORMAL slices apply inside one SQLite tx; conf changes stay 1-by-1.
 function applyEntries(group, expectedGeneration, entries) {
-  for (const entry of entries) {
-    const applied = applyOneEntry(group, expectedGeneration, entry);
+  for (let offset = 0; offset < entries.length;) {
+    const slice = nextCommittedEntrySlice(
+      entries, offset, MAX_NORMAL_APPLY_SLICE);
+    offset += slice.length;
+    const applied = applyCommittedSlice(group, expectedGeneration, slice);
     if (!applied.ok) {
       return applied.result;
     }
@@ -2036,25 +2016,19 @@ function perform(group, command) {
       return settledTurn(ready);
     }
     const expectedGeneration = runtimeGeneration;
-    // Capture only after reconstruction admits execution. Later arrivals keep
-    // their place in the group queue and their existing owned inbound wake.
-    const inboundExtent = group.inbound.length;
+    // Capture only after reconstruction admits execution. Scheduled inbound
+    // drains cap each turn to yield to the event loop.
+    const inboundExtent = command.type === RUNTIME_COMMAND.DRAIN_INBOUND ?
+      Math.min(group.inbound.length, MAX_SCHEDULED_INBOUND_DRAIN_BATCH) :
+      group.inbound.length;
     return drainInbound(group, expectedGeneration, inboundExtent,
       () => performCommand(group, command, expectedGeneration));
   });
 }
 
-// step() hands the runtime an envelope; the runtime drives it through the
-// core itself. The drain is scheduled once per burst of deliveries, on the
-// group's next turn of its own clock (so a delivery never re-enters the core
-// inside its sender's Ready, and an operation already asked for on this turn
-// drains the envelopes first), and enters the core through the group's queue,
-// admitted by the port's lifecycle owner like every other entry. It is not a
-// tick: a replica whose scheduling is stopped never campaigns from it.
-// While a user transaction holds the connection nothing enters the core: the
-// envelopes stay queued and the drain retries on the group's own timers,
-// outside the queue, until the store admits persistence again or the
-// admission bound passes (then the next operation drains them).
+// Scheduled drain enters the group's queue on its own clock (never inside a
+// sender's Ready and never acting as a tick). While a user transaction holds
+// the connection, envelopes stay queued and retry on the bounded poll timer.
 function armInboundWake(group, delayMs) {
   group.inboundDrainScheduled = true;
   try {
@@ -2094,6 +2068,24 @@ function retryInboundDrainWhenAdmitted(group) {
   armInboundWake(group, PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
 }
 
+function rescheduleRemainingInboundDrain(group, result) {
+  if (!group.closed && group.inbound.length > 0 && !group.inboundDrainScheduled) {
+    if (runtimeHealth !== HEALTHY) {
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.SHARED_RUNTIME;
+    } else if (result.outcome === CORE_OK) {
+      scheduleInboundDrain(group);
+    } else if (result.reason === RUNTIME_REASON.USER_TRANSACTION_OPEN &&
+        group.health === USABLE) {
+      if (persistenceAdmitted(group)) {
+        scheduleInboundDrain(group);
+      } else {
+        retryInboundDrainWhenAdmitted(group);
+      }
+    }
+  }
+  return settledTurn(result);
+}
+
 function runScheduledInboundDrain(group) {
   group.inboundDrainScheduled = false;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CALLBACK);
@@ -2118,10 +2110,13 @@ function runScheduledInboundDrain(group) {
   }
   group.inboundDrainDeadline = null;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.TURN_REQUEST);
-  const drained = group.admitScheduledEntry(() => enqueue(group, () =>
-    perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})));
-  if (!drained.settled) {
-    drained.pending.catch(() => undefined);
+  const finished = group.admitScheduledEntry(() =>
+    continueTurn(
+      enqueue(group, () => perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})),
+      (result) => rescheduleRemainingInboundDrain(group, result),
+    ));
+  if (!finished.settled) {
+    finished.pending.catch(() => undefined);
   }
 }
 

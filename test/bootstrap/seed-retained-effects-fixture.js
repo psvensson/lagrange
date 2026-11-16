@@ -6,7 +6,7 @@ import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {decodeCommittedProposal, encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
-import {applyCommittedEntryTransaction} from '../../src/raft/raft-rs-application-transaction-owner.js';
+import {applyCommittedEntrySliceTransaction} from '../../src/raft/raft-rs-application-transaction-owner.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {ownerStampedSeedDeclaration} from
   '../test-helpers/original-allocation-declaration-fixture.js';
@@ -112,8 +112,8 @@ function fixture(t, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
 }
 
 function applyRetainedEntry(f, entry, expectedOutcome) {
-  const result = applyCommittedEntryTransaction({store: f.store, groupId: f.member.groupId,
-    entry, confState: f.confState,
+  const result = applyCommittedEntrySliceTransaction({store: f.store, groupId: f.member.groupId,
+    entries: [entry], confState: f.confState,
     applyCommittedEntry: f.service ? (bytes, {index, term, effects}) => {
       const afterCommit = [];
       const applied = f.service.applyCommittedEntry({command: decodeCommittedProposal(bytes),

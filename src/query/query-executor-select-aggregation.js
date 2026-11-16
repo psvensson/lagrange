@@ -1,48 +1,94 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  areSqlScalarsEqualWithAffinity,
+  compareSqlScalarsWithAffinity,
+  resolveOperandComparisonAffinity,
+} from './distributed/residual-predicate-evaluator.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
-const CANONICAL_NUMERIC_STRING_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u;
-
-function isSafeComparableNumber(value) {
-  return (
-    typeof value === QUERY_EXECUTOR_LITERAL.STRING_NUMBER &&
-    Number.isFinite(value) &&
-    Math.abs(value) <= Number.MAX_SAFE_INTEGER
-  );
-}
-
-function isCanonicalNumericString(value) {
-  if (
-    typeof value !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-    !CANONICAL_NUMERIC_STRING_RE.test(value)
-  ) {
+function evaluateScalarComparisonOperator(operator, left, right, leftNode, rightNode) {
+  if (operator === QUERY_EXECUTOR_LITERAL.STRING_VALUE_5) {
+    return areSqlScalarsEqualWithAffinity(left, right, leftNode, rightNode);
+  }
+  const cmp = compareSqlScalarsWithAffinity(left, right, leftNode, rightNode);
+  if (cmp === null) {
     return false;
   }
-  const parsed = Number(value);
-  return (
-    Number.isFinite(parsed) &&
-    Math.abs(parsed) <= Number.MAX_SAFE_INTEGER
-  );
-}
-
-function coerceComparableScalars(left, right) {
-  if (isSafeComparableNumber(left) && isCanonicalNumericString(right)) {
-    return [left, Number(right)];
+  switch (operator) {
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_6:
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_7:
+    return cmp !== 0;
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_8:
+    return cmp < 0;
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_9:
+    return cmp <= 0;
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_10:
+    return cmp > 0;
+  case QUERY_EXECUTOR_LITERAL.STRING_VALUE_11:
+    return cmp >= 0;
+  default:
+    return true;
   }
-  if (isSafeComparableNumber(right) && isCanonicalNumericString(left)) {
-    return [Number(left), right];
+}
+
+function applyGroupColumnAggregate(executor, result, rows, col) {
+  const expr = col.expression || col;
+  if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE) {
+    const alias = col.alias || `${expr.function}(${executor.getArgName(expr)})`;
+    result[alias] = executor.computeAggregate(rows, expr);
+  } else if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF && rows.length > 0) {
+    result[expr.column] = rows[0][expr.column];
   }
-  return [left, right];
 }
 
-function areScalarsEqual(left, right) {
-  const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
-  return coercedLeft === coercedRight;
+function collectAggregateValues(rows, arg, distinct) {
+  const colName = arg?.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF ? arg.column : null;
+  if (!colName) {
+    return rows;
+  }
+  const qualifiedCol = arg.table ? `${arg.table}.${colName}` : null;
+  const values = rows
+    .map((row) =>
+      qualifiedCol && Object.prototype.hasOwnProperty.call(row, qualifiedCol) ?
+        row[qualifiedCol] :
+        row[colName],
+    )
+    .filter((value) => value !== null && value !== undefined);
+  return distinct ? [...new Set(values)] : values;
 }
 
+function reduceNumericAggregate(func, values) {
+  if (func === QUERY_EXECUTOR_LITERAL.STRING_SUM) {
+    return values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+  }
+  if (values.length === 0) {
+    return null;
+  }
+  if (func === QUERY_EXECUTOR_LITERAL.STRING_AVG) {
+    const avgSum = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+    return avgSum / values.length;
+  }
+  if (func === QUERY_EXECUTOR_LITERAL.STRING_MIN) {
+    return values.reduce((min, value) => (value < min ? value : min), values[0]);
+  }
+  if (func === QUERY_EXECUTOR_LITERAL.STRING_MAX) {
+    return values.reduce((max, value) => (value > max ? value : max), values[0]);
+  }
+  return null;
+}
+
+function resolveRowColumnRef(row, expr) {
+  if (
+    expr.table &&
+    Object.prototype.hasOwnProperty.call(row, `${expr.table}.${expr.column}`)
+  ) {
+    return row[`${expr.table}.${expr.column}`];
+  }
+  return row[expr.column];
+}
 // Compare one ORDER BY clause's values. Returns 0 whenever the original inline
 // comparator would have fallen through to the next clause: equal values, and
 // unequal values that answer neither < nor > (e.g. mixed types).
@@ -228,27 +274,15 @@ const queryExecutorSelectAggregationMethods = {
    */
   computeGroupAggregates(rows, ast) {
     const result = {};
-
-    // Copy group by columns from first row
     if (ast.groupBy && rows.length > 0) {
+      const firstRow = rows[0];
       for (const g of ast.groupBy) {
         const col = g.column || g.expression?.column || g;
-        result[col] = rows[0][col];
+        result[col] = firstRow[col];
       }
     }
-
-    // Compute aggregates
     for (const col of ast.columns) {
-      const expr = col.expression || col;
-      if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE) {
-        const alias = col.alias || `${expr.function}(${this.getArgName(expr)})`;
-        result[alias] = this.computeAggregate(rows, expr);
-      } else if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF) {
-        const colName = expr.column;
-        if (rows.length > 0) {
-          result[colName] = rows[0][colName];
-        }
-      }
+      applyGroupColumnAggregate(this, result, rows, col);
     }
     return result;
   },
@@ -300,71 +334,13 @@ const queryExecutorSelectAggregationMethods = {
   computeAggregate(rows, expr) {
     const func = expr.function.toUpperCase();
     const arg = expr.argument;
-    const colName = arg?.type === 'column_ref' ? arg.column : null;
-    let values = rows;
-    if (colName) {
-      const qualifiedCol = arg.table ? `${arg.table}.${colName}` : null;
-      values = rows
-        .map((row) => {
-          if (
-            qualifiedCol &&
-            Object.prototype.hasOwnProperty.call(row, qualifiedCol)
-          ) {
-            return row[qualifiedCol];
-          }
-          return row[colName];
-        })
-        .filter((value) => value !== null && value !== undefined);
+    const values = collectAggregateValues(rows, arg, expr.distinct);
+    if (func === QUERY_EXECUTOR_LITERAL.STRING_COUNT) {
+      return arg?.type === QUERY_EXECUTOR_LITERAL.STRING_STAR ?
+        rows.length :
+        values.length;
     }
-    if (expr.distinct && colName) {
-      values = [...new Set(values)];
-    }
-    switch (func) {
-    case QUERY_EXECUTOR_LITERAL.STRING_COUNT:
-      // COUNT(*) counts all rows, COUNT(column) counts non-null values
-      if (arg?.type === QUERY_EXECUTOR_LITERAL.STRING_STAR) {
-        return rows.length;
-      }
-      return values.length;
-    case QUERY_EXECUTOR_LITERAL.STRING_SUM:
-      // SUM aggregates numeric values across all partitions
-      return values.reduce(
-        (sum, value) => sum + (Number(value) || 0),
-        0,
-      );
-    case QUERY_EXECUTOR_LITERAL.STRING_AVG:
-    {
-      // AVG must be computed on combined data, not averaged averages
-      if (values.length === 0) {
-        return null;
-      }
-      const avgSum = values.reduce(
-        (sum, value) => sum + (Number(value) || 0),
-        0,
-      );
-      return avgSum / values.length;
-    }
-    case QUERY_EXECUTOR_LITERAL.STRING_MIN:
-      // MIN finds the minimum across all partitions
-      if (values.length === 0) {
-        return null;
-      }
-      return values.reduce(
-        (min, value) => (value < min ? value : min),
-        values[0],
-      );
-    case QUERY_EXECUTOR_LITERAL.STRING_MAX:
-      // MAX finds the maximum across all partitions
-      if (values.length === 0) {
-        return null;
-      }
-      return values.reduce(
-        (max, value) => (value > max ? value : max),
-        values[0],
-      );
-    default:
-      return null;
-    }
+    return reduceNumericAggregate(func, values);
   },
 
   /**
@@ -405,19 +381,9 @@ const queryExecutorSelectAggregationMethods = {
     case QUERY_EXECUTOR_LITERAL.STRING_PARAMETER:
       return params[expr.index];
     case QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF:
-      if (
-        expr.table &&
-        Object.prototype.hasOwnProperty.call(row, `${expr.table}.${expr.column}`)
-      ) {
-        return row[`${expr.table}.${expr.column}`];
-      }
-      return row[expr.column];
+      return resolveRowColumnRef(row, expr);
     case QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE:
-    {
-      // For HAVING, aggregate values should already be computed
-      const alias = `${expr.function}(${this.getArgName(expr)})`;
-      return row[alias];
-    }
+      return row[`${expr.function}(${this.getArgName(expr)})`];
     default:
       return true;
     }
@@ -434,31 +400,23 @@ const queryExecutorSelectAggregationMethods = {
   evaluateBinary(row, expr, params = []) {
     const left = this.evaluateExpression(row, expr.left, params);
     const right = this.evaluateExpression(row, expr.right, params);
-    const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
     switch (expr.operator) {
     case QUERY_EXECUTOR_LITERAL.STRING_AND:
       return left && right;
     case QUERY_EXECUTOR_LITERAL.STRING_OR:
       return left || right;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_5:
-      return coercedLeft === coercedRight;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_6:
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_7:
-      return coercedLeft !== coercedRight;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_8:
-      return coercedLeft < coercedRight;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_9:
-      return coercedLeft <= coercedRight;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_10:
-      return coercedLeft > coercedRight;
-    case QUERY_EXECUTOR_LITERAL.STRING_VALUE_11:
-      return coercedLeft >= coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_IS_NULL:
       return left === null || left === undefined;
     case QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL:
       return left !== null && left !== undefined;
     default:
-      return true;
+      return evaluateScalarComparisonOperator(
+        expr.operator,
+        left,
+        right,
+        expr.left,
+        expr.right,
+      );
     }
   },
 
@@ -494,8 +452,15 @@ const queryExecutorSelectAggregationMethods = {
    */
   evaluateIn(row, expr, params = []) {
     const value = this.evaluateExpression(row, expr.expression, params);
-    const set = expr.values.map((v) => this.evaluateExpression(row, v, params));
-    const matches = set.some((candidate) => areScalarsEqual(candidate, value));
+    const exprAffinity = resolveOperandComparisonAffinity(expr.expression, value);
+    const matches = expr.values.some((v) =>
+      areSqlScalarsEqualWithAffinity(
+        value,
+        this.evaluateExpression(row, v, params),
+        exprAffinity,
+        v,
+      ),
+    );
     return expr.negated ? !matches : matches;
   },
 
@@ -511,9 +476,9 @@ const queryExecutorSelectAggregationMethods = {
     const value = this.evaluateExpression(row, expr.expression, params);
     const low = this.evaluateExpression(row, expr.low, params);
     const high = this.evaluateExpression(row, expr.high, params);
-    const [lowValue, coercedLow] = coerceComparableScalars(value, low);
-    const [highValue, coercedHigh] = coerceComparableScalars(value, high);
-    return lowValue >= coercedLow && highValue <= coercedHigh;
+    const lowCmp = compareSqlScalarsWithAffinity(value, low, expr.expression, expr.low);
+    const highCmp = compareSqlScalarsWithAffinity(value, high, expr.expression, expr.high);
+    return lowCmp !== null && lowCmp >= 0 && highCmp !== null && highCmp <= 0;
   },
 
   /**

@@ -80,6 +80,19 @@ function deriveParticipantEntryId(idempotencyKey, partitionId) {
   return `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`;
 }
 
+function buildRejectedParticipantResult(partitionId, participant, reason) {
+  const message = reason?.message;
+  return {
+    partitionId,
+    role: participant?.role,
+    success: false,
+    errorCode: reason?.errorCode ?? null,
+    error: typeof message === 'string' && message.length > 0 ?
+      message :
+      QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+  };
+}
+
 /**
  * Canonical owner for distributed INSERT/UPDATE/DELETE execution.
  */
@@ -205,22 +218,7 @@ class DistributedWriteCoordinator {
     return enforceCoordinatorUniqueConstraints(this, ast, params);
   }
 
-  /**
-   * Execute a distributed write plan and merge participant results.
-   * @param {Object} plan - Distributed write plan.
-   * @param {Array} params - Bound parameters.
-   * @param {Object} [executionOptions] - Global execution options.
-   * @return {Promise<Object>} Aggregated write result.
-   */
-  async executePlan(plan, params = [], executionOptions = {}) {
-    if (plan.ast) {
-      await this.enforceCrossPartitionUniqueConstraints(plan.ast, params);
-    }
-    const participantResults = [];
-    const orderedPartitions = Array.from(
-      plan.partitionStatements.keys(),
-    ).sort();
-
+  async executePlanParticipants(plan, orderedPartitions, params, executionOptions) {
     if (orderedPartitions.length === 1) {
       const partitionId = orderedPartitions[0];
       const participant = plan.partitionStatements.get(partitionId);
@@ -236,52 +234,65 @@ class DistributedWriteCoordinator {
           participant.executionOptions,
         ),
       );
-      participantResults.push({
+      return [{
         partitionId,
-        role: participant.role, // every partitionStatements entry sets role
+        role: participant.role,
         ...result,
-      });
-    } else {
-      const promises = orderedPartitions.map((partitionId) => {
-        const participant = plan.partitionStatements.get(partitionId);
-        return this.executePartitionStatement(
-          plan.statementType,
-          participant.ast,
-          partitionId,
-          params,
-          this.createParticipantExecutionOptions(
-            plan,
-            partitionId,
-            executionOptions,
-            participant.executionOptions,
-          ),
-        ).then((result) => ({
-          partitionId,
-          role: participant.role, // every partitionStatements entry sets role
-          ...result,
-        }));
-      });
-      const settled = await Promise.allSettled(promises);
-      for (const outcome of settled) {
-        if (outcome.status === PROMISE_STATUS_FULFILLED) {
-          participantResults.push(outcome.value);
-        } else {
-          participantResults.push({
-            partitionId: null,
-            success: false,
-            error: outcome.reason?.message ||
-                QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          });
-        }
-      }
-      participantResults.sort((a, b) => {
-        if (a.partitionId === null && b.partitionId === null) return 0;
-        if (a.partitionId === null) return 1;
-        if (b.partitionId === null) return -1;
-        return a.partitionId < b.partitionId ? -1 :
-          a.partitionId > b.partitionId ? 1 : 0;
-      });
+      }];
     }
+    const promises = orderedPartitions.map((partitionId) => {
+      const participant = plan.partitionStatements.get(partitionId);
+      return this.executePartitionStatement(
+        plan.statementType,
+        participant.ast,
+        partitionId,
+        params,
+        this.createParticipantExecutionOptions(
+          plan,
+          partitionId,
+          executionOptions,
+          participant.executionOptions,
+        ),
+      ).then((result) => ({
+        partitionId,
+        role: participant.role,
+        ...result,
+      }));
+    });
+    const settled = await Promise.allSettled(promises);
+    return settled.map((outcome, index) => {
+      if (outcome.status === PROMISE_STATUS_FULFILLED) {
+        return outcome.value;
+      }
+      const partitionId = orderedPartitions[index];
+      return buildRejectedParticipantResult(
+        partitionId,
+        plan.partitionStatements.get(partitionId),
+        outcome.reason,
+      );
+    });
+  }
+
+  /**
+   * Execute a distributed write plan and merge participant results.
+   * @param {Object} plan - Distributed write plan.
+   * @param {Array} params - Bound parameters.
+   * @param {Object} [executionOptions] - Global execution options.
+   * @return {Promise<Object>} Aggregated write result.
+   */
+  async executePlan(plan, params = [], executionOptions = {}) {
+    if (plan.ast) {
+      await this.enforceCrossPartitionUniqueConstraints(plan.ast, params);
+    }
+    const orderedPartitions = Array.from(
+      plan.partitionStatements.keys(),
+    ).sort();
+    const participantResults = await this.executePlanParticipants(
+      plan,
+      orderedPartitions,
+      params,
+      executionOptions,
+    );
 
     const failedParticipants = participantResults.filter(
       (result) => !result.success,

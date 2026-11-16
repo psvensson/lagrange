@@ -25,6 +25,8 @@ import {
   ParallelQueryCoordinator,
 } from '../../src/query/distributed/parallel-query-coordinator.js';
 import {
+  areSqlScalarsEqualWithAffinity,
+  compareSqlScalarsWithAffinity,
   residualPredicateAdmitsRow,
 } from '../../src/query/distributed/residual-predicate-evaluator.js';
 
@@ -630,30 +632,30 @@ async (t) => {
     'residual WHERE predicates coerce PG-wire string params against SQLite numeric columns',
   );
 
-  // Safe-integer boundary and non-canonical / non-numeric scalar negative controls:
-  const evalEq = (leftVal, rightVal) =>
+  // Safe-integer boundary and SQLite Section 4.2 affinity controls:
+  const evalColVsLiteralEq = (colVal, literalVal) =>
     executor.evaluateBinary(
-      {a: leftVal, b: rightVal},
+      {a: colVal},
       {
         type: 'binary',
         operator: '=',
         left: {type: 'column_ref', column: 'a'},
-        right: {type: 'column_ref', column: 'b'},
+        right: {type: 'literal', value: literalVal},
       },
     );
-  const evalResidualEq = (leftVal, rightVal) =>
+  const evalResidualColVsLiteralEq = (colVal, literalVal) =>
     residualPredicateAdmitsRow(
       {
         type: 'binary',
         operator: '=',
         left: {type: 'column_ref', column: 'a'},
-        right: {type: 'column_ref', column: 'b'},
+        right: {type: 'literal', value: literalVal},
       },
-      {a: leftVal, b: rightVal},
+      {a: colVal},
     );
-  for (const [leftVal, rightVal, label] of [
+  for (const [colVal, literalVal, label] of [
     ['9007199254740993', 9007199254740992, 'unsafe 64-bit integer string vs rounded number'],
-    ['01', 1, 'leading-zero string vs number'],
+    ['1.0', 1, 'TEXT column "1.0" vs integer literal 1'],
     ['01', '1', 'leading-zero string vs canonical string'],
     ['abc', 'def', 'distinct non-numeric strings'],
     [null, 1, 'null vs number'],
@@ -662,13 +664,69 @@ async (t) => {
     [false, '0', 'boolean false vs string 0'],
     [NaN, '0', 'NaN vs string 0'],
   ]) {
-    t.equal(evalEq(leftVal, rightVal), false, `evaluateBinary rejects ${label}`);
+    t.equal(evalColVsLiteralEq(colVal, literalVal), false, `evaluateBinary rejects ${label}`);
     t.equal(
-      evalResidualEq(leftVal, rightVal),
+      evalResidualColVsLiteralEq(colVal, literalVal),
       false,
       `residualPredicateAdmitsRow rejects ${label}`,
     );
   }
+  t.equal(
+    evalColVsLiteralEq(1, '01'),
+    true,
+    'evaluateBinary coerces numeric text "01" against NUMERIC column 1',
+  );
+  t.equal(
+    evalResidualColVsLiteralEq(1, '01'),
+    true,
+    'residualPredicateAdmitsRow coerces numeric text "01" against NUMERIC column 1',
+  );
+  t.equal(
+    areSqlScalarsEqualWithAffinity('01', 1, 'NONE', 'NONE'),
+    false,
+    'NONE vs NONE performs no coercion',
+  );
+  t.equal(
+    compareSqlScalarsWithAffinity(1, '01', 'NONE', 'NONE'),
+    -1,
+    'NONE vs NONE orders number < string',
+  );
+});
+
+test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
+  'TEXT "1.0" = 1 -> [] vs INTEGER 1 = "01" -> [1]', async (t) => {
+  const cluster = buildJoinCluster({
+    users_p1: {
+      table: 'users',
+      rows: [
+        [1, 'alice', 35, 'east'],
+      ],
+    },
+    orders_p1: {
+      table: 'orders',
+      rows: [
+        [10, 1, 5, '1.0'],
+      ],
+    },
+  });
+
+  // 1) TEXT column o.status holding '1.0' compared to integer literal 1 on a LEFT JOIN residual WHERE:
+  const textSql =
+    'SELECT u.id FROM users AS u LEFT JOIN orders AS o ' +
+    'ON u.id = o.user_id WHERE o.status = 1';
+  const textRows = (await runJoin(cluster, textSql)).map((r) => r.id);
+  const textOracle = cluster.oracle.prepare(textSql).all().map((r) => r.id);
+  t.same(textOracle, [], 'better-sqlite3 oracle returns [] for TEXT "1.0" = 1');
+  t.same(textRows, textOracle, 'distributed residual evaluator matches oracle for TEXT "1.0" = 1');
+
+  // 2) INTEGER column o.user_id holding 1 compared to numeric text '01' on a LEFT JOIN residual WHERE:
+  const intSql =
+    'SELECT u.id FROM users AS u LEFT JOIN orders AS o ' +
+    'ON u.id = o.user_id WHERE o.user_id = \'01\'';
+  const intRows = (await runJoin(cluster, intSql)).map((r) => r.id);
+  const intOracle = cluster.oracle.prepare(intSql).all().map((r) => r.id);
+  t.same(intOracle, [1], 'better-sqlite3 oracle returns [1] for INTEGER 1 = "01"');
+  t.same(intRows, intOracle, 'distributed residual evaluator matches oracle for INTEGER 1 = "01"');
 });
 
 test('transactional reads redirect from follower replicas, pin session ' +

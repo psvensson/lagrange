@@ -399,10 +399,6 @@ async function prepareSession(service, payload, session) {
   // A sealed command already submitted belongs to its outcome owner. Only
   // a new PREPARE is topology admission; retries retain their exact bytes.
   if (session.sealed === null) {
-    if (participantCutoverPauseOf(service) !== null) {
-      return refusalOf(service, payload, CODE.CUTOVER_PAUSED,
-        {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
-    }
     const topology = topologyRefusalOf(service, payload);
     if (topology !== null) return topology;
   }

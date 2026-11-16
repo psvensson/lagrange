@@ -68,6 +68,12 @@ function ensureTelemetryStore(coordinator) {
   return coordinator.transactionBreakdownsById;
 }
 
+function countEnlistedParticipants(tx, recordedCount) {
+  const enlisted =
+    (tx?.participants?.size ?? ZERO) + (tx?.readOnlyParticipants?.size ?? ZERO);
+  return enlisted > ZERO ? enlisted : recordedCount;
+}
+
 function snapshotTransactionTelemetry(tx, outcome = null) {
   const telemetry = tx?.telemetry;
   if (!telemetry) {
@@ -89,9 +95,7 @@ function snapshotTransactionTelemetry(tx, outcome = null) {
     metadataMutations: telemetry.metadataMutations,
     metadataReads: telemetry.metadataReads,
     skippedParticipantSetMutations: telemetry.skippedParticipantSetMutations || ZERO,
-    participantCount: tx.participants instanceof Map ?
-      tx.participants.size :
-      telemetry.participantCount,
+    participantCount: countEnlistedParticipants(tx, telemetry.participantCount),
     prepareConcurrency: telemetry.prepareConcurrency,
     commitConcurrency: telemetry.commitConcurrency,
     statementCount: telemetry.statementCount,
@@ -105,13 +109,17 @@ function finalizeTransactionTelemetry(coordinator, tx, outcome) {
     return null;
   }
   tx.telemetry.totalMs = Math.max(ZERO, resolveNowMs() - tx.telemetry.startedAtMs);
-  tx.telemetry.participantCount = tx.participants instanceof Map ?
-    tx.participants.size :
-    tx.telemetry.participantCount;
+  tx.telemetry.participantCount = countEnlistedParticipants(
+    tx,
+    tx.telemetry.participantCount,
+  );
   // The one caller (distributed-transaction-decision-protocol.js) passes the
   // transaction's status, which the coordinator sets at construction.
   tx.telemetry.outcome = outcome;
-  const snapshot = snapshotTransactionTelemetry(tx, tx.telemetry.outcome);
+  const snapshot = snapshotTransactionTelemetry(
+    tx,
+    tx.telemetry.outcome,
+  );
   const store = ensureTelemetryStore(coordinator);
   store.set(snapshot.transactionId, snapshot);
   while (store.size > MAX_RETAINED_BREAKDOWNS) {
@@ -144,7 +152,7 @@ const distributedTransactionTelemetryMethods = {
         return store.get(transactionId);
       }
       const active = this.workflowCoordinator?.workflowsById?.get(transactionId);
-      return active ? snapshotTransactionTelemetry(active) : null;
+      return active ? snapshotTransactionTelemetry(active, null, this) : null;
     }
     return this.lastTransactionBreakdown || null;
   },

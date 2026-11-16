@@ -29,6 +29,7 @@ async function probeOnce(component, probe, probeContext) {
   try {
     outcome = await probe(probeContext);
   } catch (error) {
+    if (error?.terminal === true) throw error;
     return {ready: false, diagnostic: {error: errorText(error)}};
   }
   if (!outcome || typeof outcome.ready !== 'boolean' || !('diagnostic' in outcome)) {

@@ -636,63 +636,47 @@ class CreateMessageGroupPhase {
    * @return {Promise<void>}
    */
   async registerCreateSelfHostedMetadata() {
-    const bootstrapResponse =
-      this.delegates.getBootstrapResponse();
-    const assignment =
-      bootstrapResponse?.messageGroupAssignment;
-    if (
-      !assignment ||
-      assignment.strategy !==
-        AssignmentStrategy.CREATE_SELF_HOSTED
-    ) {
+    const bootstrapResponse = this.delegates.getBootstrapResponse();
+    const assignment = bootstrapResponse?.messageGroupAssignment;
+    if (!assignment ||
+        assignment.strategy !== AssignmentStrategy.CREATE_SELF_HOSTED) {
       return;
     }
-
     const groupId = assignment.groupId;
     if (!groupId) {
-      throw new Error(
-        JOINING_ERROR_MSG.SELF_HOSTED_MISSING_GROUP_ID,
-      );
+      throw new Error(JOINING_ERROR_MSG.SELF_HOSTED_MISSING_GROUP_ID);
     }
-
-    const messageGroupServices =
-      this.delegates.getMessageGroupServices();
-    const replicas = Array.from(
-      messageGroupServices.entries(),
-    ).filter(
+    const messageGroupServices = this.delegates.getMessageGroupServices();
+    const replicas = Array.from(messageGroupServices.entries()).filter(
       ([_replicaId, svc]) => svc?.groupId === groupId,
     );
-
     if (replicas.length === 0) {
-      throw new Error(
-        JOINING_ERROR_MSG
-          .selfHostedNoLocalReplicas(groupId),
-      );
+      throw new Error(JOINING_ERROR_MSG.selfHostedNoLocalReplicas(groupId));
     }
 
     const nowFn = this.delegates.getNow();
     const now = nowFn();
     const logger = this.delegates.getLogger();
-    const messageGroupRow = {
-      group_id: groupId,
-      group_name: groupId,
-      // Policy, not an identity count. Writing replicas.length here made a
-      // group that came up with one replica persist a DECLARED target of 1,
-      // which recovery then reads through the canonical decoder as authority.
-      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
-      leader_node_id: this.nodeId,
-      policy: JSON.stringify(
-        CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY,
-      ),
-      created_at: now,
-      updated_at: now,
-    };
-    this.pendingCreateSelfHostedMessageGroupRow = messageGroupRow;
-    if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
-      this.delegates.seedJoinTimeCacheRow(
-        TABLES.MESSAGE_GROUPS,
-        messageGroupRow,
-      );
+    if (assignment.reuseExistingGroup !== true) {
+      const messageGroupRow = {
+        group_id: groupId,
+        group_name: groupId,
+        // Policy, not an identity count. Writing replicas.length here made a
+        // group that came up with one replica persist a DECLARED target of 1,
+        // which recovery then reads through the canonical decoder as authority.
+        replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+        leader_node_id: this.nodeId,
+        policy: JSON.stringify(CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY),
+        created_at: now,
+        updated_at: now,
+      };
+      this.pendingCreateSelfHostedMessageGroupRow = messageGroupRow;
+      if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
+        this.delegates.seedJoinTimeCacheRow(
+          TABLES.MESSAGE_GROUPS,
+          messageGroupRow,
+        );
+      }
     }
 
     for (const [replicaId, svc] of replicas) {

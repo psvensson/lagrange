@@ -165,9 +165,9 @@ async function recordTransactionDecision(coordinator, tx, decision) {
       reportFollowedDecision(coordinator, tx, decision, recorded, persistError);
       return TRANSACTION_DECISION_RECORDING.RECORDED;
     }
-    // The caller cannot tell whether a decision exists: whatever it is
-    // answered may already be committed.
-    tx[COMMIT_POINT_REACHED_FIELD] = true;
+    // Zero-write / all-readOnly transactions have zero durable participants,
+    // so an unresolved decision write can never commit any partition changes.
+    tx[COMMIT_POINT_REACHED_FIELD] = record.participants.length > 0;
     coordinator.logger?.warn?.(TRANSACTION_DECISION_LOG_MSG.IN_DOUBT, {
       transactionId: tx.transactionId,
       attempted: decision,
@@ -198,7 +198,7 @@ async function adoptRecordedTransactionDecision(coordinator, tx) {
     tx.decision = record;
     return TRANSACTION_DECISION_RECORDING.RECORDED;
   }
-  tx[COMMIT_POINT_REACHED_FIELD] = true;
+  tx[COMMIT_POINT_REACHED_FIELD] = decisionParticipantsOf(tx).length > 0;
   return TRANSACTION_DECISION_RECORDING.IN_DOUBT;
 }
 

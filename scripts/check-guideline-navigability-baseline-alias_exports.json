@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.928Z",
+  "generatedAt": "2026-11-16T14:05:09.610Z",
   "rawViolationCount": 38,
   "violations": [
     {
@@ -203,7 +203,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-ledger.js",
-      "line": 546,
+      "line": 673,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

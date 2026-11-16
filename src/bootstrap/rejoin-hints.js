@@ -13,6 +13,7 @@ import {
   AUTO_REJOIN_DECISION_STATE,
   AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE,
   DURABLE_EVIDENCE_STATE,
+  ORIGINAL_SEED_ALLOCATION_STATE,
   REJOIN_HINTS_FILENAME,
   REJOIN_HINTS_WRITE_INTERVAL_MS,
   STARTUP_JOIN_MODE,
@@ -20,6 +21,7 @@ import {
 } from './rejoin-hints-constants.js';
 import {
   readDurableNodesTableSnapshot,
+  readOriginalSeedAllocationOutcome,
   readRejoinHints,
   readRejoinHintsOutcome,
 } from './rejoin-hints-durable-evidence.js';
@@ -335,103 +337,90 @@ function resolveDurableJoinSource(context = {}) {
     REJOIN_SOURCE.DURABLE_NODES_TABLE;
 }
 
+function extractHintedTopology(hints, hintsIdentityMatched, options, durableSnapshot) {
+  const hintPeerAddresses = hintsIdentityMatched ?
+    normalizePeerAddresses(hints?.peerAddresses, options.nodeId, options.nodeAddress) : [];
+  const peerAddresses = normalizePeerAddresses(
+    [...hintPeerAddresses, ...durableSnapshot.peerAddresses],
+    options.nodeId, options.nodeAddress);
+  const clusterNodeCount = Math.max(
+    hintsIdentityMatched ? parseClusterNodeCount(hints?.clusterNodeCount) : 0,
+    durableSnapshot.clusterNodeCount);
+  const localNodeRole = hintsIdentityMatched ?
+    normalizeNodeRole(hints?.localNodeRole) : null;
+  return {hintPeerAddresses, peerAddresses, clusterNodeCount, localNodeRole};
+}
+
+function resolveSeedBootstrapCompleted(allocationState, durableSnapshot) {
+  if (allocationState === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED) return true;
+  return allocationState === ORIGINAL_SEED_ALLOCATION_STATE.MISSING &&
+    durableSnapshot.hasDurableNodesTable === true;
+}
+
+function isDurableEvidenceBlocked(rejoinHintsRead, durableSnapshot, allocationState) {
+  return rejoinHintsRead.state === DURABLE_EVIDENCE_STATE.UNREADABLE ||
+    durableSnapshot.durableEvidenceUnreadable === true ||
+    allocationState === ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE;
+}
+
+function isDurableStatePresent({
+  hintsIdentityMatched, durableSnapshot, allocationState,
+  clusterNodeCount, durableEvidenceBlocked,
+}) {
+  return hintsIdentityMatched || durableSnapshot.hasDurableNodesTable ||
+    allocationState === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED ||
+    clusterNodeCount > 0 || durableEvidenceBlocked;
+}
+
 async function collectAutoRejoinDecisionContext(options = {}) {
   const rejoinHintsRead = await readRejoinHintsOutcome(options.dataDir);
   const hints = rejoinHintsRead.state === DURABLE_EVIDENCE_STATE.READABLE ?
-    rejoinHintsRead.hints :
-    null;
-  const durableEvidenceUnreadable =
-    rejoinHintsRead.state === DURABLE_EVIDENCE_STATE.UNREADABLE;
+    rejoinHintsRead.hints : null;
   const hintsIdentityMatched = hintsMatchLocalIdentity(
-    hints,
-    options.nodeId,
-    options.nodeAddress,
-  );
+    hints, options.nodeId, options.nodeAddress);
   const clusterIdMatch = classifyClusterIdMatch(
-    options.expectedClusterId,
-    hints?.clusterId,
-  );
+    options.expectedClusterId, hints?.clusterId);
   const durableSnapshot = await readDurableNodesTableSnapshot(options);
-  const hintPeerAddresses = hintsIdentityMatched ?
-    normalizePeerAddresses(
-      hints?.peerAddresses,
-      options.nodeId,
-      options.nodeAddress,
-    ) :
-    [];
-  const peerAddresses = normalizePeerAddresses(
-    [
-      ...hintPeerAddresses,
-      ...durableSnapshot.peerAddresses,
-    ],
-    options.nodeId,
-    options.nodeAddress,
-  );
-  const clusterNodeCount = Math.max(
-    hintsIdentityMatched ?
-      parseClusterNodeCount(hints?.clusterNodeCount) :
-      0,
-    durableSnapshot.clusterNodeCount,
-  );
-  const localNodeRole = hintsIdentityMatched ?
-    normalizeNodeRole(hints?.localNodeRole) :
-    null;
+  const originalSeedAllocation =
+    await readOriginalSeedAllocationOutcome(options.dataDir);
+  const seedBootstrapCompleted = resolveSeedBootstrapCompleted(
+    originalSeedAllocation.state, durableSnapshot);
+  const {hintPeerAddresses, peerAddresses, clusterNodeCount, localNodeRole} =
+    extractHintedTopology(hints, hintsIdentityMatched, options, durableSnapshot);
   const selectedPeerAddress = await probeRecoverablePeerAddress(
-    peerAddresses,
-    options.probePeerAddress,
-  );
-  // A persisted seed role is not proof of cluster membership: the recovery
-  // gate (seed-recovery-proof.js) requires cluster-id match plus live peer
-  // contact or durable quorum evidence before the seed may serve.
+    peerAddresses, options.probePeerAddress);
   const seedRecoveryProofSatisfied = resolveSeedRecoveryProofSatisfied({
-    clusterIdMatch,
-    selectedPeerAddress,
-    clusterNodeCount,
-    peerAddresses,
+    clusterIdMatch, selectedPeerAddress, clusterNodeCount, peerAddresses,
   });
   const preferredPeerAddress = choosePreferredPeerAddress(
-    peerAddresses,
-    hintPeerAddresses,
-  );
-  const durableEvidenceBlocked = durableEvidenceUnreadable ||
-    durableSnapshot.durableEvidenceUnreadable === true;
-  const durableStateDetected = hintsIdentityMatched ||
-    durableSnapshot.hasDurableNodesTable ||
-    clusterNodeCount > 0 ||
-    durableEvidenceBlocked;
+    peerAddresses, hintPeerAddresses);
+  const durableEvidenceBlocked = isDurableEvidenceBlocked(
+    rejoinHintsRead, durableSnapshot, originalSeedAllocation.state);
+  const durableStateDetected = isDurableStatePresent({
+    hintsIdentityMatched, durableSnapshot,
+    allocationState: originalSeedAllocation.state,
+    clusterNodeCount, durableEvidenceBlocked,
+  });
+  const requiresPeerRejoin = deriveRequiresPeerRejoin({
+    nodeRole: localNodeRole, clusterNodeCount, peerAddresses,
+  });
   const clusterIncarnationFence = buildClusterIncarnationFence({
     durableStateDetected,
     localIdentityMatched:
       hintsIdentityMatched || durableSnapshot.matchedLocalIdentity === true,
-    peerProofRequired: deriveRequiresPeerRejoin({
-      nodeRole: localNodeRole,
-      clusterNodeCount,
-      peerAddresses,
-    }) &&
-      localNodeRole !== REJOIN_ROLE_SEED,
+    peerProofRequired: requiresPeerRejoin &&
+      (localNodeRole !== REJOIN_ROLE_SEED || seedBootstrapCompleted),
     peerAddresses,
   });
 
   return {
-    durableSnapshot,
-    hintsIdentityMatched,
+    durableSnapshot, hintsIdentityMatched,
     clusterIdMismatch: clusterIdMatch === CLUSTER_ID_MATCH_STATE.MISMATCH,
-    hintPeerAddresses,
-    peerAddresses,
-    clusterNodeCount,
-    localNodeRole,
-    selectedPeerAddress,
-    preferredPeerAddress,
-    durableStateDetected,
-    durableEvidenceBlocked,
-    forceNewCluster: options.forceNewCluster === true,
-    clusterIncarnationFence,
-    seedRecoveryProofSatisfied,
-    requiresPeerRejoin: deriveRequiresPeerRejoin({
-      nodeRole: localNodeRole,
-      clusterNodeCount,
-      peerAddresses,
-    }),
+    hintPeerAddresses, peerAddresses, clusterNodeCount, localNodeRole,
+    selectedPeerAddress, preferredPeerAddress, durableStateDetected,
+    durableEvidenceBlocked, forceNewCluster: options.forceNewCluster === true,
+    clusterIncarnationFence, seedBootstrapCompleted,
+    seedRecoveryProofSatisfied, requiresPeerRejoin,
   };
 }
 

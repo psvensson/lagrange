@@ -244,7 +244,8 @@ function preparedRowOf(committed, fields) {
 
 // Steps 3, 6 and 7: a REFUSED row, a control row that never moves g.
 function refusePrepare(service, committed, {cause, detail}) {
-  clearPreparedParticipantRowKeys(service, committed.command.participantId);
+  committed.afterCommit(() =>
+    clearPreparedParticipantRowKeys(service, committed.command.participantId));
   insertParticipantTransactionRow(service.db, preparedRowOf(committed,
     {state: STATE.REFUSED, refusalCause: cause, refusalDetail: detail}));
   service.logger.warn(LOG_MSG.ROW_REFUSED, {
@@ -396,7 +397,8 @@ function releaseReservation(service, committed) {
 
 // An atomicity alarm: the row is settled REFUSED alike on every replica.
 function refuseCommit(service, committed, refusal) {
-  clearPreparedParticipantRowKeys(service, committed.command.participantId);
+  committed.afterCommit(() =>
+    clearPreparedParticipantRowKeys(service, committed.command.participantId));
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.REFUSED, refusal));
   releaseReservation(service, committed);
@@ -446,13 +448,15 @@ function commitPrepared(service, committed, row) {
   releaseReservation(service, committed);
   if (operations.length > 0) {
     advancePartitionWriteGeneration(service.db);
-    recordCommittedParticipantRowKeys(
+    const committedGeneration = readPartitionWriteGeneration(service.db);
+    committed.afterCommit(() => recordCommittedParticipantRowKeys(
       service,
       committed.command.participantId,
-      readPartitionWriteGeneration(service.db),
-    );
+      committedGeneration,
+    ));
   } else {
-    clearPreparedParticipantRowKeys(service, committed.command.participantId);
+    committed.afterCommit(() =>
+      clearPreparedParticipantRowKeys(service, committed.command.participantId));
   }
   recordCommittedWriteTraffic(service, committed.afterCommit, operations.length);
   answerProposer(service, committed, {success: true, results: applied.results,
@@ -470,7 +474,8 @@ function decideOverPrepared(service, committed, row) {
   if (command.decision === DECISION.COMMIT) {
     return commitPrepared(service, committed, row);
   }
-  clearPreparedParticipantRowKeys(service, command.participantId);
+  committed.afterCommit(() =>
+    clearPreparedParticipantRowKeys(service, command.participantId));
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.ROLLED_BACK));
   releaseReservation(service, committed);
@@ -528,7 +533,8 @@ function decideAbsent(service, committed) {
     return alarmRefusal(service, committed, CODE.NOT_PREPARED,
       participantOutcomeOf(null));
   }
-  clearPreparedParticipantRowKeys(service, command.participantId);
+  committed.afterCommit(() =>
+    clearPreparedParticipantRowKeys(service, command.participantId));
   insertParticipantTransactionRow(service.db, {
     transactionId: command.transactionId,
     participantId: command.participantId,

@@ -6,9 +6,10 @@
  * node is an active member with a live ready lease (the product's own
  * isNodeRecordReady, src/node/node-readiness-policy.js) and connection_state
  * `ready`; every required service has a healthy endpoint row; and every
- * partition considered (the six priority control-plane partitions during
- * system-table formation, or the required tables' partitions after canonical
- * table creation) has a published leader_node_id with an active voter replica
+ * partition considered (all system partitions, including the six priority
+ * control-plane partitions, during system-table formation, or the required
+ * tables' partitions after canonical table creation) has a published
+ * leader_node_id with an active voter replica
  * (isVoterRaftRole, src/raft/replica-voter-readiness.js; PartitionServiceRowOwner
  * collapses leader to follower on services rows) on an expected node and
  * as many active voter replicas on distinct nodes as its replica count; and,
@@ -153,9 +154,10 @@ function serviceEndpointDenials(endpoints, requiredServiceIds) {
 }
 
 // The partitions the verdict considers: the required tables' partitions (each
-// required table must have one), or, for the system tables, the priority
-// control-plane partitions (product-blocker-first-divergence-2026-11-01.md
-// section 5.2).
+// required table must have one), or, when scope is not narrowed to specific
+// tables, all partitions present (including all priority control-plane
+// partitions) so background system partitions are fully spread and routable
+// before readiness opens.
 function partitionScopeOf(partitions, requiredTables) {
   if (requiredTables) {
     const considered = arrayFilter(partitions,
@@ -170,9 +172,7 @@ function partitionScopeOf(partitions, requiredTables) {
       denials.push(`${DENIAL.PRIORITY_PARTITION_MISSING}:${partitionId}`);
     }
   }
-  const considered = arrayFilter(partitions,
-    (row) => arrayIncludes(PRIORITY_PARTITION_IDS, row.partition_id));
-  return {considered, denials};
+  return {considered: partitions, denials};
 }
 
 /**

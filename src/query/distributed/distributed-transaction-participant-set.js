@@ -3,9 +3,13 @@
  * NULL is unknown legacy authority, never an empty set. */
 import {PARTICIPANT_SET_STATE} from '../../constants/index.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query-constants.js';
-import {participantIdentityOf} from './distributed-transaction-identity.js';
+import {participantIdOf, participantIdentityOf} from
+  './distributed-transaction-identity.js';
 import {buildFrozenTransactionDecision} from './distributed-transaction-commit-mode.js';
-import {PARTICIPANT_STATUS} from './distributed-transaction-coordinator-constants.js';
+import {
+  PARTICIPANT_ENLISTMENT_MODE,
+  PARTICIPANT_STATUS,
+} from './distributed-transaction-coordinator-constants.js';
 
 import {participantSetTextOf, readParticipantSet} from
   './distributed-transaction-participant-manifest.js';
@@ -14,6 +18,76 @@ function incompleteParticipantSet() {
   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
   return error;
+}
+
+function readOnlyParticipantsOf(tx) {
+  if (!(tx.readOnlyParticipants instanceof Map)) {
+    tx.readOnlyParticipants = new Map();
+  }
+  return tx.readOnlyParticipants;
+}
+
+async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested) {
+  const readOnlyMap = readOnlyParticipantsOf(tx);
+  const volatileTargets = requested.filter(
+    (partitionId) => !tx.participants.has(partitionId),
+  );
+  const now = coordinator.now();
+  for (const partitionId of volatileTargets) {
+    if (!readOnlyMap.has(partitionId)) {
+      readOnlyMap.set(partitionId, {
+        workflowId: tx.workflowId,
+        transactionId: tx.transactionId,
+        participantId: participantIdOf(tx.transactionId, partitionId),
+        participantKey: partitionId,
+        partitionId,
+        status: PARTICIPANT_STATUS.FAILED,
+        readOnly: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+  const newlyEnlisted = volatileTargets.filter(
+    (partitionId) => readOnlyMap.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE,
+  );
+  await Promise.all(newlyEnlisted.map(async (partitionId) => {
+    await coordinator.beginParticipant(
+      sessionId,
+      partitionId,
+      participantIdentityOf(tx, partitionId),
+    );
+    const participant = readOnlyMap.get(partitionId);
+    if (participant) {
+      participant.status = PARTICIPANT_STATUS.ACTIVE;
+      participant.updatedAt = coordinator.now();
+    }
+  }));
+  tx.updatedAt = coordinator.now();
+  return {success: true, participants: coordinator.getOrderedParticipantIds(tx),
+    newlyEnlisted};
+}
+
+async function promoteReadOnlyParticipants(coordinator, tx, requested) {
+  if (!(tx.readOnlyParticipants instanceof Map)) return;
+  for (const partitionId of requested) {
+    const volatileParticipant = tx.readOnlyParticipants.get(partitionId);
+    if (!volatileParticipant) continue;
+    tx.readOnlyParticipants.delete(partitionId);
+    const participant = tx.participants.get(partitionId);
+    if (
+      participant &&
+      volatileParticipant.status === PARTICIPANT_STATUS.ACTIVE
+    ) {
+      participant.status = PARTICIPANT_STATUS.ACTIVE;
+      await coordinator.workflowCoordinator.upsertParticipant(tx.workflowId, {
+        ...participant,
+        status: PARTICIPANT_STATUS.ACTIVE,
+        lastError: null,
+        updatedAt: coordinator.now(),
+      });
+    }
+  }
 }
 
 const distributedTransactionParticipantSetMethods = {
@@ -67,7 +141,11 @@ const distributedTransactionParticipantSetMethods = {
     Object.assign(tx, frozen);
   },
 
-  async enlistParticipantsOwned(sessionId, partitionIds) {
+  async enlistParticipantsOwned(
+    sessionId,
+    partitionIds,
+    enlistmentMode = PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE,
+  ) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
       return {success: false, error: QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION,
@@ -80,7 +158,11 @@ const distributedTransactionParticipantSetMethods = {
         errorCode: QUERY_ERROR_CODE.TRANSACTION_PARTICIPANTS_FROZEN};
     }
     const requested = Array.from(new Set(partitionIds || []));
+    if (enlistmentMode === PARTICIPANT_ENLISTMENT_MODE.VOLATILE_READ) {
+      return enlistReadOnlyParticipants(this, tx, sessionId, requested);
+    }
     await this.retainParticipantSet(tx, requested);
+    await promoteReadOnlyParticipants(this, tx, requested);
     const newlyEnlisted = requested.filter((partitionId) =>
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
     await Promise.all(newlyEnlisted.map(async (partitionId) => {

@@ -61,8 +61,6 @@ function projectTransactionParticipantFailure(result) {
   }
   const hasParticipantFailure =
     isPrepareWriteConflictFailure(result.firstFailedParticipant) ||
-    (Array.isArray(result.failedParticipants) &&
-      result.failedParticipants.some(isPrepareWriteConflictFailure)) ||
     (Array.isArray(result.participantFailures) &&
       result.participantFailures.some(isPrepareWriteConflictFailure));
 

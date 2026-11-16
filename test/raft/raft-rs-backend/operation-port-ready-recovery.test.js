@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 
 import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
-import {applyCommittedEntryTransaction} from
+import {applyCommittedEntrySliceTransaction} from
   '../../../src/raft/raft-rs-application-transaction-owner.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
@@ -182,14 +182,14 @@ test('application effects and durable applied progress commit atomically',
         'BEFORE INSERT ON _raft_rs_applied_state ' +
         'BEGIN SELECT RAISE(ABORT, \'applied progress failed\'); END',
       );
-      assert.throws(() => applyCommittedEntryTransaction({
+      assert.throws(() => applyCommittedEntrySliceTransaction({
         store: atomicStore,
         groupId: 'atomic-application',
-        entry: {
+        entries: [{
           index: '1',
           entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
           data: Buffer.from('application-effect').toString('base64'),
-        },
+        }],
         confState: {
           voters: ['1'], learners: [], votersOutgoing: [],
           learnersNext: [], autoLeave: false,
@@ -256,9 +256,9 @@ test('an async committed membership applier cannot advance durable progress',
     const db = new Database(':memory:');
     try {
       const store = new RaftRsDurableStore(db);
-      assert.throws(() => applyCommittedEntryTransaction({store,
-        groupId: 'async-membership-applier', entry: {index: '1', term: '1',
-          entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''},
+      assert.throws(() => applyCommittedEntrySliceTransaction({store,
+        groupId: 'async-membership-applier', entries: [{index: '1', term: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''}],
         confState: {voters: ['1'], learners: [], votersOutgoing: [],
           learnersNext: [], autoLeave: false}, membershipGenerationIndex: '1',
         committedMembershipContext: {replicaIdentity: 'learner', peerId: '2'},
@@ -277,9 +277,9 @@ test('a committed membership applier answers nothing, synchronously',
       const db = new Database(':memory:');
       try {
         const store = new RaftRsDurableStore(db);
-        assert.throws(() => applyCommittedEntryTransaction({store,
-          groupId: 'answering-membership-applier', entry: {index: '1', term: '1',
-            entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''},
+        assert.throws(() => applyCommittedEntrySliceTransaction({store,
+          groupId: 'answering-membership-applier', entries: [{index: '1', term: '1',
+            entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''}],
           confState: {voters: ['1'], learners: [], votersOutgoing: [],
             learnersNext: [], autoLeave: false}, membershipGenerationIndex: '1',
           committedMembershipContext: {replicaIdentity: 'learner', peerId: '2'},
@@ -454,3 +454,133 @@ test('closing a recovery-required group frees its node exactly once',
       cluster.dispose();
     }
   });
+
+test('nextCommittedEntrySlice batches contiguous normal entries and isolates ' +
+  'non-normal boundaries', async () => {
+  const ownerModule = await import(
+    '../../../src/raft/raft-rs-application-transaction-owner.js'
+  );
+  const {
+    MAX_NORMAL_APPLY_SLICE,
+    applyCommittedEntrySliceTransaction,
+    nextCommittedEntrySlice,
+  } = ownerModule;
+  assert.equal(MAX_NORMAL_APPLY_SLICE, 64);
+  assert.equal('applyCommittedEntryTransaction' in ownerModule, false);
+  const normal = (index) => ({
+    index: String(index), term: '1', entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+  });
+  const conf = (index, entryType = RAFT_RS_ENTRY_TYPE.CONF_CHANGE) => ({
+    index: String(index), term: '1', entryType,
+  });
+  const entries = [
+    normal(1), normal(2), normal(3),
+    conf(4, RAFT_RS_ENTRY_TYPE.CONF_CHANGE),
+    normal(5),
+    conf(6, RAFT_RS_ENTRY_TYPE.CONF_CHANGE_V2),
+  ];
+  const slices = [];
+  for (let offset = 0; offset < entries.length;) {
+    const slice = nextCommittedEntrySlice(entries, offset, 2);
+    slices.push(slice.map((entry) => entry.index));
+    offset += slice.length;
+  }
+  assert.deepEqual(slices, [['1', '2'], ['3'], ['4'], ['5'], ['6']]);
+  assert.deepEqual(nextCommittedEntrySlice([], 0, 64), []);
+  assert.throws(() => nextCommittedEntrySlice(null, 0, 1), TypeError);
+  assert.throws(() => nextCommittedEntrySlice(entries, -1, 1), RangeError);
+  assert.throws(() => nextCommittedEntrySlice(entries, 0, 0), RangeError);
+  assert.throws(() => applyCommittedEntrySliceTransaction({entries: null}), TypeError);
+});
+
+test('applyCommittedEntrySliceTransaction commits multiple normal entries ' +
+  'in one transaction and rolls back cleanly mid-slice', async () => {
+  const {applyCommittedEntrySliceTransaction} = await import(
+    '../../../src/raft/raft-rs-application-transaction-owner.js'
+  );
+  const {decodeCommittedProposal, encodeProposal} = await import(
+    '../../../src/raft/raft-rs-proposal-codec.js'
+  );
+  const {RAFT_RS_TABLE} = await import(
+    '../../../src/raft/raft-rs-durable-store-constants.js'
+  );
+  const encode = (cmd) => Buffer.from(encodeProposal(cmd)).toString('base64');
+  const db = new Database(':memory:');
+  try {
+    db.exec('CREATE TABLE slice_items (id INTEGER PRIMARY KEY, note TEXT)');
+    const store = new RaftRsDurableStore(db);
+    let txCount = 0;
+    const origTx = store.transaction.bind(store);
+    store.transaction = (work) => {
+      txCount += 1;
+      return origTx(work);
+    };
+    const groupId = 'slice-group';
+    const entries = [1, 2, 3].map((idx) => ({
+      index: String(idx),
+      term: '1',
+      entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+      data: encode({id: idx}),
+    }));
+    store.appendEntries(groupId, entries);
+    const events = [];
+    const applyOne = (payloadBytes, context) => {
+      const payload = decodeCommittedProposal(payloadBytes);
+      db.prepare('INSERT INTO slice_items (id, note) VALUES (?, ?)')
+        .run(payload.id, `ok-${context.index}`);
+      context.effects.afterCommit.push(() => events.push(`commit-${context.index}`));
+      context.effects.afterRollback.push(() => events.push(`rollback-${context.index}`));
+    };
+    const committed = applyCommittedEntrySliceTransaction({
+      store,
+      groupId,
+      entries,
+      confState: {voters: ['1']},
+      membershipGenerationIndex: '0',
+      applyCommittedEntry: applyOne,
+    });
+    assert.equal(committed.escapedEffectFailures, 0);
+    assert.equal(txCount, 1, 'three normal entries share one SQLite transaction');
+    assert.deepEqual(events, ['commit-1', 'commit-2', 'commit-3']);
+    const applied = db.prepare(
+      `SELECT applied_index FROM ${RAFT_RS_TABLE.APPLIED_STATE} WHERE group_id = ?`,
+    ).get(groupId);
+    assert.equal(String(applied.applied_index), '3');
+
+    const failEntries = [4, 5].map((idx) => ({
+      index: String(idx),
+      term: '1',
+      entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+      data: encode({id: idx}),
+    }));
+    store.appendEntries(groupId, failEntries);
+    events.length = 0;
+    assert.throws(() => applyCommittedEntrySliceTransaction({
+      store,
+      groupId,
+      entries: failEntries,
+      confState: {voters: ['1']},
+      membershipGenerationIndex: '0',
+      applyCommittedEntry(payloadBytes, context) {
+        const payload = decodeCommittedProposal(payloadBytes);
+        context.effects.afterCommit.push(() => events.push(`commit-${context.index}`));
+        context.effects.afterRollback.push(() => events.push(`rollback-${context.index}`));
+        if (payload.id === 5) {
+          throw new Error('boom-mid-slice');
+        }
+        db.prepare('INSERT INTO slice_items (id, note) VALUES (?, ?)')
+          .run(payload.id, `partial-${context.index}`);
+      },
+    }), /boom-mid-slice/u);
+    assert.equal(db.inTransaction, false);
+    assert.deepEqual(events, ['rollback-4', 'rollback-5']);
+    const rows = db.prepare('SELECT id FROM slice_items ORDER BY id').all();
+    assert.deepEqual(rows.map((r) => r.id), [1, 2, 3], 'entry 4 rolled back too');
+    const afterFail = db.prepare(
+      `SELECT applied_index FROM ${RAFT_RS_TABLE.APPLIED_STATE} WHERE group_id = ?`,
+    ).get(groupId);
+    assert.equal(String(afterFail.applied_index), '3', 'applied_index stayed at 3');
+  } finally {
+    db.close();
+  }
+});

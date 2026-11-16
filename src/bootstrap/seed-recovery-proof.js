@@ -79,16 +79,29 @@ function buildSeedRecoveryProofMissingDecision(context, state, vocabulary) {
  * seed. A persisted seed role is NOT sufficient to serve bootstrap: the node
  * must additionally hold recovery proof (cluster-id match plus live peer
  * contact or durable quorum evidence). An isolated stale seed without proof
- * fails closed instead of resurrecting a divergent cluster.
+ * fails closed instead of resurrecting a divergent cluster. Once a seed has
+ * completed original bootstrap, restarting with recovery proof routes into
+ * durable peer rejoin instead of re-entering original seed preparation.
  * @param {Object} context - The collected startup decision context.
  * @param {Object} decisionState - The AUTO_REJOIN_DECISION_STATE vocabulary.
- * @return {string} DURABLE_SEED when proof holds, else
- *   SEED_RECOVERY_PROOF_MISSING.
+ * @return {string} SEED_RECOVERY_PROOF_MISSING when proof fails, rejoin
+ *   decision state when bootstrap already completed, else DURABLE_SEED.
  */
 function resolveSeedServingDecisionState(context, decisionState) {
-  return context.seedRecoveryProofSatisfied === true ?
-    decisionState.DURABLE_SEED :
-    decisionState.SEED_RECOVERY_PROOF_MISSING;
+  if (context.seedRecoveryProofSatisfied !== true) {
+    return decisionState.SEED_RECOVERY_PROOF_MISSING;
+  }
+  if (context.seedBootstrapCompleted === true) {
+    if (context.selectedPeerAddress) {
+      return decisionState.JOIN_PROBED_PEER;
+    }
+    if (Array.isArray(context.peerAddresses) &&
+        context.peerAddresses.length > 0) {
+      return decisionState.JOIN_RECOVERED_PEER;
+    }
+    return decisionState.PEER_REQUIRED_BUT_MISSING;
+  }
+  return decisionState.DURABLE_SEED;
 }
 
 /**

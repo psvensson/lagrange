@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T09:06:34.772Z",
-  "rawViolationCount": 376,
+  "generatedAt": "2026-11-16T14:05:09.608Z",
+  "rawViolationCount": 375,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -383,7 +383,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 76,
+      "line": 94,
       "column": 4,
       "functionName": "statReplicaDbPath",
       "kind": "catch_returns_default",
@@ -392,7 +392,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 87,
+      "line": 105,
       "column": 4,
       "functionName": "collectPartitionReplicaDbPaths",
       "kind": "catch_returns_default",
@@ -401,7 +401,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 117,
+      "line": 135,
       "column": 4,
       "functionName": "readPartitionsDirectoryEntries",
       "kind": "catch_returns_default",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 170,
+      "line": 188,
       "column": 4,
       "functionName": "inspectServicesReplicaDirectory",
       "kind": "catch_returns_default",
@@ -419,7 +419,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 248,
+      "line": 266,
       "column": 4,
       "functionName": "readServicesRowsFromReplicaDbOutcome",
       "kind": "catch_returns_default",
@@ -428,7 +428,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 349,
+      "line": 367,
       "column": 4,
       "functionName": "readNodesRowsFromReplicaDbOutcome",
       "kind": "catch_returns_default",
@@ -437,7 +437,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 744,
+      "line": 733,
       "column": 6,
       "functionName": "persistSnapshot",
       "kind": "catch_returns_default",
@@ -1166,7 +1166,7 @@
     },
     {
       "filePath": "src/function/function-query-executor.js",
-      "line": 333,
+      "line": 335,
       "column": 6,
       "functionName": "executeQueryThenInvoke",
       "kind": "catch_returns_default",
@@ -1553,7 +1553,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 122,
+      "line": 123,
       "column": 4,
       "functionName": "ensureTableInitialized",
       "kind": "catch_returns_default",
@@ -1634,7 +1634,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-request.js",
-      "line": 697,
+      "line": 693,
       "column": 4,
       "functionName": "answerParticipantSessionQuery",
       "kind": "catch_returns_default",
@@ -1814,7 +1814,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-write-coordinator.js",
-      "line": 439,
+      "line": 450,
       "column": 6,
       "functionName": "executePartitionStatement",
       "kind": "catch_returns_default",
@@ -1931,7 +1931,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 438,
+      "line": 460,
       "column": 4,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "catch_returns_default",
@@ -2084,7 +2084,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-replica-lifecycle-owner.js",
-      "line": 930,
+      "line": 868,
       "column": 4,
       "functionName": "retirementEvidenceOf",
       "kind": "catch_returns_default",
@@ -2093,7 +2093,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 303,
+      "line": 306,
       "column": 4,
       "functionName": "readOpeningRecord",
       "kind": "catch_returns_default",
@@ -2102,7 +2102,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 537,
+      "line": 540,
       "column": 4,
       "functionName": "persistInitialBootstrapState",
       "kind": "catch_returns_default",
@@ -2111,7 +2111,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1194,
+      "line": 1175,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2120,16 +2120,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1218,
-      "column": 4,
-      "functionName": "applyEntryDurablyOrFailure",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1362,
+      "line": 1342,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2138,7 +2129,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1422,
+      "line": 1402,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2426,7 +2417,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 527,
+      "line": 498,
       "column": 6,
       "functionName": "shouldReconcileOrphanedOperation",
       "kind": "catch_returns_default",
