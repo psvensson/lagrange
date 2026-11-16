@@ -78,6 +78,7 @@ const TABLE_CONSTRAINT_HEADS = new Set([
   'FOREIGN',
   'CONSTRAINT',
 ]);
+const DECLARED_TYPE_TOKEN_TYPES = new Set(['word', 'ident']);
 
 const STORAGE_RANK_INVALID = 0;
 const STORAGE_RANK_NUMBER = 1;
@@ -542,6 +543,40 @@ function splitTopLevelCreateTableItems(tokens) {
   return items;
 }
 
+function isColumnConstraintToken(tok) {
+  return tok.depth === 1 && tok.upper !== null && CONSTRAINT_START_TOKENS.has(tok.upper);
+}
+
+function collectDeclaredTypeTokens(itemTokens) {
+  const typeTokens = [];
+  for (let i = 1; i < itemTokens.length; i += 1) {
+    const tok = itemTokens[i];
+    if (isColumnConstraintToken(tok)) break;
+    if (tok.depth === 1 && DECLARED_TYPE_TOKEN_TYPES.has(tok.type)) {
+      typeTokens.push(tok.value);
+    }
+  }
+  return typeTokens.join(SPACE_STR);
+}
+
+function affinityFromRawTypeString(rawType) {
+  if (rawType.length === 0) return SQL_COMPARISON_AFFINITY.NONE;
+  return classifyAffinityFromTypeString(rawType) || SQL_COMPARISON_AFFINITY.NONE;
+}
+
+/**
+ * Parse a single top-level CREATE TABLE item into a `[colName, affinity]` pair,
+ * or `null` when the item is a table-level constraint.
+ *
+ * `lexPartitionStatement` populates `tok.upper` only for ASCII-letter/underscore
+ * keyword candidates (`KEYWORD = /^[A-Za-z_]+$/u`), so `tok.upper` is used to
+ * recognize table/column constraint keywords while `tok.value` on `word`/`ident`
+ * tokens is used to reconstruct the declared type name (including digit-bearing
+ * type names such as `INT8`, `INT2`, `FLOAT8`).
+ *
+ * @param {Array<Object>} itemTokens
+ * @return {[string, string]|null}
+ */
 function parseSingleColumnTokens(itemTokens) {
   if (itemTokens.length === 0) return null;
   const first = itemTokens[0];
@@ -550,20 +585,8 @@ function parseSingleColumnTokens(itemTokens) {
   }
   const colName = stripIdentifierQuotes(first.value);
   if (colName.length === 0) return null;
-  const typeTokens = [];
-  for (let i = 1; i < itemTokens.length; i += 1) {
-    const tok = itemTokens[i];
-    if (tok.depth === 1 && tok.upper !== null && CONSTRAINT_START_TOKENS.has(tok.upper)) {
-      break;
-    }
-    if (tok.depth === 1 && tok.upper !== null) {
-      typeTokens.push(tok.upper);
-    }
-  }
-  const rawType = typeTokens.join(SPACE_STR);
-  const affinity = rawType.length === 0 ? SQL_COMPARISON_AFFINITY.NONE :
-    classifyAffinityFromTypeString(rawType) || SQL_COMPARISON_AFFINITY.NONE;
-  return [colName, affinity];
+  const rawType = collectDeclaredTypeTokens(itemTokens);
+  return [colName, affinityFromRawTypeString(rawType)];
 }
 
 function parseCreateTableColumnAffinities(createSql) {
@@ -583,8 +606,7 @@ function buildColumnAffinityMapFromColumns(columns) {
     const colName = stripIdentifierQuotes(col?.name);
     if (colName.length === 0) continue;
     const rawType = String(col?.type || EMPTY_STR).trim();
-    map.set(colName, rawType.length === 0 ? SQL_COMPARISON_AFFINITY.NONE :
-      classifyAffinityFromTypeString(rawType) || SQL_COMPARISON_AFFINITY.NONE);
+    map.set(colName, affinityFromRawTypeString(rawType));
   }
   return map;
 }
@@ -600,13 +622,7 @@ function hasUnannotatedColumnRefs(node) {
       .some(hasUnannotatedColumnRefs);
 }
 
-function resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef) {
-  const colKey = stripIdentifierQuotes(node.column);
-  if (colKey.length === 0 || !(affinitiesByTable instanceof Map)) return null;
-  const tableKey = stripIdentifierQuotes(node.table || defaultTableRef || EMPTY_STR);
-  if (tableKey.length > 0 && affinitiesByTable.get(tableKey)?.has(colKey)) {
-    return affinitiesByTable.get(tableKey).get(colKey);
-  }
+function resolveUnqualifiedColumnAffinity(colKey, affinitiesByTable) {
   let matched = null;
   for (const tableMap of affinitiesByTable.values()) {
     if (!tableMap?.has(colKey)) continue;
@@ -615,6 +631,15 @@ function resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef) 
     matched = candidate;
   }
   return matched;
+}
+
+function resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef) {
+  const colKey = stripIdentifierQuotes(node.column);
+  if (colKey.length === 0 || !(affinitiesByTable instanceof Map)) return null;
+  const tableKey = stripIdentifierQuotes(node.table || defaultTableRef || EMPTY_STR);
+  const explicitTableMap = tableKey.length > 0 ? affinitiesByTable.get(tableKey) : null;
+  if (explicitTableMap?.has(colKey)) return explicitTableMap.get(colKey);
+  return resolveUnqualifiedColumnAffinity(colKey, affinitiesByTable);
 }
 
 function annotateExpressionColumnAffinities(node, affinitiesByTable, defaultTableRef = null) {
@@ -633,38 +658,18 @@ function annotateExpressionColumnAffinities(node, affinitiesByTable, defaultTabl
   }
 }
 
-async function resolveExecutorTableColumnAffinities(
-  executor, tableName, partitions, queryTimestamp, options = {},
-  getSchemaByTableName = null, resolvedByBinding = null,
-) {
-  if (typeof tableName !== 'string' || tableName.length === 0) {
-    return {ok: true, failedResults: [], map: new Map()};
-  }
-  const systemSchema = getSchemaByTableName?.(tableName);
-  if (Array.isArray(systemSchema?.columns)) {
-    return {
-      ok: true,
-      failedResults: [],
-      map: buildColumnAffinityMapFromColumns(systemSchema.columns),
-    };
-  }
-  if (!Array.isArray(partitions) || partitions.length === 0) {
-    return {ok: true, failedResults: [], map: new Map()};
-  }
-  const bindingKey = `${partitions[0]}::${tableName.toLowerCase()}`;
-  if (resolvedByBinding instanceof Map && resolvedByBinding.has(bindingKey)) {
-    return {ok: true, failedResults: [], map: resolvedByBinding.get(bindingKey)};
-  }
-  const ddlResults = await executor.executeOnPartitions(
-    [partitions[0]],
-    SQLITE_MASTER_DDL_SQL,
-    [tableName], queryTimestamp, true, options.preferLeader === true,
-    options.preferSameLatencyGroup === true, {
+function queryPartitionCreateTableDdl(executor, partitionId, tableName, queryTimestamp, options) {
+  return executor.executeOnPartitions(
+    [partitionId], SQLITE_MASTER_DDL_SQL, [tableName], queryTimestamp, true,
+    options.preferLeader === true, options.preferSameLatencyGroup === true, {
       sessionId: options.sessionId, transactionIdentity: options.transactionIdentity,
       deliveryPriority: options.deliveryPriority,
       routingReadinessDimension: options.routingReadinessDimension,
       timeoutMs: options.timeoutMs, timeoutBudget: options.timeoutBudget || null,
       cancellationToken: options.cancellationToken || null, tableName});
+}
+
+function parseDdlQueryOutcome(ddlResults, bindingKey, resolvedByBinding) {
   const failedResults = Array.isArray(ddlResults) ?
     ddlResults.filter((result) => !result?.success) : [];
   if (failedResults.length > 0) {
@@ -679,16 +684,47 @@ async function resolveExecutorTableColumnAffinities(
   return {ok: true, failedResults: [], map: parsed};
 }
 
+async function resolveExecutorTableColumnAffinities(
+  executor, tableName, partitions, queryTimestamp, options = {},
+  getSchemaByTableName = null, resolvedByBinding = null,
+) {
+  if (typeof tableName !== 'string' || tableName.length === 0) {
+    return {ok: true, failedResults: [], map: new Map()};
+  }
+  const systemColumns = getSchemaByTableName?.(tableName)?.columns;
+  if (Array.isArray(systemColumns)) {
+    return {ok: true, failedResults: [], map: buildColumnAffinityMapFromColumns(systemColumns)};
+  }
+  if (!Array.isArray(partitions) || partitions.length === 0) {
+    return {ok: true, failedResults: [], map: new Map()};
+  }
+  const bindingKey = `${partitions[0]}::${tableName.toLowerCase()}`;
+  if (resolvedByBinding instanceof Map && resolvedByBinding.has(bindingKey)) {
+    return {ok: true, failedResults: [], map: resolvedByBinding.get(bindingKey)};
+  }
+  const ddlResults = await queryPartitionCreateTableDdl(
+    executor, partitions[0], tableName, queryTimestamp, options);
+  return parseDdlQueryOutcome(ddlResults, bindingKey, resolvedByBinding);
+}
+
+function collectUnannotatedAffinityExpressions(ast, residualConjuncts) {
+  const joinConditions = (ast?.joins || []).map((join) => join?.condition).filter(Boolean);
+  const havingList = ast?.having ? [ast.having] : [];
+  const conjunctList = Array.isArray(residualConjuncts) ? residualConjuncts : [];
+  return [...conjunctList, ...joinConditions, ...havingList].filter(hasUnannotatedColumnRefs);
+}
+
+function recordBindingAffinityMap(affinitiesByTable, binding, map) {
+  if (map.size === 0) return;
+  affinitiesByTable.set(binding.tableName.toLowerCase(), map);
+  if (binding.alias) affinitiesByTable.set(binding.alias.toLowerCase(), map);
+}
+
 async function ensureExecutorQueryColumnAffinities(
   executor, ast, residualConjuncts = [], tableBindings = [],
   queryTimestamp = null, options = {}, getSchemaByTableName = null,
 ) {
-  const joinConditions = (ast?.joins || []).map((join) => join?.condition).filter(Boolean);
-  const exprs = [
-    ...(Array.isArray(residualConjuncts) ? residualConjuncts : []),
-    ...joinConditions,
-    ...(ast?.having ? [ast.having] : []),
-  ].filter(hasUnannotatedColumnRefs);
+  const exprs = collectUnannotatedAffinityExpressions(ast, residualConjuncts);
   if (exprs.length === 0) return {ok: true, failedResults: []};
   const affinitiesByTable = new Map();
   const resolvedByBinding = new Map();
@@ -698,10 +734,7 @@ async function ensureExecutorQueryColumnAffinities(
       executor, binding.tableName, binding.partitions, queryTimestamp,
       options, getSchemaByTableName, resolvedByBinding);
     if (!outcome.ok) return outcome;
-    if (outcome.map.size > 0) {
-      affinitiesByTable.set(binding.tableName.toLowerCase(), outcome.map);
-      if (binding.alias) affinitiesByTable.set(binding.alias.toLowerCase(), outcome.map);
-    }
+    recordBindingAffinityMap(affinitiesByTable, binding, outcome.map);
   }
   if (affinitiesByTable.size === 0) return {ok: true, failedResults: []};
   const defaultTableRef = tableBindings.length === 1 ?

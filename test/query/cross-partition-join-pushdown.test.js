@@ -16,6 +16,7 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
+import {MigrationPipeline} from '../../src/migration/migration-pipeline.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QUERY_JOIN_PUSHDOWN} from '../../src/query/query-constants.js';
 import {
@@ -786,8 +787,8 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
   });
   const tablePlans = new Map([['b', {partitions: ['b_p1']}]]);
 
-  const execJoin = async (sql, params = []) => {
-    const ast = new SQLParser(sql).parse();
+  const execJoin = async (sql, params = [], parserOptions = {}) => {
+    const ast = new SQLParser(sql, parserOptions).parse();
     const res = await executor.executeSelect(
       ast,
       ['a_p1'],
@@ -895,7 +896,7 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     'DDL parser preserves column after DEFAULT "(" and matches SQLite oracle ([1])',
   );
 
-  // Counterexample 7 (Retained executor across ALTER TABLE ADD COLUMN):
+  // Counterexample 7 (Retained executor across ALTER TABLE ADD COLUMN, including INT8):
   for (const db of [rightDb, oracleDb]) {
     db.exec('ALTER TABLE b ADD COLUMN added_n INTEGER DEFAULT 1');
   }
@@ -907,6 +908,39 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     await execJoin(alterSql),
     alterOracle,
     'retained executor observes newly added INTEGER column affinity after ALTER TABLE',
+  );
+
+  const alterInt8Ast = new SQLParser('ALTER TABLE b ADD COLUMN n8 INT8 DEFAULT 1').parse();
+  const alterInt8Spec = new MigrationPipeline({migrationCoordinator: {}}).buildAlterSpec(
+    alterInt8Ast,
+  );
+  for (const db of [rightDb, oracleDb]) {
+    db.exec(alterInt8Spec.sql);
+  }
+  const int8ParamSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n8 = $1 ORDER BY a.id';
+  const intControlParamSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n = $1 ORDER BY a.id';
+  t.same(
+    await execJoin(intControlParamSql, ['01'], {dialect: 'postgresql'}),
+    oracleDb.prepare('SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n = ? ORDER BY a.id')
+      .all('01')
+      .map((r) => r.id),
+    'existing INTEGER column n with bound text parameter "01" matches SQLite oracle',
+  );
+  t.same(
+    await execJoin(int8ParamSql, [1], {dialect: 'postgresql'}),
+    oracleDb.prepare('SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n8 = ? ORDER BY a.id')
+      .all(1)
+      .map((r) => r.id),
+    'ALTER TABLE added INT8 column n8 with bound numeric parameter 1 returns [1, 2]',
+  );
+  t.same(
+    await execJoin(int8ParamSql, ['01'], {dialect: 'postgresql'}),
+    oracleDb.prepare('SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.n8 = ? ORDER BY a.id')
+      .all('01')
+      .map((r) => r.id),
+    'ALTER TABLE added INT8 column n8 with bound text parameter "01" preserves NUMERIC affinity and returns [1, 2]',
   );
 
   // Counterexample 8 (Schema-read failure propagation and finite-failure recovery):
