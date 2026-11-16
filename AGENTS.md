@@ -21,10 +21,10 @@ instruction sources; reconcile older handoffs with the current owners.
 
 ## Choose The Work Unit
 
-Create a Quest when work is likely to need more than one measured attempt or to
-change an owner-boundary contract. Red and green observations within one cycle
-are one attempt. Bounded work with an obvious proof may use the direct route under
-[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
+Use the [workflow](docs/steering/workflow-guidelines/solver-quests.md) before changing
+behavior or proof meaning, including optimizations, filters, caches and defaults.
+It owns the Quest threshold, bounded direct route, transition record and proof.
+Name the affected decision and production or proof path in the existing work record.
 
 ## Quest Records
 

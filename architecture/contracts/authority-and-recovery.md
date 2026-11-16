@@ -113,8 +113,19 @@ and cleanup permission are different facts. Each has one semantic authority.
 A helper, observation, diagnostic record or cache does not need another
 independent decision owner. A projection may trigger reconciliation but cannot
 grant permission, discharge an obligation or declare completion on its own.
-Not every decision must be durable: persist what safety and recovery require;
-recompute disposable schedules, indexes of work and presentation.
+Persist what safety and recovery require; recompute disposable schedules,
+indexes of work and presentation. An owner may retain evidence of an immutable
+committed fact under a contract that identifies its exact subject and provenance,
+explains why it remains valid across later attempts or generations, and defines
+its retention bound and recovery after process loss. State which changes
+invalidate the evidence and which do not.
+
+An unavailable later read does not by itself invalidate a previously established
+immutable fact. Retaining that fact does not grant permission for a new effect:
+current authorization, membership, generation and admission conditions remain
+governed by their owners. Reuse must preserve that distinction. If the applicable
+contract requires fresh evidence, changing that requirement needs an explicit
+contract revision and its affected proof; memoization cannot silently supersede it.
 
 ### Recovery must not depend on the condition it restores
 

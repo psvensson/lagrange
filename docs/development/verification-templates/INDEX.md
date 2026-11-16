@@ -45,19 +45,31 @@ list guides coverage; it never excuses a concrete safety defect introduced by
 the candidate. Use the current Quest findings and verification entry described
 in [`solver-runbook.md`](../solver-runbook.md), not retired v1 review-bar commands.
 
-Return one consolidated pass over the agreed surface. Group all discovered
-findings by category and give each the violated invariant, reachable path,
-evidence, and effect on the repair claim. Do not stop at the first defect or
-expand routine review into an unrestricted architecture audit. Follow-up review
-checks corrections and their affected consequences, reusing still-applicable
-evidence through the existing provenance and proof-selection owners.
+Return one consolidated review of the agreed surface. For each material finding
+or acceptance claim, identify the contract, reachable producer-to-consumer path,
+evidence and effect on the repair claim. Examine the strongest plausible
+counterargument, including later validation, an alternative production path or
+a fact whose validity survives the transition. Do not stop at the first defect
+or expand routine review into an unrestricted architecture audit.
 
-For each claim, separate safety, recovery progress under stated finite-failure
-assumptions, and resource bounds. A safe refusal does not prove eventual useful
-service; a successful request does not prove recovery or bounded retained work.
-State whether the evidence is deterministic, native, or from real physical
-failure domains, and distinguish a product failure, fixture failure, verifier
-error, and unavailable execution. Preserve the first failing artifact.
+State what was executed, whether the evidence is deterministic, native or from
+real physical failure domains, what source establishes, the preconditions for
+reachability and what remains unproven. Severity does not increase the strength
+of the evidence. A contract violation or missing required proof may block landing
+without demonstrating corruption or an unsafe final state. Narrow or withdraw a
+finding when its premise is refuted.
+
+Assess safety, useful recovery after finite faults clear, and retained-resource
+bounds separately. A safe refusal does not prove eventual useful service; a
+successful request does not prove recovery or bounded retained work. Identify
+substituted boundaries and distinguish product, fixture, verifier and
+unavailable-execution results. Preserve the first failing artifact and
+still-applicable controls.
+
+Follow-up review covers repairs and the claims they invalidate, retaining
+unaffected evidence through the existing provenance and proof-selection owners.
+Route unrelated findings without widening the repair's acceptance. Use the
+existing finding and approval records; this introduces no additional review stage.
 
 An unrelated finding gets an owner and disposition in the existing record.
 It blocks this repair only when it invalidates the repair's contract, proof, or

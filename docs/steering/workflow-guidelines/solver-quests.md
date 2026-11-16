@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-11-13
+last_reviewed: 2026-11-16
 ---
 
 # Quest workflow
@@ -79,17 +79,24 @@ owned consequence for refusal; and abstractions that reduce reasoning.
 
 When changing an authoritative transition, owner-boundary contract, recovery
 semantics, durable obligation or state store, record the complete transition
-before implementing its parts. For a local repair under an unchanged contract,
-cite that transition and record the defect, affected owner path, counterexample
-and witness; resolve any missing or contradictory contract fact before coding.
-Use existing owners. Distinguish boundary-only tests from reachable production
-failures; a green primitive does not certify an operation.
+before implementing its parts. This includes changes to discovery or admission
+filters, cached verdicts, semantic classifiers, mode defaults and production
+factories when they alter which inputs or obligations reach an owner, which
+effects may proceed, or when recovery can act. Diff size and labels such as
+"optimization" or "refactor" do not change the applicable proof requirements.
+
+For a local repair under an unchanged contract, cite that transition and record
+the defect, affected owner path, counterexample and witness. Resolve missing or
+contradictory contract facts before coding. Use the existing work record and
+owners; this does not introduce a separate design stage for a routine local
+repair. Distinguish boundary-only tests from reachable production behavior; a
+green primitive does not certify an operation.
 
 ### Contract-first transition record checklist
 
 For changes meeting the transition trigger above, record the applicable facts
-in the quest log or transition note; explain an inapplicable item without
-inventing a new mechanism to fill it:
+in the existing work record; explain an inapplicable item without inventing a
+new mechanism to fill it:
 
 1. **Producer and consumer symbols**: Name the exact canonical endpoints,
    functions, exported types and affected callers. Census existing implementation
