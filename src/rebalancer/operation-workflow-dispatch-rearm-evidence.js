@@ -158,19 +158,6 @@ function isOperationDeferredRetryActive(owner, operationId) {
     )
   );
 }
-function isRetryableControlPlaneOperationTarget(operation) {
-  if (!operation) {
-    return false;
-  }
-  if (
-    operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
-  ) {
-    return true;
-  }
-  return classifySystemPartition({
-    partitionId: operation.partitionId,
-  }).systemTable;
-}
 function isBootstrapPartitionCreateOperation(operation) {
   return Boolean(
     operation &&
@@ -182,14 +169,25 @@ function isBootstrapPartitionCreateOperation(operation) {
     ),
   );
 }
+function isRetryableControlPlaneOperationTarget(operation) {
+  if (!operation) {
+    return false;
+  }
+  if (
+    operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+    isBootstrapPartitionCreateOperation(operation)
+  ) {
+    return true;
+  }
+  return classifySystemPartition({
+    partitionId: operation.partitionId,
+  }).systemTable;
+}
 function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return (
-    isRetryableControlPlaneOperationTarget(operation) ||
-    isBootstrapPartitionCreateOperation(operation)
-  );
+  return isRetryableControlPlaneOperationTarget(operation);
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {

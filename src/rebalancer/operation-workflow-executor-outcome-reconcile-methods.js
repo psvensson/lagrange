@@ -226,7 +226,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
           partitionId: operation?.partitionId || null,
         }).systemTable ||
         (operation?.entityType || operation?.entity_type) ===
-          SHARED.UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+          SHARED.UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+        this.shouldDeferRetryableDispatchFailure(operation, errorLike),
       dispatchRetryableWorkflowStep:
         this.isDispatchRetryableWorkflowStep(operation),
       retryableControlPlaneFailure:
