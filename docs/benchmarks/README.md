@@ -46,7 +46,7 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 
 | Configuration | Scenario A smoke |
 | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | product-failure (no-committed-operations, readiness-exhausted): smoke profile: offered 100, issued 0, committed 0, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 100; setup failed in bench-live-20261101-b-r9-r001: product_error, sqlstate null, code readiness_exhausted, message lagrange-node@192.168.86.27 did not report ready after 120 attempts; last readiness answer of lagrange-node@192.168.86.27: DEGRADED (degraded), reasons PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, after 120 attempts |
+| Lagrange 0.4.0 (3 nodes) | invalid-measurement (duplicate-claim, mixed-campaign, record-rejected:missing-field) |
 | TiDB + TiKV v8.5.8 | unsupported (semantic-gate-client-missing:tidb-tikv) |
 | PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
@@ -89,6 +89,6 @@ Phase timings are admitted only from observed spans.
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:a899a5f40c693addea987b85833a0f9836957746eb40e840487de75a1e5286e1
+- `data/tidb-comparison/raw-observations.ndjson` sha256:e62e8740e1aed4a6ae4bd01feea43b1264e693168a316fb00235a51e1ac4b69b
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
 - `data/tidb-comparison/invalidations.ndjson` sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c

@@ -65,11 +65,46 @@ const TYPED_PARTICIPANT_FAILURE_FIELDS = Object.freeze([
   'refusalCause',
   'refusalLayer',
 ]);
+const POST_ADMISSION_SETTLEMENT_OPERATIONS = new Set([
+  QUERY_OPERATION.COMMIT,
+  QUERY_OPERATION.ROLLBACK,
+  QUERY_OPERATION.TRANSACTION_OUTCOME,
+]);
 const NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION = Object.freeze({
   PERSIST: 'persist',
   SKIP_RETRYABLE_CONTROL_PLANE_FAILURE:
     'skip_retryable_control_plane_failure',
 });
+
+function buildCommitCatchFailure({
+  caught,
+  currentTx,
+  priorTx,
+  expectedTransactionId,
+  error,
+}) {
+  const result = {...caught};
+  if (!result.transactionId) {
+    if (currentTx?.transactionId) {
+      result.transactionId = currentTx.transactionId;
+    } else if (priorTx?.transactionId) {
+      result.transactionId = priorTx.transactionId;
+    } else if (expectedTransactionId) {
+      result.transactionId = expectedTransactionId;
+    }
+  }
+  if (!result.stage) {
+    if (currentTx?.status) {
+      result.stage = currentTx.status;
+    } else if (priorTx?.status) {
+      result.stage = priorTx.status;
+    }
+  }
+  if (typeof error?.[COMMIT_POINT_REACHED_FIELD] === LOCAL_STR_BOOLEAN) {
+    result[COMMIT_POINT_REACHED_FIELD] = error[COMMIT_POINT_REACHED_FIELD];
+  }
+  return result;
+}
 
 // The delivery identity of one transaction-control message: bound to the
 // exact transaction and operation (TX1 seam A), never to the session.
@@ -259,12 +294,13 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
     } catch (error) {
       // A COMMIT that threw is answered as a failed COMMIT carrying the
       // coordinator's commit-point fact (absent: unknown).
-      return {
-        ...this.buildCaughtQueryExecutionFailure(error),
-        ...(typeof error?.[COMMIT_POINT_REACHED_FIELD] === LOCAL_STR_BOOLEAN ?
-          {[COMMIT_POINT_REACHED_FIELD]: error[COMMIT_POINT_REACHED_FIELD]} :
-          {}),
-      };
+      return buildCommitCatchFailure({
+        caught: this.buildCaughtQueryExecutionFailure(error),
+        currentTx: this.transactionCoordinator.getTransaction(sessionId),
+        priorTx: txState,
+        expectedTransactionId: options.expectedTransactionId,
+        error,
+      });
     }
     if (!result.success && !result.errorCode) {
       return {
@@ -347,8 +383,11 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * @return {string}
    * @private
    */
-  resolveTransactionOperationRoutingReadinessDimension(partitionId) {
-    if (classifySystemPartition({partitionId}).priorityControlPlane) {
+  resolveTransactionOperationRoutingReadinessDimension(partitionId, operation = null) {
+    if (
+      classifySystemPartition({partitionId}).priorityControlPlane ||
+      POST_ADMISSION_SETTLEMENT_OPERATIONS.has(operation)
+    ) {
       return CONTROL_PLANE_READINESS_DIMENSION
         .CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
@@ -362,15 +401,19 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * query lane while the transaction tables that own recovery still converge.
    *
    * @param {string} partitionId
+   * @param {string|null} [operation]
    * @return {Object}
    * @private
    */
-  buildTransactionOperationDeliveryProfile(partitionId) {
+  buildTransactionOperationDeliveryProfile(partitionId, operation = null) {
     const priorityControlPlanePartition =
       classifySystemPartition({partitionId}).priorityControlPlane;
     return Object.freeze({
       routingReadinessDimension:
-        this.resolveTransactionOperationRoutingReadinessDimension(partitionId),
+        this.resolveTransactionOperationRoutingReadinessDimension(
+          partitionId,
+          operation,
+        ),
       deliveryPriority:
         priorityControlPlanePartition ?
           PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY :
@@ -430,7 +473,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    */
   async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
     const deliveryProfile =
-      this.buildTransactionOperationDeliveryProfile(partitionId);
+      this.buildTransactionOperationDeliveryProfile(partitionId, operation);
     const request = participantTransactionRequestOf(sessionId, operation,
       options);
     const deliveryIdentity =

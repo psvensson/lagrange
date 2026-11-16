@@ -262,3 +262,35 @@ test('release settlement memo is bounded by MAX_SETTLED_RELEASE_TRANSACTIONS and
       'evicted and pruned entries re-drive settlement from authority',
     );
   });
+
+test('release settlement holds an unexpired FROZEN+ABSENT (PREPARING) row and settles once expired',
+  async (t) => {
+    const f = fixture(t, baseRow({
+      status: 'PREPARING',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE_COMMIT',
+      frozen_participant_count: 1,
+      timeout_deadline: NOW + 1,
+    }), () => ({success: true, state: 'ROLLED_BACK', outcome: 'NOT_COMMITTED'}));
+    const census = readTransactionReleaseCensus(f.gateway.db);
+    assert.deepEqual(census.recoverableTransactionIds, [TX]);
+    assert.equal(await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    }), null);
+    assert.equal(f.deliveries.length, 0);
+    assert.equal(f.gateway.rows('sql_transactions')[0].decision, null);
+
+    const settled = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW + 1,
+    });
+    assert.equal(settled.length, 1);
+    assert.equal(settled[0].decision, 'ROLLBACK');
+    assert.equal(settled[0].terminalStatus, 'ROLLED_BACK');
+    assert.equal(f.deliveries.length, 1);
+  });

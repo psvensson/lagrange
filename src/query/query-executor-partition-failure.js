@@ -104,6 +104,9 @@ function buildQueryPartitionCandidateFailureDetails({
     // it to the delivery's failure result.
     ...pickTypedWriteAnswer(failure),
     errorCode: failureFactsOf(failure).errorCode ?? null,
+    ...(typeof failure?.refusalLayer === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+      {refusalLayer: failure.refusalLayer} :
+      {}),
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,
       failure,

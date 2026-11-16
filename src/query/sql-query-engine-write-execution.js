@@ -382,6 +382,9 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         queryOptions,
         QUERY_AST_TYPE.DELETE,
       );
+      if (res?.success === false) {
+        return res;
+      }
       results.push(res);
     }
     return {

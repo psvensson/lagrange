@@ -35,6 +35,7 @@ import {
   arrayFlatMap,
   arrayIsArray,
   arrayMap,
+  arraySome,
   dateNow,
   dateToISOString,
   numberIsFinite,
@@ -811,8 +812,28 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
           deadlineAtMs: readyDeadlineAtMs !== undefined ? readyDeadlineAtMs : null,
         };
         try {
+          const systemReady = await clusterReady(
+            readyCtx,
+            'lagrange-system-tables',
+            query,
+            nodeRoles,
+          );
+          const tables = await readSystemTables(query, readyCtx);
+          const presentCanonical = arrayFilter(
+            arrayMap(CANONICAL_TABLES, (table) => table.name),
+            (name) => arraySome(tables.partitions, (row) => row.table_name === name),
+          );
+          const cluster = presentCanonical.length > 0 ?
+            await clusterReady(
+              readyCtx,
+              'lagrange-canonical-tables-routable',
+              query,
+              nodeRoles,
+              presentCanonical,
+            ) :
+            systemReady;
           return {
-            cluster: await clusterReady(readyCtx, 'lagrange-system-tables', query, nodeRoles),
+            cluster,
             probe: await probeWriteReadback(readyCtx, sql, campaignId, visibility),
           };
         } finally {

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T07:12:52.010Z",
-  "rawViolationCount": 378,
+  "generatedAt": "2026-11-16T09:06:34.772Z",
+  "rawViolationCount": 376,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -1804,15 +1804,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
-      "line": 254,
-      "column": 6,
-      "functionName": "settleParticipants",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/distributed/distributed-write-constraint-helpers.js",
       "line": 142,
       "column": 6,
@@ -1997,15 +1988,6 @@
       "line": 114,
       "column": 6,
       "functionName": "buildTimedOutSqlRequestFailure",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine.js",
-      "line": 259,
-      "column": 6,
-      "functionName": "handleCommit",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

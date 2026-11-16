@@ -28,6 +28,23 @@ import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {
+  COMMIT_POINT_REACHED_FIELD,
+} from '../../src/query/distributed/distributed-transaction-commit-point.js';
+
+const USER_TX_PARTITION_ID = 'users-p1';
+const USER_TX_SESSION_ID = 'session-2';
+const USER_TX_SERVE_OPERATIONS = Object.freeze(['BEGIN', 'PREPARE']);
+const USER_TX_RECOVERY_OPERATIONS = Object.freeze([
+  'COMMIT',
+  'ROLLBACK',
+  'TRANSACTION_OUTCOME',
+]);
+const TEST_CAUGHT_COMMIT_TX_ID = 'tx-caught-commit-1';
+const TEST_CAUGHT_COMMIT_STAGE = 'ACTIVE';
+const TEST_CAUGHT_COMMIT_ERROR = 'freeze_failed';
+const TEST_CAUGHT_COMMIT_NODE_ID = 'local-node';
+
 const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
   'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'';
 const SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE =
@@ -202,15 +219,15 @@ function registerSqlQueryEngineExecutionTestCases({
     }, 'priority control-plane transaction delivery should use recovery routing');
   });
 
-  test('SQLQueryEngine - keeps user transaction delivery on the default ' +
-    'routing dimension', async (t) => {
+  test('SQLQueryEngine - routes admission vs settlement user transaction ' +
+    'operations', async (t) => {
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
       },
-      nodeId: 'local-node',
+      nodeId: TEST_CAUGHT_COMMIT_NODE_ID,
     });
     const routingCalls = [];
     engine.queryExecutor.executeOnPartition = async (
@@ -236,26 +253,80 @@ function registerSqlQueryEngineExecutionTestCases({
       return {success: true};
     };
 
-    await engine.deliverTransactionOperation(
-      'session-2',
-      'users-p1',
-      'COMMIT',
-    );
+    const routingCases = [
+      ...USER_TX_SERVE_OPERATIONS.map((operation) => ({
+        operation,
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      })),
+      ...USER_TX_RECOVERY_OPERATIONS.map((operation) => ({
+        operation,
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      })),
+    ];
 
-    t.equal(routingCalls.length, 1,
-      'user transaction delivery should perform a single routing lookup');
-    t.same(routingCalls[0], {
-      partitionId: 'users-p1',
-      sql: '',
-      params: [],
-      forRead: false,
-      preferLeader: false,
-      preferSameLatencyGroup: false,
-      deliveryPriority: undefined,
-      routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-      timeoutMs: undefined,
-    }, 'user transaction delivery should keep the default serve routing');
+    for (const routingCase of routingCases) {
+      routingCalls.length = 0;
+      await engine.deliverTransactionOperation(
+        USER_TX_SESSION_ID,
+        USER_TX_PARTITION_ID,
+        routingCase.operation,
+      );
+
+      t.equal(routingCalls.length, 1,
+        'user transaction delivery should perform a single routing lookup');
+      t.same(routingCalls[0], {
+        partitionId: USER_TX_PARTITION_ID,
+        sql: '',
+        params: [],
+        forRead: false,
+        preferLeader: false,
+        preferSameLatencyGroup: false,
+        deliveryPriority: undefined,
+        routingReadinessDimension: routingCase.routingReadinessDimension,
+        timeoutMs: undefined,
+      }, `user transaction ${routingCase.operation} should use expected routing`);
+    }
+  });
+
+  test('SQLQueryEngine - handleCommit preserves pre-prepare ' +
+    'commitPointReached false on thrown commit error', async (t) => {
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      systemCache: createMockSystemCache([], [], [], []),
+      messageRouter: {
+        deliver: async () => (
+          buildDeliveryEnvelope({acknowledged: true}, {success: true})
+        ),
+      },
+      nodeId: TEST_CAUGHT_COMMIT_NODE_ID,
+    });
+    const activeTx = {
+      transactionId: TEST_CAUGHT_COMMIT_TX_ID,
+      status: TEST_CAUGHT_COMMIT_STAGE,
+    };
+    engine.transactionCoordinator.getTransaction = () => activeTx;
+    engine.transactionCoordinator.commit = async () => {
+      const error = new Error(TEST_CAUGHT_COMMIT_ERROR);
+      error[COMMIT_POINT_REACHED_FIELD] = false;
+      throw error;
+    };
+
+    const result = await engine.handleCommit(USER_TX_SESSION_ID, {
+      expectedTransactionId: TEST_CAUGHT_COMMIT_TX_ID,
+    });
+
+    t.equal(result.success, false,
+      'handleCommit should report failure when commit rejects');
+    t.equal(result.error, TEST_CAUGHT_COMMIT_ERROR,
+      'handleCommit should preserve thrown error message');
+    t.equal(result.transactionId, TEST_CAUGHT_COMMIT_TX_ID,
+      'handleCommit should preserve transactionId on thrown error');
+    t.equal(result.stage, TEST_CAUGHT_COMMIT_STAGE,
+      'handleCommit should preserve transaction stage on thrown error');
+    t.equal(result[COMMIT_POINT_REACHED_FIELD], false,
+      'handleCommit should preserve stamped commitPointReached=false');
   });
 
   test('SQLQueryEngine - defaults system-table recovery selects to replica ' +

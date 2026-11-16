@@ -4,7 +4,7 @@
  * self-check (partition-transaction-determinism.js), measured against the
  * authorities they claim to cover. The function census iterates the engine's
  * own function list (pragma_function_list) against the allow-list of
- * classifier list tx1-leg-a-2. The self-check fails on any single probe
+ * classifier list tx1-leg-a-3. The self-check fails on any single probe
  * observed at the wrong layer, and on a table without a declared primary key
  * it passes only by observing its ceiling probe refused at implicit_key
  * (satisfied_by_implicit_key_refusal), so the M1 migration cutover's
@@ -43,7 +43,7 @@ import {
 // The classifier list this witness was written against, and its function
 // population (the witness's own copy): the classifier owner changes the
 // population only with a new list version, which fails the pin below.
-const LIST_VERSION = 'tx1-leg-a-2';
+const LIST_VERSION = 'tx1-leg-a-3';
 const ADMITTED_AT_LIST_VERSION = Object.freeze(['abs', 'avg', 'char', 'count',
   'group_concat', 'hex', 'instr', 'length', 'lower', 'ltrim', 'max', 'min', 'nullif',
   'quote', 'replace', 'round', 'rtrim', 'substr', 'substring', 'sum', 'total', 'trim',
@@ -128,7 +128,7 @@ const namesFunction = (name) => (instruction) => FUNCTION_OPCODES.has(instructio
   String(instruction.p4).startsWith(`${name}(`);
 const layerOf = (classified) => classified.admitted ? 'admitted' : classified.refusalLayer;
 
-test('TX1 inc4 function allow-list (list tx1-leg-a-2): every function the engine lists outside ' +
+test('TX1 inc4 function allow-list (list tx1-leg-a-3): every function the engine lists outside ' +
   'the allow-list is refused at function wherever its program names it, and the functions ' +
   'the engine compiles inline are exactly the declared set', () => onLeader(async (leader) => {
   const db = leader.db;
@@ -333,3 +333,40 @@ test('TX1 inc4 M1 cutover: the migration coordinator\'s exact cutover UPDATE ' +
     await shutdownAll(leader, follower);
   }
 });
+
+test('TX1 leg-a-3 opcodes: IdxLT (descending index scan) and IfNoHope/SeekHit (composite IN) ' +
+  'are admitted in session reads', () => onLeader(async (leader) => {
+  const db = leader.db;
+  db.exec(
+    'CREATE TABLE orders (warehouse_id INTEGER NOT NULL, district_id INTEGER NOT NULL, ' +
+    'order_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, carrier_id INTEGER, ' +
+    'PRIMARY KEY (warehouse_id, district_id, order_id));' +
+    'CREATE INDEX idx_orders_customer_latest ON orders ' +
+    '(warehouse_id, district_id, customer_id, order_id);' +
+    'CREATE TABLE stock (warehouse_id INTEGER NOT NULL, item_id INTEGER NOT NULL, ' +
+    'quantity INTEGER NOT NULL, PRIMARY KEY (warehouse_id, item_id));',
+  );
+  const orderSql =
+    'SELECT order_id, carrier_id FROM orders ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ? ' +
+    'ORDER BY order_id DESC LIMIT 1';
+  const orderOpcodes = db.prepare(`EXPLAIN ${orderSql}`).all(1, 1, 1).map((i) => i.opcode);
+  assert.ok(orderOpcodes.includes('IdxLT'), `expected IdxLT in ${orderOpcodes.join(',')}`);
+  const classifiedOrder = classifyTransactionStatement(db, {
+    tableName: 'orders',
+    sql: orderSql,
+    params: [1, 1, 1],
+  });
+  assert.equal(classifiedOrder.admitted, true);
+
+  const stockSql = 'SELECT quantity FROM stock WHERE warehouse_id = ? AND item_id IN (?, ?)';
+  const stockOpcodes = db.prepare(`EXPLAIN ${stockSql}`).all(1, 1, 2).map((i) => i.opcode);
+  assert.ok(stockOpcodes.includes('SeekHit'), `expected SeekHit in ${stockOpcodes.join(',')}`);
+  assert.ok(stockOpcodes.includes('IfNoHope'), `expected IfNoHope in ${stockOpcodes.join(',')}`);
+  const classifiedStock = classifyTransactionStatement(db, {
+    tableName: 'stock',
+    sql: stockSql,
+    params: [1, 1, 2],
+  });
+  assert.equal(classifiedStock.admitted, true);
+}));

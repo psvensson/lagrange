@@ -49,6 +49,8 @@ const RELEASE_PROOF_KIND = 'transaction_release_invocation_v1';
 // No readable release authority: the transaction is not settled this turn.
 const NO_RELEASE_AUTHORITY = null;
 const MAX_SETTLED_RELEASE_TRANSACTIONS = 1024;
+const SETTLEMENT_BATCH_SIZE = 16;
+const PROMISE_SETTLED_FULFILLED = 'fulfilled';
 const SETTLED_RELEASE_TRANSACTIONS = new WeakMap([]);
 const SETTLED_ROW_SQL =
   'SELECT participant_set_state, participant_set_text, status, decision, ' +
@@ -212,7 +214,8 @@ async function ensureFrozen(engine, service, authority, now) {
 
 async function ensureDecision(engine, service, authority, now) {
   if (authority?.decision.state === RECORDED_DECISION_STATE.RECORDED) return authority;
-  if (!authority || authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+  if (!authority || !authority.expired ||
+      authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
       authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) return NO_RELEASE_AUTHORITY;
   const record = buildDecisionRecord(authority.row.transaction_id, DECISION.ROLLBACK,
     authority.pairs.map(([participantId]) => [participantId, null]));
@@ -231,37 +234,65 @@ function participantAnswerComplete(decision, answer, expected) {
     captured.state === PARTICIPANT_STATE.ROLLED_BACK);
 }
 
-async function settleParticipants(engine, authority) {
-  const record = authority.decision;
-  const replies = [];
-  for (let index = 0; index < authority.pairs.length; index += 1) {
-    const [participantId, partitionId] = authority.pairs[index];
-    const recorded = record.participants[index];
-    if (recorded?.[0] !== participantId) return null;
-    let answer;
-    try {
-      answer = await engine.deliverTransactionOperation(
-        authority.row.session_id,
-        partitionId,
-        record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
-          QUERY_OPERATION.ROLLBACK,
-        {transactionId: authority.row.transaction_id, participantId,
-          commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
-          transactionEpoch: authority.row.transaction_epoch,
-          decision: record.decision, preparedDigest: recorded[1],
-          decisionText: record.decisionText, decisionDigest: record.decisionDigest},
-      );
-    } catch {
-      return null;
-    }
-    if (!participantAnswerComplete(record.decision, answer, {
-      operation: record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
-        QUERY_OPERATION.ROLLBACK,
-      partitionId,
+async function settleSingleParticipant({
+  engine,
+  authority,
+  record,
+  operation,
+  participantId,
+  partitionId,
+  preparedDigest,
+}) {
+  const answer = await engine.deliverTransactionOperation(
+    authority.row.session_id,
+    partitionId,
+    operation,
+    {
       transactionId: authority.row.transaction_id,
       participantId,
-    })) return null;
-    replies.push(participantId);
+      commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
+      transactionEpoch: authority.row.transaction_epoch,
+      decision: record.decision,
+      preparedDigest,
+      decisionText: record.decisionText,
+      decisionDigest: record.decisionDigest,
+    },
+  );
+  return participantAnswerComplete(record.decision, answer, {
+    operation,
+    partitionId,
+    transactionId: authority.row.transaction_id,
+    participantId,
+  }) ? participantId : null;
+}
+
+async function settleParticipants(engine, authority) {
+  const record = authority.decision;
+  for (let index = 0; index < authority.pairs.length; index += 1) {
+    if (record.participants[index]?.[0] !== authority.pairs[index][0]) {
+      return null;
+    }
+  }
+  const operation = record.decision === DECISION.COMMIT ?
+    QUERY_OPERATION.COMMIT :
+    QUERY_OPERATION.ROLLBACK;
+  const settled = await Promise.allSettled(
+    authority.pairs.map(([participantId, partitionId], index) =>
+      settleSingleParticipant({
+        engine,
+        authority,
+        record,
+        operation,
+        participantId,
+        partitionId,
+        preparedDigest: record.participants[index][1],
+      }),
+    ),
+  );
+  const replies = [];
+  for (const outcome of settled) {
+    if (outcome.status !== PROMISE_SETTLED_FULFILLED || !outcome.value) return null;
+    replies.push(outcome.value);
   }
   return replies;
 }
@@ -303,11 +334,15 @@ async function settleTransactionReleaseRows({engine, service, census, now = Date
       !Array.isArray(census.recoverableTransactionIds)) return null;
   pruneSettledTransactions(service, census.recoverableTransactionIds);
   const transactions = [];
-  for (const transactionId of census.recoverableTransactionIds) {
-    const existing = readSettledTransactionResult(service, transactionId);
-    const result = existing ?? await settleOne(engine, service, transactionId, now);
-    if (result === null) return null;
-    transactions.push(result);
+  const ids = census.recoverableTransactionIds;
+  for (let start = 0; start < ids.length; start += SETTLEMENT_BATCH_SIZE) {
+    const batch = ids.slice(start, start + SETTLEMENT_BATCH_SIZE);
+    const settledBatch = await Promise.all(batch.map((transactionId) =>
+      readSettledTransactionResult(service, transactionId) ??
+      settleOne(engine, service, transactionId, now),
+    ));
+    if (settledBatch.includes(null)) return null;
+    transactions.push(...settledBatch);
   }
   return Object.freeze(transactions);
 }

@@ -25,6 +25,14 @@
 //   failure, which the c' validation answers `statement_failed` and the
 //   PREPARE dry run settles REFUSED identically on every replica. No other
 //   layer changes.
+// - `IdxLT`, `IfNoHope`, `SeekHit` (list tx1-leg-a-3): SQLite 3.49.2's
+//   symmetric lower-bound index comparison (`OP_IdxLT`, alongside already-
+//   admitted `IdxGE`/`IdxGT`/`IdxLE`, emitted on descending `SeekLE` + `Prev`
+//   scans over ascending composite indexes) and deterministic B-tree seek-
+//   hint / index bloom skip checks (`IfNoHope`, `SeekHit`) emitted on multi-
+//   value `IN (?, ...)` probes over composite indexes and primary keys. Each
+//   reads only its cursor's committed index state and operand registers and
+//   carries no connection, clock, schema, or random dependency.
 //
 // Declared false refusals (limit L7): each refuses a statement that could be
 // staged safely, because the population does not hold it:
@@ -63,7 +71,7 @@ import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.j
 
 // The list version the leader stamps into every transaction command's
 // execution envelope (design 3.3).
-const TRANSACTION_CLASSIFIER_LIST_VERSION = 'tx1-leg-a-2';
+const TRANSACTION_CLASSIFIER_LIST_VERSION = 'tx1-leg-a-3';
 
 // The build the lists were vetted for: any other version or source id fails
 // the leader's self-check, so an upgrade fails closed until re-vetted.
@@ -102,27 +110,29 @@ const TRANSACTION_STATEMENT_KIND = Object.freeze({
   UNADMITTED: 'unadmitted',
 });
 
-// The supported population: 117 opcodes of SQLite 3.49.2 (design 3.3's 116,
-// revision 8 adding SoftNull, and HaltIfNull, vetted above). Anything else
-// refuses at `opcode`.
+// The supported population: 120 opcodes of SQLite 3.49.2 (design 3.3's 116,
+// revision 8 adding SoftNull, tx1-leg-a-2 adding HaltIfNull, and tx1-leg-a-3
+// adding IdxLT, IfNoHope, and SeekHit, vetted above). Anything else refuses
+// at `opcode`.
 const TRANSACTION_ADMITTED_OPCODES = Object.freeze(new Set([
   'Add', 'AddImm', 'Affinity', 'AggFinal', 'AggInverse', 'AggStep', 'AggValue',
   'And', 'BeginSubrtn', 'BitAnd', 'BitNot', 'BitOr', 'Blob', 'Cast', 'Clear',
   'Close', 'CollSeq', 'Column', 'Compare', 'Concat', 'Copy', 'Count',
   'DecrJumpZero', 'DeferredSeek', 'Delete', 'Divide', 'EndCoroutine', 'Eq',
   'FilterAdd', 'FinishSeek', 'FkCheck', 'Found', 'Function', 'Ge', 'Gosub',
-  'Goto', 'Gt', 'Halt', 'HaltIfNull', 'IdxDelete', 'IdxGE', 'IdxGT', 'IdxInsert', 'IdxLE',
-  'IdxRowid', 'If', 'IfNot', 'IfNotZero', 'IfPos', 'Init', 'InitCoroutine',
-  'Insert', 'Int64', 'IntCopy', 'Integer', 'IsNull', 'IsTrue', 'Jump', 'Last',
-  'Le', 'Lt', 'MakeRecord', 'Move', 'Multiply', 'MustBeInt', 'Ne', 'NewRowid',
-  'Next', 'NoConflict', 'Noop', 'Not', 'NotExists', 'NotNull', 'Null',
-  'NullRow', 'OffsetLimit', 'Once', 'OpenDup', 'OpenEphemeral', 'OpenPseudo',
-  'OpenRead', 'OpenWrite', 'Or', 'Prev', 'PureFunc', 'Real', 'Remainder',
-  'ReopenIdx', 'ResetSorter', 'ResultRow', 'Return', 'Rewind', 'RowSetAdd',
-  'RowSetRead', 'RowSetTest', 'Rowid', 'SCopy', 'SeekGE', 'SeekGT', 'SeekLE',
-  'SeekLT', 'SeekRowid', 'Sequence', 'ShiftLeft', 'ShiftRight', 'SoftNull',
-  'Sort', 'SorterData', 'SorterInsert', 'SorterNext', 'SorterOpen',
-  'SorterSort', 'String8', 'Subtract', 'Transaction', 'Variable', 'Yield',
+  'Goto', 'Gt', 'Halt', 'HaltIfNull', 'IdxDelete', 'IdxGE', 'IdxGT', 'IdxInsert',
+  'IdxLE', 'IdxLT', 'IdxRowid', 'If', 'IfNoHope', 'IfNot', 'IfNotZero', 'IfPos',
+  'Init', 'InitCoroutine', 'Insert', 'Int64', 'IntCopy', 'Integer', 'IsNull',
+  'IsTrue', 'Jump', 'Last', 'Le', 'Lt', 'MakeRecord', 'Move', 'Multiply',
+  'MustBeInt', 'Ne', 'NewRowid', 'Next', 'NoConflict', 'Noop', 'Not',
+  'NotExists', 'NotNull', 'Null', 'NullRow', 'OffsetLimit', 'Once', 'OpenDup',
+  'OpenEphemeral', 'OpenPseudo', 'OpenRead', 'OpenWrite', 'Or', 'Prev',
+  'PureFunc', 'Real', 'Remainder', 'ReopenIdx', 'ResetSorter', 'ResultRow',
+  'Return', 'Rewind', 'RowSetAdd', 'RowSetRead', 'RowSetTest', 'Rowid', 'SCopy',
+  'SeekGE', 'SeekGT', 'SeekHit', 'SeekLE', 'SeekLT', 'SeekRowid', 'Sequence',
+  'ShiftLeft', 'ShiftRight', 'SoftNull', 'Sort', 'SorterData', 'SorterInsert',
+  'SorterNext', 'SorterOpen', 'SorterSort', 'String8', 'Subtract',
+  'Transaction', 'Variable', 'Yield',
 ]));
 
 // The functions a program may name (design revision 5, unchanged): every

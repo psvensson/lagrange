@@ -244,7 +244,7 @@ test('TX1 inc4 HaltIfNull: a session INSERT of literal values and an UPDATE assi
 
 test('TX1 inc4 list version: a command stamped with the previous classifier list version ' +
   '(tx1-leg-a-1) applies as carried and is counted as an envelope mismatch against this ' +
-  'build\'s tx1-leg-a-2', async () => {
+  'build\'s tx1-leg-a-3', async () => {
   const replica = await startReplica(REPLICAS[1]);
   try {
     const tx = identityOf('i4-list');
@@ -255,7 +255,7 @@ test('TX1 inc4 list version: a command stamped with the previous classifier list
       diagnostics: envelopeDiagnosticsOf(replica)}, {apply: null,
       outcome: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.PREPARED},
       diagnostics: {mismatchCount: 1, lastMismatch: {commandType: V3.PREPARE_COMMAND,
-        carried: 'tx1-leg-a-1', own: 'tx1-leg-a-2'}}},
+        carried: 'tx1-leg-a-1', own: 'tx1-leg-a-3'}}},
     'the list bump is evidence for the release owner, never a refusal');
   } finally {
     await shutdownAll(replica);

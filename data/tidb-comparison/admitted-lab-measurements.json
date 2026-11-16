@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:a899a5f40c693addea987b85833a0f9836957746eb40e840487de75a1e5286e1"
+      "sha256": "sha256:e62e8740e1aed4a6ae4bd01feea43b1264e693168a316fb00235a51e1ac4b69b"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -4305,10 +4305,11 @@
     {
       "claimKey": "lagrange/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "product-failure",
+      "status": "invalid-measurement",
       "reasons": [
-        "no-committed-operations",
-        "readiness-exhausted"
+        "duplicate-claim",
+        "mixed-campaign",
+        "record-rejected:missing-field"
       ],
       "defectIds": [
         "D33",
@@ -4322,10 +4323,16 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-live-20261101-b-r9-r001"
+          "bench-live-20261101-b-r9-r001",
+          "bench-lab-20261116T0206Z-r001",
+          "bench-lab-20261116T0431Z-r001",
+          "bench-lab-20261116T0744Z-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:3bd3f6b62dd5cc487dd8962f6d168872fa5e3cafc72c7976d87d551717d8d980"
+          "sha256:3bd3f6b62dd5cc487dd8962f6d168872fa5e3cafc72c7976d87d551717d8d980",
+          "sha256:55e555b005cb599e752139569794934f26a8a0f05ecbb7871774d1587f789032",
+          "sha256:74c26bb55085158be85f46671b6d56b96dec1dafcf0929c3fc484372605226f2",
+          "sha256:adc680cf6f377f249aada144f143566c74b7cd1afeb607a3e611b2e5b4a0b280"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r001",
@@ -4333,76 +4340,35 @@
           "bench-live-20261101-b-r8-r001"
         ],
         "forensic": [],
-        "semanticProofIds": []
+        "semanticProofIds": [
+          "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+          "forbidden:dirty_read",
+          "forbidden:duplicate_success_effect",
+          "forbidden:lost_successful_write",
+          "forbidden:partial_commit",
+          "isolation:dirtyReadsForbidden",
+          "isolation:lostSuccessfulWriteForbidden",
+          "isolation:readYourOwnWritesRequired",
+          "isolation:successfulEffectsExactlyOnce",
+          "outcome:retryableConflictSqlState:40001",
+          "transaction:delivery:customer_balance_increases_by_selected_line_total",
+          "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+          "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+          "transaction:delivery:selected_order_carrier_is_set_once",
+          "transaction:delivery:selected_order_lines_are_marked_delivered",
+          "transaction:new_order:district_next_order_id_advances_once",
+          "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+          "transaction:new_order:one_order_line_created_per_input_line",
+          "transaction:new_order:one_order_row_created_for_allocated_order_id",
+          "transaction:new_order:stock_effects_applied_once_per_input_line",
+          "transaction:payment:customer_balance_decreases_by_payment_amount",
+          "transaction:payment:customer_payment_counters_advance_once",
+          "transaction:payment:district_ytd_increases_by_payment_amount",
+          "transaction:payment:one_history_row_created_for_logical_payment",
+          "transaction:payment:warehouse_ytd_increases_by_payment_amount"
+        ]
       },
-      "metrics": {
-        "profileClass": "smoke",
-        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-        "accounting": {
-          "offered": 100,
-          "issued": 0,
-          "unissued": 100,
-          "attempts": 0,
-          "committed": 0,
-          "conflicts": 0,
-          "conflictExhausted": 0,
-          "terminalFailures": {
-            "product_error": 0,
-            "correctness_failure": 0,
-            "transport_failure": 0,
-            "harness_fault": 0
-          },
-          "unresolved": 0,
-          "ambiguousCommits": 0
-        },
-        "runs": [
-          {
-            "runId": "bench-live-20261101-b-r9-r001",
-            "runStatus": "setup-failed",
-            "offeredRatePerSec": 5,
-            "repetition": 1,
-            "accounting": {
-              "offered": 100,
-              "issued": 0,
-              "unissued": 100,
-              "attempts": 0,
-              "committed": 0,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "drainOverrunMs": 0,
-            "maxLatencyMs": null
-          }
-        ],
-        "setupFailures": [
-          {
-            "runId": "bench-live-20261101-b-r9-r001",
-            "failureClass": "product_error",
-            "sqlState": null,
-            "code": "readiness_exhausted",
-            "message": "lagrange-node@192.168.86.27 did not report ready after 120 attempts",
-            "readinessDenial": {
-              "component": "lagrange-node@192.168.86.27",
-              "attempts": 120,
-              "elapsedMs": 167045,
-              "phase": "DEGRADED",
-              "state": "degraded",
-              "reasons": [
-                "PRIORITY_CONTROL_PLANE_RECOVERY_PENDING"
-              ]
-            }
-          }
-        ],
-        "capacity": null
-      }
+      "metrics": null
     },
     {
       "claimKey": "lagrange/scenarioB/fan-out",

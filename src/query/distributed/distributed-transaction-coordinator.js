@@ -505,8 +505,8 @@ class DistributedTransactionCoordinator {
     // hint, so the held answer is outcome-unknown, never "not committed".
     const held = this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.COMMIT);
     if (held) return held;
-    await this.freezeParticipantSet(tx);
     try {
+      await this.freezeParticipantSet(tx);
       return withCommitPoint(await this.runCommitProtocol(tx), tx);
     } catch (error) {
       throw stampThrownCommitPoint(error, tx);

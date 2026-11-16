@@ -197,7 +197,7 @@ function originCommandOf(partitionId = PARTITION_ID) {
 // The execution compatibility envelope (design v8 section 3.3): the build every
 // replica must run to apply a transaction command; this process's own build.
 // The classifier list version is the classifier owner's (tx1-leg-a-1 in the
-// design; tx1-leg-a-2 since the owner vetted HaltIfNull in increment 4).
+// design; tx1-leg-a-3 since the owner vetted HaltIfNull and seek/lookup opcodes).
 const ENVELOPE = (() => {
   const db = new Database(':memory:');
   try {
