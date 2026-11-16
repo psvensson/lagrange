@@ -23,10 +23,10 @@ reconcile older handoffs with the current owners before continuing.
 
 ## Choose The Work Unit
 
-Create a Quest for work likely to need more than one measured attempt or to change
-an owner-boundary contract. A single-sitting fix, documentation edit or mechanical
-change with an obvious proof may be committed directly; see the binding threshold
-in [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
+Use the [workflow](docs/steering/workflow-guidelines/solver-quests.md) before changing
+behavior or proof meaning, including optimizations, filters, caches and defaults.
+It owns the Quest threshold, bounded direct route, transition record and proof.
+Name the affected decision and production or proof path in the existing work record.
 
 ## Quest Records
 
