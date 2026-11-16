@@ -3,6 +3,7 @@ const ONE = 1;
 const DEFAULT_REPLICA_TARGET = 3;
 const DEFAULT_TIMEOUT_MS = 90000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+const DEFAULT_PLACEMENT_OP_TIMEOUT_MS = 10000;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -12,8 +13,26 @@ const arraySome = Function.call.bind(Array.prototype.some);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms, signal = null) {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, {once: true});
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+  });
 }
 
 function assertIdentifier(value, label) {
@@ -216,6 +235,9 @@ function resolvePlacementOptions(options = {}) {
   );
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const signal = options.signal ?? null;
+  const deadlineAtMs = Number.isFinite(options.deadlineAtMs) ? options.deadlineAtMs : null;
+  const now = typeof options.now === 'function' ? options.now : Date.now;
   return {
     provider,
     clientContainerId,
@@ -224,13 +246,23 @@ function resolvePlacementOptions(options = {}) {
     expectedAddresses,
     timeoutMs,
     pollIntervalMs,
+    signal,
+    deadlineAtMs,
+    now,
   };
 }
 
-async function executePlacementAttempt(provider, clientContainerId, endpoint, options) {
+async function executePlacementAttempt(
+  provider,
+  clientContainerId,
+  endpoint,
+  options,
+  callOptions = undefined,
+) {
   const lastStoreResult = await provider.execInContainer(
     clientContainerId,
     mysqlCommand(endpoint, storeStatusSql()),
+    callOptions,
   );
   const lastPeerResult = await provider.execInContainer(
     clientContainerId,
@@ -238,6 +270,7 @@ async function executePlacementAttempt(provider, clientContainerId, endpoint, op
       endpoint,
       regionPeerPlacementSql(options.databaseName, options.tableName),
     ),
+    callOptions,
   );
   return {lastStoreResult, lastPeerResult};
 }
@@ -283,21 +316,33 @@ async function waitForPhysicalTablePlacement(options = {}) {
     expectedAddresses,
     timeoutMs,
     pollIntervalMs,
+    signal,
+    deadlineAtMs,
+    now,
   } = resolvePlacementOptions(options);
 
-  const started = Date.now();
+  const started = now();
   let attempts = ZERO;
   let lastEvaluation = null;
   let lastStoreResult = null;
   let lastPeerResult = null;
 
-  while (Date.now() - started < timeoutMs) {
+  while (now() - started < timeoutMs) {
+    if (signal?.aborted) break;
+    const remainingDeadlineMs = deadlineAtMs !== null ? deadlineAtMs - now() : null;
+    if (remainingDeadlineMs !== null && remainingDeadlineMs <= ZERO) break;
+    const boundedOpTimeoutMs = remainingDeadlineMs !== null ?
+      Math.max(ONE, Math.min(DEFAULT_PLACEMENT_OP_TIMEOUT_MS, Math.floor(remainingDeadlineMs))) :
+      DEFAULT_PLACEMENT_OP_TIMEOUT_MS;
+    const callOptions = signal ?
+      {signal, timeoutMs: boundedOpTimeoutMs} : {timeoutMs: boundedOpTimeoutMs};
     attempts += ONE;
     const attemptResults = await executePlacementAttempt(
       provider,
       clientContainerId,
       endpoint,
       options,
+      callOptions,
     );
     lastStoreResult = attemptResults.lastStoreResult;
     lastPeerResult = attemptResults.lastPeerResult;
@@ -313,15 +358,22 @@ async function waitForPhysicalTablePlacement(options = {}) {
         return {...lastEvaluation, attempts};
       }
     }
-    await sleep(pollIntervalMs);
+    const sleepMs = deadlineAtMs !== null ?
+      Math.max(ZERO, Math.min(pollIntervalMs, deadlineAtMs - now())) :
+      pollIntervalMs;
+    await sleep(sleepMs, signal);
   }
 
-  throw formatPlacementTimeoutError(
+  const failure = formatPlacementTimeoutError(
     timeoutMs,
     lastStoreResult,
     lastPeerResult,
     lastEvaluation,
   );
+  failure.aborted = Boolean(signal?.aborted);
+  failure.deadlineExpired = Boolean(deadlineAtMs !== null && now() >= deadlineAtMs);
+  failure.lastEvaluation = lastEvaluation;
+  throw failure;
 }
 
 export {

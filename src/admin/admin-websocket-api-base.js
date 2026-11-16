@@ -419,8 +419,8 @@ class AdminWebSocketAPIBase {
     });
     this.fastify.get(
       ADMIN_ROUTE.PARTITION_DIAGNOSTICS,
-      async (_request, reply) => {
-        return this.handlePartitionDiagnostics(reply);
+      async (request, reply) => {
+        return this.handlePartitionDiagnostics(request, reply);
       },
     );
     this.fastify.get(ADMIN_ROUTE.SQL_DIAGNOSTICS, async (_request, reply) => {

@@ -905,11 +905,15 @@ test('watched container exit aborts deployLagrangeCluster and awaitReady immedia
       const entry = formationLedger.containers.get(id);
       if (entry && entry.host === '10.0.0.2') {
         entry.running = false;
+        const exitedState = {Running: false, Status: 'exited', ExitCode: 1, OOMKilled: false};
+        if (stringIncludes(command, '{{json .State}}')) {
+          return JSON.stringify(exitedState);
+        }
         return JSON.stringify({
           Id: entry.id,
           Name: `/${entry.name}`,
           Image: 'sha256:' + 'a'.repeat(64),
-          State: {Running: false, Status: 'exited', ExitCode: 1, OOMKilled: false},
+          State: exitedState,
           Config: {Image: entry.image, Entrypoint: ['/nodejs/bin/node'], Cmd: ['serve']},
           Mounts: entry.mounts,
         });
@@ -1067,4 +1071,126 @@ test('awaitReady preserves bounded formation deadline when deadlineAtMs is omitt
     },
   );
   assert.equal(stalledPolls, 1);
+});
+
+test('mid-probe deadline/SSH timeout and invalid JSON preserve lastCompletedObservation ' +
+  'and record lastProbeError separately', {timeout: 300000}, async () => {
+  const ledger = createContainerLedger();
+  let clockMs = 3_000_000;
+  let nodesPollCount = 0;
+  const {sshRun, calls} = createScriptedSsh([
+    ...cleanupDockerRules(ledger),
+    [/FROM nodes'/u, () => {
+      nodesPollCount += 1;
+      if (nodesPollCount === 1) {
+        return arrayJoin([
+          'node_id|status|connection_state|ready_lease_expires_at|last_heartbeat',
+          ...arrayMap(
+            ['00000000-0000-4000-8000-000000000001',
+              '00000000-0000-4000-8000-000000000002',
+              '00000000-0000-4000-8000-000000000003'],
+            (nodeId) => `${nodeId}|active|ready|${clockMs + 3600000}|${clockMs - 1000}`,
+          ),
+        ], '\n');
+      }
+      if (nodesPollCount === 2) {
+        return new Error('ssh: connect to host 10.0.0.1 port 22: Connection timed out');
+      }
+      clockMs += 420_000;
+      throw new Error('readiness probe formation deadline expired');
+    }],
+    [/FROM partitions'/u, () => arrayJoin([
+      'partition_id|table_name|replica_count|leader_node_id',
+      'tables-p1|tables|3|00000000-0000-4000-8000-000000000001',
+    ], '\n')],
+    [/FROM services WHERE/u, () => arrayJoin([
+      'partition_id|node_id|status|raft_role',
+      'tables-p1|00000000-0000-4000-8000-000000000001|active|leader',
+    ], '\n')],
+    ...lagrangeHealthyRules(ledger, {hosts: HOSTS}),
+  ]);
+  await assert.rejects(
+    deployers.deployLagrangeCluster({
+      hosts: HOSTS,
+      clientIp: CLIENT,
+      sshRun,
+      campaignId: CAMPAIGN,
+      nowFn: () => clockMs,
+      sleep: async (ms) => {
+        clockMs += ms;
+      },
+      opts: {
+        lagrangeImage: LAGRANGE_IMAGE,
+        cleanupOnFailure: true,
+        readiness: {stablePolls: 1, attempts: 10, intervalMs: 1000},
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'readiness_exhausted');
+      assert.equal(error.diagnostic.component, 'lagrange-system-tables');
+      assert.equal(error.diagnostic.completedAttempts, 1);
+      assert.equal(error.diagnostic.observerInfrastructure, false);
+      assert.ok(arrayIncludes(error.diagnostic.lastCompletedObservation.denials,
+        'partition_under_replicated:tables-p1'));
+      assert.ok(arrayIncludes(error.diagnostic.lastObservation.denials,
+        'partition_under_replicated:tables-p1'));
+      assert.equal(error.diagnostic.lastProbeError.deadlineExpired, true);
+      assert.ok(arrayIncludes(
+        error.deployment.readiness.lastCompletedObservation.denials,
+        'partition_under_replicated:tables-p1',
+      ));
+      assert.ok(error.deployment.readiness.lastProbeError);
+      return true;
+    },
+  );
+  const queryCalls = arrayFilter(calls, (c) => stringIncludes(c.command, 'FROM '));
+  assert.ok(queryCalls.length > 0 && arrayEvery(queryCalls, (c) =>
+    !stringIncludes(c.command, 'SELECT * FROM') &&
+    stringIncludes(c.command, 'PGCONNECT_TIMEOUT=') &&
+    stringIncludes(c.command, 'statement_timeout=')),
+  'SQL system-table queries must use explicit projections and timeouts');
+  const snapshotCalls = arrayFilter(calls, (c) =>
+    stringIncludes(c.command, '/api/admin/control-snapshot'));
+  assert.ok(snapshotCalls.length > 0 && arrayEvery(snapshotCalls, (c) =>
+    stringIncludes(c.command, 'view=serve-lane')),
+  'control-snapshot calls must request bounded serve-lane view');
+  const leaderCalls = arrayFilter(calls, (c) =>
+    stringIncludes(c.command, '/api/admin/diagnostics/partitions?view=leaders'));
+  assert.ok(leaderCalls.length > 0, 'leadersReady must request compact view=leaders');
+  const inspectCalls = arrayFilter(calls, (c) =>
+    stringIncludes(c.command, '{{json .State}}'));
+  assert.ok(inspectCalls.length > 0, 'watched container liveness must inspect {{json .State}}');
+});
+
+test('httpFromHost omits redundant body on valid JSON and preserves parseError on ' +
+  'invalid JSON without clobbering lastCompletedObservation', async () => {
+  const {httpFromHost} = await import('../real-product-remote-shell.js');
+  const validSsh = createScriptedSsh([
+    [/curl /u, '{"ready":true,"phase":"ready","state":"ready","reasons":[]}\nhttp_status=200'],
+  ]).sshRun;
+  const okAnswer = await httpFromHost({
+    sshRun: validSsh,
+    opts: {},
+    from: CLIENT,
+    url: 'http://10.0.0.1:8080/readyz',
+  });
+  assert.equal(okAnswer.status, 200);
+  assert.equal(Object.hasOwn(okAnswer, 'body'), false,
+    'valid JSON answer must omit redundant .body');
+  assert.equal(okAnswer.json?.ready, true);
+  assert.equal(okAnswer.parseError, null);
+
+  const badJson = '<html>502 Bad Gateway ' + 'x'.repeat(700) + '</html>\nhttp_status=502';
+  const badSsh = createScriptedSsh([[/curl /u, badJson]]).sshRun;
+  const badAnswer = await httpFromHost({
+    sshRun: badSsh,
+    opts: {},
+    from: CLIENT,
+    url: 'http://10.0.0.1:8080/readyz',
+  });
+  assert.equal(badAnswer.status, 502);
+  assert.equal(badAnswer.json, null);
+  assert.ok(typeof badAnswer.parseError === 'string' && badAnswer.parseError.length > 0);
+  assert.ok(badAnswer.bodyTruncated === true && badAnswer.body.length < badJson.length);
+  assert.match(badAnswer.error, /^invalid_json_response:/u);
 });

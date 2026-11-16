@@ -25,6 +25,15 @@ const READY_VALUE = '1';
 const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
 const DIAGNOSTIC_LOG_TAIL_LINES = 80;
 const DIAGNOSTIC_LOG_MAX_CHARS = 6000;
+const DEFAULT_PROVIDER_OP_TIMEOUT_MS = 10000;
+
+function boundedProviderCallOptions(callOptions, defaultMs = DEFAULT_PROVIDER_OP_TIMEOUT_MS) {
+  const signal = callOptions?.signal ?? null;
+  const rawTimeout = callOptions?.timeoutMs;
+  const timeoutMs = Number.isFinite(rawTimeout) ?
+    Math.max(1, Math.min(defaultMs, Math.floor(rawTimeout))) : defaultMs;
+  return signal ? {signal, timeoutMs} : {timeoutMs};
+}
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -146,7 +155,10 @@ function boundedLog(value) {
 
 async function fetchContainerInspect(provider, containerId) {
   try {
-    const inspect = await provider.inspectContainer(containerId);
+    const inspect = await provider.inspectContainer(
+      containerId,
+      boundedProviderCallOptions(undefined),
+    );
     return {inspect, inspectError: null};
   } catch (error) {
     return {inspect: null, inspectError: String(error?.message || error)};
@@ -160,7 +172,7 @@ async function fetchContainerLogs(provider, containerId) {
   try {
     const logs = boundedLog(await provider.getContainerLogs(
       containerId,
-      {tail: DIAGNOSTIC_LOG_TAIL_LINES},
+      {tail: DIAGNOSTIC_LOG_TAIL_LINES, timeoutMs: DEFAULT_PROVIDER_OP_TIMEOUT_MS},
     ));
     return {logs, logError: null};
   } catch (error) {
@@ -227,8 +239,9 @@ async function assertWatchedContainersRunning(provider, watchedContainers = [],
       throw err;
     }
     let inspect;
+    const boundedOpts = boundedProviderCallOptions(callOptions);
     try {
-      inspect = await provider.inspectContainer(watched.containerId, callOptions);
+      inspect = await provider.inspectContainer(watched.containerId, boundedOpts);
     } catch (error) {
       if (callOptions?.signal?.aborted) {
         const err = new Error(`TiDB reference SQL readiness aborted: ${error.message}`);
@@ -262,7 +275,11 @@ async function waitForContainerRunning(provider, containerId, options) {
   let lastError = null;
   while (Date.now() - started < options.timeoutMs) {
     try {
-      const state = await provider.inspectContainer(containerId);
+      const remainingMs = Math.max(1, options.timeoutMs - (Date.now() - started));
+      const state = await provider.inspectContainer(
+        containerId,
+        boundedProviderCallOptions({timeoutMs: remainingMs}),
+      );
       if (state?.State?.Running === true) return state;
     } catch (error) {
       lastError = error;
@@ -292,11 +309,17 @@ function buildSqlReadinessCommand(endpoint, sql = READINESS_SQL) {
 }
 
 function formatSqlReadinessDetail(lastError, lastResult) {
-  if (lastError) return lastError.message;
-  const exitCode = lastResult?.exitCode ?? 'unknown';
-  const stdout = JSON.stringify(lastResult?.stdout || '');
-  const stderr = JSON.stringify(lastResult?.stderr || '');
-  return `exit=${exitCode} stdout=${stdout} stderr=${stderr}`;
+  const parts = [];
+  if (lastResult) {
+    const exitCode = lastResult.exitCode ?? 'unknown';
+    const stdout = JSON.stringify(lastResult.stdout || '');
+    const stderr = JSON.stringify(lastResult.stderr || '');
+    parts.push(`exit=${exitCode} stdout=${stdout} stderr=${stderr}`);
+  }
+  if (lastError) {
+    parts.push(`lastError=${lastError.message}`);
+  }
+  return parts.length > 0 ? parts.join('; ') : 'no attempts recorded';
 }
 
 function isSqlReadinessSuccessful(result) {
@@ -332,8 +355,10 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
     if (remainingDeadlineMs !== null && remainingDeadlineMs <= 0) break;
     const callOptions = signal || remainingDeadlineMs !== null ? {
       ...(signal ? {signal} : {}),
-      ...(remainingDeadlineMs !== null ? {timeoutMs: Math.max(1, remainingDeadlineMs)} : {}),
-    } : undefined;
+      timeoutMs: remainingDeadlineMs !== null ?
+        Math.max(1, Math.min(DEFAULT_PROVIDER_OP_TIMEOUT_MS, Math.floor(remainingDeadlineMs))) :
+        DEFAULT_PROVIDER_OP_TIMEOUT_MS,
+    } : {timeoutMs: DEFAULT_PROVIDER_OP_TIMEOUT_MS};
     attempts += 1;
     await assertWatchedContainersRunning(provider, watchedContainers, callOptions);
     const outcome = await executeSqlReadinessAttempt(
@@ -374,6 +399,12 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   );
   failure.aborted = aborted;
   failure.deadlineExpired = deadlineExpired;
+  failure.lastResult = lastResult;
+  failure.lastError = lastError ? String(lastError.message || lastError) : null;
+  if (!aborted && !deadlineExpired && lastResult === null &&
+      lastError?.observerInfrastructure === true) {
+    failure.observerInfrastructure = true;
+  }
   throw failure;
 }
 

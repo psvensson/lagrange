@@ -983,3 +983,57 @@ describe('the forensic reader is outside the publication path', () => {
     }
   });
 });
+
+describe('readinessDenialOf structured extraction', () => {
+  it('decodes cluster-readiness denials, containerExited, and lastProbeError alongside /readyz',
+    async () => {
+      const {readinessDenialOf} = await import('../benchmark-readiness-denial.js');
+      const readyzDenial = readinessDenialOf({
+        deployment: {readiness: {evidence: {diagnostic: {
+          component: 'lagrange-node@10.0.0.1',
+          attempts: 4,
+          elapsedMs: 1200,
+          last: {status: 503, json: {phase: 'joining', state: 'waiting', reasons: ['quorum']}},
+        }}}},
+      });
+      assert.deepEqual(readyzDenial, {
+        component: 'lagrange-node@10.0.0.1',
+        attempts: 4,
+        elapsedMs: 1200,
+        phase: 'joining',
+        state: 'waiting',
+        reasons: ['quorum'],
+      });
+
+      const sysDenial = readinessDenialOf({
+        deployment: {readiness: {evidence: {diagnostic: {
+          component: 'lagrange-system-tables',
+          attempts: 28,
+          elapsedMs: 420000,
+          lastCompletedObservation: {denials: ['partition_under_replicated:tables-p1']},
+          lastProbeError: {error: 'readiness probe formation deadline expired'},
+        }}}},
+      });
+      assert.deepEqual(sysDenial, {
+        component: 'lagrange-system-tables',
+        attempts: 28,
+        elapsedMs: 420000,
+        phase: 'cluster-readiness',
+        state: 'denied',
+        reasons: ['partition_under_replicated:tables-p1'],
+        lastProbeError: 'readiness probe formation deadline expired',
+      });
+
+      const exitedDenial = readinessDenialOf({
+        deployment: {readiness: {evidence: {diagnostic: {
+          component: 'lagrange-system-tables',
+          attempts: 3,
+          elapsedMs: 5000,
+          lastObservation: {containerExited: true, role: 'lagrange-node', status: 'exited', exitCode: 137},
+        }}}},
+      });
+      assert.equal(exitedDenial.phase, 'container-exited');
+      assert.equal(exitedDenial.state, 'exited');
+      assert.deepEqual(exitedDenial.reasons, ['container_exited:lagrange-node:137']);
+    });
+});

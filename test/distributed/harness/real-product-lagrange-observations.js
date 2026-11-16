@@ -1,0 +1,659 @@
+/**
+ * Observation, readiness polling, system-table sampling, and identity/version
+ * probes for the Lagrange comparative deployer (`real-product-deployer-
+ * lagrange.js`). Keeping these probes in their own module keeps each file
+ * compact and ensures every HTTP/SQL/docker-inspect call carries bounded
+ * per-call timeouts, column projections, and structured error metadata.
+ */
+import {
+  arrayEvery,
+  arrayFilter,
+  arrayFind,
+  arrayFlatMap,
+  arrayIsArray,
+  arrayMap,
+  dateNow,
+  jsonParse,
+  numberIsFinite,
+  numberIsInteger,
+  objectHasOwn,
+  stringIndexOf,
+  stringSlice,
+  toStringValue as stringOf,
+} from './real-product-captured-intrinsics.js';
+import {
+  DEPLOYMENT_FAILURE,
+  deploymentFailure,
+} from './real-product-deployment-contract.js';
+import {
+  evaluateLagrangeClusterReadiness,
+  evaluateLagrangeServeLane,
+} from './real-product-lagrange-readiness-evaluation.js';
+import {pollReadiness} from './real-product-readiness.js';
+import {
+  classifyRemoteCommandError,
+  errorText,
+  httpFromHost,
+  inspectContainerStateCommand,
+  shellWord,
+} from './real-product-remote-shell.js';
+
+const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
+const NODE_ROLE = 'lagrange-node';
+const PG_WIRE_SERVICE_ID = 'sys-postgres-wire';
+const HTTP_OK = 200;
+const HEALTHY = 'healthy';
+const PG_WIRE_DESIRED_STATE = Object.freeze({
+  replicaCount: 1,
+  runtimeConfig: Object.freeze({host: '0.0.0.0', authMode: 'password', tlsMode: 'disable'}),
+});
+const SYSTEM_TABLE_QUERIES = Object.freeze({
+  nodes: 'SELECT node_id, status, connection_state, ready_lease_expires_at, ' +
+    'last_heartbeat FROM nodes',
+  endpoints: 'SELECT service_id, node_id, protocol, port, health_status ' +
+    'FROM service_endpoints',
+  partitions: 'SELECT partition_id, table_name, replica_count, ' +
+    'leader_node_id FROM partitions',
+  services: 'SELECT partition_id, node_id, status, raft_role FROM services ' +
+    'WHERE service_type = \'partition\'',
+});
+const PROBE_TABLE = 'bench_readiness_probe';
+const PROBE_VISIBILITY_SINGLE_LISTENER = 'single-listener';
+const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
+const NO_SUCH_CONTAINER_PATTERN = /\bNo such (?:container|object)\b/u;
+const INSPECT_TIMEOUT_MS = 10000;
+const CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS = 5000;
+const BOOT_PROVENANCE_TIMEOUT_MS = 10000;
+const BOOT_PROVENANCE_MAX_BYTES = 4096;
+
+function tagProbeError(message, flags) {
+  return Object.assign(new Error(message), flags);
+}
+
+function probeCallOptions(ctx, pollContext = null) {
+  const signal = pollContext?.signal !== undefined ? pollContext.signal : (ctx?.signal ?? null);
+  if (signal?.aborted) {
+    throw tagProbeError('readiness probe aborted', {
+      aborted: true,
+      deadlineExpired: false,
+      transportError: false,
+      observerInfrastructure: false,
+    });
+  }
+  const deadlineAtMs = pollContext?.deadlineAtMs !== undefined ?
+    pollContext.deadlineAtMs : (ctx?.deadlineAtMs ?? null);
+  if (!numberIsFinite(deadlineAtMs)) {
+    return {signal: signal ?? undefined, timeoutMs: undefined};
+  }
+  const clock = typeof ctx?.now === 'function' ? ctx.now : dateNow;
+  const remainingMs = deadlineAtMs - clock();
+  if (remainingMs <= 0) {
+    throw tagProbeError('readiness probe formation deadline expired', {
+      aborted: false,
+      deadlineExpired: true,
+      transportError: false,
+      observerInfrastructure: false,
+    });
+  }
+  return {signal: signal ?? undefined, timeoutMs: remainingMs};
+}
+
+function boundedTimeoutMs(requestedMs, defaultMs) {
+  if (!numberIsFinite(requestedMs)) return defaultMs;
+  return Math.max(1, Math.min(defaultMs, Math.floor(requestedMs)));
+}
+
+async function getJson(ctx, url, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    probeCallOptions(ctx, null);
+  return httpFromHost({
+    sshRun: ctx.sshRun,
+    opts: ctx.opts,
+    from: ctx.clientIp,
+    url,
+    signal: callOptions.signal,
+    timeoutMs: callOptions.timeoutMs,
+  });
+}
+
+function getFacts(ctx, host, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    probeCallOptions(ctx, null);
+  return httpFromHost({
+    sshRun: ctx.sshRun,
+    opts: ctx.opts,
+    from: ctx.clientIp,
+    url: `http://${host}:${PORT.REST}/management/v1/facts`,
+    basicAuth: ctx.connection,
+    signal: callOptions.signal,
+    timeoutMs: callOptions.timeoutMs,
+  });
+}
+
+function stateFieldOrNull(record, key) {
+  if (!record || typeof record !== 'object' || !objectHasOwn(record, key)) {
+    return null;
+  }
+  return record[key];
+}
+
+function exitedContainerObservation(role, state) {
+  const inspectState = state && typeof state === 'object' ? state : {};
+  return {
+    containerExited: true,
+    host: role.host,
+    role: role.role,
+    nodeId: stateFieldOrNull(role, 'nodeId'),
+    containerId: role.containerId,
+    status: stateFieldOrNull(inspectState, 'Status'),
+    running: inspectState.Running === true,
+    exitCode: stateFieldOrNull(inspectState, 'ExitCode'),
+    oomKilled: stateFieldOrNull(inspectState, 'OOMKilled'),
+    finishedAt: stateFieldOrNull(inspectState, 'FinishedAt'),
+    error: inspectState.Error || null,
+  };
+}
+
+function buildExitedContainerFailure({component, role, state, pollContext}) {
+  const observation = exitedContainerObservation(role, state);
+  const attempt = pollContext?.attempt ?? 1;
+  const diagnostic = {
+    component,
+    attempt,
+    attempts: attempt,
+    containerExited: true,
+    exitedRole: observation,
+    last: observation,
+    lastObservation: observation,
+    lastCompletedObservation: observation,
+  };
+  const failure = deploymentFailure(
+    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
+    `${component} aborted: ${role.role} on ${role.host} (${role.containerId}) ` +
+      `exited (status=${observation.status}, exitCode=${observation.exitCode})`,
+    diagnostic,
+  );
+  failure.terminal = true;
+  failure.containerExited = true;
+  failure.attempt = attempt;
+  failure.attempts = attempt;
+  failure.lastObservation = observation;
+  failure.lastCompletedObservation = observation;
+  return failure;
+}
+
+function parseInspectState(raw) {
+  let parsed;
+  try {
+    parsed = jsonParse(stringOf(raw ?? ''));
+  } catch (error) {
+    throw tagProbeError(`docker inspect answered invalid JSON: ${error.message}`, {
+      parseError: true,
+      observerInfrastructure: true,
+    });
+  }
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.Running !== 'boolean') {
+    throw new Error('docker inspect answered without container State');
+  }
+  return parsed;
+}
+
+async function inspectWatchedRole(ctx, component, role, pollContext, callOptions) {
+  const timeoutMs = boundedTimeoutMs(callOptions.timeoutMs, INSPECT_TIMEOUT_MS);
+  const inspectOpts = {
+    ...(ctx.opts || {}),
+    ...(callOptions.signal !== undefined ? {signal: callOptions.signal} : {}),
+    timeoutMs,
+  };
+  let raw;
+  try {
+    raw = await ctx.sshRun(
+      role.host,
+      inspectOpts,
+      inspectContainerStateCommand(role.containerId),
+      timeoutMs,
+    );
+  } catch (error) {
+    if (NO_SUCH_CONTAINER_PATTERN.test(errorText(error))) {
+      throw buildExitedContainerFailure({
+        component,
+        role,
+        state: {Running: false, Status: 'absent', ExitCode: null, Error: errorText(error)},
+        pollContext,
+      });
+    }
+    const classified = classifyRemoteCommandError(error);
+    throw tagProbeError(classified.message, {
+      aborted: classified.aborted,
+      deadlineExpired: classified.deadlineExpired,
+      transportError: classified.transportError,
+      observerInfrastructure: classified.observerInfrastructure,
+    });
+  }
+  const state = parseInspectState(raw);
+  if (state.Running !== true) {
+    throw buildExitedContainerFailure({component, role, state, pollContext});
+  }
+}
+
+async function assertWatchedRolesRunning(ctx, component, pollContext) {
+  if (!arrayIsArray(ctx.watchedRoles) || ctx.watchedRoles.length === 0) return;
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    probeCallOptions(ctx, null);
+  await Promise.all(arrayMap(
+    ctx.watchedRoles,
+    (role) => inspectWatchedRole(ctx, component, role, pollContext, callOptions),
+  ));
+}
+
+function readinessOf(ctx, component, probe, stablePolls = 1) {
+  return pollReadiness({
+    component,
+    probe: async (pollContext) => {
+      await assertWatchedRolesRunning(ctx, component, pollContext);
+      return probe(pollContext);
+    },
+    attempts: ctx.budget.attempts,
+    intervalMs: ctx.budget.intervalMs,
+    sleep: ctx.sleep,
+    now: ctx.now,
+    stablePolls,
+    deadlineAtMs: ctx.deadlineAtMs ?? null,
+    deadlineMs: ctx.deadlineMs ?? null,
+    signal: ctx.signal ?? null,
+  });
+}
+
+function compactReadyzDiagnostic(answer) {
+  if (answer.error !== null || answer.parseError !== null || answer.status === null ||
+      !answer.json || typeof answer.json !== 'object') {
+    return answer;
+  }
+  const reasons = arrayIsArray(answer.json.reasons) ? answer.json.reasons : [];
+  return {
+    status: answer.status,
+    json: {
+      ready: answer.json.ready === true,
+      phase: stateFieldOrNull(answer.json, 'phase'),
+      state: stateFieldOrNull(answer.json, 'state'),
+      reasons,
+    },
+    error: null,
+  };
+}
+
+function nodeReady(ctx, host) {
+  return readinessOf(ctx, `${NODE_ROLE}@${host}`, async (pollContext) => {
+    const answer = await getJson(ctx, `http://${host}:${PORT.REST}/readyz`, pollContext);
+    return {
+      ready: answer.status === HTTP_OK && answer.json?.ready === true,
+      diagnostic: compactReadyzDiagnostic(answer),
+    };
+  });
+}
+
+function membershipReady(ctx, seedHost, nodeCount) {
+  return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
+    const answer = await getFacts(ctx, seedHost, pollContext);
+    return {
+      ready: answer.json?.facts?.topology?.readyNodeCount === nodeCount,
+      diagnostic: answer,
+    };
+  });
+}
+
+function healthyListener(services, roles) {
+  const replicas = arrayFlatMap(arrayIsArray(services) ? services : [],
+    (service) => (arrayIsArray(service?.replicas) ? service.replicas : []));
+  const replica = arrayFind(replicas, (one) => one?.serviceId === PG_WIRE_SERVICE_ID &&
+    one?.healthStatus === HEALTHY && numberIsInteger(Number(one?.port)) && one?.port > 0);
+  const node = replica && arrayFind(roles, (role) => role.nodeId === replica.nodeId);
+  return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId} : null;
+}
+
+async function publicPgWireReady(ctx, seedHost, roles) {
+  const admin = `http://${seedHost}:${PORT.ADMIN}`;
+  let listener = null;
+  await readinessOf(ctx, 'lagrange-public-pg-wire', async (pollContext) => {
+    const scaleCall = probeCallOptions(ctx, pollContext);
+    const scale = await httpFromHost({
+      sshRun: ctx.sshRun,
+      opts: ctx.opts,
+      from: ctx.clientIp,
+      url: `${admin}/api/admin/services/${PG_WIRE_SERVICE_ID}/scale`,
+      method: 'POST',
+      body: PG_WIRE_DESIRED_STATE,
+      signal: scaleCall.signal,
+      timeoutMs: scaleCall.timeoutMs,
+    });
+    if (scale.aborted || scale.deadlineExpired || scale.observerInfrastructure ||
+        scale.parseError !== null || scale.status === null) {
+      return {ready: false, diagnostic: scale};
+    }
+    if (scale.json?.success !== true || scale.json?.outcome !== 'applied') {
+      return {ready: false, diagnostic: {scale}};
+    }
+    const found = await getJson(ctx,
+      `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`, pollContext);
+    if (found.aborted || found.deadlineExpired || found.observerInfrastructure ||
+        found.parseError !== null || found.status === null) {
+      return {ready: false, diagnostic: found};
+    }
+    listener = healthyListener(found.json?.services, roles);
+    return {ready: listener !== null, diagnostic: {discovery: found}};
+  });
+  return listener;
+}
+
+// A field of the product's partition diagnostics: the product answers it (its
+// value may be null, e.g. a partition without a leader); a missing field is
+// an unreadable answer, never a default.
+function partitionField(record, key) {
+  if (!record || typeof record !== 'object' || !objectHasOwn(record, key)) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `partition diagnostics answered without ${key}`, {record});
+  }
+  return record[key];
+}
+
+function deploymentHostOf(roles, nodeId) {
+  const role = arrayFind(roles, (one) => one.nodeId === nodeId);
+  return role === undefined ? null : role.host;
+}
+
+function placementOf(answer, roles, observedAt) {
+  if (answer.status !== HTTP_OK) return null;
+  const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
+  return {
+    observedAt,
+    source: '/api/admin/diagnostics/partitions',
+    replicasByPartition: arrayMap(partitions, (partition) => ({
+      partitionId: partitionField(partition, 'partitionId'),
+      tableName: partitionField(partition, 'tableName'),
+      leaderNodeId: partitionField(partition, 'leaderNodeId'),
+      leaderHost: deploymentHostOf(roles, partitionField(partition, 'leaderNodeId')),
+      replicas: arrayMap(partitionField(partition, 'replicas'), (replica) => ({
+        nodeId: partitionField(replica, 'nodeId'),
+        host: deploymentHostOf(roles, partitionField(replica, 'nodeId')),
+        status: partitionField(replica, 'status'),
+      })),
+    })),
+  };
+}
+
+function readPartitions(ctx, seedHost, pollContext = null) {
+  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
+    pollContext);
+}
+
+function readPartitionLeaders(ctx, seedHost, pollContext = null) {
+  return getJson(
+    ctx,
+    `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions?view=leaders`,
+    pollContext,
+  );
+}
+
+async function observedLeaders(ctx, seedHost) {
+  const answer = await readPartitionLeaders(ctx, seedHost);
+  if (answer.status !== HTTP_OK) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      'partition diagnostics did not answer', {answer});
+  }
+  return partitionField(answer.json, 'leaders');
+}
+
+function leadersReady(ctx, seedHost) {
+  return readinessOf(ctx, 'lagrange-partition-leaders', async (pollContext) => {
+    const answer = await readPartitionLeaders(ctx, seedHost, pollContext);
+    if (answer.status !== HTTP_OK || !answer.json) {
+      return {ready: false, diagnostic: answer};
+    }
+    const leaders = partitionField(answer.json, 'leaders');
+    const leaderEntries = leaders && typeof leaders === 'object' ? Object.values(leaders) : [];
+    const partitionCount = partitionField(answer.json, 'partitionCount');
+    return {
+      ready: numberIsInteger(partitionCount) && partitionCount > 0 &&
+        leaderEntries.length === partitionCount && arrayEvery(leaderEntries, Boolean),
+      diagnostic: {partitionCount, leaders},
+    };
+  });
+}
+
+async function readSystemTables(query, ctx = null, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    (ctx ? probeCallOptions(ctx, null) : {});
+  const entries = await Promise.all(
+    arrayMap(Object.entries(SYSTEM_TABLE_QUERIES), async ([name, sql]) => {
+      const rows = await query(sql, callOptions);
+      return [name, rows];
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+async function controlSnapshots(ctx, roles, pollContext = null) {
+  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+    probeCallOptions(ctx, null);
+  const snapshotTimeoutMs = boundedTimeoutMs(
+    callOptions.timeoutMs, CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS);
+  const queryUrlForRole = (role) =>
+    `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot` +
+    `?scope=local&view=serve-lane&timeoutMs=${snapshotTimeoutMs}`;
+  const answers = await Promise.all(arrayMap(roles, async (role) => ({
+    role,
+    answer: await httpFromHost({
+      sshRun: ctx.sshRun,
+      opts: ctx.opts,
+      from: ctx.clientIp,
+      url: queryUrlForRole(role),
+      signal: callOptions.signal,
+      timeoutMs: callOptions.timeoutMs,
+    }),
+  })));
+  const snapshots = [];
+  for (const {role, answer} of answers) {
+    if (answer.aborted || answer.deadlineExpired || answer.observerInfrastructure ||
+        answer.parseError !== null || answer.status === null) {
+      throw tagProbeError(
+        `control-snapshot probe for ${role.nodeId} failed: ${answer.error || answer.parseError}`,
+        {
+          aborted: answer.aborted === true,
+          deadlineExpired: answer.deadlineExpired === true,
+          transportError: answer.transportError === true,
+          observerInfrastructure: answer.observerInfrastructure === true,
+          parseError: answer.parseError,
+        },
+      );
+    }
+    snapshots.push({
+      nodeId: role.nodeId,
+      snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null,
+    });
+  }
+  return snapshots;
+}
+
+async function tableRoutingDenials(query, requiredTables, ctx = null, pollContext = null) {
+  const denials = [];
+  if (requiredTables === null) return denials;
+  for (const table of requiredTables) {
+    const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
+      (ctx ? probeCallOptions(ctx, null) : {});
+    try {
+      await query(`SELECT COUNT(*) AS row_count FROM ${table}`, callOptions);
+    } catch (error) {
+      if (error?.aborted === true || error?.deadlineExpired === true ||
+          error?.observerInfrastructure === true || error?.parseError === true) {
+        throw error;
+      }
+      denials.push(`table_not_routable:${table}:${errorText(error)}`);
+    }
+  }
+  return denials;
+}
+
+function recordTableRoutability(tableReadyAt, tables, context) {
+  if (context.requiredTables === null) return;
+  for (const table of context.requiredTables) {
+    if (tableReadyAt[table] !== undefined) continue;
+    const own = evaluateLagrangeClusterReadiness({
+      ...tables,
+      expectedNodeIds: context.expectedNodeIds,
+      requiredServiceIds: [],
+      requiredTables: [table],
+      now: context.now,
+    });
+    if (own.ready) tableReadyAt[table] = context.now - context.startedAt;
+  }
+}
+
+async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
+  const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  const startedAt = clock();
+  const tableReadyAt = {};
+  const readiness = await readinessOf(ctx, component, async (pollContext) => {
+    const tables = await readSystemTables(query, ctx, pollContext);
+    const now = clock();
+    recordTableRoutability(tableReadyAt, tables, {
+      requiredTables,
+      expectedNodeIds,
+      now,
+      startedAt,
+    });
+    const verdict = evaluateLagrangeClusterReadiness({
+      ...tables,
+      expectedNodeIds,
+      requiredServiceIds: [PG_WIRE_SERVICE_ID],
+      requiredTables,
+      now,
+    });
+    const lane = evaluateLagrangeServeLane({
+      snapshots: await controlSnapshots(ctx, nodeRoles, pollContext),
+    });
+    const routing = verdict.ready && lane.ready ?
+      await tableRoutingDenials(query, requiredTables, ctx, pollContext) : [];
+    const denials = [...verdict.denials, ...lane.denials, ...routing];
+    return {
+      ready: denials.length === 0,
+      diagnostic: {
+        denials,
+        nodes: tables.nodes.length,
+        partitions: tables.partitions.length,
+        tableTimeToRoutableMs: {...tableReadyAt},
+      },
+    };
+  }, ctx.budget.stablePolls);
+  return requiredTables ? {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} : readiness;
+}
+
+function probeVisibility(listenerNodeId, nodeRoles) {
+  return {
+    status: PROBE_VISIBILITY_SINGLE_LISTENER,
+    readFrom: [listenerNodeId],
+    notReadFrom: arrayFilter(arrayMap(nodeRoles, (role) => role.nodeId),
+      (nodeId) => nodeId !== listenerNodeId),
+  };
+}
+
+function probeWriteReadback(ctx, sql, campaignId, visibility) {
+  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+  return readinessOf(ctx, 'lagrange-probe-write-readback', async (pollContext) => {
+    const id = clock();
+    const token = `${campaignId}-${id}`;
+    await sql.statement(
+      `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`,
+      probeCallOptions(ctx, pollContext),
+    );
+    const insert = await sql.statement(
+      `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`,
+      probeCallOptions(ctx, pollContext),
+    );
+    const rows = await sql.query(
+      `SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`,
+      probeCallOptions(ctx, pollContext),
+    );
+    return {
+      ready: insert.rowCount === 1 && rows.length === 1 && rows[0].token === token,
+      diagnostic: {
+        written: token,
+        insertTag: insert.tag,
+        insertRowCount: insert.rowCount,
+        readBack: rows,
+        visibility,
+      },
+    };
+  });
+}
+
+function bootLogField(parsed, key) {
+  if (!objectHasOwn(parsed, key)) throw new Error(`boot provenance line without ${key}`);
+  return parsed[key];
+}
+
+async function bootProvenance(ctx, product, facts = null) {
+  try {
+    const cmd = `docker logs ${shellWord(product.containerId)} 2>&1 | ` +
+      `grep -m 1 ${BOOT_PROVENANCE_MARKER} | head -c ${BOOT_PROVENANCE_MAX_BYTES}`;
+    const line = stringOf(await ctx.sshRun(
+      product.host,
+      {...(ctx.opts || {}), timeoutMs: BOOT_PROVENANCE_TIMEOUT_MS},
+      cmd,
+      BOOT_PROVENANCE_TIMEOUT_MS,
+    ));
+    const parsed = jsonParse(stringSlice(line, stringIndexOf(line, '{')));
+    const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
+    const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
+    return {
+      version: bootLogField(parsed, 'version'),
+      bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
+      subsystem: bootLogField(parsed, 'subsystem'),
+      ...(typeof gitCommit === 'string' && gitCommit !== '' ? {gitCommit} : {}),
+    };
+  } catch (error) {
+    return {unavailable: errorText(error)};
+  }
+}
+
+function reportedVersionOf(facts) {
+  const version = facts.status === HTTP_OK ? facts.json?.facts?.release?.version : undefined;
+  if (typeof version === 'string' && version !== '') {
+    return {reportedVersion: version, reportedVersionError: null};
+  }
+  return {
+    reportedVersion: null,
+    reportedVersionError: `facts answered ${JSON.stringify({
+      status: facts.status,
+      error: facts.error,
+      version: version === undefined ? 'absent' : version,
+    })}`,
+  };
+}
+
+async function reportedVersions(ctx, products) {
+  await Promise.all(arrayMap(products, async (product) => {
+    const facts = await getFacts(ctx, product.host);
+    Object.assign(product, reportedVersionOf(facts));
+    product.bootProvenance = await bootProvenance(ctx, product, facts);
+  }));
+  return products;
+}
+
+export {
+  NODE_ROLE,
+  PG_WIRE_SERVICE_ID,
+  clusterReady,
+  controlSnapshots,
+  leadersReady,
+  membershipReady,
+  nodeReady,
+  observedLeaders,
+  placementOf,
+  probeVisibility,
+  probeWriteReadback,
+  publicPgWireReady,
+  readPartitions,
+  readSystemTables,
+  reportedVersions,
+};

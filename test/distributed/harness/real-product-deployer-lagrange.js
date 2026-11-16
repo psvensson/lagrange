@@ -29,7 +29,6 @@
 import {REQUEST_CELL_AUTH} from './constants.js';
 import {
   DateConstructor,
-  arrayEvery,
   arrayFilter,
   arrayFind,
   arrayFlatMap,
@@ -38,7 +37,6 @@ import {
   arraySome,
   dateNow,
   dateToISOString,
-  jsonParse,
   numberIsFinite,
   stringIndexOf,
   stringLastIndexOf,
@@ -68,23 +66,28 @@ import {
 } from './real-product-identity.js';
 import {TABLES as CANONICAL_TABLES} from '../reference-client/oltp-state-snapshot-shared.js';
 import {
-  evaluateLagrangeClusterReadiness,
-  evaluateLagrangeServeLane,
-} from './real-product-lagrange-readiness-evaluation.js';
-import {
   describeExhaustedDeployment,
   describingReadinessExhaustion,
 } from './real-product-exhausted-deployment.js';
-import {pollReadiness} from './real-product-readiness.js';
+import {
+  clusterReady,
+  leadersReady,
+  membershipReady,
+  nodeReady,
+  observedLeaders,
+  placementOf,
+  probeVisibility,
+  probeWriteReadback,
+  publicPgWireReady,
+  readPartitions,
+  readSystemTables,
+  reportedVersions,
+} from './real-product-lagrange-observations.js';
 import {
   createTrackedSshRun,
   dockerRunDetached,
   dockerRunOnceCommand,
-  errorText,
   execWithStatus,
-  httpFromHost,
-  inspectContainerCommand,
-  shellWord,
 } from './real-product-remote-shell.js';
 import {
   bindEndpointToContainer,
@@ -106,22 +109,10 @@ const STORAGE_MOUNT = '/campaign';
 const NODE_ROLE = 'lagrange-node';
 const LISTENER_ROLE = 'sys-postgres-wire';
 const PG_WIRE_SERVICE_ID = 'sys-postgres-wire';
-const HTTP_OK = 200;
-const HEALTHY = 'healthy';
-const PG_WIRE_DESIRED_STATE = Object.freeze({replicaCount: 1,
-  runtimeConfig: Object.freeze({host: '0.0.0.0', authMode: 'password', tlsMode: 'disable'})});
 const NODE_ID_PREFIX = '00000000-0000-4000-8000-';
 const NODE_ID_WIDTH = 12;
 const SEMVER_TAG = /:(\d+\.\d+\.\d+)$/u;
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
-const SYSTEM_TABLE_QUERIES = Object.freeze({
-  nodes: 'SELECT * FROM nodes',
-  endpoints: 'SELECT * FROM service_endpoints',
-  partitions: 'SELECT * FROM partitions',
-  services: 'SELECT * FROM services WHERE service_type = \'partition\'',
-});
-const PROBE_TABLE = 'bench_readiness_probe';
-const PROBE_VISIBILITY_SINGLE_LISTENER = 'single-listener';
 const REVISION_LABEL = 'org.opencontainers.image.revision';
 // The canonical tables' routability after CREATE TABLE: on the 2026-11-01 lab
 // a 5-node cluster needed 2 min 41 s for its first table and 3-/4-node
@@ -129,12 +120,12 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // 15 polls a minute for 15 minutes (5.6x the one routable observation); it is
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
+const ROUTABLE_DEADLINE_MS = 900000;
 // Cold 3-node formation requires all 6 priority control-plane partitions to
 // spread across 3 distinct nodes before joiners' /readyz opens; matches
 // FORMATION_BOUND_MS = 420_000 (420 polls at 1000 ms) in
 // test/distributed/scenarios/fresh-formation-user-table-routability.js.
 const FORMATION_ATTEMPTS = 420;
-const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
 // Cross-VM (--network host) transport ACK and join timeouts, matching
 // cluster-class-lifecycle-base.js (commit 5ff58af0c, CL-007).
 const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
@@ -289,239 +280,6 @@ function versionPatternOf(imageRef, expectedVersion) {
     (version) => new RegExp(`^${stringReplace(version, /\./gu, '\\.')}$`, 'u'));
 }
 
-function probeCallOptions(ctx, pollContext = null) {
-  const signal = pollContext?.signal ?? ctx.signal ?? null;
-  if (signal?.aborted) throw new Error('readiness probe aborted');
-  const deadlineAtMs = pollContext?.deadlineAtMs ?? ctx.deadlineAtMs ?? null;
-  if (!numberIsFinite(deadlineAtMs)) {
-    return {signal: signal ?? undefined, timeoutMs: undefined};
-  }
-  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
-  const remainingMs = deadlineAtMs - clock();
-  if (remainingMs <= 0) {
-    throw new Error('readiness probe formation deadline expired');
-  }
-  return {signal: signal ?? undefined, timeoutMs: remainingMs};
-}
-
-async function getJson(ctx, url, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-    {signal: ctx.signal, timeoutMs: undefined};
-  return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp, url,
-    signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
-}
-
-function getFacts(ctx, host, pollContext = null) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-    {signal: ctx.signal, timeoutMs: undefined};
-  return httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
-    url: `http://${host}:${PORT.REST}/management/v1/facts`, basicAuth: ctx.connection,
-    signal: callOptions.signal, timeoutMs: callOptions.timeoutMs});
-}
-
-const NO_SUCH_CONTAINER_PATTERN = /\bNo such (?:container|object)\b/u;
-
-function stateFieldOrNull(record, key) {
-  return record[key] ?? null;
-}
-
-function exitedContainerObservation(role, state) {
-  const inspectState = state && typeof state === 'object' ? state : {};
-  return {
-    containerExited: true,
-    host: role.host,
-    role: role.role,
-    nodeId: stateFieldOrNull(role, 'nodeId'),
-    containerId: role.containerId,
-    status: stateFieldOrNull(inspectState, 'Status'),
-    running: inspectState.Running === true,
-    exitCode: stateFieldOrNull(inspectState, 'ExitCode'),
-    oomKilled: stateFieldOrNull(inspectState, 'OOMKilled'),
-    finishedAt: stateFieldOrNull(inspectState, 'FinishedAt'),
-    error: inspectState.Error || null,
-  };
-}
-
-function buildExitedContainerFailure({component, role, state, pollContext}) {
-  const observation = exitedContainerObservation(role, state);
-  const attempt = pollContext?.attempt ?? 1;
-  const diagnostic = {
-    component,
-    attempt,
-    attempts: attempt,
-    containerExited: true,
-    exitedRole: observation,
-    last: observation,
-    lastObservation: observation,
-  };
-  const failure = deploymentFailure(
-    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
-    `${component} aborted: ${role.role} on ${role.host} (${role.containerId}) ` +
-      `exited (status=${observation.status}, exitCode=${observation.exitCode})`,
-    diagnostic,
-  );
-  failure.terminal = true;
-  failure.containerExited = true;
-  failure.attempt = attempt;
-  failure.attempts = attempt;
-  failure.lastObservation = observation;
-  return failure;
-}
-
-function parseInspectState(raw) {
-  const parsed = jsonParse(stringOf(raw ?? ''));
-  if (!parsed || typeof parsed !== 'object' ||
-      !parsed.State || typeof parsed.State !== 'object') {
-    throw new Error('docker inspect answered without container State');
-  }
-  return parsed.State;
-}
-
-async function inspectWatchedRole(ctx, component, role, pollContext) {
-  const callOptions = pollContext ? probeCallOptions(ctx, pollContext) :
-    {signal: ctx.signal, timeoutMs: undefined};
-  const inspectOpts = callOptions.signal === undefined ? ctx.opts :
-    {...(ctx.opts || {}), signal: callOptions.signal};
-  let raw;
-  try {
-    raw = await ctx.sshRun(
-      role.host,
-      inspectOpts,
-      inspectContainerCommand(role.containerId),
-      callOptions.timeoutMs,
-    );
-  } catch (error) {
-    if (NO_SUCH_CONTAINER_PATTERN.test(errorText(error))) {
-      throw buildExitedContainerFailure({
-        component,
-        role,
-        state: {Running: false, Status: 'absent', ExitCode: null, Error: errorText(error)},
-        pollContext,
-      });
-    }
-    throw error;
-  }
-  const state = parseInspectState(raw);
-  if (state.Running !== true) {
-    throw buildExitedContainerFailure({component, role, state, pollContext});
-  }
-}
-
-async function assertWatchedRolesRunning(ctx, component, pollContext) {
-  if (!arrayIsArray(ctx.watchedRoles) || ctx.watchedRoles.length === 0) return;
-  for (const role of ctx.watchedRoles) {
-    await inspectWatchedRole(ctx, component, role, pollContext);
-  }
-}
-
-function readinessOf(ctx, component, probe, stablePolls = 1) {
-  return pollReadiness({
-    component,
-    probe: async (pollContext) => {
-      await assertWatchedRolesRunning(ctx, component, pollContext);
-      return probe(pollContext);
-    },
-    attempts: ctx.budget.attempts,
-    intervalMs: ctx.budget.intervalMs,
-    sleep: ctx.sleep,
-    now: ctx.now,
-    stablePolls,
-    deadlineAtMs: ctx.deadlineAtMs ?? null,
-    deadlineMs: ctx.deadlineMs ?? null,
-    signal: ctx.signal ?? null,
-  });
-}
-
-function nodeReady(ctx, host) {
-  return readinessOf(ctx, `${NODE_ROLE}@${host}`, async (pollContext) => {
-    const answer = await getJson(ctx, `http://${host}:${PORT.REST}/readyz`, pollContext);
-    return {ready: answer.status === HTTP_OK && answer.json?.ready === true,
-      diagnostic: answer};
-  });
-}
-
-function membershipReady(ctx, seedHost, nodeCount) {
-  return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
-    const answer = await getFacts(ctx, seedHost, pollContext);
-    return {ready: answer.json?.facts?.topology?.readyNodeCount === nodeCount,
-      diagnostic: answer};
-  });
-}
-
-function healthyListener(services, roles) {
-  const replicas = arrayFlatMap(arrayIsArray(services) ? services : [],
-    (service) => (arrayIsArray(service?.replicas) ? service.replicas : []));
-  const replica = arrayFind(replicas, (one) => one?.serviceId === PG_WIRE_SERVICE_ID &&
-    one?.healthStatus === HEALTHY && Number.isInteger(Number(one?.port)) && one?.port > 0);
-  const node = replica && arrayFind(roles, (role) => role.nodeId === replica.nodeId);
-  return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId} : null;
-}
-
-async function publicPgWireReady(ctx, seedHost, roles) {
-  const admin = `http://${seedHost}:${PORT.ADMIN}`;
-  let listener = null;
-  await readinessOf(ctx, 'lagrange-public-pg-wire', async (pollContext) => {
-    const scaleCall = probeCallOptions(ctx, pollContext);
-    const scale = await httpFromHost({sshRun: ctx.sshRun, opts: ctx.opts, from: ctx.clientIp,
-      url: `${admin}/api/admin/services/${PG_WIRE_SERVICE_ID}/scale`, method: 'POST',
-      body: PG_WIRE_DESIRED_STATE, signal: scaleCall.signal, timeoutMs: scaleCall.timeoutMs});
-    if (scale.json?.success !== true || scale.json?.outcome !== 'applied') {
-      return {ready: false, diagnostic: {scale}};
-    }
-    const found = await getJson(ctx,
-      `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`, pollContext);
-    listener = healthyListener(found.json?.services, roles);
-    return {ready: listener !== null, diagnostic: {discovery: found}};
-  });
-  return listener;
-}
-
-// A field of the product's partition diagnostics: the product answers it (its
-// value may be null, e.g. a partition without a leader); a missing field is
-// an unreadable answer, never a default.
-function partitionField(record, key) {
-  if (!record || typeof record !== 'object' || !Object.hasOwn(record, key)) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `partition diagnostics answered without ${key}`, {record});
-  }
-  return record[key];
-}
-
-// The host of a node of this deployment, or null: the node is not one of its
-// recorded roles (a foreign node named by the product).
-function deploymentHostOf(roles, nodeId) {
-  const role = arrayFind(roles, (one) => one.nodeId === nodeId);
-  return role === undefined ? null : role.host;
-}
-
-// Placement as the product reports it; null when the product did not answer
-// its partition diagnostics (the record's explicit "not observed").
-function placementOf(answer, roles, observedAt) {
-  if (answer.status !== HTTP_OK) return null;
-  const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
-  return {observedAt, source: '/api/admin/diagnostics/partitions',
-    replicasByPartition: arrayMap(partitions, (partition) => ({
-      partitionId: partitionField(partition, 'partitionId'),
-      tableName: partitionField(partition, 'tableName'),
-      leaderNodeId: partitionField(partition, 'leaderNodeId'),
-      leaderHost: deploymentHostOf(roles, partitionField(partition, 'leaderNodeId')),
-      replicas: arrayMap(partitionField(partition, 'replicas'), (replica) => ({
-        nodeId: partitionField(replica, 'nodeId'),
-        host: deploymentHostOf(roles, partitionField(replica, 'nodeId')),
-        status: partitionField(replica, 'status')}))}))};
-}
-
-// The leaders the product reports; an unanswered diagnostics read is a typed
-// failure the campaign records as a role-observation failure.
-async function observedLeaders(ctx, seedHost) {
-  const answer = await readPartitions(ctx, seedHost);
-  if (answer.status !== HTTP_OK) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      'partition diagnostics did not answer', {answer});
-  }
-  return partitionField(answer.json, 'leaders');
-}
-
 // The image a host runs: its content-pinned reference when the campaign pinned
 // one per host (every data host must have it), else the campaign's reference.
 function imageForHost(opts, host, image) {
@@ -540,170 +298,6 @@ function revisionLabelOf(product) {
     return null;
   }
   return product.imageLabels[REVISION_LABEL];
-}
-
-function readPartitions(ctx, seedHost, pollContext = null) {
-  return getJson(ctx, `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
-    pollContext);
-}
-
-function leadersReady(ctx, seedHost) {
-  return readinessOf(ctx, 'lagrange-partition-leaders', async (pollContext) => {
-    const answer = await readPartitions(ctx, seedHost, pollContext);
-    if (answer.status !== HTTP_OK) return {ready: false, diagnostic: answer};
-    const partitions = Object.values(partitionField(answer.json, 'partitionsById'));
-    return {ready: partitions.length > 0 &&
-      arrayEvery(partitions, (partition) => Boolean(partitionField(partition, 'leaderNodeId'))),
-    diagnostic: {partitionCount: partitions.length,
-      leaders: partitionField(answer.json, 'leaders')}};
-  });
-}
-
-async function readSystemTables(query, ctx = null, pollContext = null) {
-  const tables = {};
-  for (const [name, sql] of Object.entries(SYSTEM_TABLE_QUERIES)) {
-    tables[name] = await query(sql, pollContext ? probeCallOptions(ctx, pollContext) : {});
-  }
-  return tables;
-}
-
-async function controlSnapshots(ctx, roles, pollContext = null) {
-  const snapshots = [];
-  for (const role of roles) {
-    const answer = await getJson(ctx,
-      `http://${role.host}:${PORT.ADMIN}/api/admin/control-snapshot`, pollContext);
-    snapshots.push({nodeId: role.nodeId,
-      snapshot: answer.status === HTTP_OK && answer.json ? answer.json : null});
-  }
-  return snapshots;
-}
-
-// Every canonical table answers a COUNT(*) through the public wire (a result,
-// not a participant failure).
-async function tableRoutingDenials(query, requiredTables, ctx = null, pollContext = null) {
-  const denials = [];
-  // null: system-table readiness, no user-table scope (the evaluation owner's state).
-  if (requiredTables === null) return denials;
-  for (const table of requiredTables) {
-    const callOptions = pollContext ? probeCallOptions(ctx, pollContext) : {};
-    try {
-      await query(`SELECT COUNT(*) AS row_count FROM ${table}`, callOptions);
-    } catch (error) {
-      denials.push(`table_not_routable:${table}:${errorText(error)}`);
-    }
-  }
-  return denials;
-}
-
-// Per required table, the time from the first poll until the table first
-// showed no denial of its own (time-to-routable).
-function recordTableRoutability(tableReadyAt, tables, context) {
-  if (context.requiredTables === null) return;
-  for (const table of context.requiredTables) {
-    if (tableReadyAt[table] !== undefined) continue;
-    const own = evaluateLagrangeClusterReadiness({...tables,
-      expectedNodeIds: context.expectedNodeIds, requiredServiceIds: [],
-      requiredTables: [table], now: context.now});
-    if (own.ready) tableReadyAt[table] = context.now - context.startedAt;
-  }
-}
-
-async function clusterReady(ctx, component, query, nodeRoles, requiredTables = null) {
-  const expectedNodeIds = arrayMap(nodeRoles, (role) => role.nodeId);
-  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
-  const startedAt = clock();
-  const tableReadyAt = {};
-  const readiness = await readinessOf(ctx, component, async (pollContext) => {
-    const tables = await readSystemTables(query, ctx, pollContext);
-    const now = clock();
-    recordTableRoutability(tableReadyAt, tables, {requiredTables, expectedNodeIds, now,
-      startedAt});
-    const verdict = evaluateLagrangeClusterReadiness({...tables, expectedNodeIds,
-      requiredServiceIds: [PG_WIRE_SERVICE_ID], requiredTables, now});
-    const lane = evaluateLagrangeServeLane({
-      snapshots: await controlSnapshots(ctx, nodeRoles, pollContext)});
-    const routing = verdict.ready && lane.ready ?
-      await tableRoutingDenials(query, requiredTables, ctx, pollContext) : [];
-    const denials = [...verdict.denials, ...lane.denials, ...routing];
-    return {ready: denials.length === 0, diagnostic: {denials,
-      nodes: tables.nodes.length, partitions: tables.partitions.length,
-      tableTimeToRoutableMs: {...tableReadyAt}}};
-  }, ctx.budget.stablePolls);
-  return requiredTables ? {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} : readiness;
-}
-
-// The public PG wire is one listener (replicaCount 1): the row is read back
-// through it only, which is recorded as a typed limitation, never as
-// visibility from every node.
-function probeVisibility(listenerNodeId, nodeRoles) {
-  return {status: PROBE_VISIBILITY_SINGLE_LISTENER, readFrom: [listenerNodeId],
-    notReadFrom: arrayFilter(arrayMap(nodeRoles, (role) => role.nodeId),
-      (nodeId) => nodeId !== listenerNodeId)};
-}
-
-function probeWriteReadback(ctx, sql, campaignId, visibility) {
-  const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
-  return readinessOf(ctx, 'lagrange-probe-write-readback', async (pollContext) => {
-    const id = clock();
-    const token = `${campaignId}-${id}`;
-    await sql.statement(
-      `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`,
-      probeCallOptions(ctx, pollContext));
-    const insert = await sql.statement(
-      `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`,
-      probeCallOptions(ctx, pollContext));
-    const rows = await sql.query(`SELECT token FROM ${PROBE_TABLE} WHERE id = ${id}`,
-      probeCallOptions(ctx, pollContext));
-    return {ready: insert.rowCount === 1 && rows.length === 1 && rows[0].token === token,
-      diagnostic: {written: token, insertTag: insert.tag, insertRowCount: insert.rowCount,
-        readBack: rows, visibility}};
-  });
-}
-
-// A field of the product's boot-provenance log line; a line without it is an
-// unavailable provenance (the caller records why), never a filled-in null.
-function bootLogField(parsed, key) {
-  if (!Object.hasOwn(parsed, key)) throw new Error(`boot provenance line without ${key}`);
-  return parsed[key];
-}
-
-// The boot provenance the node logged, or {unavailable: why}: the explicit
-// state of a node whose log does not carry it.
-async function bootProvenance(ctx, product, facts = null) {
-  try {
-    const line = stringOf(await ctx.sshRun(product.host, ctx.opts,
-      `docker logs ${shellWord(product.containerId)} 2>&1 | grep -m 1 ${BOOT_PROVENANCE_MARKER}`));
-    const parsed = jsonParse(line.slice(stringIndexOf(line, '{')));
-    const release = facts?.status === HTTP_OK ? facts.json?.facts?.release : null;
-    const gitCommit = parsed.gitCommit ?? release?.gitCommit ?? null;
-    return {version: bootLogField(parsed, 'version'),
-      bootedSrcFingerprint: bootLogField(parsed, 'bootedSrcFingerprint'),
-      subsystem: bootLogField(parsed, 'subsystem'),
-      ...(typeof gitCommit === 'string' && gitCommit !== '' ? {gitCommit} : {})};
-  } catch (error) {
-    return {unavailable: errorText(error)};
-  }
-}
-
-// The version the node reports in its facts, or null with the reason: a node
-// that did not answer it has no reported version (an empty string is none).
-function reportedVersionOf(facts) {
-  const version = facts.status === HTTP_OK ? facts.json?.facts?.release?.version : undefined;
-  if (typeof version === 'string' && version !== '') {
-    return {reportedVersion: version, reportedVersionError: null};
-  }
-  return {reportedVersion: null, reportedVersionError: `facts answered ${JSON.stringify(
-    {status: facts.status, error: facts.error, version: version === undefined ? 'absent' :
-      version})}`};
-}
-
-async function reportedVersions(ctx, products) {
-  for (const product of products) {
-    const facts = await getFacts(ctx, product.host);
-    Object.assign(product, reportedVersionOf(facts));
-    product.bootProvenance = await bootProvenance(ctx, product, facts);
-  }
-  return products;
 }
 
 function resolveFormationClock(inputNow, inputNowFn, opts) {
@@ -940,12 +534,22 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
       // After the canonical load: every partition of every canonical table
       // routable and replicated, or a typed readiness exhaustion.
       observePlacement: async () => {
-        const routable = await clusterReady({...postFormationCtx, budget: {...ctx.budget,
-          attempts: ROUTABLE_ATTEMPTS}},
-        'lagrange-canonical-tables-routable', query, nodeRoles,
-        arrayMap(CANONICAL_TABLES, (table) => table.name));
+        const clock = typeof ctx.now === 'function' ? ctx.now : dateNow;
+        const routableCtx = {
+          ...postFormationCtx,
+          deadlineAtMs: clock() + ROUTABLE_DEADLINE_MS,
+          deadlineMs: ROUTABLE_DEADLINE_MS,
+          budget: {...ctx.budget, attempts: ROUTABLE_ATTEMPTS},
+        };
+        const routable = await clusterReady(
+          routableCtx,
+          'lagrange-canonical-tables-routable',
+          query,
+          nodeRoles,
+          arrayMap(CANONICAL_TABLES, (table) => table.name),
+        );
         return {...placementOf(await readPartitions(ctx, seedHost), roles,
-          dateToISOString(new DateConstructor(ctx.now()))), routable};
+          dateToISOString(new DateConstructor(clock()))), routable};
       },
       // The arm's readiness contract again (after a product restart).
       awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,

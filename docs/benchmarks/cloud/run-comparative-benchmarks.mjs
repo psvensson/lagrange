@@ -87,8 +87,12 @@ import {
   LAGRANGE_IMAGE_DEFAULT,
   TARGET_DATA_HOSTS,
   deployComparativeTarget,
-  removeCampaignContainers,
+  teardownCampaignDeployment,
 } from '../../../test/distributed/harness/real-product-cluster-deployers.js';
+import {
+  DEPLOYMENT_FAILURE,
+  deploymentFailure,
+} from '../../../test/distributed/harness/real-product-deployment-contract.js';
 import {
   resolveLagrangeContainerImage,
 } from '../../../test/distributed/harness/real-product-deployer-lagrange.js';
@@ -373,16 +377,16 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
   return {...summary, closure: {loadGeneratorWorktree: await loadGenerator.release()}};
 }
 
-async function cleanupDeploymentStorageSubdirs({
-  dataIps, storageRoot, activeStorageSubdirs, sshRun, opts,
-}) {
-  if (!storageRoot || activeStorageSubdirs.size === 0) return;
-  const dirs = [...activeStorageSubdirs];
-  await Promise.all(dataIps.map((ip) => sshRun(ip, opts,
-    `docker run --rm --pull=never --user 0:0 -v "${storageRoot}:/bench-cleanup" ` +
-    '--entrypoint sh postgres:17-alpine -ceu \'for d in "$@"; do rm -rf ' +
-    `"/bench-cleanup/$d"; done' sh ${dirs.map((d) => `"${d}"`).join(' ')}`)));
-  activeStorageSubdirs.clear();
+function recordPendingStorageSubdir(pendingStorageByHost, hosts, subDir) {
+  if (!subDir) return;
+  for (const hostIp of hosts) {
+    let set = pendingStorageByHost.get(hostIp);
+    if (!set) {
+      set = new Set();
+      pendingStorageByHost.set(hostIp, set);
+    }
+    set.add(subDir);
+  }
 }
 
 async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
@@ -401,11 +405,12 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};
   let deploymentSeq = 0;
-  const activeStorageSubdirs = new Set();
+  const pendingStorageByHost = new Map();
   const deployArm = (run, {signal} = {}) => {
     deploymentSeq += 1;
     const subDir = opts.storageRoot ? `${run.runId}-d${deploymentSeq}` : null;
-    if (subDir) activeStorageSubdirs.add(subDir);
+    const targetHostCount = TARGET_DATA_HOSTS[run.targetId] ?? dataIps.length;
+    recordPendingStorageSubdir(pendingStorageByHost, dataIps.slice(0, targetHostCount), subDir);
     const runOpts = {
       ...deployOpts,
       ...(subDir ? {storageRoot: `${opts.storageRoot}/${subDir}`} : {}),
@@ -416,18 +421,25 @@ async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physic
       campaignId: manifest.campaignId,
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))});
   };
-  const teardown = async () => {
-    const closed = await removeCampaignContainers({hosts: hosts.map((host) => host.ip),
-      campaignId: manifest.campaignId, sshRun, opts});
-    await cleanupDeploymentStorageSubdirs({
-      dataIps, storageRoot: opts.storageRoot, activeStorageSubdirs, sshRun, opts,
-    });
-    return closed;
-  };
+  const teardown = async () => teardownCampaignDeployment({
+    hosts: hosts.map((host) => host.ip),
+    campaignId: manifest.campaignId,
+    storageRoot: opts.storageRoot,
+    pendingStorageByHost,
+    sshRun,
+    opts,
+  });
   const semanticGate = createSemanticGateStage({journey: runScenarioASemanticProofJourney,
     sshRun, opts, loadGeneratorHost, now: Date.now,
     redeploy: async (run, {signal} = {}) => {
-      await teardown();
+      const closed = await teardown();
+      if (!closed.complete) {
+        throw deploymentFailure(
+          DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+          'cannot redeploy while prior campaign containers remain unclosed',
+          {closure: closed},
+        );
+      }
       return deployArm(run, {signal});
     },
     evidenceDirOf: (run) => path.resolve(REPO_ROOT,

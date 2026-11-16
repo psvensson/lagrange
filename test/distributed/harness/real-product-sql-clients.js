@@ -21,12 +21,21 @@ import {
   deploymentFailure,
 } from './real-product-deployment-contract.js';
 import {
+  classifyRemoteCommandError,
   dockerRunOnceCommand,
   errorText,
 } from './real-product-remote-shell.js';
 
 const PSQL_SEPARATOR = '|';
 const LISTENER_OWNER_YES = 'owner=yes';
+const DEFAULT_SQL_PROBE_TIMEOUT_MS = 15000;
+const SQL_STATEMENT_TIMEOUT_MARGIN_MS = 1500;
+const SQL_STATEMENT_THRESHOLD_MS = 2000;
+const SQL_STATEMENT_SHORT_RATIO = 0.6;
+const MIN_SQL_STATEMENT_TIMEOUT_MS = 100;
+const MAX_PGCONNECT_TIMEOUT_SECONDS = 4;
+const CONNECT_TIMEOUT_DIVISOR_MS = 3000;
+const BIND_ENDPOINT_PROBE_TIMEOUT_MS = 10000;
 // Inode(s) of the LISTEN (state 0A) socket on the port, from the host network
 // namespace's tables, matched against the fds of the processes in the target
 // container's pid namespace (the probe joins it with --pid container:ID).
@@ -51,7 +60,10 @@ function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
   return arrayMap(lines, (line) => {
     const cells = stringSplit(line, separator);
     if (cells.length !== columns.length) {
-      throw new Error(`expected ${columns.length} columns, got ${cells.length}: ${line}`);
+      throw Object.assign(
+        new Error(`expected ${columns.length} columns, got ${cells.length}: ${line}`),
+        {parseError: true},
+      );
     }
     const row = {};
     columns.forEach((column, index) => {
@@ -61,33 +73,95 @@ function rowsFromDelimitedText(text, columns, {separator, nullToken = null}) {
   });
 }
 
+function tagCommandError(error, flags = {}) {
+  const err = error instanceof Error ? error : new Error(errorText(error));
+  return Object.assign(err, flags);
+}
+
 /**
  * Rows of any query over psql, keyed by the column names psql prints in its
  * header line (unaligned, no footer): one short-lived client per query, so no
  * client stays attached to the product during measurement.
  */
-function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
+function resolvePsqlSignal(opts, callOptions) {
+  if (callOptions && objectHasOwn(callOptions, 'signal')) {
+    return {signal: callOptions.signal, hasExplicitSignal: true};
+  }
+  const hasOptsSignal = Boolean(opts && objectHasOwn(opts, 'signal'));
+  return {signal: hasOptsSignal ? opts.signal : undefined, hasExplicitSignal: false};
+}
+
+function computePsqlBudgets(rawTimeoutMs) {
+  const effectiveTimeoutMs = numberIsFinite(rawTimeoutMs) ?
+    Math.min(DEFAULT_SQL_PROBE_TIMEOUT_MS, Math.max(1, Math.floor(rawTimeoutMs))) :
+    DEFAULT_SQL_PROBE_TIMEOUT_MS;
+  const connectTimeoutSeconds = Math.max(
+    1,
+    Math.min(
+      MAX_PGCONNECT_TIMEOUT_SECONDS,
+      Math.floor(effectiveTimeoutMs / CONNECT_TIMEOUT_DIVISOR_MS),
+    ),
+  );
+  const statementTimeoutMs = effectiveTimeoutMs > SQL_STATEMENT_THRESHOLD_MS ?
+    effectiveTimeoutMs - SQL_STATEMENT_TIMEOUT_MARGIN_MS :
+    Math.max(
+      MIN_SQL_STATEMENT_TIMEOUT_MS,
+      Math.floor(effectiveTimeoutMs * SQL_STATEMENT_SHORT_RATIO),
+    );
+  return {effectiveTimeoutMs, connectTimeoutSeconds, statementTimeoutMs};
+}
+
+async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, sql,
   callOptions = {}) {
-  const hasExplicitSignal = Boolean(callOptions && objectHasOwn(callOptions, 'signal'));
-  const signal = hasExplicitSignal ? callOptions.signal :
-    (opts && objectHasOwn(opts, 'signal') ? opts.signal : undefined);
-  const timeoutMs = callOptions?.timeoutMs;
+  const {signal, hasExplicitSignal} = resolvePsqlSignal(opts, callOptions);
+  const rawTimeoutMs = callOptions?.timeoutMs;
   if (signal?.aborted) {
-    return Promise.reject(new Error('psql operation aborted'));
+    throw tagCommandError(new Error('psql operation aborted'), {
+      aborted: true,
+      deadlineExpired: false,
+      transportError: false,
+      observerInfrastructure: false,
+    });
   }
-  if (numberIsFinite(timeoutMs) && timeoutMs <= 0) {
-    return Promise.reject(new Error('psql operation deadline expired'));
+  if (numberIsFinite(rawTimeoutMs) && rawTimeoutMs <= 0) {
+    throw tagCommandError(new Error('psql operation deadline expired'), {
+      aborted: false,
+      deadlineExpired: true,
+      transportError: false,
+      observerInfrastructure: false,
+    });
   }
-  const callOpts = hasExplicitSignal || signal !== undefined || timeoutMs !== undefined ? {
+  const {
+    effectiveTimeoutMs,
+    connectTimeoutSeconds,
+    statementTimeoutMs,
+  } = computePsqlBudgets(rawTimeoutMs);
+  const includeSignal = hasExplicitSignal || signal !== undefined;
+  const callOpts = {
     ...(opts || {}),
-    ...(hasExplicitSignal || signal !== undefined ? {signal} : {}),
-    ...(numberIsFinite(timeoutMs) ? {timeoutMs} : {}),
-  } : opts;
-  return sshRun(from, callOpts, dockerRunOnceCommand({campaignId,
-    image: SQL_CLIENT_IMAGE, dockerArgs: ['-e', `PGPASSWORD=${connection.password}`],
-    commandArgs: ['psql', '-h', endpoint.host, '-p', String(endpoint.port),
-      '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
-      '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}), timeoutMs);
+    ...(includeSignal ? {signal} : {}),
+    timeoutMs: effectiveTimeoutMs,
+  };
+  try {
+    return await sshRun(from, callOpts, dockerRunOnceCommand({campaignId,
+      image: SQL_CLIENT_IMAGE,
+      dockerArgs: [
+        '-e', `PGPASSWORD=${connection.password}`,
+        '-e', `PGCONNECT_TIMEOUT=${connectTimeoutSeconds}`,
+        '-e', `PGOPTIONS=-c statement_timeout=${statementTimeoutMs}`,
+      ],
+      commandArgs: ['psql', '-X', '-h', endpoint.host, '-p', String(endpoint.port),
+        '-U', connection.user, '-d', connection.database, '-v', 'ON_ERROR_STOP=1',
+        '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}), effectiveTimeoutMs);
+  } catch (error) {
+    const classified = classifyRemoteCommandError(error);
+    throw tagCommandError(error, {
+      aborted: classified.aborted,
+      deadlineExpired: classified.deadlineExpired,
+      transportError: classified.transportError,
+      observerInfrastructure: classified.observerInfrastructure,
+    });
+  }
 }
 
 /**
@@ -118,21 +192,34 @@ function createPsqlQueryReader(target) {
  * campaign's) or by several is `endpoint_unbound`.
  */
 async function bindEndpointToContainer({sshRun, opts, campaignId, endpoint, candidates}) {
-  const answers = [];
-  for (const candidate of candidates) {
+  const answers = await Promise.all(arrayMap(candidates, async (candidate) => {
     let out;
+    let probeError = null;
     try {
-      out = await sshRun(endpoint.host, opts, dockerRunOnceCommand({campaignId,
+      out = await sshRun(endpoint.host, {
+        ...(opts || {}),
+        timeoutMs: BIND_ENDPOINT_PROBE_TIMEOUT_MS,
+      }, dockerRunOnceCommand({campaignId,
         image: SQL_CLIENT_IMAGE,
         dockerArgs: ['--pid', `container:${candidate.containerId}`, '--cap-add', 'SYS_PTRACE'],
         commandArgs: ['sh', '-c', LISTENER_OWNER_SCRIPT, 'listener-probe',
-          String(endpoint.port)]}));
+          String(endpoint.port)]}), BIND_ENDPOINT_PROBE_TIMEOUT_MS);
     } catch (error) {
-      out = `error: ${errorText(error)}`;
+      const classified = classifyRemoteCommandError(error);
+      out = `error: ${classified.message}`;
+      probeError = {
+        error: classified.message,
+        transportError: classified.transportError,
+        observerInfrastructure: classified.observerInfrastructure,
+      };
     }
-    answers.push({containerId: candidate.containerId, role: candidate.role,
-      owner: stringIncludes(String(out ?? ''), LISTENER_OWNER_YES)});
-  }
+    return {
+      containerId: candidate.containerId,
+      role: candidate.role,
+      owner: stringIncludes(String(out ?? ''), LISTENER_OWNER_YES),
+      ...(probeError ? {probeError} : {}),
+    };
+  }));
   const owners = arrayFilter(answers, (answer) => answer.owner);
   if (owners.length !== 1) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.ENDPOINT_UNBOUND,

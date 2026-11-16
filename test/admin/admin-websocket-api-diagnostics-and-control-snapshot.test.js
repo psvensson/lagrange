@@ -1202,3 +1202,119 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy peers w
       'snapshot should keep healthy peers visible when service rows are repaired before endpoint rows',
     );
   });
+
+test('AdminWebSocketAPI - partition diagnostics view=leaders and control snapshot view=serve-lane return compact bounded projections',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-1',
+      node_id: 'node-1',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      partition_id: 'partition-1',
+      table_id: 'table-1',
+      table_name: 'events',
+      state: 'NORMAL',
+      leader_node_id: 'node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'partition-1-r1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r1',
+      node_id: 'node-1',
+      raft_role: 'leader',
+      status: 'active',
+      address: 'node-1/partition/partition-1-r1',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-1-ws',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-1:8082',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          }];
+        },
+      },
+    });
+    api.controlSnapshot.resolveLocalControlSnapshot = () =>
+      new Promise(() => {});
+
+    await api.initialize(0, {listen: false});
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    const leadersRes = await api.getFastify().inject({
+      method: 'GET',
+      url: `${ADMIN_ROUTE.PARTITION_DIAGNOSTICS}?view=leaders`,
+    });
+    t.equal(leadersRes.statusCode, 200, 'view=leaders should return 200');
+    const leadersPayload = leadersRes.json();
+    t.equal(leadersPayload.partitionCount, 1, 'view=leaders includes partitionCount');
+    t.same(leadersPayload.leaders, {'partition-1': 'node-1'},
+      'view=leaders includes leaders map');
+    t.equal(leadersPayload.partitionsById, undefined,
+      'view=leaders omits partitionsById detail');
+    t.equal(leadersPayload.replicaOperations, undefined,
+      'view=leaders omits replicaOperations detail');
+
+    const badLeadersRes = await api.getFastify().inject({
+      method: 'GET',
+      url: `${ADMIN_ROUTE.PARTITION_DIAGNOSTICS}?view=bogus`,
+    });
+    t.equal(badLeadersRes.statusCode, 400,
+      'unsupported partition diagnostics view returns 400');
+
+    const serveLaneRes = await api.getFastify().inject({
+      method: 'GET',
+      url: `${ADMIN_ROUTE.CONTROL_SNAPSHOT}?scope=local&view=serve-lane&timeoutMs=25`,
+    });
+    t.equal(serveLaneRes.statusCode, 200,
+      'view=serve-lane with short bounded timeoutMs degrades cleanly to 200');
+    const servePayload = serveLaneRes.json();
+    t.same(servePayload.nodes, ['node-1'],
+      'serve-lane projection preserves active node ids');
+    t.equal(
+      servePayload.controlPlaneDiagnostics?.readinessByNodeId?.['node-1']
+        ?.dimensions?.serveEligible,
+      true,
+      'serve-lane projection preserves serveEligible dimension',
+    );
+    t.equal(servePayload.replicaOperations?.inFlightCount, 0,
+      'serve-lane projection preserves replicaOperations.inFlightCount');
+    t.equal(servePayload.partitions, undefined,
+      'serve-lane projection omits heavy partition arrays');
+    t.equal(servePayload.controlPlaneDiagnostics?.controlPlaneOperations, undefined,
+      'serve-lane projection omits unbounded control-plane operation logs');
+
+    const badViewRes = await api.getFastify().inject({
+      method: 'GET',
+      url: `${ADMIN_ROUTE.CONTROL_SNAPSHOT}?scope=local&view=invalid`,
+    });
+    t.equal(badViewRes.statusCode, 400, 'unsupported control snapshot view returns 400');
+
+    const badTimeoutRes = await api.getFastify().inject({
+      method: 'GET',
+      url: `${ADMIN_ROUTE.CONTROL_SNAPSHOT}?scope=local&timeoutMs=0`,
+    });
+    t.equal(badTimeoutRes.statusCode, 400, 'non-positive timeoutMs returns 400');
+  });

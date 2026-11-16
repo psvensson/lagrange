@@ -80,10 +80,17 @@ function createContainerLedger() {
     const id = stringSplit(stringTrim(command), /\s+/u).pop();
     const entry = containers.get(id);
     if (!entry || entry.removed) return new Error(`Error: No such container: ${id}`);
+    const state = {
+      Running: entry.running,
+      Status: entry.running ? 'running' : 'exited',
+      StartedAt: entry.startedAt || '2026-11-01T10:00:00.000Z',
+    };
+    if (stringIncludes(command, '{{json .State}}')) {
+      return JSON.stringify(state);
+    }
     return JSON.stringify({
       Id: entry.id, Name: `/${entry.name}`, Image: imageIdOf(entry.image),
-      State: {Running: entry.running, Status: entry.running ? 'running' : 'exited',
-        StartedAt: entry.startedAt || '2026-11-01T10:00:00.000Z'},
+      State: state,
       Config: {Image: entry.image, Entrypoint: entrypointOf(entry.image), Cmd: ['serve']},
       Mounts: entry.mounts,
     });
@@ -227,13 +234,18 @@ function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.
       replicas: [{serviceId: 'sys-postgres-wire', nodeId: LAGRANGE_NODE_IDS[0],
         address: hosts[0], port: 5433, healthStatus: 'healthy'}]}]})],
     // The product's partition diagnostics shape (admin-control-snapshot-local-
-    // diagnostics-methods.js): leaders and partitionsById are always answered.
-    [/\/api\/admin\/diagnostics\/partitions/u, http(200, {partitionCount: 1,
-      leaders: {p1: LAGRANGE_NODE_IDS[0]},
-      partitionsById: {p1: {partitionId: 'p1', tableName: 'stock',
-        leaderNodeId: LAGRANGE_NODE_IDS[0],
-        replicas: arrayMap(LAGRANGE_NODE_IDS.slice(0, hosts.length),
-          (nodeId) => ({nodeId, status: 'active'}))}}})],
+    // diagnostics-methods.js): view=leaders answers compact leaders, full includes partitionsById.
+    [/\/api\/admin\/diagnostics\/partitions/u, (command) => {
+      if (stringIncludes(command, 'view=leaders')) {
+        return http(200, {partitionCount: 1, leaders: {p1: LAGRANGE_NODE_IDS[0]}});
+      }
+      return http(200, {partitionCount: 1,
+        leaders: {p1: LAGRANGE_NODE_IDS[0]},
+        partitionsById: {p1: {partitionId: 'p1', tableName: 'stock',
+          leaderNodeId: LAGRANGE_NODE_IDS[0],
+          replicas: arrayMap(LAGRANGE_NODE_IDS.slice(0, hosts.length),
+            (nodeId) => ({nodeId, status: 'active'}))}}});
+    }],
   ];
 }
 

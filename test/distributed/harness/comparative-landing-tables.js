@@ -50,8 +50,9 @@ function formatCapacity(metrics) {
 function formatReadinessDenial(denial) {
   if (!denial) return '';
   const reasons = denial.reasons.length > 0 ? arrayJoin(denial.reasons, ', ') : 'none';
+  const probeNote = denial.lastProbeError ? ` (lastProbeError: ${denial.lastProbeError})` : '';
   return `; last readiness answer of ${denial.component}: ${denial.phase} ` +
-    `(${denial.state}), reasons ${reasons}, after ${denial.attempts} attempts`;
+    `(${denial.state}), reasons ${reasons}${probeNote}, after ${denial.attempts} attempts`;
 }
 
 /**

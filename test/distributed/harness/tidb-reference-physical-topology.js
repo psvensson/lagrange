@@ -309,6 +309,14 @@ function createTiDbReferencePhysicalRoutingProvider(options = {}) {
     async inspectContainer(containerId) {
       return ownerFor(containerId).provider.inspectContainer(containerId);
     },
+    async inspectContainerState(containerId) {
+      const provider = ownerFor(containerId).provider;
+      if (typeof provider.inspectContainerState === TYPE_FUNCTION) {
+        return provider.inspectContainerState(containerId);
+      }
+      const inspected = await provider.inspectContainer(containerId);
+      return inspected?.State ?? null;
+    },
     async inspectContainerIfExists(containerId) {
       const owner = ownerFor(containerId);
       if (typeof owner.provider.inspectContainerIfExists !== TYPE_FUNCTION) {

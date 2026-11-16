@@ -114,6 +114,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     ADMIN_CONTROL_SNAPSHOT_LITERAL,
     ADMIN_ERROR_MESSAGE,
     ADMIN_OPERATIONAL_DIAGNOSTICS,
+    ADMIN_PARTITION_DIAGNOSTICS_VIEW,
     CDC_TELEMETRY_MODE,
     COLUMN,
     PARTITION_STATE_UNKNOWN,
@@ -165,6 +166,94 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     if (bufferedEvents > 0 || bufferReplayInFlight === true) {
       bufferedPartitionIds.push(partitionId);
     }
+  }
+  function collectPartitionMetadataAndReplicas(partitionRows, serviceRows) {
+    const partitionMetadataById = {};
+    for (const partitionRow of partitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+      partitionMetadataById[partitionId] = {
+        tableId: firstStringField(
+          partitionRow,
+          COLUMN.TABLE_ID,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLEID,
+        ),
+        tableName: firstStringField(
+          partitionRow,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLE_NAME,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLENAME,
+        ),
+        state: firstStringField(
+          partitionRow,
+          COLUMN.STATE,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.PARTITIONSTATE,
+        ),
+      };
+    }
+    const replicasByPartitionId = {};
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'type',
+        'serviceType',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+      replicasByPartitionId[partitionId] =
+        replicasByPartitionId[partitionId] || [];
+      replicasByPartitionId[partitionId].push({
+        replicaId: firstStringField(
+          serviceRow,
+          COLUMN.REPLICA_ID,
+          COLUMN.SERVICE_ID,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.REPLICAID,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.ID,
+        ),
+        nodeId: firstStringField(
+          serviceRow,
+          COLUMN.NODE_ID,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.NODEID,
+        ),
+        raftRole: firstStringField(
+          serviceRow,
+          COLUMN.RAFT_ROLE,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.RAFTROLE,
+        ),
+        status: firstStringField(
+          serviceRow,
+          COLUMN.STATUS,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.STATUS,
+        ),
+        address: firstStringField(
+          serviceRow,
+          COLUMN.ADDRESS,
+          ADMIN_CONTROL_SNAPSHOT_LITERAL.ADDRESS,
+        ),
+      });
+    }
+    const partitionIds = uniqueSorted([
+      ...Object.keys(partitionMetadataById),
+      ...Object.keys(replicasByPartitionId),
+    ]);
+    return {partitionMetadataById, replicasByPartitionId, partitionIds};
   }
   class AdminControlSnapshotLocalDiagnosticsMethods {
     buildLocalCdcTelemetry() {
@@ -335,7 +424,19 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
      * Build node-local partition diagnostics payload.
      * @return {Object}
      */
-    buildLocalPartitionDiagnostics() {
+    buildLocalPartitionDiagnostics(options = {}) {
+      const requestedView =
+        options?.view === undefined ?
+          ADMIN_PARTITION_DIAGNOSTICS_VIEW.FULL :
+          options.view;
+      if (
+        requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.FULL &&
+        requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.LEADERS
+      ) {
+        throw new Error(
+          ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_VIEW_UNSUPPORTED,
+        );
+      }
       if (
         !this.systemTableCache ||
         typeof this.systemTableCache.getAll !== 'function'
@@ -345,101 +446,30 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const capturedAt = this.nowFn();
       const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
       const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-      const replicaOperationRows = this.systemTableCache.getAll(
-        TABLES.REPLICA_OPERATIONS,
-      );
       const leaderSummary = this.buildControlSnapshotLeaderSummary(
         partitionRows,
         serviceRows,
       );
+      const {
+        partitionMetadataById,
+        replicasByPartitionId,
+        partitionIds,
+      } = collectPartitionMetadataAndReplicas(partitionRows, serviceRows);
+      if (requestedView === ADMIN_PARTITION_DIAGNOSTICS_VIEW.LEADERS) {
+        return {
+          schemaVersion: ADMIN_OPERATIONAL_DIAGNOSTICS.PARTITION_SCHEMA_VERSION,
+          nodeId: this.nodeId,
+          capturedAt,
+          partitionCount: partitionIds.length,
+          leaders: leaderSummary.leaders,
+        };
+      }
+      const replicaOperationRows = this.systemTableCache.getAll(
+        TABLES.REPLICA_OPERATIONS,
+      );
       const voterCounts = this.buildControlSnapshotVoterCounts(serviceRows);
       const replicaOperations =
         this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
-      const partitionMetadataById = {};
-      for (const partitionRow of partitionRows) {
-        const partitionId = firstStringField(
-          partitionRow,
-          COLUMN.PARTITION_ID,
-          'partitionId',
-          'id',
-        );
-        if (!partitionId) {
-          continue;
-        }
-        partitionMetadataById[partitionId] = {
-          tableId: firstStringField(
-            partitionRow,
-            COLUMN.TABLE_ID,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLEID,
-          ),
-          tableName: firstStringField(
-            partitionRow,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLE_NAME,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.TABLENAME,
-          ),
-          state: firstStringField(
-            partitionRow,
-            COLUMN.STATE,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.PARTITIONSTATE,
-          ),
-        };
-      }
-      const replicasByPartitionId = {};
-      for (const serviceRow of serviceRows) {
-        const serviceType = firstStringField(
-          serviceRow,
-          COLUMN.SERVICE_TYPE,
-          'type',
-          'serviceType',
-        );
-        if (serviceType !== SERVICE_TYPE_PARTITION) {
-          continue;
-        }
-        const partitionId = firstStringField(
-          serviceRow,
-          COLUMN.PARTITION_ID,
-          'partitionId',
-          'id',
-        );
-        if (!partitionId) {
-          continue;
-        }
-        replicasByPartitionId[partitionId] =
-          replicasByPartitionId[partitionId] || [];
-        replicasByPartitionId[partitionId].push({
-          replicaId: firstStringField(
-            serviceRow,
-            COLUMN.REPLICA_ID,
-            COLUMN.SERVICE_ID,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.REPLICAID,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.ID,
-          ),
-          nodeId: firstStringField(
-            serviceRow,
-            COLUMN.NODE_ID,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.NODEID,
-          ),
-          raftRole: firstStringField(
-            serviceRow,
-            COLUMN.RAFT_ROLE,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.RAFTROLE,
-          ),
-          status: firstStringField(
-            serviceRow,
-            COLUMN.STATUS,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.STATUS,
-          ),
-          address: firstStringField(
-            serviceRow,
-            COLUMN.ADDRESS,
-            ADMIN_CONTROL_SNAPSHOT_LITERAL.ADDRESS,
-          ),
-        });
-      }
-      const partitionIds = uniqueSorted([
-        ...Object.keys(partitionMetadataById),
-        ...Object.keys(replicasByPartitionId),
-      ]);
       const partitionsById = {};
       for (const partitionId of partitionIds) {
         const metadata = partitionMetadataById[partitionId] || {};
@@ -684,4 +714,52 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     );
   }
 }
-export {assignAdminControlSnapshotLocalDiagnosticsMethods};
+function projectServeLaneReadinessByNodeId(rawReadinessByNodeId) {
+  if (!rawReadinessByNodeId || typeof rawReadinessByNodeId !== 'object') {
+    return {};
+  }
+  const projected = {};
+  for (const [nodeId, entry] of Object.entries(rawReadinessByNodeId)) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    projected[nodeId] = {
+      ...(entry.dimensions && typeof entry.dimensions === 'object' ?
+        {dimensions: {serveEligible: entry.dimensions.serveEligible === true}} :
+        {}),
+      ...(Array.isArray(entry.reasons) ? {reasons: entry.reasons} : {}),
+    };
+  }
+  return projected;
+}
+
+function projectServeLaneControlSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return snapshot;
+  }
+  const rawInFlightCount = snapshot.replicaOperations?.inFlightCount;
+  const replicaOperations =
+    typeof rawInFlightCount === 'number' && Number.isFinite(rawInFlightCount) ?
+      {inFlightCount: rawInFlightCount} :
+      {};
+  return {
+    schemaVersion: snapshot.schemaVersion,
+    nodeId: snapshot.nodeId,
+    capturedAt: snapshot.capturedAt,
+    nodes: Array.isArray(snapshot.nodes) ? snapshot.nodes : [],
+    ...(snapshot.observationMode !== undefined ?
+      {observationMode: snapshot.observationMode} :
+      {}),
+    controlPlaneDiagnostics: {
+      readinessByNodeId: projectServeLaneReadinessByNodeId(
+        snapshot.controlPlaneDiagnostics?.readinessByNodeId,
+      ),
+    },
+    replicaOperations,
+  };
+}
+
+export {
+  assignAdminControlSnapshotLocalDiagnosticsMethods,
+  projectServeLaneControlSnapshot,
+};

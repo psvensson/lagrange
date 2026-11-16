@@ -53,7 +53,10 @@ export {
   TIDB_IMAGE_DEFAULT,
   TIKV_IMAGE_DEFAULT,
 } from './real-product-deployment-contract.js';
-export {removeCampaignContainers} from './real-product-campaign-cleanup.js';
+export {
+  removeCampaignContainers,
+  teardownCampaignDeployment,
+} from './real-product-campaign-cleanup.js';
 export {measureComponentRecovery} from './real-product-component-recovery.js';
 
 export {

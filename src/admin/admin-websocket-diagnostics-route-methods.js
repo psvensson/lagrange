@@ -8,6 +8,7 @@ import {
   getRemainingBudgetMs,
 } from '../control-plane/timeout-budget.js';
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
+import {projectServeLaneControlSnapshot} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
@@ -33,6 +34,7 @@ const CONTROL_SNAPSHOT_RETRY_WAIT = Object.freeze({
 
 const {
   ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_PARTITION_DIAGNOSTICS_VIEW,
   ADMIN_ERROR_MESSAGE,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
@@ -200,9 +202,24 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
     }
   },
 
-  async handlePartitionDiagnostics(reply) {
+  async handlePartitionDiagnostics(request, reply) {
+    const rawView =
+      request?.query?.[ADMIN_PARTITION_DIAGNOSTICS_VIEW.QUERY_KEY];
+    let view = ADMIN_PARTITION_DIAGNOSTICS_VIEW.FULL;
+    if (rawView !== undefined) {
+      view = String(rawView).trim().toLowerCase();
+      if (
+        view !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.FULL &&
+        view !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.LEADERS
+      ) {
+        reply.code(HTTP_STATUS.BAD_REQUEST).send({
+          error: ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_VIEW_UNSUPPORTED,
+        });
+        return;
+      }
+    }
     try {
-      const diagnostics = this.buildLocalPartitionDiagnostics();
+      const diagnostics = this.buildLocalPartitionDiagnostics({view});
       reply.code(HTTP_STATUS.OK).send(diagnostics);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
@@ -233,6 +250,43 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
     }
   },
 
+  resolveControlSnapshotViewParam(rawView) {
+    if (rawView === undefined) {
+      return {view: ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_FULL, error: null};
+    }
+    const view = String(rawView).trim().toLowerCase();
+    if (
+      view !== ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_FULL &&
+      view !== ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_SERVE_LANE
+    ) {
+      return {
+        view: null,
+        error: ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_VIEW_UNSUPPORTED,
+      };
+    }
+    return {view, error: null};
+  },
+
+  resolveControlSnapshotTimeoutParam(rawTimeoutMs) {
+    if (rawTimeoutMs === undefined) {
+      return {requestedTimeoutMs: undefined, error: null};
+    }
+    const timeoutText = String(rawTimeoutMs).trim();
+    const parsedTimeoutMs = Number(timeoutText);
+    if (
+      timeoutText.length === 0 ||
+      !Number.isSafeInteger(parsedTimeoutMs) ||
+      parsedTimeoutMs <= 0 ||
+      parsedTimeoutMs > ADMIN_CONTROL_SNAPSHOT.MAX_HTTP_QUERY_TIMEOUT_MS
+    ) {
+      return {
+        requestedTimeoutMs: undefined,
+        error: ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_TIMEOUT_INVALID,
+      };
+    }
+    return {requestedTimeoutMs: parsedTimeoutMs, error: null};
+  },
+
   async handleControlSnapshot(request, reply) {
     const scope = String(
       request?.query?.[ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_KEY] ||
@@ -246,9 +300,48 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
       });
       return;
     }
+    const viewCheck = this.resolveControlSnapshotViewParam(
+      request?.query?.[ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_KEY],
+    );
+    if (viewCheck.error) {
+      reply.code(HTTP_STATUS.BAD_REQUEST).send({error: viewCheck.error});
+      return;
+    }
+    const timeoutCheck = this.resolveControlSnapshotTimeoutParam(
+      request?.query?.[ADMIN_CONTROL_SNAPSHOT.QUERY_TIMEOUT_MS_KEY],
+    );
+    if (timeoutCheck.error) {
+      reply.code(HTTP_STATUS.BAD_REQUEST).send({error: timeoutCheck.error});
+      return;
+    }
+    await this.serveControlSnapshotView(reply, viewCheck.view, timeoutCheck.requestedTimeoutMs);
+  },
+
+  async serveControlSnapshotView(reply, view, requestedTimeoutMs) {
     try {
-      const snapshot = await this.buildLocalControlSnapshot();
-      reply.code(HTTP_STATUS.OK).send(snapshot);
+      if (
+        view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_FULL &&
+        requestedTimeoutMs === undefined
+      ) {
+        const snapshot = await this.buildLocalControlSnapshot();
+        reply.code(HTTP_STATUS.OK).send(snapshot);
+        return;
+      }
+      const queryTimeoutMs =
+        requestedTimeoutMs === undefined ?
+          ADMIN_CONTROL_SNAPSHOT.DEFAULT_SERVE_LANE_QUERY_TIMEOUT_MS :
+          requestedTimeoutMs;
+      const snapshot = await this.resolveBoundedLocalControlSnapshot({
+        allowAuthoritativeRepair: false,
+        allowAuthoritativeReadinessRefresh: false,
+        boundedObservationProbe: true,
+        queryTimeoutMs,
+      });
+      const payload =
+        view === ADMIN_CONTROL_SNAPSHOT.QUERY_VIEW_SERVE_LANE ?
+          projectServeLaneControlSnapshot(snapshot) :
+          snapshot;
+      reply.code(HTTP_STATUS.OK).send(payload);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
         error: error.message,
@@ -411,8 +504,12 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
     return this.controlSnapshot.buildLocalCdcDiagnostics();
   },
 
-  buildLocalPartitionDiagnostics() {
-    return this.controlSnapshot.buildLocalPartitionDiagnostics();
+  async resolveBoundedLocalControlSnapshot(options = {}) {
+    return this.controlSnapshot.resolveBoundedLocalControlSnapshot(options);
+  },
+
+  buildLocalPartitionDiagnostics(options = {}) {
+    return this.controlSnapshot.buildLocalPartitionDiagnostics(options);
   },
 
   buildLocalSqlDiagnostics() {

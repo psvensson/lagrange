@@ -51,6 +51,7 @@ import {
 import {deriveRunMetrics} from './raw-observation-metrics.js';
 import {serializeJsonData} from '../../../src/utils/canonical-json-data.js';
 import {SCENARIO_OUTCOME} from './scenario-outcome.js';
+import {readinessDenialOf} from './benchmark-readiness-denial.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -452,7 +453,8 @@ function checkExecution(run) {
     reasons.push(ADMISSION_REASON.CLOSURE_INCOMPLETE);
   }
   if (run.observations.runStatus === BENCHMARK_RUN_STATUS.SETUP_FAILED &&
-      run.observations.setup.failureClass === FAILURE_CLASS.HARNESS_FAULT) {
+      (run.observations.setup.failureClass === FAILURE_CLASS.HARNESS_FAULT ||
+       run.observations.setup.failureClass === 'infrastructure_error')) {
     reasons.push(ADMISSION_REASON.SETUP_HARNESS_FAULT);
   }
   if (!hasWindow(run)) return reasons;
@@ -722,29 +724,6 @@ function checkDeployment(run, claim) {
     reasons.push(ADMISSION_REASON.DELAY_OR_BYTE_FORMULA);
   }
   return reasons;
-}
-
-// The product's last answer before its readiness bound ran out: the component,
-// the attempts spent and the denial the product itself reported.
-function textOrNull(value) {
-  return typeof value === 'string' ? value : null;
-}
-
-function fieldOrNull(record, key) {
-  return record?.[key] ?? null;
-}
-
-function readinessDenialOf(run) {
-  const diagnostic = fieldOrNull(run.deployment.readiness.evidence, 'diagnostic');
-  // The deployer's last answer is the HTTP answer {status, body, json, error};
-  // the product's own readiness body is its json (null when it sent none).
-  const last = fieldOrNull(fieldOrNull(diagnostic, 'last'), 'json');
-  const reasons = fieldOrNull(last, 'reasons');
-  return {component: fieldOrNull(diagnostic, 'component'),
-    attempts: fieldOrNull(diagnostic, 'attempts'),
-    elapsedMs: fieldOrNull(diagnostic, 'elapsedMs'),
-    phase: textOrNull(fieldOrNull(last, 'phase')), state: textOrNull(fieldOrNull(last, 'state')),
-    reasons: Array.isArray(reasons) ? [...reasons] : []};
 }
 
 function isReadinessExhaustedRun(run) {

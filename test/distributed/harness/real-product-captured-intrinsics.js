@@ -27,6 +27,7 @@ const mapGet = Function.call.bind(Map.prototype.get);
 const mapSet = Function.call.bind(Map.prototype.set);
 const numberIsFinite = Number.isFinite;
 const numberIsInteger = Number.isInteger;
+const numberIsSafeInteger = Number.isSafeInteger;
 const objectFreeze = Object.freeze;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
@@ -37,6 +38,7 @@ const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 const stringLastIndexOf = Function.call.bind(String.prototype.lastIndexOf);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringSlice = Function.call.bind(String.prototype.slice);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
@@ -67,6 +69,7 @@ export {
   mapSet,
   numberIsFinite,
   numberIsInteger,
+  numberIsSafeInteger,
   objectFreeze,
   objectGetPrototypeOf,
   objectHasOwn,
@@ -77,6 +80,7 @@ export {
   stringLastIndexOf,
   stringPadStart,
   stringReplace,
+  stringSlice,
   stringSplit,
   stringStartsWith,
   stringToLowerCase,

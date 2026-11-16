@@ -80,6 +80,7 @@ const PLACEMENT_TABLE = 'stock';
 const TAG = /:v?(\d+\.\d+\.\d+)$/u;
 // Bounded lifetime of the client container (R13): the campaign's own budget.
 const SQL_CLIENT_LIFETIME_SECONDS = 6 * 60 * 60;
+const DEFAULT_TIDB_OP_TIMEOUT_MS = 10000;
 const P = TIDB_REFERENCE_DEFAULTS;
 const TIKV_STATUS_PORT = 20180;
 
@@ -113,7 +114,8 @@ function pdReady(ctx, pdHost) {
       const hasPollSignal = Boolean(pollContext && objectHasOwn(pollContext, 'signal'));
       const signal = hasPollSignal ? pollContext.signal : ctx.signal;
       const timeoutMs = numberIsFinite(pollContext?.remainingMs) ?
-        Math.max(1, pollContext.remainingMs) : undefined;
+        Math.max(1, Math.min(DEFAULT_TIDB_OP_TIMEOUT_MS, pollContext.remainingMs)) :
+        DEFAULT_TIDB_OP_TIMEOUT_MS;
       const answer = await httpFromHost({
         sshRun: ctx.sshRun,
         opts: ctx.opts,
@@ -132,15 +134,29 @@ function pdReady(ctx, pdHost) {
 }
 
 function readinessClientCommand(ctx, verb, callOpts = ctx.opts) {
-  return ctx.sshRun(ctx.sqlClient.host, callOpts, `${verb} ${ctx.sqlClient.containerId}`);
+  return ctx.sshRun(
+    ctx.sqlClient.host,
+    callOpts,
+    `${verb} ${ctx.sqlClient.containerId}`,
+    callOpts?.timeoutMs,
+  );
 }
 
 // Stop the readiness client and observe that it exited: the record says so
 // from the container's own state, never by assumption.
 async function stopReadinessClient(ctx) {
-  const stopOpts = {...(ctx.opts || {}), signal: null, deadlineAtMs: null, deadlineMs: null};
+  const stopOpts = {
+    ...(ctx.opts || {}),
+    signal: null,
+    deadlineAtMs: null,
+    deadlineMs: null,
+    timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS,
+  };
   await readinessClientCommand(ctx, 'docker stop -t 0', stopOpts);
-  const inspected = await ctx.provider.inspectContainer(ctx.sqlClient.containerId, {signal: null});
+  const inspected = await ctx.provider.inspectContainer(
+    ctx.sqlClient.containerId,
+    {signal: null, timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS},
+  );
   if (inspected?.State?.Status !== EXITED) {
     throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
       `TiDB readiness client ${ctx.sqlClient.containerId} did not exit ` +
@@ -151,7 +167,11 @@ async function stopReadinessClient(ctx) {
 
 // A read after deployment: the readiness client runs only for its duration.
 async function withReadinessClient(ctx, read) {
-  const startOpts = ctx.signal ? {...(ctx.opts || {}), signal: ctx.signal} : ctx.opts;
+  const startOpts = {
+    ...(ctx.opts || {}),
+    ...(ctx.signal ? {signal: ctx.signal} : {}),
+    timeoutMs: DEFAULT_TIDB_OP_TIMEOUT_MS,
+  };
   await readinessClientCommand(ctx, 'docker start', startOpts);
   try {
     return await read();
@@ -161,9 +181,16 @@ async function withReadinessClient(ctx, read) {
   }
 }
 
-async function sql(ctx, endpoint, statement) {
+async function sql(ctx, endpoint, statement, callOptions = undefined) {
+  const boundedOptions = {
+    ...(ctx.signal && callOptions?.signal === undefined ? {signal: ctx.signal} : {}),
+    ...(callOptions || {}),
+    timeoutMs: numberIsFinite(callOptions?.timeoutMs) ?
+      Math.max(1, Math.min(DEFAULT_TIDB_OP_TIMEOUT_MS, callOptions.timeoutMs)) :
+      DEFAULT_TIDB_OP_TIMEOUT_MS,
+  };
   const result = await ctx.provider.execInContainer(ctx.sqlClient.containerId,
-    buildTiDbPhysicalMysqlCommand(endpoint, statement));
+    buildTiDbPhysicalMysqlCommand(endpoint, statement), boundedOptions);
   if (result.exitCode !== 0) throw new Error(`mysql exited ${result.exitCode}`);
   return result.stdout;
 }
@@ -319,8 +346,12 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
       expectedAddresses: arrayMap(hosts.slice(0, STORE_COUNT),
         (host) => `${host}:${P.tikvPort}`),
       databaseName, tableName: PLACEMENT_TABLE, timeoutMs: budget.timeoutMs,
-      pollIntervalMs: budget.pollIntervalMs}));
+      pollIntervalMs: budget.pollIntervalMs,
+      signal: ctx.signal ?? null,
+      deadlineAtMs: ctx.deadlineAtMs ?? null,
+      now: ctx.now}));
   const stopped = await stopReadinessClient(ctx);
+  const postFormationCtx = {...ctx, deadlineAtMs: null};
   const readinessClient = {...ctx.sqlClient, imageRef: TIDB_SQL_CLIENT_IMAGE,
     imageId: stopped.imageId, measured: false, stateBeforeMeasurement: EXITED,
     stoppedAt: stopped.observedAt};
@@ -350,11 +381,11 @@ async function formTiDbCluster({ctx, hosts, images, formed}) {
           await ctx.settleInFlight();
         }
       },
-      observePlacement: () => withReadinessClient(ctx, async () => ({
+      observePlacement: () => withReadinessClient(postFormationCtx, async () => ({
         observedAt: new Date().toISOString(),
         source: 'tidb-reference-physical-placement-proof', ...(await placement())})),
-      observeRoles: () => withReadinessClient(ctx, async () => ({
-        stores: await observeStores(ctx, endpoint)})),
+      observeRoles: () => withReadinessClient(postFormationCtx, async () => ({
+        stores: await observeStores(postFormationCtx, endpoint)})),
     },
   };
 }

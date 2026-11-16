@@ -37,11 +37,24 @@ test('D20: every product container the deployer starts carries the campaign labe
 
 test('D20: teardown filters on the campaign label only and records what it could not ' +
   'close', async () => {
+  let host1Removed = false;
   const {sshRun, calls} = createScriptedSsh([
-    [/docker ps -aq --filter/u, (_command, host) => (host === '10.0.0.2' ?
-      new Error('ssh: connect to host 10.0.0.2 port 22: No route to host') : 'c1\nc2')],
-    [/docker rm -f/u, (_command, host) => (host === '10.0.0.3' ?
-      new Error('Error response from daemon: removal in progress') : '')],
+    [/docker ps -aq --filter/u, (_command, host) => {
+      if (host === '10.0.0.2') {
+        return new Error('ssh: connect to host 10.0.0.2 port 22: No route to host');
+      }
+      if (host === '10.0.0.1') {
+        return host1Removed ? '' : 'c1\nc2';
+      }
+      return 'c3';
+    }],
+    [/docker rm -f/u, (_command, host) => {
+      if (host === '10.0.0.3') {
+        return new Error('Error response from daemon: removal in progress');
+      }
+      if (host === '10.0.0.1') host1Removed = true;
+      return '';
+    }],
   ]);
   const result = await deployers.removeCampaignContainers({hosts: HOSTS, campaignId: 'camp-77',
     sshRun, opts: {}});
@@ -53,6 +66,7 @@ test('D20: teardown filters on the campaign label only and records what it could
   assert.deepEqual(result.removed, [{host: '10.0.0.1', containerIds: ['c1', 'c2']}]);
   assert.deepEqual(arrayMap(result.unclosed, (entry) => entry.host).sort(),
     ['10.0.0.2', '10.0.0.3']);
+  assert.deepEqual(result.confirmedClosedHosts, ['10.0.0.1']);
   assert.equal(result.complete, false);
 });
 
@@ -62,4 +76,51 @@ test('D20: teardown refuses a campaign id that could widen the filter', async ()
     sshRun, opts: {}}));
   await assert.rejects(deployers.removeCampaignContainers({hosts: HOSTS,
     campaignId: 'x y', sshRun, opts: {}}));
+});
+
+test('closure-gated storage cleanup removes only confirmed closed hosts, defers lingering ' +
+  'hosts, rejects unsafe subdirs, and never hides container closure failures', async () => {
+  const pendingStorageByHost = new Map([
+    ['10.0.0.1', new Set(['run-1-d1'])],
+    ['10.0.0.2', new Set(['run-1-d1'])],
+    ['10.0.0.3', new Set(['../escape'])],
+  ]);
+  let host1Removed = false;
+  const rmRfHosts = [];
+  const {sshRun} = createScriptedSsh([
+    [/docker ps -aq --filter/u, (_command, host) => {
+      if (host === '10.0.0.1') return host1Removed ? '' : 'c1';
+      if (host === '10.0.0.2') return 'c2';
+      return '';
+    }],
+    [/docker rm -f/u, (_command, host) => {
+      if (host === '10.0.0.1') host1Removed = true;
+      return '';
+    }],
+    [/\/bench-cleanup/u, (_command, host) => {
+      rmRfHosts.push(host);
+      return '';
+    }],
+  ]);
+  const closed = await deployers.teardownCampaignDeployment({
+    hosts: HOSTS,
+    campaignId: 'camp-88',
+    storageRoot: '/var/lib/bench-data',
+    pendingStorageByHost,
+    sshRun,
+    opts: {},
+  });
+  assert.equal(closed.complete, false);
+  assert.deepEqual(closed.removed, [{host: '10.0.0.1', containerIds: ['c1']}]);
+  assert.deepEqual(closed.unclosed, [{
+    host: '10.0.0.2',
+    containerIds: ['c2'],
+    reason: 'containers still present after docker rm -f',
+  }]);
+  assert.deepEqual(rmRfHosts, ['10.0.0.1']);
+  assert.equal(pendingStorageByHost.get('10.0.0.1').size, 0);
+  assert.deepEqual([...pendingStorageByHost.get('10.0.0.2')], ['run-1-d1']);
+  assert.equal(closed.storageCleanup.deferredHosts[0].host, '10.0.0.2');
+  assert.equal(closed.storageCleanup.errors[0].host, '10.0.0.3');
+  assert.match(closed.storageCleanup.errors[0].error, /unsafe storage cleanup/u);
 });

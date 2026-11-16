@@ -71,6 +71,7 @@ const PRODUCTS_UNPINNED = 'campaign_products_unpinned';
 // The deployer's readiness exhaustion as the run's setup failure: the product
 // never answered its readiness contract, so the failure is the product's.
 const READINESS_SETUP_FAILURE_CLASS = 'product_error';
+const INFRASTRUCTURE_SETUP_FAILURE_CLASS = 'infrastructure_error';
 const INTERRUPTED_SETUP_FAILURE_CLASS = 'interrupted';
 const DEPLOYMENT_EVENT_KINDS = Object.freeze([IDENTITY_EVENT_KIND.RESTART,
   IDENTITY_EVENT_KIND.IMAGE_CHANGE]);
@@ -88,6 +89,13 @@ function isInterruptedFailure(error, signal) {
     signal?.aborted === true);
 }
 
+function isObserverInfrastructureFailure(error) {
+  return Boolean(
+    error?.observerInfrastructure === true ||
+    error?.diagnostic?.observerInfrastructure === true,
+  );
+}
+
 function lastObservationOf(error, attempt) {
   return error?.lastObservation ?? error?.diagnostic?.lastObservation ??
     attempt?.deployment?.readiness?.lastObservation ??
@@ -96,9 +104,16 @@ function lastObservationOf(error, attempt) {
 
 function failureOf(error, signal = null) {
   const interrupted = isInterruptedFailure(error, signal);
+  const observerInfrastructure = !interrupted && isObserverInfrastructureFailure(error);
   const isReadiness = error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED;
-  const failureClass = interrupted ? INTERRUPTED_SETUP_FAILURE_CLASS :
-    (isReadiness ? READINESS_SETUP_FAILURE_CLASS : null);
+  let failureClass = null;
+  if (interrupted) {
+    failureClass = INTERRUPTED_SETUP_FAILURE_CLASS;
+  } else if (observerInfrastructure) {
+    failureClass = INFRASTRUCTURE_SETUP_FAILURE_CLASS;
+  } else if (isReadiness) {
+    failureClass = READINESS_SETUP_FAILURE_CLASS;
+  }
   const lastObservation = lastObservationOf(error, error?.attempt);
   const semanticGate = error?.semanticGate ?? error?.attempt?.semanticGate ?? null;
   const rawDiagnostic = error?.diagnostic ?? null;
@@ -128,6 +143,9 @@ function stateOfFailure(failure, attempt) {
       failure.aborted === true) {
     return RUN_STATE.INTERRUPTED;
   }
+  if (failure.failureClass === INFRASTRUCTURE_SETUP_FAILURE_CLASS) {
+    return RUN_STATE.FAILED;
+  }
   // A product failure names the product that failed: only a complete record.
   if (arrayIncludes(PRODUCT_FAILURE_CODES, failure.code)) {
     return attempt?.workload ? RUN_STATE.PRODUCT_FAILURE : RUN_STATE.FAILED;
@@ -148,8 +166,13 @@ function assertEndpointBound(deployment) {
 
 function closureOf(closure) {
   if (!closure) return null;
-  return {status: closure.complete ? CLOSURE_STATUS.COMPLETE : CLOSURE_STATUS.INCOMPLETE,
-    removed: closure.removed, unclosed: closure.unclosed, error: closure.error ?? null};
+  return {
+    status: closure.complete ? CLOSURE_STATUS.COMPLETE : CLOSURE_STATUS.INCOMPLETE,
+    removed: closure.removed,
+    unclosed: closure.unclosed,
+    error: closure.error ?? null,
+    ...(closure.storageCleanup ? {storageCleanup: closure.storageCleanup} : {}),
+  };
 }
 
 // The hosts the deployment's roles and the load generator ran on.
@@ -356,13 +379,14 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
   const lastObservation = failure?.lastObservation ??
     deployment?.readiness?.lastObservation ??
     deployment?.readiness?.evidence?.lastObservation ?? null;
+  const recordedClosure = deployment?.closure ?? closureOf(closure);
   const record = {recordType: RECORD_TYPE.RUN, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, runId: run.runId, claimKey: run.claimKey,
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
     ...(failureClass ? {failureClass} : {}),
     ...(lastObservation !== null ? {lastObservation} : {}),
-    ...(deployment?.closure ? {cleanup: deployment.closure} : {}),
+    ...(recordedClosure ? {cleanup: recordedClosure} : {}),
     execution: {state, failure, ...(failureClass ? {failureClass} : {}), startedAt, endedAt},
     identity: recordedIdentity(run, header, attempt),
     plan: recordedPlan(run, manifest, workload),
@@ -391,8 +415,13 @@ function watchdogFor(deps) {
 async function unmeasuredAttempt({run, manifest, deps, events, error, signal}) {
   const deployment = error.deployment;
   const interrupted = isInterruptedFailure(error, signal);
-  const failureClass = interrupted ? INTERRUPTED_SETUP_FAILURE_CLASS :
-    READINESS_SETUP_FAILURE_CLASS;
+  const observerInfrastructure = !interrupted && isObserverInfrastructureFailure(error);
+  let failureClass = READINESS_SETUP_FAILURE_CLASS;
+  if (interrupted) {
+    failureClass = INTERRUPTED_SETUP_FAILURE_CLASS;
+  } else if (observerInfrastructure) {
+    failureClass = INFRASTRUCTURE_SETUP_FAILURE_CLASS;
+  }
   const lastObservation = lastObservationOf(error, {deployment});
   const attempt = {deployment, workload: null, productsAfter: null, roleObservations: null};
   attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment,
@@ -415,6 +444,7 @@ function hasCampaignAttempt(error) {
 function isDescribedExhaustion(error) {
   return Boolean(error?.deployment) &&
     !hasCampaignAttempt(error) &&
+    !isObserverInfrastructureFailure(error) &&
     (error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED ||
       error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED ||
       error?.aborted === true);
@@ -565,7 +595,9 @@ async function runComparativeCampaign({manifest, header, deps}) {
       records.push(record);
       attempted.push({runId: run.runId, claimKey: run.claimKey, targetId: run.targetId,
         state: record.execution.state, failureCode: record.execution.failure?.code ?? null,
-        closureComplete: record.deployment?.closure?.status === CLOSURE_STATUS.COMPLETE});
+        closureComplete:
+          (record.deployment?.closure?.status ?? record.cleanup?.status) ===
+          CLOSURE_STATUS.COMPLETE});
     }
   } finally {
     watchdog.clear();

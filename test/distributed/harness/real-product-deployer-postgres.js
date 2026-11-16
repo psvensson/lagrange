@@ -44,8 +44,10 @@ import {
 } from './real-product-exhausted-deployment.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
+  classifyRemoteCommandError,
   createTrackedSshRun,
   dockerRunDetached,
+  errorText,
   shellQuote,
   shellWord,
 } from './real-product-remote-shell.js';
@@ -65,6 +67,12 @@ const APP_USER = 'bench';
 const REPLICATION_USER = 'replicator';
 const STANDBY_NAMES = Object.freeze(['s1', 's2']);
 const PASSWORD_BYTES = 18;
+const DEFAULT_POSTGRES_PROBE_TIMEOUT_MS = 10000;
+const MAX_PG_ISREADY_TIMEOUT_SECONDS = 4;
+const PG_STATEMENT_TIMEOUT_MARGIN_MS = 2000;
+const PG_STATEMENT_THRESHOLD_MS = 3000;
+const PG_STATEMENT_SHORT_RATIO = 0.6;
+const MIN_PG_STATEMENT_TIMEOUT_MS = 250;
 function versionPatternOfMajor(major) {
   return new RegExp(`^PostgreSQL ${major}[.\\s]`, 'u');
 }
@@ -86,8 +94,9 @@ function storageArgs(opts, campaignId, label) {
     [];
 }
 
-function adminSql(cid, sql) {
-  return `docker exec ${shellWord(cid)} psql -U postgres -d ${DATABASE} -v ON_ERROR_STOP=1 ` +
+function adminSql(cid, sql, statementTimeoutMs = DEFAULT_POSTGRES_PROBE_TIMEOUT_MS) {
+  return `docker exec -e PGOPTIONS=${shellQuote(`-c statement_timeout=${statementTimeoutMs}`)} ` +
+    `${shellWord(cid)} psql -X -U postgres -d ${DATABASE} -v ON_ERROR_STOP=1 ` +
     `-At -F '|' -c ${shellQuote(sql)}`;
 }
 
@@ -108,17 +117,32 @@ function standbyScript({primaryHost, name, password}) {
       (setting) => `-c ${setting}`), ' ')}`], '\n');
 }
 
-function callOptsFor(ctx, pollContext = null) {
+function callOptsFor(
+  ctx,
+  pollContext = null,
+  defaultTimeoutMs = DEFAULT_POSTGRES_PROBE_TIMEOUT_MS,
+) {
   const hasPollSignal = Boolean(pollContext && objectHasOwn(pollContext, 'signal'));
   const signal = hasPollSignal ? pollContext.signal : ctx.signal;
   const timeoutMs = numberIsFinite(pollContext?.remainingMs) ?
-    Math.max(1, pollContext.remainingMs) : undefined;
-  if ((signal === undefined || signal === null) && timeoutMs === undefined) return ctx.opts;
+    Math.max(1, Math.min(defaultTimeoutMs, Math.floor(pollContext.remainingMs))) :
+    defaultTimeoutMs;
   return {
     ...(ctx.opts || {}),
     ...(signal !== undefined && signal !== null ? {signal} : {}),
-    ...(timeoutMs !== undefined ? {timeoutMs} : {}),
+    timeoutMs,
   };
+}
+
+function rethrowClassifiedPostgresError(error) {
+  const classified = classifyRemoteCommandError(error);
+  const err = error instanceof Error ? error : new Error(errorText(error));
+  throw Object.assign(err, {
+    aborted: classified.aborted,
+    deadlineExpired: classified.deadlineExpired,
+    transportError: classified.transportError,
+    observerInfrastructure: classified.observerInfrastructure,
+  });
 }
 
 function serverReady(ctx, role) {
@@ -132,24 +156,40 @@ function serverReady(ctx, role) {
     deadlineAtMs: ctx.deadlineAtMs ?? null,
     probe: async (pollContext) => {
       const callOpts = callOptsFor(ctx, pollContext);
-      return {
-        ready: true,
-        diagnostic: await ctx.sshRun(
-          role.host,
-          callOpts,
-          `docker exec ${shellWord(role.containerId)} pg_isready -h 127.0.0.1 -p ${PORT} ` +
-            '-U postgres',
-          callOpts?.timeoutMs,
-        ),
-      };
+      const pgReadyTimeoutSeconds = Math.max(
+        1,
+        Math.min(MAX_PG_ISREADY_TIMEOUT_SECONDS, Math.floor(callOpts.timeoutMs / 2000)),
+      );
+      try {
+        return {
+          ready: true,
+          diagnostic: await ctx.sshRun(
+            role.host,
+            callOpts,
+            `docker exec ${shellWord(role.containerId)} pg_isready -t ${pgReadyTimeoutSeconds} ` +
+              `-h 127.0.0.1 -p ${PORT} -U postgres`,
+            callOpts.timeoutMs,
+          ),
+        };
+      } catch (error) {
+        return rethrowClassifiedPostgresError(error);
+      }
     },
   });
 }
 
 async function query(ctx, role, sql, pollContext = null) {
   const callOpts = callOptsFor(ctx, pollContext);
-  return stringTrim(String(await ctx.sshRun(role.host, callOpts,
-    adminSql(role.containerId, sql), callOpts?.timeoutMs)));
+  const timeoutMs = callOpts.timeoutMs;
+  const statementTimeoutMs = timeoutMs > PG_STATEMENT_THRESHOLD_MS ?
+    timeoutMs - PG_STATEMENT_TIMEOUT_MARGIN_MS :
+    Math.max(MIN_PG_STATEMENT_TIMEOUT_MS, Math.floor(timeoutMs * PG_STATEMENT_SHORT_RATIO));
+  try {
+    return stringTrim(String(await ctx.sshRun(role.host, callOpts,
+      adminSql(role.containerId, sql, statementTimeoutMs), timeoutMs)));
+  } catch (error) {
+    return rethrowClassifiedPostgresError(error);
+  }
 }
 
 function replicationRows(text) {

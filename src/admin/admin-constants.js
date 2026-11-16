@@ -200,6 +200,12 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'Control snapshot scope must be "local"',
   CONTROL_SNAPSHOT_UNAVAILABLE:
     'Control snapshot unavailable because system cache is not configured',
+  CONTROL_SNAPSHOT_VIEW_UNSUPPORTED:
+    'Unsupported control snapshot view parameter',
+  CONTROL_SNAPSHOT_TIMEOUT_INVALID:
+    'Control snapshot timeoutMs must be a positive finite integer',
+  PARTITION_DIAGNOSTICS_VIEW_UNSUPPORTED:
+    'Unsupported partition diagnostics view parameter',
   CACHE_OWNER_TRANSITION_UNAVAILABLE:
     'Admin cache owner transition requires typed child participants',
   CDC_DIAGNOSTICS_UNAVAILABLE:
@@ -300,12 +306,26 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
     'SELECT * FROM control_snapshot_local(true)',
   QUERY_SCOPE_KEY: 'scope',
   QUERY_SCOPE_LOCAL: 'local',
+  QUERY_VIEW_KEY: 'view',
+  QUERY_VIEW_FULL: 'full',
+  QUERY_VIEW_SERVE_LANE: 'serve-lane',
+  QUERY_TIMEOUT_MS_KEY: 'timeoutMs',
+  // ends-on: control_snapshot_local bounded local snapshot read completes
+  DEFAULT_SERVE_LANE_QUERY_TIMEOUT_MS: 5000,
+  // ends-on: admin HTTP diagnostics query request completes
+  MAX_HTTP_QUERY_TIMEOUT_MS: 30000,
   SCHEMA_VERSION: 1,
   TABLE_NAME: 'control_snapshot_local',
   IN_FLIGHT_EXCLUDED_STATUSES: Object.freeze([
     'removed',
     'failed',
   ]),
+});
+
+export const ADMIN_PARTITION_DIAGNOSTICS_VIEW = Object.freeze({
+  QUERY_KEY: 'view',
+  FULL: 'full',
+  LEADERS: 'leaders',
 });
 
 const ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE = Object.freeze({

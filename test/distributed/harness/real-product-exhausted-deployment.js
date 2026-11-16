@@ -53,12 +53,24 @@ async function describeExhaustedDeployment({targetId, topology, sshRun, opts, ro
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));
   const lastObservation = failure?.lastObservation ??
     failure?.diagnostic?.lastObservation ?? failure?.diagnostic?.last ?? null;
+  const lastCompletedObservation = failure?.lastCompletedObservation ??
+    failure?.diagnostic?.lastCompletedObservation ?? null;
+  const lastProbeError = failure?.lastProbeError ??
+    failure?.diagnostic?.lastProbeError ?? null;
   const aborted = Boolean(failure?.aborted || failure?.diagnostic?.aborted ||
     failure?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED);
   return {targetId, topology, roles: [...roles], storage, runClass: runClassOf(storage),
     readiness: {state: READINESS_STATE.EXHAUSTED, observedAt: new Date().toISOString(),
       aborted, lastObservation,
-      evidence: {failure: failure.message, diagnostic: failure.diagnostic, lastObservation}},
+      ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
+      ...(lastProbeError !== null ? {lastProbeError} : {}),
+      evidence: {
+        failure: failure.message,
+        diagnostic: failure.diagnostic,
+        lastObservation,
+        ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
+        ...(lastProbeError !== null ? {lastProbeError} : {}),
+      }},
     identity: {products}, placement: null, endpoint};
 }
 

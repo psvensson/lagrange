@@ -931,3 +931,69 @@ async () => {
     await rm(tempDir, {recursive: true, force: true});
   }
 });
+
+test('pure observer-infrastructure readiness exhaustion classifies as infrastructure_error ' +
+  'and failed, while keeping record.cleanup even when deployment is null', async () => {
+  const manifest = buildComparativeCampaignManifest({
+    campaignId: 'camp-infra-01',
+    profile: COMPARATIVE_SMOKE_PROFILE,
+    targets: ['lagrange', 'pg-single-primary'],
+  });
+  const {deps} = harness({
+    deadlineAt: null,
+    deployRun: async (currentRun) => {
+      if (currentRun.targetId === 'lagrange') {
+        const ledger = createContainerLedger();
+        const ssh = createScriptedSsh([
+          [/curl .*8080\/readyz/u, Object.assign(
+            new Error('ssh: connect to host 10.0.0.1 port 22: No route to host'),
+            {code: 255},
+          )],
+          ...lagrangeHealthyRules(ledger, {hosts: ['10.0.0.1', '10.0.0.2', '10.0.0.3']}),
+        ]).sshRun;
+        return deployers.deployComparativeTarget('lagrange', {
+          hosts: ['10.0.0.1', '10.0.0.2', '10.0.0.3'],
+          clientIp: '10.0.0.9',
+          sshRun: ssh,
+          opts: {
+            lagrangeImage: LAGRANGE_IMAGE,
+            readiness: {attempts: 2, intervalMs: 1, stablePolls: 1},
+          },
+          campaignId: manifest.campaignId,
+          sleep: async () => {},
+        });
+      }
+      throw Object.assign(
+        new Error('ssh: connect to host 10.0.0.1 port 22: No route to host'),
+        {code: 255, observerInfrastructure: true},
+      );
+    },
+    inspectProducts: async (dep) => dep.identity.products,
+    teardownRun: async () => ({
+      complete: true,
+      removed: [{host: '10.0.0.1', containerIds: ['c1']}],
+      unclosed: [],
+    }),
+  });
+  const summary = await runComparativeCampaign({
+    manifest: {...manifest, runs: [manifest.runs[0], manifest.runs[1]]},
+    header: {
+      executionTarget: 'lab',
+      physicalHosts: arrayMap(['10.0.0.1', '10.0.0.2', '10.0.0.3'], (ip) => ({
+        hostId: ip, ip, hostname: ip, bootId: 'b', cpus: 8, memGb: 16,
+      })),
+      harness: {gitCommit: '0'.repeat(40)},
+    },
+    deps,
+  });
+  const firstRun = summary.records[0];
+  assert.equal(firstRun.failureClass, 'infrastructure_error');
+  assert.equal(firstRun.execution.state, 'failed');
+  assert.equal(firstRun.cleanup?.status, 'complete');
+  assert.equal(firstRun.deployment?.closure?.status, 'complete');
+  const secondRun = summary.records[1];
+  assert.equal(secondRun.deployment, null);
+  assert.equal(secondRun.failureClass, 'infrastructure_error');
+  assert.equal(secondRun.execution.state, 'failed');
+  assert.equal(secondRun.cleanup?.status, 'complete');
+});

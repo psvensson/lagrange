@@ -1243,6 +1243,11 @@ class DockerProvider {
     return container.inspect();
   }
 
+  async inspectContainerState(containerId) {
+    const inspected = await this.inspectContainer(containerId);
+    return inspected?.State ?? null;
+  }
+
   /**
    * Inspect a container by ID or name, returning null if missing.
    * @param {string} containerId
