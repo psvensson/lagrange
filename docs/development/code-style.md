@@ -3,7 +3,7 @@ scope: style
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-11-13
+last_reviewed: 2026-11-16
 ---
 
 > **Canonical source.** Lint, formatting, naming. Reached from the
@@ -84,8 +84,18 @@ When writing or modifying code:
   boundary or limit access to mutable state. For a real boundary, use the
   declared runtime and composition surfaces in
   [`architecture/overview.md`](../../architecture/overview.md#core-principles).
-  Preserve unchanged contracts and limit consumer migration to invalidated
-  contracts; keep unrelated restructuring outside the causal change.
+  Preserve unchanged contracts and limit migration to affected consumers. When
+  extraction changes mutation versus returned values, object identity, defaulting,
+  asynchronous ordering or failure propagation, identify every affected caller
+  and verify the value or effect received by its next real consumer. This remains
+  necessary when public behavior is intended to stay unchanged. A helper returning
+  the right value does not prove that callers consume it.
+
+  Keep unrelated restructuring outside the causal change. Separate substantial
+  mechanical movement from behavioral changes when that makes the review clearer.
+  A smaller file, an explicit owner parameter or a forwarding module does not by
+  itself establish encapsulation or reduce the number of places making the
+  same decision.
 
 ## Constants And Naming
 

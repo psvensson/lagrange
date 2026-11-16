@@ -42,13 +42,25 @@ test, model, or immutable run artifact).
      control under the [release-gate policy](../../../test/guidelines/release-gate.md);
      an import or fixture-setup failure is not rejection of the claimed cause.
 
-4. **Stale-then-fresh temporal replay**
-   - Replay an older stale/degraded witness followed by newer authoritative
-     evidence.
-   - Prove the old observation cannot remain a permanent semantic veto after
-     the evidence it described changes.
-   - Prove the consumer re-enters the canonical owner path rather than using a
-     local reinterpretation.
+4. **Stale-then-fresh transition through existing bindings**
+   - For an affected state, identity, generation or lifecycle transition,
+     establish the predecessor state through the relevant production
+     construction or its contract-backed boundary. Retain the connections,
+     sessions, cached references, registrations or attempts that can survive
+     the change.
+   - Introduce newer authoritative evidence and execute the actual transition.
+     Identify which retained resources and enforcement bindings depend on the
+     changed fact, and trace their owner-defined refresh, retirement or
+     invalidation. Updating a local field or constructing an already-correct
+     replacement fixture does not prove that a previously adopted binding changed.
+   - In the same relevant sequence, show that stale work remains refused and
+     current legitimate work can progress under the contract's stated
+     availability assumptions. Identify the owner-driven event that makes
+     progress possible. An incidental later reconnect or restart is not proof
+     of progression unless the contract assigns it that responsibility.
+   - State which transition and binding were exercised and which were
+     source-traced. Keep unrelated resource lifetimes and unchanged contracts
+     outside the repair.
 
 5. **Pressure and backoff attack**
    - Prove a liveness fix does not bypass owner-owned backpressure, retry-after,
@@ -116,16 +128,35 @@ test, model, or immutable run artifact).
       of the old semantic path; leave unchanged contracts and applicable proof
       intact.
 
-12. **Actual producer, consumer and binding conformance**
+12. **Actual producer meaning, consumer and binding conformance**
     - Identify the actual producer implementation, consumer and production
-      binding covered by a conformance claim. A typedef, annotated return,
-      cast or permissive collaborator type alone does not prove that chain.
-    - Show separately that an invalid actual producer and an invalid consumer
-      are rejected through the unchanged production binding. Include relevant
-      implementation diagnostics; filtering them out cannot establish conformance.
-    - Where dynamic input crosses the boundary, check the owned runtime
-      validation as well. Keep the check scoped to the affected contract; this
-      does not require a repository-wide type migration.
+      binding. State the semantic fact the producer claims, the relevant classes
+      of admitted input, and the identity, generation and lifetime covered by
+      that fact. A typedef, annotated return, cast, digest or structurally valid
+      record establishes only the properties actually checked.
+    - Challenge the producer at the boundary of its admitted input domain.
+      Exercise a reachable counterexample to the claimed precondition and
+      observe the required outcome through the actual consumer. When an
+      eligibility predicate permits concurrency, omits work, filters recovery
+      or skips validation, verify the meaning that makes that permission safe.
+      A preconstructed "eligible" or "complete" answer does not prove that the
+      actual producer can establish it.
+    - Separately show that invalid producer behavior and invalid consumer use
+      are detected at the affected boundary. Include relevant implementation
+      diagnostics and owned runtime validation for dynamic input. The consumer
+      must preserve the producer's declared meaning and restrictions; it must
+      not reconstruct the owner's decision to compensate for a defective producer.
+    - When the change alters defaults, mode activation, dependency wiring or
+      the admitted input domain, exercise normal production construction or
+      its existing faithful composition fixture and verify the effective
+      behavior selected. State overrides that remove or change a decision
+      relevant to the claim. Opt-in helper coverage alone does not establish
+      newly enabled production behavior.
+    - Inspect later enforcement points. Determine whether they independently
+      reject the counterexample or trust the same disputed evidence. State what
+      was executed, what source establishes and what remains unproven. Keep
+      this work scoped to the affected contract; it does not require a
+      repository-wide type migration.
 
 ## Verdict bar
 
