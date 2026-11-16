@@ -1,28 +1,28 @@
 ---
 audience: agent
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-13
 ---
 
 # Owner router
 
-This table maps each [`rules.md`](rules.md) owner key to its authority; changing
-an implementation changes its row, not the rule. Consult only relevant owners.
+Policy and declared contracts state what is required; enforcement implements
+checks, and references explain usage. Consult only the relevant concern.
 
-| Key | Authority | Consult when |
-| --- | --- | --- |
-| `architecture` | [`architecture/INDEX.md`](../../architecture/INDEX.md) | deciding who owns a concern, or which owners a change touches |
-| `owner-interactions` | `coupledPairs` in [`impact-contracts.json`](../../test/shards/impact-contracts.json) and its named witness tests | a change spans two owners |
-| `contracts` | [`architecture/contracts/`](../../architecture/contracts/) | changing a boundary's shape, lifecycle, pressure or retry behaviour |
-| `generated-artifacts` | the producer named in the artifact's own header; `npm run commands` lists the generators | an artifact looks stale, wrong, or worth editing by hand |
-| `guideline-audits` | `npm run audit:guidelines` and the checker each violation names | naming a value, encoding an outcome, or a guideline audit fails |
-| `sealed-acceptance` | the quest's own `quest.json`, [`solve-commands.md`](generated/solve-commands.md), and [`release-gate.md`](../../test/guidelines/release-gate.md) for feature journeys and evidence ceilings | sealing a claim, or judging whether evidence proves one |
-| `quest-lifecycle` | the landing guard in [`guards.js`](../../scripts/solve/guards.js), plus [`solve-commands.md`](generated/solve-commands.md) and [`solver-quests.md`](workflow-guidelines/solver-quests.md) | starting, recording, scoping or landing a unit of work |
-| `terminal-proof` | `npm run audit:closed-quest-shape` | closing a unit, or deciding what a closed unit keeps |
-| `record-history` | `npm run audit:quest-log-append-only` and [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | correcting recorded evidence or maintaining its current summary |
-| `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
-| `action-authority` | [`action-authority.js`](../../scripts/action-authority.js) | taking an action that cannot be taken back, or that leaves this repository |
-| `solve-probes` | [`probes.js`](../../scripts/solve/probes.js) and `probe-guard.js` in [`src/test-helpers/INDEX.md`](../../src/test-helpers/INDEX.md) | writing a `doneWhen` probe, or a harness that must refuse to run under one |
-| `steering` | [`rules.md`](rules.md), this router, `npm run audit:steering-diet` and `npm run audit:rule-set` | adding, moving or removing steering material |
+| Key | Policy or declared contract | Enforcement / reference | Consult when |
+| --- | --- | --- | --- |
+| `architecture` | [`architecture/INDEX.md`](../../architecture/INDEX.md) | named runtime owners | choosing an owner or affected interaction |
+| `owner-interactions` | [`runtime-contracts.md`](../../architecture/runtime-contracts.md) and `coupledPairs` in [`impact-contracts.json`](../../test/shards/impact-contracts.json) | named witness tests | a change affects an interaction |
+| `contracts` | [`architecture/contracts/`](../../architecture/contracts/) | the contract's implementation and witnesses | changing boundary semantics |
+| `generated-artifacts` | the producer named in the artifact's header under [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | `npm run commands` lists generators | inspecting or correcting generated material |
+| `guideline-audits` | [`code-style.md`](../development/code-style.md) and [`test/guidelines/`](../../test/guidelines/INDEX.md) | `npm run audit:guidelines` and the named checker | naming values, encoding outcomes or repairing an audit |
+| `sealed-acceptance` | the quest's `quest.json` and [`release-gate.md`](../../test/guidelines/release-gate.md) | [`quest-validators.md`](../development/quest-validators.md) | sealing or evaluating a claim |
+| `quest-lifecycle` | [`solver-quests.md`](workflow-guidelines/solver-quests.md) | [`guards.js`](../../scripts/solve/guards.js), [`solve-commands.md`](generated/solve-commands.md) | starting, recording, scoping or landing work |
+| `terminal-proof` | [`quest-closure.md`](../development/quest-closure.md), [`quest-artifacts.md`](../development/quest-artifacts.md) | `npm run audit:closed-quest-shape` | closing work or retaining its evidence |
+| `record-history` | [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | `npm run audit:quest-log-append-only` | correcting evidence or updating a current summary |
+| `publication` | [`solver-quests.md`](workflow-guidelines/solver-quests.md#landing-publication-and-continuation) | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing or repairing a red shared branch |
+| `action-authority` | [`solver-quests.md`](workflow-guidelines/solver-quests.md#publication-authority) under R26 | [`action-authority.js`](../../scripts/action-authority.js) | taking an outward or irreversible action |
+| `solve-probes` | [`quest-validators.md`](../development/quest-validators.md) under R27 | [`probes.js`](../../scripts/solve/probes.js), [`src/test-helpers/INDEX.md`](../../src/test-helpers/INDEX.md) | defining a probe or guarded harness |
+| `steering` | [`rules.md`](rules.md), this router and [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | `npm run audit:steering-diet`, `npm run audit:rule-set` | revising steering |
 
 ## Conditional material
 
@@ -43,15 +43,15 @@ Load only relevant owners; `npm run audit:doc-audience` governs public links.
 | delegating work, coordinating roles or arranging independent review | [`quest-subagents.md`](../development/quest-subagents.md) |
 | project agent skills, Serena navigation, Context7 documentation, installation or tooling evidence | [`agent-tooling.md`](../development/agent-tooling.md); existing Quest owners retain workflow authority |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
-| resuming or coordinating a service milestone, or selecting the next cutover risk-reduction unit | the active epic's current summary, using [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) and [`quest-subagents.md`](../development/quest-subagents.md); for the cutover, [`contract-first-2026-10-08.md`](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md), then [`adversarial-risk-review-2026-10-10.md`](../development/adversarial-risk-review-2026-10-10.md) with its local execution handoff |
+| resuming a milestone or selecting the next cutover unit | the active epic's current summary under [`documentation-lifecycle.md`](../development/documentation-lifecycle.md); current correction coordination: [`operation-integrity-and-reliable-formation.md`](../../solve/epics/operation-integrity-and-reliable-formation.md). Follow dated plans only as linked rationale, not live assignments. |
 | choosing a physical test runner or continuing a queued run | [`home-lab.md`](../development/home-lab.md) |
 
 ## Known owner gap
 
-Repository code asks the action owner and refuses unregistered actions. Workflow
-YAML's container publication and public release actions remain registered but
-unasked; the push hook decides shared-branch redness separately. No code here
-performs force or release-tag pushes, and no guard refuses them.
+Guarded repository entrypoints ask the action owner. Workflow YAML's container
+publication and public release actions remain registered but unasked; the push
+hook decides shared-branch redness separately. Force and release-tag pushes lack
+a guard. Command success does not establish operator authorization.
 
 ## When authorities disagree
 

@@ -53,6 +53,7 @@ const NPM = 'npm';
 const RUN = 'run';
 const ESLINT_NO_CHANGES_LABEL = 'eslint(changed)';
 const SCOPED_RATCHET_CHECK = 'test:metrics:scoped';
+const FILE_SIZE_CHECK = 'audit:file-size';
 const MS_COLUMN_WIDTH = 6;
 const FAILURE_EXCERPT_CHARS = 2000;
 const HEAD_LABEL = 'HEAD';
@@ -101,10 +102,15 @@ function runNpm(script, extraArgs = []) {
   const result = spawnSync(NPM, args, {cwd: root, encoding: UTF8});
   return {
     script,
+    args,
     ok: result.status === 0,
     ms: Date.now() - started,
     output: `${result.stdout || ''}${result.stderr || ''}`,
   };
+}
+
+function runFileSizeCheck(range, paths) {
+  return runNpm(FILE_SIZE_CHECK, [BASE_FLAG, range.base || HEAD_LABEL, ...paths]);
 }
 
 function runEslint(paths) {
@@ -160,6 +166,7 @@ export function runFastStatic({base = null, explain = false,
   results.push(runNpm(GLOBAL_DEPENDENCY_CHECK));
   results.push(runEslint(changedJs));
   if (changedJs.length > 0) {
+    results.push(runFileSizeCheck(range, changedJs));
     results.push(runNpm(SCOPED_RATCHET_CHECK, changedJs));
   }
 

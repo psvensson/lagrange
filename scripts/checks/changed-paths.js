@@ -67,7 +67,8 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8 = 'utf8';
 const NEWLINE = '\n';
-const TAB = '\t';
+const NUL = '\0';
+const NULL_TERMINATED = '-z';
 const DEFAULT_HEAD = 'HEAD';
 const RENAME_DETECTION = '-M';
 const NAME_STATUS = '--name-status';
@@ -89,20 +90,21 @@ const QUIET = '--quiet';
 const END_OF_OPTIONS = '--end-of-options';
 const COMMIT_PEEL = '^{commit}';
 const UNRESOLVED_BASE = 'the declared check base does not name a commit here: ';
+const MALFORMED_CHANGE_RECORD = 'git returned an incomplete NUL-delimited change record';
 // The repository this process runs from: the one a declared range names.
 const REPOSITORY_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Null when git cannot answer (no base, not a repository). Output past the
 // git output bound is not that: it is a failure of its own and propagates.
-function git(root, args) {
+function git(root, args, separator = NEWLINE) {
   try {
     return arrayFilter(
       stringSplit(execGit(args, {
         cwd: root,
         encoding: UTF8,
         env: gitProcessEnvironment(),
-      }), NEWLINE),
+      }), separator),
       Boolean);
   } catch (error) {
     if (isGitOutputTooLarge(error)) throw error;
@@ -110,31 +112,38 @@ function git(root, args) {
   }
 }
 
-function parseNameStatus(lines) {
+// `--name-status -z` emits status, path and (for a rename) destination as
+// separate NUL fields. Git's display quoting and filename newlines/tabs never
+// become data transformations or record separators in this owner.
+function parseNameStatus(fields) {
   const records = [];
-  const sourceLines = lines || [];
-  for (let index = 0; index < sourceLines.length; index += 1) {
-    const line = sourceLines[index];
-    const fields = stringSplit(line, TAB);
-    const code = fields[0];
+  const sourceFields = fields || [];
+  for (let index = 0; index < sourceFields.length;) {
+    const code = sourceFields[index];
+    const firstPath = sourceFields[index + 1];
+    index += 2;
+    if (!firstPath) throw new Error(MALFORMED_CHANGE_RECORD);
     if (stringStartsWith(code, STATUS_RENAMED_PREFIX)) {
+      const destination = sourceFields[index];
+      index += 1;
+      if (!destination) throw new Error(MALFORMED_CHANGE_RECORD);
       appendArrayValue(records, {
         status: CHANGE_RENAMED,
-        oldPath: fields[1],
-        path: fields[2],
+        oldPath: firstPath,
+        path: destination,
       });
       continue;
     }
     if (stringStartsWith(code, STATUS_DELETED_PREFIX)) {
       appendArrayValue(records,
-        {status: CHANGE_DELETED, oldPath: fields[1], path: null});
+        {status: CHANGE_DELETED, oldPath: firstPath, path: null});
       continue;
     }
     appendArrayValue(records, {
       status: stringStartsWith(code, STATUS_ADDED_PREFIX) ?
         CHANGE_ADDED : CHANGE_MODIFIED,
       oldPath: null,
-      path: fields[1],
+      path: firstPath,
     });
   }
   return records;
@@ -144,7 +153,9 @@ function dedupe(records) {
   const seen = createOrderedStringMap();
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
-    const key = `${record.status}:${record.oldPath || ''}:${record.path || ''}`;
+    // Git paths cannot contain NUL; a printable separator can occur in either
+    // rename side and alias a distinct record.
+    const key = `${record.status}${NUL}${record.oldPath || ''}${NUL}${record.path || ''}`;
     if (!orderedStringMapHas(seen, key)) {
       orderedStringMapSet(seen, key, record);
     }
@@ -270,15 +281,16 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
   const records = [];
   if (base) {
     const committed = git(root,
-      [DIFF, NAME_STATUS, RENAME_DETECTION, `${base}..${head}`]);
+      [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, `${base}..${head}`], NUL);
     if (committed === null) return null;
     appendArrayValues(records, parseNameStatus(committed));
   }
   appendArrayValues(records, parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, DEFAULT_HEAD])));
+    git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, DEFAULT_HEAD], NUL)));
   appendArrayValues(records, parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, CACHED])));
-  const untrackedPaths = git(root, [LS_FILES, OTHERS, EXCLUDE_STANDARD]) || [];
+    git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, CACHED], NUL)));
+  const untrackedPaths = git(root,
+    [LS_FILES, OTHERS, EXCLUDE_STANDARD, NULL_TERMINATED], NUL) || [];
   for (let index = 0; index < untrackedPaths.length; index += 1) {
     appendArrayValue(records, {
       status: CHANGE_ADDED,

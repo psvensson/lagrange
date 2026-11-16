@@ -3,7 +3,7 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-13
 ---
 
 > **Canonical source.** Runtime, control-plane, data, cache and transport
@@ -134,8 +134,11 @@ by its existing join operation.
 
 ## System-Table Row Lifecycle
 
-For every system-table-backed entity, exactly one component owns row creation,
-lifecycle transitions, and deletion.
+Each authoritative fact and row operation has one owner. Creation, lifecycle,
+role publication and deletion may have distinct owners only through an explicit
+contract with non-overlapping field and operation responsibilities. Use the
+[canonical writer matrix](#canonical-writers); sharing a row never permits
+competing writers for the same fact.
 
 Required patterns:
 
@@ -184,39 +187,33 @@ cache reconciliation on a zero-row repeat.
 
 ## Cache And Read Models
 
-`SystemTableCache` is the steady-state read model for CDC-propagated metadata.
-It is not an authority for reconstructing owner-managed write payloads.
+`SystemTableCache` serves CDC-propagated presentation, diagnostics and discovery,
+and may trigger owner reconciliation. It cannot grant admission or serving,
+answer a write, or reconstruct owner-managed write payloads.
 
 Required patterns:
 
-1. CDC-propagated metadata decisions read from the cache unless the boundary
-   explicitly declares another owner-fed read model.
-   Superseded for gating decisions (owner decision, 2026-11-02): a
-   decision that admits, promotes or answers a write reads the committed
-   fact. Replica admission reads the committed replica operation; a routed
-   write answers at its commit position. The cache serves presentation,
-   diagnostics and discovery, and may trigger reconciliation; it never
-   grants.
-2. SQL reads for equivalent semantics are limited to authoritative writes,
-   explicit recovery sweeps, and diagnostics reconciliation.
+1. A decision that admits, promotes or answers a write reads its owner's
+   committed fact. Replica admission reads the committed replica operation;
+   a routed write answers at its commit position.
+2. Each decision declares its owner-fed read model. Authoritative reads supply
+   committed gating facts as well as write/deduplication decisions. Recovery and
+   diagnostics reads retain their declared purpose and typed outcomes.
 3. Cache divergence recovery re-enters the owner reconcile path.
 4. Cache/authoritative divergence is surfaced as typed diagnostics.
 5. New system tables are classified in exactly one of
    `CDC_PROPAGATED_TABLES` or `CDC_NON_PROPAGATED_TABLES`.
 
-Superseded 2026-11-02 for gating decisions (R09, quest
-`serve-eligibility-committed-epoch-read`, epic `raft-rs-full-cutover`): pattern
-1 no longer applies to a decision that grants serving. Per-node serve
-eligibility is the readiness owner's answer from a committed read of the
-`nodes` rows and the latest published `control_plane_publications` row, taken
-on the system partitions' raft leaders, at a stated publication epoch, or a
-typed unavailability; the cache is a reconciliation trigger for that answer,
-never its source. System-table routing decides on raft leadership (the target
-proves it with its read-authority witness or answers the typed redirect) and
-live transport, not on a readiness lane. The cache remains the read model for
-presentation, diagnostics, discovery and reconciliation triggers. Further
-gating consumers (provisioning, rebalancer planning, publication planning)
-move under the same quest's later attempts.
+Per-node serve eligibility is the readiness owner's answer from a committed
+read of the `nodes` rows and latest published `control_plane_publications` row,
+taken on the system partitions' raft leaders at a stated publication epoch,
+or typed unavailability. Cache changes trigger reconciliation of that answer.
+System-table routing uses raft leadership (proved by the target's read-authority
+witness, or a typed redirect) and live transport; it does not require a readiness
+lane that its own recovery is meant to restore.
+
+These are required contracts. Completion of each consumer's cutover remains
+bound to its source and evidence; this prose does not certify implementation.
 
 Forbidden patterns:
 
@@ -465,7 +462,8 @@ Specific readiness rules:
   when the transport owner has it.
 - Apply bounded stale-heartbeat tolerance.
 - Share `repairEligible` across internal topology consumers.
-- Use `serveEligible` for routing and benchmark consumers.
+- Serving admission and benchmark consumers use the committed `serveEligible`
+  answer. System-table routing uses leadership and live transport as above.
 
 Specific admission rules:
 
@@ -495,7 +493,10 @@ Forbidden patterns:
 
 ## Timeout And Invariant Rules
 
-Timeouts and invariant breaches in control-plane logic are correctness bugs.
+Invariant breaches and timeouts that violate the declared control-plane
+contract are correctness bugs. A legal caller-deadline expiry, typed refusal
+or unavailable execution is a distinct outcome, never successful completion.
+Investigate unexpected stalls and classify their cause and budget owner.
 
 Required patterns:
 
@@ -571,8 +572,9 @@ reference semantics do not introduce a second JSON conversion. A lost answer
 after submission retains the existing owner's retry/unknown-outcome obligation.
 Router-proven pre-send refusal remains distinct through `recoverableBeforeSend`.
 
-During splits, moves, and leader elections, queries may be slower but must not
-fail because topology is transient.
+During splits, moves and leader elections, preserve query correctness and the
+caller budget. Retry reachable owners within that budget; when service remains
+unavailable, return the declared structured outcome without inventing success.
 
 Required patterns:
 

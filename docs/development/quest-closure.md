@@ -56,8 +56,13 @@ the repair. Record what is pending and the next action. For a requested run,
 link the request or run id, revision, workload and status, plus the owner or
 mechanism that will observe it and resume. If no run is submitted or no
 continuation exists, say so; do not describe work as queued, running or
-automatically resuming. Resolve the hold through a later attempt or typed
-finding only after its missing input is available.
+automatically resuming. A later attempt or typed finding clears the current
+projection's hold, including the finding written by evidence upload. If custody
+must be recorded before the missing input is available, re-record the unresolved
+hold before handing off or claiming continuation; see the
+[lifecycle side effects](quest-lifecycle.md#current-vocabulary). Untyped
+observations and assignment findings preserve the hold. An `open` projection
+alone does not establish that the missing input was resolved.
 
 Use `note --exhausted` when evidence establishes no honest remaining move in
 this unit; record the ruled-out approaches and why. Use `note --superseded`

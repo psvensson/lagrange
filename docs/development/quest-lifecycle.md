@@ -22,7 +22,8 @@ Use the current Solver records and statuses in handoffs. The generated
 | --- | --- |
 | `start` | Validates a draft quest and its epic, measures a red `doneWhen`, and appends the seal. |
 | finding | Durable evidence, a theory, an altitude check, a decision, or a ruled-out approach. |
-| attempt | What changed, with the head and changed paths recorded by `note --attempt`. |
+| attempt | One hypothesis/change/measurement cycle; `note --attempt` records its head and changed paths. Individual commands and red/green observations are not separate attempts. |
+| assignment | The current package's paths and existing authority reference, appended with `note --assignment`; an amendment changes the assignment, not the seal. |
 | verification | Independent reviewer identity, reviewed content and evidence, and `approve` or `reject`. |
 | `open` | Work is unfinished and has no outstanding recorded hold. |
 | `blocked` | A recorded hold names the next owner class (`judgment`, `verification`, or `authorization`); its text identifies the concrete owner and missing input. |
@@ -32,8 +33,16 @@ Use the current Solver records and statuses in handoffs. The generated
 
 `probe` measures and projects state; `board` lists open work. Neither starts a
 test job or schedules continuation. A later attempt or typed finding clears a
-`blocked` hold in the projection; append it only when the missing input has
-actually been resolved. Terminal quests accept no new entries.
+`blocked` hold in the current projection. This includes the typed finding written
+by `evidence add`; evidence upload is therefore not a hold-neutral observation.
+An untyped finding or assignment preserves the hold. If evidence custody must be
+recorded while the missing input remains unresolved, record that input again with
+`note --blocked` before handing off or claiming continuation. Do not describe the
+temporary `open` projection as evidence that the missing input was supplied.
+
+`blocked` is a resumable hold; `solved`, `exhausted` and `superseded` are terminal
+states. Terminal Quests accept no new entries. Correct a terminal record in the
+current open owning/successor record, linking the immutable original.
 
 ## Progress And Handoff
 

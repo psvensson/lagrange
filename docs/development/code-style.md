@@ -13,7 +13,9 @@ last_reviewed: 2026-11-13
 
 ## Document Role
 
-This document governs linting, formatting, and local coding-style rules.
+This document governs linting, formatting and local code organization. It applies
+the existing ownership and proof rules to those choices; their canonical
+contracts remain in the linked owners.
 
 Use this file for:
 
@@ -21,14 +23,8 @@ Use this file for:
 - formatting conventions
 - local style conventions such as unused-parameter naming
 
-Do not use this file for:
-
-- architecture ownership rules
-- testing policy
-- roadmap scope decisions
-- current subsystem owner maps
-
-For those concerns, use:
+For architectural contracts, acceptance policy, roadmap scope and current
+subsystem ownership, use:
 
 - [`rules.md`](../steering/rules.md) - the cross-cutting invariants
 - [`router.md`](../steering/router.md) - the owner of any other concern
@@ -55,10 +51,15 @@ When writing or modifying code:
 
 ## Source File Size And Naming
 
-- New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines; run `npm run audit:file-size` to confirm).
-- If an edit would leave a touched source-code file over its scope threshold, extract
-  a smaller responsibility module, helper, contract, state model, or consumer boundary
-  before Quest closure.
+- New files and previously compliant touched files remain within the limits
+  owned by `scripts/check-file-size-thresholds.js`: source/script files at most
+  800 lines and test files at most 1500 lines. Inherited oversized files may
+  remain oversized without increasing their own size against the actual proof
+  base. Follow the complete [file-size policy](../../test/guidelines/proof-ladders.md#file-size-ratchet-policy)
+  for comparison scope, moves, copies and required checks.
+- Extract a smaller responsibility module, contract, state model or consumer
+  boundary when needed to repair the defect or prevent size growth. Merely
+  touching an inherited oversized file does not require full extraction.
 - Extraction can preserve the existing semantic owner. A file-size limit does
   not require a new service, state store, queue, class or asynchronous handoff;
   introduce a new authority only when the concern itself requires that boundary.
@@ -203,8 +204,9 @@ pattern: ESLint is then its only gate, and it needs no baseline file.
 - Ensure all new code follows the linting rules above
 - Break long lines appropriately to stay under 100 characters
 - Use consistent formatting with existing codebase patterns
-- Confirm every new or edited source-code file is within its scope threshold (see `scripts/check-file-size-thresholds.js`), or
-  refactor the touched file before Quest closure.
+- Confirm the [file-size ratchet](../../test/guidelines/proof-ladders.md#file-size-ratchet-policy)
+  against the actual proof base: compliant/new files stay within their limits,
+  inherited oversized files do not grow, and no other file funds new debt.
 
 ## Related Checks
 

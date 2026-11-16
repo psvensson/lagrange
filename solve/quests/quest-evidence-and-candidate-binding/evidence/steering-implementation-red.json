@@ -1,0 +1,70 @@
+{
+  "phase": "red-baseline",
+  "claim": "Actual assertion failures with new witnesses and unchanged production implementation; not completion or integration acceptance.",
+  "sourceCommit": "a84827ebd09e156c8fbc7649b196ab2723d26b66",
+  "sourceTree": "6415709bb9f57a803f9435fdcdaee61aac2c31ce",
+  "implementationBase": "348796bca4b896b123def681b18941490de4d393",
+  "job": "https://github.com/psvensson/lagrange-lab/issues/3809",
+  "host": "adams-gamla",
+  "node": "v22.23.2",
+  "originalLogBytes": 45806,
+  "originalLogSha256": "2b4f5a225c08f58563aa00af7eb125b4e97edec4e76f842138d8f23385056cb3",
+  "originalLogEvidenceIssues": [
+    "https://github.com/psvensson/lagrange-lab/issues/3810",
+    "https://github.com/psvensson/lagrange-lab/issues/3811",
+    "https://github.com/psvensson/lagrange-lab/issues/3812",
+    "https://github.com/psvensson/lagrange-lab/issues/3813",
+    "https://github.com/psvensson/lagrange-lab/issues/3814",
+    "https://github.com/psvensson/lagrange-lab/issues/3815"
+  ],
+  "witnesses": [
+    {
+      "file": "test/scripts/check-file-size-thresholds.test.js",
+      "exitCode": 1,
+      "failedAssertions": [
+        "not ok 2 - an untracked new oversized source file is rejected below the aggregate budget",
+        "not ok 3 - a previously compliant file cannot cross its threshold",
+        "not ok 4 - an inherited oversized file cannot grow even when the total count stays constant",
+        "not ok 6 - deleting inherited debt cannot fund a different new oversized file",
+        "not ok 8 - a copy is new debt while its original remains",
+        "not ok 9 - one deleted identity cannot be inherited by two copies",
+        "not ok 10 - a similarity-detected edited rename does not establish inherited identity",
+        "not ok 11 - moving a source file out of scan scope is refused",
+        "not ok 12 - changing from test scope to source scope does not transfer the larger allowance",
+        "not ok 13 - committed growth is measured from the declared base, not the latest HEAD",
+        "not ok 14 - an unresolved declared base refuses instead of silently using HEAD",
+        "not ok 15 - an explicit base takes precedence over the environment",
+        "not ok 16 - worktree-only checks compare changed files to HEAD when no publication base exists",
+        "not ok 19 - changed script and JavaScript module files use the source threshold",
+        "not ok 20 - an explicit file selection uses the declared comparison base"
+      ]
+    },
+    {
+      "file": "test/solve/guards.test.js",
+      "exitCode": 1,
+      "failedAssertions": [
+        "not ok 3 - proof machinery and operative acceptance inputs require independent review"
+      ]
+    },
+    {
+      "file": "test/solve/commands.test.js",
+      "exitCode": 1,
+      "failedAssertions": [
+        "not ok 6 - package assignment refuses missing and unintended scope before staging",
+        "not ok 7 - standalone fixes retain package scope and directory boundaries",
+        "not ok 8 - assignment validates paths and authorization references without clearing holds",
+        "not ok 9 - a scope amendment invalidates previous review without changing the seal",
+        "not ok 10 - proof-only changes require current content-bound independent approval",
+        "not ok 11 - missing candidate digest cannot authorize a reviewed input",
+        "not ok 12 - review binds acceptance terms and referenced proof bytes but not ordinary notes"
+      ]
+    },
+    {
+      "file": "test/solve/schema.test.js",
+      "exitCode": 1,
+      "failedAssertions": [
+        "not ok 6 - assignment findings have bounded paths and an existing authority reference"
+      ]
+    }
+  ]
+}

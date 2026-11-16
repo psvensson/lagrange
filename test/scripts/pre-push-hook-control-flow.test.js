@@ -54,6 +54,7 @@ const recorderSource = (name) =>
   'fs.appendFileSync(process.env.PRE_PUSH_FLOW_CALLS, JSON.stringify({\n' +
   `  name: ${JSON.stringify(name)}, argv: process.argv.slice(2), input,\n` +
   '  env: {injections: process.env.LAGRANGE_WORKSPACE_INJECTIONS || null,\n' +
+  '    checkBase: process.env.LAGRANGE_CHECK_BASE || null,\n' +
   '    pushedRef: process.env.LAGRANGE_GATE_PUSHED_REF || null}}) + \'\\n\');\n' +
   'process.exit(Number(process.env[\'PRE_PUSH_FLOW_STATUS_\' + ' +
   `${JSON.stringify(name.toUpperCase())}] || 0));\n`;
@@ -232,6 +233,19 @@ const LINT_ENV = Object.freeze({
   LAGRANGE_WORKSPACE_INJECTIONS: 'node_modules,data',
   LAGRANGE_GATE_RED_MAIN_CHECKED: '1',
   LAGRANGE_PUSH_SKIP_TESTS: '1',
+});
+
+test('the corpus ratchet receives the pushed base before any test stage', () => {
+  const run = runHook(
+    `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...LINT_ENV, LAGRANGE_GATE_PUSHED_SHA: shas.second,
+      LAGRANGE_CHECK_BASE: 'HEAD'}, shas.second);
+  assert.equal(run.status, 0, run.output);
+  const corpus = materializerCalls(run.recorded)
+    .find((call) => call.argv.includes('--in-place'));
+  assert.ok(corpus, 'the exact checkout reaches the corpus ratchets');
+  assert.equal(corpus.env.checkBase, shas.base,
+    'ambient HEAD must not hide growth committed after the remote base');
 });
 
 test('the lint stage hands eslint file paths and nothing else', () => {

@@ -34,8 +34,8 @@
 # red-first or incomplete. They skip the local proof gate by default; remote
 # presence is NOT merge/release approval. Set LAGRANGE_PUSH_PROVE_BRANCH=1 to
 # request the full gate for a non-main branch.
-# Main pushes still take the full gate. Bypass with git push --no-verify only
-# for emergencies (it skips EVERYTHING). LAGRANGE_PUSH_SKIP_TESTS=1 skips only
+# Main pushes still take the full gate; --no-verify is not an acceptance route.
+# LAGRANGE_PUSH_SKIP_TESTS=1 skips only
 # the repeated test stage after an exact tree has already been gated green.
 # Unused-file findings on untracked paths do not block: untracked files are
 # never part of a push (a concurrent session's in-flight work must not gate
@@ -290,6 +290,23 @@ if [ -n "${LAGRANGE_PUSH_SKIP_TESTS:-}" ] && [ "${LAGRANGE_GATE_ALREADY_PROVED_S
   exit 0
 fi
 
+# Every range-sensitive stage uses the pushed ref's base, including the
+# per-file size ratchet. Establish it before any content stage; an ambient
+# HEAD base must not turn committed growth into an empty comparison.
+if [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ]; then
+  if ! git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
+    echo "pre-push: pushed-ref base ${MAIN_REMOTE_SHA} is unavailable; fetch it before proving this push" >&2
+    exit 1
+  fi
+  if [ -n "${LAGRANGE_CHECK_BASE:-}" ] && [ "${LAGRANGE_CHECK_BASE}" != "${MAIN_REMOTE_SHA}" ]; then
+    echo "pre-push: ignoring ambient LAGRANGE_CHECK_BASE=${LAGRANGE_CHECK_BASE}; the pushed ref's remote sha is the proof base"
+  fi
+  export LAGRANGE_CHECK_BASE="${MAIN_REMOTE_SHA}"
+else
+  # A manual invocation or non-main proof resolves the publication merge base.
+  unset LAGRANGE_CHECK_BASE
+fi
+
 stage "unused-files" "unused-files check"
 npm run -s test:unused:push
 # Lint the pushed range, TRACKED files only, honoring the same principle as
@@ -371,19 +388,7 @@ node scripts/check-unused-exports.js
 # Final stage - the test stage. Everything cheap has already passed, so a
 # failure here is a real test regression, not a lint nit discovered after
 # minutes of test time. The change proof is the selection CI runs after the
-# push, fed the same base: the remote sha of main from the pushed-ref line,
-# exported as LAGRANGE_CHECK_BASE. The pushed ref WINS over an ambient value:
-# a shell that still carries LAGRANGE_CHECK_BASE=HEAD would otherwise prove
-# zero changed paths. A push that does not update main, or a manual
-# invocation, resolves its own base (the publication merge-base) inside the
-# proof.
-if [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ] \
-  && git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
-  if [ -n "${LAGRANGE_CHECK_BASE:-}" ] && [ "${LAGRANGE_CHECK_BASE}" != "${MAIN_REMOTE_SHA}" ]; then
-    echo "pre-push: ignoring ambient LAGRANGE_CHECK_BASE=${LAGRANGE_CHECK_BASE}; the pushed ref's remote sha is the proof base"
-  fi
-  export LAGRANGE_CHECK_BASE="${MAIN_REMOTE_SHA}"
-fi
+# push, fed the same base established before the content stages above.
 if [ -n "${LAGRANGE_PUSH_SKIP_TESTS:-}" ]; then
   echo "pre-push: LAGRANGE_PUSH_SKIP_TESTS set — skipping test:gate:postpush (static checks all green)"
 else

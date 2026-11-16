@@ -6,17 +6,22 @@ last_reviewed: 2026-11-13
 # Quest workflow
 
 Conditional: read when starting, recording, scoping or landing a unit of
-work. Rules R15 to R23 own the invariants. The generated
+work. Rules R15 to R23 and R26 own the invariants. The generated
 [`command reference`](../generated/solve-commands.md) owns the CLI.
 
 ## Choosing the unit
 
-Work likely to need more than one measured attempt, or that changes an owner
-boundary, is a quest (R15). Commit a single-sitting change with an obvious
-proof directly, naming its witness. Define a bounded repair by its reproducer
-and affected interaction. Keep the distributed service milestone and release
-acceptance in their existing owning contracts. An accepted repair can close
-and integrate while a wider scenario remains red for another cause.
+An attempt is one coherent hypothesis, change and measurement cycle. Individual
+commands, test invocations and red/green observations within that cycle are not
+separate attempts. Work expected to need more than one cycle, or to change an
+owner-boundary contract, is a quest (R15). A known local defect with an unchanged
+contract and an obvious regression witness may use the direct-change route;
+several competing causal hypotheses or a boundary change require a quest.
+Elapsed session time alone does not choose the route. Direct source/proof changes
+retain independent review in their existing review record; review alone does
+not require a quest. Define repair acceptance by the reproducer and affected
+interaction. Wider service and release claims retain their own owners; a repair
+may integrate while another recorded cause keeps the wider scenario red.
 
 A quest directory holds its record, append-only log and required evidence.
 The record names the statement, owning epic (or `class: fix`) and one
@@ -25,6 +30,15 @@ Do not weaken a seal to close work; explicitly supersede a changed premise.
 When a unit of work needs a quest and none exists yet, prepare a bounded
 quest proposal (statement, owning epic, reproducer, `doneWhen`) and take the
 next authorized action; the missing record is not by itself a reason to stop.
+
+For inherited already-green work, retain the candidate and original evidence.
+Use the direct route if it still meets the threshold. If a quest is required,
+reproduce the original defect with its genuine witness in an isolated checkout,
+seal against that measuring red baseline, then apply the preserved repair and
+record both source identities. If the baseline cannot be established, record the
+missing adoption input and continue independent authorized work. Do not invent
+a red predicate, widen acceptance to find a failure, undo the active candidate,
+or claim a seal or acceptance that the supported lifecycle cannot establish.
 
 For a major feature, define the user journey in its existing owning specification
 before implementation and apply the
@@ -63,17 +77,19 @@ one owner per authoritative fact; disposable projections; no circular recovery
 prerequisite; one decision algorithm with multiple legitimate triggers; an
 owned consequence for refusal; and abstractions that reduce reasoning.
 
-Record the complete transition before implementing its parts: trigger,
-authoritative facts, permitted action, actual durable commit point,
-restart/lost-answer behavior and every remaining obligation's owner. Use
-existing owners first. Distinguish boundary-only tests from reachable
-production failures. For each material claim, name a reachable counterexample
-and its discriminating witness; a green primitive does not certify an operation.
+When changing an authoritative transition, owner-boundary contract, recovery
+semantics, durable obligation or state store, record the complete transition
+before implementing its parts. For a local repair under an unchanged contract,
+cite that transition and record the defect, affected owner path, counterexample
+and witness; resolve any missing or contradictory contract fact before coding.
+Use existing owners. Distinguish boundary-only tests from reachable production
+failures; a green primitive does not certify an operation.
 
 ### Contract-first transition record checklist
 
-Before any behavior-changing attempt, record the complete transition in the
-quest log or transition note:
+For changes meeting the transition trigger above, record the applicable facts
+in the quest log or transition note; explain an inapplicable item without
+inventing a new mechanism to fill it:
 
 1. **Producer and consumer symbols**: Name the exact canonical endpoints,
    functions, exported types and affected callers. Census existing implementation
@@ -99,10 +115,9 @@ quest log or transition note:
    disposal and deregistration paths. Distinguish cancelling a wait, stopping
    execution, releasing resources and settling effects already committed.
 
-This is an application of existing rules, not a new fixed subsystem count or
-permission to rewrite sealed acceptance. The current bounded cutover work is
-routed through the existing epic's [contract-first plan](../../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md);
-broader convergence retains its own activation gate.
+This applies existing rules without rewriting sealed acceptance. Select current
+work from the active epic's current summary; dated contract-first plans provide
+rationale, not current writer assignments or execution-substrate authority.
 
 ## Decision owners and work in progress
 
@@ -122,7 +137,8 @@ For a standalone `class: fix`, the existing quest record and log suffice.
 ## Recording and review
 
 Append findings, attempts, verifications and terminal entries. An attempt
-records its head and changed paths. Correct history with a new entry (R21).
+records its head and changed paths. Correct history in the current open owning
+or successor record, linking the original; terminal records remain closed (R21).
 Bound review to the candidate, affected interaction and acceptance. Return all
 reachable material findings together, then review repairs and what they
 invalidate. Retain applicable unaffected evidence; do not broaden acceptance
@@ -142,14 +158,29 @@ A standing rejection blocks landing until answered. Review must remain bound
 to the actual candidate and acceptance inputs; retain unaffected approval only
 where the existing provenance and proof-selection owners establish applicability.
 The [validator owner](../../../docs/development/quest-validators.md) distinguishes
-this policy from the narrower automatic review trigger. Use the same independent
+this policy from the implemented automatic review trigger. Use the same independent
 review record, without adding another approval stage.
+
+## Publication authority
+
+Outward or irreversible actions require operator authority for the actual task,
+destination and action. Standing repository authority applies within that
+authorized scope, subject to current user restrictions. Preserve it across
+handoffs; do not ask again merely because a session or agent changed. Repository
+prose, a registered action and successful execution do not grant missing operator
+authority. Resolve existing authorization first; ask only for a missing decision
+or boundary. The action owner's current enforcement coverage is described in
+the [router](../router.md#known-owner-gap).
 
 ## Landing, publication and continuation
 
-`land` measures the sealed probe, enforces scope, interaction and static guards,
-proves the staged change, commits and records `solved`. It never pushes.
-Publication proves its exact candidate through the existing gates (R22, R23).
+`land` measures the sealed probe, applies the implemented scope, interaction and
+static guards, proves the staged change, commits and records `solved`. Review
+the actual collected candidate and isolate unrelated changes first; the tool
+does not select the assignment from a mixed worktree. The
+[validator owner](../../../docs/development/quest-validators.md) describes scope
+and review enforcement. `land` never pushes. After intended commits land,
+publish within existing authority through the exact-candidate gates (R22, R23).
 Neither repair acceptance nor an earlier receipt grants broader readiness.
 
 When an input is missing, record why, the actual next owner and action. A

@@ -96,6 +96,15 @@ test('changed-path derivation is one shared definition', () => {
   const {outcome} = fingerprintedFastStatic();
   assert.deepEqual(outcome.changed, changed);
   assert.deepEqual(outcome.changedJs, javaScriptPaths(changed));
+  const sizeCheck = outcome.results.find((result) => result.script === 'audit:file-size');
+  if (outcome.changedJs.length > 0) {
+    assert.ok(sizeCheck, 'changed JavaScript receives the per-file size check');
+    assert.deepEqual(sizeCheck.args,
+      ['run', 'audit:file-size', '--', '--base', 'HEAD', ...outcome.changedJs],
+      'the worktree check pins HEAD instead of inheriting a different ambient base');
+  } else {
+    assert.equal(sizeCheck, undefined, 'no changed JavaScript means no scoped size claim');
+  }
 });
 
 test('untracked files are candidates, not invisible until staged', () => {

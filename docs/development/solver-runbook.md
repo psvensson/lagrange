@@ -8,7 +8,7 @@ Example-oriented operator aid for landing, publishing and repairing. It defines
 no policy and no second boot sequence: the load order is owned by
 [`AGENTS.md`](../../AGENTS.md), the binding workflow by
 [`solver-quests.md`](../steering/workflow-guidelines/solver-quests.md), and the
-complete generated CLI reference by
+generated CLI reference by
 [`solve-commands.md`](../steering/generated/solve-commands.md).
 
 ## The Four Verbs
@@ -27,7 +27,12 @@ Consult the generated reference for supported operations. Older frontier,
 strategy-rung, `run`/`step` and generic executor instructions are retired.
 
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
-`--blocked`, `--exhausted` or `--superseded`. A verification also takes
+`--assignment`, `--blocked`, `--exhausted` or `--superseded`. An assignment takes
+`--paths-file <list>` and `--authority "<existing task/scope authorization>"`;
+the paths are exact repository-relative files or directory prefixes ending in
+`/`. Record a necessary amendment before editing beyond the assignment. The
+reference records existing authority; it does not grant new authority.
+A verification also takes
 `--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
 cannot land without an approving verification newer than the last attempt.
 The workflow's review requirement also covers changes to proof and acceptance
@@ -57,7 +62,7 @@ owner or review scope, without a fixed round count or an automatic human stop.
 | --- | --- |
 | `doneWhen is not green` | the sealed probe does not yet measure success |
 | `doneWhen differs from the sealed probe` | the acceptance criterion was edited after sealing; it is immutable, so supersede the quest instead |
-| `paths outside epic ... authorizes` | a changed path is not authorised by the epic; record a justified scope decision under existing authority or leave it out; ask only if authority is missing |
+| assignment or epic scope refusal | record the missing package assignment, isolate unrelated paths or append an authorized amendment within the epic's outer scope; ask only if authority is missing |
 | a verification entry is required | source landing lacks the required current independent approval; the note must identify reviewed content and evidence |
 | `the newest verification is a rejection` | repair and record a newer attempt first |
 | altitude-check budget exceeded | more than three attempts since the last altitude check need a recorded reassessment before landing; this is not a human-approval gate |
@@ -116,9 +121,11 @@ completed work is durably authorised; a never-before-authorised push or publish
 is not, and stays an authority boundary under R26.
 
 Scope every commit to the work at hand, never sweeping unrelated dirty worktree
-entries. `land` considers the changed paths in the worktree and enforces the
-epic's authorised scope; keep unrelated work isolated rather than assuming it
-will be ignored. Ad-hoc commits need the same deliberate scope control.
+entries. `land` collects staged, unstaged and nonignored untracked paths and
+checks the current package assignment plus applicable epic scope. It does not
+select the assignment's files out of a mixed worktree. Keep unrelated work
+isolated and include required generated outputs in the reviewed assignment.
+Ad-hoc commits need the same deliberate scope control.
 
 ## Choosing What To Run In Parallel
 
@@ -161,15 +168,21 @@ current work rather than creating a second tracking system.
 
 ## Authorizing An Outward Action
 
-An action that cannot be taken back, or that leaves this repository, is
-performed only where the operator's authority for it already exists (R26). One
-component decides that, and every such action in this repository's own code
-asks it before acting. What it wants is what you supplied, never what the
-command could work out for itself:
+An action that cannot be taken back, or that leaves this repository, needs the
+operator's existing authority under the
+[workflow policy](../steering/workflow-guidelines/solver-quests.md#publication-authority).
+Standing publication authority applies only to the authorized task and
+destination, subject to current user restrictions. Do not ask again for that
+same authority or infer it from a successful command.
+
+The action owner checks registered command inputs. The
+[known coverage gaps](../steering/router.md#known-owner-gap) remain real:
+workflow publication and some Git operations are not automatically guarded.
+Their executability is not authorization. Registered inputs include:
 
 | Action | What authorizes it |
 | --- | --- |
-| publishing a landed head | the standing authority to publish what has landed; nothing to pass |
+| publishing a landed head | existing standing authority for this task and destination; the command takes no extra authorization flag |
 | pushing onto a red shared branch | `--fixes-red <the head it is red at> --reason "<why>"` |
 | routing a push to another runner | the marker in the reviewed head commit *and* `--runner` |
 | gating without the dataset | `--allow-missing-data` |

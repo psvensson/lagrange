@@ -4,6 +4,7 @@
 //   node scripts/solve.js start --id <quest>
 //   node scripts/solve.js note --id <quest> --finding "<text>" [--kind theory|altitude-check|decision|ruled-out|evidence] [--status active|supported|falsified|superseded] [--evidence <ref>]
 //   node scripts/solve.js note --id <quest> --attempt "<what changed>"
+//   node scripts/solve.js note --id <quest> --assignment "<reason>" --paths-file <list> --authority "<existing authorization reference>"
 //   node scripts/solve.js note --id <quest> --verification "<summary>" --verifier subagent:<id> --verdict approve|reject
 //   node scripts/solve.js note --id <quest> --blocked "<why>" --next-owner judgment|verification|authorization
 //   node scripts/solve.js note --id <quest> --exhausted "<why>" | --superseded "<why>" [--by <quest>]
@@ -15,6 +16,7 @@
 //   node scripts/solve.js board
 // Every command accepts --json.
 
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -42,7 +44,11 @@ const RELOCATE_FLAG = Object.freeze({PATHS_FILE: 'paths-file',
   SOURCE_COMMIT: 'source-commit', RECORD_TO: 'record-to', DRY_RUN: 'dry-run'});
 const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
 const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
-  '--exhausted, --superseded';
+  '--exhausted, --superseded, --assignment';
+const ASSIGNMENT_USAGE = 'note --assignment "<reason>" --paths-file <list> ' +
+  '--authority "<existing authorization reference>" records scope, not a grant of authority';
+const TEXT_ENCODING = 'utf8';
+const PATHS_FILE_FLAG = 'paths-file';
 const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
   '[--text "<why>"] [--replace] | ' +
   'solve evidence delete <asset> --authorize-asset <asset> | ' +
@@ -91,6 +97,19 @@ function parseArgs(argv) {
 }
 
 function noteOptions(flags) {
+  if (typeof flags.assignment === 'string') {
+    if (typeof flags[PATHS_FILE_FLAG] !== 'string' || typeof flags.authority !== 'string' ||
+        flags.kind !== undefined) throw new SolveError(ASSIGNMENT_USAGE);
+    let paths;
+    try {
+      paths = fs.readFileSync(flags[PATHS_FILE_FLAG], TEXT_ENCODING).split(/\r?\n/u)
+        .filter(Boolean);
+    } catch (error) {
+      throw new SolveError(`assignment paths could not be read: ${error.message}`);
+    }
+    return {id: flags.id, type: ENTRY_TYPE.FINDING, text: flags.assignment,
+      assignment: {paths, authority: flags.authority}};
+  }
   const shape = NOTE_SHAPES.find((candidate) => typeof flags[candidate.flag] === 'string');
   if (!shape) throw new SolveError(NOTE_USAGE);
   return {id: flags.id, ...shape.build(flags)};

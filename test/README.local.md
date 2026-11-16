@@ -22,20 +22,36 @@ Project default:
 - use `{numRuns: 10}` unless a specific suite documents a stronger reason to use
   a different count
 
-## Full Suite Execution
+## Change Proof And Full-Suite Checkpoints
 
-The full suite can take a long time to run. Use one run per checkpoint and
-analyze the saved output instead of rerunning immediately.
+`npm test` runs the change-proof orchestrator, not the complete suite. Use
+`npm run check:release` at the full-suite checkpoints required by the
+[harness owner](guidelines/harness.md#what-the-four-commands-prove). Analyze the
+original output before repeating a run; a retry never replaces its first failure.
 
-Suggested workflow:
+For a change-proof invocation, retain a unique result directory and the command's
+actual status. Record relevant configuration and runner identity with this result:
 
 ```bash
-npm test > /tmp/test-output.txt 2>&1
-grep "# fail" /tmp/test-output.txt
-grep "Error:" /tmp/test-output.txt
-tail -50 /tmp/test-output.txt
-rm /tmp/test-output.txt
+(
+  mkdir -p test-output/manual
+  run_dir=$(mktemp -d test-output/manual/run.XXXXXX) || exit 1
+  git rev-parse HEAD > "$run_dir/source.txt"
+  printf '%s\n' 'npm test' > "$run_dir/command.txt"
+  if npm test > "$run_dir/output.log" 2>&1; then
+    test_status=0
+  else
+    test_status=$?
+  fi
+  printf '%s\n' "$test_status" > "$run_dir/exit-status.txt"
+  tail -50 "$run_dir/output.log"
+  printf 'Original output: %s/output.log\n' "$run_dir"
+  exit "$test_status"
+)
 ```
+
+The tail is a diagnostic view, not the complete evidence. Retain the original
+output through the existing evidence owner before cleaning the workspace.
 
 ## Output Handling
 
@@ -47,19 +63,13 @@ rm /tmp/test-output.txt
 
 ## Example Commands
 
-Targeted runs use the committed fail-closed runner (`npm run test:file`) or
-invoke tap (the suite runner) directly — the two are equivalent for green
-runs; the runner additionally fails closed on empty TAP streams, skips, and
-todos. Do NOT pass extra arguments to `npm test` — the `test` script is the
-full sharded suite and silently ignores them, so `npm test -- <file>` and
-`npm test -- --grep ...` run everything while appearing filtered.
+Targeted runs use `npm run test:file -- <explicit-file-paths>`, the classified
+runner that owns execution placement and resource policy and fails closed on
+empty TAP streams, skips and todos. Raw `npx tap` does not carry those same
+guarantees. Do not pass file or filter arguments to `npm test`: the change-proof
+orchestrator does not use them to select a targeted file run.
 
 ```bash
-npm run test:file -- test/storage/partition.test.js
-npm run test:file -- --filter partition test/storage/*.test.js
-npx tap test/storage/partition.test.js
-npx tap test/storage/partition.test.js test/storage/table.test.js
+npm run test:file -- test/scripts/check-file-size-thresholds.test.js
+npm run test:file -- test/solve/guards.test.js test/solve/commands.test.js
 ```
-
-`--filter <substring>` narrows the provided file list by path substring and
-fails closed (nonzero) when nothing matches.

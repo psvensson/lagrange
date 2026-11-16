@@ -28,7 +28,7 @@
   "censusSize": 2657,
   "digest": "fnv1a32-e1eb3591",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-00351855",
+  "observationDigest": "fnv1a32-70f38c05",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19550,7 +19550,14 @@
     },
     "test/scripts/check-file-size-thresholds.test.js": {
       "files": [
+        "README.md",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "src/rebalancer/operation-workflow-owner.js"
+      ],
+      "directories": [
+        "src",
+        "test"
       ]
     },
     "test/scripts/check-guideline-ambient-intrinsics.test.js": {
@@ -19981,6 +19988,7 @@
         "package-lock.json",
         "package.json",
         "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
         "solve/changes/global-owner-debt-inventory/inventory.json"
@@ -20427,6 +20435,7 @@
         "package-lock.json",
         "package.json",
         "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/global-owner-debt-inventory/helpers.js",
         "scripts/inventory-ordinal-segments.js",
@@ -20491,6 +20500,7 @@
         "package-lock.json",
         "package.json",
         "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/global-owner-debt-inventory/constants.js",
         "scripts/inventory-ordinal-segments.js",
@@ -20781,6 +20791,7 @@
         "package-lock.json",
         "package.json",
         "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "scripts/checks/test-primary-classification-constants.js",
         "scripts/inventory-ordinal-segments.js",
         "solve/changes/global-owner-debt-inventory/inventory.json"
@@ -20811,6 +20822,7 @@
         "package.json",
         "scripts/check-complexity.js",
         "scripts/check-file-size-thresholds.js",
+        "scripts/checks/file-size-change-ratchet.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/global-owner-debt-inventory/helpers.js",
@@ -21001,6 +21013,7 @@
         "scripts/checks/wait-for-thermal-headroom.js"
       ],
       "env": [
+        "LAGRANGE_CHECK_BASE",
         "LAGRANGE_GATE_PUSHED_REF",
         "LAGRANGE_WORKSPACE_INJECTIONS",
         "PRE_PUSH_FLOW_CALLS",
@@ -22357,6 +22370,8 @@
         "test/shards/subsystem-classes.json"
       ],
       "directories": [
+        ".githooks",
+        "docs",
         "scripts",
         "scripts/checks",
         "solve",
@@ -22390,7 +22405,14 @@
     },
     "test/solve/guards.test.js": {
       "files": [
+        ".githooks/pre-push",
+        ".github/workflows/release.yml",
+        ".taprc",
+        "architecture/overview.md",
         "dependency-cruiser.config.cjs",
+        "docs/current-capabilities.json",
+        "docs/development/quest-validators.md",
+        "docs/steering/rules.md",
         "package-lock.json",
         "package.json",
         "scripts/check-file-size-thresholds.js",
@@ -22401,7 +22423,10 @@
         "scripts/check-guideline-silent-catch.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve/commands.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
+        "test/guidelines/release-gate.md",
         "test/shards/impact-contracts.json",
         "test/shards/primary-classes.json"
       ],
@@ -22463,7 +22488,8 @@
       "directories": [
         "scripts/checks",
         "solve/epics",
-        "solve/quests"
+        "solve/quests",
+        "src"
       ]
     },
     "test/solve/store.test.js": {

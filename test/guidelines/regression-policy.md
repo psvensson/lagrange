@@ -274,8 +274,7 @@ Required coverage:
 
 1. Add a deterministic unit or integration regression for the owning component
    that repeats the triggering cycle a bounded number of times — enough to
-   expose accumulation while staying within the duration limits (2s unit / 30s
-   integration).
+   expose accumulation under the [duration targets and hardware tolerance](harness.md#test-duration-targets-and-hardware-tolerance).
 2. Assert owned resource metrics such as queue depth, subscriber count,
    in-flight map size, or buffered-event count return to a bounded plateau.
 3. If the distributed harness reported heap growth, add or refine diagnostics
@@ -363,8 +362,9 @@ For any component that:
 
 - Pressure tests belong alongside the existing unit or integration tests for the
   component, not in a separate stress-test directory.
-- Pressure tests MUST respect the standard duration limits (2s unit,
-  30s integration). Use mocked time and injected latency, not real delays.
+- Pressure tests follow the [duration targets and hardware tolerance](harness.md#test-duration-targets-and-hardware-tolerance).
+  Keep performance targets distinct from runner watchdogs and production
+  deadlines. Use mocked time and injected latency, not unnecessary real delays.
 - Name them clearly: include "under pressure", "slow dependency",
   "concurrent callers", or "stale cache" in the test description.
 
@@ -374,9 +374,12 @@ For any state-mutating operation path governed by the idempotency rule in
 [`rules.md`](../../docs/steering/rules.md), add at least
 one test that:
 
-1. Executes the operation once and records the resulting state.
-2. Executes the same operation again with the same inputs.
-3. Asserts the state is identical after both executions.
+1. Executes one logical operation and records its intended effect and identity.
+2. Retries that same logical operation, including lost-answer recovery where
+   relevant, through the owning entrypoint.
+3. Asserts no duplicate effect and the owner-defined result or reconciliation
+   outcome. Compare the operation's effects, not unrelated concurrently changing
+   state; naturally idempotent operations do not need invented identity machinery.
 
 This applies to row creation, lifecycle transitions, workflow step advances,
 and any CDC-propagated mutation.

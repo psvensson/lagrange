@@ -7,8 +7,6 @@ requires:
 
 # AGENTS
 
-This is the single steering entry point and load order for the **Quest** workflow.
-
 ## Steering Load Order
 
 1. Read this file.
@@ -18,15 +16,15 @@ This is the single steering entry point and load order for the **Quest** workflo
    the work touches. Nothing else is read by default, and no rule holds the
    detail its owner holds.
 
-On starting or resuming, identify the rule-set revision and source commit;
-reconcile older handoffs with the current owners before continuing.
+On starting or resuming, identify the rule-set revision, source commit and loaded
+instruction sources; reconcile older handoffs with the current owners.
 
 ## Choose The Work Unit
 
-Create a Quest for work likely to need more than one measured attempt or to change
-an owner-boundary contract. A single-sitting fix, documentation edit or mechanical
-change with an obvious proof may be committed directly; see the binding threshold
-in [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
+Create a Quest when work is likely to need more than one measured attempt or to
+change an owner-boundary contract. Red and green observations within one cycle
+are one attempt. Bounded work with an obvious proof may use the direct route under
+[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
 
 ## Quest Records
 
@@ -37,22 +35,19 @@ landing within existing authority. Ask the user only for a missing decision or
 authority; the workflow owner defines continuation responsibilities. Source and
 proof/acceptance changes require independent verification under
 [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md)
-(`note --verification ... --verifier subagent:<id> --verdict approve`). Solver
-commits only reviewed Quest scope and never pushes.
+(`note --verification ... --verifier subagent:<id> --verdict approve`). Review
+the actual collected candidate and isolate unrelated changes before landing;
+Solver does not select an assignment from a mixed worktree and never pushes.
 
 A bounded repair, a representative service milestone and full release acceptance
 are separate claims. Record the remaining service blocker after a repair closes;
 do not enlarge the repair merely to make the whole milestone green.
 
-After every intended Quest commit has landed, publish the exact committed HEAD:
-
-```sh
-npm run publish
-```
-
-The publisher verifies a clean candidate and remote eligibility, then records
-HEAD-bound evidence. Its inert-data rebase exception and GitHub post-merge proof
-requirements are owned by the [runbook](docs/development/solver-runbook.md).
+After the intended commits land, publish the exact HEAD with `npm run publish`
+within the task and destination's existing authority. The
+[workflow](docs/steering/workflow-guidelines/solver-quests.md#publication-authority)
+owns that boundary; the [runbook](docs/development/solver-runbook.md) describes
+clean-candidate checks, inert-data rebasing and GitHub post-merge proof.
 
 ## Find The Right Surface
 
@@ -64,9 +59,9 @@ requirements are owned by the [runbook](docs/development/solver-runbook.md).
 | Available project commands | `npm run commands` |
 | Open epics and quests | `node scripts/solve.js board` |
 
-Use `npm run commands` for the quickstart. Before an ad-hoc repository command,
-search the [generated tools index](docs/steering/generated/tools-index.md) for task
-keywords and read matching entries; prefer an existing script.
+Before inventing an operational or proof command, search the
+[tools index](docs/steering/generated/tools-index.md); prefer the existing owner.
+Ordinary source reads and Git inspection do not require a command-index detour.
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.

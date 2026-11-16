@@ -13,7 +13,9 @@ After an independently verified resolution, identify the smallest enforceable
 prevention: existing regression, check, type or invariant; otherwise its current
 contract/documentation owner. Record the cause, failed approaches, actual evidence,
 exact source identity, applicability limits and prevention link as an append-only
-finding in the open owning Quest. Capture before `land`: terminal logs are closed.
+finding in the open owning Quest, or in the existing review record for an eligible
+direct change. Do not create a Quest solely to store the lesson. Capture before
+`land` when a Quest applies: terminal logs are closed.
 
 Keep unverified hypotheses explicitly theoretical. They may guide an observation;
 they cannot become current steering. Never increase a ratchet baseline, invent an
@@ -25,6 +27,7 @@ the identity, scope and ordering assumptions still hold. An old green result is
 not fresh proof. Discard unsupported guidance, not its historical evidence.
 
 Correct stale guidance through the current owner and a new finding in an open
-owning/successor Quest, linking the immutable earlier record. Do not append to or
+owning/successor Quest, or the current direct-change review record, linking the
+immutable earlier record. Do not append to or
 rewrite a terminal Quest. A retrieval index, if ever needed, remains derived and
 disposable; it cannot decide which lesson is authoritative.

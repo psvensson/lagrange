@@ -36,6 +36,12 @@ import {gitProcessEnvironment} from
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
+const QUOTED_PATHS = ['src/räknare.js', 'src/tab\towner.js', 'src/line\nowner.js'];
+const MOVED_CONTROL_PATH = 'src/moved\nowner.js';
+const COLON_RENAMES = [
+  ['src/a.js', 'src/b.js:src/c.js'],
+  ['src/a.js:src/b.js', 'src/c.js'],
+];
 
 function git(repo, args) {
   execGit(args, {
@@ -135,4 +141,71 @@ test('the derivation does not modify the repository it inspects', () => {
   const before = fingerprint();
   changedRecords({root: repo});
   assert.equal(fingerprint(), before);
+});
+
+test('Unicode and control filenames retain their actual names before and after staging', (t) => {
+  const fixture = buildFixtureRepo();
+  t.after(() => fs.rmSync(fixture, {recursive: true, force: true}));
+  git(fixture, ['config', 'core.quotePath', 'true']);
+  for (const relative of QUOTED_PATHS) {
+    fs.writeFileSync(path.join(fixture, relative), 'export const value = 1;\n');
+  }
+  const untracked = changedRecords({root: fixture});
+  for (const relative of QUOTED_PATHS) {
+    assert.ok(untracked.some((record) => record.status === CHANGE_ADDED &&
+      record.path === relative), JSON.stringify(relative));
+  }
+  git(fixture, ['add', '--', ...QUOTED_PATHS]);
+  const staged = changedRecords({root: fixture});
+  for (const relative of QUOTED_PATHS) {
+    assert.ok(staged.some((record) => record.status === CHANGE_ADDED &&
+      record.path === relative), JSON.stringify(relative));
+  }
+});
+
+test('NUL path records preserve both control-name rename sides and committed deletions', (t) => {
+  const fixture = buildFixtureRepo();
+  t.after(() => fs.rmSync(fixture, {recursive: true, force: true}));
+  git(fixture, ['config', 'core.quotePath', 'true']);
+  for (const relative of QUOTED_PATHS) {
+    fs.writeFileSync(path.join(fixture, relative), `// ${JSON.stringify(relative)}\n`);
+  }
+  git(fixture, ['add', '-A']);
+  git(fixture, ['commit', '--quiet', '-m', 'record unusual paths']);
+  const base = execGit(['rev-parse', 'HEAD'], {
+    cwd: fixture, encoding: UTF8, env: gitProcessEnvironment(),
+  }).trim();
+  git(fixture, ['mv', QUOTED_PATHS[2], MOVED_CONTROL_PATH]);
+  git(fixture, ['rm', '--', QUOTED_PATHS[1]]);
+  fs.appendFileSync(path.join(fixture, QUOTED_PATHS[0]), '// changed\n');
+  git(fixture, ['add', '-A']);
+  git(fixture, ['commit', '--quiet', '-m', 'change unusual paths']);
+  const changed = changedRecords({root: fixture, base});
+  assert.ok(changed.some((record) => record.status === CHANGE_RENAMED &&
+    record.oldPath === QUOTED_PATHS[2] && record.path === MOVED_CONTROL_PATH));
+  assert.ok(changed.some((record) => record.status === CHANGE_DELETED &&
+    record.oldPath === QUOTED_PATHS[1] && record.path === null));
+  assert.ok(changed.some((record) => record.status === CHANGE_MODIFIED &&
+    record.path === QUOTED_PATHS[0]));
+});
+
+test('distinct rename sides cannot alias through a printable record separator', (t) => {
+  const fixture = buildFixtureRepo();
+  t.after(() => fs.rmSync(fixture, {recursive: true, force: true}));
+  for (const [before] of COLON_RENAMES) {
+    fs.mkdirSync(path.dirname(path.join(fixture, before)), {recursive: true});
+    fs.writeFileSync(path.join(fixture, before), `// owner ${before}\n`);
+  }
+  git(fixture, ['add', '-A']);
+  git(fixture, ['commit', '--quiet', '-m', 'record colon paths']);
+  for (const [before, after] of COLON_RENAMES) {
+    fs.mkdirSync(path.dirname(path.join(fixture, after)), {recursive: true});
+    git(fixture, ['mv', '--', before, after]);
+  }
+  const changed = changedRecords({root: fixture});
+  for (const [before, after] of COLON_RENAMES) {
+    assert.ok(changed.some((record) => record.status === CHANGE_RENAMED &&
+      record.oldPath === before && record.path === after),
+    `the distinct rename ${before} -> ${after} remains in the candidate`);
+  }
 });

@@ -52,6 +52,8 @@ const AUTHORITY_FIXTURE = Object.freeze({
 });
 const RULES_MD = 'docs/steering/rules.md';
 const ALWAYS_LOAD_BUDGET = 360;
+const ROUTER_POLICY_COLUMN = 2;
+const ROUTER_ENFORCEMENT_COLUMN = 3;
 const SCOPE_RULE = 'R16';
 const AUTHORIZATION_RULE = 'R26';
 const LINK = /\]\(([^)#\s]+)(?:#[^)]*)?\)/gu;
@@ -70,11 +72,11 @@ const REPRESENTATIVE_TASKS = Object.freeze([
   {task: 'red-main repair', owner: 'publication'},
 ]);
 
-function routerRows() {
+function routerRows(column = ROUTER_POLICY_COLUMN) {
   const rows = fs.readFileSync(ROUTER_MD, 'utf8').split('\n');
   return new Map(rows.flatMap((line) => {
-    const match = /^\|\s*`([\w-]+)`\s*\|([^|]*)\|/u.exec(line);
-    return match ? [[match[1], match[2]]] : [];
+    const match = /^\|\s*`([\w-]+)`\s*\|([^|]*)\|([^|]*)\|/u.exec(line);
+    return match ? [[match[1], match[column]]] : [];
   }));
 }
 
@@ -197,18 +199,18 @@ test('R16 owns all of R16 and none of R26', () => {
 test('R26 routes to the real authorization boundary', () => {
   const entry = ruleSetManifest().rules.find((row) => row.id === AUTHORIZATION_RULE);
   assert.ok(entry, `${AUTHORIZATION_RULE} is not sealed`);
-  const rows = routerRows();
+  const rows = routerRows(ROUTER_ENFORCEMENT_COLUMN);
   const scripts = JSON.parse(fs.readFileSync(PACKAGE, 'utf8')).scripts;
   const authorities = resolvedAuthorities(rows.get(entry.owner), scripts);
   assert.ok(authorities.length > 0,
     `${entry.owner} resolves to nothing that exists`);
-  // An owner invented to make the rule green would resolve only to prose. At
-  // least one authority behind it has to be something that runs.
+  // The separate enforcement column must reach the registered action owner.
+  // Policy routing alone does not establish executable coverage.
   const executable = authorities.filter((authority) =>
     Object.hasOwn(scripts, authority) || authority.endsWith('.js'));
   assert.ok(executable.length > 0,
     `${entry.owner} resolves only to documents; the authorization boundary ` +
-    'needs a mechanism that enforces it');
+    'needs the mechanism for its registered actions');
   const rule = ruleById(AUTHORIZATION_RULE);
   assert.match(rule.fields.Invariant, /authorit|authoris|authoriz/iu,
     'R26 states the authorization invariant');
@@ -262,13 +264,12 @@ function authorityVerdict(authorization) {
 function authorityOf(id) {
   const entry = ruleSetManifest().rules.find((row) => row.id === id);
   const scripts = JSON.parse(fs.readFileSync(PACKAGE, 'utf8')).scripts;
-  return resolvedAuthorities(routerRows().get(entry.owner), scripts);
+  return resolvedAuthorities(routerRows(ROUTER_ENFORCEMENT_COLUMN).get(entry.owner), scripts);
 }
 
-test('the two rules route to owners that share no authority', () => {
-  // An editorial split would leave both rules pointing at the same place. The
-  // owners here resolve to disjoint sets, and each set contains the mechanism
-  // that realises its rule.
+test('scope and action authorization route to distinct enforcement owners', () => {
+  // Policy prose may share the workflow document. Each enforcement route must
+  // still reach its own mechanism, with scope and operator authority distinct.
   const scope = authorityOf(SCOPE_RULE);
   const authority = authorityOf(AUTHORIZATION_RULE);
   assert.ok(scope.includes(SCOPE_MECHANISM),

@@ -139,9 +139,12 @@ To prevent overlap and contradictory runtime behavior:
    to the canonical leader.
 6. **Readiness Gating:** internal topology consumers (`ReplicaDispatchService`,
    `RebalanceCoordinator`, `ManagedSplitWorkflow`, admission planning) use the
-   shared `repairEligible` dimension from `ControlPlaneReadinessService`;
-   routing and benchmark admission use `serveEligible`. The membership-health
-   guards and the shared cross-layer owner-contract kernels (mutation-defer,
+   shared `repairEligible` dimension from `ControlPlaneReadinessService`.
+   Serving and benchmark admission consume its committed `serveEligible`
+   answer. System-table routing uses raft leadership and live transport rather
+   than a readiness lane; see the
+   [decision authority contract](runtime-contracts.md#cache-and-read-models).
+   The membership-health guards and shared cross-layer owner-contract kernels (mutation-defer,
    write-health, leader-gap routing, priority-recovery, strict-CDC ingress,
    benchmark admission, boundary catalog) are documented in
    [`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md). The

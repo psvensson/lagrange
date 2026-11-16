@@ -73,9 +73,11 @@ quorum envelopes rather than raw node counts:
 
 ## Current architecture
 
-Start with the [programming model](../docs/native-programming-model.md) and
+For architecture onboarding, start with the [programming model](../docs/native-programming-model.md) and
 [execution semantics](../docs/execution-semantics.md) for what an application
-can rely on. Then read the implementation in this order:
+can rely on. Continue through the implementation in this order.
+For a bounded task, use [By question](#by-question) and its relevant owners;
+this sequence is not a prerequisite to every edit.
 
 1. [The Lagrange System Model](system-model.md) - tables, partitions, replicas,
    Artifacts, Bindings, Cells, and durable-state ownership.
