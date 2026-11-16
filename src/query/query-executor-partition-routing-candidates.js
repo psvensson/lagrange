@@ -65,6 +65,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     preferLeader = false,
     preferSameLatencyGroup = false,
     routingReadinessDimension = this.defaultRoutingReadinessDimension,
+    routingOptions = {},
   ) {
     return this.resolvePartitionServiceCandidates(
       partitionId,
@@ -72,6 +73,7 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       preferLeader,
       preferSameLatencyGroup,
       routingReadinessDimension,
+      routingOptions,
     ).candidates;
   },
 
@@ -98,7 +100,8 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       ...routingOptions,
       [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ]: forRead,
     };
-    const prioritizeLeader = preferLeader || !forRead;
+    const hasTransactionIdentity = Boolean(routingOptions?.transactionIdentity);
+    const prioritizeLeader = preferLeader || !forRead || hasTransactionIdentity;
     const routingSnapshot = this.getPartitionRoutingSnapshot(
       partitionId,
       routingReadinessDimension,
@@ -255,6 +258,12 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     if (prioritizeLeader) {
       if (canonicalLeaderNodeId) {
         canonicalLeaderServices.forEach(addService);
+        if (hasTransactionIdentity && candidates.length > 0) {
+          return {
+            candidates,
+            routingSnapshot,
+          };
+        }
       }
       orderedServices
         .filter((service) => service.node_id === this.nodeId)

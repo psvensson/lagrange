@@ -330,7 +330,13 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
-    const routingRefusal = writeRoutingRefusal(this, payload, isWriteOperation);
+    const requiresLeaderRouting =
+      isWriteOperation || Boolean(payload?.transactionId);
+    const routingRefusal = writeRoutingRefusal(
+      this,
+      payload,
+      requiresLeaderRouting,
+    );
     if (routingRefusal !== null) return routingRefusal;
     const ingressRefusal = isWriteOperation ?
       refuseRoutedClientSystemTableWrite(payload, this.tableName) : null;

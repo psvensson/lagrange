@@ -174,6 +174,7 @@ class NodeRegistrationOwner {
         await this.advanceStaleJoinAdmissionIncarnation(
           existingJoinAdmissionProgress,
         );
+        budgetRow = existingJoinAdmissionProgress.nodeRow;
         this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
         logger.info(LOG_RESUMING_JOIN_ADMISSION_PROGRESS, {
           nodeId: this.nodeId,

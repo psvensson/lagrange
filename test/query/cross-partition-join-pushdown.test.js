@@ -18,6 +18,15 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QUERY_JOIN_PUSHDOWN} from '../../src/query/query-constants.js';
+import {
+  PARTITION_SERVICE_REMOTE_QUERY_METHODS,
+} from '../../src/partition/partition-service-remote-query-methods.js';
+import {
+  ParallelQueryCoordinator,
+} from '../../src/query/distributed/parallel-query-coordinator.js';
+import {
+  residualPredicateAdmitsRow,
+} from '../../src/query/distributed/residual-predicate-evaluator.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
@@ -500,4 +509,436 @@ test('LEFT JOIN residual comparisons filter NULL-extended rows like ' +
   t.same(sortRows(isNullRows), sortRows(isNullOracle),
     'IS NULL keeps exactly the NULL-extended rows');
   t.ok(isNullRows.length > 0, 'the NULL-extended row is present');
+});
+
+test('STOCK_LEVEL_COUNT join and residual predicates match SQLite numeric ' +
+  'INTEGER columns against PG-wire text-format string bind parameters',
+async (t) => {
+  const orderLineDb = new Database(':memory:');
+  orderLineDb.exec(
+    'CREATE TABLE order_line (warehouse_id INTEGER, district_id INTEGER, ' +
+      'order_id INTEGER, line_number INTEGER, item_id INTEGER)',
+  );
+  const insertOl = orderLineDb.prepare(
+    'INSERT INTO order_line VALUES (?, ?, ?, ?, ?)',
+  );
+  for (let item = 1; item <= 5; item += 1) {
+    insertOl.run(1, 1, 1, item, item);
+  }
+  insertOl.run(1, 1, 2, 1, 6);
+
+  const stockDb = new Database(':memory:');
+  stockDb.exec(
+    'CREATE TABLE stock (warehouse_id INTEGER, item_id INTEGER, ' +
+      'quantity INTEGER)',
+  );
+  const insertStock = stockDb.prepare('INSERT INTO stock VALUES (?, ?, ?)');
+  for (let item = 1; item <= 5; item += 1) {
+    insertStock.run(1, item, 10 + item);
+    insertStock.run(2, item, 10 + item);
+  }
+  insertStock.run(1, 6, 25);
+
+  const partitionDbs = new Map([
+    ['order_line_p1', orderLineDb],
+    ['stock_p1', stockDb],
+  ]);
+  const messageRouter = {
+    async deliver(address, message) {
+      if (message.type !== 'QUERY') {
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
+      }
+      const partitionId = address.split('/')[2];
+      const db = partitionDbs.get(partitionId);
+      const rows = db.prepare(message.sql).all(...(message.params || []));
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: true,
+        rows,
+        count: rows.length,
+        partitionId,
+      });
+    },
+  };
+  const services = [...partitionDbs.keys()].map((partitionId) => ({
+    service_id: partitionId,
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: 'test-node',
+    raft_role: 'leader',
+    address: `test-node/partition/${partitionId}`,
+    status: 'active',
+  }));
+  const systemCache = {
+    services,
+    filter(type, predicate) {
+      return type === 'services' ? this.services.filter(predicate) : [];
+    },
+    get() {
+      return null;
+    },
+    getAll(type) {
+      return type === 'services' ? this.services : [];
+    },
+  };
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter,
+    systemCache,
+  });
+  const tablePlans = new Map([['s', {partitions: ['stock_p1']}]]);
+
+  const stockLevelSql =
+    'SELECT COUNT(DISTINCT ol.item_id) AS low_stock ' +
+    'FROM order_line AS ol JOIN stock AS s ' +
+    'ON s.warehouse_id = $1 AND s.item_id = ol.item_id ' +
+    'WHERE ol.warehouse_id = $2 AND ol.district_id = $3 ' +
+    'AND ol.order_id >= $4 AND ol.order_id < $5 AND s.quantity < $6';
+  const stringParams = ['1', '1', '1', '1', '2', '19'];
+  const ast = new SQLParser(stockLevelSql, {dialect: 'postgresql'}).parse();
+  const result = await executor.executeSelect(
+    ast,
+    ['order_line_p1'],
+    stringParams,
+    {distributedPlan: {tablePlans}},
+  );
+  t.equal(result.success, true, 'STOCK_LEVEL_COUNT select succeeds');
+  t.same(
+    result.rows,
+    [{low_stock: 5}],
+    'STOCK_LEVEL_COUNT with string bind params returns low_stock = 5',
+  );
+
+  const leftJoinResidualSql =
+    'SELECT COUNT(DISTINCT ol.item_id) AS low_stock ' +
+    'FROM order_line AS ol LEFT JOIN stock AS s ' +
+    'ON s.item_id = ol.item_id ' +
+    'WHERE ol.warehouse_id = $1 AND ol.district_id = $2 ' +
+    'AND ol.order_id = $3 AND s.warehouse_id = $4 AND s.quantity < $5';
+  const residualAst = new SQLParser(leftJoinResidualSql, {
+    dialect: 'postgresql',
+  }).parse();
+  const residualResult = await executor.executeSelect(
+    residualAst,
+    ['order_line_p1'],
+    ['1', '1', '1', '1', '19'],
+    {distributedPlan: {tablePlans}},
+  );
+  t.equal(residualResult.success, true, 'LEFT JOIN residual select succeeds');
+  t.same(
+    residualResult.rows,
+    [{low_stock: 5}],
+    'residual WHERE predicates coerce PG-wire string params against SQLite numeric columns',
+  );
+
+  // Safe-integer boundary and non-canonical / non-numeric scalar negative controls:
+  const evalEq = (leftVal, rightVal) =>
+    executor.evaluateBinary(
+      {a: leftVal, b: rightVal},
+      {
+        type: 'binary',
+        operator: '=',
+        left: {type: 'column_ref', column: 'a'},
+        right: {type: 'column_ref', column: 'b'},
+      },
+    );
+  const evalResidualEq = (leftVal, rightVal) =>
+    residualPredicateAdmitsRow(
+      {
+        type: 'binary',
+        operator: '=',
+        left: {type: 'column_ref', column: 'a'},
+        right: {type: 'column_ref', column: 'b'},
+      },
+      {a: leftVal, b: rightVal},
+    );
+  for (const [leftVal, rightVal, label] of [
+    ['9007199254740993', 9007199254740992, 'unsafe 64-bit integer string vs rounded number'],
+    ['01', 1, 'leading-zero string vs number'],
+    ['01', '1', 'leading-zero string vs canonical string'],
+    ['abc', 'def', 'distinct non-numeric strings'],
+    [null, 1, 'null vs number'],
+    [undefined, '1', 'undefined vs string'],
+    [true, '1', 'boolean true vs string 1'],
+    [false, '0', 'boolean false vs string 0'],
+    [NaN, '0', 'NaN vs string 0'],
+  ]) {
+    t.equal(evalEq(leftVal, rightVal), false, `evaluateBinary rejects ${label}`);
+    t.equal(
+      evalResidualEq(leftVal, rightVal),
+      false,
+      `residualPredicateAdmitsRow rejects ${label}`,
+    );
+  }
+});
+
+test('transactional reads redirect from follower replicas, pin session ' +
+  'leader affinity, and disable speculative hedging', async (t) => {
+  const followerService = {
+    partitionId: 'orders-p1',
+    replicaId: 'orders-p1-r2',
+    role: 'follower',
+    tableName: 'orders',
+    logger: {debug() {}, warn() {}, info() {}, error() {}},
+    isWriteQuery: PARTITION_SERVICE_REMOTE_QUERY_METHODS.isWriteQuery,
+    rejectStalePartitionEpochWrite:
+      PARTITION_SERVICE_REMOTE_QUERY_METHODS.rejectStalePartitionEpochWrite,
+    resolveLeaderAddress: () => 'node-1/partition/orders-p1-r1',
+  };
+  const redirectAnswer =
+    await PARTITION_SERVICE_REMOTE_QUERY_METHODS.handleRemoteQuery.call(
+      followerService,
+      {
+        sql: 'SELECT order_id FROM orders WHERE warehouse_id = ?',
+        params: [1],
+        transactionId: 'tx-order-status-1',
+        participantId: 'tx-order-status-1:orders-p1',
+        commitMode: 'TWO_PHASE',
+        transactionEpoch: 1,
+      },
+    );
+  t.equal(redirectAnswer.success, false, 'follower refuses transactional SELECT');
+  t.equal(
+    redirectAnswer.redirect,
+    'LEADER_REDIRECT',
+    'follower redirects transactional SELECT to leader',
+  );
+  t.equal(
+    redirectAnswer.leaderAddress,
+    'node-1/partition/orders-p1-r1',
+    'redirect points to the partition leader address',
+  );
+
+  let speculativeCalled = false;
+  const coordinator = new ParallelQueryCoordinator({
+    partitionQueryExecutor: async (_sql, partitionId) => ({
+      success: true,
+      rows: [{id: 1}],
+      partitionId,
+    }),
+  });
+  coordinator.speculativeExecutionEnabled = true;
+  coordinator.executeWithSpeculativeExecution = async () => {
+    speculativeCalled = true;
+    return [];
+  };
+  await coordinator.executeParallel(
+    'SELECT * FROM orders',
+    ['orders-p1', 'orders-p2'],
+    [],
+    {
+      forRead: true,
+      transactionIdentity: {
+        transactionId: 'tx-order-status-1',
+        participantId: 'tx-order-status-1:orders-p1',
+        commitMode: 'TWO_PHASE',
+        transactionEpoch: 1,
+      },
+    },
+  );
+  t.equal(
+    speculativeCalled,
+    false,
+    'speculative read hedging is disabled when transactionIdentity is present',
+  );
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'orders-p1',
+        table_name: 'orders',
+        leader_node_id: 'node-2',
+      },
+    ],
+    services: [
+      {
+        service_id: 'orders-p1-r1',
+        service_type: 'partition',
+        partition_id: 'orders-p1',
+        node_id: 'node-1',
+        raft_role: 'leader',
+        address: 'node-1/partition/orders-p1-r1',
+        status: 'active',
+      },
+      {
+        service_id: 'orders-p1-r2',
+        service_type: 'partition',
+        partition_id: 'orders-p1',
+        node_id: 'node-2',
+        raft_role: 'follower',
+        address: 'node-2/partition/orders-p1-r2',
+        status: 'active',
+      },
+    ],
+    get(type, id) {
+      return type === 'partitions' ?
+        this.partitions.find((p) => p.partition_id === id) || null :
+        null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') return this.services.filter(predicate);
+      if (type === 'partitions') return this.partitions.filter(predicate);
+      return [];
+    },
+    getAll(type) {
+      if (type === 'services') return this.services;
+      if (type === 'partitions') return this.partitions;
+      return [];
+    },
+  };
+  const deliveredAddresses = [];
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache,
+    messageRouter: {
+      async deliver(address) {
+        deliveredAddresses.push(address);
+        if (address === 'node-2/partition/orders-p1-r2') {
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            success: false,
+            redirect: 'LEADER_REDIRECT',
+            leaderAddress: 'node-1/partition/orders-p1-r1',
+            partitionId: 'orders-p1',
+          });
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [{order_id: 42}],
+          count: 1,
+          partitionId: 'orders-p1',
+        });
+      },
+    },
+  });
+  const txCandidates = executor.getPartitionServiceCandidates(
+    'orders-p1',
+    true,
+    true,
+    false,
+    undefined,
+    {transactionIdentity: {transactionId: 'tx-order-status-1'}},
+  );
+  t.equal(
+    txCandidates.length,
+    1,
+    'transactional read candidate resolution omits follower fallbacks behind canonical leader',
+  );
+  const txReadResult = await executor.executeOnPartition(
+    'orders-p1',
+    'SELECT order_id FROM orders WHERE warehouse_id = ?',
+    [1],
+    true,
+    true,
+    false,
+    {
+      sessionId: 'sess-tx-1',
+      transactionIdentity: {
+        transactionId: 'tx-order-status-1',
+        participantId: 'tx-order-status-1:orders-p1',
+        commitMode: 'TWO_PHASE',
+        transactionEpoch: 1,
+      },
+    },
+  );
+  t.equal(txReadResult.success, true, 'transactional read follows LEADER_REDIRECT');
+  t.equal(
+    executor.getSessionPartitionAddress('sess-tx-1', 'orders-p1'),
+    'node-1/partition/orders-p1-r1',
+    'session partition affinity is pinned to the redirected leader after transactional read',
+  );
+
+  // Non-leader-unavailable refusal on the canonical leader does NOT fall back to followers:
+  let mode = 'refuse_non_leader';
+  const traceAddresses = [];
+  const tracedExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache,
+    messageRouter: {
+      async deliver(address) {
+        traceAddresses.push(address);
+        if (mode === 'refuse_non_leader') {
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            success: false,
+            error: 'Participant transaction refused: NOT_ACTIVE',
+            failureCode: 'NOT_ACTIVE',
+            partitionId: 'orders-p1',
+          });
+        }
+        if (address === 'node-2/partition/orders-p1-r2') {
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            success: false,
+            error: 'No leader available for write operation',
+            failureCode: 'NOT_LEADER',
+            partitionId: 'orders-p1',
+          });
+        }
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [{order_id: 99}],
+          count: 1,
+          partitionId: 'orders-p1',
+        });
+      },
+    },
+  });
+  tracedExecutor.readRetryAttempts = 1;
+  const refusedTxRead = await tracedExecutor.executeOnPartition(
+    'orders-p1',
+    'SELECT order_id FROM orders WHERE warehouse_id = ?',
+    [1],
+    true,
+    true,
+    false,
+    {
+      sessionId: 'sess-tx-2',
+      transactionIdentity: {
+        transactionId: 'tx-order-status-2',
+        participantId: 'tx-order-status-2:orders-p1',
+        commitMode: 'TWO_PHASE',
+        transactionEpoch: 1,
+      },
+    },
+  );
+  t.equal(refusedTxRead.success, false, 'non-leader refusal fails the attempt');
+  t.same(
+    traceAddresses,
+    ['node-2/partition/orders-p1-r2'],
+    'executeOnPartition does not fall back to follower replicas behind a canonical leader',
+  );
+
+  // Stale canonical/pinned leader returning NOT_LEADER clears the pin and widens to remaining replicas:
+  mode = 'not_leader_widen';
+  traceAddresses.length = 0;
+  tracedExecutor.setSessionPartitionAddress(
+    'sess-tx-3',
+    'orders-p1',
+    'node-2/partition/orders-p1-r2',
+  );
+  const widenedTxRead = await tracedExecutor.executeOnPartition(
+    'orders-p1',
+    'SELECT order_id FROM orders WHERE warehouse_id = ?',
+    [1],
+    true,
+    true,
+    false,
+    {
+      sessionId: 'sess-tx-3',
+      transactionIdentity: {
+        transactionId: 'tx-order-status-3',
+        participantId: 'tx-order-status-3:orders-p1',
+        commitMode: 'TWO_PHASE',
+        transactionEpoch: 1,
+      },
+    },
+  );
+  t.equal(widenedTxRead.success, true, 'NOT_LEADER widens transactional read to remaining replica');
+  t.same(
+    traceAddresses,
+    ['node-2/partition/orders-p1-r2', 'node-1/partition/orders-p1-r1'],
+    'stale leader is tried first, then widened to the new leader replica',
+  );
+  t.equal(
+    tracedExecutor.getSessionPartitionAddress('sess-tx-3', 'orders-p1'),
+    'node-1/partition/orders-p1-r1',
+    'stale pin is replaced with the widened leader replica address',
+  );
 });

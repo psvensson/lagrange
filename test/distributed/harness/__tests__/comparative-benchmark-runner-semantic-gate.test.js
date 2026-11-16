@@ -454,39 +454,40 @@ function createTransactionalOltpStore(fault = {}) {
   };
 }
 
-function armOf(ledger, generation, {persistent = false} = {}) {
-  const mountArg = persistent ? ` -v /srv/bench/camp/lagrange-${generation}:/data` : '';
-  const id = stringTrim(ledger.run(
-    `docker run -d --name bench-c-lagrange-node-${generation}${mountArg} ` +
-    '--network host psvensson/lagrange:0.4.0', '10.0.0.1'));
-  const entry = ledger.containers.get(id);
-  entry.startedAt = `2026-11-01T10:0${generation}:00.000Z`;
+function armOf(ledger, generation, {persistent = false, nodeCount = 1} = {}) {
+  const startedAt = `2026-11-01T10:0${generation}:00.000Z`;
+  const nodes = arrayMap(Array.from({length: nodeCount}, (_, idx) => idx + 1), (idx) => {
+    const host = `10.0.0.${idx}`;
+    const src = `/srv/bench/camp/lagrange-${generation}-${idx}`;
+    const mountArg = persistent ? ` -v ${src}:/data` : '';
+    const id = stringTrim(ledger.run(
+      `docker run -d --name bench-c-lagrange-node-${generation}-${idx}${mountArg} ` +
+      '--network host psvensson/lagrange:0.4.0', host));
+    ledger.containers.get(id).startedAt = startedAt;
+    return {host, id, src};
+  });
   return {
-    roles: [{role: 'lagrange-node', host: '10.0.0.1', containerId: id}],
-    endpoint: {host: '10.0.0.1', port: 5433 + generation, containerId: id},
-    storage: [{
+    roles: arrayMap(nodes, (n) => ({role: 'lagrange-node', host: n.host, containerId: n.id})),
+    endpoint: {host: nodes[0].host, port: 5433 + generation, containerId: nodes[0].id},
+    storage: arrayMap(nodes, (n) => ({
       role: 'lagrange-node',
-      host: '10.0.0.1',
-      containerId: id,
+      host: n.host,
+      containerId: n.id,
       mount: '/data',
       kind: persistent ? STORAGE_KIND.HOST_VOLUME : STORAGE_KIND.CONTAINER_LAYER,
-      source: persistent ? `/srv/bench/camp/lagrange-${generation}` : null,
-    }],
+      source: persistent ? n.src : null,
+    })),
     access: {connection: {user: 'bench', database: 'bench'}},
     identity: {
-      products: [{
+      products: arrayMap(nodes, (n) => ({
         role: 'lagrange-node',
-        host: '10.0.0.1',
-        containerId: id,
+        host: n.host,
+        containerId: n.id,
         imageId: IMAGE,
-        startedAt: entry.startedAt,
-        mounts: persistent ? [{
-          type: 'bind',
-          source: `/srv/bench/camp/lagrange-${generation}`,
-          destination: '/data',
-        }] : [],
+        startedAt,
+        mounts: persistent ? [{type: 'bind', source: n.src, destination: '/data'}] : [],
         reportedVersion: '0.4.0',
-      }],
+      })),
     },
     operations: {awaitReady: async () => ({ready: true})},
   };
@@ -670,6 +671,29 @@ test('Lagrange: cohort preserved per case and before measurement, restart of the
   assert.deepEqual(arrayMap(result.gate.bindings, (b) => b.endpoint), [
     '10.0.0.1:5433',
   ]);
+  assert.equal(log[3][1], first.endpoint.containerId,
+    '1-node Lagrange deployment selects the single node for durability restart');
+
+  const multiNode = armOf(ledger, 2, {persistent: true, nodeCount: 3});
+  const multiLog = [];
+  const multiResult = await createSemanticGateStage({
+    journey: journey(multiLog),
+    sshRun,
+    opts: {},
+    evidenceDirOf: () => null,
+    now: () => 0,
+    redeploy: async () => multiNode,
+  })({
+    run: {runId: 'r-multi', system: 'lagrange', resetDataset: async () => {}},
+    manifest: {campaignId: 'camp'},
+    deployment: multiNode,
+  });
+  const peerIds = arrayMap(arrayFilter(multiNode.identity.products,
+    (p) => p.containerId !== multiNode.endpoint.containerId), (p) => p.containerId);
+  assert.equal(arrayIncludes(peerIds, multiLog[3][1]), true,
+    '3-node Lagrange deployment selects a non-endpoint lagrange-node data replica');
+  assert.notEqual(multiLog[3][1], multiNode.endpoint.containerId);
+  assert.equal(multiResult.gate.binding.containerId, multiNode.endpoint.containerId);
 });
 
 test('PostgreSQL resets through its adapter; unknown systems record semantic-gate-not-run',

@@ -400,7 +400,24 @@ const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
   }),
 });
 
+const PARTICIPANT_CONCURRENCY_GRANULARITY = Object.freeze({
+  PARTITION: 'partition',
+  ROW_KEY: 'row-key',
+});
+
+function resolveParticipantConcurrencyGranularity(value) {
+  if (value === undefined || value === null) {
+    return PARTICIPANT_CONCURRENCY_GRANULARITY.PARTITION;
+  }
+  if (value === PARTICIPANT_CONCURRENCY_GRANULARITY.PARTITION ||
+      value === PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY) {
+    return value;
+  }
+  throw new TypeError(`Invalid participant concurrencyGranularity: ${String(value)}`);
+}
+
 export {
+  PARTICIPANT_CONCURRENCY_GRANULARITY,
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
   PARTICIPANT_ORIGIN_HISTORY_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE,
@@ -419,4 +436,5 @@ export {
   PARTICIPANT_TRANSACTION_SQL,
   PARTICIPANT_TRANSACTION_STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR,
+  resolveParticipantConcurrencyGranularity,
 };

@@ -35,6 +35,13 @@ import {
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {
+  findParticipantSession,
+  getRetainedRowKeyHistoryStats,
+} from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  extractStatementWriteFootprint,
+} from '../../src/partition/partition-write-footprint-contract.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const QUIET_LOGGER = Object.freeze({
@@ -428,6 +435,183 @@ test('Scenario A deep-stack: Workstreams 3, 4, and 5 Raft batch telemetry, canon
         (await send(leader, commitMessage(txC1, prepC1.preparedDigest))).success,
         true,
       );
+
+      // 4. OR update (WHERE id = ? OR id = ?) records BOTH k-1 and k-2, refuses a concurrent
+      // transaction touching k-1, and prevents generation advancement across an overlapping OR commit!
+      const txOr1 = identityOf('6'.repeat(32), {sessionId: 'or-sess-1'});
+      const txOr2 = identityOf('7'.repeat(32), {sessionId: 'or-sess-2'});
+      assert.equal((await send(leader, beginMessage(txOr1))).success, true);
+      assert.equal((await send(leader, beginMessage(txOr2))).success, true);
+
+      const orUpdateSql = `UPDATE ${TABLE} SET value = ? WHERE id = ? OR id = ?`;
+      assert.equal(
+        (await send(leader, queryMessage(txOr1, orUpdateSql, ['or-val-1', 'k-1', 'k-2']))).success,
+        true,
+      );
+      // Concurrent write to k-1 while txOr1 holds both k-1 and k-2 must be refused!
+      const conflictOnK1 = await send(
+        leader,
+        queryMessage(txOr2, updateSql, ['try-k1', 'k-1']),
+      );
+      assert.equal(conflictOnK1.success, false);
+      // Concurrent write to k-3 (disjoint from {k-1, k-2}) succeeds!
+      assert.equal(
+        (await send(leader, queryMessage(txOr2, updateSql, ['ok-k3', 'k-3']))).success,
+        true,
+      );
+
+      // Now open txOrOverlap BEFORE txOr1 commits, touching k-4 first, or open txOr3 before
+      // another OR commit on (k-2, k-3) so txOr2 (which touched k-3 at earlier generationBase)
+      // cannot advance generationBase across an overlapping OR commit!
+      const prepOr1 = await send(leader, prepareMessage(txOr1));
+      assert.equal(prepOr1.success, true);
+      assert.equal(
+        (await send(leader, commitMessage(txOr1, prepOr1.preparedDigest))).success,
+        true,
+      );
+      // While txOr2 is still active at an older generationBase, retained history holds txOr1's commit:
+      const statsWhileActive = getRetainedRowKeyHistoryStats(leader);
+      assert.equal(statsWhileActive.scopedGenerationCount > 0, true);
+      assert.equal(statsWhileActive.committedRowKeyCount >= 2, true);
+
+      // txOr2 touched k-3, which is disjoint from txOr1's {k-1, k-2}, so txOr2 can prepare & commit:
+      const prepOr2 = await send(leader, prepareMessage(txOr2));
+      assert.equal(prepOr2.success, true);
+      assert.equal(
+        (await send(leader, commitMessage(txOr2, prepOr2.preparedDigest))).success,
+        true,
+      );
+
+      // Once all live sessions and prepared obligations complete, retained row-key state is pruned!
+      const statsAfterIdle = getRetainedRowKeyHistoryStats(leader);
+      assert.equal(statsAfterIdle.scopedGenerationCount, 0);
+      assert.equal(statsAfterIdle.committedRowKeyCount, 0);
+      assert.equal(statsAfterIdle.preparedParticipantCount, 0);
+
+      // Verify overlapping OR commit prevents sealSession / canAdvanceRowKeySessionGeneration:
+      // txStale begins and stages a write on k-2; then txStale loses the key or another tx commits
+      // an OR write on (k-1, k-2) after txStale's base. Specifically:
+      // txA stages on k-2, txB begins at same base; txA commits on (k-1 OR k-2);
+      // if a session had generationBase before txA's OR commit and touched k-1, PREPARE must refuse!
+      const txFastOr = identityOf('8'.repeat(32), {sessionId: 'fast-or-1'});
+      const txLateK1 = identityOf('9'.repeat(32), {sessionId: 'late-k1-1'});
+      assert.equal((await send(leader, beginMessage(txFastOr))).success, true);
+      assert.equal((await send(leader, beginMessage(txLateK1))).success, true);
+      assert.equal(
+        (await send(leader, queryMessage(txFastOr, orUpdateSql, ['or-v2', 'k-1', 'k-2']))).success,
+        true,
+      );
+      const prepFastOr = await send(leader, prepareMessage(txFastOr));
+      assert.equal(prepFastOr.success, true);
+      assert.equal(
+        (await send(leader, commitMessage(txFastOr, prepFastOr.preparedDigest))).success,
+        true,
+      );
+      // Now txLateK1 (opened before txFastOr committed) stages a write on k-1 (now free) and tries to PREPARE:
+      assert.equal(
+        (await send(leader, queryMessage(txLateK1, updateSql, ['late-v1', 'k-1']))).success,
+        true,
+      );
+      const prepLateK1 = await send(leader, prepareMessage(txLateK1));
+      assert.equal(prepLateK1.success, false, 'PREPARE must refuse advancing across overlapping OR commit on k-1');
+      assert.equal(prepLateK1.refusalCause, 'conflict');
+
+      // After txLateK1 ends on refusal, retained row-key history is pruned again:
+      assert.deepEqual(getRetainedRowKeyHistoryStats(leader), {
+        scopedGenerationCount: 0,
+        committedRowKeyCount: 0,
+        preparedParticipantCount: 0,
+      });
+
+      // 5. Unscoped OR branch (WHERE id = ? OR value = ?), parameterless literal write,
+      // and multi-row INSERT classification:
+      const unscopedOrFootprint = extractStatementWriteFootprint({
+        sql: `UPDATE ${TABLE} SET value = ? WHERE id = ? OR value = ?`,
+        params: ['x', 'k-1', 'old'],
+        pkCols: ['id'],
+        allCols: ['id', 'value'],
+      });
+      assert.equal(unscopedOrFootprint.scoped, false);
+      assert.deepEqual(unscopedOrFootprint.rowKeys, []);
+
+      const literalUpdateFootprint = extractStatementWriteFootprint({
+        sql: `UPDATE ${TABLE} SET value = 'lit-val' WHERE id = 'k-1'`,
+        params: [],
+        pkCols: ['id'],
+        allCols: ['id', 'value'],
+      });
+      assert.equal(literalUpdateFootprint.scoped, true);
+      assert.deepEqual(literalUpdateFootprint.rowKeys, ['k-1']);
+
+      const multiInsertFootprint = extractStatementWriteFootprint({
+        sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?), ('k-lit', 'v-lit')`,
+        params: ['k-param', 'v-param'],
+        pkCols: ['id'],
+        allCols: ['id', 'value'],
+      });
+      assert.equal(multiInsertFootprint.scoped, true);
+      assert.deepEqual(multiInsertFootprint.rowKeys, ['k-param', 'k-lit']);
+      assert.deepEqual(multiInsertFootprint.pkTuples, [['k-param'], ['k-lit']]);
+
+      // 6a. Refused unscoped DELETE in tx2 does not set tx2.hasUnscopedWrite = true
+      // or block tx1's subsequent writes.
+      const txU1 = identityOf('a'.repeat(32), {sessionId: 'u-unscoped-1'});
+      const txU2 = identityOf('b'.repeat(32), {sessionId: 'u-unscoped-2'});
+      assert.equal((await send(leader, beginMessage(txU1))).success, true);
+      assert.equal((await send(leader, beginMessage(txU2))).success, true);
+      assert.equal(
+        (await send(leader, queryMessage(txU1, updateSql, ['u1-v1', 'k-1']))).success,
+        true,
+      );
+      const refusedUnscopedDelete = await send(
+        leader,
+        queryMessage(txU2, `DELETE FROM ${TABLE}`, []),
+      );
+      assert.equal(refusedUnscopedDelete.success, false);
+      const sessionU2 = findParticipantSession(leader, txU2);
+      assert.equal(
+        sessionU2?.hasUnscopedWrite,
+        false,
+        'refused unscoped DELETE in tx2 must not set tx2.hasUnscopedWrite = true',
+      );
+      // tx1's subsequent write on k-2 must not be blocked by tx2's refused unscoped DELETE!
+      assert.equal(
+        (await send(leader, queryMessage(txU1, updateSql, ['u1-v2', 'k-2']))).success,
+        true,
+      );
+      await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, txU2));
+      const prepU1 = await send(leader, prepareMessage(txU1));
+      assert.equal(prepU1.success, true);
+      assert.equal(
+        (await send(leader, commitMessage(txU1, prepU1.preparedDigest))).success,
+        true,
+      );
+
+      // 6b. Failed duplicate INSERT in tx1 does not retain the row key in tx1.touchedRowKeys
+      // or block tx2 from mutating that row key.
+      const txDup1 = identityOf('c'.repeat(32), {sessionId: 'dup-sess-1'});
+      const txDup2 = identityOf('0'.repeat(32), {sessionId: 'dup-sess-2'});
+      assert.equal((await send(leader, beginMessage(txDup1))).success, true);
+      assert.equal((await send(leader, beginMessage(txDup2))).success, true);
+      // k-1 already exists, so INSERT INTO items (id, value) VALUES ('k-1', 'dup') fails SQLite UNIQUE constraint:
+      const failedDupInsert = await send(
+        leader,
+        queryMessage(txDup1, INSERT_SQL, ['k-1', 'dup']),
+      );
+      assert.equal(failedDupInsert.success, false);
+      const sessionDup1 = findParticipantSession(leader, txDup1);
+      assert.equal(
+        sessionDup1?.touchedRowKeys?.has('k-1'),
+        false,
+        'failed duplicate INSERT must not retain k-1 in txDup1.touchedRowKeys',
+      );
+      // txDup2 can still stage a write on k-1 without conflict!
+      assert.equal(
+        (await send(leader, queryMessage(txDup2, updateSql, ['dup2-ok', 'k-1']))).success,
+        true,
+      );
+      await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, txDup1));
+      await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, txDup2));
     });
   } finally {
     clearFixtureSingletons();

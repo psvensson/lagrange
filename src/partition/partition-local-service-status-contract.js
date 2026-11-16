@@ -176,7 +176,7 @@ function assertPartitionLocalServiceStatusConformance(value) {
   if (!isPlainObject(value)) {
     throw new TypeError(ERROR_PREFIX_RECORD_NOT_OBJECT);
   }
-  const record = /** @type {Record<string, unknown>} */ (value);
+  const record = value;
   const keys = objectKeys(record);
   for (let i = NUM_ZERO; i < keys.length; i += 1) {
     const key = keys[i];
@@ -198,20 +198,20 @@ function assertPartitionLocalServiceStatusConformance(value) {
   if (invalidFieldBatch2 !== null) {
     throw new TypeError(`${ERROR_PREFIX_INVALID_PROPERTY_TYPE}${invalidFieldBatch2}`);
   }
-  return /** @type {PartitionLocalServiceStatusRecord} */ (value);
+  return value;
 }
 
 /**
  * Type predicate for PartitionLocalServiceStatusRecord.
  *
- * @param {unknown} value
- * @return {value is PartitionLocalServiceStatusRecord}
+ * @param {*} value
+ * @return {boolean}
  */
 function isPartitionLocalServiceStatusRecord(value) {
   if (!isPlainObject(value)) {
     return false;
   }
-  const record = /** @type {Record<string, unknown>} */ (value);
+  const record = value;
   const keys = objectKeys(record);
   if (keys.length !== STATUS_FIELD_COUNT) {
     return false;
@@ -233,7 +233,24 @@ function isPartitionLocalServiceStatusRecord(value) {
  */
 function createPartitionLocalServiceStatusRecord(fields) {
   assertPartitionLocalServiceStatusConformance(fields);
-  return objectFreeze({...fields});
+  const record = {
+    partitionId: fields.partitionId,
+    tableId: fields.tableId,
+    tableName: fields.tableName,
+    replicaId: fields.replicaId,
+    nodeId: fields.nodeId,
+    role: fields.role,
+    isLeader: fields.isLeader,
+    leaderId: fields.leaderId,
+    term: fields.term,
+    state: fields.state,
+    keyRange: fields.keyRange,
+    sizeBytes: fields.sizeBytes,
+    replicaCount: fields.replicaCount,
+    cdcSubscribers: fields.cdcSubscribers,
+    initialized: fields.initialized,
+  };
+  return objectFreeze(record);
 }
 
 export {

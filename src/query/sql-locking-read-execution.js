@@ -23,28 +23,17 @@ import {
   getTransactionReservations,
   LOCKING_READ_RESERVATION_KIND,
 } from '../partition/partition-locking-read-reservation.js';
+import {extractStatementWriteFootprint} from
+  '../partition/partition-write-footprint-contract.js';
 import {
-  LOCKING_READ_AST_TYPE,
-  LOCKING_READ_CLAUSE,
-  LOCKING_READ_STRENGTH,
-  LOCKING_READ_TX_OWNERSHIP,
-  LOCKING_READ_UNKNOWN_PARTITION,
+  LOCKING_READ_AST_TYPE, LOCKING_READ_CLAUSE, LOCKING_READ_STRENGTH,
+  LOCKING_READ_TX_OWNERSHIP, LOCKING_READ_UNKNOWN_PARTITION,
 } from './sql-locking-read-constants.js';
-import {
-  QUERY_AST_NODE,
-  QUERY_ERROR_CODE,
-  QUERY_OPERATOR,
-} from './query-constants.js';
+import {QUERY_AST_NODE, QUERY_ERROR_CODE} from './query-constants.js';
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
 
 const LOCAL_LOG_QUERY_MATCHING_PK_ROWS_FAILED =
   'locking read query matching pk rows failed';
-
-const LOGICAL_OPERATOR = Object.freeze({
-  AND_UPPER: 'AND',
-  AND_LOWER: 'and',
-  EQUALS: '=',
-});
 
 /**
  * Determine whether a parsed AST is a locking read (SELECT ... FOR UPDATE).
@@ -144,6 +133,22 @@ function extractMergedPkTuple(row, pkColumns, whereEqualities) {
   return values.some((v) => v === undefined || v === null) ? null : values;
 }
 
+function extractWhereEqualitiesViaFootprint(ast, pkColumns, params) {
+  const equalities = new Map();
+  if (!ast?.where || !Array.isArray(pkColumns)) return equalities;
+  for (const col of pkColumns) {
+    const colFootprint = extractStatementWriteFootprint({
+      ast,
+      params,
+      pkCols: [col],
+    });
+    if (colFootprint.scoped && colFootprint.pkTuples.length === 1) {
+      equalities.set(col.toLowerCase(), colFootprint.pkTuples[0][0]);
+    }
+  }
+  return equalities;
+}
+
 /**
  * Resolve canonical primary key tuples for selected rows.
  * @param {Object} engine - SQL query engine.
@@ -153,15 +158,21 @@ function extractMergedPkTuple(row, pkColumns, whereEqualities) {
 async function resolveCanonicalPkTuples(engine, ctx) {
   const {
     ast, tableName, pkColumns, candidatePartitions,
-    rows, params, sessionId, queryOptions,
+    rows, params, sessionId, transactionRead, queryOptions,
   } = ctx;
   const allInProjection = rows.every((row) => extractRowPkValues(row, pkColumns) !== null);
   if (allInProjection) return rows.map((row) => extractRowPkValues(row, pkColumns));
 
-  const wherePk = extractPkFromWhereClause(ast.where, pkColumns, params);
-  if (wherePk && rows.length === 1) return [wherePk];
+  const whereFootprint = extractStatementWriteFootprint({
+    ast,
+    params,
+    pkCols: pkColumns,
+  });
+  if (whereFootprint.scoped && whereFootprint.pkTuples.length === 1 && rows.length === 1) {
+    return [[...whereFootprint.pkTuples[0]]];
+  }
 
-  const whereEqualities = collectAndEqualities(ast.where, params);
+  const whereEqualities = extractWhereEqualitiesViaFootprint(ast, pkColumns, params);
   if (whereEqualities.size > 0 && rows.length > 0) {
     const mergedTuples = rows.map((row) => extractMergedPkTuple(row, pkColumns, whereEqualities));
     if (mergedTuples.every((tuple) => tuple !== null)) {
@@ -169,7 +180,9 @@ async function resolveCanonicalPkTuples(engine, ctx) {
     }
   }
 
-  const statement = {ast, whereClause: ast.where, params, sessionId, queryOptions};
+  const statement = {
+    ast, whereClause: ast.where, params, sessionId, transactionRead, queryOptions,
+  };
   const pkRows = await queryMatchingPkRows(
     engine,
     {tableName, pkColumns, candidatePartitions},
@@ -223,11 +236,6 @@ async function rollbackConflictingSession(engine, sessionId, transactionId) {
   }
 }
 
-/**
- * Acquire reservations for all canonical tuples.
- * @param {Object} ctx - Context options.
- * @return {Promise<Object|null>} Conflict result or null.
- */
 async function acquireAllRowReservations(ctx) {
   const {
     engine, tableName, canonicalTuples, candidatePartitions,
@@ -236,21 +244,15 @@ async function acquireAllRowReservations(ctx) {
   for (const pkValues of canonicalTuples) {
     const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
     const acq = acquireRowReservation({
-      tableName,
-      partitionId,
-      pkValues,
-      transactionId,
-      sessionId,
+      tableName, partitionId, pkValues, transactionId, sessionId,
       participantId: `${transactionId}:${partitionId}`,
       kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-      db: resolvePartitionDb(engine, partitionId),
-      holdTimeoutMs,
+      db: resolvePartitionDb(engine, partitionId), holdTimeoutMs,
     });
     if (acq.conflict) {
       await rollbackConflictingSession(engine, sessionId, transactionId);
       return createLockConflictResult({
-        rowKey: acq.rowKey,
-        transactionId,
+        rowKey: acq.rowKey, transactionId,
         conflictingTransactionId: acq.conflictingTransactionId,
       });
     }
@@ -258,12 +260,6 @@ async function acquireAllRowReservations(ctx) {
   return null;
 }
 
-/**
- * Safely resolve canonical primary key tuples.
- * @param {Object} engine - Query engine.
- * @param {Object} ctx - Resolution context.
- * @return {Promise<{failure?: Object, tuples?: Array<Array<*>>}>}
- */
 async function tryResolveCanonicalPkTuples(engine, ctx) {
   try {
     const tuples = await resolveCanonicalPkTuples(engine, ctx);
@@ -280,11 +276,6 @@ async function tryResolveCanonicalPkTuples(engine, ctx) {
   }
 }
 
-/**
- * Execute locking read reservation for a completed SELECT ... FOR UPDATE query.
- * @param {Object} options - Execution context options.
- * @return {Promise<Object>} Admitted result or 55P03 conflict refusal.
- */
 export async function executeLockingReadReservations(options) {
   const {engine, ast, sessionId, transactionRead, selectResult} = options;
   const target = validateLockingReadTarget(engine, ast, selectResult);
@@ -297,132 +288,30 @@ export async function executeLockingReadReservations(options) {
   const params = options.params || selectResult._boundParams || selectResult.params || [];
 
   const resolution = await tryResolveCanonicalPkTuples(engine, {
-    ast,
-    tableName: target.tableName,
-    pkColumns: target.pkColumns,
-    candidatePartitions,
-    rows: target.rows,
-    params,
-    sessionId,
-    queryOptions: options.queryOptions || {},
+    ast, tableName: target.tableName, pkColumns: target.pkColumns,
+    candidatePartitions, rows: target.rows, params, sessionId,
+    transactionRead, queryOptions: options.queryOptions || {},
   });
   if (resolution.failure) return resolution.failure;
 
   const conflict = await acquireAllRowReservations({
-    engine,
-    tableName: target.tableName,
-    canonicalTuples: resolution.tuples,
-    candidatePartitions,
-    transactionId: transactionRead.identity.transactionId,
-    sessionId,
-    holdTimeoutMs: options.holdTimeoutMs,
+    engine, tableName: target.tableName, canonicalTuples: resolution.tuples,
+    candidatePartitions, transactionId: transactionRead.identity.transactionId,
+    sessionId, holdTimeoutMs: options.holdTimeoutMs,
   });
   return conflict || selectResult;
 }
 
-/**
- * Extract literal or parameter value from AST node.
- * @param {Object} node - AST node.
- * @param {Array<*>} params - Bound parameter values.
- * @return {*}
- */
 function extractLiteralOrParamValue(node, params) {
-  if (!node) return null;
+  if (node === null || node === undefined) return null;
+  if (typeof node === 'string' || typeof node === 'number') return node;
   if (node.type === QUERY_AST_NODE.PARAMETER) {
     const idx = typeof node.index === 'number' ? node.index : 0;
     return params?.[idx] ?? null;
   }
-  return node.value !== undefined ? node.value : node;
+  return node.value !== undefined ? node.value : null;
 }
 
-/**
- * Get column identifier string from AST node.
- * @param {Object} node - AST node.
- * @return {string|null}
- */
-function getColumnIdentifier(node) {
-  return node ? (node.column || node.name || null) : null;
-}
-
-/**
- * Match binary equality on a target column name.
- * @param {Object} where - Binary comparison AST node.
- * @param {string} targetCol - Target column in lower-case.
- * @param {Array<*>} params - Bound parameter values.
- * @return {Array<*>|null}
- */
-function matchBinaryEqualityPk(where, targetCol, params) {
-  const leftCol = getColumnIdentifier(where.left);
-  if (typeof leftCol === 'string' && leftCol.toLowerCase() === targetCol) {
-    return [extractLiteralOrParamValue(where.right, params)];
-  }
-  const rightCol = getColumnIdentifier(where.right);
-  if (typeof rightCol === 'string' && rightCol.toLowerCase() === targetCol) {
-    return [extractLiteralOrParamValue(where.left, params)];
-  }
-  return null;
-}
-
-/**
- * Collect equality conditions from an AND expression tree.
- * @param {Object} node - AST expression node.
- * @param {Array<*>} params - Bound parameter values.
- * @param {Map<string, *>} result - Collected column-to-value map.
- * @return {Map<string, *>}
- */
-function collectAndEqualities(node, params, result = new Map()) {
-  if (!node) return result;
-  const op = node.operator;
-  if (node.type === QUERY_AST_NODE.BINARY &&
-      (op === LOGICAL_OPERATOR.AND_UPPER || op === LOGICAL_OPERATOR.AND_LOWER)) {
-    collectAndEqualities(node.left, params, result);
-    collectAndEqualities(node.right, params, result);
-    return result;
-  }
-  if (node.type === QUERY_AST_NODE.BINARY &&
-      (op === QUERY_OPERATOR.EQUALS || op === LOGICAL_OPERATOR.EQUALS)) {
-    const leftCol = getColumnIdentifier(node.left);
-    const rightCol = getColumnIdentifier(node.right);
-    if (typeof leftCol === 'string') {
-      result.set(leftCol.toLowerCase(), extractLiteralOrParamValue(node.right, params));
-    } else if (typeof rightCol === 'string') {
-      result.set(rightCol.toLowerCase(), extractLiteralOrParamValue(node.left, params));
-    }
-  }
-  return result;
-}
-
-/**
- * Extract primary key tuple from WHERE clause expressions.
- * @param {Object} where - WHERE clause AST node.
- * @param {string[]} pkColumns - Declared primary key column names.
- * @param {Array<*>} params - Parameter values.
- * @return {Array<*>|null}
- */
-function extractPkFromWhereClause(where, pkColumns, params) {
-  if (!where || !Array.isArray(pkColumns) || pkColumns.length === 0) return null;
-  if (pkColumns.length === 1 &&
-      where.type === QUERY_AST_NODE.BINARY &&
-      where.operator === QUERY_OPERATOR.EQUALS) {
-    return matchBinaryEqualityPk(where, pkColumns[0].toLowerCase(), params);
-  }
-  const equalities = collectAndEqualities(where, params);
-  const tuple = [];
-  for (const col of pkColumns) {
-    const val = equalities.get(col.toLowerCase());
-    if (val === undefined || val === null) return null;
-    tuple.push(val);
-  }
-  return tuple;
-}
-
-/**
- * Extract primary key tuples from an INSERT statement AST.
- * @param {Object} ast - INSERT statement AST.
- * @param {string[]} pkColumns - Declared primary key column names.
- * @param {Array<*>} params - Parameter values.
- * @return {Array<Array<*>>}
- */
 function extractInsertPkValues(ast, pkColumns, params) {
   if (!ast) return [];
   const columns = ast.columns || [];
@@ -450,7 +339,10 @@ function getConflictingReservations(engine, tableName, currentTransactionId) {
   for (const tx of coordinator.transactionsBySession.values()) {
     if (tx.transactionId === currentTransactionId) continue;
     for (const rec of getTransactionReservations(tx.transactionId)) {
-      if (rec.tableName === tableName) conflicting.push(rec);
+      if (rec.tableName === tableName &&
+          rec.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+        conflicting.push(rec);
+      }
     }
   }
   return conflicting;
@@ -478,7 +370,7 @@ async function failConflict(engine, statement, writeTransaction, transactionId, 
 
 /**
  * Check row reservations for an INSERT statement.
- * @param {Object} context - Write statement context.
+ * @param {Object} ctx - Write statement context.
  * @return {Promise<Object|null>} Conflict refusal result, or null if permitted.
  */
 async function checkInsertReservations(ctx) {
@@ -495,6 +387,7 @@ async function checkInsertReservations(ctx) {
       pkValues,
       transactionId,
       db: resolvePartitionDb(engine, partitionId),
+      onlyForUpdate: true,
     });
     if (check.conflict) {
       return failConflict(engine, statement, writeTransaction, transactionId, check);
@@ -518,6 +411,7 @@ async function checkSinglePkConflict(ctx, wherePk) {
     pkValues: wherePk,
     transactionId,
     db: resolvePartitionDb(engine, partitionId),
+    onlyForUpdate: true,
   });
   return check.conflict ?
     failConflict(engine, statement, writeTransaction, transactionId, check) :
@@ -565,6 +459,7 @@ async function checkQueriedCandidatesConflict(ctx) {
       pkValues,
       transactionId,
       db: resolvePartitionDb(engine, partitionId),
+      onlyForUpdate: true,
     });
     if (check.conflict) {
       return failConflict(engine, statement, writeTransaction, transactionId, check);
@@ -583,8 +478,20 @@ async function checkUpdateOrDeleteReservations(ctx) {
   if (conflicting.length === 0) return null;
 
   const ast = ctx.statement.writePlan?.ast || ctx.statement.ast;
-  const wherePk = extractPkFromWhereClause(ast?.where, ctx.pkColumns, ctx.statement.params);
-  return wherePk ? checkSinglePkConflict(ctx, wherePk) : checkQueriedCandidatesConflict(ctx);
+  const footprint = extractStatementWriteFootprint({
+    sql: ctx.statement.sql || '',
+    ast,
+    params: ctx.statement.params || [],
+    pkCols: ctx.pkColumns,
+  });
+  if (!footprint.scoped || footprint.pkTuples.length === 0) {
+    return checkQueriedCandidatesConflict(ctx);
+  }
+  for (const pkTuple of footprint.pkTuples) {
+    const conflict = await checkSinglePkConflict(ctx, [...pkTuple]);
+    if (conflict) return conflict;
+  }
+  return null;
 }
 
 /**
@@ -601,28 +508,13 @@ async function evaluateWriteReservations(context) {
 
   const transactionId = writeTransaction.transactionState?.transactionId || null;
   const candidatePartitions = Array.from(statement.writePlan.partitionStatements.keys());
-
-  if (statement.statementType === LOCKING_READ_AST_TYPE.INSERT) {
-    return checkInsertReservations({
-      engine,
-      tableName,
-      pkColumns,
-      candidatePartitions,
-      statement,
-      writeTransaction,
-      transactionId,
-    });
-  }
-
-  return checkUpdateOrDeleteReservations({
-    engine,
-    tableName,
-    pkColumns,
-    candidatePartitions,
-    statement,
-    writeTransaction,
-    transactionId,
-  });
+  const ctx = {
+    engine, tableName, pkColumns, candidatePartitions,
+    statement, writeTransaction, transactionId,
+  };
+  return statement.statementType === LOCKING_READ_AST_TYPE.INSERT ?
+    checkInsertReservations(ctx) :
+    checkUpdateOrDeleteReservations(ctx);
 }
 
 /**
@@ -676,21 +568,31 @@ function stageInsertPkReservations(args) {
 }
 
 /**
- * Stage WHERE equality primary key reservations for UPDATE or DELETE.
+ * Stage WHERE primary key reservations for UPDATE or DELETE.
  * @param {Object} args - Stage arguments.
  */
 function stageWherePkReservations(args) {
   const {engine, tableName, ast, pkColumns, params, candidatePartitions, meta} = args;
-  const wherePk = extractPkFromWhereClause(ast?.where, pkColumns, params);
-  if (!wherePk) return;
-  const partitionId = resolveRowPartitionId(engine, tableName, wherePk, candidatePartitions);
-  acquireRowReservation({
-    tableName,
-    partitionId,
-    pkValues: wherePk,
-    db: resolvePartitionDb(engine, partitionId),
-    ...meta,
+  const footprint = extractStatementWriteFootprint({
+    ast,
+    params: params || [],
+    pkCols: pkColumns,
   });
+  if (!footprint.scoped || footprint.pkTuples.length === 0) {
+    return 0;
+  }
+  for (const pkTuple of footprint.pkTuples) {
+    const pkValues = [...pkTuple];
+    const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
+    acquireRowReservation({
+      tableName,
+      partitionId,
+      pkValues,
+      db: resolvePartitionDb(engine, partitionId),
+      ...meta,
+    });
+  }
+  return footprint.pkTuples.length;
 }
 
 /**
@@ -780,6 +682,7 @@ async function queryMatchingPkRows(engine, target, statement) {
   }
 
   const selectAst = buildMatchingPkSelectAst(target, statement);
+  const transactionIdentity = statement.transactionRead?.identity;
   const readResult = await queryExecutor.executeSelect(
     selectAst,
     target.candidatePartitions,
@@ -788,6 +691,7 @@ async function queryMatchingPkRows(engine, target, statement) {
       sessionId: statement.sessionId,
       timeoutMs: statement.queryOptions?.timeoutMs,
       preferLeader: true,
+      ...(transactionIdentity ? {transactionIdentity} : {}),
     },
   );
 

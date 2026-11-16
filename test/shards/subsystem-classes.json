@@ -28,7 +28,7 @@
   "censusSize": 2657,
   "digest": "fnv1a32-e1eb3591",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ae053bb5",
+  "observationDigest": "fnv1a32-00351855",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3219,7 +3219,9 @@
         "docs/development/verification-templates/owner-interaction.md",
         "docs/steering/workflow-guidelines/solver-quests.md",
         "src/bootstrap/owners/partition-quorum-authority.js",
-        "src/partition/partition-local-service-status-contract.js"
+        "src/partition/partition-local-service-status-contract.js",
+        "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-write-footprint-contract.js"
       ]
     },
     "test/bootstrap/critical-placement-trace-classifier.test.js": {
@@ -14929,7 +14931,8 @@
     "test/query/transaction-release-census.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/query/distributed/distributed-transaction-release-census.js"
+        "src/query/distributed/distributed-transaction-release-census.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js"
       ]
     },
     "test/query/transaction-release-settlement.test.js": {
@@ -14939,7 +14942,6 @@
         "src/partition/partition-participant-transaction-bytes.js",
         "src/query/distributed/distributed-transaction-participant-manifest.js",
         "src/query/distributed/distributed-transaction-release-census.js",
-        "src/query/distributed/distributed-transaction-release-settlement.js",
         "src/query/distributed/distributed-transaction-settlement.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]

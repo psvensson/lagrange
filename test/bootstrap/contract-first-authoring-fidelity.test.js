@@ -10,6 +10,13 @@ import {
   assertPartitionLocalServiceStatusConformance,
   isPartitionLocalServiceStatusRecord,
 } from '../../src/partition/partition-local-service-status-contract.js';
+import {
+  STATEMENT_WRITE_FOOTPRINT_KEYS,
+  assertStatementWriteFootprintConformance,
+  createStatementWriteFootprintRecord,
+  extractStatementWriteFootprint,
+  isStatementWriteFootprintRecord,
+} from '../../src/partition/partition-write-footprint-contract.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {
@@ -78,11 +85,10 @@ test('real producer and consumer pass contract-first typecheck with zero diagnos
 test('phantom members are rejected by static typecheck and runtime conformance', () => {
   const originalConsumerSource = fs.readFileSync(CONSUMER_FILE, 'utf8');
 
-  // Static verification 1: status.hasQuorum rejected by TypeScript checkJs
+  // Static verification 1: status.hasQuorum rejected by ES6 AST contract check
   const consumerWithHasQuorum = originalConsumerSource.replace(
     'const status = localService.getStatus();',
-    '/** @type {import("../../partition/partition-local-service-status-contract.js").PartitionLocalServiceStatusRecord} */\n' +
-      'const status = localService.getStatus();\n' +
+    'const status = localService.getStatus();\n' +
       'if (status.hasQuorum) return LOCAL_STATUS_UNAVAILABLE;',
   );
   const staticResultHasQuorum = verifyContractBoundaryTypecheck({
@@ -97,15 +103,14 @@ test('phantom members are rejected by static typecheck and runtime conformance',
   );
   assert.ok(
     hasQuorumDiagnostic,
-    `Expected diagnostic TS2339/TS2551 for ${PHANTOM_MEMBER_HAS_QUORUM}, got: ` +
+    `Expected contract diagnostic for ${PHANTOM_MEMBER_HAS_QUORUM}, got: ` +
       JSON.stringify(staticResultHasQuorum.diagnostics),
   );
 
-  // Static verification 2: status.activeReplicaCount rejected by TypeScript checkJs
+  // Static verification 2: status.activeReplicaCount rejected by ES6 AST contract check
   const consumerWithActiveReplica = originalConsumerSource.replace(
     'const status = localService.getStatus();',
-    '/** @type {import("../../partition/partition-local-service-status-contract.js").PartitionLocalServiceStatusRecord} */\n' +
-      'const status = localService.getStatus();\n' +
+    'const status = localService.getStatus();\n' +
       'if (status.activeReplicaCount > 0) return LOCAL_STATUS_UNAVAILABLE;',
   );
   const staticResultActiveReplica = verifyContractBoundaryTypecheck({
@@ -284,5 +289,88 @@ test('steering and verification templates align with zero legacy fallback', () =
     normalizedSolverQuests.toLowerCase().includes('absent versus unavailable') ||
       normalizedSolverQuests.toLowerCase().includes('absent vs unavailable'),
     'solver-quests.md checklist must cover absent versus unavailable',
+  );
+});
+
+test('StatementWriteFootprintRecord producer/consumer conformance trial rejects phantom fields statically and at runtime', () => {
+  assert.deepEqual(STATEMENT_WRITE_FOOTPRINT_KEYS, ['scoped', 'rowKeys', 'pkTuples']);
+
+  const footprintConsumerFile = 'src/partition/partition-participant-transaction-session.js';
+  const originalSessionSource = fs.readFileSync(footprintConsumerFile, 'utf8');
+  const phantomFootprintField = 'phantomRowKeyHint';
+
+  const sessionWithPhantomRead = originalSessionSource.replace(
+    'if (!footprint.scoped || footprint.rowKeys.length === 0) {',
+    `if (footprint.${phantomFootprintField}) return {conflict: false, rowKey: null, alreadyTouchedInSession: false, scoped: false};\n` +
+      '  if (!footprint.scoped || footprint.rowKeys.length === 0) {',
+  );
+  const staticFootprintResult = verifyContractBoundaryTypecheck({
+    sourceOverrides: {
+      [footprintConsumerFile]: sessionWithPhantomRead,
+    },
+  });
+  assert.equal(staticFootprintResult.passed, false);
+  const phantomDiagnostic = staticFootprintResult.diagnostics.find(
+    (diag) => TS_DIAGNOSTIC_CODES_PROPERTY_NOT_EXIST.includes(diag.code) &&
+      diag.message.includes(phantomFootprintField),
+  );
+  assert.ok(
+    phantomDiagnostic,
+    `Expected diagnostic TS2339/TS2551 for ${phantomFootprintField}, got: ` +
+      JSON.stringify(staticFootprintResult.diagnostics),
+  );
+
+  // Static verification of producer excess-property check on createStatementWriteFootprintRecord
+  const footprintProducerFile = 'src/partition/partition-write-footprint-contract.js';
+  const originalProducerSource = fs.readFileSync(footprintProducerFile, 'utf8');
+  const producerWithPhantomLiteral = originalProducerSource.replace(
+    'scoped: fields.scoped,',
+    `scoped: fields.scoped,\n    ${phantomFootprintField}: true,`,
+  );
+  const staticProducerResult = verifyContractBoundaryTypecheck({
+    sourceOverrides: {
+      [footprintProducerFile]: producerWithPhantomLiteral,
+    },
+  });
+  assert.equal(staticProducerResult.passed, false);
+  const excessPropDiagnostic = staticProducerResult.diagnostics.find(
+    (diag) => diag.code === 2353 && diag.message.includes(phantomFootprintField),
+  );
+  assert.ok(
+    excessPropDiagnostic,
+    `Expected contract excess-property diagnostic for ${phantomFootprintField}, got: ` +
+      JSON.stringify(staticProducerResult.diagnostics),
+  );
+
+  const validFootprint = extractStatementWriteFootprint({
+    sql: 'UPDATE items SET value = ? WHERE id = ? OR id = ?',
+    params: ['v-new', 'k-1', 'k-2'],
+    pkCols: ['id'],
+    allCols: ['id', 'value'],
+  });
+  assert.equal(isStatementWriteFootprintRecord(validFootprint), true);
+  assert.equal(validFootprint.scoped, true);
+  assert.deepEqual(validFootprint.rowKeys, ['k-1', 'k-2']);
+  assert.deepEqual(validFootprint.pkTuples, [['k-1'], ['k-2']]);
+  assert.doesNotThrow(() => assertStatementWriteFootprintConformance(validFootprint));
+
+  const footprintWithPhantom = {
+    scoped: true,
+    rowKeys: ['k-1'],
+    pkTuples: [['k-1']],
+    [phantomFootprintField]: 'drift',
+  };
+  assert.equal(isStatementWriteFootprintRecord(footprintWithPhantom), false);
+  assert.throws(
+    () => assertStatementWriteFootprintConformance(footprintWithPhantom),
+    (error) => error instanceof TypeError && error.message.includes(phantomFootprintField),
+  );
+  assert.throws(
+    () => createStatementWriteFootprintRecord({
+      scoped: false,
+      rowKeys: ['k-1'],
+      pkTuples: [['k-1']],
+    }),
+    (error) => error instanceof TypeError,
   );
 });

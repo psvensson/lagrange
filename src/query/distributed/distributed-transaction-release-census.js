@@ -1,6 +1,8 @@
 /** Read-only input to the release owner's fresh drain invocation. Historical
  * terminal status is never discharge proof. This helper certifies no drain. */
 import {createHash} from 'node:crypto';
+import {COMMIT_MODE, PARTICIPANT_SET_STATE} from
+  '../../constants/transactions.js';
 import {readParticipantSet} from './distributed-transaction-participant-manifest.js';
 import {decisionRecordOfRow, RECORDED_DECISION_STATE} from './distributed-transaction-decision-record.js';
 import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
@@ -35,13 +37,13 @@ function censusResult(state, rowGenerationDigest = null, legacy = [], recoverabl
     recoverableTransactionIds: Object.freeze(recoverable)});
 }
 
-function isPostOriginUndecidedRow(row, postOriginEnforced) {
+function isPostOriginOpenUndecidedRow(row, postOriginEnforced, record) {
   return postOriginEnforced &&
-    (row?.status === TRANSACTION_STATUS.ACTIVE ||
-      row?.status === TRANSACTION_STATUS.PREPARING) &&
-    row?.decision === null &&
-    row?.decision_text === null &&
-    row?.decision_digest === null;
+    row?.status === TRANSACTION_STATUS.ACTIVE &&
+    row?.participant_set_state === PARTICIPANT_SET_STATE.OPEN &&
+    row?.commit_mode === COMMIT_MODE.NOT_SELECTED &&
+    row?.frozen_participant_count === 0 &&
+    record?.state === RECORDED_DECISION_STATE.ABSENT;
 }
 
 function readTransactionReleaseCensus(database) {
@@ -56,28 +58,35 @@ function readTransactionReleaseCensus(database) {
       readPartitionWriteOrigin(database) !== null;
     const columns = new Set(database.prepare(CENSUS_SCHEMA_SQL).all().map((row) => row.name));
     const allRows = database.prepare(CENSUS_ROWS_SQL).all();
-    const rows = allRows.filter((row) => !isPostOriginUndecidedRow(row, postOriginEnforced));
-    const canonicalRows = rows.map((row) => Object.fromEntries(
+    const canonicalRows = allRows.map((row) => Object.fromEntries(
       Object.keys(row).sort().map((key) => [key, row[key]])));
     const digest = createHash('sha256').update(JSON.stringify(canonicalRows)).digest('hex');
     if (!REQUIRED_COLUMNS.every((name) => columns.has(name))) {
-      return censusResult(rows.length === 0 ? TRANSACTION_RELEASE_CENSUS_STATE.EMPTY_LEGACY_SCHEMA :
-        TRANSACTION_RELEASE_CENSUS_STATE.HELD, digest, rows.map((row) => row.transaction_id),
-      [], enforcement);
+      return censusResult(allRows.length === 0 ?
+        TRANSACTION_RELEASE_CENSUS_STATE.EMPTY_LEGACY_SCHEMA :
+        TRANSACTION_RELEASE_CENSUS_STATE.HELD, digest,
+      allRows.map((row) => row.transaction_id), [], enforcement);
     }
     const legacy = [];
     const recoverable = [];
-    for (const row of rows) {
+    let held = false;
+    for (const row of allRows) {
       const pairs = readParticipantSet(row.transaction_id, row.participant_set_text);
       const record = decisionRecordOfRow(row, row.transaction_id);
       const validDecision = record.state !== RECORDED_DECISION_STATE.INVALID &&
         (record.state === RECORDED_DECISION_STATE.ABSENT ||
           (pairs && record.participants.length === pairs.length &&
             record.participants.every(([id], index) => id === pairs[index][0])));
-      (pairs && validDecision ? recoverable : legacy).push(row.transaction_id);
+      if (!pairs || !validDecision) {
+        legacy.push(row.transaction_id);
+        held = true;
+      } else if (!isPostOriginOpenUndecidedRow(row, postOriginEnforced, record)) {
+        recoverable.push(row.transaction_id);
+        held = true;
+      }
     }
-    return censusResult(rows.length === 0 ? TRANSACTION_RELEASE_CENSUS_STATE.CLEAR :
-      TRANSACTION_RELEASE_CENSUS_STATE.HELD, digest, legacy, recoverable, enforcement);
+    return censusResult(held ? TRANSACTION_RELEASE_CENSUS_STATE.HELD :
+      TRANSACTION_RELEASE_CENSUS_STATE.CLEAR, digest, legacy, recoverable, enforcement);
   } catch {
     // A missing schema/read is unavailable, never the empty census.
     return censusResult(TRANSACTION_RELEASE_CENSUS_STATE.UNAVAILABLE);

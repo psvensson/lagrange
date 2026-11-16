@@ -197,10 +197,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
   }
 
-  buildExecutorFailureOutcomeErrorLike(
-    outcome,
-    fallbackMessage,
-  ) {
+  buildExecutorFailureOutcomeErrorLike(outcome, fallbackMessage) {
     const errorMessage =
       outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] || fallbackMessage;
     const error = new Error(errorMessage);
@@ -222,16 +219,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
   buildExecutorFailureReconcileEvidence(operation, errorLike) {
     return Object.freeze({
       criticalSystemPartition:
-        classifySystemPartition({
-          partitionId: operation?.partitionId || null,
-        }).systemTable ||
+        classifySystemPartition({partitionId: operation?.partitionId || null}).systemTable ||
         (operation?.entityType || operation?.entity_type) ===
           SHARED.UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
         this.shouldDeferRetryableDispatchFailure(operation, errorLike),
-      dispatchRetryableWorkflowStep:
-        this.isDispatchRetryableWorkflowStep(operation),
-      retryableControlPlaneFailure:
-        isRetryableControlPlaneError(errorLike),
+      dispatchRetryableWorkflowStep: this.isDispatchRetryableWorkflowStep(operation),
+      retryableControlPlaneFailure: isRetryableControlPlaneError(errorLike),
     });
   }
 

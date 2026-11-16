@@ -15,6 +15,7 @@
 // refusal) or whose outcome is unknown keeps the session PREPARING with its
 // sealed command, so the coordinator's retry re-proposes the same bytes.
 import {
+  PARTICIPANT_CONCURRENCY_GRANULARITY,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
@@ -24,6 +25,7 @@ import {
   readPreparedParticipantIds,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
+import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -34,14 +36,15 @@ const TABLE_PK_MEMO = new WeakMap();
 const COMMITTED_ROW_KEY_GENERATIONS = new WeakMap();
 const PREPARED_PARTICIPANT_ROW_KEYS = new WeakMap();
 const SCOPED_COMMIT_GENERATIONS = new WeakMap();
-const GRANULARITY_ROW_KEY = 'row-key';
-const ROW_KEY_SEPARATOR = '|';
-const DEFAULT_CONFLICT_SETTLE_WAIT_MS = 5000;
-const EMPTY_PK_METADATA = Object.freeze({pkCols: Object.freeze([]), allCols: Object.freeze([])});
-const SQL_INSERT_PREFIX = /^\s*INSERT\b/iu;
-const SQL_INSERT_COLS_RE = /^\s*INSERT\s+INTO\s+[^\s(]+\s*\(([^)]+)\)/iu;
-const SQL_WHERE_SPLIT_RE = /\bWHERE\b/iu;
-const SQL_WHERE_TOKEN_RE = /([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(\?|\$\d+)|\?/gu;
+
+const DEFAULT_CONFLICT_SETTLE_WAIT_MS = 30000;
+const MAX_RETAINED_COMMITTED_GENERATIONS = 1024;
+const MAX_RETAINED_COMMITTED_ROW_KEYS = 16384;
+const UNSCOPED_CONFLICT_SENTINEL = '*';
+const EMPTY_PK_METADATA = Object.freeze({
+  pkCols: Object.freeze([]),
+  allCols: Object.freeze([]),
+});
 
 function perServiceMap(store, service) {
   let map = store.get(service);
@@ -50,6 +53,15 @@ function perServiceMap(store, service) {
     store.set(service, map);
   }
   return map;
+}
+
+function perServiceSet(store, service) {
+  let set = store.get(service);
+  if (set === undefined) {
+    set = new Set();
+    store.set(service, set);
+  }
+  return set;
 }
 
 function readTableInfoMetadata(db, tableName) {
@@ -88,65 +100,6 @@ function resolveTablePkMetadata(service) {
   return meta;
 }
 
-function extractInsertRowKey(sql, params, pkCols, allCols) {
-  const match = SQL_INSERT_COLS_RE.exec(sql);
-  const cols = match ?
-    match[1].split(',').map((c) => c.trim().replace(/^["'`]|["'`]$/gu, '').toLowerCase()) :
-    allCols;
-  const values = [];
-  for (const pkCol of pkCols) {
-    const idx = cols.indexOf(pkCol);
-    if (idx < 0 || idx >= params.length || params[idx] === undefined) {
-      return null;
-    }
-    values.push(String(params[idx]));
-  }
-  return values.join(ROW_KEY_SEPARATOR);
-}
-
-function extractWhereRowKey(sql, params, pkCols) {
-  const whereMatch = SQL_WHERE_SPLIT_RE.exec(sql);
-  if (!whereMatch) return null;
-  const prefix = sql.slice(0, whereMatch.index);
-  let qIndex = (prefix.match(/\?/gu) || []).length;
-  const whereClause = sql.slice(whereMatch.index + whereMatch[0].length);
-  const equalities = new Map();
-  for (const match of whereClause.matchAll(SQL_WHERE_TOKEN_RE)) {
-    const col = match[1];
-    const placeholder = match[2];
-    if (!col) {
-      qIndex += 1;
-      continue;
-    }
-    const paramIdx = placeholder === '?' ? qIndex++ : Number(placeholder.slice(1)) - 1;
-    if (paramIdx >= 0 && paramIdx < params.length && params[paramIdx] !== undefined) {
-      equalities.set(col.toLowerCase(), String(params[paramIdx]));
-    }
-  }
-  const values = [];
-  for (const pkCol of pkCols) {
-    if (!equalities.has(pkCol)) return null;
-    values.push(equalities.get(pkCol));
-  }
-  return values.join(ROW_KEY_SEPARATOR);
-}
-
-function extractStatementCanonicalRowKey(service, params, sql) {
-  if (typeof sql === 'string' && sql.length > 0) {
-    const {pkCols, allCols} = resolveTablePkMetadata(service);
-    if (pkCols.length > 0) {
-      const extracted = SQL_INSERT_PREFIX.test(sql) ?
-        extractInsertRowKey(sql, params, pkCols, allCols) :
-        extractWhereRowKey(sql, params, pkCols);
-      if (extracted !== null) {
-        return {rowKey: extracted, scoped: true};
-      }
-      return {rowKey: String(params[0]), scoped: false};
-    }
-  }
-  return {rowKey: String(params[0]), scoped: true};
-}
-
 function sessionsOf(service) {
   let sessions = SESSIONS.get(service);
   if (sessions === undefined) {
@@ -157,8 +110,8 @@ function sessionsOf(service) {
 }
 
 function isRowKeyConcurrencyEnabled(service) {
-  return service?.concurrencyGranularity === GRANULARITY_ROW_KEY ||
-    service?.allowConcurrentParticipantSessions === true;
+  return service?.concurrencyGranularity ===
+    PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY;
 }
 
 function hasPreparingParticipantSession(service) {
@@ -176,11 +129,43 @@ function canAdmitConcurrentParticipantSession(service) {
     !hasPreparingParticipantSession(service);
 }
 
-function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
+function isRowKeyHeldByOtherPreparedParticipant(preparedMap, selfParticipantId, rk) {
+  for (const [otherParticipantId, entry] of preparedMap?.entries() ?? []) {
+    if (otherParticipantId !== selfParticipantId &&
+        (entry?.hasUnscopedWrite === true || entry?.rowKeys?.has(rk))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasAnyActiveOrPreparedWriteByOther(service, session) {
   for (const other of SESSIONS.get(service)?.values() ?? []) {
     if (other !== session &&
         other.phase !== PHASE.DOOMED &&
-        other.touchedRowKeys?.has(rowKey)) {
+        (other.hasUnscopedWrite === true || (other.touchedRowKeys?.size ?? 0) > 0)) {
+      return true;
+    }
+  }
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  const selfParticipantId = session?.identity?.participantId;
+  for (const [otherParticipantId, entry] of preparedMap?.entries() ?? []) {
+    if (otherParticipantId !== selfParticipantId &&
+        (entry?.hasUnscopedWrite === true || (entry?.rowKeys?.size ?? 0) > 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
+  if (rowKey === UNSCOPED_CONFLICT_SENTINEL) {
+    return hasAnyActiveOrPreparedWriteByOther(service, session);
+  }
+  for (const other of SESSIONS.get(service)?.values() ?? []) {
+    if (other !== session &&
+        other.phase !== PHASE.DOOMED &&
+        (other.hasUnscopedWrite === true || other.touchedRowKeys?.has(rowKey))) {
       return true;
     }
   }
@@ -235,9 +220,14 @@ function waitForConflictingRowKeyHolderToSettle(
     session.touchedRowKeys.clear();
     notifyRowKeySettlementWaiters(service);
   }
+  if (session && session.operations?.length === 0 && session.hasUnscopedWrite === true) {
+    session.hasUnscopedWrite = false;
+    notifyRowKeySettlementWaiters(service);
+  }
   const boundedWaitMs = Math.max(1, Math.min(timeoutMs, DEFAULT_CONFLICT_SETTLE_WAIT_MS));
-  return new Promise((resolve) => {
+  return /** @type {Promise<void>} */ (new Promise((resolve) => {
     const waiters = rowKeySettlementWaitersOf(service);
+    /** @type {ReturnType<typeof setTimeout> | null} */
     let timer = null;
     const waiter = {
       session,
@@ -248,30 +238,221 @@ function waitForConflictingRowKeyHolderToSettle(
           timer = null;
         }
         waiters.delete(waiter);
-        resolve();
+        resolve(undefined);
       },
     };
     waiters.add(waiter);
     timer = setTimeout(() => {
       waiter.resolve();
     }, boundedWaitMs);
-  });
+  }));
+}
+
+function findConflictingScopedRowKey(service, session, rowKeys) {
+  for (let i = 0; i < rowKeys.length; i += 1) {
+    const rk = rowKeys[i];
+    if (hasRowKeyConflictWithOtherSession(service, session, rk)) {
+      return rk;
+    }
+  }
+  return null;
+}
+
+function recordScopedSessionFootprint(service, session, rowKeys) {
+  const conflictingRk = findConflictingScopedRowKey(service, session, rowKeys);
+  if (conflictingRk !== null) {
+    return {
+      conflict: true,
+      rowKey: conflictingRk,
+      alreadyTouchedInSession: false,
+      scoped: true,
+      addedRowKeys: [],
+      setUnscopedWrite: false,
+    };
+  }
+  const alreadyTouchedInSession = rowKeys.some(
+    (rk) => session.touchedRowKeys?.has(rk) === true,
+  );
+  const addedRowKeys = [];
+  for (let i = 0; i < rowKeys.length; i += 1) {
+    const rk = rowKeys[i];
+    if (session.touchedRowKeys && !session.touchedRowKeys.has(rk)) {
+      session.touchedRowKeys.add(rk);
+      addedRowKeys.push(rk);
+    }
+  }
+  return {
+    conflict: false,
+    rowKey: rowKeys[0],
+    alreadyTouchedInSession,
+    scoped: true,
+    addedRowKeys,
+    setUnscopedWrite: false,
+  };
+}
+
+function recordUnscopedSessionFootprint(service, session) {
+  const conflict = hasRowKeyConflictWithOtherSession(
+    service,
+    session,
+    UNSCOPED_CONFLICT_SENTINEL,
+  );
+  const priorUnscoped = Boolean(session.hasUnscopedWrite);
+  if (!conflict) {
+    session.hasUnscopedWrite = true;
+  }
+  return {
+    conflict,
+    rowKey: conflict ? UNSCOPED_CONFLICT_SENTINEL : null,
+    alreadyTouchedInSession: false,
+    scoped: false,
+    addedRowKeys: [],
+    setUnscopedWrite: !conflict && !priorUnscoped,
+  };
+}
+
+function revertSessionRowKeyCheck(service, session, rowKeyCheck) {
+  if (!session || !rowKeyCheck || rowKeyCheck.conflict) return;
+  let changed = false;
+  if (rowKeyCheck.setUnscopedWrite === true) {
+    session.hasUnscopedWrite = false;
+    changed = true;
+  }
+  if (Array.isArray(rowKeyCheck.addedRowKeys) && session.touchedRowKeys instanceof Set) {
+    for (let i = 0; i < rowKeyCheck.addedRowKeys.length; i += 1) {
+      if (session.touchedRowKeys.delete(rowKeyCheck.addedRowKeys[i])) {
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    notifyRowKeySettlementWaiters(service);
+  }
 }
 
 function checkAndRecordSessionRowKey(service, session, params, sql = '') {
-  if (!isRowKeyConcurrencyEnabled(service) ||
-      !Array.isArray(params) ||
-      params.length === 0) {
-    return {conflict: false, rowKey: null, alreadyTouchedInSession: false, scoped: false};
+  if (!isRowKeyConcurrencyEnabled(service)) {
+    return {
+      conflict: false,
+      rowKey: null,
+      alreadyTouchedInSession: false,
+      scoped: false,
+      addedRowKeys: [],
+      setUnscopedWrite: false,
+    };
   }
-  const {rowKey, scoped} = extractStatementCanonicalRowKey(service, params, sql);
-  session.hasUnscopedWrite = session.hasUnscopedWrite || !scoped;
-  const alreadyTouchedInSession = session.touchedRowKeys?.has(rowKey) === true;
-  const conflict = hasRowKeyConflictWithOtherSession(service, session, rowKey);
-  if (!conflict) {
-    session.touchedRowKeys?.add(rowKey);
+  const {pkCols, allCols} = resolveTablePkMetadata(service);
+  const footprint = extractStatementWriteFootprint({
+    sql,
+    params: Array.isArray(params) ? params : [],
+    pkCols,
+    allCols,
+  });
+  if (!footprint.scoped || footprint.rowKeys.length === 0) {
+    return recordUnscopedSessionFootprint(service, session);
   }
-  return {conflict, rowKey, alreadyTouchedInSession, scoped};
+  return recordScopedSessionFootprint(service, session, footprint.rowKeys);
+}
+
+function findMinActiveGenerationBase(service) {
+  let minGen = Infinity;
+  for (const session of SESSIONS.get(service)?.values() ?? []) {
+    if (typeof session?.generationBase === 'number' && session.generationBase < minGen) {
+      minGen = session.generationBase;
+    }
+  }
+  for (const entry of PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.values() ?? []) {
+    const base = typeof entry?.generationBase === 'number' ? entry.generationBase : 0;
+    if (base < minGen) {
+      minGen = base;
+    }
+  }
+  return minGen;
+}
+
+function evictExcessGenerations(scopedGens, committedGenMap) {
+  if (!scopedGens || scopedGens.size <= MAX_RETAINED_COMMITTED_GENERATIONS) {
+    return;
+  }
+  const sorted = [...scopedGens].sort((a, b) => a - b);
+  const evictCount = scopedGens.size - MAX_RETAINED_COMMITTED_GENERATIONS;
+  const highestEvicted = sorted[evictCount - 1];
+  for (let i = 0; i < evictCount; i += 1) {
+    scopedGens.delete(sorted[i]);
+  }
+  if (committedGenMap) {
+    for (const [rk, gen] of [...committedGenMap.entries()]) {
+      if (gen <= highestEvicted) {
+        committedGenMap.delete(rk);
+      }
+    }
+  }
+}
+
+function evictExcessRowKeys(scopedGens, committedGenMap) {
+  if (!committedGenMap || committedGenMap.size <= MAX_RETAINED_COMMITTED_ROW_KEYS) {
+    return;
+  }
+  while (committedGenMap.size > MAX_RETAINED_COMMITTED_ROW_KEYS) {
+    let lowestGen = Infinity;
+    for (const gen of scopedGens ?? []) {
+      if (gen < lowestGen) {
+        lowestGen = gen;
+      }
+    }
+    if (lowestGen < Infinity && scopedGens) {
+      scopedGens.delete(lowestGen);
+      for (const [rk, gen] of [...committedGenMap.entries()]) {
+        if (gen <= lowestGen) {
+          committedGenMap.delete(rk);
+        }
+      }
+    } else {
+      const oldestKey = committedGenMap.keys().next().value;
+      if (oldestKey === undefined) break;
+      committedGenMap.delete(oldestKey);
+    }
+  }
+}
+
+function pruneRetainedRowKeyHistory(service) {
+  if (!service) return;
+  const scopedGens = SCOPED_COMMIT_GENERATIONS.get(service);
+  const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
+  if ((!scopedGens || scopedGens.size === 0) &&
+      (!committedGenMap || committedGenMap.size === 0)) {
+    return;
+  }
+  const minGen = findMinActiveGenerationBase(service);
+  if (minGen === Infinity) {
+    scopedGens?.clear();
+    committedGenMap?.clear();
+    return;
+  }
+  if (scopedGens) {
+    for (const gen of [...scopedGens]) {
+      if (gen <= minGen) {
+        scopedGens.delete(gen);
+      }
+    }
+  }
+  if (committedGenMap) {
+    for (const [rk, gen] of [...committedGenMap.entries()]) {
+      if (gen <= minGen) {
+        committedGenMap.delete(rk);
+      }
+    }
+  }
+  evictExcessGenerations(scopedGens, committedGenMap);
+  evictExcessRowKeys(scopedGens, committedGenMap);
+}
+
+function getRetainedRowKeyHistoryStats(service) {
+  return {
+    scopedGenerationCount: SCOPED_COMMIT_GENERATIONS.get(service)?.size ?? 0,
+    committedRowKeyCount: COMMITTED_ROW_KEY_GENERATIONS.get(service)?.size ?? 0,
+    preparedParticipantCount: PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.size ?? 0,
+  };
 }
 
 function stagePreparedParticipantRowKeys(
@@ -281,25 +462,19 @@ function stagePreparedParticipantRowKeys(
   hasUnscopedWrite = false,
 ) {
   if (!service || !participantId || !(touchedRowKeys instanceof Set)) return;
+  const session = SESSIONS.get(service)?.get(participantId);
   perServiceMap(PREPARED_PARTICIPANT_ROW_KEYS, service).set(participantId, {
     rowKeys: new Set(touchedRowKeys),
     hasUnscopedWrite: Boolean(hasUnscopedWrite),
+    generationBase: session?.generationBase ?? 0,
   });
 }
 
 function clearPreparedParticipantRowKeys(service, participantId) {
   if (!service || !participantId) return;
   PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.delete(participantId);
+  pruneRetainedRowKeyHistory(service);
   notifyRowKeySettlementWaiters(service);
-}
-
-function perServiceSet(store, service) {
-  let set = store.get(service);
-  if (set === undefined) {
-    set = new Set();
-    store.set(service, set);
-  }
-  return set;
 }
 
 function recordCommittedParticipantRowKeys(service, participantId, generation) {
@@ -308,6 +483,7 @@ function recordCommittedParticipantRowKeys(service, participantId, generation) {
   const entry = preparedMap?.get(participantId);
   preparedMap?.delete(participantId);
   if (!entry || entry.hasUnscopedWrite || entry.rowKeys.size === 0) {
+    pruneRetainedRowKeyHistory(service);
     notifyRowKeySettlementWaiters(service);
     return;
   }
@@ -316,6 +492,7 @@ function recordCommittedParticipantRowKeys(service, participantId, generation) {
   for (const rk of entry.rowKeys) {
     committedGenMap.set(rk, generation);
   }
+  pruneRetainedRowKeyHistory(service);
   notifyRowKeySettlementWaiters(service);
 }
 
@@ -327,16 +504,6 @@ function areIntermediateGenerationsScoped(service, fromGen, toGen) {
     if (!scopedGens.has(gen)) return false;
   }
   return true;
-}
-
-function isRowKeyHeldByOtherPreparedParticipant(preparedMap, selfParticipantId, rk) {
-  for (const [otherParticipantId, entry] of preparedMap?.entries() ?? []) {
-    if (otherParticipantId !== selfParticipantId &&
-        (entry?.hasUnscopedWrite === true || entry?.rowKeys?.has(rk))) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function isRowKeyTouchedAfterGeneration(service, session, rk) {
@@ -385,18 +552,16 @@ function reconcilePreparedParticipantRowKeys(service) {
 
 /**
  * Open a staging session for a BEGIN the request owner admitted.
- * @param {Object} service - The partition (its leader).
- * @param {Object} identity - {sessionId, transactionId, participantId,
+ * @param {any} service - The partition (its leader).
+ * @param {any} identity - {sessionId, transactionId, participantId,
  *   commitMode, transactionEpoch} of the BEGIN.
- * @param {Object} base - {generationBase, originIndex}: the write generation
+ * @param {any} base - {generationBase, originIndex}: the write generation
  *   read at BEGIN and the origin it counts from (design 3.2, 0.0.13).
- * @return {Object} The session.
+ * @return {any} The session.
  */
 function openParticipantSession(service, identity, base) {
   const session = {
     identity: Object.freeze({...identity}),
-    // Each staged operation as its PREPARE will carry it (decoded from its
-    // JSON text), and the encoded bytes of the operations text.
     operations: [],
     compiledOperations: [],
     touchedRowKeys: new Set(),
@@ -419,11 +584,12 @@ function openParticipantSession(service, identity, base) {
 /**
  * The session staging this request's transaction here: the one its
  * participantId keys, begun by the same transactionId; null otherwise.
- * @param {Object} service - The partition.
- * @param {{transactionId: string, participantId: string}} request - Identity.
- * @return {Object|null} The session.
+ * @param {any} service - The partition.
+ * @param {{transactionId?: string, participantId?: string}} request - Identity.
+ * @return {any} The session.
  */
 function findParticipantSession(service, {transactionId, participantId}) {
+  if (!participantId) return null;
   const session = SESSIONS.get(service)?.get(participantId) ?? null;
   return session?.identity.transactionId === transactionId ? session : null;
 }
@@ -431,9 +597,9 @@ function findParticipantSession(service, {transactionId, participantId}) {
 /**
  * The session a routing sessionId names, if a participant transaction holds
  * it (participantQueryClassification asks through the collision predicate).
- * @param {Object} service - The partition.
+ * @param {any} service - The partition.
  * @param {string} sessionId - A routing sessionId.
- * @return {Object|null} The session.
+ * @return {any} The session.
  */
 function participantSessionNamed(service, sessionId) {
   for (const session of SESSIONS.get(service)?.values() ?? []) {
@@ -447,8 +613,8 @@ function participantSessionNamed(service, sessionId) {
 /**
  * Whether the current participant owner holds this routing session, either in
  * volatile staging or as a durable PREPARED obligation.
- * @param {Object} service - The partition.
- * @param {*} sessionId - Routing context from a QUERY.
+ * @param {any} service - The partition.
+ * @param {any} sessionId - Routing context from a QUERY.
  * @return {boolean} Whether ordinary query routing would collide with TX1.
  */
 function participantRoutingSessionCollision(service, sessionId) {
@@ -460,7 +626,7 @@ function participantRoutingSessionCollision(service, sessionId) {
 /**
  * Whether any staging session exists here (one non-terminal transaction per
  * partition).
- * @param {Object} service - The partition.
+ * @param {any} service - The partition.
  * @return {boolean} Whether a session stages, prepares or is doomed here.
  */
 function hasParticipantSession(service) {
@@ -470,7 +636,7 @@ function hasParticipantSession(service) {
 /**
  * Whether the current participant owner holds the partition: volatile
  * staging on this leader, or a durable PREPARED reservation.
- * @param {Object} service - The partition.
+ * @param {any} service - The partition.
  * @return {boolean} Whether TX1 has nonterminal work here.
  */
 function participantTransactionActive(service) {
@@ -479,13 +645,14 @@ function participantTransactionActive(service) {
 
 /**
  * End one session (its transaction was decided, refused or discarded).
- * @param {Object} service - The partition.
- * @param {Object} session - The session.
+ * @param {any} service - The partition.
+ * @param {any} session - The session.
  */
 function endParticipantSession(service, session) {
   const sessions = SESSIONS.get(service);
   if (sessions?.get(session.identity.participantId) === session) {
     sessions.delete(session.identity.participantId);
+    pruneRetainedRowKeyHistory(service);
     notifyRowKeySettlementWaiters(service);
   }
 }
@@ -493,12 +660,15 @@ function endParticipantSession(service, session) {
 /**
  * Discard every session: this replica stopped leading (the demotion hook;
  * nothing durable or connection-bound is held, so nothing is healed).
- * @param {Object} service - The partition.
+ * @param {any} service - The partition.
  */
 function discardParticipantSessions(service) {
   const sessions = SESSIONS.get(service);
+  SCOPED_COMMIT_GENERATIONS.get(service)?.clear();
+  COMMITTED_ROW_KEY_GENERATIONS.get(service)?.clear();
   if (sessions === undefined || sessions.size === 0) {
     reconcilePreparedParticipantRowKeys(service);
+    pruneRetainedRowKeyHistory(service);
     notifyRowKeySettlementWaiters(service);
     return;
   }
@@ -506,6 +676,7 @@ function discardParticipantSessions(service) {
     partitionId: service.partitionId, sessionCount: sessions.size});
   sessions.clear();
   reconcilePreparedParticipantRowKeys(service);
+  pruneRetainedRowKeyHistory(service);
   notifyRowKeySettlementWaiters(service);
 }
 
@@ -520,7 +691,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
       if (hasLockingReadReservations(session.identity?.transactionId)) {
         continue;
       }
-      sessions.delete(session.identity.participantId);
+      sessions?.delete(session.identity.participantId);
       discarded += 1;
       service.logger.info(LOG_MSG.SESSION_EXPIRED, {
         partitionId: service.partitionId,
@@ -530,6 +701,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
   }
   if (discarded > 0) {
     reconcilePreparedParticipantRowKeys(service);
+    pruneRetainedRowKeyHistory(service);
     notifyRowKeySettlementWaiters(service);
   }
   return discarded;
@@ -564,7 +736,7 @@ function reportHeldPreparedRows(service, nowMs, holdTimeoutMs) {
  * The participant half of the hold sweep (design 4): discard every staging
  * session held past the hold window and report every PREPARED row held past
  * it; a PREPARED row is never brought to a terminal state here.
- * @param {Object} service - The partition (its hold window,
+ * @param {any} service - The partition (its hold window,
  *   preparedStateHoldTimeoutMs).
  * @param {number} nowMs - The sweep's time, on the service's clock.
  * @return {number} How many staging sessions were discarded.
@@ -592,12 +764,15 @@ export {
   discardParticipantSessions,
   endParticipantSession,
   findParticipantSession,
+  getRetainedRowKeyHistoryStats,
   hasParticipantSession,
   notifyRowKeySettlementWaiters,
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
+  pruneRetainedRowKeyHistory,
   recordCommittedParticipantRowKeys,
+  revertSessionRowKeyCheck,
   stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,
   waitForConflictingRowKeyHolderToSettle,

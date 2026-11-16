@@ -397,6 +397,27 @@ function evaluateReservationConflict(storeOutcome, existing, transactionId, rowK
   return null;
 }
 
+function upgradeReentrantReservationIfNeeded(
+  conflictOutcome,
+  existing,
+  requestedKind,
+  store,
+  expiresAt,
+) {
+  if (conflictOutcome.reentrant === true &&
+      existing &&
+      requestedKind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE &&
+      existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+    existing.kind = LOCKING_READ_RESERVATION_KIND.FOR_UPDATE;
+    if (expiresAt !== null) {
+      existing.expiresAt = expiresAt;
+    }
+    if (store) {
+      insertDbReservation(store, existing);
+    }
+  }
+}
+
 /**
  * Attempt to acquire a row write-intent reservation for a transaction.
  * Fail-fast without waiting (waitQueue: false).
@@ -415,7 +436,13 @@ function evaluateReservationConflict(storeOutcome, existing, transactionId, rowK
  * @return {Object} Acquisition outcome.
  */
 export function acquireRowReservation(options) {
-  const {tableName, partitionId, pkValues, transactionId} = options;
+  const {
+    tableName,
+    partitionId,
+    pkValues,
+    transactionId,
+    kind = LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+  } = options;
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
   const store = resolvePartitionStore(partitionId, options.db);
   const storeOutcome = checkStoreReservation(store, {
@@ -425,6 +452,10 @@ export function acquireRowReservation(options) {
     transactionId,
   });
   const existing = RESERVATIONS.get(rowKey);
+  const now = Date.now();
+  const expiresAt = typeof options.holdTimeoutMs === 'number' && options.holdTimeoutMs > 0 ?
+    now + options.holdTimeoutMs :
+    null;
 
   const conflictOutcome = evaluateReservationConflict(
     storeOutcome,
@@ -433,17 +464,16 @@ export function acquireRowReservation(options) {
     rowKey,
   );
   if (conflictOutcome !== null) {
+    upgradeReentrantReservationIfNeeded(conflictOutcome, existing, kind, store, expiresAt);
     return conflictOutcome;
   }
 
-  const now = Date.now();
-  const expiresAt = typeof options.holdTimeoutMs === 'number' && options.holdTimeoutMs > 0 ?
-    now + options.holdTimeoutMs :
-    null;
   const record = buildReservationRecord(options, rowKey, now, expiresAt);
 
   trackMemoryReservation(transactionId, rowKey, record);
-  if (store) insertDbReservation(store, record);
+  if (store && record.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+    insertDbReservation(store, record);
+  }
 
   return {
     success: true,
@@ -459,8 +489,9 @@ export function acquireRowReservation(options) {
  * @param {string} options.tableName - Table name.
  * @param {string} options.partitionId - Partition identifier.
  * @param {Array<*>|*} options.pkValues - Declared primary key tuple.
- * @param {string} [options.transactionId] - Current transaction ID (if any).
- * @param {Object} [options.db] - Partition SQLite database.
+ * @param {string|null} [options.transactionId] - Current transaction ID (if any).
+ * @param {Object|null} [options.db] - Partition SQLite database.
+ * @param {boolean} [options.onlyForUpdate] - Only conflict on FOR_UPDATE reservations.
  * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string}}
  */
 export function checkRowReservationConflict({
@@ -469,6 +500,7 @@ export function checkRowReservationConflict({
   pkValues,
   transactionId = null,
   db = null,
+  onlyForUpdate = false,
 }) {
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
   const store = resolvePartitionStore(partitionId, db);
@@ -484,7 +516,9 @@ export function checkRowReservationConflict({
   }
 
   const existing = RESERVATIONS.get(rowKey);
-  if (existing && existing.transactionId !== transactionId) {
+  if (existing &&
+      existing.transactionId !== transactionId &&
+      (!onlyForUpdate || existing.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE)) {
     return {
       conflict: true,
       rowKey,
@@ -689,7 +723,14 @@ export function getTransactionReservations(transactionId) {
 export function hasLockingReadReservations(transactionId) {
   if (!transactionId) return false;
   const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
-  return Boolean(txSet && txSet.size > 0);
+  if (!txSet || txSet.size === 0) return false;
+  for (const rowKey of txSet) {
+    const rec = RESERVATIONS.get(rowKey);
+    if (rec && rec.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

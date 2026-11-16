@@ -33,29 +33,68 @@ const LIKE_ANY_SEQUENCE = /%/g;
 const LIKE_ANY_SINGLE = /_/g;
 const LIKE_REGEX_ANY_SEQUENCE = '.*';
 const LIKE_REGEX_ANY_SINGLE = '.';
+const CANONICAL_NUMERIC_STRING_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u;
 
 function isNullValue(value) {
   return value === null || value === undefined;
+}
+
+function isSafeComparableNumber(value) {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= Number.MAX_SAFE_INTEGER
+  );
+}
+
+function isCanonicalNumericString(value) {
+  if (
+    typeof value !== 'string' ||
+    !CANONICAL_NUMERIC_STRING_RE.test(value)
+  ) {
+    return false;
+  }
+  const parsed = Number(value);
+  return (
+    Number.isFinite(parsed) &&
+    Math.abs(parsed) <= Number.MAX_SAFE_INTEGER
+  );
+}
+
+function coerceComparableScalars(left, right) {
+  if (isSafeComparableNumber(left) && isCanonicalNumericString(right)) {
+    return [left, Number(right)];
+  }
+  if (isSafeComparableNumber(right) && isCanonicalNumericString(left)) {
+    return [Number(left), right];
+  }
+  return [left, right];
+}
+
+function areScalarsEqual(left, right) {
+  const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
+  return coercedLeft === coercedRight;
 }
 
 function threeValuedComparison(operator, left, right) {
   if (isNullValue(left) || isNullValue(right)) {
     return UNKNOWN;
   }
+  const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
   switch (operator) {
   case QUERY_OPERATOR.EQUALS:
-    return left === right;
+    return coercedLeft === coercedRight;
   case QUERY_OPERATOR.NOT_EQUALS:
   case QUERY_OPERATOR.NOT_EQUALS_ALT:
-    return left !== right;
+    return coercedLeft !== coercedRight;
   case QUERY_OPERATOR.LESS_THAN:
-    return left < right;
+    return coercedLeft < coercedRight;
   case QUERY_OPERATOR.LESS_THAN_OR_EQUAL:
-    return left <= right;
+    return coercedLeft <= coercedRight;
   case QUERY_OPERATOR.GREATER_THAN:
-    return left > right;
+    return coercedLeft > coercedRight;
   case QUERY_OPERATOR.GREATER_THAN_OR_EQUAL:
-    return left >= right;
+    return coercedLeft >= coercedRight;
   default:
     return UNKNOWN;
   }
@@ -119,7 +158,7 @@ function evaluateIn(node, row) {
       sawNull = true;
       continue;
     }
-    if (candidateValue === value) {
+    if (areScalarsEqual(candidateValue, value)) {
       return node.negated ? false : true;
     }
   }

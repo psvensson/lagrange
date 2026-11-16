@@ -224,7 +224,7 @@ function applySuccessfulCandidateAffinity(
       executionOptions.sessionId,
       partitionId,
     );
-  } else if (!forRead) {
+  } else if (!forRead || Boolean(executionOptions?.transactionIdentity)) {
     executor.setSessionPartitionAddress(
       executionOptions.sessionId,
       partitionId,

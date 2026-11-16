@@ -5,6 +5,10 @@ import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 import {buildTransactionDecisionRecord} from
   '../../src/query/distributed/distributed-transaction-decision.js';
+import {
+  isSweepEligibleTransactionRow,
+  isTerminalSweepTransactionRow,
+} from '../../src/query/distributed/distributed-transaction-recovery.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
@@ -293,4 +297,104 @@ test('R2 CAS: an exact competing immutable decision wins; late generic progress 
     for (const field of ['session_id', 'transaction_epoch', 'participant_set_state',
       'participant_set_text', 'commit_mode', 'frozen_participant_count', 'decision',
       'decision_text', 'decision_digest']) assert.equal(after[field], before[field], field);
+  });
+
+test('R2 sweep discovery: live undecided waits for deadline while decided rows sweep immediately',
+  async (t) => {
+    const now = 1000;
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const liveUndecided = {
+      ...durableRow('1'.repeat(32)),
+      status: 'ACTIVE',
+      timeout_deadline: now + 60000,
+      participant_set_state: 'OPEN',
+      commit_mode: 'NOT_SELECTED',
+      frozen_participant_count: 0,
+      decision: null,
+      decision_text: null,
+      decision_digest: null,
+    };
+    const decidedCommit = {
+      ...durableRow('2'.repeat(32), 'COMMIT'),
+      status: 'COMMITTING',
+      timeout_deadline: now + 60000,
+    };
+    const decidedRollback = {
+      ...durableRow('3'.repeat(32), 'ROLLBACK'),
+      status: 'COMMITTING',
+      timeout_deadline: now + 60000,
+    };
+    const terminalCommit = {
+      ...durableRow('4'.repeat(32), 'COMMIT'),
+      status: 'COMMITTED',
+      timeout_deadline: now - 10,
+    };
+    const terminalRollback = {
+      ...durableRow('5'.repeat(32), 'ROLLBACK'),
+      status: 'ROLLED_BACK',
+      timeout_deadline: now - 10,
+    };
+    for (const row of [
+      liveUndecided,
+      decidedCommit,
+      decidedRollback,
+      terminalCommit,
+      terminalRollback,
+    ]) {
+      gateway.seed('sql_transactions', row);
+    }
+
+    assert.equal(isTerminalSweepTransactionRow(terminalCommit), true);
+    assert.equal(isTerminalSweepTransactionRow(terminalRollback), true);
+    assert.equal(isTerminalSweepTransactionRow(decidedCommit), false);
+    assert.equal(isSweepEligibleTransactionRow(liveUndecided, now), false);
+    assert.equal(isSweepEligibleTransactionRow(decidedCommit, now), true);
+    assert.equal(isSweepEligibleTransactionRow(decidedRollback, now), true);
+    assert.equal(isSweepEligibleTransactionRow(terminalCommit, now), false);
+    assert.equal(isSweepEligibleTransactionRow(terminalRollback, now), false);
+
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      logger,
+      controlPlaneSystemTableGateway: gateway,
+    });
+    await engine.waitForDistributedTransactionRecoveryReplay();
+    engine.systemCache = {
+      getAll: (tableName) => gateway.rows(tableName),
+    };
+    const coordinator = engine.transactionCoordinator;
+    coordinator.now = () => now;
+    coordinator.loadRecoveryStateForSweep = () =>
+      engine.loadDistributedTransactionRecoveryState();
+
+    const discovery = engine.loadDistributedTransactionRecoveryState();
+    assert.deepEqual(
+      discovery.transactions.map((row) => row.transaction_id).sort(),
+      [decidedCommit.transaction_id, decidedRollback.transaction_id],
+      'only decided non-terminal rows are sweep-eligible before timeout_deadline',
+    );
+
+    const calls = [];
+    coordinator.commitParticipant = async (_session, partition, request) =>
+      calls.push({op: 'COMMIT', partition, ...request});
+    coordinator.rollbackParticipant = async (_session, partition, request) =>
+      calls.push({op: 'ROLLBACK', partition, ...request});
+
+    const sweep = await coordinator.runRecoverySweep();
+    assert.equal(sweep.swept, 2);
+    assert.equal(sweep.resolved, 2);
+    assert.equal(calls.length, 2);
+    const byTx = new Map(
+      gateway.rows('sql_transactions').map((row) => [row.transaction_id, row]),
+    );
+    assert.equal(byTx.get(liveUndecided.transaction_id).status, 'ACTIVE');
+    assert.equal(byTx.get(liveUndecided.transaction_id).participant_set_state, 'OPEN');
+    assert.equal(byTx.get(decidedCommit.transaction_id).status, 'COMMITTED');
+    assert.equal(byTx.get(decidedRollback.transaction_id).status, 'ROLLED_BACK');
+    assert.deepEqual(
+      engine.loadDistributedTransactionRecoveryState().transactions,
+      [],
+      'once decided rows reach terminal status, sweep discovery is empty until live deadline',
+    );
   });

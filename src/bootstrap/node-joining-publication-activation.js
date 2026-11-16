@@ -18,6 +18,8 @@ import {nodeStateUpdateOptionsFromLifecycleRequest} from
   '../control-plane/node-lifecycle-publication-wire.js';
 import {initializeGuardedRuntimeServiceHandler} from
   './shared/guarded-runtime-service-handler.js';
+import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
+  '../partition/partition-participant-transaction-constants.js';
 
 // A durable-rejoin replica that holds no durable record is refused at its
 // consensus port (owner decision O4): it is not restored, not activated and
@@ -251,8 +253,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     const messageGroupService =
       options.messageGroupService || this.getLeaderMessageGroupService();
     const partition = new PartitionService({
+      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
       ...options,
-      concurrencyGranularity: options.concurrencyGranularity ?? 'row-key',
       transport: this.transport,
       messageGroupService,
       messageRouter: this.messageRouter,

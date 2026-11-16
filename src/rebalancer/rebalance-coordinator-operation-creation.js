@@ -506,56 +506,16 @@ class RebalanceCoordinatorOperationCreation {
 
     if (move?.operationCreationAdmission?.allowed !== true) {
       await this.ensureOperationLedgerSelfMoveSerialized({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
+        move, normalizedMoveType, entityType, entityId, partitionId,
         registerDurableSelfMoveIntent: true,
       });
-      await this.ensureNoConflictingInFlightReplaceForRemove({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
-      await this.ensurePriorityControlPlaneRemoveLaneAvailable({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
-      await this.ensurePrioritySurplusRemovePlacementFenceAllowed({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
-      await this.ensureEntityAddLikeCreateLaneAvailable({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
-
-      await this.ensureCriticalPartitionCreateLaneAvailable({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
-      await this.ensureCreateTopologyGuardAllowed({
-        move,
-        normalizedMoveType,
-        entityType,
-        entityId,
-        partitionId,
-      });
+      const guardCtx = {move, normalizedMoveType, entityType, entityId, partitionId};
+      await this.ensureNoConflictingInFlightReplaceForRemove(guardCtx);
+      await this.ensurePriorityControlPlaneRemoveLaneAvailable(guardCtx);
+      await this.ensurePrioritySurplusRemovePlacementFenceAllowed(guardCtx);
+      await this.ensureEntityAddLikeCreateLaneAvailable(guardCtx);
+      await this.ensureCriticalPartitionCreateLaneAvailable(guardCtx);
+      await this.ensureCreateTopologyGuardAllowed(guardCtx);
     }
 
     const recordContext = {

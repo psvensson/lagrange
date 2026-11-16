@@ -145,6 +145,7 @@ const RETAINED_OBLIGATIONS = objectFreeze([
 ]);
 const STORAGE_CONTINUITY_PRESERVED = 'preserved';
 const STORAGE_CONTINUITY_UNPRESERVED = 'unpreserved';
+const LAGRANGE_NODE_ROLE = 'lagrange-node';
 const TIKV_ROLE = 'tikv';
 
 const PG_CASE_EXECUTORS = objectFreeze({
@@ -416,7 +417,22 @@ function selectDurabilityFaultTarget(system, deployment, request) {
     if (tikv) return {host: ownField(tikv, 'host'), containerId: ownField(tikv, 'containerId')};
   }
   const endpoint = ownField(deployment, 'endpoint');
-  return {host: ownField(endpoint, 'host'), containerId: ownField(endpoint, 'containerId')};
+  const endpointContainerId = ownField(endpoint, 'containerId');
+  if (system === SYSTEM.LAGRANGE) {
+    const nonEndpointReplica = arrayFind(
+      products,
+      (one) =>
+        productRoleOf(one) === LAGRANGE_NODE_ROLE &&
+        ownField(one, 'containerId') !== endpointContainerId,
+    );
+    if (nonEndpointReplica) {
+      return {
+        host: ownField(nonEndpointReplica, 'host'),
+        containerId: ownField(nonEndpointReplica, 'containerId'),
+      };
+    }
+  }
+  return {host: ownField(endpoint, 'host'), containerId: endpointContainerId};
 }
 
 function preserveReportedIdentity(inspected, previousByContainer) {

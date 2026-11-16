@@ -988,3 +988,148 @@ t.test(
     t.end();
   },
 );
+
+t.test(
+  'syncBootIncarnation advances identity in place over existing bidirectional ' +
+    'connections (both dialer -> acceptor and acceptor -> dialer) and fences ' +
+    'in-flight deliveries without disconnecting',
+  async (t) => {
+    initializeInProcessTestEnvironment(SEED_NODE_ID);
+    t.teardown(cleanupTestEnvironment);
+
+    const acceptor = await createInProcessRouter(t, {
+      nodeId: SEED_NODE_ID,
+      wsPort: 19930,
+      bootIncarnation: 1,
+    });
+    const dialer = await createInProcessRouter(t, {
+      nodeId: JOINER_NODE_ID,
+      wsPort: 19931,
+      bootIncarnation: 1,
+    });
+
+    await dialer.connectToNode(SEED_NODE_ID, 'ws://localhost:19930');
+    t.equal(
+      await waitFor(() => linkIsSettled(acceptor, dialer)),
+      true,
+      'bidirectional connection settles at bootIncarnation = 1',
+    );
+
+    const dialerConn = dialer.nodeConnections.get(SEED_NODE_ID);
+    const acceptorConn = acceptor.nodeConnections.get(JOINER_NODE_ID);
+    const dialerConnectionId = dialerConn.connectionId;
+    const acceptorConnectionId = acceptorConn.connectionId;
+
+    // 1) Outbound dialer -> inbound acceptor transition
+    const d1OnAcceptor =
+      acceptor.connectionAuthorityOwner.captureIncomingDelivery(
+        JOINER_NODE_ID,
+        acceptorConn.ws,
+      );
+    const localD1OnDialer =
+      dialer.connectionAuthorityOwner.captureLocalDelivery();
+    t.equal(d1OnAcceptor?.senderBootIncarnation, 1);
+    t.equal(d1OnAcceptor?.isCurrent(), true);
+    t.equal(localD1OnDialer?.isCurrent(), true);
+
+    dialer.syncBootIncarnation(2);
+    t.equal(
+      localD1OnDialer.isCurrent(),
+      false,
+      'advancing local bootIncarnation immediately fences pre-advance local delivery',
+    );
+    t.equal(
+      await waitFor(
+        () =>
+          acceptor.getCurrentPrimaryConnectionBootIncarnation(JOINER_NODE_ID)
+            ?.bootIncarnation === 2,
+      ),
+      true,
+      'acceptor observes dialer bootIncarnation = 2 over existing socket',
+    );
+    t.equal(
+      acceptor.nodeConnections.get(JOINER_NODE_ID)?.state,
+      ConnectionState.CONNECTED,
+      'incoming primary socket on acceptor remains CONNECTED',
+    );
+    t.same(
+      acceptor.getCurrentPrimaryConnectionBootIncarnation(JOINER_NODE_ID),
+      {
+        nodeId: JOINER_NODE_ID,
+        bootIncarnation: 2,
+        connectionId: acceptorConnectionId,
+      },
+      'acceptor advances primary bootIncarnation to 2 on the same connectionId',
+    );
+    t.equal(
+      d1OnAcceptor.isCurrent(),
+      false,
+      'old-incarnation delivery on acceptor is immediately fenced',
+    );
+    const d2OnAcceptor =
+      acceptor.connectionAuthorityOwner.captureIncomingDelivery(
+        JOINER_NODE_ID,
+        acceptorConn.ws,
+      );
+    t.equal(d2OnAcceptor?.senderBootIncarnation, 2);
+    t.equal(d2OnAcceptor?.connectionId, acceptorConnectionId);
+    t.equal(
+      d2OnAcceptor?.isCurrent(),
+      true,
+      'new-incarnation delivery on the same acceptor connection is current',
+    );
+
+    // 2) Inbound acceptor -> outbound dialer transition
+    const d1OnDialer =
+      dialer.connectionAuthorityOwner.captureIncomingDelivery(
+        SEED_NODE_ID,
+        dialerConn.ws,
+      );
+    t.equal(d1OnDialer?.senderBootIncarnation, 1);
+    t.equal(d1OnDialer?.isCurrent(), true);
+
+    acceptor.syncBootIncarnation(2);
+    t.equal(
+      await waitFor(
+        () =>
+          dialer.getCurrentPrimaryConnectionBootIncarnation(SEED_NODE_ID)
+            ?.bootIncarnation === 2,
+      ),
+      true,
+      'dialer observes acceptor bootIncarnation = 2 over existing socket',
+    );
+    t.equal(
+      dialer.nodeConnections.get(SEED_NODE_ID)?.state,
+      ConnectionState.CONNECTED,
+      'outbound primary socket on dialer remains CONNECTED',
+    );
+    t.same(
+      dialer.getCurrentPrimaryConnectionBootIncarnation(SEED_NODE_ID),
+      {
+        nodeId: SEED_NODE_ID,
+        bootIncarnation: 2,
+        connectionId: dialerConnectionId,
+      },
+      'dialer advances primary bootIncarnation to 2 on the same connectionId',
+    );
+    t.equal(
+      d1OnDialer.isCurrent(),
+      false,
+      'old-incarnation delivery on dialer is immediately fenced',
+    );
+    const d2OnDialer =
+      dialer.connectionAuthorityOwner.captureIncomingDelivery(
+        SEED_NODE_ID,
+        dialerConn.ws,
+      );
+    t.equal(d2OnDialer?.senderBootIncarnation, 2);
+    t.equal(d2OnDialer?.connectionId, dialerConnectionId);
+    t.equal(
+      d2OnDialer?.isCurrent(),
+      true,
+      'new-incarnation delivery on the same dialer connection is current',
+    );
+
+    t.end();
+  },
+);

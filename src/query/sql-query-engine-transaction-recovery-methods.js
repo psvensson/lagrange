@@ -4,15 +4,11 @@ import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
+import {isSweepEligibleTransactionRow} from
+  './distributed/distributed-transaction-recovery.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_OBJECT = 'object';
-const SWEEP_FROZEN_STATE = 'FROZEN';
-const SWEEP_STATUS_COMMITTED = 'COMMITTED';
-const SWEEP_DECISION_COMMIT = 'COMMIT';
-const SWEEP_STATUS_ROLLED_BACK = 'ROLLED_BACK';
-const SWEEP_DECISION_ROLLBACK = 'ROLLBACK';
 
 const {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -26,27 +22,6 @@ const TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES = new Set([
   TABLES.SQL_TRANSACTIONS,
   TABLES.SQL_TRANSACTION_PARTICIPANTS,
 ]);
-
-function isTerminalSweepTransactionRow(row) {
-  const status = row?.status;
-  const decision = row?.decision;
-  const setState = row?.participant_set_state;
-  return setState === SWEEP_FROZEN_STATE && (
-    (status === SWEEP_STATUS_COMMITTED && decision === SWEEP_DECISION_COMMIT) ||
-    (status === SWEEP_STATUS_ROLLED_BACK && decision === SWEEP_DECISION_ROLLBACK)
-  );
-}
-
-function isSweepEligibleTransactionRow(row, now) {
-  if (!row || typeof row !== LOCAL_STR_OBJECT) {
-    return true;
-  }
-  if (isTerminalSweepTransactionRow(row)) {
-    return false;
-  }
-  const deadline = Number(row.timeout_deadline);
-  return !Number.isFinite(deadline) || deadline <= 0 || deadline <= now;
-}
 
 class SQLQueryEngineTransactionRecoveryMethods
   extends SQLQueryEngineWriteFailureMethods {

@@ -288,6 +288,107 @@ test('B3/B5: staged write vs concurrent SELECT ... FOR UPDATE fails fast with 55
   }
 });
 
+test('B3/B5: staged write (WRITE_STAGED) does NOT cause checkWriteStatementReservations to reject concurrent write with 55P03', async () => {
+  const harness = createTestHarness();
+  try {
+    const {engine} = harness;
+    const tx1 = await engine.transactionCoordinator.begin('s1');
+    const updateRes1 = await engine.executeQuery(
+      'UPDATE orders SET total = 500 WHERE id = 10',
+      [],
+      {sessionId: 's1'},
+    );
+    assert.equal(updateRes1.success, true);
+    assert.equal(hasLockingReadReservations(tx1.transactionId), false);
+    const tx1Reservations = getTransactionReservations(tx1.transactionId);
+    assert.equal(tx1Reservations.length, 1);
+    assert.equal(tx1Reservations[0].kind, 'WRITE_STAGED');
+
+    await engine.transactionCoordinator.begin('s2');
+    const updateRes2 = await engine.executeQuery(
+      'UPDATE orders SET total = 600 WHERE id = 10',
+      [],
+      {sessionId: 's2'},
+    );
+    assert.notEqual(
+      updateRes2.sqlState,
+      '55P03',
+      'WRITE_STAGED reservation must not reject a concurrent write with 55P03',
+    );
+    assert.equal(updateRes2.success, true);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('B3/B5: re-entrant SELECT ... FOR UPDATE upgrades same-transaction WRITE_STAGED reservation to FOR_UPDATE and blocks concurrent write with 55P03', async () => {
+  const harness = createTestHarness();
+  try {
+    const {engine} = harness;
+    const tx1 = await engine.transactionCoordinator.begin('s1');
+    const stagedUpdate = await engine.executeQuery(
+      'UPDATE orders SET total = 500 WHERE id = 10',
+      [],
+      {sessionId: 's1'},
+    );
+    assert.equal(stagedUpdate.success, true);
+    assert.equal(hasLockingReadReservations(tx1.transactionId), false);
+
+    const lockRes = await engine.executeQuery(
+      'SELECT id, total FROM orders WHERE id = 10 FOR UPDATE',
+      [],
+      {sessionId: 's1'},
+    );
+    assert.equal(lockRes.success, true);
+    assert.equal(
+      hasLockingReadReservations(tx1.transactionId),
+      true,
+      're-entrant FOR UPDATE must upgrade WRITE_STAGED reservation to FOR_UPDATE',
+    );
+    const upgraded = getTransactionReservations(tx1.transactionId);
+    assert.equal(upgraded.length, 1);
+    assert.equal(upgraded[0].kind, 'FOR_UPDATE');
+
+    await engine.transactionCoordinator.begin('s2');
+    const concurrentWrite = await engine.executeQuery(
+      'UPDATE orders SET total = 700 WHERE id = 10',
+      [],
+      {sessionId: 's2'},
+    );
+    assert.equal(concurrentWrite.success, false);
+    assert.equal(concurrentWrite.errorCode, 'LOCK_NOT_AVAILABLE');
+    assert.equal(concurrentWrite.sqlState, '55P03');
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('B3/B5: unscoped column-to-column WHERE id = id runs checkQueriedCandidatesConflict and fails fast with 55P03 when row is locked FOR UPDATE', async () => {
+  const harness = createTestHarness();
+  try {
+    const {engine} = harness;
+    await engine.transactionCoordinator.begin('s1');
+    const lockRes = await engine.executeQuery(
+      'SELECT id, total FROM orders WHERE id = 10 FOR UPDATE',
+      [],
+      {sessionId: 's1'},
+    );
+    assert.equal(lockRes.success, true);
+
+    await engine.transactionCoordinator.begin('s2');
+    const colToColUpdate = await engine.executeQuery(
+      'UPDATE orders SET total = 99 WHERE id = id',
+      [],
+      {sessionId: 's2'},
+    );
+    assert.equal(colToColUpdate.success, false);
+    assert.equal(colToColUpdate.errorCode, 'LOCK_NOT_AVAILABLE');
+    assert.equal(colToColUpdate.sqlState, '55P03');
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test('B4: reservation release on COMMIT allows subsequent transactions to lock and mutate rows', async () => {
   const harness = createTestHarness();
   try {

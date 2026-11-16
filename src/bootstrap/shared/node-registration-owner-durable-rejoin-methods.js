@@ -294,6 +294,9 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       existingMembership?.observedNodeRow || null,
       existingMembership?.nodeRow || null,
     );
+    if (existingMembership && typeof existingMembership === 'object' && advanced) {
+      existingMembership.nodeRow = advanced;
+    }
     await this.advanceReusedEndpointRows(existingMembership);
     return advanced;
   }
@@ -303,38 +306,36 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   // over a newer owner. The cache is then seeded with this boot's rows.
   async advanceReusedEndpointRows(existingMembership) {
     const bootIncarnation = this.getRegistrationBootIncarnation();
-    const reused = collectReusedEndpointEntries(existingMembership);
-    for (const [tableName, row] of reused) {
-      await this.advanceSingleReusedEndpointRow(
-        tableName,
-        row,
-        bootIncarnation,
-      );
+    const hasObject = existingMembership && typeof existingMembership === 'object';
+    const advancedMetaRows = [];
+    for (const [tableName, row] of collectReusedEndpointEntries(existingMembership)) {
+      const advancedRow = await this.advanceSingleReusedEndpointRow(
+        tableName, row, bootIncarnation);
+      if (tableName === TABLES.NODE_ENDPOINTS && hasObject) {
+        existingMembership.endpointRow = advancedRow;
+      } else if (tableName === TABLES.SERVICE_ENDPOINTS) {
+        advancedMetaRows.push(advancedRow);
+      }
     }
-    stampReusedEndpointMembershipIncarnations(
-      existingMembership,
-      bootIncarnation,
-    );
+    if (hasObject && Array.isArray(existingMembership.metaEndpointRows)) {
+      existingMembership.metaEndpointRows = advancedMetaRows;
+    }
+    stampReusedEndpointMembershipIncarnations(existingMembership, bootIncarnation);
   }
 
   async advanceSingleReusedEndpointRow(tableName, row, bootIncarnation) {
     const observedIncarnation = normalizeKnownNodeBootIncarnation(
-      readObservedBootIncarnation(row),
-    );
-    this.assertNodeBootIncarnationNotStale(
-      observedIncarnation,
-      bootIncarnation,
-    );
-    if (observedIncarnation === bootIncarnation) {
-      return;
-    }
+      readObservedBootIncarnation(row));
+    this.assertNodeBootIncarnationNotStale(observedIncarnation, bootIncarnation);
+    if (observedIncarnation === bootIncarnation) return row;
     const result = await this.upsertSystemTableRowWithRetry(tableName, row);
     if (result?.success === false) {
-      throw new Error(
-        `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`,
-      );
+      throw new Error(`${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`);
     }
-    withOriginHlcStamp(row, result?.originHlc);
+    return withOriginHlcStamp(
+      withOriginHlcStamp(row, result?.partitionResult?.originHlc),
+      result?.originHlc,
+    );
   }
 
   getRegistrationBootIncarnation() {
@@ -458,14 +459,15 @@ class NodeRegistrationOwnerDurableRejoinMethods {
    * Progress already on this boot is left untouched (the advance verb's
    * CURRENT outcome).
    * @param {Object} progress - Resolved existing join-admission progress.
-   * @return {Promise<void>}
+   * @return {Promise<Object>}
    */
   async advanceStaleJoinAdmissionIncarnation(progress) {
-    await this.advanceNodeBootIncarnation(
+    progress.nodeRow = await this.advanceNodeBootIncarnation(
       progress.observedNodeRow,
       progress.nodeRow,
     );
     await this.advanceReusedEndpointRows(progress);
+    return progress.nodeRow;
   }
 
   // The NODES registration is monotonic in its own mutation (D-7): a newer
@@ -527,7 +529,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     );
     this.assertNodeBootIncarnationNotStale(knownIncarnation, nextIncarnation);
     if (knownIncarnation === nextIncarnation) {
-      return nextNodeRow;
+      return withOriginHlcStamp(nextNodeRow, observedRow?.[COLUMN.UPDATED_AT_HLC]);
     }
     const error = new Error(NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED);
     error.deferRetry = true;
@@ -745,8 +747,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       if (classification.applied !== true) {
         throw buildLostStorageMutationFailureError(failedRow, classification);
       }
-      this.seedJoinTimeCacheRow(TABLES.SERVICES, failedRow);
-      reconciledRows.push(failedRow);
+      const stampedFailedRow = withOriginHlcStamp(
+        withOriginHlcStamp(failedRow, updateResult?.partitionResult?.originHlc),
+        updateResult?.originHlc,
+      );
+      this.seedJoinTimeCacheRow(TABLES.SERVICES, stampedFailedRow);
+      reconciledRows.push(stampedFailedRow);
     }
     return reconciledRows;
   }

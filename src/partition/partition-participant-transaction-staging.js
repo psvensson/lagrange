@@ -47,8 +47,10 @@ import {
   PARTICIPANT_TRANSACTION_REPLAY_BOUND as BOUND,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
-import {checkAndRecordSessionRowKey} from
-  './partition-participant-transaction-session.js';
+import {
+  checkAndRecordSessionRowKey,
+  revertSessionRowKeyCheck,
+} from './partition-participant-transaction-session.js';
 import {readPartitionWriteGeneration} from
   './partition-participant-transaction-store.js';
 
@@ -274,6 +276,7 @@ function stageWrite(service, session, request, params) {
   const classified = classifyTransactionStatement(service.db,
     {tableName: service.tableName, sql: request.sql, params});
   if (!classified.admitted) {
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return classifierRefusal(classified);
   }
   // As the PREPARE will carry it: the decoding of its own JSON text.
@@ -282,6 +285,7 @@ function stageWrite(service, session, request, params) {
   const operations = [...session.operations, operation];
   const bytes = Buffer.byteLength(JSON.stringify(operations), TEXT_ENCODING);
   if (operations.length > BOUND.MAX_OPERATIONS || bytes > BOUND.MAX_BYTES) {
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return refused(CODE.REPLAY_BUDGET_EXCEEDED,
       {operations: operations.length, bytes});
   }
@@ -289,6 +293,7 @@ function stageWrite(service, session, request, params) {
     validateDirectDisjointWrite(service, session, () => runStaged(service, operation)) :
     validateOverReplay(service, session, () => runStaged(service, operation));
   if (outcome.failure !== undefined) {
+    revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return failedValidation(service, session, outcome.failure);
   }
   session.operations = operations;

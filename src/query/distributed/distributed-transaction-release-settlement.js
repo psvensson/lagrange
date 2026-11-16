@@ -6,6 +6,16 @@
  * uses the fixed settlement command for freeze/decision/progress, re-drives
  * every participant through the normal transaction wire, then binds those
  * replies to a fresh row census and the current release attempt.
+ *
+ * Once a transaction's participant fanout and terminal progress row have been
+ * settled for a database, its immutable terminal settlement fact is memoized in
+ * the module-owned SETTLED_RELEASE_TRANSACTIONS WeakMap (bounded by
+ * MAX_SETTLED_RELEASE_TRANSACTIONS and pruned to the current census's
+ * recoverableTransactionIds). Every read of the memo verifies the live durable
+ * sql_transactions row (FROZEN state, terminal status, decision, decisionDigest
+ * and participant_set_text) before reusing the proof, while permission for each
+ * release action remains governed by the current cohort, generation, schema,
+ * drain and rowGenerationDigest checks.
  */
 import {deepFreeze} from '../../raft/raft-operation-port.js';
 import {COMMIT_MODE, isCanonicalTransactionEpoch, PARTICIPANT_SET_STATE,
@@ -38,21 +48,78 @@ import {participantAnswerSnapshotOf} from
 const RELEASE_PROOF_KIND = 'transaction_release_invocation_v1';
 // No readable release authority: the transaction is not settled this turn.
 const NO_RELEASE_AUTHORITY = null;
+const MAX_SETTLED_RELEASE_TRANSACTIONS = 1024;
+const SETTLED_RELEASE_TRANSACTIONS = new WeakMap([]);
+const SETTLED_ROW_SQL =
+  'SELECT participant_set_state, participant_set_text, status, decision, ' +
+  'decision_digest FROM sql_transactions WHERE transaction_id = ?';
 const RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
   'decisionDigest', 'terminalStatus', 'participantIds']);
 
+function settledTransactionMapKey(service) {
+  return service?.db instanceof Object ? service.db : NO_RELEASE_AUTHORITY;
+}
+
+function pruneSettledTransactions(service, recoverableTransactionIds) {
+  const key = settledTransactionMapKey(service);
+  const settled = key ? SETTLED_RELEASE_TRANSACTIONS.get(key) : undefined;
+  if (!settled) return;
+  const activeIds = new Set(recoverableTransactionIds);
+  for (const transactionId of settled.keys()) {
+    if (!activeIds.has(transactionId)) {
+      settled.delete(transactionId);
+    }
+  }
+}
+
+function readSettledRow(db, transactionId) {
+  try {
+    return db.prepare(SETTLED_ROW_SQL).get(transactionId);
+  } catch {
+    return NO_RELEASE_AUTHORITY;
+  }
+}
+
 function readSettledTransactionResult(service, transactionId) {
-  return service?._settledReleaseTransactions?.get(transactionId) ?? null;
+  const db = settledTransactionMapKey(service);
+  const settled = db ? SETTLED_RELEASE_TRANSACTIONS.get(db) : undefined;
+  const entry = settled ? settled.get(transactionId) : undefined;
+  if (!entry) return NO_RELEASE_AUTHORITY;
+  const row = readSettledRow(db, transactionId);
+  if (
+    !row ||
+    row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+    row.status !== entry.result.terminalStatus ||
+    row.decision !== entry.result.decision ||
+    row.decision_digest !== entry.result.decisionDigest ||
+    row.participant_set_text !== entry.participantSetText
+  ) {
+    settled.delete(transactionId);
+    return NO_RELEASE_AUTHORITY;
+  }
+  return entry.result;
 }
 
 function recordSettledTransactionResult(service, transactionId, settledEntry) {
-  if (!service || typeof service !== 'object' || !settledEntry) {
-    return;
+  const key = settledTransactionMapKey(service);
+  if (!key || !settledEntry?.result) return;
+  let settled = SETTLED_RELEASE_TRANSACTIONS.get(key);
+  if (!settled) {
+    settled = new Map();
+    SETTLED_RELEASE_TRANSACTIONS.set(key, settled);
   }
-  if (!(service._settledReleaseTransactions instanceof Map)) {
-    service._settledReleaseTransactions = new Map();
+  if (settled.has(transactionId)) {
+    settled.delete(transactionId);
+  } else if (settled.size >= MAX_SETTLED_RELEASE_TRANSACTIONS) {
+    const firstKey = settled.keys().next().value;
+    if (firstKey !== undefined) {
+      settled.delete(firstKey);
+    }
   }
-  service._settledReleaseTransactions.set(transactionId, settledEntry);
+  settled.set(transactionId, Object.freeze({
+    result: settledEntry.result,
+    participantSetText: settledEntry.participantSetText,
+  }));
 }
 
 function exactKeys(value, fields) {
@@ -217,9 +284,14 @@ async function settleOne(engine, service, transactionId, now) {
   if (!after || after.decision.state !== RECORDED_DECISION_STATE.RECORDED ||
       after.decision.decisionText !== authority.decision.decisionText ||
       after.row.status !== terminalStatus) return null;
-  return deepFreeze({transactionId, decision: after.decision.decision,
+  const result = deepFreeze({transactionId, decision: after.decision.decision,
     decisionDigest: after.decision.decisionDigest, terminalStatus,
     participantIds: Object.freeze(participantIds)});
+  recordSettledTransactionResult(service, transactionId, {
+    result,
+    participantSetText: after.row.participant_set_text,
+  });
+  return result;
 }
 
 async function settleTransactionReleaseRows({engine, service, census, now = Date.now()}) {
@@ -229,14 +301,12 @@ async function settleTransactionReleaseRows({engine, service, census, now = Date
       census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
       census.legacyTransactionIds?.length !== 0 ||
       !Array.isArray(census.recoverableTransactionIds)) return null;
+  pruneSettledTransactions(service, census.recoverableTransactionIds);
   const transactions = [];
   for (const transactionId of census.recoverableTransactionIds) {
     const existing = readSettledTransactionResult(service, transactionId);
     const result = existing ?? await settleOne(engine, service, transactionId, now);
     if (result === null) return null;
-    if (existing === null) {
-      recordSettledTransactionResult(service, transactionId, result);
-    }
     transactions.push(result);
   }
   return Object.freeze(transactions);
@@ -262,4 +332,8 @@ function transactionReleaseProofOf({release, attempt, census, transactions}) {
       participantIds: [...entry.participantIds]}))});
 }
 
-export {settleTransactionReleaseRows, transactionReleaseProofOf};
+export {
+  MAX_SETTLED_RELEASE_TRANSACTIONS,
+  settleTransactionReleaseRows,
+  transactionReleaseProofOf,
+};

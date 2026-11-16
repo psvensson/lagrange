@@ -440,8 +440,8 @@ function hasCanonicalAuthorityPort(localService) {
 }
 
 /**
- * @param {any} localService
- * @return {import('../../partition/partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord | {unavailable: true}}
+ * @param {*} localService
+ * @return {Object}
  */
 function readCanonicalLocalServiceStatus(localService) {
   if (
@@ -453,7 +453,6 @@ function readCanonicalLocalServiceStatus(localService) {
     return LOCAL_STATUS_UNAVAILABLE;
   }
   try {
-    /** @type {import('../../partition/partition-local-service-status-contract.js').PartitionLocalServiceStatusRecord} */
     const status = localService.getStatus();
     return isPartitionLocalServiceStatusRecord(status) ?
       status : LOCAL_STATUS_UNAVAILABLE;

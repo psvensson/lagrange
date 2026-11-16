@@ -1,4 +1,6 @@
 import {PartitionService} from '../partition/partition-service.js';
+import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
+  '../partition/partition-participant-transaction-constants.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {
   BOOTSTRAP_DEFAULT,
@@ -151,8 +153,8 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         }
 
         const partition = new PartitionService({
+          concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
           ...options,
-          concurrencyGranularity: options.concurrencyGranularity ?? 'row-key',
           dbPath,
           transport: this.transport,
           messageGroupService: messageGroupService,

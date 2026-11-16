@@ -51,6 +51,7 @@ function createPartitionCandidateDeliveryState({
           executionOptions?.readAuthority || null,
         recoveryCandidateSelectionKey:
           executionOptions.recoveryCandidateSelectionKey,
+        transactionIdentity: executionOptions?.transactionIdentity || null,
       },
     );
     routingSnapshot = refreshedResolution.routingSnapshot;

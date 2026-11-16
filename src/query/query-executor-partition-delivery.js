@@ -77,6 +77,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const requireCanonicalLeader =
       executionOptions?.readAuthority?.leaderMode ===
         CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+    const isLeaderPinnedDelivery =
+      !forRead || Boolean(executionOptions?.transactionIdentity);
     const attemptBudget = createPartitionAttemptBudget({
       executor: this,
       partitionId,
@@ -193,6 +195,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             executionOptions?.readAuthority || null,
           recoveryCandidateSelectionKey:
             executionOptions.recoveryCandidateSelectionKey,
+          transactionIdentity: executionOptions?.transactionIdentity || null,
         },
       );
     for (let attempt = 1; attempt <= currentMaxAttempts; attempt++) {
@@ -513,7 +516,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               continue;
             }
             if (
-              !forRead &&
+              isLeaderPinnedDelivery &&
               this.isLeaderUnavailable(
                 redirectFailureMessage,
                 redirectResponse?.errorCode,
@@ -589,7 +592,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             continue;
           }
           if (
-            !forRead &&
+            isLeaderPinnedDelivery &&
             this.isLeaderUnavailable(errorMessage, response?.errorCode)
           ) {
             recordCandidateFailure(
@@ -654,7 +657,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               candidateIndex,
               serviceInfo?.nodeId || null,
             );
-            if (!forRead) {
+            if (isLeaderPinnedDelivery) {
               clearPinnedCandidateAddress(
                 this,
                 executionOptions,
@@ -690,7 +693,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             continue;
           }
           if (
-            !forRead &&
+            isLeaderPinnedDelivery &&
             this.isLeaderUnavailable(
               errorMessage,
               classifyThrownDeliveryError(error).errorCode,

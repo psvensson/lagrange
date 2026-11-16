@@ -7,6 +7,8 @@
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
+import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
+  '../../partition/partition-participant-transaction-constants.js';
 import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../raft/raft-rs-original-allocation-constants.js';
 import {assertCritical} from '../../utils/assert.js';
@@ -15,40 +17,24 @@ import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
-import {classifySystemPartition} from
-  '../system-partition-classification.js';
-import {resolveCanonicalLeaderService} from
-  '../../cache/leader-readiness-gate.js';
+import {classifySystemPartition} from '../system-partition-classification.js';
+import {resolveCanonicalLeaderService} from '../../cache/leader-readiness-gate.js';
 import {
-  BOOTSTRAP_PHASE,
-  BOOTSTRAP_DEFAULT,
-  BOOTSTRAP_ERROR,
-  BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
-  BOOTSTRAP_UNIFIED_RECONCILE,
+  BOOTSTRAP_PHASE, BOOTSTRAP_DEFAULT, BOOTSTRAP_ERROR, BOOTSTRAP_LOG_MSG,
+  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT, BOOTSTRAP_UNIFIED_RECONCILE,
 } from '../bootstrap-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_SCHEMAS,
-  INITIAL_PARTITION_IDS,
-  getInitialReplicaIds,
-  INITIAL_MESSAGE_GROUP_ID,
-  INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+  SYSTEM_TABLE_NAME, SYSTEM_TABLE_SCHEMAS, INITIAL_PARTITION_IDS,
+  getInitialReplicaIds, INITIAL_MESSAGE_GROUP_ID, INITIAL_MESSAGE_GROUP_REPLICA_IDS,
 } from '../system-table-schemas-constants.js';
 import {assignSeedPartitionReplicaProgressMethods} from
   './seed-partition-replica-progress.js';
 import {
-  COLUMN,
-  SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
-  SERVICE_TYPE,
-  STRING,
-  UNIFIED_SERVICE_TYPE,
-  isPartitionCleanupServiceRow,
+  COLUMN, SERVICE_DESCRIPTOR_FIELD, SERVICE_LIFECYCLE_STATE, SERVICE_TYPE,
+  STRING, UNIFIED_SERVICE_TYPE, isPartitionCleanupServiceRow,
 } from '../../constants/index.js';
 import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
   '../shared/hosted-replica-authorities.js';
-
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_STRING = 'string';
@@ -211,18 +197,12 @@ class SeedPartitionsPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const definition = context?.definition || {};
-    const serviceId =
-      definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    const serviceId = definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
     let options = d.admitOriginalSeedReplica(d.resolveBootstrapReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.PARTITION,
+      serviceId, UNIFIED_SERVICE_TYPE.PARTITION,
     ));
     const startupAdmission = d.getStartupServicesAdmission?.();
-    assertBootstrapPartitionStorageAdmission(
-      options,
-      startupAdmission,
-      d.getNodeId(),
-    );
+    assertBootstrapPartitionStorageAdmission(options, startupAdmission, d.getNodeId());
 
     const partitionServices = d.getPartitionServices();
     if (!partitionServices.has(options.replicaId) && options.createDelayMs > 0) {
@@ -241,9 +221,7 @@ class SeedPartitionsPhase {
       tableName: options.tableName,
       partitionId: options.partitionId,
       replicaId: options.replicaId,
-      peerTotal: Math.max(
-        0, options.replicaIds.length - 1,
-      ),
+      peerTotal: Math.max(0, options.replicaIds.length - 1),
     });
 
     try {
@@ -283,6 +261,7 @@ class SeedPartitionsPhase {
           typeof d.getBootstrapReadinessState === 'function' ?
             d.getBootstrapReadinessState() :
             null,
+        concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
         suppressLifecycleLogs: true,
         onInitializationStage: (stageEvent) =>
           this.updatePartitionReplicaProgress(

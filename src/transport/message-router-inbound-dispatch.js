@@ -307,62 +307,32 @@ class MessageRouterInboundDispatch {
       } else if (
         adoptionDecision.state === INCOMING_CONNECTION_ADOPTION.ADOPT_INCOMING
       ) {
-        if (existing && existing.ws && existing.connectionId !== connectionId) {
-          this.retireConnection(existing);
-          try {
-            existing.ws.terminate();
-          } catch (error) {
-            this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-              nodeId,
-              error: error.message,
-            });
-          }
-        }
-        if (existing && this.nodeConnections.get(nodeId) === existing) {
-          this.nodeConnections.delete(nodeId);
-        }
-        this.nodeConnections.delete(connectionId);
-        // Migrate the pre-identify inbound-activity stamp to the node key so
-        // raw connection-id keys never accumulate across reconnect churn.
-        const preIdentifyActivityAt =
-          this.nodeInboundActivityAt.get(connectionId);
-        this.nodeInboundActivityAt.delete(connectionId);
-        if (preIdentifyActivityAt) {
-          this.nodeInboundActivityAt.set(
+        if (
+          existing === connection &&
+          connection.ws === ws &&
+          this.nodeConnections.get(nodeId) === connection
+        ) {
+          this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
             nodeId,
-            Math.max(
-              preIdentifyActivityAt,
-              this.nodeInboundActivityAt.get(nodeId) || TRANSPORT_NUM.ZERO,
-            ),
+            connection,
+            bootIncarnation,
           );
+        } else {
+          this.terminateReplacedIncomingConnection(nodeId, connectionId, existing);
+          this.rekeyAdoptedIncomingConnection(
+            connectionId,
+            nodeId,
+            connection,
+            bootIncarnation,
+          );
+          this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
+            oldKey: connectionId,
+            newKey: nodeId,
+            localNodeId: this.nodeId,
+          });
+          this.sendIdentification(connection);
+          this.startPingInterval(connection);
         }
-        this.nodeConnections.set(nodeId, connection);
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-          nodeId,
-          connection,
-          bootIncarnation,
-        );
-        this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
-          oldKey: connectionId,
-          newKey: nodeId,
-          localNodeId: this.nodeId,
-        });
-        // Identity is bidirectional: only the dialer sends IDENTIFY on open,
-        // so answer the adopted primary with this side's own IDENTIFY. That
-        // reply is the only way the dialer's outbound record learns this
-        // boot's incarnation (formation-release cohort capture reads the
-        // current primary regardless of direction). Sent for a primary
-        // adoption only: never for a bulk socket (forked above), never for a
-        // kept self-connection, and never in reply to a reply (the outbound
-        // branch below binds without answering).
-        this.sendIdentification(connection);
-        // Arm the keepalive on the adopted inbound connection. The outbound
-        // dialer pings this side; without a ping from this side too, a half-open
-        // inbound socket to a peer that died without a clean TCP close (e.g. a
-        // hard restart) would linger undetected here with no liveness probe and
-        // no re-dial. The adopted record carries a configuredAddress, so the
-        // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
-        this.startPingInterval(connection);
       } else {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
@@ -442,6 +412,50 @@ class MessageRouterInboundDispatch {
       nodeAddress,
       connectionId,
     });
+  }
+  terminateReplacedIncomingConnection(nodeId, connectionId, existing) {
+    if (existing && existing.ws && existing.connectionId !== connectionId) {
+      this.retireConnection(existing);
+      try {
+        existing.ws.terminate();
+      } catch (error) {
+        this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+          nodeId,
+          error: error.message,
+        });
+      }
+    }
+    if (existing && this.nodeConnections.get(nodeId) === existing) {
+      this.nodeConnections.delete(nodeId);
+    }
+  }
+  rekeyAdoptedIncomingConnection(
+    connectionId,
+    nodeId,
+    connection,
+    bootIncarnation,
+  ) {
+    this.nodeConnections.delete(connectionId);
+    // Migrate the pre-identify inbound-activity stamp to the node key so
+    // raw connection-id keys never accumulate across reconnect churn.
+    const preIdentifyActivityAt =
+      this.nodeInboundActivityAt.get(connectionId);
+    this.nodeInboundActivityAt.delete(connectionId);
+    if (preIdentifyActivityAt) {
+      this.nodeInboundActivityAt.set(
+        nodeId,
+        Math.max(
+          preIdentifyActivityAt,
+          this.nodeInboundActivityAt.get(nodeId) || TRANSPORT_NUM.ZERO,
+        ),
+      );
+    }
+    this.nodeConnections.set(nodeId, connection);
+    this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+      nodeId,
+      connection,
+      bootIncarnation,
+    );
   }
   /**
    * Attach the bulk transfer channel registry that adopts identified

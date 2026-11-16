@@ -2,7 +2,7 @@ import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {
   PARTICIPANT_SET_STATE,
   isCanonicalTransactionEpoch,
-} from '../../constants/index.js';
+} from '../../constants/transactions.js';
 import {
   QUERY_OPERATION,
 } from '../query-constants.js';
@@ -28,6 +28,7 @@ import {
   RECOVERY_SWEEP_LOG_MSG,
   TERMINAL_TRANSACTION_STATUS,
   TRANSACTION_RECOVERY_OWNER_KEY,
+  TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
@@ -44,6 +45,43 @@ const LOCAL_STR_PREPARETERM = 'prepareTerm';
 const LOCAL_STR_TIMEOUT_DEADLINE = 'timeout_deadline';
 const LOCAL_STR_TIMEOUTDEADLINE = 'timeoutDeadline';
 const RECOVERED_TRANSACTION_DECISION_EVENT = 'RECOVERY_STATE_RESTORED';
+const POST_DECISION_SWEEP_TRANSACTION_STATUS = Object.freeze(new Set([
+  TRANSACTION_STATUS.COMMITTING,
+  TRANSACTION_STATUS.ROLLING_BACK,
+  TRANSACTION_STATUS.FAILED,
+  TRANSACTION_STATUS.COMMITTED,
+  TRANSACTION_STATUS.ROLLED_BACK,
+]));
+
+function isTerminalSweepTransactionRow(row) {
+  return row?.participant_set_state === PARTICIPANT_SET_STATE.FROZEN && (
+    (row?.status === TRANSACTION_STATUS.COMMITTED &&
+      row?.decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT) ||
+    (row?.status === TRANSACTION_STATUS.ROLLED_BACK &&
+      row?.decision === PARTICIPANT_TRANSACTION_DECISION.ROLLBACK)
+  );
+}
+
+function hasRecordedDecisionOrPostDecisionStatus(row) {
+  return (row?.decision !== null && row?.decision !== undefined) ||
+    (row?.decision_text !== null && row?.decision_text !== undefined) ||
+    (row?.decision_digest !== null && row?.decision_digest !== undefined) ||
+    POST_DECISION_SWEEP_TRANSACTION_STATUS.has(row?.status);
+}
+
+function isSweepEligibleTransactionRow(row, now) {
+  if (!row || typeof row !== LOCAL_STR_OBJECT) {
+    return true;
+  }
+  if (isTerminalSweepTransactionRow(row)) {
+    return false;
+  }
+  if (hasRecordedDecisionOrPostDecisionStatus(row)) {
+    return true;
+  }
+  const deadline = Number(row.timeout_deadline);
+  return !Number.isFinite(deadline) || deadline <= 0 || deadline <= now;
+}
 
 /**
  * @param {*} errorLike
@@ -706,4 +744,8 @@ const distributedTransactionRecoveryMethods = {
   },
 };
 
-export {distributedTransactionRecoveryMethods};
+export {
+  distributedTransactionRecoveryMethods,
+  isSweepEligibleTransactionRow,
+  isTerminalSweepTransactionRow,
+};

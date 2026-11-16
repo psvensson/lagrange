@@ -36,6 +36,12 @@ import {
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {
+  getRetainedRowKeyHistoryStats,
+} from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  extractStatementWriteFootprint,
+} from '../../src/partition/partition-write-footprint-contract.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -506,6 +512,19 @@ async function verifyRollbackCleanupAndConflictReplay(leader, updateSql) {
   const prepC1 = await send(leader, prepareMessage(txC1));
   assert.equal(prepC1.success, true);
   assert.equal((await send(leader, commitMessage(txC1, prepC1.preparedDigest))).success, true);
+
+  const orFootprint = extractStatementWriteFootprint({
+    sql: `UPDATE ${TABLE} SET value = ? WHERE id = ? OR id = ?`,
+    params: ['or-v', RK_ONE, RK_TWO],
+    pkCols: ['id'],
+    allCols: ['id', 'value'],
+  });
+  assert.equal(orFootprint.scoped, true);
+  assert.deepEqual(orFootprint.rowKeys, [RK_ONE, RK_TWO]);
+
+  const idleStats = getRetainedRowKeyHistoryStats(leader);
+  assert.equal(idleStats.scopedGenerationCount, ZERO);
+  assert.equal(idleStats.committedRowKeyCount, ZERO);
 }
 
 async function runAllChecks() {

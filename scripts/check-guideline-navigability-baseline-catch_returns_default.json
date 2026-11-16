@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-14T21:05:37.928Z",
-  "rawViolationCount": 381,
+  "generatedAt": "2026-11-16T07:12:52.010Z",
+  "rawViolationCount": 378,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 448,
+      "line": 449,
       "column": 10,
       "functionName": "getMembers",
       "kind": "catch_returns_default",
@@ -464,7 +464,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 522,
+      "line": 523,
       "column": 10,
       "functionName": "isNodeLifecycleReady",
       "kind": "catch_returns_default",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js",
-      "line": 296,
+      "line": 287,
       "column": 6,
       "functionName": "resolveClusterIncarnationFence",
       "kind": "catch_returns_default",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-publication-methods.js",
-      "line": 87,
+      "line": 94,
       "column": 4,
       "functionName": "readOwnDataProperty",
       "kind": "catch_returns_default",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-row-merge.js",
-      "line": 531,
+      "line": 562,
       "column": 4,
       "functionName": "tryParseHLCTimestamp",
       "kind": "catch_returns_default",
@@ -779,7 +779,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 538,
+      "line": 539,
       "column": 6,
       "functionName": "driveOwnerMembershipReconcile",
       "kind": "catch_returns_default",
@@ -1292,7 +1292,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-row-owner.js",
-      "line": 127,
+      "line": 129,
       "column": 4,
       "functionName": "observeMessageGroupService",
       "kind": "catch_returns_default",
@@ -1589,7 +1589,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 512,
+      "line": 546,
       "column": 4,
       "functionName": "releaseDbTransactionReservations",
       "kind": "catch_returns_default",
@@ -1598,7 +1598,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 586,
+      "line": 620,
       "column": 4,
       "functionName": "releaseDbSessionReservations",
       "kind": "catch_returns_default",
@@ -1607,7 +1607,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 660,
+      "line": 694,
       "column": 4,
       "functionName": "sweepExpiredReservations",
       "kind": "catch_returns_default",
@@ -1715,7 +1715,7 @@
     },
     {
       "filePath": "src/partition/partition-service-row-owner.js",
-      "line": 129,
+      "line": 136,
       "column": 4,
       "functionName": "observePartitionRegistration",
       "kind": "catch_returns_default",
@@ -1805,7 +1805,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
-      "line": 173,
+      "line": 254,
       "column": 6,
       "functionName": "settleParticipants",
       "kind": "catch_returns_default",
@@ -1922,7 +1922,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 78,
+      "line": 67,
       "column": 4,
       "functionName": "resolvePartitionDb",
       "kind": "catch_returns_default",
@@ -1931,7 +1931,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 271,
+      "line": 267,
       "column": 4,
       "functionName": "tryResolveCanonicalPkTuples",
       "kind": "catch_returns_default",
@@ -1940,7 +1940,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 544,
+      "line": 438,
       "column": 4,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "catch_returns_default",
@@ -2003,7 +2003,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 257,
+      "line": 259,
       "column": 6,
       "functionName": "handleCommit",
       "kind": "catch_returns_default",
@@ -2021,25 +2021,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 58,
-      "column": 6,
-      "functionName": "findExistingTableRecord",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 95,
-      "column": 6,
-      "functionName": "findExistingPartitionRecord",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 137,
+      "line": 129,
       "column": 6,
       "functionName": "getTableRecord",
       "kind": "catch_returns_default",
@@ -2048,7 +2030,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-metadata-lookup.js",
-      "line": 180,
+      "line": 172,
       "column": 6,
       "functionName": "getPartitionRecord",
       "kind": "catch_returns_default",
@@ -2498,16 +2480,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 58,
-      "column": 6,
-      "functionName": "normalizeOperationWorkflowTransitionStepsHistory",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 431,
+      "line": 412,
       "column": 6,
       "functionName": "updateStep",
       "kind": "catch_returns_default",
@@ -2552,7 +2525,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 306,
+      "line": 309,
       "column": 6,
       "functionName": "resolveProvisioningLedgerInterlockDeferral",
       "kind": "catch_returns_default",
@@ -2786,7 +2759,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 493,
+      "line": 557,
       "column": 6,
       "functionName": "getReplicaOperationStepsHistory",
       "kind": "catch_returns_default",
@@ -2948,7 +2921,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 431,
+      "line": 432,
       "column": 6,
       "functionName": "_completeAuthentication",
       "kind": "catch_returns_default",

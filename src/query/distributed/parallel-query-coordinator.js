@@ -386,12 +386,13 @@ class ParallelQueryCoordinator {
         }, effectiveTimeoutMs);
       });
 
-      // Execute with straggler hedging if enabled. Hedging is read-only:
-      // a hedged write could be delivered twice (the hedge lands on a
-      // follower whose leader redirect bypasses the exclusion), so write
-      // fan-outs keep the plain race against the chunk timeout.
+      // Execute with straggler hedging if enabled. Hedging is read-only and
+      // non-transactional: a hedged write could be delivered twice, and a
+      // hedged transactional read would exclude the leader replica holding the
+      // participant session and route to a follower replica.
       if (this.speculativeExecutionEnabled &&
         options.forRead === true &&
+        !options.transactionIdentity &&
         partitionIds.length > 1) {
         return await this.executeWithSpeculativeExecution(
           sql,

@@ -41,12 +41,17 @@ async function syncNodeJoiningBootIncarnation(service, nextIncarnation) {
     service.heartbeatService.bootIncarnation = current;
   }
   if (service.messageRouter) {
+    service.messageRouter.syncBootIncarnation?.(current);
     service.messageRouter.bootIncarnation = current;
   }
   service.replicaLifecycleOwner?.syncOwnerIncarnation?.(current);
   if (service.replicaHandler?.replicaCreateAdmissionOwner) {
     service.replicaHandler.replicaCreateAdmissionOwner.ownerIncarnation =
       current;
+  }
+  if (service.messageGroupServiceHandler?.replicaCreateAdmissionOwner) {
+    service.messageGroupServiceHandler.replicaCreateAdmissionOwner
+      .ownerIncarnation = current;
   }
   if (service.replicaCreateAdmissionOwner) {
     service.replicaCreateAdmissionOwner.ownerIncarnation = current;

@@ -4,6 +4,45 @@ const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
+const CANONICAL_NUMERIC_STRING_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u;
+
+function isSafeComparableNumber(value) {
+  return (
+    typeof value === QUERY_EXECUTOR_LITERAL.STRING_NUMBER &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= Number.MAX_SAFE_INTEGER
+  );
+}
+
+function isCanonicalNumericString(value) {
+  if (
+    typeof value !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+    !CANONICAL_NUMERIC_STRING_RE.test(value)
+  ) {
+    return false;
+  }
+  const parsed = Number(value);
+  return (
+    Number.isFinite(parsed) &&
+    Math.abs(parsed) <= Number.MAX_SAFE_INTEGER
+  );
+}
+
+function coerceComparableScalars(left, right) {
+  if (isSafeComparableNumber(left) && isCanonicalNumericString(right)) {
+    return [left, Number(right)];
+  }
+  if (isSafeComparableNumber(right) && isCanonicalNumericString(left)) {
+    return [Number(left), right];
+  }
+  return [left, right];
+}
+
+function areScalarsEqual(left, right) {
+  const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
+  return coercedLeft === coercedRight;
+}
+
 // Compare one ORDER BY clause's values. Returns 0 whenever the original inline
 // comparator would have fallen through to the next clause: equal values, and
 // unequal values that answer neither < nor > (e.g. mixed types).
@@ -395,24 +434,25 @@ const queryExecutorSelectAggregationMethods = {
   evaluateBinary(row, expr, params = []) {
     const left = this.evaluateExpression(row, expr.left, params);
     const right = this.evaluateExpression(row, expr.right, params);
+    const [coercedLeft, coercedRight] = coerceComparableScalars(left, right);
     switch (expr.operator) {
     case QUERY_EXECUTOR_LITERAL.STRING_AND:
       return left && right;
     case QUERY_EXECUTOR_LITERAL.STRING_OR:
       return left || right;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_5:
-      return left === right;
+      return coercedLeft === coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_6:
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_7:
-      return left !== right;
+      return coercedLeft !== coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_8:
-      return left < right;
+      return coercedLeft < coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_9:
-      return left <= right;
+      return coercedLeft <= coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_10:
-      return left > right;
+      return coercedLeft > coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_VALUE_11:
-      return left >= right;
+      return coercedLeft >= coercedRight;
     case QUERY_EXECUTOR_LITERAL.STRING_IS_NULL:
       return left === null || left === undefined;
     case QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL:
@@ -455,7 +495,7 @@ const queryExecutorSelectAggregationMethods = {
   evaluateIn(row, expr, params = []) {
     const value = this.evaluateExpression(row, expr.expression, params);
     const set = expr.values.map((v) => this.evaluateExpression(row, v, params));
-    const matches = set.some((candidate) => candidate === value);
+    const matches = set.some((candidate) => areScalarsEqual(candidate, value));
     return expr.negated ? !matches : matches;
   },
 
@@ -471,7 +511,9 @@ const queryExecutorSelectAggregationMethods = {
     const value = this.evaluateExpression(row, expr.expression, params);
     const low = this.evaluateExpression(row, expr.low, params);
     const high = this.evaluateExpression(row, expr.high, params);
-    return value >= low && value <= high;
+    const [lowValue, coercedLow] = coerceComparableScalars(value, low);
+    const [highValue, coercedHigh] = coerceComparableScalars(value, high);
+    return lowValue >= coercedLow && highValue <= coercedHigh;
   },
 
   /**
