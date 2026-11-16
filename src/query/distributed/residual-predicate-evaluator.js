@@ -1,5 +1,6 @@
 import {EXPR_TYPE} from '../parser-constants.js';
 import {QUERY_OPERATOR} from '../query-constants.js';
+import {lexPartitionStatement} from '../../partition/partition-statement-admission-lexer.js';
 
 /**
  * SQL three-valued-logic evaluator for coordinator-side residual JOIN
@@ -85,7 +86,6 @@ const STORAGE_RANK_BLOB = 3;
 const SQLITE_MASTER_DDL_SQL =
   'SELECT sql FROM sqlite_master WHERE type = \'table\' AND lower(name) = lower(?)';
 const OPEN_PAREN_CHAR = '(';
-const CLOSE_PAREN_CHAR = ')';
 const COMMA_CHAR = ',';
 const SPACE_STR = ' ';
 const EMPTY_STR = '';
@@ -523,35 +523,42 @@ function stripIdentifierQuotes(rawName) {
     .toLowerCase();
 }
 
-function splitTopLevelCommaItems(body) {
+function splitTopLevelCreateTableItems(tokens) {
+  const openIdx = tokens.findIndex(
+    (tok) => tok.depth === 0 && tok.text === OPEN_PAREN_CHAR,
+  );
+  if (openIdx < 0) return [];
+  const closeIdx = tokens[openIdx].close;
+  if (!Number.isInteger(closeIdx)) return [];
   const items = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    if (body[i] === OPEN_PAREN_CHAR) depth += 1;
-    else if (body[i] === CLOSE_PAREN_CHAR && depth > 0) depth -= 1;
-    else if (body[i] === COMMA_CHAR && depth === 0) {
-      items.push(body.slice(start, i));
+  let start = openIdx + 1;
+  for (let i = openIdx + 1; i < closeIdx; i += 1) {
+    if (tokens[i].depth === 1 && tokens[i].text === COMMA_CHAR) {
+      items.push(tokens.slice(start, i));
       start = i + 1;
     }
   }
-  items.push(body.slice(start));
+  items.push(tokens.slice(start, closeIdx));
   return items;
 }
 
-function parseSingleColumnDefinition(defText) {
-  const tokens = String(defText || EMPTY_STR).trim().split(/\s+/u).filter(Boolean);
-  if (tokens.length === 0 || TABLE_CONSTRAINT_HEADS.has(tokens[0].toUpperCase())) {
+function parseSingleColumnTokens(itemTokens) {
+  if (itemTokens.length === 0) return null;
+  const first = itemTokens[0];
+  if (first.upper !== null && TABLE_CONSTRAINT_HEADS.has(first.upper)) {
     return null;
   }
-  const colName = stripIdentifierQuotes(tokens[0]);
+  const colName = stripIdentifierQuotes(first.value);
   if (colName.length === 0) return null;
   const typeTokens = [];
-  for (let i = 1; i < tokens.length; i += 1) {
-    if (CONSTRAINT_START_TOKENS.has(tokens[i].toUpperCase().replace(/\(.*/u, EMPTY_STR))) {
+  for (let i = 1; i < itemTokens.length; i += 1) {
+    const tok = itemTokens[i];
+    if (tok.depth === 1 && tok.upper !== null && CONSTRAINT_START_TOKENS.has(tok.upper)) {
       break;
     }
-    typeTokens.push(tokens[i]);
+    if (tok.depth === 1 && tok.upper !== null) {
+      typeTokens.push(tok.upper);
+    }
   }
   const rawType = typeTokens.join(SPACE_STR);
   const affinity = rawType.length === 0 ? SQL_COMPARISON_AFFINITY.NONE :
@@ -561,12 +568,9 @@ function parseSingleColumnDefinition(defText) {
 
 function parseCreateTableColumnAffinities(createSql) {
   const map = new Map();
-  const sql = String(createSql || EMPTY_STR);
-  const openIdx = sql.indexOf(OPEN_PAREN_CHAR);
-  const closeIdx = sql.lastIndexOf(CLOSE_PAREN_CHAR);
-  if (openIdx < 0 || closeIdx <= openIdx) return map;
-  for (const item of splitTopLevelCommaItems(sql.slice(openIdx + 1, closeIdx))) {
-    const parsed = parseSingleColumnDefinition(item);
+  const {tokens} = lexPartitionStatement(String(createSql || EMPTY_STR));
+  for (const itemTokens of splitTopLevelCreateTableItems(tokens)) {
+    const parsed = parseSingleColumnTokens(itemTokens);
     if (parsed !== null) map.set(parsed[0], parsed[1]);
   }
   return map;
@@ -630,20 +634,26 @@ function annotateExpressionColumnAffinities(node, affinitiesByTable, defaultTabl
 }
 
 async function resolveExecutorTableColumnAffinities(
-  executor, tableName, partitions, queryTimestamp, options = {}, getSchemaByTableName = null,
+  executor, tableName, partitions, queryTimestamp, options = {},
+  getSchemaByTableName = null, resolvedByBinding = null,
 ) {
-  if (typeof tableName !== 'string' || tableName.length === 0) return new Map();
+  if (typeof tableName !== 'string' || tableName.length === 0) {
+    return {ok: true, failedResults: [], map: new Map()};
+  }
   const systemSchema = getSchemaByTableName?.(tableName);
   if (Array.isArray(systemSchema?.columns)) {
-    return buildColumnAffinityMapFromColumns(systemSchema.columns);
+    return {
+      ok: true,
+      failedResults: [],
+      map: buildColumnAffinityMapFromColumns(systemSchema.columns),
+    };
   }
-  if (!Array.isArray(partitions) || partitions.length === 0) return new Map();
-  if (!(executor.tableColumnAffinities instanceof Map)) {
-    executor.tableColumnAffinities = new Map();
+  if (!Array.isArray(partitions) || partitions.length === 0) {
+    return {ok: true, failedResults: [], map: new Map()};
   }
   const bindingKey = `${partitions[0]}::${tableName.toLowerCase()}`;
-  if (executor.tableColumnAffinities.has(bindingKey)) {
-    return executor.tableColumnAffinities.get(bindingKey);
+  if (resolvedByBinding instanceof Map && resolvedByBinding.has(bindingKey)) {
+    return {ok: true, failedResults: [], map: resolvedByBinding.get(bindingKey)};
   }
   const ddlResults = await executor.executeOnPartitions(
     [partitions[0]],
@@ -655,11 +665,18 @@ async function resolveExecutorTableColumnAffinities(
       routingReadinessDimension: options.routingReadinessDimension,
       timeoutMs: options.timeoutMs, timeoutBudget: options.timeoutBudget || null,
       cancellationToken: options.cancellationToken || null, tableName});
+  const failedResults = Array.isArray(ddlResults) ?
+    ddlResults.filter((result) => !result?.success) : [];
+  if (failedResults.length > 0) {
+    return {ok: false, failedResults, map: new Map()};
+  }
   const createSql = ddlResults?.[0]?.rows?.[0]?.sql;
   const parsed = typeof createSql === 'string' && createSql.length > 0 ?
     parseCreateTableColumnAffinities(createSql) : new Map();
-  if (parsed.size > 0) executor.tableColumnAffinities.set(bindingKey, parsed);
-  return parsed;
+  if (resolvedByBinding instanceof Map && parsed.size > 0) {
+    resolvedByBinding.set(bindingKey, parsed);
+  }
+  return {ok: true, failedResults: [], map: parsed};
 }
 
 async function ensureExecutorQueryColumnAffinities(
@@ -672,23 +689,27 @@ async function ensureExecutorQueryColumnAffinities(
     ...joinConditions,
     ...(ast?.having ? [ast.having] : []),
   ].filter(hasUnannotatedColumnRefs);
-  if (exprs.length === 0) return;
+  if (exprs.length === 0) return {ok: true, failedResults: []};
   const affinitiesByTable = new Map();
+  const resolvedByBinding = new Map();
   for (const binding of tableBindings) {
     if (!binding?.tableName) continue;
-    const colMap = await resolveExecutorTableColumnAffinities(executor,
-      binding.tableName, binding.partitions, queryTimestamp, options, getSchemaByTableName);
-    if (colMap.size > 0) {
-      affinitiesByTable.set(binding.tableName.toLowerCase(), colMap);
-      if (binding.alias) affinitiesByTable.set(binding.alias.toLowerCase(), colMap);
+    const outcome = await resolveExecutorTableColumnAffinities(
+      executor, binding.tableName, binding.partitions, queryTimestamp,
+      options, getSchemaByTableName, resolvedByBinding);
+    if (!outcome.ok) return outcome;
+    if (outcome.map.size > 0) {
+      affinitiesByTable.set(binding.tableName.toLowerCase(), outcome.map);
+      if (binding.alias) affinitiesByTable.set(binding.alias.toLowerCase(), outcome.map);
     }
   }
-  if (affinitiesByTable.size === 0) return;
+  if (affinitiesByTable.size === 0) return {ok: true, failedResults: []};
   const defaultTableRef = tableBindings.length === 1 ?
     tableBindings[0].alias || tableBindings[0].tableName : null;
   for (const expr of exprs) {
     annotateExpressionColumnAffinities(expr, affinitiesByTable, defaultTableRef);
   }
+  return {ok: true, failedResults: []};
 }
 
 /**

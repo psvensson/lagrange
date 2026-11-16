@@ -132,13 +132,29 @@ const queryExecutorJoinExecutionMethods = {
         partitions: joinPartitions.get(join.table?.name) || [],
       })),
     ];
-    await this.ensureQueryColumnAffinities(
+    const affinityOutcome = await this.ensureQueryColumnAffinities(
       ast,
       pushdownPlan.residualConjuncts,
       tableBindings,
       queryTimestamp,
       options,
     );
+    if (affinityOutcome?.ok === false) {
+      const failureSummary = buildDistributedFailureSummary(
+        affinityOutcome.failedResults,
+      );
+      return {
+        success: false,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        ...failureSummary,
+        distributedMetrics: {
+          fanout: fanoutMetrics,
+          mergeDurationMs: 0,
+          failedPartitionCount: affinityOutcome.failedResults.length,
+        },
+      };
+    }
     for (const [edgeIndex, join] of ast.joins.entries()) {
       const edgePlan = pushdownPlan.joins[edgeIndex];
       const rightTableRef = join.table.alias || join.table.name;

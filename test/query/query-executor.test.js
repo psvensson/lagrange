@@ -178,10 +178,16 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
     'SELECT * FROM users JOIN profiles ON users.id = profiles.user_id',
   );
   const fanoutCalls = [];
+  const dataCalls = [];
+  const schemaCalls = [];
   const rowSets = [
     [{id: 1, name: 'Alice'}],
     [{user_id: 1, bio: 'Hello'}],
   ];
+  const schemaDdls = {
+    users: 'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)',
+    profiles: 'CREATE TABLE profiles (user_id INTEGER, bio TEXT)',
+  };
   executor.executeOnPartitions = async (
     partitionIds,
     sql,
@@ -192,7 +198,7 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
     preferSameLatencyGroup,
     executionOptions = {},
   ) => {
-    fanoutCalls.push({
+    const callRecord = {
       partitionIds,
       sql,
       params,
@@ -201,11 +207,22 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
       preferLeader,
       preferSameLatencyGroup,
       executionOptions,
-    });
+    };
+    fanoutCalls.push(callRecord);
+    if (String(sql).includes('sqlite_master')) {
+      schemaCalls.push(callRecord);
+      const ddl = schemaDdls[executionOptions.tableName] || '';
+      return [{
+        success: true,
+        partitionId: partitionIds[0],
+        rows: ddl ? [{sql: ddl}] : [],
+      }];
+    }
+    dataCalls.push(callRecord);
     return [{
       success: true,
       partitionId: partitionIds[0],
-      rows: rowSets[fanoutCalls.length - 1] || [],
+      rows: rowSets[dataCalls.length - 1] || [],
     }];
   };
   executor.mergeEngine.mergePartitionResults = (results) => ({
@@ -227,10 +244,14 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
   );
 
   t.equal(result.success, true);
-  t.equal(fanoutCalls.length, 2, 'join should fan out once per table');
+  t.equal(result.rows.length, 1, 'data response sequencing produces the joined row');
+  t.equal(dataCalls.length, 2, 'join should fan out once per table for data reads');
+  t.equal(schemaCalls.length, 2, 'join should fan out once per table for schema reads');
   t.same(
     fanoutCalls.map((call) => call.executionOptions.routingReadinessDimension),
     [
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ],

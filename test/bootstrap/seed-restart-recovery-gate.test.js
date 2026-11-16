@@ -55,10 +55,12 @@ import {
   markOriginalAllocationIssued,
   prepareOriginalAllocationRow,
   prepareReplicaLifecycleForOriginalAllocation,
+  readDurableReplicaLifecycle,
   transitionOriginalRight,
 } from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {
   getMessageGroupDbPath,
+  getPartitionDbPath,
 } from '../../src/storage/data-directory-manager.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -468,10 +470,7 @@ async function seedCompletedOriginalFounderDbs(
           peerId: member.peerId,
           replicaIdentity: member.replicaId,
         });
-        await owner.retire('retired-by-drain', {
-          retiredBy: 'test-drain',
-          generation: 1,
-        });
+        await owner.retire('retired-by-drain');
       }
     }
   } finally {
@@ -580,6 +579,18 @@ test('a completed multi-node founder whose drained services-p1-r1 anchor and mg-
     retireReplicaIds: [tablesReplicaId],
   });
   await persistSeedHints(dataDir, {nodeRows: THREE_NODE_ROWS, clusterId: CLUSTER_ID_A});
+
+  const retiredRow = readDurableReplicaLifecycle(
+    getPartitionDbPath(dataDir, 'tables-p1', tablesReplicaId),
+    'tables-p1',
+    tablesReplicaId,
+  );
+  t.equal(retiredRow.state, 'retired');
+  t.equal(
+    retiredRow.retirementEvidence,
+    null,
+    'ordinary per-replica retirement records null group retirementEvidence',
+  );
 
   const allocation = await readOriginalSeedAllocationOutcome(dataDir);
   t.equal(allocation.state, ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED);

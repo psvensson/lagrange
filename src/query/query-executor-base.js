@@ -416,6 +416,42 @@ class QueryExecutorBase {
       };
     }
 
+    // Annotate HAVING column affinities before building the fanout plan so the
+    // cloned combineSpec.having expression carries declared schema affinities.
+    const tableName = resolveSelectTableName(ast);
+    if (ast.having) {
+      const affinityOutcome = await this.ensureQueryColumnAffinities(
+        ast,
+        [],
+        [
+          {
+            tableName,
+            alias: ast.from?.alias || tableName,
+            partitions: partitionIds,
+          },
+        ],
+        queryTimestamp,
+        options,
+      );
+      if (affinityOutcome?.ok === false) {
+        const failureSummary = buildDistributedFailureSummary(
+          affinityOutcome.failedResults,
+        );
+        return {
+          success: false,
+          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+          ...failureSummary,
+          partitions: partitionIds,
+          distributedMetrics: {
+            fanout: this.getLastCoordinatorMetrics(),
+            mergeDurationMs: 0,
+            failedPartitionCount: affinityOutcome.failedResults.length,
+          },
+        };
+      }
+    }
+
     // Build the fan-out plan: partition-side SQL with combinable partial
     // aggregates and over-fetched LIMIT, so global clauses (aggregates,
     // GROUP BY/HAVING, OFFSET) are applied exactly once at the merge.
@@ -435,7 +471,6 @@ class QueryExecutorBase {
     );
 
     // Execute on all partitions in parallel (read operations can go to any replica)
-    const tableName = resolveSelectTableName(ast);
     const preferLeader =
       options.preferLeader === true ||
       Boolean(tableName && INITIAL_PARTITION_IDS[tableName]);
@@ -484,21 +519,6 @@ class QueryExecutorBase {
     }
 
     // Aggregate results
-    if (ast.having) {
-      await this.ensureQueryColumnAffinities(
-        ast,
-        [],
-        [
-          {
-            tableName,
-            alias: ast.from?.alias || tableName,
-            partitions: partitionIds,
-          },
-        ],
-        queryTimestamp,
-        options,
-      );
-    }
     const mergeStartTimeMs = Date.now();
     const aggregated = this.mergeEngine.mergePartitionResults(
       results,

@@ -913,7 +913,7 @@ function readOriginalAllocationRightsRow(db, groupId, replicaIdentity, lifecycle
   const member = declaration.declaration?.members?.find((entry) =>
     entry?.groupId === groupId && entry?.replicaId === replicaIdentity);
   const validState = lifecycle.state === LIFECYCLE_STATE.ACTIVE ||
-    (lifecycle.state === LIFECYCLE_STATE.RETIRED && lifecycle.retirementEvidence !== null);
+    lifecycle.state === LIFECYCLE_STATE.RETIRED;
   if (!member || !validState || lifecycle.incarnation !== member.incarnation) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, replicaIdentity);
   }

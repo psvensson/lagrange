@@ -893,8 +893,9 @@ test('participant transaction store skips repeated SQLite queries on idle DBs ' 
       });
       throw new Error('force-rollback');
     })(), /force-rollback/u);
+    const afterRollback = counts.executions;
     assert.equal(isPartitionReserved(db), false);
-    assert.ok(counts.executions > afterOpen,
+    assert.ok(counts.executions > afterRollback,
       'first check after rollback re-verifies SQLite state');
     const afterClear = counts.executions;
     assert.deepEqual(readPreparedParticipantIds(db), []);

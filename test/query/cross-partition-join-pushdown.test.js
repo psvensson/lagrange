@@ -856,6 +856,103 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     oracleDb.prepare(blobBindOnBlobSql).all(Buffer.from('1')).map((r) => r.id),
     'BLOB binding against BLOB column matches oracle ([2])',
   );
+
+  // Counterexample 5 (Non-join HAVING): SELECT n, COUNT(*) AS total FROM b GROUP BY n HAVING n = '01'
+  const nonJoinHavingSql =
+    'SELECT n, COUNT(*) AS total FROM b GROUP BY n HAVING n = \'01\'';
+  const nonJoinHavingAst = new SQLParser(nonJoinHavingSql).parse();
+  const nonJoinHavingRes = await executor.executeSelect(
+    nonJoinHavingAst,
+    ['b_p1'],
+    [],
+  );
+  t.equal(nonJoinHavingRes.success, true, 'non-join HAVING select succeeds');
+  t.same(
+    nonJoinHavingRes.rows,
+    oracleDb.prepare(nonJoinHavingSql).all(),
+    'non-join HAVING n = "01" annotates combineSpec.having and matches SQLite oracle',
+  );
+
+  // Counterexample 6 (Quoted '(' default in CREATE TABLE):
+  const parenDdl = `
+    CREATE TABLE b_paren (
+      id INTEGER PRIMARY KEY,
+      a_id INTEGER,
+      label TEXT DEFAULT '(',
+      n INTEGER
+    );
+  `;
+  for (const db of [rightDb, oracleDb]) {
+    db.exec(parenDdl);
+    db.prepare('INSERT INTO b_paren (id, a_id, n) VALUES (?, ?, ?)').run(10, 1, 1);
+  }
+  tablePlans.set('bp', {partitions: ['b_p1']});
+  const parenSql =
+    'SELECT a.id FROM a LEFT JOIN b_paren AS bp ON a.id = bp.a_id WHERE bp.n = \'01\'';
+  t.same(
+    await execJoin(parenSql),
+    oracleDb.prepare(parenSql).all().map((r) => r.id),
+    'DDL parser preserves column after DEFAULT "(" and matches SQLite oracle ([1])',
+  );
+
+  // Counterexample 7 (Retained executor across ALTER TABLE ADD COLUMN):
+  for (const db of [rightDb, oracleDb]) {
+    db.exec('ALTER TABLE b ADD COLUMN added_n INTEGER DEFAULT 1');
+  }
+  const alterSql =
+    'SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id WHERE b.added_n = \'01\' ORDER BY a.id';
+  const alterOracle = oracleDb.prepare(alterSql).all().map((r) => r.id);
+  t.same(alterOracle, [1, 2], 'SQLite oracle returns [1, 2] after ALTER TABLE ADD COLUMN');
+  t.same(
+    await execJoin(alterSql),
+    alterOracle,
+    'retained executor observes newly added INTEGER column affinity after ALTER TABLE',
+  );
+
+  // Counterexample 8 (Schema-read failure propagation and finite-failure recovery):
+  let failSchemaReads = true;
+  let schemaFailureAttempts = 0;
+  const origDeliver = messageRouter.deliver.bind(messageRouter);
+  messageRouter.deliver = async (address, message) => {
+    if (
+      failSchemaReads &&
+      message.type === 'QUERY' &&
+      String(message.sql).includes('sqlite_master') &&
+      address.endsWith('/b_p1')
+    ) {
+      schemaFailureAttempts += 1;
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: false,
+        error: 'SQLITE_BUSY: database is locked',
+        errorCode: 'SQLITE_BUSY',
+        partitionId: 'b_p1',
+      });
+    }
+    return origDeliver(address, message);
+  };
+  const failedSchemaAst = new SQLParser(intEqZeroOneSql).parse();
+  const failedSchemaRes = await executor.executeSelect(
+    failedSchemaAst,
+    ['a_p1'],
+    [],
+    {distributedPlan: {tablePlans}},
+  );
+  t.equal(
+    failedSchemaRes.success,
+    false,
+    'failed schema read propagates failure instead of returning an incomplete success',
+  );
+  t.equal(
+    schemaFailureAttempts,
+    3,
+    'existing read retry owner makes 3 attempts on schema read failure',
+  );
+  failSchemaReads = false;
+  t.same(
+    await execJoin(intEqZeroOneSql),
+    [1, 2],
+    'once schema-read failure clears, the same executor returns the complete matching rows',
+  );
 });
 
 test('transactional reads redirect from follower replicas, pin session ' +
