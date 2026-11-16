@@ -638,6 +638,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         evaluationContext,
       );
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
+      this.syncOperationContinuationWake(rebalanceResult, executedMoveCount);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
         this.currentInterval = this.usesPriorityRebalanceCadence() ?

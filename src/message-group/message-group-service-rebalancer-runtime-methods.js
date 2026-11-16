@@ -1,6 +1,21 @@
+import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+
 const MESSAGE_GROUP_SERVICE_REBALANCER_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
+
+function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
+  if (
+    options.readinessTransitionOnly &&
+    options.backgroundReady &&
+    !options.wasBackgroundReady &&
+    rebalancer.isLeader === true
+  ) {
+    rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+    rebalancer.lastCheckAtMs = 0;
+    rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+  }
+}
 
 function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
   const {
@@ -59,12 +74,54 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
     }
 
     /**
+     * Check whether all required dependencies for rebalancer creation are available.
+     * @return {boolean}
+     * @private
+     */
+    hasRequiredRebalancerDependencies() {
+      return Boolean(
+        this.systemTableCache &&
+        this.cdcIntegrationService &&
+        this.tablePolicyService &&
+        this.rebalanceCoordinator &&
+        this.transport,
+      );
+    }
+
+    /**
+     * Initialize message-group rebalancer instance and set leadership.
+     * @private
+     */
+    initializeRebalancer() {
+      this.rebalancer = new UnifiedRebalancer({
+        entityId: this.groupId,
+        entityType: RebalancerEntityType.MESSAGE_GROUP,
+        systemTableCache: this.systemTableCache,
+        cdcIntegrationService: this.cdcIntegrationService,
+        tablePolicyService: this.tablePolicyService,
+        nodeId: this.nodeId,
+        messageRouter: this.transport,
+        sqlQueryEngine: this.cdcIntegrationService.sqlQueryEngine,
+        rebalanceCoordinator: this.rebalanceCoordinator,
+        controlPlaneReadinessService:
+          this.rebalanceCoordinator.controlPlaneReadinessService,
+      });
+      this.rebalancer.initialize();
+      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
+      this._lastBackgroundWorkReady = this.isBackgroundWorkReady();
+    }
+
+    /**
      * Initialize message-group rebalancer when leader and dependencies are ready.
+     * @param {Object} [options]
+     * @param {boolean} [options.readinessTransitionOnly=false]
      * @private
      */
     maybeInitializeRebalancer(options = {}) {
       const readinessTransitionOnly = options.readinessTransitionOnly === true;
       const backgroundReady = this.isBackgroundWorkReady();
+      const wasBackgroundReady = this._lastBackgroundWorkReady === true;
+      this._lastBackgroundWorkReady = backgroundReady;
       if (this.rebalancer) {
         // Edge-gate (mirror of PartitionService.maybeInitializeRebalancer): the
         // shared metadata-publication readiness state fans this call out across
@@ -99,35 +156,20 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
             this.cdcIntegrationService?.sqlQueryEngine || null;
         }
         this.rebalancer.setLeader(desiredLeadership);
+        maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
+          readinessTransitionOnly,
+          backgroundReady,
+          wasBackgroundReady,
+        });
         return;
       }
       if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {
         return;
       }
-      if (
-        !this.systemTableCache ||
-        !this.cdcIntegrationService ||
-        !this.tablePolicyService ||
-        !this.rebalanceCoordinator ||
-        !this.transport
-      ) {
+      if (!this.hasRequiredRebalancerDependencies()) {
         return;
       }
-      this.rebalancer = new UnifiedRebalancer({
-        entityId: this.groupId,
-        entityType: RebalancerEntityType.MESSAGE_GROUP,
-        systemTableCache: this.systemTableCache,
-        cdcIntegrationService: this.cdcIntegrationService,
-        tablePolicyService: this.tablePolicyService,
-        nodeId: this.nodeId,
-        messageRouter: this.transport,
-        sqlQueryEngine: this.cdcIntegrationService.sqlQueryEngine,
-        rebalanceCoordinator: this.rebalanceCoordinator,
-        controlPlaneReadinessService:
-          this.rebalanceCoordinator.controlPlaneReadinessService,
-      });
-      this.rebalancer.initialize();
-      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
+      this.initializeRebalancer();
     }
 
     /**

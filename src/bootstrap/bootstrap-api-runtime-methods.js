@@ -23,6 +23,14 @@ const BOOTSTRAP_API_HANDOFF_ERROR_MSG = Object.freeze({
     'Failed to update MOVE_REPLICA handoff operation',
 });
 
+function stopBootstrapReadinessLifecycleFollowing(api) {
+  api.bootstrapReadinessOwner?.stopFollowingLifecycleSources?.();
+}
+
+async function shutdownRequestCellHttpAdapter(api) {
+  await api.requestCellHttpAdapter?.shutdown?.();
+}
+
 function createBootstrapApiRuntimeMethods(options = {}) {
   const bootstrapApiCloseErrorCode = options.bootstrapApiCloseErrorCode;
   const bootstrapApiError = options.bootstrapApiError || {};
@@ -596,7 +604,8 @@ function createBootstrapApiRuntimeMethods(options = {}) {
 
     async shutdown() {
       this.stopMoveReplicaAssignmentSweep();
-      await this.requestCellHttpAdapter?.shutdown?.();
+      stopBootstrapReadinessLifecycleFollowing(this);
+      await shutdownRequestCellHttpAdapter(this);
       const wasInitialized = this.initialized === true;
       const hadFastify = Boolean(this.fastify);
       const serverListening = this.fastify?.server?.listening === true;

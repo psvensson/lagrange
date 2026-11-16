@@ -13,7 +13,7 @@ documentClass: generated
 - [cdc-table-policy.js](cdc-table-policy.js) - The one recording rule of the durable CDC obligation ledger (owner decision D2): a committed write owes a CDC... (importers: hub)
 - [index.js](index.js) - Cache module exports. (importers: one)
 - [leader-readiness-gate.js](leader-readiness-gate.js) - Check if a partition has any leader service (even without address). (importers: many)
-- [read-only-system-table-cache.js](read-only-system-table-cache.js) - Read-Only System Table Cache Wrapper. (importers: many)
+- [read-only-system-table-cache.js](read-only-system-table-cache.js) - Read-Only System Table Cache Wrapper. (importers: hub)
 - [shared-row-read.js](shared-row-read.js) - Call-site helpers that route an audited read-only hot path through the cache's no-clone shared-row read... (importers: many)
 - [system-cache-client.js](system-cache-client.js) - SystemCacheClient - Unified read-only cache client abstraction. (importers: few)
 - [system-cache-key-descriptor.js](system-cache-key-descriptor.js) - Canonical primary-key descriptor for system-table cache operations. (importers: hub)

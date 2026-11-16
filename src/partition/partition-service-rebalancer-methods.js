@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 
 const {
   EntityType,
@@ -8,6 +9,19 @@ const {
   UnifiedRebalancer,
   assertCritical,
 } = PARTITION_SERVICE_SHARED;
+
+function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
+  if (
+    options.readinessTransitionOnly &&
+    options.backgroundReady &&
+    !options.wasBackgroundReady &&
+    rebalancer.isLeader === true
+  ) {
+    rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+    rebalancer.lastCheckAtMs = 0;
+    rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+  }
+}
 
 class PartitionServiceRebalancerMethods {
   /**
@@ -125,6 +139,8 @@ class PartitionServiceRebalancerMethods {
   maybeInitializeRebalancer(options = {}) {
     const readinessTransitionOnly = options.readinessTransitionOnly === true;
     const backgroundReady = this.isBackgroundWorkReady();
+    const wasBackgroundReady = this._lastBackgroundWorkReady === true;
+    this._lastBackgroundWorkReady = backgroundReady;
     if (this.rebalancer) {
       // Edge-gate (readiness-transition path only): the shared metadata-
       // publication readiness state is a single node-wide object that ~every
@@ -155,6 +171,11 @@ class PartitionServiceRebalancerMethods {
         this.rebalancer.setLeader(desiredLeadership);
       }
       this.driveRebalancerLeadershipSink();
+      maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
+        readinessTransitionOnly,
+        backgroundReady,
+        wasBackgroundReady,
+      });
       return;
     }
     if (!backgroundReady || !this.isLeader) {
@@ -238,6 +259,7 @@ class PartitionServiceRebalancerMethods {
     this.rebalancer.initialize();
     this.rebalancer.setLeader(this.resolveRebalancerLeadership());
     this.driveRebalancerLeadershipSink();
+    this._lastBackgroundWorkReady = this.isBackgroundWorkReady();
   }
 }
 

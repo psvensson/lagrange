@@ -36,6 +36,9 @@ const NO_FAILURE_COUNT = 0;
 const FAILURE_COUNT_STEP = 1;
 const LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR =
   'Lifecycle dependency name is required';
+const LIFECYCLE_DEPENDENCY_SOURCE_BOUND_ERROR =
+  'Lifecycle dependencies are read from the bound source; ' +
+  'setDependency is refused';
 const UNKNOWN_LIFECYCLE_PHASE_ERROR_PREFIX = 'Unknown lifecycle phase: ';
 const INVALID_LIFECYCLE_PHASE_TRANSITION_ERROR_PREFIX =
   'Invalid lifecycle phase transition: ';
@@ -100,6 +103,8 @@ class LifecycleController extends EventEmitter {
     this._consecutiveFailureCount = ZERO_COUNT;
     this._stableWindowStartedAt = null;
     this._dependencies = new Map();
+    this._dependencySource = null;
+    this._readingDependencySource = false;
     this._transitionCount = ZERO_COUNT;
     this._transitionHistory = [];
     this._probeStatusCounts = new Map();
@@ -120,6 +125,39 @@ class LifecycleController extends EventEmitter {
    * @param {Object|null} [options.details]
    */
   setDependency(name, ready, options = {}) {
+    if (this._dependencySource !== null) {
+      throw new Error(LIFECYCLE_DEPENDENCY_SOURCE_BOUND_ERROR);
+    }
+    this.storeDependency(name, ready, options);
+  }
+
+  /**
+   * Bind the one live source of the dependencies: every evaluation re-reads
+   * it, so no projection rests on a value an earlier caller sampled.
+   * @param {function(): Array<Object>} readDependencies - Returns {name,
+   *   ready, reasonCode, classification, demotionPolicy, details} per entry.
+   */
+  bindDependencySource(readDependencies) {
+    this._dependencySource = readDependencies;
+  }
+
+  readDependenciesFromSource() {
+    if (this._dependencySource === null) {
+      return;
+    }
+    this._readingDependencySource = true;
+    try {
+      const dependencies = this._dependencySource();
+      this._dependencies.clear();
+      for (const dependency of dependencies) {
+        this.storeDependency(dependency.name, dependency.ready, dependency);
+      }
+    } finally {
+      this._readingDependencySource = false;
+    }
+  }
+
+  storeDependency(name, ready, options = {}) {
     if (typeof name !== TYPE_STRING || name.length === PHASE_RANK_INIT) {
       throw new Error(LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR);
     }
@@ -149,6 +187,13 @@ class LifecycleController extends EventEmitter {
    * @return {Object}
    */
   evaluate() {
+    // A source that consults the lifecycle while it is being read is answered
+    // the last completed projection: the read is never re-entered, and no
+    // projection is made from a dependency set that is still being read.
+    if (this._readingDependencySource) {
+      return this.getSnapshot();
+    }
+    this.readDependenciesFromSource();
     const now = this._now();
     const previousPhase = this._phase;
     const previousLegacyState = this.resolveLegacyState(previousPhase, {

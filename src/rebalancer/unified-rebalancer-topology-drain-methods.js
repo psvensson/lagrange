@@ -4,8 +4,12 @@ import {
 } from './replica-operation-topology-drain.js';
 
 const {
+  OperationType,
   SYSTEM_TABLE_NAME,
+  classifySystemPartition,
+  getPartitionRowFromCache,
   isReplaceRemoveDispatchPhase,
+  normalizeReplicaOperationRecord,
 } = UNIFIED_REBALANCER_SHARED;
 
 const UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS = Object.freeze({
@@ -21,14 +25,46 @@ const UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS = Object.freeze({
     const observedAt = Number.isFinite(options.observedAt) ?
       Math.floor(options.observedAt) :
       this.nowFn();
+    const predicate = options.operationFilter || (() => true);
     const operations = this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      () => true,
+      predicate,
     );
     return resolveLatestTopologyShapingOperationDrain(
       operations,
       {observedAt},
     );
+  },
+
+  /**
+   * Whether an operation holds the priority-spread stability fence (priority
+   * control-plane partition work, or an ADD operation such as schema/initial
+   * provisioning). Non-priority REPLACE/REMOVE operations never re-lock or
+   * reset the post-clear stability clock.
+   *
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isPrioritySpreadFenceHoldingOperation(operation) {
+    if (!operation) {
+      return false;
+    }
+    const normalized = normalizeReplicaOperationRecord(operation);
+    if (normalized.type === OperationType.ADD) {
+      return true;
+    }
+    const partitionId = normalized.partitionId;
+    if (!partitionId) {
+      return false;
+    }
+    return classifySystemPartition({
+      partitionId,
+      partitionRow: getPartitionRowFromCache(
+        this.systemTableCache,
+        partitionId,
+      ),
+    }).priorityControlPlane === true;
   },
 
   /**

@@ -24,14 +24,21 @@ import {
 import {
   readExpectedReplicaCount,
 } from '../control-plane/membership-publication-priority-partition-canonical-data.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   EntityType,
   REBALANCER_LOG_MSG,
   RECONCILE_REASON,
+  ReplicaStatus,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
+  getPartitionRowFromCache,
+  normalizeServiceRow,
 } = UNIFIED_REBALANCER_SHARED;
 
 const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
@@ -172,6 +179,52 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   /**
+   * Whether this partition has a declared replication target and either holds
+   * fewer active replicas than declared or sits on fewer distinct active hosts
+   * than min(declared RF, available target hosts). Synthetic fixtures with no
+   * declared partition row or zero active replicas return false.
+   * @return {boolean}
+   */
+  isPartitionBelowDeclaredDistinctHostSpread() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return false;
+    }
+    const desired = resolveDesiredReplicationFactor(
+      getPartitionRowFromCache(this.systemTableCache, this.entityId),
+    );
+    if (
+      desired.source === REPLICATION_TARGET_SOURCE.UNDECLARED ||
+      desired.replicationFactor <= UNIFIED_REBALANCER_LITERAL.ZERO
+    ) {
+      return false;
+    }
+    const activeNodeIds = new Set();
+    let activeReplicaCount = UNIFIED_REBALANCER_LITERAL.ZERO;
+    for (const replica of this.getCurrentReplicas()) {
+      const normalizedReplica = normalizeServiceRow(replica);
+      if (normalizedReplica.status !== ReplicaStatus.ACTIVE) {
+        continue;
+      }
+      activeReplicaCount += UNIFIED_REBALANCER_LITERAL.ONE;
+      if (normalizedReplica.nodeId) {
+        activeNodeIds.add(normalizedReplica.nodeId);
+      }
+    }
+    if (activeReplicaCount === UNIFIED_REBALANCER_LITERAL.ZERO) {
+      return false;
+    }
+    if (activeReplicaCount < desired.replicationFactor) {
+      return true;
+    }
+    const availableTargetHostCount = this.getAvailableNodes().length;
+    return (
+      availableTargetHostCount > UNIFIED_REBALANCER_LITERAL.ONE &&
+      activeNodeIds.size <
+        Math.min(desired.replicationFactor, availableTargetHostCount)
+    );
+  },
+
+  /**
    * Whether this entity uses the short priority reconcile cadence.
    * @return {boolean}
    */
@@ -208,10 +261,12 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     })) {
       const globalTopologyBlockingOperations =
         this.getGlobalTopologyBlockingInFlightOperations().filter(
-          (operation) => this.isTopologySettlingInFlightOperation(
-            operation,
-            {nowMs: observedAt},
-          ),
+          (operation) =>
+            this.isPrioritySpreadFenceHoldingOperation(operation) &&
+            this.isTopologySettlingInFlightOperation(
+              operation,
+              {nowMs: observedAt},
+            ),
         );
       globalTopologyBlockingOperationCount =
         globalTopologyBlockingOperations.length;
@@ -222,7 +277,11 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         });
       } else {
         latestTopologyDrain =
-          this.getLatestGlobalTopologyShapingOperationDrain({observedAt});
+          this.getLatestGlobalTopologyShapingOperationDrain({
+            observedAt,
+            operationFilter: (operation) =>
+              this.isPrioritySpreadFenceHoldingOperation(operation),
+          });
         observeActiveBackgroundPrioritySpreadOperationDrain({
           readinessOwner: this.controlPlaneReadinessService,
           drainedAt: latestTopologyDrain?.drainedAtMs,
@@ -239,7 +298,8 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     if (
       priorityPartition ||
       !stableReleaseBlocker ||
-      this.isRuntimeServiceDesiredStateDeficit()
+      this.isRuntimeServiceDesiredStateDeficit() ||
+      this.isPartitionBelowDeclaredDistinctHostSpread()
     ) {
       return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }

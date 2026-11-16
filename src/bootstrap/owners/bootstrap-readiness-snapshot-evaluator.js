@@ -1,4 +1,4 @@
-import {readStateField} from '../../utils/state-field-read.js';
+import {STATE_ABSENT, readStateField} from '../../utils/state-field-read.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -16,25 +16,142 @@ import {
 } from '../shared/local-query-transport-readiness.js';
 import {hasBootstrapJoinAuthority} from './bootstrap-join-projection-policy.js';
 import {BOOTSTRAP_READINESS_OWNER_LITERAL} from './bootstrap-readiness-owner-literals.js';
-
-const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
-  SQL_ENGINE_READY: 'sql_engine_ready',
-  LEADER_METADATA_READY: 'leader_metadata_ready',
-  RUNTIME_WIRING_READY: 'runtime_wiring_ready',
-  LOCAL_QUERY_TRANSPORT_READY: 'local_query_transport_ready',
-  CONTROL_PLANE_WRITE_HEALTH: 'control_plane_write_health',
-  PRIORITY_CONTROL_PLANE_RECOVERY: 'priority_control_plane_recovery',
-});
+import {
+  BOOTSTRAP_READINESS_DEPENDENCY,
+  LIFECYCLE_WAKE_SOURCE,
+} from './bootstrap-readiness-lifecycle-source.js';
 
 const READINESS_PROBE_ASYNC_TIMEOUT_ERROR_CODE =
   'READINESS_PROBE_ASYNC_TIMEOUT';
 const READINESS_PROBE_ASYNC_TIMEOUT_MS = 250; // ends-on: the evaluateReadinessSnapshotAsync() evaluation resolves
+const PRIORITY_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+  'priority_control_plane_recovery_diagnostics_unavailable';
+const DEFAULT_PROGRESS_CONTRACT_ENTRY = Object.freeze({
+  nextAction: 'wait_for_readiness_support',
+  wakeSource: 'bootstrap',
+  blockingDependency: 'readiness_support',
+});
+const PROGRESS_CONTRACT_BY_REASON = Object.freeze({
+  [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE]: Object.freeze({
+    nextAction: 'wait_for_bootstrap_phase',
+    wakeSource: 'bootstrap',
+    blockingDependency: 'bootstrap',
+  }),
+  [BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE]: Object.freeze({
+    nextAction: 'wait_for_sql_engine',
+    wakeSource: 'sql_engine',
+    blockingDependency: 'sql_engine',
+  }),
+  [BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE]: Object.freeze({
+    nextAction: 'wait_for_leader_metadata',
+    wakeSource: 'leader_metadata',
+    blockingDependency: 'leader_metadata',
+  }),
+  [BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY]: Object.freeze({
+    nextAction: 'wait_for_runtime_wiring',
+    wakeSource: 'runtime_wiring',
+    blockingDependency: 'runtime_wiring',
+  }),
+  [LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY]: Object.freeze({
+    nextAction: 'wait_for_local_query_transport',
+    wakeSource: 'local_query_transport_event',
+    blockingDependency: 'local_query_transport',
+  }),
+  [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING]: Object.freeze({
+    nextAction: 'wait_for_priority_control_plane_recovery',
+    wakeSource: LIFECYCLE_WAKE_SOURCE.PRIORITY_CONTROL_PLANE_RECOVERY_EVENT,
+    blockingDependency: 'priority_control_plane_recovery',
+  }),
+  [PRIORITY_RECOVERY_DIAGNOSTICS_UNAVAILABLE]: Object.freeze({
+    nextAction: 'wait_for_priority_control_plane_recovery',
+    wakeSource: LIFECYCLE_WAKE_SOURCE.PRIORITY_CONTROL_PLANE_RECOVERY_EVENT,
+    blockingDependency: 'priority_control_plane_recovery',
+  }),
+});
+
+function resolveStartupAuthorityFailureField(startupAuthority) {
+  const failure = startupAuthority?.failure;
+  if (failure?.state === BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT) {
+    return {startupAuthorityFailureReason: failure.reason};
+  }
+  return {};
+}
+
+function resolveBootstrapJoinAuthorityFailureField(
+  startupAuthority,
+  priorityControlPlaneRecoveryHealth,
+) {
+  const failure = startupAuthority?.failure;
+  const reason = failure?.state === BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ?
+    failure.reason :
+    priorityControlPlaneRecoveryHealth?.details?.failureReason;
+  return typeof reason === 'string' ?
+    {bootstrapJoinAuthorityFailureReason: reason} :
+    {};
+}
+
+function applyAsyncProbeRecoveryHealth(snapshot, recoveryHealth) {
+  if (recoveryHealth?.healthy === true) {
+    return snapshot;
+  }
+  const reasonCode = recoveryHealth?.reasonCode;
+  const existingReasons = Array.isArray(snapshot?.reasons) ?
+    snapshot.reasons :
+    [];
+  const reasons =
+    typeof reasonCode === 'string' &&
+    reasonCode.length > 0 &&
+    !existingReasons.includes(reasonCode) ?
+      [...existingReasons, reasonCode] :
+      existingReasons;
+  const phase = snapshot?.phase === LIFECYCLE_PHASE.INIT ?
+    LIFECYCLE_PHASE.INIT :
+    LIFECYCLE_PHASE.DEGRADED;
+  return {
+    ...snapshot,
+    ready: false,
+    phase,
+    reasons,
+  };
+}
+
+function resolveStartupAuthorityEnvelope(startupAuthority) {
+  const rawState = readStateField(startupAuthority?.state);
+  const rawObservationState = readStateField(
+    startupAuthority?.publication?.observationState,
+  );
+  return {
+    startupAuthorityState: rawState === STATE_ABSENT ?
+      BOOTSTRAP_READINESS_OWNER_LITERAL.AUTHORITY_UNAVAILABLE :
+      rawState,
+    startupAuthorityAvailable: startupAuthority?.authorityAvailable === true,
+    startupAuthorityFailure:
+      startupAuthority?.failure ||
+      Object.freeze({
+        state: BOOTSTRAP_READINESS_OWNER_LITERAL.NONE,
+      }),
+    startupAuthorityPublication:
+      startupAuthority?.publication ||
+      Object.freeze({
+        observationState:
+          BOOTSTRAP_READINESS_OWNER_LITERAL.OBSERVATION_UNAVAILABLE,
+      }),
+    startupAuthorityPublicationObservationState:
+      rawObservationState === STATE_ABSENT ?
+        BOOTSTRAP_READINESS_OWNER_LITERAL.OBSERVATION_UNAVAILABLE :
+        rawObservationState,
+  };
+}
 
 const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
   evaluateReadinessSnapshot() {
     const readinessState = this.getReadinessState();
     let snapshot;
-    if (
+    if (this.sourcesLifecycleDependenciesOf(readinessState)) {
+      snapshot = this.describeLifecycleSnapshotWithStartupAuthority(
+        readinessState.evaluate(),
+      );
+    } else if (
       !readinessState ||
       typeof readinessState.setDependency !== 'function'
     ) {
@@ -68,7 +185,17 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
   async evaluateReadinessSnapshotAsync() {
     const readinessState = this.getReadinessState();
     let snapshot;
-    if (
+    if (this.sourcesLifecycleDependenciesOf(readinessState)) {
+      const priorityControlPlaneRecoveryHealth =
+        await this.getPriorityControlPlaneRecoveryHealthAsync();
+      snapshot = this.describeLifecycleSnapshotWithStartupAuthority(
+        applyAsyncProbeRecoveryHealth(
+          readinessState.evaluate(),
+          priorityControlPlaneRecoveryHealth,
+        ),
+        priorityControlPlaneRecoveryHealth,
+      );
+    } else if (
       !readinessState ||
       typeof readinessState.setDependency !== 'function'
     ) {
@@ -229,102 +356,56 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
       },
     );
     const snapshot = readinessState.evaluate();
-    const finalSnapshot = {
-      ...snapshot,
-      startupAuthorityState:
-        startupAuthority?.state ||
-        BOOTSTRAP_READINESS_OWNER_LITERAL.AUTHORITY_UNAVAILABLE,
-      startupAuthorityAvailable: startupAuthority?.authorityAvailable === true,
-      startupAuthorityFailure:
-        startupAuthority?.failure ||
-        Object.freeze({
-          state: BOOTSTRAP_READINESS_OWNER_LITERAL.NONE,
-        }),
-      ...(startupAuthority?.failure?.state ===
-      BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ?
-        {
-          startupAuthorityFailureReason: startupAuthority.failure.reason,
-        } :
-        {}),
-      startupAuthorityPublication:
-        startupAuthority?.publication ||
-        Object.freeze({
-          observationState:
-            BOOTSTRAP_READINESS_OWNER_LITERAL.OBSERVATION_UNAVAILABLE,
-        }),
-      startupAuthorityPublicationObservationState:
-        startupAuthority?.publication?.observationState ||
-        BOOTSTRAP_READINESS_OWNER_LITERAL.OBSERVATION_UNAVAILABLE,
-      bootstrapJoinAuthorityAvailable:
-        hasBootstrapJoinAuthority(priorityControlPlaneRecoveryHealth) ||
-        startupAuthority?.authorityAvailable === true,
-      ...(startupAuthority?.failure?.state ===
-        BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ||
-      typeof priorityControlPlaneRecoveryHealth?.details?.failureReason ===
-        'string' ?
-        {
-          bootstrapJoinAuthorityFailureReason:
-              startupAuthority?.failure?.state ===
-              BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ?
-                startupAuthority.failure.reason :
-                priorityControlPlaneRecoveryHealth.details.failureReason,
-        } :
-        {}),
-    };
+    const finalSnapshot = this.describeLifecycleSnapshotWithStartupAuthority(
+      snapshot,
+      priorityControlPlaneRecoveryHealth,
+      startupAuthority,
+    );
     if (finalSnapshot.ready !== true) {
       finalSnapshot.progressContract = this.buildStartupReadinessProgressContract(finalSnapshot);
     }
     return finalSnapshot;
   },
+  describeLifecycleSnapshotWithStartupAuthority(
+    snapshot,
+    priorityControlPlaneRecoveryHealth =
+    this.getPriorityControlPlaneRecoveryHealth(),
+    startupAuthority = this.getStartupAuthoritySnapshot(Date.now()),
+  ) {
+    return {
+      ...snapshot,
+      ...resolveStartupAuthorityEnvelope(startupAuthority),
+      ...resolveStartupAuthorityFailureField(startupAuthority),
+      bootstrapJoinAuthorityAvailable:
+        hasBootstrapJoinAuthority(priorityControlPlaneRecoveryHealth) ||
+        startupAuthority?.authorityAvailable === true,
+      ...resolveBootstrapJoinAuthorityFailureField(
+        startupAuthority,
+        priorityControlPlaneRecoveryHealth,
+      ),
+    };
+  },
 
   buildStartupReadinessProgressContract(snapshot) {
     const reasons = Array.isArray(snapshot?.reasons) ? snapshot.reasons : [];
     const primaryReason = reasons[0] || 'readiness_retryable';
-
-    let nextAction = 'wait_for_readiness_support';
-    let wakeSource = 'bootstrap';
-    let blockingDependency = 'readiness_support';
-
-    if (primaryReason === BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE) {
-      nextAction = 'wait_for_bootstrap_phase';
-      wakeSource = 'bootstrap';
-      blockingDependency = 'bootstrap';
-    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE) {
-      nextAction = 'wait_for_sql_engine';
-      wakeSource = 'sql_engine';
-      blockingDependency = 'sql_engine';
-    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      nextAction = 'wait_for_leader_metadata';
-      wakeSource = 'leader_metadata';
-      blockingDependency = 'leader_metadata';
-    } else if (primaryReason === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      nextAction = 'wait_for_runtime_wiring';
-      wakeSource = 'runtime_wiring';
-      blockingDependency = 'runtime_wiring';
-    } else if (primaryReason === LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY) {
-      nextAction = 'wait_for_local_query_transport';
-      wakeSource = 'local_query_transport_event';
-      blockingDependency = 'local_query_transport';
-    } else if (
-      primaryReason === LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING ||
-      primaryReason === 'priority_control_plane_recovery_diagnostics_unavailable'
-    ) {
-      nextAction = 'wait_for_priority_control_plane_recovery';
-      wakeSource = 'priority_control_plane_recovery_event';
-      blockingDependency = 'priority_control_plane_recovery';
-    }
+    const contractEntry =
+      PROGRESS_CONTRACT_BY_REASON[primaryReason] ||
+      DEFAULT_PROGRESS_CONTRACT_ENTRY;
 
     return {
       owner: 'startup_readiness_owner',
       boundary: 'startup_support_evidence',
       state: 'readiness_retryable',
       reason: primaryReason,
-      nextAction,
-      wakeSource,
-      retryAfterMs: typeof snapshot?.retryAfterMs === 'number' ? snapshot.retryAfterMs : 0,
+      nextAction: contractEntry.nextAction,
+      wakeSource: contractEntry.wakeSource,
+      retryAfterMs: typeof snapshot?.retryAfterMs === 'number' ?
+        snapshot.retryAfterMs :
+        0,
       terminalState: 'satisfied',
       evidencePath: 'startup_support_evidence',
-      blockingDependency,
+      blockingDependency: contractEntry.blockingDependency,
     };
   },
 });

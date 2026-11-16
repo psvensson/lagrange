@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 345,
+    "bootstrap-membership": 346,
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
@@ -12,23 +12,23 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 280,
+    "placement-rebalance": 281,
     "query-sql": 194,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 229,
+    "storage-partition": 230,
     "storage-raft": 152,
     "test-infrastructure": 166,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-de7c1285",
+  "censusSize": 2664,
+  "digest": "fnv1a32-3e475f12",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aaa5f0ad",
+  "observationDigest": "fnv1a32-c5079fa3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -250,6 +250,7 @@
     "test/bootstrap/node-registration-owner.test.js": "bootstrap-membership",
     "test/bootstrap/node-state-gating.property.test.js": "bootstrap-membership",
     "test/bootstrap/odd-replica-count-invariant.property.test.js": "bootstrap-membership",
+    "test/bootstrap/owners/bootstrap-readiness-lifecycle-source.test.js": "bootstrap-membership",
     "test/bootstrap/owners/bootstrap-readiness-owner.test.js": "bootstrap-membership",
     "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js": "bootstrap-membership",
     "test/bootstrap/partition-activation-handler-boundary.test.js": "bootstrap-membership",
@@ -1486,6 +1487,7 @@
     "test/partition/partition-service-size-split-transport.test.js": "storage-partition",
     "test/partition/partition-service-sqlite-metrics.test.js": "storage-partition",
     "test/partition/partition-service-stale-topology-write-guard.test.js": "storage-partition",
+    "test/partition/partition-service-traffic-ready-rebalancer-wake.test.js": "storage-partition",
     "test/partition/partition-service-transactions-query-routing.test.js": "storage-partition",
     "test/partition/partition-service-write-commit.test.js": "storage-partition",
     "test/partition/partition-service.test.js": "storage-partition",
@@ -2033,6 +2035,7 @@
     "test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-topology-guard.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-critical-move-priority.property.test.js": "placement-rebalance",
+    "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js": "placement-rebalance",
     "test/rebalancer/rebalancer-entity-interaction-contract.test.js": "placement-rebalance",
     "test/rebalancer/rebalancer-gating.property.test.js": "placement-rebalance",
     "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js": "placement-rebalance",
@@ -3547,6 +3550,17 @@
     "test/bootstrap/node-state-gating.property.test.js": {
       "files": [
         "src/cdc/cdc-pipeline-readiness-gate.js"
+      ]
+    },
+    "test/bootstrap/owners/bootstrap-readiness-lifecycle-source.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-api-constants.js",
+        "src/bootstrap/lifecycle-controller.js",
+        "src/bootstrap/owners/bootstrap-readiness-owner.js",
+        "src/bootstrap/startup-recovery-coordinator.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cache/read-only-system-table-cache.js",
+        "src/control-plane/control-plane-readiness-service.js"
       ]
     },
     "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js": {
@@ -13389,6 +13403,13 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/partition-service-traffic-ready-rebalancer-wake.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/partition/partition-service-transactions-query-routing.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
@@ -17633,6 +17654,13 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
+      ]
+    },
+    "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalancer-entity-interaction-contract.test.js": {
