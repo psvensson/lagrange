@@ -104,7 +104,9 @@ function isJsLanguagePrimitiveLiteral(node, parent, ancestors) {
 // Independently verified on pinned base 540418614772acc8c5c82be8d8cf6b0ecbe32ef3
 // (1,233 -> 4,824 raw violations before script witness cleanup; 4,752 after
 // hoisting 72 raw literal occurrences across scripts/checks/apparatus-release-
-// consolidation-budget.js and scripts/lab/{lagrange-lab,probe}.js).
+// consolidation-budget.js and scripts/lab/{lagrange-lab,probe}.js; tightened
+// 4,752 -> 4,729 upon candidate integration after sibling repairs retired 23
+// additional baseline entries).
 const LITERAL_BASELINE_FILENAME = './check-guideline-literals-baseline.json';
 const LITERAL_BASELINE_FILE_URL = new URL(
   LITERAL_BASELINE_FILENAME,

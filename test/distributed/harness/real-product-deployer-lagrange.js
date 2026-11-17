@@ -780,7 +780,6 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
 }
 
 export {
-  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   deployLagrangeCluster,
   resolveLagrangeContainerImage,
 };

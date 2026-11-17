@@ -76,7 +76,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // hint after de-exporting internal runtime-admin composition and policy helpers.
 // Retiring unconsumed failure-bundle forwarding exports, with namespace
 // consumers preserved and audited: measured 1381 -> 1321.
-const BASELINE_UNUSED_EXPORT_COUNT = 1321;
+// 2026-11-17 (candidate-integration): tightened 1321 -> 1319 on the checker
+// hint after de-exporting internal-only rebalancer, query, bootstrap,
+// partition, and comparative-harness helpers.
+const BASELINE_UNUSED_EXPORT_COUNT = 1319;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

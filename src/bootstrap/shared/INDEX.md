@@ -26,7 +26,7 @@ documentClass: generated
 - [node-registration-owner-constants.js](node-registration-owner-constants.js) - No leading comment; first export: AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE. (importers: few)
 - [node-registration-owner-durable-rejoin-methods.js](node-registration-owner-durable-rejoin-methods.js) - Throw the typed deferred error when an authoritative row read was UNAVAILABLE. (importers: one)
 - [node-registration-owner-publication-methods.js](node-registration-owner-publication-methods.js) - No leading comment; first export: createNodeRegistrationPublicationMethods. (importers: one)
-- [node-registration-owner-row-builder.js](node-registration-owner-row-builder.js) - No leading comment; first export: NON_REUSABLE_NODE_STATUSES. (importers: many)
+- [node-registration-owner-row-builder.js](node-registration-owner-row-builder.js) - No leading comment; first export: buildAuthoritativeRowSourceUnavailableError. (importers: many)
 - [node-registration-owner.js](node-registration-owner.js) - No leading comment; first export: NodeRegistrationOwner. (importers: many)
 - [node-state-publication-outcome.js](node-state-publication-outcome.js) - No leading comment; first export: NODE_STATE_PUBLICATION_OWNER_LITERAL. (importers: one)
 - [node-state-publication-owner.js](node-state-publication-owner.js) - Log a terminal node-state update failure. (importers: few)

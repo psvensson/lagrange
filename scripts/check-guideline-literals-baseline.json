@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-17T07:34:01.359Z",
-  "rawViolationCount": 4752,
+  "generatedAt": "2026-11-17T08:09:09.094Z",
+  "rawViolationCount": 4729,
   "violations": [
     {
       "filePath": "scripts/agent-tooling/cli.js",
@@ -26392,15 +26392,6 @@
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
     },
     {
-      "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 379,
-      "column": 9,
-      "value": "250",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
       "line": 96,
       "column": 7,
@@ -32080,60 +32071,6 @@
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
     },
     {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 263,
-      "column": 10,
-      "value": "'retry_registry'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 276,
-      "column": 10,
-      "value": "'unknown_attempt_key'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 285,
-      "column": 5,
-      "value": "250",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 286,
-      "column": 32,
-      "value": "30000",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 286,
-      "column": 52,
-      "value": "10",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
-      "line": 302,
-      "column": 10,
-      "value": "'escalate'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
       "line": 301,
       "column": 59,
@@ -32180,7 +32117,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 416,
+      "line": 426,
       "column": 25,
       "value": "'querySingleFlightJoinCount'",
       "kind": "free_floating_string_literal",
@@ -32189,7 +32126,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 417,
+      "line": 427,
       "column": 27,
       "value": "'queryTrackingBypassCount'",
       "kind": "free_floating_string_literal",
@@ -32450,34 +32387,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 80,
-      "column": 41,
-      "value": "'deferred'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 81,
-      "column": 35,
-      "value": "'deferred'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 82,
-      "column": 38,
-      "value": "'retry'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 269,
+      "line": 276,
       "column": 15,
       "value": "'node endpoint heartbeat upsert failed'",
       "kind": "free_floating_string_literal",
@@ -37219,24 +37129,6 @@
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
     },
     {
-      "filePath": "src/query/distributed/distributed-write-constraint-helpers.js",
-      "line": 29,
-      "column": 57,
-      "value": "', '",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-write-constraint-helpers.js",
-      "line": 185,
-      "column": 62,
-      "value": "' AND '",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
       "filePath": "src/query/nested-call-classifier.js",
       "line": 121,
       "column": 34,
@@ -37295,51 +37187,6 @@
       "line": 656,
       "column": 35,
       "value": "':'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 253,
-      "column": 62,
-      "value": "'|'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 516,
-      "column": 60,
-      "value": "'\\\\$&'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 517,
-      "column": 48,
-      "value": "'.*'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 517,
-      "column": 68,
-      "value": "'.'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 532,
-      "column": 42,
-      "value": "'DESC'",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
@@ -37583,24 +37430,6 @@
       "line": 671,
       "column": 41,
       "value": "'candidate read failed during reservation check'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/sql-parser-expression-methods.js",
-      "line": 119,
-      "column": 37,
-      "value": "'\\''",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/query/sql-parser-expression-methods.js",
-      "line": 420,
-      "column": 36,
-      "value": "'\\''",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
@@ -39722,7 +39551,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 127,
+      "line": 221,
       "column": 52,
       "value": "'operation'",
       "kind": "free_floating_string_literal",
@@ -39731,7 +39560,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 153,
+      "line": 253,
       "column": 54,
       "value": "'entity'",
       "kind": "free_floating_string_literal",
@@ -39740,7 +39569,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 158,
+      "line": 258,
       "column": 9,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39749,7 +39578,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 168,
+      "line": 268,
       "column": 9,
       "value": "'authoritative_operation_visibility_deferred'",
       "kind": "free_floating_string_literal",
@@ -39758,7 +39587,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 170,
+      "line": 270,
       "column": 7,
       "value": "'Authoritative operation visibility deferred for '",
       "kind": "free_floating_string_literal",
@@ -39767,7 +39596,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 172,
+      "line": 272,
       "column": 9,
       "value": "':'",
       "kind": "free_floating_string_literal",
@@ -39776,7 +39605,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 174,
+      "line": 274,
       "column": 9,
       "value": "' ('",
       "kind": "free_floating_string_literal",
@@ -39785,7 +39614,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 176,
+      "line": 276,
       "column": 9,
       "value": "')'",
       "kind": "free_floating_string_literal",
@@ -39794,7 +39623,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 207,
+      "line": 307,
       "column": 29,
       "value": "'operation'",
       "kind": "free_floating_string_literal",
@@ -39803,7 +39632,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 212,
+      "line": 312,
       "column": 49,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39812,7 +39641,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 213,
+      "line": 313,
       "column": 56,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39821,7 +39650,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 239,
+      "line": 339,
       "column": 29,
       "value": "'operation'",
       "kind": "free_floating_string_literal",
@@ -39830,7 +39659,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 243,
+      "line": 343,
       "column": 31,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39839,7 +39668,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 244,
+      "line": 344,
       "column": 49,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39848,7 +39677,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 245,
+      "line": 345,
       "column": 56,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39857,7 +39686,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 272,
+      "line": 372,
       "column": 9,
       "value": "' '",
       "kind": "free_floating_string_literal",
@@ -39866,7 +39695,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 273,
+      "line": 373,
       "column": 9,
       "value": "'for '",
       "kind": "free_floating_string_literal",
@@ -39875,7 +39704,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 274,
+      "line": 374,
       "column": 30,
       "value": "'operation'",
       "kind": "free_floating_string_literal",
@@ -39884,7 +39713,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 275,
+      "line": 375,
       "column": 9,
       "value": "' on '",
       "kind": "free_floating_string_literal",
@@ -39893,7 +39722,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 276,
+      "line": 376,
       "column": 32,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -39902,7 +39731,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 277,
+      "line": 377,
       "column": 27,
       "value": "': '",
       "kind": "free_floating_string_literal",
@@ -39911,7 +39740,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 287,
+      "line": 387,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -39947,7 +39776,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 890,
+      "line": 887,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -40118,7 +39947,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-evaluation-methods.js",
-      "line": 185,
+      "line": 186,
       "column": 13,
       "value": "','",
       "kind": "free_floating_string_literal",
@@ -40127,7 +39956,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-evaluation-methods.js",
-      "line": 211,
+      "line": 212,
       "column": 13,
       "value": "','",
       "kind": "free_floating_string_literal",
@@ -41108,7 +40937,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 148,
+      "line": 261,
       "column": 48,
       "value": "'failed'",
       "kind": "free_floating_string_literal",
@@ -41508,42 +41337,6 @@
       "column": 38,
       "value": "8",
       "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 296,
-      "column": 39,
-      "value": "8",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 364,
-      "column": 36,
-      "value": "'default'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 365,
-      "column": 28,
-      "value": "'anonymous'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 412,
-      "column": 55,
-      "value": "'utf8'",
-      "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
       "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
     },

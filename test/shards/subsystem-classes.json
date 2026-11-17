@@ -28,7 +28,7 @@
   "censusSize": 2664,
   "digest": "fnv1a32-3e475f12",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4ad4767f",
+  "observationDigest": "fnv1a32-81452bfc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19788,6 +19788,9 @@
         "scripts",
         "src",
         "test"
+      ],
+      "env": [
+        "DELAY"
       ]
     },
     "test/scripts/check-guideline-navigability.test.js": {

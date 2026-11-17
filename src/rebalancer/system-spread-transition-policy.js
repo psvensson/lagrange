@@ -554,8 +554,5 @@ export {
   doesOperationTransitionReleaseSystemTargetNodeSlot,
   evaluateSystemPartitionTargetNodeSlotAdmission,
   isNodesPartitionPresentAndUnderSpread,
-  isNodesPartitionSpreadInCache,
   isReplicasBelowDeclaredDistinctHostSpread,
-  resolveCommittedActiveClusterHostCount,
-  resolvePhaseBSystemTransitionSnapshotOptions,
 };

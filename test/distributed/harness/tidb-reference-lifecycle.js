@@ -789,6 +789,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
 export {
   DEFAULTS as TIDB_REFERENCE_DEFAULTS,
   buildReadinessSql as buildTiDbReferenceReadinessSql,
+  sleep as sleepWithAbortSignal,
   startTiDbReferenceCluster,
   stopTiDbReferenceCluster,
   waitForSqlReady as waitForTiDbReferenceSqlReady,

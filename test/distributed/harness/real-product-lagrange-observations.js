@@ -774,10 +774,7 @@ async function reportedVersions(ctx, products) {
 }
 
 export {
-  NODE_ROLE,
-  PG_WIRE_SERVICE_ID,
   clusterReady,
-  controlSnapshots,
   leadersReady,
   membershipReady,
   nodeReady,

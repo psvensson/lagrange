@@ -777,14 +777,11 @@ function residualPredicateAdmitsRow(node, row) {
 
 export {
   SQL_COMPARISON_AFFINITY,
-  annotateExpressionColumnAffinities,
   applySqlComparisonAffinity,
   areSqlScalarsEqualWithAffinity,
   buildColumnAffinityMapFromColumns,
   compareSqlScalarsWithAffinity,
   ensureExecutorQueryColumnAffinities,
-  hasUnannotatedColumnRefs,
-  parseCreateTableColumnAffinities,
   residualPredicateAdmitsRow,
   resolveOperandComparisonAffinity,
 };

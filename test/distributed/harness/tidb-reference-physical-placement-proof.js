@@ -15,6 +15,7 @@ import {
   classifyRemoteCommandError,
   errorText,
 } from './real-product-remote-shell.js';
+import {sleepWithAbortSignal as sleep} from './tidb-reference-lifecycle.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -23,28 +24,6 @@ const DEFAULT_TIMEOUT_MS = 90000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_PLACEMENT_OP_TIMEOUT_MS = 10000;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
-
-function sleep(ms, signal = null) {
-  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => {
-    let settled = false;
-    let timer = null;
-    const onAbort = () => {
-      if (settled) return;
-      settled = true;
-      if (timer !== null) clearTimeout(timer);
-      resolve();
-    };
-    signal.addEventListener('abort', onAbort, {once: true});
-    timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-  });
-}
 
 function assertIdentifier(value, label) {
   const text = String(value || '');

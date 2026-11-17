@@ -535,7 +535,6 @@ function stampReusedEndpointMembershipIncarnations(
 }
 
 export {
-  NON_REUSABLE_NODE_STATUSES,
   buildAuthoritativeRowSourceUnavailableError,
   buildDurableRejoinMembershipResolution,
   buildExistingJoinAdmissionProgressResolution,
@@ -543,7 +542,6 @@ export {
   buildLostStorageMutationFailureError,
   buildNodeEndpointRegistrationData,
   buildNodeRegistrationRow,
-  buildReentryNormalizedNodeRow,
   buildRefusedJoinAdmissionWithdrawal,
   buildRejectedJoinAdmissionMutationAcceptance,
   canReuseObservedJoinAdmissionNodeRowForAddress,
@@ -552,12 +550,10 @@ export {
   filterAuthoritativeNodeEndpointRow,
   filterAuthoritativePartitionServiceRowsForNode,
   isDurableRejoinFenceContinuityPresent,
-  parseEndpointMetadataObject,
   readObservedBootIncarnation,
   readObservedStorageIncarnation,
   resolveHighestObservedNodeIncarnation,
   resolveServiceUpdateExpectedIdentity,
-  stampEndpointStorageIncarnationMetadata,
   stampReusedEndpointMembershipIncarnations,
   withOriginHlcStamp,
 };

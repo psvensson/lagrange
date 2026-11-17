@@ -25,7 +25,6 @@ const FOOTPRINT_FIELD_SCOPED = 'scoped';
 const FOOTPRINT_FIELD_ROW_KEYS = 'rowKeys';
 const FOOTPRINT_FIELD_PK_TUPLES = 'pkTuples';
 
-const ROW_KEY_SEPARATOR = '|';
 const SQLITE_NUMERIC_TEXT_RE = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*$/u;
 
 const TYPE_STRING = 'string';
@@ -742,7 +741,6 @@ function extractStatementWriteFootprint(options) {
 
 export {
   MAX_SCOPED_FOOTPRINT_TUPLES,
-  ROW_KEY_SEPARATOR,
   STATEMENT_WRITE_FOOTPRINT_KEYS,
   assertStatementWriteFootprintConformance,
   createStatementWriteFootprintRecord,

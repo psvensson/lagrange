@@ -2165,6 +2165,69 @@
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
       ]
+    },
+    "phase-b-system-spread-policy-admission": {
+      "description": "Phase B host-occupancy transition policy and the serialized operation admission owner enforce concurrent per-node slot limits and staggered continuation wakes without starvation or deadlock.",
+      "owners": [
+        "src/rebalancer/system-spread-transition-policy.js",
+        "src/rebalancer/move-planner-state-methods.js",
+        "src/rebalancer/continuation-wake-coordinator.js",
+        "src/rebalancer/replica-operation-step-policy.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/unified-rebalancer-rebalance-loop.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
+        "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
+        "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "src/rebalancer/operation-workflow-owner-create-budget-dispatch.js",
+        "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js"
+      ],
+      "tests": [
+        "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js",
+        "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js",
+        "test/rebalancer/replica-operation-confirmation-authority-read.test.js",
+        "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+        "test/rebalancer/topology-owner-contracts.test.js"
+      ]
+    },
+    "readiness-lifecycle-traffic-ready-rebalancer-wake": {
+      "description": "Control-plane readiness planning publication binds to the autonomous lifecycle source, dispatching rising-edge TRAFFIC_READY notifications to wake the rebalancer without requiring manual unpolled HTTP /readyz probes.",
+      "owners": [
+        "src/control-plane/readiness-planning-publication-contract.js",
+        "src/control-plane/readiness-planning-snapshot-owner.js",
+        "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+        "src/control-plane/readiness-planning-completion-admission-methods.js",
+        "src/bootstrap/owners/bootstrap-readiness-lifecycle-source.js",
+        "src/bootstrap/owners/bootstrap-readiness-owner.js",
+        "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+        "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+        "src/rebalancer/rebalancer-local-mutation-readiness-wake.js",
+        "src/rebalancer/continuation-wake-coordinator.js"
+      ],
+      "tests": [
+        "test/bootstrap/owners/bootstrap-readiness-lifecycle-source.test.js",
+        "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js",
+        "test/control-plane/readiness-planning-consistency-mode.test.js",
+        "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js"
+      ]
+    },
+    "benchmark-remote-shell-identity-campaign-attribution": {
+      "description": "Remote SSH command execution and native process termination preserve explicit transport and timeout facts across container identity and workload adapters into the final campaign runner without lossy code overloading.",
+      "owners": [
+        "test/distributed/harness/real-product-remote-shell.js",
+        "test/distributed/harness/real-product-deployment-contract.js",
+        "test/distributed/harness/real-product-identity.js",
+        "test/distributed/harness/real-product-readiness.js",
+        "test/distributed/harness/real-product-lagrange-observations.js",
+        "test/distributed/harness/comparative-benchmark-workload-call-site.js",
+        "test/distributed/harness/comparative-benchmark-campaign-runner.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
+        "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4610,6 +4673,102 @@
         "test/bootstrap/guarded-runtime-service-handler.test.js",
         "test/bootstrap/pgwire-startup-safety-gate.test.js",
         "test/bootstrap/cleanup-ownership-order-characterization.test.js"
+      ]
+    },
+    "phase-b-system-spread-policy-admission": {
+      "description": "Phase B host-occupancy transition policy and the serialized operation admission owner enforce concurrent per-node slot limits and staggered continuation wakes without starvation or deadlock.",
+      "endpoints": [
+        {
+          "id": "system-spread-transition-occupancy-policy",
+          "owners": [
+            "src/rebalancer/system-spread-transition-policy.js",
+            "src/rebalancer/move-planner-state-methods.js",
+            "src/rebalancer/continuation-wake-coordinator.js",
+            "src/rebalancer/replica-operation-step-policy.js",
+            "src/rebalancer/replica-operation-progress.js",
+            "src/rebalancer/unified-rebalancer-rebalance-loop.js"
+          ]
+        },
+        {
+          "id": "serialized-operation-admission-owner",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-operation-creation.js",
+            "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
+            "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
+            "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+            "src/rebalancer/operation-workflow-owner-create-budget-dispatch.js",
+            "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js"
+          ]
+        }
+      ],
+      "contract": "phase-b-system-spread-policy-admission",
+      "witnessTests": [
+        "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js",
+        "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js",
+        "test/rebalancer/replica-operation-confirmation-authority-read.test.js",
+        "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+        "test/rebalancer/topology-owner-contracts.test.js"
+      ]
+    },
+    "readiness-lifecycle-traffic-ready-rebalancer-wake": {
+      "description": "Control-plane readiness planning publication binds to the autonomous lifecycle source, dispatching rising-edge TRAFFIC_READY notifications to wake the rebalancer without requiring manual unpolled HTTP /readyz probes.",
+      "endpoints": [
+        {
+          "id": "planning-publication-lifecycle-source",
+          "owners": [
+            "src/control-plane/readiness-planning-publication-contract.js",
+            "src/control-plane/readiness-planning-snapshot-owner.js",
+            "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+            "src/control-plane/readiness-planning-completion-admission-methods.js",
+            "src/bootstrap/owners/bootstrap-readiness-lifecycle-source.js",
+            "src/bootstrap/owners/bootstrap-readiness-owner.js"
+          ]
+        },
+        {
+          "id": "traffic-ready-rebalancer-wake",
+          "owners": [
+            "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+            "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+            "src/rebalancer/rebalancer-local-mutation-readiness-wake.js",
+            "src/rebalancer/continuation-wake-coordinator.js"
+          ]
+        }
+      ],
+      "contract": "readiness-lifecycle-traffic-ready-rebalancer-wake",
+      "witnessTests": [
+        "test/bootstrap/owners/bootstrap-readiness-lifecycle-source.test.js",
+        "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js",
+        "test/control-plane/readiness-planning-consistency-mode.test.js",
+        "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js"
+      ]
+    },
+    "benchmark-remote-shell-identity-campaign-attribution": {
+      "description": "Remote SSH command execution and native process termination preserve explicit transport and timeout facts across container identity and workload adapters into the final campaign runner without lossy code overloading.",
+      "endpoints": [
+        {
+          "id": "remote-shell-process-classification",
+          "owners": [
+            "test/distributed/harness/real-product-remote-shell.js",
+            "test/distributed/harness/real-product-deployment-contract.js"
+          ]
+        },
+        {
+          "id": "benchmark-identity-workload-campaign-attribution",
+          "owners": [
+            "test/distributed/harness/real-product-identity.js",
+            "test/distributed/harness/real-product-readiness.js",
+            "test/distributed/harness/real-product-lagrange-observations.js",
+            "test/distributed/harness/comparative-benchmark-workload-call-site.js",
+            "test/distributed/harness/comparative-benchmark-campaign-runner.js"
+          ]
+        }
+      ],
+      "contract": "benchmark-remote-shell-identity-campaign-attribution",
+      "witnessTests": [
+        "test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
+        "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
       ]
     }
   }
