@@ -2,7 +2,7 @@
   "schema": "solve-quest/2",
   "id": "gcp-bounded-vm-lifetime",
   "epic": "developer-journey-and-measured-comparisons",
-  "statement": "The existing GCP creation entrypoint accepts an explicit whole-second UTC expiry and requests that same absolute termination time, DELETE action and boot-disk auto-deletion in its existing six-name creation call. Malformed calendar or time input is refused before any gcloud invocation. Omitted or empty input preserves ordinary creation without claiming a lifetime bound, and a create-only expiry cannot obstruct placement or teardown.",
+  "statement": "Every GCP benchmark VM is created with a provider-enforced lifetime bound rendered from one shared definition (test/distributed/harness/gcp-vm-lifetime.js): a required whole-second maximum run duration with DELETE on expiry and boot-disk auto-deletion. Both GCP VM creators carry it: the six-name creation call of docs/benchmarks/cloud/provision-gcp.sh (VM_MAX_RUN_DURATION_SECONDS) and every Pulumi instance of GCPProvisioner (gcp.maxRunDurationSeconds in each caller's config). An absent or malformed bound is refused before any provider call; there is no unbounded creation path, and a create-only bound cannot obstruct placement or teardown.",
   "doneWhen": {
     "probe": "test-receipt",
     "args": {
@@ -15,11 +15,11 @@
   "constraints": [
     {
       "id": "existing-owner-and-topology",
-      "statement": "Change the existing docs/benchmarks/cloud/provision-gcp.sh create owner and its existing Bash-executing witness. Preserve the six named VMs and existing identity, SSH, image, storage, firewall, placement and teardown owners. Add no scheduler, billing API, retry loop or competing cleanup authority. The frozen four-path draft and its transition record define this unit; root owns integration metadata and lifecycle records."
+      "statement": "Change the two existing GCP VM creators (docs/benchmarks/cloud/provision-gcp.sh create and test/distributed/harness/gcp-provisioner.js) and their existing witnesses, and add exactly one shared lifetime definition both render. Preserve the six named VMs and existing identity, SSH, image, storage, firewall, placement and teardown owners. Add no scheduler, billing API, retry loop or competing cleanup authority. Root owns integration metadata and lifecycle records."
     },
     {
       "id": "explicit-input-contract",
-      "statement": "VM_TERMINATION_TIME is optional and create-only. A nonempty input must be a valid YYYY-MM-DDTHH:MM:SSZ UTC timestamp with whole seconds before any gcloud call; forward it unchanged with --instance-termination-action=DELETE and --boot-disk-auto-delete. Google owns admissible future scheduling limits. No fallback may drop a requested schedule after a refusal. Empty or omitted input requests no provider lifetime bound; placement and teardown ignore this create-only input."
+      "statement": "The lifetime bound is required at creation. provision-gcp.sh reads VM_MAX_RUN_DURATION_SECONDS and GCPProvisioner reads its config's maxRunDurationSeconds; each must be a positive whole number of seconds, else creation is refused before any gcloud or Pulumi call. Every VM is created with --max-run-duration=<seconds>s / scheduling.maxRunDuration, instance termination action DELETE and boot-disk auto-deletion, rendered by the one shared definition. Google owns the admissible range. No path creates a VM without the bound and no fallback drops it; placement and teardown ignore this create-only input."
     },
     {
       "id": "genuine-baseline-adoption",
@@ -31,7 +31,7 @@
     },
     {
       "id": "bounded-evidence-claim",
-      "statement": "This witness executes the real Bash entrypoint with its existing gcloud and placement-node substitutes. Passing establishes local argument forwarding, validation and existing control behavior. It does not establish live provider acceptance, scheduling, deletion, billing closure or a successful GCP comparative campaign. No cloud resources are created to satisfy this unit."
+      "statement": "The Bash witness executes the real entrypoint with its existing gcloud and placement-node substitutes (the lifetime rendering runs on the real node); the provisioner witness runs the real Pulumi stack program against a recording @pulumi/gcp stand-in. Passing establishes local argument forwarding, validation and existing control behavior. It does not establish live provider acceptance, scheduling, deletion, billing closure or a successful GCP comparative campaign. No cloud resources are created to satisfy this unit."
     },
     {
       "id": "retained-live-obligations",

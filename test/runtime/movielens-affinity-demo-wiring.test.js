@@ -72,6 +72,7 @@ import {
 import {
   fullLogDestPath,
 } from '../../test/distributed/harness/full-node-log-capture.js';
+import {GCPProvisioner} from '../../test/distributed/harness/gcp-provisioner.js';
 import {
   PREPARE_STATUS,
   START_STATUS,
@@ -101,6 +102,10 @@ test('MovieLens GCP deployment profile owns VM and container capacity', (t) => {
     {memory: '2g', cpus: '2.0'},
     'the live workload cannot inherit the legacy 512MiB/1-CPU fallback',
   );
+  // Every demo VM carries the provider-enforced lifetime bound; the provisioner
+  // refuses a profile without a well-formed one before any provider call.
+  assert.equal(defaultProfile.infrastructure.maxRunDurationSeconds, 7200);
+  assert.doesNotThrow(() => new GCPProvisioner(defaultProfile.infrastructure));
   const defaultClusterConfig = buildGcpDemoClusterConfig(defaultProfile);
   assert.deepEqual(
     defaultClusterConfig.resourceLimits,

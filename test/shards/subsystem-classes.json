@@ -28,7 +28,7 @@
   "censusSize": 2665,
   "digest": "fnv1a32-0af21cc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-85370ee7",
+  "observationDigest": "fnv1a32-27c8e67d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7832,6 +7832,9 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json"
+      ],
+      "directories": [
+        "test/distributed/config"
       ]
     },
     "test/distributed/harness/__tests__/in-cluster-chaos-injection-scenario.test.js": {

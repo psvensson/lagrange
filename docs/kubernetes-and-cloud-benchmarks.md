@@ -173,7 +173,7 @@ Lagrange includes an automated distributed benchmarking framework (`scripts/run-
 
 ### 1. Cloud Configuration Overrides
 
-The default GCP template is located at `test/distributed/config/gcp-default.json`. You can override project, zone, machine types, and instance counts by creating your own JSON configuration file:
+The default GCP template is located at `test/distributed/config/gcp-default.json`. You can override project, zone, machine types, and instance counts by creating your own JSON configuration file. Every `gcp` block must name `maxRunDurationSeconds`, the whole seconds each VM may run: Compute Engine creates every VM with that maximum run duration and deletes it, boot disk included, when it elapses, even if the run never tears it down. A block without a positive whole number there is refused before anything is created. Choose it to cover provisioning, the run and teardown.
 
 Create `my-cloud-config.json`:
 
@@ -184,7 +184,8 @@ Create `my-cloud-config.json`:
     "zone": "us-central1-a",
     "machineType": "e2-standard-4",
     "vmCount": 5,
-    "preemptible": false
+    "preemptible": false,
+    "maxRunDurationSeconds": 7200
   },
   "resourceLimits": {
     "memory": "4g",

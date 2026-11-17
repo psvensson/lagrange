@@ -50,6 +50,9 @@ const {createCluster} = CLUSTER_FACTORY_LAYER;
 // variance that swung otherwise-identical code between 2687ms and 9573ms
 // max gaps (archived runs 21-34-12/21-42-44/21-50-53); a fixed-performance
 // class removes steal-time from the certification variable set.
+// Compute Engine deletes each VM 7200 s after it starts, whether or not
+// teardown ran. The scheduled formation-health job (60-minute budget) fits
+// with margin; a full demo run that outlives the bound loses its VMs and fails.
 const GCP_DEMO_DEPLOYMENT_PROFILE = Object.freeze({
   infrastructure: Object.freeze({
     project: 'something-2e584',
@@ -57,6 +60,7 @@ const GCP_DEMO_DEPLOYMENT_PROFILE = Object.freeze({
     machineType: 'n2-standard-4',
     vmCount: 5,
     preemptible: false,
+    maxRunDurationSeconds: 7200,
   }),
   container: Object.freeze({
     memory: '2g',

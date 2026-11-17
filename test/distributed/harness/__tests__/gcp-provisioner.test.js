@@ -8,7 +8,8 @@
  *
  * Since Pulumi dependencies are not installed, these tests verify
  * constructor configuration and address format expectations without
- * calling provision().
+ * calling provision(), and run the stack program against a recording
+ * stand-in for @pulumi/gcp to show what every created VM carries.
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
@@ -20,7 +21,17 @@ import {
   GCP_HARNESS_IMAGE_FAMILY,
   GCPProvisioner,
   harnessImageSource,
+  harnessStackProgram,
 } from '../gcp-provisioner.js';
+import {gcpVmLifetimeInstanceArgs} from '../gcp-vm-lifetime.js';
+import {
+  arrayFilter,
+  arrayMap,
+  stringEndsWith,
+} from '../real-product-captured-intrinsics.js';
+
+// Every config names its VMs' provider-enforced lifetime bound.
+const BOUND = 7200;
 
 test('GCP provisioner selects the project-local reusable image family', (t) => {
   assert.equal(GCP_HARNESS_IMAGE_FAMILY, 'lagrange-distributed-harness');
@@ -34,13 +45,14 @@ test('GCP provisioner selects the project-local reusable image family', (t) => {
 // --- Constructor / preemptible configuration (Req 8.4) ---
 
 test('GCPProvisioner stores preemptible true', (t) => {
-  const p = new GCPProvisioner({project: 'proj', preemptible: true});
+  const p = new GCPProvisioner({project: 'proj', preemptible: true, maxRunDurationSeconds: BOUND});
   assert.strictEqual(p._preemptible, true);
   t.end();
 });
 
 test('GCPProvisioner stores preemptible false', (t) => {
-  const p = new GCPProvisioner({project: 'proj', preemptible: false});
+  const p = new GCPProvisioner({project: 'proj', preemptible: false,
+    maxRunDurationSeconds: BOUND});
   assert.strictEqual(p._preemptible, false);
   t.end();
 });
@@ -48,7 +60,7 @@ test('GCPProvisioner stores preemptible false', (t) => {
 // --- Constructor default values (Req 8.4) ---
 
 test('GCPProvisioner uses default values for optional config', (t) => {
-  const p = new GCPProvisioner({project: 'my-project'});
+  const p = new GCPProvisioner({project: 'my-project', maxRunDurationSeconds: BOUND});
   assert.strictEqual(p._zone, 'us-central1-a');
   assert.strictEqual(p._machineType, 'e2-standard-4');
   assert.strictEqual(p._vmCount, 1);
@@ -57,10 +69,110 @@ test('GCPProvisioner uses default values for optional config', (t) => {
   t.end();
 });
 
+// --- Provider-enforced lifetime bound ---
+
+test('GCPProvisioner refuses a config without a well-formed lifetime bound, before any ' +
+  'provider call', (t) => {
+  for (const config of [{project: 'proj'}, {project: 'proj', maxRunDurationSeconds: null}]) {
+    assert.throws(() => new GCPProvisioner(config),
+      /^Error: GCP config maxRunDurationSeconds is not set: .*no VM is created without a provider-enforced lifetime bound$/u);
+  }
+  for (const malformed of [0, -60, 1.5, Number.NaN, Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1, '7200', '2h', true, {seconds: 7200}]) {
+    assert.throws(
+      () => new GCPProvisioner({project: 'proj', maxRunDurationSeconds: malformed}),
+      /^Error: GCP config maxRunDurationSeconds must be a positive whole number of seconds/u,
+      String(malformed));
+  }
+  t.end();
+});
+
+// Census of the committed GCPProvisioner callers' configs: the distributed
+// runner and matrix template, the TiDB reference workflows and checks. Each
+// names a bound the provisioner admits (the MovieLens demo profile is checked
+// by its own wiring test).
+test('every committed GCP config names a lifetime bound the provisioner admits', (t) => {
+  const configDir = new URL('../../config/', import.meta.url);
+  const configs = arrayMap(
+    arrayFilter(fs.readdirSync(configDir), (name) => stringEndsWith(name, '.json')),
+    (name) => [name, JSON.parse(fs.readFileSync(new URL(name, configDir), 'utf8'))]);
+  const withGcp = arrayFilter(configs, ([, config]) => config.gcp !== undefined);
+  assert.deepEqual(arrayMap(withGcp, ([name]) => name).sort(), [
+    'gcp-default.json', 'gcp-large.json', 'gcp-memory-soak.json', 'gcp-small.json',
+    'gcp-tidb-oltp-loadgen.json', 'gcp-tidb-oltp-single-host.json',
+    'gcp-tidb-reference-physical.json', 'gcp-tidb-reference-smoke.json']);
+  for (const [name, config] of withGcp) {
+    assert.doesNotThrow(() => new GCPProvisioner(config.gcp), name);
+  }
+  t.end();
+});
+
+// A recording stand-in for the @pulumi/gcp resources the program declares.
+function recordingPulumi() {
+  const declared = [];
+  const resource = (kind) => class {
+    constructor(name, args) {
+      declared.push({kind, name, args});
+      this.selfLink = `${kind}/${name}`;
+      this.name = name;
+      this.networkInterfaces = {apply: (read) => read([{networkIp: '10.0.0.1',
+        accessConfigs: [{natIp: '1.2.3.4'}]}])};
+    }
+  };
+  return {declared, deps: {
+    pulumi: {all: (values) => values},
+    gcp: {compute: {Network: resource('Network'), Firewall: resource('Firewall'),
+      Instance: resource('Instance')}},
+  }};
+}
+
+test('every VM the stack program creates carries the provider-enforced lifetime bound: ' +
+  'maxRunDuration, DELETE on expiry and boot-disk auto-deletion', async (t) => {
+  for (const preemptible of [false, true]) {
+    const {declared, deps} = recordingPulumi();
+    const program = harnessStackProgram(deps, {project: 'proj', zone: 'us-central1-a',
+      machineType: 'e2-standard-4', vmCount: 3, preemptible,
+      lifetime: gcpVmLifetimeInstanceArgs(BOUND, 'bound'),
+      dockerSourceRanges: ['10.128.0.0/9']});
+    const outputs = await program();
+    const instances = arrayFilter(declared, ({kind}) => kind === 'Instance');
+    assert.equal(instances.length, 3);
+    assert.deepEqual(outputs.instanceNames, ['ddb-test-vm-0', 'ddb-test-vm-1', 'ddb-test-vm-2']);
+    for (const {args} of instances) {
+      assert.deepEqual(args.scheduling, {preemptible, automaticRestart: !preemptible,
+        maxRunDuration: {seconds: BOUND}, instanceTerminationAction: 'DELETE'});
+      assert.deepEqual(args.bootDisk, {autoDelete: true, initializeParams: {
+        image: harnessImageSource('proj'), size: 50, type: 'pd-standard'}});
+    }
+  }
+  t.end();
+});
+
+test('every stack operation first refreshes against the provider, so a VM the provider ' +
+  'deleted at its bound is dropped from state, not taken as present', async (t) => {
+  const options = [];
+  const stack = {
+    async setConfig() {},
+    async up(given) {
+      options.push(['up', given.refresh]);
+      throw new Error('injected');
+    },
+    async destroy(given) {
+      options.push(['destroy', given.refresh]);
+    },
+  };
+  const p = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
+  await assert.rejects(() => p._updateStack(stack, 'proj', 'us-central1-a'), /injected/u);
+  p._stack = stack;
+  await p.destroy();
+  assert.deepEqual(options, [['up', true], ['destroy', true], ['destroy', true]]);
+  t.end();
+});
+
 // --- destroy() without provision() ---
 
 test('destroy throws when no stack is active', async (t) => {
-  const p = new GCPProvisioner({project: 'proj'});
+  const p = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
   await assert.rejects(
     () => p.destroy(),
     {message: 'No active Pulumi stack. Call provision() before destroy().'},
@@ -70,7 +182,7 @@ test('destroy throws when no stack is active', async (t) => {
 
 test('stack update failure destroys partially-created resources', async (t) => {
   const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-stack-failure-'));
-  const p = new GCPProvisioner({project: 'proj'});
+  const p = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
   const calls = [];
   p._certDir = certDir;
   const stack = {
@@ -104,7 +216,7 @@ test('stack update failure destroys partially-created resources', async (t) => {
 // --- Cost estimation ---
 
 test('estimateCost returns null before provision()', (t) => {
-  const p = new GCPProvisioner({project: 'proj'});
+  const p = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
   assert.strictEqual(p.estimateCost(), null);
   t.end();
 });
@@ -112,6 +224,7 @@ test('estimateCost returns null before provision()', (t) => {
 test('estimateCost computes on-demand total from uptime and vmCount', (t) => {
   const p = new GCPProvisioner({
     project: 'proj',
+    maxRunDurationSeconds: BOUND,
     machineType: 'e2-standard-4',
     vmCount: 2,
     preemptible: false,
@@ -132,6 +245,7 @@ test('estimateCost computes on-demand total from uptime and vmCount', (t) => {
 test('estimateCost applies preemptible discount', (t) => {
   const p = new GCPProvisioner({
     project: 'proj',
+    maxRunDurationSeconds: BOUND,
     machineType: 'e2-standard-4',
     vmCount: 1,
     preemptible: true,
@@ -148,6 +262,7 @@ test('estimateCost applies preemptible discount', (t) => {
 test('estimateCost falls back for unknown machine type', (t) => {
   const p = new GCPProvisioner({
     project: 'proj',
+    maxRunDurationSeconds: BOUND,
     machineType: 'custom-unlisted-99',
     vmCount: 1,
   });
@@ -161,7 +276,7 @@ test('estimateCost falls back for unknown machine type', (t) => {
 // --- installImage precondition ---
 
 test('installImage throws when provision() has not run', async (t) => {
-  const p = new GCPProvisioner({project: 'proj'});
+  const p = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
   await assert.rejects(
     () => p.installImage('distributed-db:test'),
     /requires provision\(\) to have completed first/,
@@ -171,7 +286,7 @@ test('installImage throws when provision() has not run', async (t) => {
 
 test('certificate distribution fans out across image-backed VMs', async () => {
   const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-provision-test-'));
-  const provisioner = new GCPProvisioner({project: 'proj'});
+  const provisioner = new GCPProvisioner({project: 'proj', maxRunDurationSeconds: BOUND});
   provisioner._certDir = certDir;
   provisioner._vmNames = ['vm-a', 'vm-b'];
   let activeReadinessChecks = 0;
