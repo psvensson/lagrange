@@ -136,12 +136,6 @@ function appendUnderRepresentedAddMoves(
   }
 }
 
-function selectUnderRepresentedAddMoves(addMoves, deferredAdds, serialPlanner) {
-  if (!serialPlanner && addMoves.length === 0 && deferredAdds.length > 0) {
-    addMoves.push(...deferredAdds);
-  }
-}
-
 class MovePlannerMoveCalculationMethods {
   /**
    * Calculate moves needed to reach target state.
@@ -428,7 +422,6 @@ class MovePlannerMoveCalculationMethods {
 
     // Generate ADD moves for under-represented nodes FIRST
     const addMoves = [];
-    const deferredSystemAddMoves = [];
     const replaceMoves = [];
     if (!cleanupOnlyWhilePending) {
       for (const [nodeId, targetCount] of targetCounts) {
@@ -448,15 +441,11 @@ class MovePlannerMoveCalculationMethods {
             nodeId,
             globalSystemTargetOccupancy: true,
           });
-          appendUnderRepresentedAddMoves(
-            deferredSystemAddMoves, nodeId, targetCount, currentCounts);
           continue;
         }
         appendUnderRepresentedAddMoves(
           addMoves, nodeId, targetCount, currentCounts);
       }
-      selectUnderRepresentedAddMoves(
-        addMoves, deferredSystemAddMoves, serialGoalStatePartition);
     }
     const targetReplicaCount = targetState.targetReplicaCount;
     // The partition's OWN policy row, resolved LAZILY and at most once per

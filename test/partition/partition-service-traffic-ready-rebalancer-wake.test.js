@@ -29,6 +29,8 @@ import {withFoundingStamp} from './partition-founding-stamp.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {
   createMockCache,
+  createMockControlPlaneReadinessService,
+  createMockCoordinator,
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
@@ -421,4 +423,165 @@ test('Cold-start rising edge: rebalancer initialized on DEGRADED -> TRAFFIC_READ
 
     ps.rebalancer.shutdown();
     await ps.shutdown();
+  });
+
+test('nodes-p1 formation dependency wakes at 0ms on DEGRADED -> TRAFFIC_READY while ordinary below-spread system partition staggers',
+  async (t) => {
+    const readyLeaseExpiry = Date.now() + 600_000;
+    const buildCacheWithUnderSpread = (partitionId) => {
+      const cacheListeners = new Set();
+      return {
+        ...createMockCache(),
+        onCacheChange(listener) {
+          cacheListeners.add(listener);
+        },
+        offCacheChange(listener) {
+          cacheListeners.delete(listener);
+        },
+        get(tableName, key) {
+          if (tableName === 'partitions' && key === partitionId) {
+            return {partition_id: partitionId, replica_count: 3};
+          }
+          return undefined;
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+        getAll(tableName) {
+          if (tableName === 'nodes') {
+            return [
+              {
+                node_id: 'n1',
+                status: 'active',
+                connection_state: 'ready',
+                ready_lease_expires_at: readyLeaseExpiry,
+              },
+              {
+                node_id: 'n2',
+                status: 'active',
+                connection_state: 'ready',
+                ready_lease_expires_at: readyLeaseExpiry,
+              },
+              {
+                node_id: 'n3',
+                status: 'active',
+                connection_state: 'ready',
+                ready_lease_expires_at: readyLeaseExpiry,
+              },
+            ];
+          }
+          if (tableName === 'partitions') {
+            return [{partition_id: partitionId, replica_count: 3}];
+          }
+          if (tableName === 'services') {
+            return ['r1', 'r2', 'r3'].map((suffix) => ({
+              service_id: `${partitionId}-${suffix}`,
+              partition_id: partitionId,
+              service_type: 'partition',
+              node_id: 'n1',
+              status: 'active',
+            }));
+          }
+          return [];
+        },
+      };
+    };
+    const buildUnderSpreadCoordinator = (cache) =>
+      createMockCoordinator({
+        controlPlaneReadinessService: createMockControlPlaneReadinessService({
+          systemTableCache: cache,
+        }),
+      });
+
+    const nodesCache = buildCacheWithUnderSpread('nodes-p1');
+    const nodesPs = new PartitionService(withFoundingStamp({
+      partitionId: 'nodes-p1',
+      tableId: 'nodes',
+      replicaId: 'nodes-p1-r1',
+      nodeId: NODE_ID,
+      dbPath: ':memory:',
+      deferElection: true,
+      suppressLifecycleLogs: true,
+    }));
+    nodesPs.metadataPublicationReadinessState = readinessStateFor(RECOVERY_DIP_SNAPSHOT);
+    nodesPs.messageRouter = createMockMessageRouter();
+    nodesPs.isLeader = true;
+    nodesPs.setSystemTableCache(nodesCache);
+    nodesPs.setCdcIntegrationService(createMockCdcService());
+    nodesPs.setTablePolicyService(createMockPolicyService());
+    nodesPs.setSqlQueryEngine(createMockSqlEngine());
+    nodesPs.setRebalanceCoordinator(buildUnderSpreadCoordinator(nodesCache));
+
+    t.ok(nodesPs.rebalancer, 'nodes-p1 rebalancer initialized during DEGRADED');
+    const nodesEnqueued = [];
+    nodesPs.rebalancer.enqueueRebalanceCheck = (reason) => {
+      nodesEnqueued.push(reason);
+      return true;
+    };
+    nodesPs.rebalancer.lastCheckAtMs = SIMULATED_LAST_CHECK_MS;
+
+    const clustersCache = buildCacheWithUnderSpread('tables-p1');
+    const clustersPs = new PartitionService(withFoundingStamp({
+      partitionId: 'tables-p1',
+      tableId: 'tables',
+      replicaId: 'tables-p1-r1',
+      nodeId: NODE_ID,
+      dbPath: ':memory:',
+      deferElection: true,
+      suppressLifecycleLogs: true,
+    }));
+    clustersPs.metadataPublicationReadinessState = readinessStateFor(RECOVERY_DIP_SNAPSHOT);
+    clustersPs.messageRouter = createMockMessageRouter();
+    clustersPs.isLeader = true;
+    clustersPs.setSystemTableCache(clustersCache);
+    clustersPs.setCdcIntegrationService(createMockCdcService());
+    clustersPs.setTablePolicyService(createMockPolicyService());
+    clustersPs.setSqlQueryEngine(createMockSqlEngine());
+    clustersPs.setRebalanceCoordinator(buildUnderSpreadCoordinator(clustersCache));
+
+    const clusterEnqueued = [];
+    const clusterScheduled = [];
+    const originalInit = clustersPs.initializeRebalancer.bind(clustersPs);
+    clustersPs.initializeRebalancer = (bundle) => {
+      originalInit(bundle);
+      clustersPs.rebalancer.enqueueRebalanceCheck = (reason) => {
+        clusterEnqueued.push(reason);
+        return true;
+      };
+      clustersPs.rebalancer.scheduleNextCheck = (delayMs) => {
+        clusterScheduled.push(delayMs);
+      };
+    };
+
+    nodesPs.metadataPublicationReadinessState = readinessStateFor(READY_SNAPSHOT);
+    nodesPs.handleMetadataPublicationReadinessTransition();
+
+    clustersPs.metadataPublicationReadinessState = readinessStateFor(READY_SNAPSHOT);
+    clustersPs.handleMetadataPublicationReadinessTransition();
+
+    t.same(
+      nodesEnqueued,
+      [RECONCILE_REASON.PERIODIC_CHECK],
+      'nodes-p1 wakes immediately at 0ms on DEGRADED -> TRAFFIC_READY edge',
+    );
+    t.equal(nodesPs.rebalancer.lastCheckAtMs, 0, 'nodes-p1 clears lastCheckAtMs on TRAFFIC_READY');
+    t.same(
+      clusterEnqueued,
+      [],
+      'ordinary under-spread system partition does not stampede enqueue at t=0ms on TRAFFIC_READY',
+    );
+    t.equal(
+      clusterScheduled.length,
+      1,
+      'ordinary under-spread system partition schedules deterministic staggered wake on TRAFFIC_READY',
+    );
+    t.ok(
+      clustersPs.rebalancer.operationContinuationWakeState?.awaitingBudgetSlotRelease === true,
+      'ordinary under-spread system partition arms continuation wake before staggered check',
+    );
+
+    nodesPs.rebalancer.shutdown();
+    clustersPs.rebalancer.shutdown();
+    await nodesPs.shutdown();
+    await clustersPs.shutdown();
   });

@@ -250,8 +250,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
   getLeadershipStartDelayMs() {
     if (
       this.isControlPlanePriorityPartition() ||
-      (!this.isFormationLivenessDependencyPartition() &&
-        this.isPartitionBelowDeclaredDistinctHostSpread())
+      this.isPartitionBelowDeclaredDistinctHostSpread()
     ) {
       return Math.max(
         UNIFIED_REBALANCER_LITERAL.ONE,

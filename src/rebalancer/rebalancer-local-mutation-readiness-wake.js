@@ -20,6 +20,10 @@ const LOCAL_MUTATION_READINESS_WAKE_TABLES = Object.freeze(new Set([
   TABLES.CONTROL_PLANE_PUBLICATIONS,
   TABLES.REPLICA_OPERATIONS,
 ]));
+const SLOT_WAKE_STAGGER_BASE_MS = 1000;
+const SLOT_WAKE_STAGGER_STEP_MS = 120;
+const SLOT_WAKE_HISTORY_LIMIT = 64;
+const RECENT_CONTINUATION_OP_LIMIT = 16;
 
 function isLocalMutationReadinessWakeArmed(rebalancer) {
   return Boolean(
@@ -80,6 +84,121 @@ function hasBudgetExceededRebalanceOutcome(rebalanceResult) {
   );
 }
 
+function hasRecentlyWokenOperation(rebalancer, operationId) {
+  if (!operationId || !Array.isArray(rebalancer._recentContinuationWakeOpIds)) {
+    return false;
+  }
+  return rebalancer._recentContinuationWakeOpIds.includes(operationId);
+}
+
+function recordRecentlyWokenOperation(rebalancer, operationId) {
+  if (!operationId) {
+    return;
+  }
+  if (!Array.isArray(rebalancer._recentContinuationWakeOpIds)) {
+    rebalancer._recentContinuationWakeOpIds = [];
+  }
+  if (!rebalancer._recentContinuationWakeOpIds.includes(operationId)) {
+    rebalancer._recentContinuationWakeOpIds.push(operationId);
+    if (
+      rebalancer._recentContinuationWakeOpIds.length >
+      RECENT_CONTINUATION_OP_LIMIT
+    ) {
+      rebalancer._recentContinuationWakeOpIds.shift();
+    }
+  }
+}
+
+function resolveSlotWakeCoordinatorHost(state) {
+  if (state.coordinator) {
+    return state.coordinator;
+  }
+  if (state.cache) {
+    return state.cache;
+  }
+  return null;
+}
+
+function resolveSlotWakeDispatchRecord(state, operationId) {
+  if (!operationId) {
+    return null;
+  }
+  const host = resolveSlotWakeCoordinatorHost(state);
+  if (!host) {
+    return null;
+  }
+  if (!(host._slotWakeDispatchState instanceof Map)) {
+    host._slotWakeDispatchState = new Map();
+  }
+  const registry = host._slotWakeDispatchState;
+  let record = registry.get(operationId);
+  if (!record) {
+    record = {winnerAssigned: false, staggerCount: 0};
+    registry.set(operationId, record);
+    if (registry.size > SLOT_WAKE_HISTORY_LIMIT) {
+      const oldestKey = registry.keys().next().value;
+      registry.delete(oldestKey);
+    }
+  }
+  return record;
+}
+
+function rebalancerAlreadyHostsNode(rebalancer, targetNodeId) {
+  if (!targetNodeId || !rebalancer.getCurrentReplicas) {
+    return false;
+  }
+  const replicas = rebalancer.getCurrentReplicas();
+  if (!Array.isArray(replicas)) {
+    return false;
+  }
+  return replicas.some((replica) => replica && replica.node_id === targetNodeId);
+}
+
+function resolveSlotWakeDelayMsFromRecord(
+  rebalancer,
+  state,
+  normalized,
+  dispatchRecord,
+) {
+  const needsBudgetImmediate = state.awaitingBudgetExhausted === true;
+  const winnerEligible =
+    needsBudgetImmediate ||
+    !rebalancerAlreadyHostsNode(rebalancer, normalized.targetNodeId);
+  if (!dispatchRecord.winnerAssigned && winnerEligible) {
+    dispatchRecord.winnerAssigned = true;
+    return UNIFIED_REBALANCER_LITERAL.ZERO;
+  }
+  const staggerIndex = dispatchRecord.staggerCount;
+  dispatchRecord.staggerCount += 1;
+  return SLOT_WAKE_STAGGER_BASE_MS + staggerIndex * SLOT_WAKE_STAGGER_STEP_MS;
+}
+
+function resolveSlotWakeDelayMsSafe(rebalancer, state, normalized) {
+  const dispatchRecord = resolveSlotWakeDispatchRecord(
+    state,
+    normalized.operationId,
+  );
+  if (!dispatchRecord) {
+    return UNIFIED_REBALANCER_LITERAL.ZERO;
+  }
+  return resolveSlotWakeDelayMsFromRecord(
+    rebalancer,
+    state,
+    normalized,
+    dispatchRecord,
+  );
+}
+
+function resolveContinuationWakeDelayMs(rebalancer, wakeState, normalized, ownMatch) {
+  if (ownMatch) {
+    return UNIFIED_REBALANCER_LITERAL.ZERO;
+  }
+  if (wakeState.pendingOwnMatch) {
+    return wakeState.staggerDelayMs;
+  }
+  return resolveSlotWakeDelayMsSafe(rebalancer, wakeState, normalized);
+}
+
 function scheduleOperationContinuationMicrotask(rebalancer, state) {
   if (state.pending === true) {
     return;
@@ -93,9 +212,18 @@ function scheduleOperationContinuationMicrotask(rebalancer, state) {
       rebalancer.disarmOperationContinuationWake();
       return;
     }
+    const staggerDelayMs = state.staggerDelayMs;
     rebalancer.disarmOperationContinuationWake();
     rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
     rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
+    rebalancer.lastStateChangeTime = UNIFIED_REBALANCER_LITERAL.ZERO;
+    if (
+      staggerDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO &&
+      rebalancer.scheduleNextCheck
+    ) {
+      rebalancer.scheduleNextCheck(staggerDelayMs);
+      return;
+    }
     rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
   });
 }
@@ -109,18 +237,79 @@ function handleOperationContinuationObservation(rebalancer, state, operation) {
     return;
   }
   const normalized = normalizeReplicaOperationRecord(operation);
+  if (hasRecentlyWokenOperation(rebalancer, normalized.operationId)) {
+    return;
+  }
+  if (state.clearPriorityCheckFloorOnTerminal === true) {
+    recordRecentlyWokenOperation(rebalancer, normalized.operationId);
+    rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
+    rebalancer.disarmOperationContinuationWake();
+    return;
+  }
   const ownMatch =
     state.awaitingOwnOperationCompletion === true &&
     normalized.partitionId === rebalancer.entityId;
-  const slotMatch = state.awaitingBudgetSlotRelease === true;
+  const slotMatch =
+    state.awaitingBudgetSlotRelease === true &&
+    normalized.partitionId !== rebalancer.entityId;
   if (!ownMatch && !slotMatch) {
     return;
   }
+  recordRecentlyWokenOperation(rebalancer, normalized.operationId);
+  state.staggerDelayMs = resolveContinuationWakeDelayMs(
+    rebalancer,
+    state,
+    normalized,
+    ownMatch,
+  );
   state.pendingOwnMatch = state.pendingOwnMatch || ownMatch;
   scheduleOperationContinuationMicrotask(rebalancer, state);
 }
 
-function attachOperationContinuationListeners(rebalancer, state) {
+function canReuseContinuationWakeState(existing, rebalancer, attachCacheListener) {
+  return Boolean(
+    existing &&
+    existing.coordinator === rebalancer.rebalanceCoordinator &&
+    existing.cache === rebalancer.systemTableCache &&
+    existing.attachCacheListener === attachCacheListener,
+  );
+}
+
+function applyContinuationWakeOptions(target, options) {
+  target.awaitingOwnOperationCompletion =
+    options?.awaitingOwnOperationCompletion === true;
+  target.awaitingBudgetSlotRelease =
+    options?.awaitingBudgetSlotRelease === true;
+  target.awaitingBudgetExhausted =
+    options?.awaitingBudgetExhausted === true;
+  target.clearPriorityCheckFloorOnTerminal =
+    options?.clearPriorityCheckFloorOnTerminal === true;
+}
+
+function buildContinuationWakeState(rebalancer, options, attachCacheListener) {
+  const state = {
+    awaitingOwnOperationCompletion: false,
+    awaitingBudgetSlotRelease: false,
+    awaitingBudgetExhausted: false,
+    clearPriorityCheckFloorOnTerminal: false,
+    attachCacheListener,
+    pending: false,
+    pendingOwnMatch: false,
+    staggerDelayMs: UNIFIED_REBALANCER_LITERAL.ZERO,
+    coordinator: rebalancer.rebalanceCoordinator || null,
+    cache: rebalancer.systemTableCache || null,
+    onTerminal: null,
+    cacheListener: null,
+  };
+  applyContinuationWakeOptions(state, options);
+  return state;
+}
+
+function attachOperationContinuationListeners(
+  rebalancer,
+  state,
+  attachCacheListener = true,
+) {
   const onTerminal = (payload) => {
     const operation = payload?.operation ? payload.operation : payload;
     handleOperationContinuationObservation(rebalancer, state, operation);
@@ -151,7 +340,7 @@ function attachOperationContinuationListeners(rebalancer, state) {
     state.onTerminal = onTerminal;
     attached = true;
   }
-  if (state.cache?.onCacheChange) {
+  if (attachCacheListener && state.cache?.onCacheChange) {
     state.cache.onCacheChange(cacheListener);
     state.cacheListener = cacheListener;
     attached = true;
@@ -175,6 +364,19 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
   syncLocalMutationReadinessWake(shouldDefer) {
     if (shouldDefer === true) {
       this.armLocalMutationReadinessWake();
+      if (this.isControlPlanePriorityPartition() === true) {
+        this.armOperationContinuationWake({
+          clearPriorityCheckFloorOnTerminal: true,
+          attachCacheListener: false,
+        });
+      } else if (
+        this.isPartitionBelowDeclaredDistinctHostSpread?.() === true
+      ) {
+        this.syncOperationContinuationWake(
+          null,
+          UNIFIED_REBALANCER_LITERAL.ZERO,
+        );
+      }
       return true;
     }
     this.disarmLocalMutationReadinessWake();
@@ -261,42 +463,27 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     return this.armOperationContinuationWake({
       awaitingOwnOperationCompletion: hasOwnInFlight,
       awaitingBudgetSlotRelease: !hasOwnInFlight,
+      awaitingBudgetExhausted: hitBudgetExceeded,
     });
   },
 
-  armOperationContinuationWake({
-    awaitingOwnOperationCompletion = false,
-    awaitingBudgetSlotRelease = false,
-  } = {}) {
+  armOperationContinuationWake(options) {
     if (!this.isLeader || this.isShuttingDown) {
       this.disarmOperationContinuationWake();
       return false;
     }
+    const attachCacheListener = options?.attachCacheListener !== false;
     const existing = this.operationContinuationWakeState;
+    if (canReuseContinuationWakeState(existing, this, attachCacheListener)) {
+      applyContinuationWakeOptions(existing, options);
+      return true;
+    }
     if (existing) {
-      if (
-        existing.coordinator === this.rebalanceCoordinator &&
-        existing.cache === this.systemTableCache
-      ) {
-        existing.awaitingOwnOperationCompletion =
-          awaitingOwnOperationCompletion;
-        existing.awaitingBudgetSlotRelease = awaitingBudgetSlotRelease;
-        return true;
-      }
       this.disarmOperationContinuationWake();
     }
-    const state = {
-      awaitingOwnOperationCompletion,
-      awaitingBudgetSlotRelease,
-      pending: false,
-      pendingOwnMatch: false,
-      coordinator: this.rebalanceCoordinator || null,
-      cache: this.systemTableCache || null,
-      onTerminal: null,
-      cacheListener: null,
-    };
+    const state = buildContinuationWakeState(this, options, attachCacheListener);
     this.operationContinuationWakeState = state;
-    if (!attachOperationContinuationListeners(this, state)) {
+    if (!attachOperationContinuationListeners(this, state, attachCacheListener)) {
       this.operationContinuationWakeState = null;
       return false;
     }

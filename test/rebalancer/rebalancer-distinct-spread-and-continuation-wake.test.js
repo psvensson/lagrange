@@ -45,7 +45,7 @@ const UNDECLARED_PARTITION_ID = 'undeclared-p1';
 const EMPTY_REPLICAS_PARTITION_ID = 'empty_replicas-p1';
 const PRIORITY_OBSERVER_ID = 'replica_operations-p1';
 const NON_PRIORITY_NODES_PARTITION_ID = 'nodes-p1';
-const ORDINARY_SYSTEM_PARTITION_ID = 'clusters-p1';
+const ORDINARY_SYSTEM_PARTITION_ID = 'tables-p1';
 const SCHEMA_PROVISIONING_PARTITION_ID = 'schema-provisioning-p1';
 const REPLICATION_FACTOR_THREE = 3;
 const INITIAL_NOW_MS = 10_000;
@@ -705,8 +705,9 @@ test(
         'already-spread partition keeps 60s..120s leadership start delay',
       );
       t.ok(
-        nodesStartDelay >= nodesPartition.periodicCheckIntervalMs,
-        'nodes-p1 formation-liveness dependency defers JOIN_READY start until TRAFFIC_READY wake',
+        nodesStartDelay >= SINGLE_WAKE_COUNT &&
+          nodesStartDelay <= nodesPartition.getPriorityRetryDelayMs(),
+        'nodes-p1 formation-liveness dependency uses short leadership start delay',
       );
 
       concentrated.currentInterval = concentrated.periodicCheckIntervalMs;
@@ -779,9 +780,10 @@ test(
       const ordinaryReplicas = ordinarySystem.getCurrentReplicas();
       const ordinaryTarget = await ordinarySystem.calculateTargetState(ordinaryReplicas, policy);
       const ordinaryMoves = ordinarySystem.calculateMoves(ordinaryReplicas, ordinaryTarget);
-      t.ok(
-        ordinaryMoves.length > ZERO_COUNT,
-        'Phase B ordinary system partition emits REPLACE when all target nodes are globally transitional',
+      t.equal(
+        ordinaryMoves.length,
+        ZERO_COUNT,
+        'ordinary system partition honors nodesWithGlobalSystemAddTransitional when all targets are globally transitional',
       );
       const nodesReplicas = nodesPartition.getCurrentReplicas();
       const nodesTarget = await nodesPartition.calculateTargetState(nodesReplicas, policy);
@@ -796,5 +798,151 @@ test(
       spread.shutdown();
       nodesPartition.shutdown();
       ordinarySystem.shutdown();
+    }
+  });
+
+test(
+  'slotMatch wakes only one eligible 0ms winner per operationId, staggers remaining contenders, ' +
+    'deduplicates CDC echoes, and clears priority floor on gate-blocked OPERATION_COMPLETED',
+  async (t) => {
+    initializeTestEnvironment();
+    const nowMs = INITIAL_NOW_MS;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const tableA = 'clusters-p1';
+    const tableB = 'tables-p1';
+    const tableC = 'indices-p1';
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: tableA, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: tableB, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: tableC, replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services: [
+        ...buildReplicaRows(tableA, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_B]),
+        ...buildReplicaRows(tableB, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+        ...buildReplicaRows(tableC, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ],
+    });
+
+    const records = new Map();
+    const makeContender = (partitionId) => {
+      const log = {enqueued: [], scheduled: []};
+      records.set(partitionId, log);
+      const entity = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_A,
+        systemTableCache,
+        rebalanceCoordinator: coordinator,
+        nowFn: () => nowMs,
+      });
+      entity.isLeader = true;
+      entity.getAvailableNodes = () => nodes;
+      entity.lastCheckAtMs = INITIAL_LAST_CHECK_AT_MS;
+      entity.enqueueRebalanceCheck = (reason) => {
+        log.enqueued.push(reason);
+        return true;
+      };
+      entity.scheduleNextCheck = (delayMs) => {
+        log.scheduled.push(delayMs);
+      };
+      entity.syncOperationContinuationWake(null, ZERO_COUNT);
+      return entity;
+    };
+
+    const contenderAlreadyOnB = makeContender(tableA);
+    const contenderNeedsB = makeContender(tableB);
+    const contenderSecondNeedsB = makeContender(tableC);
+
+    const priorityRebalancer = createTestRebalancer({
+      entityId: PRIORITY_OBSERVER_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    priorityRebalancer.isLeader = true;
+    priorityRebalancer.lastCheckAtMs = INITIAL_LAST_CHECK_AT_MS;
+    priorityRebalancer.syncLocalMutationReadinessWake(true);
+
+    try {
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'replace-freed-b',
+          partitionId: 'unrelated-p1',
+          targetNodeId: TEST_NODE_B,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      // Synchronously cleared for gate-blocked priority partition before queue drain.
+      t.equal(
+        priorityRebalancer.lastCheckAtMs,
+        ZERO_COUNT,
+        'priority partition clears lastCheckAtMs synchronously on OPERATION_COMPLETED after gate block',
+      );
+      t.equal(
+        coordinator.listenerCount(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED),
+        SINGLE_WAKE_COUNT,
+        'only the priority partition holds a STEP_CHANGED listener',
+      );
+
+      await Promise.resolve();
+
+      t.same(
+        records.get(tableA).enqueued,
+        [],
+        'contender already hosting targetNodeId does not steal the 0ms winner slot',
+      );
+      t.equal(
+        records.get(tableA).scheduled.length,
+        SINGLE_WAKE_COUNT,
+        'ineligible-target contender is staggered instead',
+      );
+      t.same(
+        records.get(tableB).enqueued,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'first eligible contender needing targetNodeId wakes at 0ms',
+      );
+      t.same(
+        records.get(tableC).enqueued,
+        [],
+        'second eligible contender does not stampede at 0ms',
+      );
+      t.equal(
+        records.get(tableC).scheduled.length,
+        SINGLE_WAKE_COUNT,
+        'second eligible contender is staggered via scheduleNextCheck',
+      );
+      t.ok(
+        records.get(tableC).scheduled[0] > records.get(tableA).scheduled[0],
+        'stagger delays strictly increase across contenders',
+      );
+
+      // Re-arm and emit duplicate CDC update for the same terminal operationId -> deduplicated.
+      contenderNeedsB.syncOperationContinuationWake(null, ZERO_COUNT);
+      systemTableCache.emitCacheChange(TABLES.REPLICA_OPERATIONS, 'UPDATE', {
+        operation_id: 'replace-freed-b',
+        partition_id: 'unrelated-p1',
+        target_node_id: TEST_NODE_B,
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.REMOVED,
+        workflow_step: WORKFLOW_STEP.REMOVED,
+      });
+      await Promise.resolve();
+      t.equal(
+        records.get(tableB).enqueued.length,
+        SINGLE_WAKE_COUNT,
+        'duplicate CDC cache event for same operationId does not double-wake',
+      );
+    } finally {
+      contenderAlreadyOnB.shutdown();
+      contenderNeedsB.shutdown();
+      contenderSecondNeedsB.shutdown();
+      priorityRebalancer.shutdown();
     }
   });
