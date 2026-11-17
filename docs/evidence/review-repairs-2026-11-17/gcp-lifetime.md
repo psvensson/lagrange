@@ -186,3 +186,23 @@ These JavaScript audits do not analyze Bash semantics. Native execution of the
 actual script is the local behavior witness; future provider verification is a
 separate launch obligation. No local project execution, cloud mutation, billing
 approval, Quest seal or acceptance is claimed by this draft.
+
+## Superseded: the bound is mandatory (2026-11-17)
+
+Independent review confirmed that the optional input above is a "keep old behaviour if
+absent" path: an omitted `VM_TERMINATION_TIME` still created unbounded VMs, and a test
+asserted that path. A second GCP VM creator, the Pulumi `GCPProvisioner`
+(`test/distributed/harness/gcp-provisioner.js`), set no lifetime at all. The record above
+is retained as written; the contract it describes no longer holds.
+
+The bound now has one definition, `test/distributed/harness/gcp-vm-lifetime.js`, and is
+required by both creators: `provision-gcp.sh` reads `VM_MAX_RUN_DURATION_SECONDS` and
+renders `--max-run-duration=<seconds>s`, `--instance-termination-action=DELETE` and
+`--boot-disk-auto-delete` through `docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs`;
+`GCPProvisioner` reads its config's `maxRunDurationSeconds` and gives every Pulumi instance
+`scheduling.maxRunDuration`, `instanceTerminationAction: DELETE` and
+`bootDisk.autoDelete: true`. An absent or malformed bound is refused before any provider
+call. `VM_TERMINATION_TIME` and its calendar validation are removed; a relative duration
+was chosen because the committed configs of the second creator cannot hold an absolute
+time. The live read-back obligations above still apply, against
+`scheduling.maxRunDuration`.

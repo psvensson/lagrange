@@ -12,6 +12,13 @@
  * 0.0.0.0/0. Certificates are written to a 0700 temp dir and pushed to VMs
  * over `gcloud compute scp` (SSH), never embedded in instance metadata.
  *
+ * Every VM is created with the provider-enforced lifetime bound the run's
+ * config names (maxRunDurationSeconds; one definition in gcp-vm-lifetime.js,
+ * shared with docs/benchmarks/cloud/provision-gcp.sh): Compute Engine deletes
+ * it, boot disk included, when the bound elapses, even if destroy() never
+ * runs. A config without a well-formed bound is refused at construction,
+ * before any provider call.
+ *
  * Requires optional dependencies: @pulumi/pulumi, @pulumi/gcp (loaded
  * dynamically so the module imports without them), the `pulumi` CLI, the
  * `gcloud` CLI (for scp/ssh), and `openssl` (for certificates).
@@ -24,6 +31,7 @@ import {execFile, execFileSync} from 'node:child_process';
 
 import {DOCKER_DEFAULTS} from './constants.js';
 import {fixedLocaleCommand} from './real-product-remote-shell.js';
+import {gcpVmLifetimeInstanceArgs} from './gcp-vm-lifetime.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -98,6 +106,11 @@ const PULUMI_BACKEND_URL_ENV = 'PULUMI_BACKEND_URL';
 const PULUMI_CONFIG_PASSPHRASE_ENV = 'PULUMI_CONFIG_PASSPHRASE';
 const PULUMI_LOCAL_BACKEND_DIRNAME = '.pulumi-local-backend';
 const PULUMI_LOCAL_SECRETS_PASSPHRASE = 'lagrange-distributed-local';
+const MAX_RUN_DURATION_LABEL = 'GCP config maxRunDurationSeconds';
+// Compute Engine deletes a VM whose lifetime bound elapsed without Pulumi, so
+// every stack operation first reads the provider's actual resources: a deleted
+// VM is dropped from the stale state rather than taken as still present.
+const STACK_REFRESH = true;
 
 function harnessImageSource(project) {
   return `projects/${project}/global/images/family/` +
@@ -162,6 +175,120 @@ async function loadPulumiDeps() {
   }
 }
 
+/**
+ * The Pulumi program of one provisioning run: the VPC, its three firewall
+ * rules and `vmCount` instances. Every instance carries the run's
+ * provider-enforced lifetime bound (`lifetime`, from gcpVmLifetimeInstanceArgs).
+ * @param {{pulumi: Object, gcp: Object}} deps
+ * @param {Object} run
+ * @return {Function} the program for LocalWorkspace.createOrSelectStack
+ */
+function harnessStackProgram({pulumi, gcp}, {
+  project, zone, machineType, vmCount, preemptible, lifetime, dockerSourceRanges,
+}) {
+  return async () => {
+    const network = new gcp.compute.Network(NETWORK_NAME, {
+      project,
+      autoCreateSubnetworks: true,
+    });
+
+    // Node-comm ports (REST/transport/admin). Node-to-node traffic uses the
+    // VPC-internal range; the runner must ALSO reach a node's readiness and
+    // admin APIs over the host external IP, so the runner's own IP is
+    // included (dockerSourceRanges already = internal + runner /32). Never
+    // world-open.
+    new gcp.compute.Firewall(FIREWALL_INTERNAL_NAME, {
+      project,
+      network: network.selfLink,
+      allows: [{
+        protocol: DOCKER_PORT_PROTOCOL,
+        ports: [
+          `${PG_WIRE_PORT_START}-${PG_WIRE_PORT_END}`,
+          `${NODE_COMM_PORT_START}-${NODE_COMM_PORT_END}`,
+        ],
+      }],
+      sourceRanges: dockerSourceRanges,
+      targetTags: [NETWORK_TAG],
+    });
+
+    new gcp.compute.Firewall(FIREWALL_DOCKER_NAME, {
+      project,
+      network: network.selfLink,
+      allows: [{
+        protocol: DOCKER_PORT_PROTOCOL,
+        ports: [`${DOCKER_PORT}`],
+      }],
+      sourceRanges: dockerSourceRanges,
+      targetTags: [NETWORK_TAG],
+    });
+
+    // SSH only via IAP TCP forwarding + intra-VPC; never world-open.
+    new gcp.compute.Firewall(FIREWALL_IAP_SSH_NAME, {
+      project,
+      network: network.selfLink,
+      allows: [{
+        protocol: DOCKER_PORT_PROTOCOL,
+        ports: [`${SSH_PORT}`],
+      }],
+      sourceRanges: [IAP_TCP_FORWARDING_RANGE, VPC_INTERNAL_RANGE],
+      targetTags: [NETWORK_TAG],
+    });
+
+    const externalIps = [];
+    const internalIps = [];
+    const instanceNames = [];
+
+    for (let i = 0; i < vmCount; i++) {
+      const vmName = `${VM_NAME_PREFIX}-${i}`;
+
+      const instance = new gcp.compute.Instance(vmName, {
+        project,
+        zone,
+        machineType,
+        tags: [NETWORK_TAG],
+        bootDisk: {
+          ...lifetime.bootDisk,
+          initializeParams: {
+            image: harnessImageSource(project),
+            size: DISK_SIZE_GB,
+            type: DISK_TYPE,
+          },
+        },
+        networkInterfaces: [{
+          network: network.selfLink,
+          accessConfigs: [{}],
+        }],
+        scheduling: {
+          preemptible,
+          automaticRestart: !preemptible,
+          ...lifetime.scheduling,
+        },
+        // SSH via gcloud requires an OS Login or metadata key; gcloud
+        // compute scp/ssh handles key injection for the caller's account.
+      });
+
+      const natIp = instance.networkInterfaces.apply(
+        (ifaces) => ifaces[0].accessConfigs[0].natIp,
+      );
+      externalIps.push(natIp);
+      const internalIp = instance.networkInterfaces.apply(
+        (ifaces) => ifaces[0].networkIp,
+      );
+      internalIps.push(internalIp);
+      // Pulumi auto-names the GCP resource with a random suffix
+      // (ddb-test-vm-0-1a2b3c); the ONLY correct name to SSH/scp to is the
+      // one GCP actually assigned, read back from the instance itself.
+      instanceNames.push(instance.name);
+    }
+
+    return {
+      externalIps: pulumi.all(externalIps),
+      internalIps: pulumi.all(internalIps),
+      instanceNames: pulumi.all(instanceNames),
+    };
+  };
+}
+
 class GCPProvisioner {
   /**
    * @param {Object} config
@@ -170,8 +297,12 @@ class GCPProvisioner {
    * @param {string} [config.machineType] - VM machine type
    * @param {number} [config.vmCount] - Number of VMs to provision
    * @param {boolean} [config.preemptible] - Use preemptible VMs
+   * @param {number} config.maxRunDurationSeconds - Whole seconds each VM may
+   *   run before Compute Engine deletes it (required; no VM is unbounded)
    */
   constructor(config) {
+    this._lifetime = gcpVmLifetimeInstanceArgs(
+      config.maxRunDurationSeconds, MAX_RUN_DURATION_LABEL);
     this._project = config.project;
     this._zone = config.zone || DEFAULT_ZONE;
     this._machineType = config.machineType || DEFAULT_MACHINE_TYPE;
@@ -275,7 +406,7 @@ class GCPProvisioner {
     try {
       await stack.setConfig('gcp:project', {value: project});
       await stack.setConfig('gcp:zone', {value: zone});
-      return await stack.up({onOutput: () => {}});
+      return await stack.up({refresh: STACK_REFRESH, onOutput: () => {}});
     } catch (error) {
       await this._destroyQuietly();
       throw error;
@@ -284,7 +415,7 @@ class GCPProvisioner {
 
   async provision() {
     this._pulumiDeps = await loadPulumiDeps();
-    const {pulumi, gcp} = this._pulumiDeps;
+    const {pulumi} = this._pulumiDeps;
     this._configureLocalBackend();
 
     // Ephemeral PKI for this provisioning run, in a 0700 temp dir.
@@ -295,110 +426,15 @@ class GCPProvisioner {
 
     const project = this._project;
     const zone = this._zone;
-    const machineType = this._machineType;
-    const vmCount = this._vmCount;
-    const preemptible = this._preemptible;
-    const dockerSourceRanges = this._runnerSourceRanges();
-
-    const program = async () => {
-      const network = new gcp.compute.Network(NETWORK_NAME, {
-        project,
-        autoCreateSubnetworks: true,
-      });
-
-      // Node-comm ports (REST/transport/admin). Node-to-node traffic uses the
-      // VPC-internal range; the runner must ALSO reach a node's readiness and
-      // admin APIs over the host external IP, so the runner's own IP is
-      // included (dockerSourceRanges already = internal + runner /32). Never
-      // world-open.
-      new gcp.compute.Firewall(FIREWALL_INTERNAL_NAME, {
-        project,
-        network: network.selfLink,
-        allows: [{
-          protocol: DOCKER_PORT_PROTOCOL,
-          ports: [
-            `${PG_WIRE_PORT_START}-${PG_WIRE_PORT_END}`,
-            `${NODE_COMM_PORT_START}-${NODE_COMM_PORT_END}`,
-          ],
-        }],
-        sourceRanges: dockerSourceRanges,
-        targetTags: [NETWORK_TAG],
-      });
-
-      new gcp.compute.Firewall(FIREWALL_DOCKER_NAME, {
-        project,
-        network: network.selfLink,
-        allows: [{
-          protocol: DOCKER_PORT_PROTOCOL,
-          ports: [`${DOCKER_PORT}`],
-        }],
-        sourceRanges: dockerSourceRanges,
-        targetTags: [NETWORK_TAG],
-      });
-
-      // SSH only via IAP TCP forwarding + intra-VPC; never world-open.
-      new gcp.compute.Firewall(FIREWALL_IAP_SSH_NAME, {
-        project,
-        network: network.selfLink,
-        allows: [{
-          protocol: DOCKER_PORT_PROTOCOL,
-          ports: [`${SSH_PORT}`],
-        }],
-        sourceRanges: [IAP_TCP_FORWARDING_RANGE, VPC_INTERNAL_RANGE],
-        targetTags: [NETWORK_TAG],
-      });
-
-      const externalIps = [];
-      const internalIps = [];
-      const instanceNames = [];
-
-      for (let i = 0; i < vmCount; i++) {
-        const vmName = `${VM_NAME_PREFIX}-${i}`;
-
-        const instance = new gcp.compute.Instance(vmName, {
-          project,
-          zone,
-          machineType,
-          tags: [NETWORK_TAG],
-          bootDisk: {
-            initializeParams: {
-              image: harnessImageSource(project),
-              size: DISK_SIZE_GB,
-              type: DISK_TYPE,
-            },
-          },
-          networkInterfaces: [{
-            network: network.selfLink,
-            accessConfigs: [{}],
-          }],
-          scheduling: {
-            preemptible,
-            automaticRestart: !preemptible,
-          },
-          // SSH via gcloud requires an OS Login or metadata key; gcloud
-          // compute scp/ssh handles key injection for the caller's account.
-        });
-
-        const natIp = instance.networkInterfaces.apply(
-          (ifaces) => ifaces[0].accessConfigs[0].natIp,
-        );
-        externalIps.push(natIp);
-        const internalIp = instance.networkInterfaces.apply(
-          (ifaces) => ifaces[0].networkIp,
-        );
-        internalIps.push(internalIp);
-        // Pulumi auto-names the GCP resource with a random suffix
-        // (ddb-test-vm-0-1a2b3c); the ONLY correct name to SSH/scp to is the
-        // one GCP actually assigned, read back from the instance itself.
-        instanceNames.push(instance.name);
-      }
-
-      return {
-        externalIps: pulumi.all(externalIps),
-        internalIps: pulumi.all(internalIps),
-        instanceNames: pulumi.all(instanceNames),
-      };
-    };
+    const program = harnessStackProgram(this._pulumiDeps, {
+      project,
+      zone,
+      machineType: this._machineType,
+      vmCount: this._vmCount,
+      preemptible: this._preemptible,
+      lifetime: this._lifetime,
+      dockerSourceRanges: this._runnerSourceRanges(),
+    });
 
     const stack = await pulumi.automation.LocalWorkspace.createOrSelectStack({
       stackName: STACK_NAME,
@@ -444,7 +480,7 @@ class GCPProvisioner {
   async _destroyQuietly() {
     try {
       if (this._stack) {
-        await this._stack.destroy({onOutput: () => {}});
+        await this._stack.destroy({refresh: STACK_REFRESH, onOutput: () => {}});
         this._destroyedAtMs = Date.now();
         this._stack = null;
       }
@@ -632,7 +668,7 @@ class GCPProvisioner {
     }
     let stackError = null;
     try {
-      await this._stack.destroy({onOutput: () => {}});
+      await this._stack.destroy({refresh: STACK_REFRESH, onOutput: () => {}});
       this._destroyedAtMs = Date.now();
     } catch (err) {
       stackError = err;
@@ -693,4 +729,9 @@ class GCPProvisioner {
   }
 }
 
-export {GCP_HARNESS_IMAGE_FAMILY, GCPProvisioner, harnessImageSource};
+export {
+  GCP_HARNESS_IMAGE_FAMILY,
+  GCPProvisioner,
+  harnessImageSource,
+  harnessStackProgram,
+};

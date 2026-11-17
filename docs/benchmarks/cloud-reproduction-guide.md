@@ -125,14 +125,14 @@ GCP is used only when asked for, with hosts you provisioned; the runner creates 
 export PROJECT_ID="your-gcp-project-id"
 export SSH_USER="bench"
 export SSH_PUBLIC_KEY_FILE="$HOME/.ssh/id_ed25519.pub"
-# Optional: replace the placeholder with the agreed future UTC expiry for a bounded allocation.
-# export VM_TERMINATION_TIME="YYYY-MM-DDTHH:MM:SSZ"
+export VM_MAX_RUN_DURATION_SECONDS=25200   # the agreed allocation lifetime, here seven hours
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 Every value is named by you or is a documented default, and the script prints the values in use
-before it creates anything. `PROJECT_ID`, `SSH_USER` and `SSH_PUBLIC_KEY_FILE` are required (the
-key is installed for `SSH_USER` on every VM; a missing or unreadable key file is refused before any
-`gcloud` call, and the script never searches for a key). Defaults: `ZONE=us-central1-a`,
+before it creates anything. `PROJECT_ID`, `SSH_USER`, `SSH_PUBLIC_KEY_FILE` and
+`VM_MAX_RUN_DURATION_SECONDS` are required (the key is installed for `SSH_USER` on every VM; a
+missing or unreadable key file is refused before any `gcloud` call, and the script never searches
+for a key). Defaults: `ZONE=us-central1-a`,
 `MACHINE_TYPE=e2-standard-4`, `CLUSTER_PREFIX=lagrange-bench`, `NETWORK=default`,
 `BOOT_DISK_SIZE=50GB`, `BOOT_DISK_TYPE=pd-ssd` (the disk type bears on results),
 `FIREWALL_ALLOW=tcp:1-65535,udp:1-65535,icmp` (between the VMs only), and the image
@@ -151,22 +151,28 @@ engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IM
 `IMAGE_PROJECT`, `BOOT_DISK_SIZE`, `BOOT_DISK_TYPE` and `FIREWALL_ALLOW` lines the script prints;
 step 2 refuses without any of them and records them for every host.
 
-For an allocation with a provider lifetime backstop, set `VM_TERMINATION_TIME` to an explicit
-absolute UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` form before creating the VMs. The script checks
-the format, calendar date and time ranges before any `gcloud` call. A nonempty valid value is
-passed unchanged to the existing six-VM creation call with `--instance-termination-action=DELETE`
-and `--boot-disk-auto-delete`. Empty or omitted input preserves ordinary creation without a
-provider lifetime bound; the script prints which request it makes. `--place` and `--teardown`
-ignore this creation-only input, so a malformed or expired setting cannot block cleanup.
+Every VM is created with a provider-enforced lifetime bound; there is no unbounded creation.
+`VM_MAX_RUN_DURATION_SECONDS` is the whole number of seconds each VM may run: the six-VM creation
+call passes `--max-run-duration=<seconds>s`, `--instance-termination-action=DELETE` and
+`--boot-disk-auto-delete`, so Compute Engine deletes every VM, boot disk included, when the
+duration has elapsed since the VM last started, whether or not `--teardown` ran. An absent or
+malformed value (anything but a positive whole number of seconds) is refused before any `gcloud`
+call, and the script prints the lifetime arguments it requests before creating anything. The bound
+has one definition, `test/distributed/harness/gcp-vm-lifetime.js`, which also bounds every VM the
+distributed harness's Pulumi provisioner creates (its configs name `gcp.maxRunDurationSeconds`); the
+script renders it with Node (`docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs`). `--place` and
+`--teardown` ignore this creation-only input, so a malformed setting cannot block cleanup.
 
-Choose a future expiry within [Google's supported scheduling limits](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime).
-Local validation proves only the input's format and calendar validity; Google checks the future
-scheduling limits. After creation, verify every named VM's `scheduling.terminationTime`,
-`scheduling.instanceTerminationAction`, effective
-`resourceStatus.scheduling.terminationTimestamp`, and boot disk `disks[].autoDelete` before
-placing a campaign. Retain that provider response with the launch evidence. Printed arguments
-or a successful local test do not verify the live schedule. The absolute expiry is not extended
-by this script; select it to cover preparation, the authorized campaign attempts and cleanup.
+Choose the duration to cover creation, placement, the authorized campaign attempts and teardown;
+the script never extends it, and a campaign that outlives it loses its VMs. Google owns the
+[admissible range](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime) and
+refuses a value outside it at creation; local validation proves only that the value is a positive
+whole number. After creation, verify every named VM's `scheduling.maxRunDuration`,
+`scheduling.instanceTerminationAction`, effective `resourceStatus.scheduling.terminationTimestamp`,
+and boot disk `disks[].autoDelete` before placing a campaign, and retain that provider response
+with the launch evidence. Printed arguments or a successful local test do not verify the live
+schedule. The bound is a backstop: `--teardown` still owns cleanup after success, partial creation
+or failure.
 
 ### Step 2 - Place what the campaign needs
 ```sh

@@ -109,6 +109,7 @@ test('distributed matrix GCP target preserves scenario config semantics', (t) =>
       zone: 'europe-north1-a',
       machineType: 'e2-standard-4',
       vmCount: 5,
+      maxRunDurationSeconds: 7200,
     },
   };
   const configured = buildGcpTargetConfig(base, template);
@@ -118,6 +119,8 @@ test('distributed matrix GCP target preserves scenario config semantics', (t) =>
   assert.equal(configured.nodesPerHost, 1);
   assert.equal(configured.gcp.vmCount, base.size);
   assert.equal(configured.gcp.project, template.gcp.project);
+  assert.equal(configured.gcp.maxRunDurationSeconds, 7200,
+    'every matrix run\'s VMs carry the template\'s provider-enforced lifetime bound');
   assert.equal(configured.docker.socketPath, undefined);
   t.end();
 });

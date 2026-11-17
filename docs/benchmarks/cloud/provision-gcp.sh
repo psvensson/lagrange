@@ -30,10 +30,17 @@
 #   SSH_USER             SSH username for the benchmark runner (create, --place)
 #   SSH_PUBLIC_KEY_FILE  public key installed for SSH_USER on every VM (create); it must exist
 #                        and be readable; VMs are never created without it
-# Optional creation lifetime:
-#   VM_TERMINATION_TIME  absolute UTC expiry, YYYY-MM-DDTHH:MM:SSZ; requests DELETE and
-#                        boot-disk auto-deletion for every VM. Empty/omitted means no
-#                        provider lifetime bound. Ignored by --place and --teardown.
+#   VM_MAX_RUN_DURATION_SECONDS
+#                        whole seconds each VM may run (create). Every VM is created with
+#                        this provider-enforced maximum run duration and Compute Engine
+#                        DELETEs it, boot disk included, when it elapses, whether or not
+#                        --teardown ran. VMs are never created without it: an absent or
+#                        malformed value is refused before any gcloud call. Choose it to
+#                        cover creation, --place, the campaign and teardown; nothing
+#                        extends it. --place and --teardown ignore it.
+# The lifetime bound has one definition, test/distributed/harness/gcp-vm-lifetime.js, shared
+# with the distributed harness's GCPProvisioner; the create step renders its gcloud arguments
+# with Node (docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs), so Node must be on PATH here.
 # Documented defaults (environment overrides):
 #   ZONE            GCP zone (default: us-central1-a)
 #   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
@@ -66,32 +73,13 @@ fail() {
   exit 1
 }
 
-validate_termination_time() {
-  local message="VM_TERMINATION_TIME must be a valid UTC date and time in YYYY-MM-DDTHH:MM:SSZ form"
-  local utc_pattern='^([0-9]{4})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'
-  utc_pattern+='T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$'
-  [[ "$1" =~ ${utc_pattern} ]] || usage "${message}"
-  local year=$((10#${BASH_REMATCH[1]}))
-  local month=$((10#${BASH_REMATCH[2]}))
-  local day=$((10#${BASH_REMATCH[3]}))
-  local max_day=31
-  case "${month}" in
-    2)
-      max_day=28
-      if ((year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))); then
-        max_day=29
-      fi ;;
-    4|6|9|11) max_day=30 ;;
-  esac
-  ((year > 0 && day <= max_day)) || usage "${message}"
-}
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 if [ "${1:-}" = "--place" ]; then
   shift
   for name in HOSTS SSH_HOSTS SSH_USER IMAGE_FAMILY IMAGE_PROJECT BOOT_DISK_SIZE BOOT_DISK_TYPE FIREWALL_ALLOW; do
     [ -n "${!name:-}" ] || usage "${name} is not set: export it as the create step printed"
   done
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
   echo "[gcp] Placing images, the harness commit and the reference-client cache..."
   exec node "${REPO_ROOT}/docs/benchmarks/cloud/run-comparative-benchmarks.mjs" --execution-target gcp --provision \
     --hosts "${HOSTS}" --ssh-hosts "${SSH_HOSTS}" --ssh-user "${SSH_USER}" \
@@ -193,12 +181,11 @@ if [ "${1:-}" = "--teardown" ]; then
   exit 0
 fi
 
-TERMINATION_ARGS=()
-if [ -n "${VM_TERMINATION_TIME:-}" ]; then
-  validate_termination_time "${VM_TERMINATION_TIME}"
-  TERMINATION_ARGS=(--termination-time="${VM_TERMINATION_TIME}"
-    --instance-termination-action=DELETE --boot-disk-auto-delete)
-fi
+# The lifetime every VM is created with, from its one definition: an absent or malformed
+# bound exits 2 here, naming why, before any gcloud call. Never empty once rendered.
+LIFETIME_TEXT="$(node "${REPO_ROOT}/docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs" \
+  "${VM_MAX_RUN_DURATION_SECONDS:-}")" || exit
+read -r -a LIFETIME_ARGS <<< "${LIFETIME_TEXT}"
 
 [ -n "${SSH_USER:-}" ] || usage "SSH_USER is not set: export SSH_USER=<the user the runner connects as>"
 [ -n "${SSH_PUBLIC_KEY_FILE:-}" ] ||
@@ -212,11 +199,7 @@ echo "[gcp] project ${PROJECT_ID}, zone ${ZONE}, machine type ${MACHINE_TYPE}, p
 echo "[gcp] VM image: family ${IMAGE_FAMILY} in project ${IMAGE_PROJECT}"
 echo "[gcp] boot disk ${BOOT_DISK_SIZE} ${BOOT_DISK_TYPE}, firewall allows ${FIREWALL_ALLOW}"
 echo "[gcp] ssh user ${SSH_USER}, key ${SSH_PUBLIC_KEY_FILE}"
-if [ -n "${VM_TERMINATION_TIME:-}" ]; then
-  echo "[gcp] VM termination requested: ${VM_TERMINATION_TIME} (DELETE, boot disk auto-delete)"
-else
-  echo "[gcp] VM termination time not set; no provider-enforced lifetime bound requested"
-fi
+echo "[gcp] VM lifetime: every VM is created with ${LIFETIME_ARGS[*]}"
 
 # The run creates its firewall rule; a rule of that name that already exists was not created
 # by this run and is never reused.
@@ -263,7 +246,7 @@ gcloud compute instances create "${NODES[@]}" \
   --boot-disk-size="${BOOT_DISK_SIZE}" \
   --boot-disk-type="${BOOT_DISK_TYPE}" \
   --tags="${NETWORK_TAG}" \
-  "${TERMINATION_ARGS[@]}" \
+  "${LIFETIME_ARGS[@]}" \
   "${META_ARGS[@]}"
 
 echo "[gcp] Resolving internal and external IP addresses..."
