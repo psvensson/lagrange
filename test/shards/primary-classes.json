@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2311,
+    "unit": 2312,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-9663c159",
+  "censusSize": 2666,
+  "digest": "fnv1a32-c4087bbb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1689,6 +1689,7 @@
     "test/query/sql-query-pbt.test.js": "unit",
     "test/query/sql-request.test.js": "unit",
     "test/query/sql-scalar-functions.test.js": "unit",
+    "test/query/sql-semantics-differential-oracle.test.js": "unit",
     "test/query/sql-statement-refusals.test.js": "unit",
     "test/query/straggler-detection.property.test.js": "unit",
     "test/query/strategy-selector.test.js": "unit",
