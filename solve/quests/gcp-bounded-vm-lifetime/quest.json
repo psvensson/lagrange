@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "gcp-bounded-vm-lifetime",
+  "epic": "developer-journey-and-measured-comparisons",
+  "statement": "The existing GCP creation entrypoint accepts an explicit whole-second UTC expiry and requests that same absolute termination time, DELETE action and boot-disk auto-deletion in its existing six-name creation call. Malformed calendar or time input is refused before any gcloud invocation. Omitted or empty input preserves ordinary creation without claiming a lifetime bound, and a create-only expiry cannot obstruct placement or teardown.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/gcp-bounded-vm-lifetime/evidence/receipt.json",
+      "requiredReceipts": [
+        "create-time-expiry-contract"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner-and-topology",
+      "statement": "Change the existing docs/benchmarks/cloud/provision-gcp.sh create owner and its existing Bash-executing witness. Preserve the six named VMs and existing identity, SSH, image, storage, firewall, placement and teardown owners. Add no scheduler, billing API, retry loop or competing cleanup authority. The frozen four-path draft and its transition record define this unit; root owns integration metadata and lifecycle records."
+    },
+    {
+      "id": "explicit-input-contract",
+      "statement": "VM_TERMINATION_TIME is optional and create-only. A nonempty input must be a valid YYYY-MM-DDTHH:MM:SSZ UTC timestamp with whole seconds before any gcloud call; forward it unchanged with --instance-termination-action=DELETE and --boot-disk-auto-delete. Google owns admissible future scheduling limits. No fallback may drop a requested schedule after a refusal. Empty or omitted input requests no provider lifetime bound; placement and teardown ignore this create-only input."
+    },
+    {
+      "id": "genuine-baseline-adoption",
+      "statement": "Retain the draft and original evidence. Establish the red observation at unchanged source 4b0c8ec1de59e9a074afa97ce260afb2868685c5 with exactly the candidate witness bytes. Require actual successful script execution, the create call and all six argv names before the missing termination-argument assertion. A missing receipt, import error, fixture failure, command-not-found or nonzero exit alone is not this measurement. Invoke the real start lifecycle only after inspecting genuine failed receipt and full original output; never fabricate sealedAt or a red result."
+    },
+    {
+      "id": "receipt-owner-and-proof-custody",
+      "statement": "Use scripts/quest-evidence/harness-runtime.js to execute the ordinary complete classified provisioner suite and produce the required receipt, including the exact test digest. Retain first-run full classified stdout/stderr, complete per-file TAP/stderr, source identities and actual recorded create argv. Keep the same witness and assertions in baseline and candidate. The managed proof records real process outcomes; independent review must inspect behavioral engagement and healthy ordinary create/place/teardown controls."
+    },
+    {
+      "id": "bounded-evidence-claim",
+      "statement": "This witness executes the real Bash entrypoint with its existing gcloud and placement-node substitutes. Passing establishes local argument forwarding, validation and existing control behavior. It does not establish live provider acceptance, scheduling, deletion, billing closure or a successful GCP comparative campaign. No cloud resources are created to satisfy this unit."
+    },
+    {
+      "id": "retained-live-obligations",
+      "statement": "A later authorized live launch must read back each VM's requested and effective termination state and boot-disk autoDelete before placement. Existing canonical teardown remains responsible after success, partial creation and failure; closure separately checks stopped VMs, disks and firewall. This unit grants no spending authority and does not extend the allocation lifetime or replace those obligations."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity"
+  ],
+  "sealedAt": "4b0c8ec1de59e9a074afa97ce260afb2868685c5"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "gcp-bounded-vm-lifetime",
+  "status": "pass",
+  "testFileDigests": {
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": "9aeffe7f5c3b2d1a519e1031f473a1c0c5edd1aad621dd2e47f63a27699b03c9"
+  },
+  "generatedAt": "2026-11-17T15:05:18.858Z",
+  "receipts": [
+    {
+      "id": "create-time-expiry-contract",
+      "passed": true,
+      "command": "npm run test:file -- test/distributed/harness/__tests__/provision-gcp-script.test.js > \"$GCP_ADOPTION_CLASSIFIED_STDOUT\" 2> \"$GCP_ADOPTION_CLASSIFIED_STDERR\"",
+      "detail": "Actual complete classified provisioner suite after genuine baseline adoption; local Bash argument, refusal, ordinary create, placement and teardown evidence only; no real provider invocation.",
+      "testFile": "test/distributed/harness/__tests__/provision-gcp-script.test.js"
+    }
+  ]
+}
