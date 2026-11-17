@@ -13,7 +13,8 @@ import {BudgetEnforcer} from './budget-enforcer.js';
 import {CancellationToken} from './cancellation-token.js';
 import {LineageTracker} from './lineage-tracker.js';
 import {ExecutionContext} from './execution-context.js';
-import {ResultStream} from './result-stream.js';
+import {normalizeQueryBudget} from
+  '../wasm-service/query-budget-constants.js';
 import {
   SNAPSHOT_MODE,
   DEFAULT_SNAPSHOT_MODE,
@@ -75,11 +76,6 @@ function validateOpts(opts) {
       typeof opts.session !== 'string') {
     throw new Error(ERR.INVALID_SESSION);
   }
-  if (opts.budgets !== undefined &&
-      (typeof opts.budgets !== 'object' ||
-       opts.budgets === null)) {
-    throw new Error(ERR.INVALID_BUDGETS);
-  }
   if (opts.snapshot !== undefined) {
     validateSnapshot({
       mode: opts.snapshot.mode ?? DEFAULT_SNAPSHOT_MODE,
@@ -103,7 +99,8 @@ function validateOpts(opts) {
  * @param {string} [opts.snapshot.mode] - 'readCommitted' or
  *   'snapshot'.
  * @param {number} [opts.snapshot.ts] - Snapshot timestamp.
- * @param {Object} [opts.budgets] - Budget overrides.
+ * @param {Object} [opts.budgets] - Budget overrides, normalized by
+ *   normalizeQueryBudget (unknown fields and invalid limits are refused).
  * @return {Promise<*>} Result of the user function.
  * @throws {Error} If userFn is not a function or execution
  *   fails.
@@ -122,22 +119,22 @@ async function run(userFn, opts) {
     mode: opts?.snapshot?.mode ?? DEFAULT_SNAPSHOT_MODE,
     ts: opts?.snapshot?.ts,
   };
-  const budgets = opts?.budgets ?? {};
+  // runtime.run is a public budget boundary: the caller's overrides become
+  // the one normalized budget every component of this run reads.
+  const budgets = normalizeQueryBudget(opts?.budgets);
 
   const queryId = generateQueryId();
-  const budgetEnforcer = new BudgetEnforcer(budgets);
   const cancellationToken = new CancellationToken();
   const lineageTracker = new LineageTracker(queryId);
-  const resultStream = new ResultStream(budgets);
 
   const ctx = new ExecutionContext({
     session,
     snapshot,
-    budgetEnforcer,
+    budgets,
+    budgetEnforcer: new BudgetEnforcer(budgets),
     cancellationToken,
     lineageTracker,
     queryExecutor: opts?.queryExecutor ?? stubQueryExecutor,
-    resultStream,
   });
 
   try {

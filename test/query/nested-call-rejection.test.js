@@ -16,6 +16,7 @@ import {
   DEFAULT_SNAPSHOT_MODE,
   PLAN_KIND,
 } from '../../src/query/runtime-constants.js';
+import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Build an ExecutionContext with a mock queryExecutor.
@@ -25,11 +26,12 @@ import {
  */
 function buildDeps(queryExecutor) {
   const cancellationToken = new CancellationToken();
-  const budgetEnforcer = new BudgetEnforcer();
+  const budgetEnforcer = new BudgetEnforcer(normalizeQueryBudget());
   const lineageTracker = new LineageTracker('test-query-1');
   const executionContext = new ExecutionContext({
     session: 'test-session',
     snapshot: {mode: DEFAULT_SNAPSHOT_MODE},
+    budgets: normalizeQueryBudget(),
     budgetEnforcer,
     cancellationToken,
     lineageTracker,

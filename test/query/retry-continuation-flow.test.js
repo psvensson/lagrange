@@ -39,6 +39,7 @@ import {
   DEFAULT_SNAPSHOT_MODE,
   PLAN_KIND,
 } from '../../src/query/runtime-constants.js';
+import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Build a minimal ExecutionContext for testing.
@@ -50,7 +51,7 @@ function buildCtx(overrides = {}) {
   const token = overrides.cancellationToken ??
     new CancellationToken();
   const budgetEnforcer = overrides.budgetEnforcer ??
-    new BudgetEnforcer();
+    new BudgetEnforcer(normalizeQueryBudget());
   const lineageTracker = overrides.lineageTracker ??
     new LineageTracker('retry-cont-q');
   const dedupeRegistry = overrides.dedupeRegistry ??
@@ -60,6 +61,7 @@ function buildCtx(overrides = {}) {
   return new ExecutionContext({
     session: 'retry-cont-session',
     snapshot: {mode: DEFAULT_SNAPSHOT_MODE},
+    budgets: normalizeQueryBudget(),
     budgetEnforcer,
     cancellationToken: token,
     lineageTracker,

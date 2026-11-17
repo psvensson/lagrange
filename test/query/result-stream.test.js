@@ -13,6 +13,8 @@ import {
 } from '../../src/query/result-stream.js';
 import {
   QUERY_BUDGET_ERROR_MSG,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 
 // --- estimateRowBytes ---
@@ -38,33 +40,45 @@ test('estimateRowBytes - returns JSON length for objects', (t) => {
 // --- ResultStream construction ---
 
 test('ResultStream - starts in OPEN state', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   t.equal(stream.state, STREAM_STATE.OPEN);
   t.equal(stream.totalRows, 0);
   t.equal(stream.totalBytes, 0);
   t.end();
 });
 
-test('ResultStream - accepts budget overrides', (t) => {
-  const stream = new ResultStream({RESULT_MAX_ROWS: 5});
+test('ResultStream - reads the limits of a normalized budget', (t) => {
+  const stream = new ResultStream(normalizeQueryBudget({RESULT_MAX_ROWS: 5}));
   t.equal(stream.maxRows, 5);
-  const camelStream = new ResultStream({
-    resultMaxRows: 3,
-    resultMaxBytes: 64,
-  });
-  t.equal(camelStream.maxRows, 3);
-  t.equal(camelStream.maxBytes, 64);
-  t.throws(
-    () => new ResultStream({RESULT_MAX_ROWS: 5, resultMaxRows: 2}),
-    /Conflicting query budget values/,
-  );
+  const bytesStream = new ResultStream(normalizeQueryBudget({
+    RESULT_MAX_ROWS: 3,
+    RESULT_MAX_BYTES: 64,
+  }));
+  t.equal(bytesStream.maxRows, 3);
+  t.equal(bytesStream.maxBytes, 64);
+  t.end();
+});
+
+test('ResultStream - refuses a budget that is not normalized', (t) => {
+  for (const budgets of [
+    undefined,
+    {},
+    {RESULT_MAX_ROWS: 5},
+    {resultMaxRows: 3, resultMaxBytes: 64},
+    Object.freeze({...normalizeQueryBudget(), resultMaxRows: 2}),
+  ]) {
+    t.throws(
+      () => new ResultStream(budgets),
+      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED),
+    );
+  }
   t.end();
 });
 
 // --- push ---
 
 test('ResultStream - push accepts rows', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   const result = stream.push([{id: 1}, {id: 2}]);
 
   t.equal(result.accepted, 2);
@@ -76,7 +90,7 @@ test('ResultStream - push accepts rows', (t) => {
 });
 
 test('ResultStream - push enforces max rows', (t) => {
-  const stream = new ResultStream({RESULT_MAX_ROWS: 2});
+  const stream = new ResultStream(normalizeQueryBudget({RESULT_MAX_ROWS: 2}));
 
   stream.push([{id: 1}, {id: 2}]);
   const result = stream.push([{id: 3}]);
@@ -93,10 +107,10 @@ test('ResultStream - push enforces max rows', (t) => {
 
 test('ResultStream - push enforces max bytes', (t) => {
   // Each row is ~10 bytes as JSON; set limit to 15
-  const stream = new ResultStream({
+  const stream = new ResultStream(normalizeQueryBudget({
     RESULT_MAX_ROWS: 1000,
     RESULT_MAX_BYTES: 15,
-  });
+  }));
 
   const result = stream.push([{id: 1}, {id: 2}, {id: 3}]);
 
@@ -111,7 +125,7 @@ test('ResultStream - push enforces max bytes', (t) => {
 });
 
 test('ResultStream - push throws on closed stream', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   stream.close();
 
   t.throws(
@@ -122,7 +136,7 @@ test('ResultStream - push throws on closed stream', (t) => {
 });
 
 test('ResultStream - push throws on non-array', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   t.throws(
     () => stream.push('not-array'),
     /Pushed rows must be an array/,
@@ -131,7 +145,7 @@ test('ResultStream - push throws on non-array', (t) => {
 });
 
 test('ResultStream - push partial accept on budget edge', (t) => {
-  const stream = new ResultStream({RESULT_MAX_ROWS: 3});
+  const stream = new ResultStream(normalizeQueryBudget({RESULT_MAX_ROWS: 3}));
 
   stream.push([{id: 1}]);
   const result = stream.push([{id: 2}, {id: 3}, {id: 4}]);
@@ -146,7 +160,7 @@ test('ResultStream - push partial accept on budget edge', (t) => {
 // --- close ---
 
 test('ResultStream - close returns summary', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   stream.push([{id: 1}]);
   const summary = stream.close();
 
@@ -157,7 +171,7 @@ test('ResultStream - close returns summary', (t) => {
 });
 
 test('ResultStream - close preserves budget_exceeded state', (t) => {
-  const stream = new ResultStream({RESULT_MAX_ROWS: 1});
+  const stream = new ResultStream(normalizeQueryBudget({RESULT_MAX_ROWS: 1}));
   stream.push([{id: 1}, {id: 2}]);
   const summary = stream.close();
 
@@ -168,7 +182,7 @@ test('ResultStream - close preserves budget_exceeded state', (t) => {
 // --- onData listener ---
 
 test('ResultStream - onData notifies on push', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   const received = [];
   stream.onData((batch, meta) => {
     received.push({batch, meta});
@@ -183,7 +197,7 @@ test('ResultStream - onData notifies on push', (t) => {
 });
 
 test('ResultStream - onData throws on non-function', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   t.throws(
     () => stream.onData('not-fn'),
     /Stream listener must be a function/,
@@ -194,7 +208,7 @@ test('ResultStream - onData throws on non-function', (t) => {
 // --- getRows ---
 
 test('ResultStream - getRows returns all collected rows', (t) => {
-  const stream = new ResultStream();
+  const stream = new ResultStream(normalizeQueryBudget());
   stream.push([{id: 1}]);
   stream.push([{id: 2}]);
 

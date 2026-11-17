@@ -10,7 +10,7 @@
  */
 
 import {
-  BROADCAST_MAX_PAYLOAD_BYTES,
+  requireNormalizedQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 import {
   BROADCAST_FIELD,
@@ -26,10 +26,13 @@ import {
  *
  * @param {string} ref - Broadcast reference string.
  * @param {Object} dataset - Broadcast payload with version.
- * @param {Object} [budgets] - Budget overrides.
+ * @param {Readonly<Object>} budgets - The query's normalized budget.
  * @return {{valid: boolean, error: string|null}} Validation result.
+ * @throws {Error} When the budget is not a normalized budget.
  */
 function validateBroadcastArgs(ref, dataset, budgets) {
+  const {BROADCAST_MAX_PAYLOAD_BYTES: maxBytes} =
+    requireNormalizedQueryBudget(budgets);
   if (!ref) {
     return {
       valid: false,
@@ -57,8 +60,6 @@ function validateBroadcastArgs(ref, dataset, budgets) {
   }
 
   const payloadBytes = estimateBroadcastBytes(dataset);
-  const maxBytes = budgets?.BROADCAST_MAX_PAYLOAD_BYTES ??
-    BROADCAST_MAX_PAYLOAD_BYTES;
   if (payloadBytes > maxBytes) {
     return {
       valid: false,
@@ -111,8 +112,9 @@ function estimateBroadcastBytes(dataset) {
  */
 class BroadcastStore {
   /**
-   * @param {Object} [options] - Store options.
-   * @param {number} [options.maxPayloadBytes] - Hard size cap.
+   * @param {Object} options - Store options.
+   * @param {Readonly<Object>} options.budgets - The query's normalized
+   *   budget; its BROADCAST_MAX_PAYLOAD_BYTES is the hard size cap.
    * @param {Function} [options.onTelemetry] - Telemetry callback.
    * @param {Object} [options.lineageTracker] - LineageTracker
    *   instance for attaching lineage IDs.
@@ -120,8 +122,7 @@ class BroadcastStore {
    *   lineage ID generation.
    */
   constructor(options = {}) {
-    this.maxPayloadBytes = options.maxPayloadBytes ??
-      BROADCAST_MAX_PAYLOAD_BYTES;
+    this._budgets = requireNormalizedQueryBudget(options.budgets);
     this.onTelemetry = options.onTelemetry ?? null;
     this.lineageTracker = options.lineageTracker ?? null;
     this.stageIndex = options.stageIndex ?? 0;
@@ -144,7 +145,7 @@ class BroadcastStore {
     const validation = validateBroadcastArgs(
       ref,
       dataset,
-      {BROADCAST_MAX_PAYLOAD_BYTES: this.maxPayloadBytes},
+      this._budgets,
     );
     if (!validation.valid) {
       throw new Error(validation.error);

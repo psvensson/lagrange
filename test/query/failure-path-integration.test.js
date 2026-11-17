@@ -31,7 +31,7 @@ import {
   PRIMITIVE_ERROR_MSG,
 } from '../../src/query/distributed/distributed-context-constants.js';
 import {
-  QB_FIELD,
+  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 
 // -------------------------------------------------------
@@ -40,9 +40,9 @@ import {
 
 test('budget exceed during emit terminates and returns ' +
   'descriptive error', async (t) => {
-  const enforcer = new BudgetEnforcer({
-    [QB_FIELD.EMIT_MAX_BYTES]: 10,
-  });
+  const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+    EMIT_MAX_BYTES: 10,
+  }));
   const buffer = new ShuffleBuffer({maxBytes: 10});
 
   // Emit within budget succeeds
@@ -82,11 +82,13 @@ test('budget exceed during emit terminates and returns ' +
 
 test('budget exceed during broadcast terminates and ' +
   'returns descriptive error', (t) => {
-  const enforcer = new BudgetEnforcer({
-    [QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES]: 30,
-  });
+  const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+    BROADCAST_MAX_PAYLOAD_BYTES: 30,
+  }));
   // Store allows small payloads but rejects large ones
-  const store = new BroadcastStore({maxPayloadBytes: 50});
+  const store = new BroadcastStore({
+    budgets: normalizeQueryBudget({BROADCAST_MAX_PAYLOAD_BYTES: 50}),
+  });
 
   // Small broadcast succeeds (24 bytes serialized)
   store.broadcast('r1', {version: 1, data: 'a'});
@@ -122,9 +124,9 @@ test('budget exceed during broadcast terminates and ' +
 
 test('emit through ShuffleBuffer with BudgetEnforcer ' +
   'terminates on combined limit', async (t) => {
-  const enforcer = new BudgetEnforcer({
-    [QB_FIELD.EMIT_MAX_BYTES]: 20,
-  });
+  const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+    EMIT_MAX_BYTES: 20,
+  }));
   const buffer = new ShuffleBuffer({maxBytes: 50});
 
   // Emit records, tracking bytes in enforcer
@@ -170,10 +172,12 @@ test('emit through ShuffleBuffer with BudgetEnforcer ' +
 
 test('broadcast store rejects oversized payload and ' +
   'enforcer terminates on budget', (t) => {
-  const enforcer = new BudgetEnforcer({
-    [QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES]: 50,
+  const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+    BROADCAST_MAX_PAYLOAD_BYTES: 50,
+  }));
+  const store = new BroadcastStore({
+    budgets: normalizeQueryBudget({BROADCAST_MAX_PAYLOAD_BYTES: 50}),
   });
-  const store = new BroadcastStore({maxPayloadBytes: 50});
 
   // Small broadcast succeeds
   store.broadcast('ref-a', {version: 1, data: 'ok'});

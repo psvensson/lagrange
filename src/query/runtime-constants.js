@@ -49,8 +49,6 @@ const RUNTIME_ERROR_MSG = Object.freeze({
     'snapshot.mode must be "readCommitted" or "snapshot"',
   INVALID_SNAPSHOT_TS:
     'snapshot.ts must be a number when provided',
-  INVALID_BUDGETS:
-    'opts.budgets must be an object when provided',
   INVALID_SESSION:
     'opts.session must be a string when provided',
   EXECUTION_FAILED:

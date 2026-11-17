@@ -21,6 +21,7 @@ import {
   DEFAULT_SNAPSHOT_MODE,
   DIAGNOSTICS_FIELD as DF,
 } from '../../src/query/runtime-constants.js';
+import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -31,11 +32,12 @@ function makeDiag() {
 function makeExecCtx(planDiagnostics) {
   const mockExecutor = async () => ({rows: [{id: 1}]});
   const cancellationToken = new CancellationToken();
-  const budgetEnforcer = new BudgetEnforcer();
+  const budgetEnforcer = new BudgetEnforcer(normalizeQueryBudget());
   const lineageTracker = new LineageTracker('diag-q1');
   const ctx = new ExecutionContext({
     session: 'diag-session',
     snapshot: {mode: DEFAULT_SNAPSHOT_MODE},
+    budgets: normalizeQueryBudget(),
     budgetEnforcer,
     cancellationToken,
     lineageTracker,
