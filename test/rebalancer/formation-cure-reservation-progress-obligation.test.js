@@ -245,7 +245,6 @@ test(
         replicaIntentId: REPLICA_ID,
         operationIntentId: OPERATION_ID,
         deferDispatchUntilBootstrapTopology: true,
-        emitOperationCreated: true,
       };
       const admission = await coordinator.checkProvisioningAdmission(move);
       t.equal(

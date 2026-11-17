@@ -349,7 +349,6 @@ test('guard: the conservative-union escape admits a spread-typed ADD for ' +
         partitionId: TEST_PARTITION_ID,
         nodeId: TEST_NODE_ID_C,
         reason: 'spread_replicas',
-        emitOperationCreated: false,
         enforceConcurrentOperationBudget: true,
       });
     } catch (error) {

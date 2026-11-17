@@ -174,10 +174,12 @@ class RebalanceCoordinatorOperationCreation {
    * @param {string} [move.entityId] - Entity ID for canonical operations.
    * @param {string} move.nodeId - Target node ID.
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
-   * @param {boolean} [move.emitOperationCreated] - Emit the local
-   *   coordinator-created dispatch trigger after persistence.
    * @param {boolean} [move.deferDispatchUntilBootstrapTopology] - Persist the
-   *   operation as non-dispatchable until its bootstrap cohort is complete.
+   *   operation with the durable bootstrap-topology dispatch hold. The hold,
+   *   not any request flag, is the dispatch authority: every created row is
+   *   announced and armed, and the owner's claim refuses a held row until
+   *   the hold's releaser stamps the cohort
+   *   (releaseBootstrapTopologyDispatchHold).
    * @param {Object} [move.operationCreationAdmission] - Immutable admission
    *   observation previously issued by this coordinator owner.
    * @return {Promise<Object>} Created or existing operation record.
@@ -423,7 +425,6 @@ class RebalanceCoordinatorOperationCreation {
     this.assertGroupNotRetiring(move);
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
-    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(move);
     const partitionId = move.partitionId;
@@ -513,7 +514,6 @@ class RebalanceCoordinatorOperationCreation {
       move,
       normalizedMove,
       normalizedMoveType,
-      shouldEmitOperationCreated,
       entityType,
       entityId,
       partitionId,
@@ -552,7 +552,6 @@ class RebalanceCoordinatorOperationCreation {
       move,
       normalizedMove,
       normalizedMoveType,
-      shouldEmitOperationCreated,
       entityType,
       entityId,
       partitionId,
@@ -860,13 +859,11 @@ class RebalanceCoordinatorOperationCreation {
       throw reservationError;
     }
 
-    if (shouldEmitOperationCreated) {
-      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
-      await this.armCoordinatorCreatedOperationProgress(
-        operation,
-        context.createdOperationArmContext,
-      );
-    }
+    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
+    await this.armCoordinatorCreatedOperationProgress(
+      operation,
+      context.createdOperationArmContext,
+    );
 
     return operation;
   }

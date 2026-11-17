@@ -284,3 +284,60 @@ export function createProvisioningReadyService(nodeSource, clock) {
     },
   }, clock);
 }
+
+// The cohort stamp fields the provisioner hands the hold releaser, and the
+// operation fields the coordinator's released row carries them under.
+const BOOTSTRAP_HOLD_RELEASE_STAMP_FIELDS = Object.freeze([
+  'replicaIds',
+  'peerAddresses',
+  'bootstrapMembership',
+  'bootstrapTableMetadata',
+  'bootstrapPartitionMetadata',
+]);
+
+/**
+ * Give a provisioning coordinator double the coordinator's bootstrap-hold
+ * release owner (RebalanceCoordinator.releaseBootstrapTopologyDispatchHold):
+ * every row the double created is held PENDING until its one release, which
+ * answers the released row (stamp applied); a second release of a row, or a
+ * release of a row the double created already past PENDING, is refused with
+ * the row as the coordinator re-reads it. Each release request is recorded
+ * on `bootstrapHoldReleases` for the test's assertions.
+ * @param {Object} coordinator - provisioning coordinator double
+ * @return {Object} the same double
+ */
+export function withBootstrapHoldRelease(coordinator) {
+  // A row is one created object: a double that answers a later create of the
+  // same id with a NEW object made a new row; one that answers it with the
+  // same object reused the row (and its release).
+  const createdById = new Map();
+  const releasedRows = new WeakSet();
+  const createOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.bootstrapHoldReleases = [];
+  coordinator.createOperation = async (move) => {
+    const operation = await createOperation(move);
+    createdById.set(operation.operationId, operation);
+    return operation;
+  };
+  coordinator.releaseBootstrapTopologyDispatchHold =
+    async (operationId, stamp) => {
+      const operation = createdById.get(operationId);
+      const held = operation !== undefined && !releasedRows.has(operation) &&
+        (operation.workflowStep === undefined ||
+          operation.workflowStep === 'PENDING');
+      coordinator.bootstrapHoldReleases.push(
+        {operationId, stamp, released: held});
+      if (!held) {
+        return {released: false, operation: operation ? {...operation} : null};
+      }
+      releasedRows.add(operation);
+      const released = {...operation};
+      for (const field of BOOTSTRAP_HOLD_RELEASE_STAMP_FIELDS) {
+        if (stamp[field] !== null && stamp[field] !== undefined) {
+          released[field] = stamp[field];
+        }
+      }
+      return {released: true, operation: released};
+    };
+  return coordinator;
+}

@@ -219,7 +219,6 @@ function createSizedAddOperation(coordinator) {
     nodeId: TEST_TARGET_NODE_ID,
     entityType: SERVICE_TYPE.PARTITION,
     entityId: TEST_PARTITION_ID,
-    emitOperationCreated: false,
   });
 }
 

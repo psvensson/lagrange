@@ -28,6 +28,7 @@ import {
   createMockSystemCache,
   createAdmittedSplitAdmissionService,
   createProvisioningReadyService,
+  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
@@ -104,7 +105,7 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' 
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -124,7 +125,7 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' 
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -248,7 +249,7 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' 
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -268,7 +269,7 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' 
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -397,7 +398,7 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -417,7 +418,7 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -480,7 +481,7 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' 
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -500,7 +501,7 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' 
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -568,7 +569,7 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -588,7 +589,7 @@ test('SQLQueryEngine - provisionInitialTablePartition honors explicit ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({

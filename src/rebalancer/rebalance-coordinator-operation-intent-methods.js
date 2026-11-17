@@ -242,7 +242,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         )
       ) {
         this.rememberOperationIntent(dedupeKey, operationForMissReuse);
-        return operationForMissReuse;
+        return structuredClone(operationForMissReuse);
       }
       this.recentOperationIntents.delete(dedupeKey);
       return null;
@@ -335,7 +335,11 @@ class RebalanceCoordinatorOperationIntentMethods {
   }
 
   /**
-   * Remember a recently created/reused operation intent.
+   * Remember a recently created/reused operation intent. The cache keeps its
+   * own snapshot: the caller's operation object (a create's return value, a
+   * provisioning plan entry) is never shared by reference with the cache, so
+   * a caller's in-memory edits can neither alter the cached intent nor ride
+   * it back out to the next re-creating caller.
    * @param {string} dedupeKey - Intent key.
    * @param {Object} operation - Operation payload.
    * @private
@@ -346,7 +350,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       return;
     }
     this.recentOperationIntents.set(dedupeKey, {
-      operation,
+      operation: structuredClone(operation),
       expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
   }

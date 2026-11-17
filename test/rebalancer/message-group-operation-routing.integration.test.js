@@ -456,7 +456,6 @@ test('Message-group operation routing integration', async (t) => {
           entityId: 'mg-1',
           nodeId: 'node-2',
           replicaId: 'mg-1-r4',
-          emitOperationCreated: false,
         });
 
         const dedupeQuery = queries.find((q) =>
