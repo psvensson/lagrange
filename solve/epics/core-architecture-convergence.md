@@ -74,6 +74,18 @@ authorizes:
 
 ## Status and activation
 
+### Independent implementation portability (2026-11-17)
+
+The approved [implementation-independent portability plan](core-architecture-convergence/independent-portability-plan-2026-11-17.md)
+is a **planning-only contract and conformance continuation** within this epic,
+not a new runtime subsystem, Epic, roadmap lane or release requirement. Its
+[first Q0 inventory](core-architecture-convergence/independent-portability-q0-inventory-2026-11-17.md)
+is read-only and explicitly incomplete. It inventories source-of-truth and
+documentation drift without changing any existing sealed Quest or treating
+target semantics as current capability. A later behavior-changing package
+still requires the predecessor cutover/READY gates, one owner, a measuring
+red Quest, and the normal independent proof and landing rules.
+
 ### 2026-10-08 cutover interaction clarification
 
 The approved [contract-first cutover plan](raft-rs-full-cutover/contract-first-2026-10-08.md) belongs to raft-rs-full-cutover, not a bypass of this epic.
