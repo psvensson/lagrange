@@ -395,6 +395,8 @@ test('CDCPipelineReadinessGate — waitForReady rejects on timeout',
       t.equal(err.unmetConditions.length, 3);
       t.equal(err.timeoutMs, 50);
       t.equal(err.timeoutKind, 'no_progress');
+      t.equal(err.deferRetry, true);
+      t.equal(err.retryable, true);
       t.equal(invariantEvents.length, 1);
       t.equal(
         invariantEvents[0].invariantId,

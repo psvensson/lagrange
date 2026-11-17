@@ -45,6 +45,7 @@ const UNDECLARED_PARTITION_ID = 'undeclared-p1';
 const EMPTY_REPLICAS_PARTITION_ID = 'empty_replicas-p1';
 const PRIORITY_OBSERVER_ID = 'replica_operations-p1';
 const NON_PRIORITY_NODES_PARTITION_ID = 'nodes-p1';
+const ORDINARY_SYSTEM_PARTITION_ID = 'clusters-p1';
 const SCHEMA_PROVISIONING_PARTITION_ID = 'schema-provisioning-p1';
 const REPLICATION_FACTOR_THREE = 3;
 const INITIAL_NOW_MS = 10_000;
@@ -637,8 +638,7 @@ test(
 
 test(
   'distinct-spread partitions get short leadership start delay, keep continuation wake armed ' +
-    'and minimum interval on no_changes_needed, and do not hard-skip when all targets are ' +
-    'globally transitional',
+    'and minimum interval on no_changes_needed, and separate Phase A vs Phase B global occupancy',
   async (t) => {
     initializeTestEnvironment();
     const nowMs = INITIAL_NOW_MS;
@@ -651,6 +651,7 @@ test(
         {partition_id: CONCENTRATED_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
         {partition_id: SPREAD_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
         {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
       ],
       services: [
         ...buildReplicaRows(
@@ -665,56 +666,49 @@ test(
           NON_PRIORITY_NODES_PARTITION_ID,
           [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
         ),
+        ...buildReplicaRows(
+          ORDINARY_SYSTEM_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
+        ),
       ],
       operations,
     });
-
-    const concentrated = createTestRebalancer({
-      entityId: CONCENTRATED_PARTITION_ID,
-      entityType: EntityType.PARTITION,
-      nodeId: TEST_NODE_A,
-      systemTableCache,
-      rebalanceCoordinator: coordinator,
-      nowFn: () => nowMs,
-    });
-    const spread = createTestRebalancer({
-      entityId: SPREAD_PARTITION_ID,
-      entityType: EntityType.PARTITION,
-      nodeId: TEST_NODE_A,
-      systemTableCache,
-      rebalanceCoordinator: coordinator,
-      nowFn: () => nowMs,
-    });
-    const systemConcentrated = createTestRebalancer({
-      entityId: NON_PRIORITY_NODES_PARTITION_ID,
-      entityType: EntityType.PARTITION,
-      nodeId: TEST_NODE_A,
-      systemTableCache,
-      rebalanceCoordinator: coordinator,
-      nowFn: () => nowMs,
-    });
-    concentrated.getAvailableNodes = () => nodes;
-    spread.getAvailableNodes = () => nodes;
-    systemConcentrated.getAvailableNodes = () => nodes;
-    concentrated.isLeader = true;
-    spread.isLeader = true;
-    systemConcentrated.isLeader = true;
+    const makeEntity = (entityId) => {
+      const entity = createTestRebalancer({
+        entityId,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_A,
+        systemTableCache,
+        rebalanceCoordinator: coordinator,
+        nowFn: () => nowMs,
+      });
+      entity.getAvailableNodes = () => nodes;
+      entity.isLeader = true;
+      return entity;
+    };
+    const concentrated = makeEntity(CONCENTRATED_PARTITION_ID);
+    const spread = makeEntity(SPREAD_PARTITION_ID);
+    const nodesPartition = makeEntity(NON_PRIORITY_NODES_PARTITION_ID);
+    const ordinarySystem = makeEntity(ORDINARY_SYSTEM_PARTITION_ID);
 
     try {
       const concentratedStartDelay = concentrated.getLeadershipStartDelayMs();
       const spreadStartDelay = spread.getLeadershipStartDelayMs();
+      const nodesStartDelay = nodesPartition.getLeadershipStartDelayMs();
       t.ok(
         concentratedStartDelay >= SINGLE_WAKE_COUNT &&
           concentratedStartDelay <= concentrated.getPriorityRetryDelayMs(),
-        'below-distinct-spread partition uses short priority leadership start delay',
+        'below-distinct-spread non-formation partition uses short leadership start delay',
       );
       t.ok(
         spreadStartDelay >= spread.periodicCheckIntervalMs,
         'already-spread partition keeps 60s..120s leadership start delay',
       );
+      t.ok(
+        nodesStartDelay >= nodesPartition.periodicCheckIntervalMs,
+        'nodes-p1 formation-liveness dependency defers JOIN_READY start until TRAFFIC_READY wake',
+      );
 
-      // When no_changes_needed occurs with 0 own in-flight ops, below-spread partition arms
-      // slot-release wake and resets interval to minimum (5s) instead of backing off to 90s.
       concentrated.currentInterval = concentrated.periodicCheckIntervalMs;
       concentrated.rebalance = async () => ({
         success: true,
@@ -722,11 +716,7 @@ test(
         reason: 'no_changes_needed',
       });
       const forcePriorityRetry = await concentrated.advanceCheckCadence(true);
-      t.equal(
-        forcePriorityRetry,
-        true,
-        'below-distinct-spread partition forces priority retry cadence on 0 executed moves',
-      );
+      t.equal(forcePriorityRetry, true, 'below-spread partition forces priority retry cadence');
       t.equal(
         concentrated.currentInterval,
         concentrated.getPriorityRetryDelayMs(),
@@ -738,8 +728,6 @@ test(
         'below-distinct-spread partition with 0 own ops stays armed for slot release',
       );
 
-      // When own op is in flight and intermediate check returns no_changes_needed, keep
-      // awaitingOwnOperationCompletion armed.
       operations.push({
         operation_id: 'own-in-flight-1',
         partition_id: CONCENTRATED_PARTITION_ID,
@@ -760,8 +748,6 @@ test(
         'below-distinct-spread partition with own in-flight op keeps own-completion wake armed',
       );
 
-      // When BOTH 0002 and 0003 have cross-partition system adds in flight, MovePlanner does NOT
-      // hard-skip all targets to [].
       const globalOps = [
         {
           operation_id: 'sys-op-b',
@@ -773,30 +759,42 @@ test(
         },
         {
           operation_id: 'sys-op-c',
-          partition_id: 'clusters-p1',
+          partition_id: 'services-p1',
           type: OperationType.REPLACE,
           target_node_id: TEST_NODE_C,
           status: ReplicaStatus.PENDING,
           workflow_step: WORKFLOW_STEP.PENDING,
         },
       ];
-      systemConcentrated.getGlobalTopologyBlockingInFlightOperations = () => globalOps;
-      systemConcentrated.getInFlightOperations = () => [];
-      const currentReplicas = systemConcentrated.getCurrentReplicas();
-      const targetState = await systemConcentrated.calculateTargetState(currentReplicas, {
+      const policy = {
         targetReplicaCount: REPLICATION_FACTOR_THREE,
         minReplicaCount: REPLICATION_FACTOR_THREE,
         maxReplicaCount: 7,
         placementConstraints: {spreadAcrossNodes: true},
-      });
-      const moves = systemConcentrated.calculateMoves(currentReplicas, targetState);
+      };
+      for (const entity of [ordinarySystem, nodesPartition]) {
+        entity.getGlobalTopologyBlockingInFlightOperations = () => globalOps;
+        entity.getInFlightOperations = () => [];
+      }
+      const ordinaryReplicas = ordinarySystem.getCurrentReplicas();
+      const ordinaryTarget = await ordinarySystem.calculateTargetState(ordinaryReplicas, policy);
+      const ordinaryMoves = ordinarySystem.calculateMoves(ordinaryReplicas, ordinaryTarget);
       t.ok(
-        moves.length > ZERO_COUNT,
-        'system partition emits REPLACE move when all needed target nodes are globally transitional',
+        ordinaryMoves.length > ZERO_COUNT,
+        'Phase B ordinary system partition emits REPLACE when all target nodes are globally transitional',
+      );
+      const nodesReplicas = nodesPartition.getCurrentReplicas();
+      const nodesTarget = await nodesPartition.calculateTargetState(nodesReplicas, policy);
+      const nodesMoves = nodesPartition.calculateMoves(nodesReplicas, nodesTarget);
+      t.equal(
+        nodesMoves.length,
+        ZERO_COUNT,
+        'Phase A serial-goal-state partition honors nodesWithGlobalSystemAddTransitional',
       );
     } finally {
       concentrated.shutdown();
       spread.shutdown();
-      systemConcentrated.shutdown();
+      nodesPartition.shutdown();
+      ordinarySystem.shutdown();
     }
   });

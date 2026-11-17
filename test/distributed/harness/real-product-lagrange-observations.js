@@ -69,6 +69,7 @@ const DEFAULT_HTTP_PROBE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS = 5000;
 const BOOT_PROVENANCE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const BOOT_PROVENANCE_MAX_BYTES = 4096;
+const EXITED_CONTAINER_LOG_TAIL_LINES = 80;
 
 function tagProbeError(message, flags) {
   return Object.assign(new Error(message), flags);
@@ -154,7 +155,7 @@ function stateFieldOrNull(record, key) {
   return record[key];
 }
 
-function exitedContainerObservation(role, state) {
+function exitedContainerObservation(role, state, logTail = null) {
   const inspectState = state && typeof state === 'object' ? state : {};
   return {
     containerExited: true,
@@ -168,11 +169,12 @@ function exitedContainerObservation(role, state) {
     oomKilled: stateFieldOrNull(inspectState, 'OOMKilled'),
     finishedAt: stateFieldOrNull(inspectState, 'FinishedAt'),
     error: inspectState.Error || null,
+    logTail,
   };
 }
 
-function buildExitedContainerFailure({component, role, state, pollContext}) {
-  const observation = exitedContainerObservation(role, state);
+function buildExitedContainerFailure({component, role, state, pollContext, logTail = null}) {
+  const observation = exitedContainerObservation(role, state, logTail);
   const attempt = pollContext?.attempt ?? 1;
   const diagnostic = {
     component,
@@ -215,6 +217,21 @@ function parseInspectState(raw) {
   return parsed;
 }
 
+async function captureExitedContainerLogTail(ctx, role, inspectOpts, timeoutMs) {
+  try {
+    const rawLogs = await ctx.sshRun(
+      role.host,
+      inspectOpts,
+      `docker logs --tail ${EXITED_CONTAINER_LOG_TAIL_LINES} ${shellWord(role.containerId)} 2>&1`,
+      timeoutMs,
+    );
+    const text = stringOf(rawLogs ?? '');
+    return text === '' ? null : text;
+  } catch {
+    return null;
+  }
+}
+
 async function inspectWatchedRole(ctx, component, role, pollContext, callOptions) {
   const timeoutMs = boundedTimeoutMs(callOptions.timeoutMs, INSPECT_TIMEOUT_MS);
   const inspectOpts = {
@@ -248,7 +265,8 @@ async function inspectWatchedRole(ctx, component, role, pollContext, callOptions
   }
   const state = parseInspectState(raw);
   if (state.Running !== true) {
-    throw buildExitedContainerFailure({component, role, state, pollContext});
+    const logTail = await captureExitedContainerLogTail(ctx, role, inspectOpts, timeoutMs);
+    throw buildExitedContainerFailure({component, role, state, pollContext, logTail});
   }
 }
 

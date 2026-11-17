@@ -618,5 +618,15 @@ test('phaseQuerySystemState timeout error lists unmet conditions',
         err.unmetConditions.includes('propagationLeader'),
         'join-time readiness should not block on propagationLeader',
       );
+      t.equal(
+        err.deferRetry,
+        true,
+        'CDC readiness gate timeout marks deferRetry so join resume classifies it retryable',
+      );
+      t.equal(
+        err.retryable,
+        true,
+        'CDC readiness gate timeout marks retryable so process does not exit(1) on transient CDC lag',
+      );
     }
   });

@@ -136,9 +136,9 @@ function appendUnderRepresentedAddMoves(
   }
 }
 
-function selectUnderRepresentedAddMoves(addMoves, deferredSystemAddMoves) {
-  if (addMoves.length === 0 && deferredSystemAddMoves.length > 0) {
-    addMoves.push(...deferredSystemAddMoves);
+function selectUnderRepresentedAddMoves(addMoves, deferredAdds, serialPlanner) {
+  if (!serialPlanner && addMoves.length === 0 && deferredAdds.length > 0) {
+    addMoves.push(...deferredAdds);
   }
 }
 
@@ -449,21 +449,14 @@ class MovePlannerMoveCalculationMethods {
             globalSystemTargetOccupancy: true,
           });
           appendUnderRepresentedAddMoves(
-            deferredSystemAddMoves,
-            nodeId,
-            targetCount,
-            currentCounts,
-          );
+            deferredSystemAddMoves, nodeId, targetCount, currentCounts);
           continue;
         }
         appendUnderRepresentedAddMoves(
-          addMoves,
-          nodeId,
-          targetCount,
-          currentCounts,
-        );
+          addMoves, nodeId, targetCount, currentCounts);
       }
-      selectUnderRepresentedAddMoves(addMoves, deferredSystemAddMoves);
+      selectUnderRepresentedAddMoves(
+        addMoves, deferredSystemAddMoves, serialGoalStatePartition);
     }
     const targetReplicaCount = targetState.targetReplicaCount;
     // The partition's OWN policy row, resolved LAZILY and at most once per

@@ -320,7 +320,8 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
   assert.equal(inspectInFlight, 0);
   assert.equal(inspectTracker.inFlightOps.size, 0);
 
-  // Part B: fast transient SSH error on host 1 must NOT mask sibling Running: false on host 2.
+  // Part B: fast transient SSH error on host 1 must NOT mask sibling Running: false on host 2,
+  // and exitedRole.logTail captures bounded docker logs before throwing.
   let siblingSettled = false;
   const {sshRun: rawMaskedSsh} = createScriptedSsh([
     [/docker inspect --type container .* c1$/u, async () => {
@@ -332,6 +333,7 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
       siblingSettled = true;
       return JSON.stringify({Running: false, Status: 'exited', ExitCode: 137});
     }],
+    [/docker logs --tail 80 c2 2>&1$/u, () => 'FATAL: synthetic container exit log tail'],
     [/docker inspect --type container .* c3$/u, async () => {
       await delayMs(20);
       return JSON.stringify({Running: true, Status: 'running'});
@@ -360,6 +362,10 @@ test('settleConcurrentBatch prevents overlapping probes across attempts, preserv
       assert.equal(error.code, DEPLOYMENT_FAILURE.READINESS_EXHAUSTED);
       assert.equal(error.containerExited, true);
       assert.equal(error.diagnostic.exitedRole.host, HOSTS[1]);
+      assert.equal(
+        error.diagnostic.exitedRole.logTail,
+        'FATAL: synthetic container exit log tail',
+      );
       return true;
     },
   );

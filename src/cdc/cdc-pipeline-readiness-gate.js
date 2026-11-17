@@ -46,6 +46,28 @@ function buildUnmetSignature(result) {
   return JSON.stringify(normalizeUnmetConditions(result?.unmetConditions));
 }
 
+function buildReadinessTimeoutError({
+  unmetConditions,
+  timeout,
+  timeoutKind,
+  lastProgressElapsedMs,
+}) {
+  const error = new Error(
+    `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +
+    `unmet=[${unmetConditions.join(', ')}] ` +
+    `timeout=${timeout}ms ` +
+    `kind=${timeoutKind}`,
+  );
+  return Object.assign(error, {
+    unmetConditions,
+    timeoutMs: timeout,
+    timeoutKind,
+    lastProgressElapsedMs,
+    deferRetry: true,
+    retryable: true,
+  });
+}
+
 /**
  * CDCPipelineReadinessGate evaluates whether the CDC pipeline is fully
  * wired and capable of propagating events from partition leaders to the
@@ -207,17 +229,12 @@ class CDCPipelineReadinessGate extends EventEmitter {
             lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
           },
         });
-        const error = new Error(
-          `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +
-          `unmet=[${result.unmetConditions.join(', ')}] ` +
-          `timeout=${timeout}ms ` +
-          `kind=${timeoutKind}`,
-        );
-        error.unmetConditions = result.unmetConditions;
-        error.timeoutMs = timeout;
-        error.timeoutKind = timeoutKind;
-        error.lastProgressElapsedMs = Math.max(0, lastProgressAtMs - startMs);
-        throw error;
+        throw buildReadinessTimeoutError({
+          unmetConditions: result.unmetConditions,
+          timeout,
+          timeoutKind,
+          lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
+        });
       }
 
       await this._sleep(interval);
