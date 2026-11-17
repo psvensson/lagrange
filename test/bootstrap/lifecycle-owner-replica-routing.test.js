@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
@@ -86,6 +87,7 @@ test('BootstrapService routes replica lifecycle through unified adapters', async
 
 test('NodeJoiningService routes replica lifecycle through unified adapters', async (t) => {
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-1',
     nodeAddress: 'ws://localhost:9090',

@@ -44,6 +44,7 @@
 import {execFile, spawn} from 'node:child_process';
 import {createWriteStream, existsSync, realpathSync} from 'node:fs';
 import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
+import {hostname} from 'node:os';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -248,6 +249,7 @@ async function startNode(index, dataRoot) {
   const env = {
     ...process.env,
     NODE_ADDRESS: `localhost:${restPort}`,
+    NODE_HOST_ID: hostname(),
     REST_API_PORT: String(restPort),
     ADMIN_WS_PORT: String(adminPort),
     DATA_DIR: dataDir,

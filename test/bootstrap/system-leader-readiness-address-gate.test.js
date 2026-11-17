@@ -4,6 +4,7 @@
  * Requirements: 6.1, 6.4
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -125,6 +126,7 @@ const createSeedBootstrapCache = ({
 
 test('BootstrapService readiness waiter blocks when required system-table leader addresses are missing', async (t) => {
   const bootstrapService = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -158,6 +160,7 @@ test('BootstrapService readiness waiter blocks when required system-table leader
 
 test('BootstrapService readiness waiter accepts local seed leaders before service addresses publish', async (t) => {
   const bootstrapService = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -232,6 +235,7 @@ test('BootstrapService readiness waiter accepts local seed leaders before servic
 
 test('BootstrapService readiness waiter ignores missing message-group leaders before activation', async (t) => {
   const bootstrapService = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -249,6 +253,7 @@ test('BootstrapService readiness waiter ignores missing message-group leaders be
 
 test('BootstrapService readiness waiter accepts role-based local seed leaders', async (t) => {
   const bootstrapService = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -320,6 +325,7 @@ test('NodeJoiningService join waiter allows missing leader_node_id metadata', as
   };
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -380,6 +386,7 @@ test('NodeJoiningService join waiter ignores missing message-group leader rows',
   };
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

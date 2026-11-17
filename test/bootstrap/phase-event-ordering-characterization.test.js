@@ -9,6 +9,7 @@
  * Design: D2.1, D5.3, D11.1
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {READINESS_CONVERGENCE_PHASE} from
@@ -461,6 +462,7 @@ test('Join startup - emits phase start/complete events in correct order',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -525,6 +527,7 @@ test('Join startup - emits COMPLETE event after all phases', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -568,6 +571,7 @@ test('Join startup - phase failure emits phaseFailed event with error',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -649,6 +653,7 @@ test('Join startup - a MOVE_REPLICA assignment is refused, never executed',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -754,6 +759,7 @@ test('Join startup - phase event payloads include phase and nodeId',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -987,6 +993,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -1062,6 +1069,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
@@ -1145,6 +1153,7 @@ async (t) => {
 
   // Collect join payloads
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

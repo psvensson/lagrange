@@ -1,6 +1,7 @@
 // Component orchestration: real BootstrapService cleanup delegates and real
 // MessageRouter registration/retirement, with bounded shutdown doubles only.
 // This does not measure native message-group close, startup or recovery.
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -30,6 +31,7 @@ function createSilentLogger() {
 
 function createFixture() {
   const bootstrap = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: NODE_ID,
     nodeAddress: 'localhost:8080',
     bootIncarnation: TEST_BOOT_INCARNATION,

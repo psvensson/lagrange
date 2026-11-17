@@ -6,6 +6,7 @@
  * Validates: Requirements 7.1, 7.3
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
@@ -22,6 +23,7 @@ import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
  */
 function createTestBootstrapService(overrides = {}) {
   const service = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-seed-node',
     nodeAddress: 'http://localhost:3000',

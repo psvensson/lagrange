@@ -172,6 +172,14 @@ function nodeAddressOf(nodeId) {
   return `${NODE_ADDRESS_PREFIX}${nodeId}${NODE_ADDRESS_SUFFIX}`;
 }
 
+// The world's declared topology: each simulated node runs on its own machine,
+// the one its address names (the formation of 3 hosts, 1 node each). That
+// machine's name is the host identity the node declares at registration.
+const SIMULATED_MACHINE_SUFFIX = '-machine';
+function simulatedHostIdOf(nodeId) {
+  return `${nodeId}${SIMULATED_MACHINE_SUFFIX}`;
+}
+
 // World time. The clock moves only by the evaluation instants the driver
 // takes (one millisecond each), so it never reaches a delay any owner armed:
 // advance(0) runs only what is due at the current instant (deferred
@@ -1106,6 +1114,7 @@ function createFormationWorld() {
         });
       const hosts = startNode(nodeId, clusterIncarnationFence);
       const registrationOwner = new NodeRegistrationOwner({
+        hostId: simulatedHostIdOf(nodeId),
         nodeId,
         nodeAddress: nodeAddressOf(nodeId),
         membershipPublicationRuntimeOwner:
@@ -1170,4 +1179,5 @@ export {
   WORLD_START_MS,
   createFormationWorld,
   nodeAddressOf,
+  simulatedHostIdOf,
 };

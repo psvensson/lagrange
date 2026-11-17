@@ -15,6 +15,7 @@
  * Requirements: 4.1, 4.6, 7.8, 7.10
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -73,6 +74,7 @@ let nodeIdCounter = 0x900000000000;
 // startup mints the boot incarnation.
 function createWsJoiningService({nodeId, wsPort, seedWsPort, httpPost}) {
   return new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,

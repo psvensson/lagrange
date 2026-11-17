@@ -8,6 +8,7 @@
  * Requirements: 4.1, 4.6, 4.7, 7.8, 7.10, 7.11
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -253,6 +254,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
+        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
@@ -405,6 +407,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
+        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
@@ -773,6 +776,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort2 = getUniquePort();
 
       joiningService2 = new NodeJoiningService({
+        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId2,
         nodeAddress: `ws://localhost:${joiningWsPort2}`,
@@ -808,6 +812,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort3 = getUniquePort();
 
       joiningService3 = new NodeJoiningService({
+        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId3,
         nodeAddress: `ws://localhost:${joiningWsPort3}`,

@@ -2,6 +2,7 @@
  * Debug test to understand where the join flow hangs.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -164,6 +165,7 @@ test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
     console.log('DEBUG: Creating joining service on port', joiningWsPort);
 
     joiningService = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: joiningNodeId,
       nodeAddress: `ws://localhost:${joiningWsPort}`,

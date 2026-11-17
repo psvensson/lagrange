@@ -49,6 +49,16 @@ const DEFAULT_STABILITY = Object.freeze({
   OVERALL_TIMEOUT_MS: 600000,
 });
 
+// Every member declares its required host identity (NODE_HOST_ID, owner
+// decision D3 2026-11-17): the name of the lab host the job runs on, read on
+// that host when the member starts, then the member command is exec'd.
+const MEMBER_HOST_IDENTITY_ARGV = Object.freeze([
+  '/bin/sh',
+  '-c',
+  'set -eu; NODE_HOST_ID="$(hostname)"; export NODE_HOST_ID; exec "$@"',
+  'lagrange-member',
+]);
+
 const MIN_PORT = 1024;
 const MAX_PORT = 65535;
 
@@ -354,7 +364,7 @@ function generateClusterSpec(options = {}) {
 
     return {
       name: member.name,
-      argv,
+      argv: [...MEMBER_HOST_IDENTITY_ARGV, ...argv],
       env,
       cwd: 'member-data',
       ports,

@@ -10,6 +10,7 @@ import {evaluateLagrangeClusterReadiness} from '../real-product-lagrange-readine
 import {
   LAGRANGE_IMAGE,
   createContainerLedger,
+  dataHostNameRules,
   dockerRules,
   http,
   lagrangeHealthyRules,
@@ -48,6 +49,7 @@ test('D05/J7: Lagrange readiness never reached throws readiness_exhausted with t
   const ledger = createContainerLedger();
   const notReady = http(503, {ready: false, phase: 'init', reasons: ['seed-contact']});
   const {sshRun, calls} = createScriptedSsh([
+    ...dataHostNameRules(),
     ...dockerRules(ledger),
     [/curl/u, notReady],
   ]);

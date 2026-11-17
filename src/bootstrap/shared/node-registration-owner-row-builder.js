@@ -22,6 +22,7 @@ import {
   MEMBERSHIP_LIFECYCLE_INTENT,
 } from '../../control-plane/membership-lifecycle-controller.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
+import {requireDeclaredNodeHostId} from '../../topology/node-host-identity.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
@@ -58,11 +59,15 @@ function buildAuthoritativeRowSourceUnavailableError(tableName) {
   return error;
 }
 
+// The row a re-entering boot writes: the persisted row advanced to this
+// boot, with this boot's declared host identity (never the persisted one: a
+// restart re-declares it, and an older version's row has none).
 function buildReentryNormalizedNodeRow(
   nodeRow,
   now,
   bootIncarnation,
-  storageIncarnation = null,
+  storageIncarnation,
+  hostId,
 ) {
   const persistedStatus = normalizeString(nodeRow?.[COLUMN.STATUS]);
   const reusableStatus =
@@ -79,6 +84,7 @@ function buildReentryNormalizedNodeRow(
     [COLUMN.LAST_HEARTBEAT]: now,
     [COLUMN.READY_LEASE_EXPIRES_AT]: null,
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
+    [COLUMN.HOST_ID]: requireDeclaredNodeHostId(hostId),
     ...(resolvedStorageIncarnation > 0 ?
       {[STORAGE_INCARNATION_FIELD]: resolvedStorageIncarnation} :
       {}),
@@ -281,6 +287,7 @@ function buildFailedLostStoragePartitionRow(row, now) {
 function buildNodeRegistrationRow({
   nodeId,
   nodeAddress,
+  hostId,
   nodeCapabilities,
   bootIncarnation,
   storageIncarnation,
@@ -302,6 +309,7 @@ function buildNodeRegistrationRow({
   return {
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.NODE_ADDRESS]: nodeAddress,
+    [COLUMN.HOST_ID]: requireDeclaredNodeHostId(hostId),
     [COLUMN.CPU_CORES]: cpus.length,
     [COLUMN.MEMORY_MB]: totalMemoryMb,
     [COLUMN.DISK_GB]: NUM.HUNDRED,
@@ -411,6 +419,7 @@ function buildDurableRejoinMembershipResolution({
   now,
   currentIncarnation,
   storageIncarnation,
+  hostId,
 }) {
   return {
     nodeRow: buildReentryNormalizedNodeRow(
@@ -418,6 +427,7 @@ function buildDurableRejoinMembershipResolution({
       now,
       currentIncarnation,
       storageIncarnation,
+      hostId,
     ),
     observedNodeRow: authoritativeNodeRow,
     endpointRow: stampEndpointStorageIncarnationMetadata(
@@ -442,6 +452,7 @@ function buildExistingJoinAdmissionProgressResolution({
   currentIncarnation,
   storageIncarnation,
   sameBootRetry,
+  hostId,
 }) {
   return {
     nodeRow: buildReentryNormalizedNodeRow(
@@ -449,6 +460,7 @@ function buildExistingJoinAdmissionProgressResolution({
       now,
       currentIncarnation,
       storageIncarnation,
+      hostId,
     ),
     observedNodeRow: authoritativeNodeRow,
     endpointRow: authoritativeEndpointRow ?

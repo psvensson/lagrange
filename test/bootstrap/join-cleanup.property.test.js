@@ -12,6 +12,7 @@
  * Feature: architecture-violations-cleanup, Property 4
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -66,6 +67,7 @@ const PHASES_WITH_MG_CLEANUP = FAILURE_PHASES.filter(
  */
 function createTrackedJoiningService(cleanupContext) {
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-joining-node',
     nodeAddress: 'http://localhost:4000',
