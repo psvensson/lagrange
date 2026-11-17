@@ -12,7 +12,10 @@ import {
 import {
   canAdvanceRowKeySessionGeneration,
   findParticipantSession,
+  hasParticipantSession,
 } from '../../src/partition/partition-participant-transaction-session.js';
+import {PARTITION_SERVICE_OPERATION} from
+  '../../src/partition/partition-service-constants.js';
 import {readPartitionWriteGeneration} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE} from
@@ -28,7 +31,7 @@ import {
   INSERT_SQL, ROW, TABLE, applyCommitted, awaitProposal, beginMessage,
   clearFixtureSingletons, commitMessage, identityOf, ordinaryWriteOf, originOf,
   prepareMessage, queryMessage, REPLICAS, resetFixtureSingletons, send,
-  settleTicks, shutdownAll, startLeader, startReplica, track,
+  settleTicks, shutdownAll, startLeader, startReplica, track, txMessage,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {
   CONTROL_PARTITION,
@@ -110,7 +113,8 @@ test('release admission treats unstamped connections as unsafe and lifecycle ' +
   }
 });
 
-test('Deadlock A: release pause allows already-admitted session PREPARE to drain', () =>
+test('release pause refuses a staged session\'s first PREPARE: volatile staging ' +
+  'crosses no release fence and drains through its own transaction failure path', () =>
   withLeader(async (leader, proposed) => {
     const tx = identityOf('a'.repeat(32));
     assert.equal((await send(leader, beginMessage(tx))).success, true);
@@ -119,20 +123,20 @@ test('Deadlock A: release pause allows already-admitted session PREPARE to drain
     raiseParticipantCutoverPause(leader);
     const refusedBegin = await send(leader, beginMessage(identityOf('b'.repeat(32))));
     assert.equal(refusedBegin.failureCode, CODE.CUTOVER_PAUSED);
-    const prepare = track(send(leader, prepareMessage(tx)));
-    const command = await awaitProposal(proposed,
-      (entry) => entry.transactionId === tx.transactionId);
-    assert.ok(command);
-    assert.equal(applyCommitted(leader, command), null);
-    await settleTicks();
-    assert.equal(prepare.value?.success, true, JSON.stringify(prepare.value));
-    assert.equal(prepare.value?.state, 'PREPARED');
-    const commit = track(send(leader, commitMessage(tx, command.preparedDigest)));
-    const decision = await awaitProposal(proposed, (entry) =>
-      entry.transactionId === tx.transactionId && entry.decision === 'COMMIT');
-    assert.equal(applyCommitted(leader, decision), null);
-    await settleTicks();
-    assert.equal(commit.value?.success, true);
+    const prepare = await send(leader, prepareMessage(tx));
+    assert.equal(prepare.success, false, JSON.stringify(prepare));
+    assert.equal(prepare.failureCode, CODE.CUTOVER_PAUSED);
+    assert.equal(prepare.deferRetry, true);
+    assert.equal(proposed.some((entry) => entry?.transactionId === tx.transactionId), false,
+      'the refused first PREPARE proposed no durable obligation');
+    assert.equal(hasParticipantSession(leader), true,
+      'the staged session is volatile work the release drain still observes');
+    const rollback = await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
+    assert.equal(rollback.success, true, JSON.stringify(rollback));
+    assert.equal(hasParticipantSession(leader), false,
+      'the transaction owner\'s rollback ends the staging the release drain waits on');
+    assert.notEqual(participantCutoverPauseOf(leader), null,
+      'the release fence stayed raised throughout');
   }));
 
 test('disjoint row-key session advances generation across concurrent committed writes', () =>

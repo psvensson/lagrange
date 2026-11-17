@@ -302,7 +302,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       resolvedEntitySizeBytes: options.resolvedEntitySizeBytes,
     });
 
-    const now = Date.now();
+    const now = this.nowFn();
     const reservationId = `res-${operation.operationId}`;
     const expiresAt = now + this.config.reservationTtlMs;
 
@@ -479,7 +479,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       return;
     }
 
-    const now = Date.now();
+    const now = this.nowFn();
     let releasedCount = 0;
     const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
     for (const row of rows) {

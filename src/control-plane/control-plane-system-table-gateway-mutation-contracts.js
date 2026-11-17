@@ -279,28 +279,21 @@ function resolveControlPlaneAttemptKey(result = {}) {
 }
 
 /**
- * Preserve non-empty attempt/request correlation keys across result normalization.
- * @param {Object} result
+ * The attempt correlation keys a normalized mutation result names. They have
+ * one source: the gateway's own submission context (the keys it delivered
+ * the attempt under), never a second read of the inner result.
  * @param {Object} context
  * @return {Object}
  */
-function resolveControlPlaneMutationAttemptContext(
-  result = {},
-  context = {},
-) {
-  const propagated = {};
+function resolveControlPlaneMutationAttemptContext(context) {
+  const attemptKeys = {};
   for (const field of CONTROL_PLANE_MUTATION_ATTEMPT_KEY_FIELDS) {
-    const existing = result?.[field];
-    if (typeof existing === 'string' && existing.length > 0) {
-      propagated[field] = existing;
-      continue;
-    }
-    const inherited = context?.[field];
-    if (typeof inherited === 'string' && inherited.length > 0) {
-      propagated[field] = inherited;
+    const value = context?.[field];
+    if (typeof value === 'string' && value.length > 0) {
+      attemptKeys[field] = value;
     }
   }
-  return propagated;
+  return attemptKeys;
 }
 
 function resolveControlPlaneDeadline(result = {}) {

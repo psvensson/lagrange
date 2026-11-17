@@ -3,6 +3,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {
@@ -168,7 +169,11 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
     connection_state: STATE.READY,
     capabilities: '[]',
     last_heartbeat: now - 1000,
-    ready_lease_expires_at: null,
+    // A READY row holds the live lease its last heartbeat was granted: this
+    // write is a renewal. (A READY row whose lease lapsed is not placement-
+    // eligible; the write that restores it is a READY transition - see
+    // test/control-plane/node-lifecycle-publication.test.js.)
+    ready_lease_expires_at: now + 14_000,
     created_at: now - 5000,
   };
 
@@ -268,11 +273,17 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
     0,
     'heartbeat-only READY should not enqueue cluster publication reconcile work',
   );
-  t.equal(
-    readyRetryEnqueues.length,
-    0,
+  // The service's initialization replays its cached READY row into the ready
+  // retry owner once (restart recovery, reason nodes_cache_ready); the
+  // heartbeat-only publication itself adds nothing to that owner path.
+  t.same(
+    readyRetryEnqueues.filter((entry) =>
+      entry.reason !== RECONCILE_REASON.NODES_CACHE_READY),
+    [],
     'heartbeat-only READY should not enqueue the ready retry owner path',
   );
+  t.ok(readyRetryEnqueues.length <= 1,
+    'at most the one initialization replay of the cached READY row');
   t.equal(
     publicationAcks.length,
     0,

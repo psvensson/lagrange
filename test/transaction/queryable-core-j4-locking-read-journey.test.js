@@ -198,11 +198,12 @@ test('J4: projection-independent canonical row identity (omitted and aliased PK 
     assert.deepEqual(Object.keys(res1.rows[0]), ['balance']);
     assert.equal(res1.rows[0].balance, 100);
 
-    // Verify canonical row accounts:accounts-p1:[1] is locked in SQLite backing
+    // Verify canonical row accounts:accounts-p1:1 is locked in SQLite backing
+    // (the row key is the canonical PK tuple key of the write footprint).
     const p1Db = partitionDbs.get('accounts-p1');
     const dbRow = p1Db.prepare(
       'SELECT * FROM _lagrange_locking_read_reservations WHERE table_name = ? AND row_key = ?',
-    ).get('accounts', 'accounts:accounts-p1:[1]');
+    ).get('accounts', 'accounts:accounts-p1:1');
     assert.ok(dbRow, 'canonical row identity must be recorded in partition SQLite table');
     assert.equal(dbRow.transaction_id, tx1.transactionId);
 
@@ -217,10 +218,10 @@ test('J4: projection-independent canonical row identity (omitted and aliased PK 
     assert.deepEqual(Object.keys(res2.rows[0]).sort(), ['account_key', 'balance']);
     assert.equal(res2.rows[0].account_key, 2);
 
-    // Verify row accounts:accounts-p1:[2] is locked
+    // Verify row accounts:accounts-p1:2 is locked
     const dbRow2 = p1Db.prepare(
       'SELECT * FROM _lagrange_locking_read_reservations WHERE table_name = ? AND row_key = ?',
-    ).get('accounts', 'accounts:accounts-p1:[2]');
+    ).get('accounts', 'accounts:accounts-p1:2');
     assert.ok(dbRow2, 'aliased PK query must lock canonical row identity');
     assert.equal(dbRow2.transaction_id, tx1.transactionId);
 
@@ -348,7 +349,7 @@ test('J4: commit release allows successor progress to observe committed state an
     const p1Db = partitionDbs.get('accounts-p1');
     const remaining = p1Db.prepare(
       'SELECT COUNT(*) as cnt FROM _lagrange_locking_read_reservations WHERE row_key = ?',
-    ).get('accounts:accounts-p1:[1]');
+    ).get('accounts:accounts-p1:1');
     assert.equal(remaining.cnt, 0, 'reservation must be released on COMMIT');
 
     // Successor session 2 acquires lock on id = 1
@@ -562,7 +563,7 @@ test('J4: durable partition SQLite reservation survives simulated coordinator st
       INSERT OR REPLACE INTO _lagrange_locking_read_reservations
       (partition_id, table_name, row_key, transaction_id, session_id, epoch, reserved_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('p1', 'accounts', 'accounts:p1:[42]', 'tx-persisted', 's-persisted', 1, Date.now(), Date.now() + 5000);
+    `).run('p1', 'accounts', 'accounts:p1:42', 'tx-persisted', 's-persisted', 1, Date.now(), Date.now() + 5000);
 
     // New transaction checking the partition DB must observe the conflict
     const conflictCheck = checkRowReservationConflict({
@@ -578,7 +579,7 @@ test('J4: durable partition SQLite reservation survives simulated coordinator st
     // Sweep expired reservations
     db.prepare(
       'UPDATE _lagrange_locking_read_reservations SET expires_at = ? WHERE row_key = ?',
-    ).run(Date.now() - 1000, 'accounts:p1:[42]');
+    ).run(Date.now() - 1000, 'accounts:p1:42');
 
     const swept = sweepExpiredReservations(db);
     assert.equal(swept, 1);

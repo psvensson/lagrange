@@ -338,10 +338,12 @@ test('a lagged READY is rebased to write time and granted a full lease',
     t.equal(durable.current().ready_lease_expires_at, NOW + READY_LEASE_MS);
   });
 
-// V3a (commit D): only the write that PROMOTES a non-READY row to READY is a
-// READY transition (critical admission). A write on a row that is already
-// READY - a lease renewal - keeps the cadence the heartbeat asked for, so the
-// override is never a standing critical lane for steady heartbeats.
+// V3a (commit D): only the write that makes a row placement-eligible - a
+// non-READY row promoted to READY, or a READY row whose lease lapsed
+// re-granted one - is a READY transition (critical admission). A write on a
+// row that already holds a live READY lease - a lease renewal - keeps the
+// cadence the heartbeat asked for, so the override is never a standing
+// critical lane for steady heartbeats.
 test('the READY_TRANSITION admission applies only to a non-READY -> READY ' +
   'write; a READY renewal keeps the requested cadence', async (t) => {
   const steady = {publicationMode: 'heartbeat_steady'};
@@ -360,6 +362,27 @@ test('the READY_TRANSITION admission applies only to a non-READY -> READY ' +
   t.equal(renewal.writes[0].options.workClass, 'background',
     'READY -> READY keeps the requested steady (background) cadence');
   t.equal(renewal.writes[0].options.deliveryPriority, 'background');
+  const lapsed = createDurableNodes(registeredRow({
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    ready_lease_expires_at: NOW - 1,
+  }));
+  t.equal((await createPublication(lapsed).publish(readyRequest(steady)))
+    .outcome, OUTCOME.APPLIED);
+  t.equal(lapsed.writes[0].options.workClass, 'critical',
+    'a READY row with a lapsed lease regains eligibility as a READY transition');
+  t.equal(lapsed.current().ready_lease_expires_at, NOW + READY_LEASE_MS,
+    'the transition grants a full lease');
+  const unleased = createDurableNodes(registeredRow({
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    ready_lease_expires_at: null,
+  }));
+  t.equal((await createPublication(unleased).publish(readyRequest(steady)))
+    .outcome, OUTCOME.APPLIED);
+  t.equal(unleased.writes[0].options.workClass, 'critical',
+    'a READY row without a recorded lease is not eligible: its READY write ' +
+    'is a READY transition');
 });
 
 test('the lease authority owns grant and expiry', (t) => {

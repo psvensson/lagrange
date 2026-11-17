@@ -54,8 +54,12 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
       cacheVisible: true,
       recoveredFromCacheGap: false,
       attempts: 1,
+      // The gateway result names the exact attempt it answers: the canonical
+      // mutation request key and the one idempotency key it delivered under.
       partitionResult: {
         success: true,
+        requestKey: updateOptions.recoveryCandidateSelectionKey,
+        idempotencyKey,
         outcome: 'applied',
         completionState: 'applied',
         contractState: 'ready',
