@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {sqlLength, sqlSubstr, sqlRound} from './sql-scalar-functions.js';
 import {
   SQL_COMPARISON_AFFINITY,
   applySqlComparisonAffinity,
@@ -10,8 +11,6 @@ import {
 const {QUERY_ERROR_CODE, QUERY_EXECUTOR_LITERAL} = QUERY_EXECUTOR_SHARED;
 const UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
 const INVALID_PARAMETER_NAN_MSG = 'Invalid parameter value: NaN is unrepresentable';
-const SUBSTR_WITH_LENGTH_ARG_COUNT = 3;
-const DECIMAL_BASE = 10;
 const GROUP_KEY_DELIMITER = '|';
 const LIKE_ESCAPE_REPLACEMENT = '\\$&';
 const LIKE_ANY_SEQ_PATTERN = '.*';
@@ -608,26 +607,12 @@ const queryExecutorSelectAggregationMethods = {
     case SCALAR_FN.TRIM:
       return a0Null ? null : String(a0).trim();
     case SCALAR_FN.LENGTH:
-      return a0Null ? null : String(a0).length;
+      return sqlLength(a0);
     case SCALAR_FN.SUBSTR:
-    case SCALAR_FN.SUBSTRING: {
-      if (a0Null || args[1] === null || args[1] === undefined) return null;
-      const text = String(a0);
-      const start = Math.trunc(Number(args[1]));
-      const zeroStart = start > 0 ? start - 1 :
-        (start < 0 ? Math.max(text.length + start, 0) : 0);
-      if (args.length < SUBSTR_WITH_LENGTH_ARG_COUNT) return text.slice(zeroStart);
-      if (args[2] === null || args[2] === undefined) return null;
-      const len = Math.max(Math.trunc(Number(args[2])), 0);
-      return text.slice(zeroStart, zeroStart + len);
-    }
-    case SCALAR_FN.ROUND: {
-      if (a0Null) return null;
-      const digits = args[1] === undefined || args[1] === null ?
-        0 : Math.trunc(Number(args[1]));
-      const factor = DECIMAL_BASE ** digits;
-      return Math.round(Number(a0) * factor) / factor;
-    }
+    case SCALAR_FN.SUBSTRING:
+      return sqlSubstr(...args);
+    case SCALAR_FN.ROUND:
+      return sqlRound(...args);
     default:
       return null;
     }

@@ -210,12 +210,10 @@ describe('query-budget-constants', () => {
         assert.equal(fromCamel[upperKey], 42);
         assert.equal(fromCamel[camelKey], 42);
 
-        const fromSqlRequestSpread = normalizeQueryBudget({
-          ...DEFAULT_QUERY_BUDGET,
-          [camelKey]: 42,
-        });
-        assert.equal(fromSqlRequestSpread[upperKey], 42);
-        assert.equal(fromSqlRequestSpread[camelKey], 42);
+        const equalAliases = normalizeQueryBudget({[upperKey]: 42, [camelKey]: 42});
+        assert.equal(equalAliases[upperKey], 42);
+        assert.equal(equalAliases[camelKey], 42);
+        assert.deepEqual(normalizeQueryBudget(equalAliases), equalAliases);
       }
     });
 
@@ -223,6 +221,21 @@ describe('query-budget-constants', () => {
       for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
         assert.throws(
           () => normalizeQueryBudget({[upperKey]: 128, [camelKey]: 1}),
+          (err) => err.message.includes(
+            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
+          ),
+        );
+      }
+    });
+
+    it('never infers an explicit default-valued field was omitted', () => {
+      for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+        const defaultValue = DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey];
+        assert.throws(
+          () => normalizeQueryBudget({
+            ...DEFAULT_EFFECTIVE_QUERY_BUDGET,
+            [camelKey]: defaultValue + 1,
+          }),
           (err) => err.message.includes(
             QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
           ),

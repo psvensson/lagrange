@@ -5,7 +5,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {createSqlRequest, isSqlRequest} from '../../src/query/sql-request.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
-import {DEFAULT_QUERY_BUDGET} from '../../src/wasm-service/query-budget-constants.js';
+import {
+  DEFAULT_EFFECTIVE_QUERY_BUDGET,
+  DEFAULT_QUERY_BUDGET,
+  QB_FIELD,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+} from '../../src/wasm-service/query-budget-constants.js';
 
 test('createSqlRequest - creates frozen request with defaults', (t) => {
   const req = createSqlRequest({statement: 'SELECT 1'});
@@ -120,6 +125,48 @@ test('createSqlRequest - merges budget overrides', (t) => {
     req.budgets.EMIT_MAX_BYTES,
     DEFAULT_QUERY_BUDGET.EMIT_MAX_BYTES,
   );
+  t.end();
+});
+
+test('createSqlRequest - normalizes caller budget fields before applying defaults', (t) => {
+  const override = 42;
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    for (const budgets of [
+      {[upperKey]: override},
+      {[camelKey]: override},
+      {[upperKey]: override, [camelKey]: override},
+    ]) {
+      const request = createSqlRequest({statement: 'SELECT 1', budgets});
+      t.equal(request.budgets[upperKey], override, `${upperKey} preserves the override`);
+      t.equal(request.budgets[camelKey], override, `${camelKey} names the same limit`);
+      t.ok(Object.isFrozen(request.budgets));
+    }
+  }
+  const camelBudgets = Object.fromEntries(
+    Object.values(QB_FIELD).map((key) => [key, override]),
+  );
+  const request = createSqlRequest({statement: 'SELECT 1', budgets: camelBudgets});
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    t.equal(request.budgets[upperKey], override);
+    t.equal(request.budgets[camelKey], override);
+  }
+  t.end();
+});
+
+test('createSqlRequest - rejects explicit budget conflicts even at default values', (t) => {
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    const defaultValue = DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey];
+    for (const budgets of [
+      {[upperKey]: defaultValue, [camelKey]: defaultValue + 1},
+      {[upperKey]: defaultValue + 1, [camelKey]: defaultValue},
+    ]) {
+      t.throws(
+        () => createSqlRequest({statement: 'SELECT 1', budgets}),
+        new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS),
+        `${upperKey} rejects contradictory caller values`,
+      );
+    }
+  }
   t.end();
 });
 
