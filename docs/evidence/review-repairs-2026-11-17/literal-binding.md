@@ -119,3 +119,155 @@ The original diagnostic asserts historical counts, so executing it unchanged
 against the correction is expected to fail those historical-count assertions.
 Use the retained native observations for old behavior and the retained public
 regression suite for corrected behavior; do not rewrite the historical witness.
+
+## Completed component proof, appended 2026-11-17
+
+### Unchanged scope and frozen source
+
+Root assigned this evidence-only follow-up after collecting and independently
+reviewing the native result. The writable scope for this follow-up is this
+record alone. The checker, private resolver, test, baseline and original
+assignment remain unchanged. The earlier pending status and proof plan above
+are retained as history; the observations below update the component proof
+status without claiming integration or final-gate completion.
+
+Managed proof [4938](https://github.com/psvensson/lagrange-lab/issues/4938),
+request `e66eb8cd04884868a2d4f89bec2e29ec`, executed on `local-workstation`
+with Node `v22.23.2`. Its source was remote preservation commit
+`7f13e35b224f26b7175fb63b2dc3187f0e14415f`, tree
+`075a692848e1f20ca653ca248129d1168a551bd7`. The local preservation commit
+`ad0f7fbe6790a7cb4e952098a81f9093075ba040` has that identical tree. The
+counterfactual used baseline `4b0c8ec1de59e9a074afa97ce260afb2868685c5`,
+tree `b17f89301e4ecace0a8fa852a6ebbefe91517105`, with only the exact
+candidate witness overlaid for its owner-suite run.
+
+| Frozen input | SHA-256 |
+| --- | --- |
+| `scripts/check-guideline-literals.js` | `f06c5dbee49c860efeb6535b9d8e33d8790669fa7829ec257dc97c3e17db1f6b` |
+| `scripts/literal-constant-bindings.js` | `a4c99803e37b092e420e8d03b70198e695047e0c9c37e2a4b9283596ceb6b35b` |
+| `test/scripts/check-guideline-literals.test.js` | `3feacb02f17a6253b958d1c7591ba3b68b237687ab4bb126482d6d6593f7078b` |
+| Unchanged literal baseline | `13b8ccfa55e4ffccc41aa1b839a80a835373bd58f2cba4b85c89c5b45e9e4c22` |
+
+### Actual regression and control observations
+
+Each source state ran the complete classified owner suite once through the
+existing `scripts/quest-evidence/harness-runtime.js`; retry was disabled.
+Both generated receipts name the same witness digest. The baseline receipt
+failed and its command exited 1; the candidate receipt passed and its command
+exited 0. The harness's receipt label does not create or seal a Quest.
+
+The baseline had 19 top-level subtests: 15 passed and four failed. Its 58 leaf
+assertions contained 33 passes and 25 failures. The first failure was the
+uppercase runtime-parameter counterexample. The other failing subtests cover
+runtime shadowing forms, unresolved/mutable/cyclic or shadowed intrinsic
+references, and preservation of the new findings in the filesystem report.
+The candidate passed all 19 subtests and all 58 leaf assertions. The classified
+runner reports 77 aggregate assertions because it includes the 19 parent
+subtest results; this is the same run, not a second measurement.
+
+The six original diagnostic inputs were also fed directly to both public
+scanners, preserving the observed violation records:
+
+| Original case | Baseline count | Candidate count |
+| --- | ---: | ---: |
+| Lowercase runtime parameter multiplied by `500` | 1 | 1 |
+| Uppercase runtime parameter `BUDGET` multiplied by `500` | 0 | 1 |
+| Actual module `const BUDGET = 10` multiplied by `500` | 0 | 0 |
+| Runtime parameter `freeze` called with `{waitMs: 500}` | 1 | 1 |
+| Same parameter shadowing module `const freeze = Object.freeze` | 0 | 1 |
+| Actual unshadowed module freeze alias with `{waitMs: 500}` | 0 | 0 |
+
+In the two repaired cases the new record identifies the literal `500` as
+`free_floating_number_literal`. The surrounding healthy controls remain
+unchanged. Native execution therefore discriminates the two demonstrated
+binding defects instead of merely showing that the process returned zero.
+
+### Identical-input scan and scoped checks
+
+The comparison completed all 2,499 selected baseline `src/` and `scripts/`
+files. Both public scanners received the same relative paths and source bytes,
+verified against the pinned Git blobs. The corpus manifest SHA-256 is
+`26f91552ffec92ae07a89d09340a3dd1d06a8463551ba930714eed90f8bbe7d7`.
+Old and new raw outputs each contain 4,729 records and are byte-identical,
+with SHA-256
+`a691bab59da186de8a32fc6d8473de840f1eb37b9ebd7502e14cb3b3d969d940`.
+There are zero added or removed identities or occurrences, zero changed files,
+and zero unbaselined records in either scan. The literal baseline was not
+re-anchored or otherwise changed.
+
+The complete candidate literal gate scanned 2,500 files, including the new
+private helper, and reported zero new violations and 4,729 inherited
+violations. This preserves existing debt; it does not claim a debt-free tree.
+Equality on this finite repository corpus does not replace the regression
+witnesses that demonstrate the corrected lexical classification.
+
+The native scoped results were:
+
+- ESLint and the file-size gate passed. The latter compared against exact
+  baseline `4b0c8ec1de59e9a074afa97ce260afb2868685c5`.
+- Scoped complexity and cognitive reports had zero violations both before and
+  after. The new helper separately passed strict thresholds 12 and 20.
+- The scoped literal audit scanned two files: zero new and one inherited
+  violation. The decision-boundary audit scanned two files with no violations.
+- The ambient-intrinsic command exited zero but scanned zero files. That
+  domain exclusion supplies no intrinsic-audit coverage for this unit.
+- The impact-contract registry passed with 98 contracts and 72 coupled pairs.
+
+### Collected evidence, review and remaining limits
+
+Root collected the complete worker stream and native log, then extracted and
+hash-verified all 99 artifact files under
+`/workspace/scratch/1d848e6f888d/takeover-literal-binding-proof-artifacts/`.
+The complete logs are
+`/workspace/scratch/1d848e6f888d/takeover-literal-binding-proof-worker.log`
+and `/workspace/scratch/1d848e6f888d/takeover-literal-binding-proof-native.log`.
+These collected bytes, rather than a native temporary-directory survival
+assumption, provide the retained proof. Installed worker release
+`53e262450fada3b4e706898201a3c732811ae4d0` treats its temporary workspace
+as disposable after scope closure through `generic_worker.py` and
+`run_retention.py`; unexported temporary files are not evidence held for later
+collection.
+
+The durable evidence collection contains 65 ordered pages, numbered 0 through
+64, for stream
+`13aa2d1be3fda84b52804e59e81c38398165430d4275ea02095cdf7d2760ec5a`:
+
+| Pages, inclusive | Evidence collection issues |
+| --- | --- |
+| 0 | [4949](https://github.com/psvensson/lagrange-lab/issues/4949) |
+| 1 | [4954](https://github.com/psvensson/lagrange-lab/issues/4954) |
+| 2-33 | [4957](https://github.com/psvensson/lagrange-lab/issues/4957) through [4988](https://github.com/psvensson/lagrange-lab/issues/4988), in order |
+| 34-64 | [4990](https://github.com/psvensson/lagrange-lab/issues/4990) through [5020](https://github.com/psvensson/lagrange-lab/issues/5020), in order |
+
+The first submitted envelopes for pages 1-64 used the wrong schema and were
+corrected before evidence admission. Those envelope corrections changed neither
+the data nor the stream; the collected worker bytes and hash below are unchanged.
+
+| Collected evidence | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Complete worker log | 517547 | `05388006e51b759e567813c0599a191c957f37dac71d07d2c267afe7dd8c7cb8` |
+| Complete native log | 3580645 | `5e4ad951fa97c27018b3b33c25435ecdf7bbc55ce30b92f30faefeaed63f53db` |
+| `baseline.receipt.json` | 1001 | `02f459b451c60523c3ef623824c70d3be12c1b9327a624888d4e0add3784f4e0` |
+| `candidate.receipt.json` | 803 | `6b43b5844e74120e1a7649ea74bf7d6364a1519702f03691af0f628c5971a735` |
+| `baseline.full.tap` | 24819 | `c0e414fbea766742cf435b66937ad77da3405ab0293a3d2c868e46d4f93f4735` |
+| `candidate.full.tap` | 6421 | `3323f5f40fead41e94f0355cb27aaf8fdea956566a11cf089c94c03c48aa5069` |
+| `comparison/comparison-status.json` | 639 | `8db035976b7ed9c353973f88ea22107207596f58b5cac2c309017573faa507e7` |
+| `comparison/original-witness-observations.json` | 3691 | `3b48092f40201c6e71343f2d8a1b50aceb520b4939d09fb96c25672189142859` |
+
+The native result records `baseline_exit=1`, `candidate_exit=0`,
+`verification_failures=0`, `capture_failed=0`, `interrupted=0`, and final
+exit 0. The worker stream records baseline-worktree closure after evidence
+emission. Complete classified stdout/stderr, TAP/stderr, runner manifests,
+commands, exit statuses, raw scanner records, per-file counts and comparison
+artifacts remain among the collected files; an empty stderr is retained as an
+empty artifact rather than silently omitted.
+
+Root independently reviewed the frozen checker, resolver, tests and record,
+then accepted the completed component-proof condition after inspecting these
+native results and the identical-input comparison. This author records that
+verdict without substituting self-review for it. Root still owns review of this
+documentation follow-up, generated metadata, applicability to the collected
+integration candidate, integration and exact-candidate final gates. No final
+gate, merge, publication, product-service readiness, GCP measurement, or release
+acceptance is claimed here. No local project test, audit, build or generator
+was executed for this follow-up.
