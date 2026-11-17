@@ -8,7 +8,7 @@ const SOURCE = Object.freeze({
   JOB_OWNER: 'src/query/schema-provisioning-job-owner.js',
   JOB_REPOSITORY: 'src/query/schema-provisioning-job-repository.js',
   LIFECYCLE: 'src/query/sql-query-engine-lifecycle-and-callback-dispatch.js',
-  PG_HANDLER: 'src/runtime/pgwire-protocol-handler.js',
+  PG_RESULT_MAPPER: 'src/runtime/pgwire-result-mapper.js',
   PG_CONSTANTS: 'src/runtime/pgwire-protocol-constants.js',
   PROVISIONING: 'src/query/sql-query-engine-initial-partition-provisioning.js',
   REPLICA_OWNER:
@@ -27,7 +27,7 @@ test('durable provisioning owner trace stays on canonical owners', (t) => {
   const replicaOwner = read(SOURCE.REPLICA_OWNER);
   const lifecycle = read(SOURCE.LIFECYCLE);
   const admin = read(SOURCE.ADMIN);
-  const pgHandler = read(SOURCE.PG_HANDLER);
+  const pgResultMapper = read(SOURCE.PG_RESULT_MAPPER);
   const pgConstants = read(SOURCE.PG_CONSTANTS);
 
   t.match(durableTableCreation, /schemaProvisioningJobOwner\.execute/u);
@@ -57,7 +57,7 @@ test('durable provisioning owner trace stays on canonical owners', (t) => {
 
   t.match(admin, /message\.jobId = value\.jobId/u);
   t.match(pgConstants, /LOCK_NOT_AVAILABLE: '55P03'/u);
-  t.match(pgHandler, /provisioning_job_id/u);
-  t.match(pgHandler, /retry_after_ms/u);
+  t.match(pgResultMapper, /provisioning_job_id/u);
+  t.match(pgResultMapper, /retry_after_ms/u);
   t.end();
 });

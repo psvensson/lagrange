@@ -40,11 +40,17 @@ function harness() {
   return {engine, messages, gateway};
 }
 
-for (const [name, sql, partitions] of [
-  ['table', 'SELECT id FROM users', ['users-p']],
-  ['fromless', 'SELECT 1 AS id', ['users-p']],
+// Declared-column-affinity schema reads the join path issues once per joined
+// table (query-executor-join-execution ensureQueryColumnAffinities). They are
+// participant QUERY messages like the data reads and must carry the same
+// session, transaction and participant identity.
+const AFFINITY_SCHEMA_READ_SQL = /FROM sqlite_master WHERE type = 'table'/u;
+
+for (const [name, sql, partitions, affinityReadCount] of [
+  ['table', 'SELECT id FROM users', ['users-p'], 0],
+  ['fromless', 'SELECT 1 AS id', ['users-p'], 0],
   ['join', 'SELECT u.id FROM users u JOIN items i ON u.id = i.id',
-    ['users-p', 'items-p']],
+    ['users-p', 'items-p'], 2],
 ]) {
   test(`TX1 Q5: ${name} SELECT enlists and carries its session identity`,
     async (t) => {
@@ -57,7 +63,10 @@ for (const [name, sql, partitions] of [
       const tx = engine.transactionCoordinator.getTransaction('reader');
       assert.deepEqual([...tx.participants].sort(), partitions.sort());
       const queries = messages.filter((message) => message.type === 'QUERY');
-      assert.equal(queries.length, partitions.length);
+      const affinityReads = queries.filter((query) =>
+        AFFINITY_SCHEMA_READ_SQL.test(query.sql));
+      assert.equal(affinityReads.length, affinityReadCount);
+      assert.equal(queries.length - affinityReads.length, partitions.length);
       for (const query of queries) {
         const partitionId = query.address.split('/').at(-1);
         assert.equal(query.sessionId, 'reader');

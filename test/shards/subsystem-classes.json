@@ -28,7 +28,7 @@
   "censusSize": 2664,
   "digest": "fnv1a32-3e475f12",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-81452bfc",
+  "observationDigest": "fnv1a32-78b5a99e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14203,7 +14203,7 @@
         "src/query/table-creation-service-durable-job.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/runtime/pgwire-protocol-constants.js",
-        "src/runtime/pgwire-protocol-handler.js"
+        "src/runtime/pgwire-result-mapper.js"
       ]
     },
     "test/query/execute-request.test.js": {
