@@ -377,6 +377,46 @@ function remainingFormationMs(ctx) {
   return ctx.deadlineAtMs - ctx.now();
 }
 
+function resolveLagrangeImageAndVersion(opts) {
+  const rawImage = opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT;
+  return {
+    image: resolveLagrangeContainerImage(opts),
+    expectedVersion: opts.lagrangeVersion || semverTagOf(rawImage),
+  };
+}
+
+function buildLagrangeFormationBudget(opts) {
+  return Object.freeze({
+    ...resolveReadinessBudget(opts),
+    attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS,
+  });
+}
+
+async function attachFormationCleanupAndRolesOnError({
+  error,
+  formationTracker,
+  roles,
+  opts,
+  clientIp,
+  hosts,
+  campaignId,
+  sshRun,
+  cleanOpts,
+}) {
+  await formationTracker.settleInFlight();
+  if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
+    error.roles = [...roles];
+  }
+  if (opts.cleanupOnFailure) {
+    error.cleanup = await removeCampaignContainers({
+      hosts: clientIp ? [...hosts, clientIp] : hosts,
+      campaignId,
+      sshRun,
+      opts: cleanOpts,
+    });
+  }
+}
+
 /**
  * @param {{hosts: Array<string>, clientIp: string, sshRun: Function,
  *   opts: Object, campaignId: string, sleep: Function, signal?: AbortSignal|null,
@@ -388,9 +428,7 @@ function remainingFormationMs(ctx) {
 async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campaignId, sleep,
   signal = null, deadlineAtMs = null, deadlineMs = null, now, nowFn}) {
   requireCampaignId(campaignId);
-  const rawImage = opts.lagrangeImage || opts.image || LAGRANGE_IMAGE_DEFAULT;
-  const image = resolveLagrangeContainerImage(opts);
-  const expectedVersion = opts.lagrangeVersion || semverTagOf(rawImage);
+  const {image, expectedVersion} = resolveLagrangeImageAndVersion(opts);
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
   const clock = resolveFormationClock(now, nowFn, opts);
@@ -404,8 +442,7 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
     callerDeadlineMs: deadlineMs ?? opts.deadlineMs,
     callerSignal: abortSignal,
   });
-  const budget = Object.freeze({...resolveReadinessBudget(opts),
-    attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS});
+  const budget = buildLagrangeFormationBudget(opts);
   const formationTracker = createTrackedSshRun(sshRun, formationWindow.signal);
   const ctx = {
     sshRun: formationTracker.trackedSshRun,
@@ -476,18 +513,17 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
       },
     );
   } catch (error) {
-    await formationTracker.settleInFlight();
-    if (error && typeof error === 'object' && !arrayIsArray(error.roles)) {
-      error.roles = [...roles];
-    }
-    if (opts.cleanupOnFailure) {
-      error.cleanup = await removeCampaignContainers({
-        hosts: clientIp ? [...hosts, clientIp] : hosts,
-        campaignId,
-        sshRun,
-        opts: cleanOpts,
-      });
-    }
+    await attachFormationCleanupAndRolesOnError({
+      error,
+      formationTracker,
+      roles,
+      opts,
+      clientIp,
+      hosts,
+      campaignId,
+      sshRun,
+      cleanOpts,
+    });
     throw error;
   }
 }
@@ -516,13 +552,8 @@ async function startLagrangeNode({sshRun, opts, host, seedHost, image, connectio
   return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
 }
 
-async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, roles, nodeReadiness,
-  formed, campaignId}) {
-  const {sshRun, opts} = ctx;
-  const seedHost = hosts[0];
-  await prepareNodeStorage({sshRun, opts, host: seedHost, campaignId, index: 0});
-  roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
-    campaignId, index: 0}));
+async function startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId,
+  roles}) {
   const joinerIndices = [];
   for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
   let cancelled = false;
@@ -556,6 +587,42 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     }
     throw reason;
   }
+}
+
+function assertExpectedLagrangeRevision(products, expectedRevision) {
+  if (!expectedRevision) return;
+  const wrong = arrayFilter(products, (product) =>
+    revisionLabelOf(product) !== expectedRevision);
+  if (wrong.length > 0) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `image revision label differs from ${expectedRevision}`,
+      {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
+  }
+}
+
+async function readSystemTablesForReady(postQuery, readyCtx) {
+  try {
+    return await readSystemTables(postQuery, readyCtx);
+  } catch (error) {
+    if (isDeploymentFailure(error)) throw error;
+    const classified = classifyRemoteCommandError(error);
+    if (error?.aborted === true || error?.deadlineExpired === true ||
+        classified.aborted || classified.deadlineExpired ||
+        readyCtx.signal?.aborted) {
+      throw toReadinessExhausted('lagrange-system-tables', error, readyCtx);
+    }
+    throw error;
+  }
+}
+
+async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, roles, nodeReadiness,
+  formed, campaignId}) {
+  const {sshRun, opts} = ctx;
+  const seedHost = hosts[0];
+  await prepareNodeStorage({sshRun, opts, host: seedHost, campaignId, index: 0});
+  roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
+    campaignId, index: 0}));
+  await startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId, roles});
   ctx.watchedRoles = [...roles];
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
@@ -586,15 +653,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
       versionPattern: versionPatternOf(image, ctx.expectedVersion),
       expectedSrcFingerprint: opts.lagrangeSrcFingerprint || opts.expectedSrcFingerprint || null,
       expectedGitCommit: opts.expectedGitCommit || null}});
-  if (opts.lagrangeRevision) {
-    const wrong = arrayFilter(products, (product) =>
-      revisionLabelOf(product) !== opts.lagrangeRevision);
-    if (wrong.length > 0) {
-      throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-        `image revision label differs from ${opts.lagrangeRevision}`,
-        {hosts: arrayMap(wrong, (one) => [one.host, revisionLabelOf(one)])});
-    }
-  }
+  assertExpectedLagrangeRevision(products, opts.lagrangeRevision);
   const bindRemainingMs = remainingFormationMs(ctx);
   if (bindRemainingMs !== null && bindRemainingMs <= 0) {
     throw toReadinessExhausted(
@@ -720,19 +779,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
             postQuery,
             nodeRoles,
           );
-          let tables;
-          try {
-            tables = await readSystemTables(postQuery, readyCtx);
-          } catch (error) {
-            if (isDeploymentFailure(error)) throw error;
-            const classified = classifyRemoteCommandError(error);
-            if (error?.aborted === true || error?.deadlineExpired === true ||
-                classified.aborted || classified.deadlineExpired ||
-                readyCtx.signal?.aborted) {
-              throw toReadinessExhausted('lagrange-system-tables', error, readyCtx);
-            }
-            throw error;
-          }
+          const tables = await readSystemTablesForReady(postQuery, readyCtx);
           const presentCanonical = arrayFilter(
             arrayMap(CANONICAL_TABLES, (table) => table.name),
             (name) => arraySome(tables.partitions, (row) => row.table_name === name),

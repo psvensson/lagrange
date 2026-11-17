@@ -385,6 +385,80 @@ function advanceOriginalRightToTransferred(db, member, right) {
   });
 }
 
+function collectPersistedFounderReplicaIds(
+  dataDir,
+  {includeAnchor, includeMg, extraReplicaIds},
+) {
+  const persistedReplicaIds = new Set(extraReplicaIds);
+  if (includeAnchor) {
+    persistedReplicaIds.add(originalSeedAnchor(dataDir).replicaId);
+  }
+  if (includeMg) {
+    for (const replicaId of INITIAL_MESSAGE_GROUP_REPLICA_IDS) {
+      persistedReplicaIds.add(replicaId);
+    }
+  }
+  return persistedReplicaIds;
+}
+
+async function openFounderMemberDbs(draft, persistedReplicaIds, dbs) {
+  const incarnations = new Map();
+  for (const member of draft.members) {
+    const persistOnDisk = persistedReplicaIds.has(member.replicaId);
+    if (persistOnDisk) {
+      await mkdir(dirname(member.dbPath), {recursive: true});
+    }
+    const db = new Database(persistOnDisk ? member.dbPath : ':memory:');
+    dbs.set(member.replicaId, db);
+    const born = db.transaction(() =>
+      prepareReplicaLifecycleForOriginalAllocation({
+        db,
+        groupId: member.groupId,
+        peerId: member.peerId,
+        replicaIdentity: member.replicaId,
+      }),
+    )();
+    incarnations.set(member.replicaId, born.detail.incarnation);
+  }
+  return incarnations;
+}
+
+async function applyFounderMemberAllocationState(
+  db,
+  declaration,
+  member,
+  {transferred, retireSet},
+) {
+  prepareOriginalAllocationRow({db, declaration, member});
+  const isAnchor = member.replicaId === declaration.anchorReplicaId;
+  if (isAnchor) {
+    markOriginalAllocationIssued({db, declaration, anchor: member});
+  }
+  if (transferred) {
+    advanceOriginalRightToTransferred(
+      db,
+      member,
+      ORIGINAL_ALLOCATION_COLUMN.SERVICE_RIGHT,
+    );
+    if (isAnchor) {
+      advanceOriginalRightToTransferred(
+        db,
+        member,
+        ORIGINAL_ALLOCATION_COLUMN.IDENTITY_RIGHT,
+      );
+    }
+  }
+  if (retireSet.has(member.replicaId)) {
+    const owner = new RaftRsReplicaLifecycleOwner({
+      db,
+      groupId: member.groupId,
+      peerId: member.peerId,
+      replicaIdentity: member.replicaId,
+    });
+    await owner.retire('retired-by-drain');
+  }
+}
+
 async function seedCompletedOriginalFounderDbs(
   dataDir,
   {
@@ -404,37 +478,19 @@ async function seedCompletedOriginalFounderDbs(
     ...identity,
     now: TEST_DECLARED_AT,
   });
-  const anchorReplicaId = originalSeedAnchor(dataDir).replicaId;
-  const persistedReplicaIds = new Set(extraReplicaIds);
-  if (includeAnchor) {
-    persistedReplicaIds.add(anchorReplicaId);
-  }
-  if (includeMg) {
-    for (const replicaId of INITIAL_MESSAGE_GROUP_REPLICA_IDS) {
-      persistedReplicaIds.add(replicaId);
-    }
-  }
+  const persistedReplicaIds = collectPersistedFounderReplicaIds(dataDir, {
+    includeAnchor,
+    includeMg,
+    extraReplicaIds,
+  });
   const retireSet = new Set(retireReplicaIds);
   const dbs = new Map();
-  const incarnations = new Map();
   try {
-    for (const member of draft.members) {
-      const persistOnDisk = persistedReplicaIds.has(member.replicaId);
-      if (persistOnDisk) {
-        await mkdir(dirname(member.dbPath), {recursive: true});
-      }
-      const db = new Database(persistOnDisk ? member.dbPath : ':memory:');
-      dbs.set(member.replicaId, db);
-      const born = db.transaction(() =>
-        prepareReplicaLifecycleForOriginalAllocation({
-          db,
-          groupId: member.groupId,
-          peerId: member.peerId,
-          replicaIdentity: member.replicaId,
-        }),
-      )();
-      incarnations.set(member.replicaId, born.detail.incarnation);
-    }
+    const incarnations = await openFounderMemberDbs(
+      draft,
+      persistedReplicaIds,
+      dbs,
+    );
     const declaration = completeSeedOriginalAllocation(
       draft,
       incarnations,
@@ -444,34 +500,12 @@ async function seedCompletedOriginalFounderDbs(
       if (!persistedReplicaIds.has(member.replicaId)) {
         continue;
       }
-      const db = dbs.get(member.replicaId);
-      prepareOriginalAllocationRow({db, declaration, member});
-      if (member.replicaId === declaration.anchorReplicaId) {
-        markOriginalAllocationIssued({db, declaration, anchor: member});
-      }
-      if (transferred) {
-        advanceOriginalRightToTransferred(
-          db,
-          member,
-          ORIGINAL_ALLOCATION_COLUMN.SERVICE_RIGHT,
-        );
-        if (member.replicaId === declaration.anchorReplicaId) {
-          advanceOriginalRightToTransferred(
-            db,
-            member,
-            ORIGINAL_ALLOCATION_COLUMN.IDENTITY_RIGHT,
-          );
-        }
-      }
-      if (retireSet.has(member.replicaId)) {
-        const owner = new RaftRsReplicaLifecycleOwner({
-          db,
-          groupId: member.groupId,
-          peerId: member.peerId,
-          replicaIdentity: member.replicaId,
-        });
-        await owner.retire('retired-by-drain');
-      }
+      await applyFounderMemberAllocationState(
+        dbs.get(member.replicaId),
+        declaration,
+        member,
+        {transferred, retireSet},
+      );
     }
   } finally {
     for (const db of dbs.values()) {

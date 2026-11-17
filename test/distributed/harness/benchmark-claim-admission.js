@@ -495,46 +495,70 @@ function checkFinalState(run) {
     [ADMISSION_REASON.FINAL_STATE_UNRECONCILED];
 }
 
-function gateBindingHolds(run, binding, gate = null) {
-  if (!binding) return false;
+function createDeploymentBindingMatcher(run) {
   const endpoint = run.deployment.endpoint;
   const product = arrayFind(run.identity.products,
     (p) => p.containerId === endpoint.containerId);
   const expectedEndpoint = `${endpoint.host}:${endpoint.port}`;
-  const matches = (b) => Boolean(b) &&
+  const productImageId = product?.imageId;
+  return (b) => Boolean(b) &&
     b.campaignId === run.campaignId &&
     b.containerId === endpoint.containerId &&
-    b.imageId === product?.imageId &&
+    b.imageId === productImageId &&
     b.endpoint === expectedEndpoint;
-  if (!matches(binding)) return false;
-  const checkedGate = gate || run.correctness?.semanticGate;
-  if (checkedGate?.bindings && Array.isArray(checkedGate.bindings)) {
-    if (!arrayEvery(checkedGate.bindings, matches)) return false;
-  }
-  if (checkedGate?.cases && Array.isArray(checkedGate.cases)) {
-    for (const c of checkedGate.cases) {
-      if (c.binding && !matches(c.binding)) return false;
-    }
+}
+
+function gateCaseBindingsHold(cases, matches) {
+  if (!Array.isArray(cases)) return true;
+  for (const c of cases) {
+    if (c.binding && !matches(c.binding)) return false;
   }
   return true;
 }
 
+function gateBindingHolds(run, binding, gate = null) {
+  if (!binding) return false;
+  const matches = createDeploymentBindingMatcher(run);
+  if (!matches(binding)) return false;
+  const checkedGate = gate || run.correctness?.semanticGate;
+  if (!checkedGate) return true;
+  if (Array.isArray(checkedGate.bindings) && !arrayEvery(checkedGate.bindings, matches)) {
+    return false;
+  }
+  return gateCaseBindingsHold(checkedGate.cases, matches);
+}
+
+function isDurabilityProofCase(proofCase) {
+  return proofCase.caseId === 'durability' ||
+    proofCase.caseId === 'scenario-a-durable-commit-v1';
+}
+
+function hasDurabilityRestartEvidence(proofCase) {
+  return Boolean(
+    proofCase.faultEvidence ||
+    proofCase.observation?.faultEvidence ||
+    proofCase.proofRecord?.actual?.faultEvidence ||
+    proofCase.restartedAt ||
+    proofCase.restartEvidence,
+  );
+}
+
+function isAdmissibleAwardedCase(proofCase) {
+  if (proofCase.status !== 'passed' && proofCase.status !== 'executed') return false;
+  return !isDurabilityProofCase(proofCase) || hasDurabilityRestartEvidence(proofCase);
+}
+
 function awardedProofIds(gate) {
   if (!gate) return [];
-  if (Array.isArray(gate.cases)) {
-    const passedIds = new Set();
-    for (const c of gate.cases) {
-      if (c.status !== 'passed' && c.status !== 'executed') continue;
-      if (c.caseId === 'durability' || c.caseId === 'scenario-a-durable-commit-v1') {
-        const hasRestart = Boolean(c.faultEvidence || c.observation?.faultEvidence ||
-          c.proofRecord?.actual?.faultEvidence || c.restartedAt || c.restartEvidence);
-        if (!hasRestart) continue;
-      }
-      for (const id of c.proofIds || []) passedIds.add(id);
-    }
-    return [...passedIds].sort();
+  if (!Array.isArray(gate.cases)) {
+    return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
   }
-  return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
+  const passedIds = new Set();
+  for (const c of gate.cases) {
+    if (!isAdmissibleAwardedCase(c)) continue;
+    for (const id of c.proofIds || []) passedIds.add(id);
+  }
+  return [...passedIds].sort();
 }
 
 // Capacity runs need a passed gate; a smoke run may carry an incomplete gate,
@@ -552,42 +576,47 @@ function gateCaseReasons(gate) {
     `${ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE}:${entry.caseId}:${entry.kind}`));
 }
 
+function missingSemanticGateReasons(run) {
+  // The chain has no gate client for this system (the gate stage said so):
+  // the claim is unsupported, naming the missing client (decision 1,
+  // 2026-11-02); a gate record that is simply absent stays missing.
+  const notRun = arrayFind(run.harnessEvents || [],
+    (event) => event.kind === GATE_NOT_RUN_EVENT && typeof event.missingClient === 'string');
+  return [notRun ? `${ADMISSION_REASON.SEMANTIC_GATE_CLIENT_MISSING}:${notRun.missingClient}` :
+    ADMISSION_REASON.SEMANTIC_GATE_MISSING];
+}
+
+function gateCasesRequireBlockingReason(gate) {
+  if (!Array.isArray(gate.cases)) return false;
+  return arraySome(gate.cases, (c) =>
+    c.status === 'not-executed' ||
+    c.status === 'skipped' ||
+    (isDurabilityProofCase(c) && !hasDurabilityRestartEvidence(c)));
+}
+
+function nonPassedSemanticGateReason(gate, profileClass) {
+  const isIncompleteSmoke = gate.status === GATE_STATUS.INCOMPLETE &&
+    profileClass === BENCHMARK_PROFILE_CLASS.SMOKE;
+  return isIncompleteSmoke ?
+    ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
+    ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED;
+}
+
 function checkSemanticGate(run) {
   const gate = run.correctness.semanticGate;
-  if (!gate) {
-    // The chain has no gate client for this system (the gate stage said so):
-    // the claim is unsupported, naming the missing client (decision 1,
-    // 2026-11-02); a gate record that is simply absent stays missing.
-    const notRun = arrayFind(run.harnessEvents || [],
-      (event) => event.kind === GATE_NOT_RUN_EVENT && typeof event.missingClient === 'string');
-    return [notRun ? `${ADMISSION_REASON.SEMANTIC_GATE_CLIENT_MISSING}:${notRun.missingClient}` :
-      ADMISSION_REASON.SEMANTIC_GATE_MISSING];
-  }
+  if (!gate) return missingSemanticGateReasons(run);
   if (!gateBindingHolds(run, gate.binding, gate)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
-  if (Array.isArray(gate.cases)) {
-    const hasUnexecuted = arraySome(gate.cases, (c) =>
-      c.status === 'not-executed' || c.status === 'skipped');
-    const hasDurabilityAnomaly = arraySome(gate.cases, (c) => {
-      if (c.caseId !== 'durability' && c.caseId !== 'scenario-a-durable-commit-v1') return false;
-      const hasRestart = Boolean(c.faultEvidence || c.observation?.faultEvidence ||
-        c.proofRecord?.actual?.faultEvidence || c.restartedAt || c.restartEvidence);
-      return !hasRestart;
-    });
-    if (hasUnexecuted || hasDurabilityAnomaly) {
-      return [run.plan?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
-        ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
-        ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
-    }
+  if (gateCasesRequireBlockingReason(gate)) {
+    return [run.plan?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
+      ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
+      ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
   }
   if (gate.status === GATE_STATUS.PASSED) return [];
   const details = gateCaseReasons(gate);
   if (gate.status === GATE_STATUS.FAILED) {
     return [ADMISSION_REASON.SEMANTIC_GATE_FAILED, ...details];
   }
-  return [gate.status === GATE_STATUS.INCOMPLETE &&
-    run.plan.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
-    ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
-    ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED, ...details];
+  return [nonPassedSemanticGateReason(gate, run.plan.profileClass), ...details];
 }
 
 // A detail reason explains its base reason and blocks exactly when it does.

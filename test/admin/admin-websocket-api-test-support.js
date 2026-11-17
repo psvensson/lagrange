@@ -139,11 +139,74 @@ export function getAuthoritativeRepairReadTables(statements = []) {
  * @param {Object<string, Array<Object>|Function>} [options.readRowsByTable]
  * @return {Object}
  */
+function cloneRows(rows) {
+  return Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
+}
+
+async function queryEngineRowsForTable(queryEngine, tableName, readIntent) {
+  const statement = readIntent && readIntent.sql ?
+    readIntent.sql :
+    `SELECT * FROM ${tableName}`;
+  const params = readIntent && Array.isArray(readIntent.params) ?
+    readIntent.params :
+    [];
+  const queryResult = await queryEngine.executeRequest({statement, params});
+  if (!queryResult || queryResult.success !== true) {
+    return null;
+  }
+  return cloneRows(queryResult.rows);
+}
+
+function parseReadIntentTableName(readIntent) {
+  const statement = String((readIntent && readIntent.sql) || '').trim();
+  const statementMatch = statement.match(/^select \* from ([a-z_]+)$/i);
+  const rawName = (readIntent && readIntent.tableName) ||
+    (statementMatch && statementMatch[1]) ||
+    '';
+  return {
+    statement,
+    tableName: String(rawName).trim().toLowerCase(),
+  };
+}
+
+function indexRowsByFieldKey(rows, keyField) {
+  const list = Array.isArray(rows) ? rows : [];
+  return new Map(
+    list
+      .map((row) => [String((row && row[keyField]) || ''), row])
+      .filter(([key]) => key.length > 0),
+  );
+}
+
+function applyAuthoritativeRowMutations(
+  cacheTarget,
+  tableName,
+  cachedByKey,
+  authoritativeByKey,
+) {
+  let mutationCount = 0;
+  for (const [key, row] of authoritativeByKey.entries()) {
+    cacheTarget.applySystemTableChange(
+      tableName,
+      cachedByKey.has(key) ? 'UPDATE' : 'INSERT',
+      {...row},
+    );
+    mutationCount += 1;
+  }
+  for (const [key, row] of cachedByKey.entries()) {
+    if (authoritativeByKey.has(key)) {
+      continue;
+    }
+    cacheTarget.applySystemTableChange(tableName, 'DELETE', {...row});
+    mutationCount += 1;
+  }
+  return mutationCount;
+}
+
 export function createAuthoritativeCacheGateway(writableCache, options = {}) {
   const queryEngine = options.queryEngine || null;
   const readRowsByTable = options.readRowsByTable || {};
   const executeReadCalls = [];
-  const cloneRows = (rows) => Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
   const resolveAuthoritativeRows = async (tableName, readIntent = {}) => {
     const tableOverride = readRowsByTable[tableName];
     if (typeof tableOverride === 'function') {
@@ -152,38 +215,21 @@ export function createAuthoritativeCacheGateway(writableCache, options = {}) {
     if (Array.isArray(tableOverride)) {
       return cloneRows(tableOverride);
     }
-
     if (queryEngine && typeof queryEngine.executeRequest === 'function') {
-      const queryResult = await queryEngine.executeRequest({
-        statement: readIntent?.sql || `SELECT * FROM ${tableName}`,
-        params: Array.isArray(readIntent?.params) ? readIntent.params : [],
-      });
-      if (queryResult?.success !== true) {
-        return null;
-      }
-      return cloneRows(queryResult?.rows);
+      return queryEngineRowsForTable(queryEngine, tableName, readIntent);
     }
-
-    return cloneRows(writableCache?.getAll(tableName));
+    return cloneRows(writableCache ? writableCache.getAll(tableName) : []);
   };
 
   return {
     executeReadCalls,
     async executeRead(readIntent = {}, readOptions = {}) {
-      const statement = String(readIntent?.sql || '').trim();
-      const statementMatch = statement.match(/^select \* from ([a-z_]+)$/i);
-      const tableName = String(
-        readIntent?.tableName ||
-          statementMatch?.[1] ||
-          '',
-      )
-        .trim()
-        .toLowerCase();
+      const {statement, tableName} = parseReadIntentTableName(readIntent);
       executeReadCalls.push({
         tableName,
         sql: statement,
-        strategy: readIntent?.strategy || null,
-        owner: readIntent?.owner || null,
+        strategy: (readIntent && readIntent.strategy) || null,
+        owner: (readIntent && readIntent.owner) || null,
         options: {...readOptions},
       });
       if (tableName.length === 0) {
@@ -203,6 +249,7 @@ export function createAuthoritativeCacheGateway(writableCache, options = {}) {
           error: 'authoritative_query_failed',
         };
       }
+      const sessionId = readOptions && readOptions.sessionId;
       return {
         success: true,
         tableName,
@@ -212,8 +259,7 @@ export function createAuthoritativeCacheGateway(writableCache, options = {}) {
           scope: 'complete_table',
           tableName,
           observedAtMs: Date.now(),
-          causeId: readOptions?.sessionId ||
-            `test-authoritative-read:${tableName}`,
+          causeId: sessionId || `test-authoritative-read:${tableName}`,
           rowSetComplete: true,
         },
       };
@@ -221,48 +267,27 @@ export function createAuthoritativeCacheGateway(writableCache, options = {}) {
     async reconcileAuthoritativeCacheRows(
       tableName,
       authoritativeRows,
-      options = {},
+      reconcileOpts = {},
     ) {
-      const cacheTarget = options.cacheMutationTarget || writableCache;
-      const keyField =
-        options.primaryKeyField || getSystemCachePrimaryKeyField(tableName);
-      const cachedRows = Array.isArray(options.cachedRows) ?
-        options.cachedRows :
+      const cacheTarget = reconcileOpts.cacheMutationTarget || writableCache;
+      const keyField = reconcileOpts.primaryKeyField ||
+        getSystemCachePrimaryKeyField(tableName);
+      const cachedRows = Array.isArray(reconcileOpts.cachedRows) ?
+        reconcileOpts.cachedRows :
         cacheTarget.getAll(tableName);
-      const cachedByKey = new Map(
-        cachedRows
-          .map((row) => [String(row?.[keyField] || ''), row])
-          .filter(([key]) => key.length > 0),
+      const cachedByKey = indexRowsByFieldKey(cachedRows, keyField);
+      const authoritativeByKey = indexRowsByFieldKey(authoritativeRows, keyField);
+      const mutationCount = applyAuthoritativeRowMutations(
+        cacheTarget,
+        tableName,
+        cachedByKey,
+        authoritativeByKey,
       );
-      const authoritativeByKey = new Map(
-        (Array.isArray(authoritativeRows) ? authoritativeRows : [])
-          .map((row) => [String(row?.[keyField] || ''), row])
-          .filter(([key]) => key.length > 0),
-      );
-      let mutationCount = 0;
-
-      for (const [key, row] of authoritativeByKey.entries()) {
-        cacheTarget.applySystemTableChange(
-          tableName,
-          cachedByKey.has(key) ? 'UPDATE' : 'INSERT',
-          {...row},
-        );
-        mutationCount += 1;
-      }
-
-      for (const [key, row] of cachedByKey.entries()) {
-        if (authoritativeByKey.has(key)) {
-          continue;
-        }
-        cacheTarget.applySystemTableChange(tableName, 'DELETE', {...row});
-        mutationCount += 1;
-      }
-
+      const obs = reconcileOpts.authoritativeObservation;
       return {
         success: true,
         mutationCount,
-        authoritativeObservedAtMs:
-          options?.authoritativeObservation?.observedAtMs || null,
+        authoritativeObservedAtMs: (obs && obs.observedAtMs) || null,
       };
     },
   };

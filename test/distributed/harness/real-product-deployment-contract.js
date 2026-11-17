@@ -166,38 +166,68 @@ function resolveNumericExitCode(rawCode) {
   return numberIsSafeInteger(parsed) ? parsed : null;
 }
 
-function extractCommandProcessFacts(error) {
-  const exitCode = resolveNumericExitCode(error?.exitCode) ??
-    (typeof error?.code === 'number' ? resolveNumericExitCode(error.code) : null);
-  let osErrorCode = null;
-  if (typeof error?.osErrorCode === 'string' && error.osErrorCode !== '') {
-    osErrorCode = error.osErrorCode;
-  } else if (typeof error?.code === 'string' && !isDeploymentFailure(error)) {
-    osErrorCode = error.code;
-  }
-  const signal = typeof error?.signal === 'string' && error.signal !== '' ? error.signal : null;
-  const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
-  const stderr = typeof error?.stderr === 'string' ? error.stderr : '';
-  return {exitCode, osErrorCode, signal, stdout, stderr};
+function resolveCommandExitCode(error) {
+  const exitCode = resolveNumericExitCode(error?.exitCode);
+  if (exitCode !== null) return exitCode;
+  return typeof error?.code === 'number' ? resolveNumericExitCode(error.code) : null;
 }
 
-function attachRemoteCommandAttribution(failure, classified, cause = null) {
-  if (!failure || typeof failure !== 'object' || !classified) return failure;
-  Object.assign(failure, {
+function resolveOsErrorCode(error) {
+  if (typeof error?.osErrorCode === 'string' && error.osErrorCode !== '') {
+    return error.osErrorCode;
+  }
+  if (typeof error?.code === 'string' && !isDeploymentFailure(error)) {
+    return error.code;
+  }
+  return null;
+}
+
+function nonEmptyStringOrNull(value) {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function stringOrEmpty(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function extractCommandProcessFacts(error) {
+  return {
+    exitCode: resolveCommandExitCode(error),
+    osErrorCode: resolveOsErrorCode(error),
+    signal: nonEmptyStringOrNull(error?.signal),
+    stdout: stringOrEmpty(error?.stdout),
+    stderr: stringOrEmpty(error?.stderr),
+  };
+}
+
+function stringFieldsOf(source, keys) {
+  const fields = {};
+  for (const key of keys) {
+    if (typeof source[key] === 'string') {
+      fields[key] = source[key];
+    }
+  }
+  return fields;
+}
+
+function buildRemoteAttributionFields(classified) {
+  return {
     exitCode: classified.exitCode ?? null,
     signal: classified.signal ?? null,
     killed: Boolean(classified.killed),
-    ...(typeof classified.stdout === 'string' ? {stdout: classified.stdout} : {}),
-    ...(typeof classified.stderr === 'string' ? {stderr: classified.stderr} : {}),
-    ...(typeof classified.osErrorCode === 'string' ?
-      {osErrorCode: classified.osErrorCode} : {}),
+    ...stringFieldsOf(classified, ['stdout', 'stderr', 'osErrorCode']),
     aborted: Boolean(classified.aborted),
     deadlineExpired: Boolean(classified.deadlineExpired),
     timedOut: Boolean(classified.timedOut),
     httpTimedOut: Boolean(classified.httpTimedOut),
     transportError: Boolean(classified.transportError),
     observerInfrastructure: Boolean(classified.observerInfrastructure),
-  });
+  };
+}
+
+function attachRemoteCommandAttribution(failure, classified, cause = null) {
+  if (!failure || typeof failure !== 'object' || !classified) return failure;
+  Object.assign(failure, buildRemoteAttributionFields(classified));
   if (cause instanceof Error && cause !== failure && failure.cause === undefined) {
     failure.cause = cause;
   }

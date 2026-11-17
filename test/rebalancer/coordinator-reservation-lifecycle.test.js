@@ -59,6 +59,130 @@ function initializeConfig(overrides = {}) {
   });
 }
 
+function insertReplicaOperation(operations, params) {
+  const [
+    opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
+    status, step, created, updated, completed, err, history,
+    entityType, entityId,
+  ] = params;
+  operations.set(opId, {
+    operation_id: opId, type, partition_id: partId,
+    replica_id: repId, target_claim_key: targetClaimKey,
+    source_node_id: srcNode,
+    target_node_id: tgtNode, status, workflow_step: step,
+    created_at: created, updated_at: updated,
+    completed_at: completed, error_message: err,
+    steps_history: history,
+    entity_type: entityType, entity_id: entityId,
+  });
+  return {success: true, changes: 1};
+}
+
+function insertStorageReservation(reservations, params) {
+  const [resId, opId, eType, eId, partId, tgtNode,
+    estBytes, ampFactor, status, reason,
+    created, updated, expires] = params;
+  reservations.set(resId, {
+    reservation_id: resId, operation_id: opId,
+    entity_type: eType, entity_id: eId,
+    partition_id: partId, target_node_id: tgtNode,
+    estimated_bytes: estBytes,
+    amplification_factor: ampFactor,
+    status, reason_code: reason,
+    created_at: created, updated_at: updated,
+    expires_at: expires, released_at: null,
+  });
+  return {success: true, changes: 1};
+}
+
+function updateStorageReservations(reservations, sql, params) {
+  const [newStatus, updated, released, reservationIdOrOperationId,
+    activeStatus] = params;
+  const byReservationId = sql.includes('reservation_id = ?');
+  let changes = 0;
+  for (const [key, row] of reservations) {
+    const matchesIdentity = byReservationId ?
+      row.reservation_id === reservationIdOrOperationId :
+      row.operation_id === reservationIdOrOperationId;
+    if (matchesIdentity && row.status === activeStatus) {
+      reservations.set(key, {
+        ...row,
+        status: newStatus,
+        updated_at: updated,
+        released_at: released,
+      });
+      changes++;
+    }
+  }
+  return {success: true, changes};
+}
+
+function selectReplicaOperations(operations, sql, params) {
+  const allOps = Array.from(operations.values());
+  if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
+    const [partId, tgtNode] = params;
+    const matching = allOps.filter((op) =>
+      op.partition_id === partId &&
+      op.target_node_id === tgtNode &&
+      !['active', 'removed', 'failed'].includes(op.status));
+    return {success: true, rows: matching};
+  }
+  if (sql.includes('NOT IN') || sql.includes('status <>')) {
+    const incomplete = allOps.filter((op) =>
+      !['active', 'removed', 'failed'].includes(op.status));
+    return {success: true, rows: incomplete};
+  }
+  if (sql.includes('operation_id = ?')) {
+    const [opId] = params;
+    const op = operations.get(opId);
+    return {success: true, rows: op ? [op] : []};
+  }
+  return {success: true, rows: allOps};
+}
+
+function handleStorageReservationQuery(reservations, sql, params) {
+  if (sql.includes('INTO storage_reservations')) {
+    return insertStorageReservation(reservations, params);
+  }
+  if (sql.includes('UPDATE storage_reservations')) {
+    return updateStorageReservations(reservations, sql, params);
+  }
+  if (sql.includes('SELECT * FROM storage_reservations WHERE operation_id = ?')) {
+    const [opId, status] = params;
+    const rows = Array.from(reservations.values())
+      .filter((row) => row.operation_id === opId && row.status === status);
+    return {success: true, rows};
+  }
+  if (sql.includes('SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?')) {
+    const [status, expiryThreshold] = params;
+    const rows = Array.from(reservations.values())
+      .filter((row) => row.status === status && row.expires_at <= expiryThreshold);
+    return {success: true, rows};
+  }
+  if (params.length > 0) {
+    const [status] = params;
+    const active = Array.from(reservations.values())
+      .filter((r) => r.status === status);
+    return {success: true, rows: active};
+  }
+  return {success: true, rows: Array.from(reservations.values())};
+}
+
+function updateReplicaOperation(operations, params) {
+  const [status, step, updated, completed, err,
+    history, repId, opId] = params;
+  const existing = operations.get(opId);
+  if (existing) {
+    operations.set(opId, {
+      ...existing, status, workflow_step: step,
+      updated_at: updated, completed_at: completed,
+      error_message: err, steps_history: history,
+      replica_id: repId,
+    });
+  }
+  return {success: true};
+}
+
 /**
  * In-memory SQL engine that tracks both operations and reservations.
  */
@@ -71,128 +195,17 @@ function createTrackingSqlEngine() {
     reservations,
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-          status, step, created, updated, completed, err, history,
-          entityType, entityId,
-        ] = params;
-        operations.set(opId, {
-          operation_id: opId, type, partition_id: partId,
-          replica_id: repId, target_claim_key: targetClaimKey,
-          source_node_id: srcNode,
-          target_node_id: tgtNode, status, workflow_step: step,
-          created_at: created, updated_at: updated,
-          completed_at: completed, error_message: err,
-          steps_history: history,
-          entity_type: entityType, entity_id: entityId,
-        });
-        return {success: true, changes: 1};
+        return insertReplicaOperation(operations, params);
       }
-
-      if (sql.includes('INTO storage_reservations')) {
-        const [resId, opId, eType, eId, partId, tgtNode,
-          estBytes, ampFactor, status, reason,
-          created, updated, expires] = params;
-        reservations.set(resId, {
-          reservation_id: resId, operation_id: opId,
-          entity_type: eType, entity_id: eId,
-          partition_id: partId, target_node_id: tgtNode,
-          estimated_bytes: estBytes,
-          amplification_factor: ampFactor,
-          status, reason_code: reason,
-          created_at: created, updated_at: updated,
-          expires_at: expires, released_at: null,
-        });
-        return {success: true, changes: 1};
+      if (sql.includes('storage_reservations')) {
+        return handleStorageReservationQuery(reservations, sql, params);
       }
-
-      if (sql.includes('UPDATE storage_reservations')) {
-        const [newStatus, updated, released, reservationIdOrOperationId,
-          activeStatus] = params;
-        let changes = 0;
-        for (const [key, row] of reservations) {
-          const matchesOperation = row.operation_id === reservationIdOrOperationId;
-          const matchesReservation =
-            row.reservation_id === reservationIdOrOperationId;
-          const matchesIdentity = sql.includes('reservation_id = ?') ?
-            matchesReservation :
-            matchesOperation;
-          if (matchesIdentity && row.status === activeStatus) {
-            reservations.set(key, {
-              ...row,
-              status: newStatus,
-              updated_at: updated,
-              released_at: released,
-            });
-            changes++;
-          }
-        }
-        return {success: true, changes};
-      }
-
-      if (sql.includes('SELECT * FROM storage_reservations WHERE operation_id = ?')) {
-        const [opId, status] = params;
-        const rows = Array.from(reservations.values())
-          .filter((row) => row.operation_id === opId && row.status === status);
-        return {success: true, rows};
-      }
-
-      if (sql.includes('SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?')) {
-        const [status, expiryThreshold] = params;
-        const rows = Array.from(reservations.values())
-          .filter((row) => row.status === status && row.expires_at <= expiryThreshold);
-        return {success: true, rows};
-      }
-
       if (sql.includes('UPDATE replica_operations')) {
-        const [status, step, updated, completed, err,
-          history, repId, opId] = params;
-        const existing = operations.get(opId);
-        if (existing) {
-          operations.set(opId, {
-            ...existing, status, workflow_step: step,
-            updated_at: updated, completed_at: completed,
-            error_message: err, steps_history: history,
-            replica_id: repId,
-          });
-        }
-        return {success: true};
+        return updateReplicaOperation(operations, params);
       }
-
-      if (sql.includes('SELECT * FROM storage_reservations')) {
-        if (params.length > 0) {
-          const [status] = params;
-          const active = Array.from(reservations.values())
-            .filter((r) => r.status === status);
-          return {success: true, rows: active};
-        }
-        return {success: true, rows: Array.from(reservations.values())};
-      }
-
       if (sql.includes('replica_operations')) {
-        const allOps = Array.from(operations.values());
-        if (sql.includes('partition_id = ?') &&
-            sql.includes('target_node_id = ?')) {
-          const [partId, tgtNode] = params;
-          const matching = allOps.filter((op) =>
-            op.partition_id === partId &&
-            op.target_node_id === tgtNode &&
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: matching};
-        }
-        if (sql.includes('NOT IN') || sql.includes('status <>')) {
-          const incomplete = allOps.filter((op) =>
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: incomplete};
-        }
-        if (sql.includes('operation_id = ?')) {
-          const [opId] = params;
-          const op = operations.get(opId);
-          return {success: true, rows: op ? [op] : []};
-        }
-        return {success: true, rows: allOps};
+        return selectReplicaOperations(operations, sql, params);
       }
-
       return {success: true, rows: []};
     },
   };

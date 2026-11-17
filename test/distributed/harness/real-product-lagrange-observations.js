@@ -352,6 +352,17 @@ function healthyListener(services, roles) {
   return node ? {host: node.host, port: Number(replica.port), nodeId: replica.nodeId} : null;
 }
 
+function isUnusableProbeHttpAnswer(answer) {
+  return Boolean(
+    answer.aborted || answer.deadlineExpired || answer.observerInfrastructure ||
+      answer.parseError !== null || answer.status === null,
+  );
+}
+
+function isAppliedScaleAnswer(scale) {
+  return scale.json?.success === true && scale.json?.outcome === 'applied';
+}
+
 async function publicPgWireReady(ctx, seedHost, roles) {
   const admin = `http://${seedHost}:${PORT.ADMIN}`;
   let listener = null;
@@ -367,17 +378,15 @@ async function publicPgWireReady(ctx, seedHost, roles) {
       signal: scaleCall.signal,
       timeoutMs: scaleCall.timeoutMs,
     });
-    if (scale.aborted || scale.deadlineExpired || scale.observerInfrastructure ||
-        scale.parseError !== null || scale.status === null) {
+    if (isUnusableProbeHttpAnswer(scale)) {
       return {ready: false, diagnostic: scale};
     }
-    if (scale.json?.success !== true || scale.json?.outcome !== 'applied') {
+    if (!isAppliedScaleAnswer(scale)) {
       return {ready: false, diagnostic: {scale}};
     }
     const found = await getJson(ctx,
       `${admin}/api/admin/discovery/services?serviceId=${PG_WIRE_SERVICE_ID}`, pollContext);
-    if (found.aborted || found.deadlineExpired || found.observerInfrastructure ||
-        found.parseError !== null || found.status === null) {
+    if (isUnusableProbeHttpAnswer(found)) {
       return {ready: false, diagnostic: found};
     }
     listener = healthyListener(found.json?.services, roles);
@@ -402,25 +411,24 @@ function deploymentHostOf(roles, nodeId) {
   return role === undefined ? null : role.host;
 }
 
+function mergeAnswerFlag(answer, classified, key) {
+  return Boolean(answer?.[key] === true || classified[key]);
+}
+
 function partitionDiagnosticsFailure(message, answer) {
   const classified = classifyRemoteCommandError(answer);
-  const aborted = Boolean(answer?.aborted === true || classified.aborted);
-  const deadlineExpired = Boolean(answer?.deadlineExpired === true || classified.deadlineExpired);
-  const timedOut = Boolean(answer?.timedOut === true || classified.timedOut);
-  const httpTimedOut = Boolean(answer?.httpTimedOut === true || classified.httpTimedOut);
-  const transportError = Boolean(answer?.transportError === true || classified.transportError);
-  const observerInfrastructure = Boolean(
-    answer?.observerInfrastructure === true || classified.observerInfrastructure,
-  );
-  const code = aborted || deadlineExpired ?
+  const flags = {
+    aborted: mergeAnswerFlag(answer, classified, 'aborted'),
+    deadlineExpired: mergeAnswerFlag(answer, classified, 'deadlineExpired'),
+    timedOut: mergeAnswerFlag(answer, classified, 'timedOut'),
+    httpTimedOut: mergeAnswerFlag(answer, classified, 'httpTimedOut'),
+    transportError: mergeAnswerFlag(answer, classified, 'transportError'),
+    observerInfrastructure: mergeAnswerFlag(answer, classified, 'observerInfrastructure'),
+  };
+  const code = flags.aborted || flags.deadlineExpired ?
     DEPLOYMENT_FAILURE.READINESS_EXHAUSTED : DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED;
-  const failure = deploymentFailure(code, message, {
-    answer, aborted, deadlineExpired, timedOut, httpTimedOut, transportError,
-    observerInfrastructure,
-  });
-  return Object.assign(failure, {
-    aborted, deadlineExpired, timedOut, httpTimedOut, transportError, observerInfrastructure,
-  });
+  const failure = deploymentFailure(code, message, {answer, ...flags});
+  return Object.assign(failure, flags);
 }
 
 function isOkDiagnosticsAnswer(answer) {
@@ -587,17 +595,27 @@ async function controlSnapshots(ctx, roles, pollContext = null) {
   return arrayMap(answers, ({role, answer}) => toControlSnapshotEntry(role, answer));
 }
 
+function isFatalTableRoutingError(error) {
+  return Boolean(
+    error?.aborted === true || error?.deadlineExpired === true ||
+      error?.observerInfrastructure === true || error?.parseError === true,
+  );
+}
+
+function tableRoutingCallOptions(ctx, pollContext) {
+  if (pollContext) return probeCallOptions(ctx, pollContext, null);
+  return ctx ? probeCallOptions(ctx, null, null) : {};
+}
+
 async function tableRoutingDenials(query, requiredTables, ctx = null, pollContext = null) {
   const denials = [];
   if (requiredTables === null) return denials;
+  const callOptions = tableRoutingCallOptions(ctx, pollContext);
   for (const table of requiredTables) {
-    const callOptions = pollContext ? probeCallOptions(ctx, pollContext, null) :
-      (ctx ? probeCallOptions(ctx, null, null) : {});
     try {
       await query(`SELECT COUNT(*) AS row_count FROM ${table}`, callOptions);
     } catch (error) {
-      if (error?.aborted === true || error?.deadlineExpired === true ||
-          error?.observerInfrastructure === true || error?.parseError === true) {
+      if (isFatalTableRoutingError(error)) {
         throw error;
       }
       denials.push(`table_not_routable:${table}:${errorText(error)}`);

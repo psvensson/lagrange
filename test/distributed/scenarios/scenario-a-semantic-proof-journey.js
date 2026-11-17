@@ -347,19 +347,25 @@ function isJourneyAbortError(error, signal) {
   );
 }
 
-function assertJourneyActive(request, stage, caseId = null) {
-  const signal = request?.signal ?? null;
-  const deadlineAtMs = request?.deadlineAtMs ?? request?.deadlineAt ?? null;
-  const nowFn = typeof request?.now === 'function' ? request.now : Date.now;
-  const aborted = Boolean(signal?.aborted);
-  const deadlineExpired = Number.isFinite(deadlineAtMs) && nowFn() >= deadlineAtMs;
-  if (!aborted && !deadlineExpired) return;
+function resolveJourneyClockState(request) {
+  const req = request ?? {};
+  const signal = req.signal ?? null;
+  const deadlineAtMs = req.deadlineAtMs ?? req.deadlineAt ?? null;
+  const nowFn = typeof req.now === 'function' ? req.now : Date.now;
+  return {
+    aborted: Boolean(signal?.aborted),
+    deadlineExpired: Number.isFinite(deadlineAtMs) && nowFn() >= deadlineAtMs,
+  };
+}
+
+function buildJourneyInterruptedError({request, stage, caseId, deadlineExpired}) {
+  const req = request ?? {};
+  const suffix = caseId ? `:${caseId}` : '';
   const err = deploymentFailure(
     DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
-    `Campaign watchdog or deadline stopped semantic gate (${stage}` +
-      `${caseId ? `:${caseId}` : ''})`,
+    `Campaign watchdog or deadline stopped semantic gate (${stage}${suffix})`,
     {
-      targetId: request?.targetId ?? request?.system ?? null,
+      targetId: req.targetId ?? req.system ?? null,
       stage,
       caseId,
       failureClass: 'interrupted',
@@ -369,7 +375,13 @@ function assertJourneyActive(request, stage, caseId = null) {
   );
   err.aborted = true;
   err.failureClass = 'interrupted';
-  throw err;
+  return err;
+}
+
+function assertJourneyActive(request, stage, caseId = null) {
+  const {aborted, deadlineExpired} = resolveJourneyClockState(request);
+  if (!aborted && !deadlineExpired) return;
+  throw buildJourneyInterruptedError({request, stage, caseId, deadlineExpired});
 }
 
 function awaitWithJourneySignal(promiseOrFn, request, stage, caseId = null) {
@@ -555,6 +567,67 @@ function summarizeJourneyCases(system, cases) {
   });
 }
 
+async function recordBeforeCaseError(context, proofCase, journeyRequest, error) {
+  if (isJourneyAbortError(error, journeyRequest.signal)) {
+    assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+    throw error;
+  }
+  assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+  const erroredCase = {
+    caseId: proofCase.id,
+    proofIds: proofCase.proofIds,
+    binding: context.binding,
+    status: CASE_STATUS.ERRORED,
+    error: String(error?.message || error),
+    failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
+    failureReasons: [FAILURE_REASON.CASE_ERRORED],
+  };
+  const evidencePath = await persistEvidence(
+    journeyRequest.evidenceDir,
+    context.system,
+    proofCase.id,
+    erroredCase,
+  );
+  if (evidencePath !== null) {
+    erroredCase.evidencePath = evidencePath;
+  }
+  return Object.freeze(erroredCase);
+}
+
+function buildCaseRunOptions(createAdapter, current, proofCase, journeyRequest) {
+  return Object.freeze({
+    createAdapter,
+    prepareContext: async () => current,
+    persistentStorage: journeyRequest.persistentStorage,
+    ...(journeyRequest.restartProduct ? {
+      restartCluster: ({context: active}) => awaitWithJourneySignal(
+        () => journeyRequest.restartProduct({context: active}),
+        journeyRequest,
+        'restart-product',
+        proofCase.id,
+      ),
+    } : {}),
+  });
+}
+
+async function executeJourneyCaseStep(proofCase, context, createAdapter, journeyRequest) {
+  assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
+  let nextContext;
+  try {
+    nextContext = await rebindForCase(context, proofCase, journeyRequest);
+  } catch (error) {
+    return {
+      context,
+      caseResult: await recordBeforeCaseError(context, proofCase, journeyRequest, error),
+    };
+  }
+  assertJourneyActive(journeyRequest, 'run-case', proofCase.id);
+  const options = buildCaseRunOptions(createAdapter, nextContext, proofCase, journeyRequest);
+  const caseResult = await runCase(proofCase, nextContext, options, journeyRequest);
+  assertJourneyActive(journeyRequest, 'after-case', proofCase.id);
+  return {context: nextContext, caseResult};
+}
+
 async function runScenarioASemanticProofJourney(request = {}) {
   if (!PGWIRE_PROOF_SYSTEMS.has(request.system)) {
     throw new Error(`Scenario A PG-wire proof journey does not run ${request.system}`);
@@ -570,53 +643,9 @@ async function runScenarioASemanticProofJourney(request = {}) {
   const cases = [];
   try {
     for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
-      assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
-      try {
-        context = await rebindForCase(context, proofCase, journeyRequest);
-      } catch (error) {
-        if (isJourneyAbortError(error, journeyRequest.signal)) {
-          assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
-          throw error;
-        }
-        assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
-        const erroredCase = {
-          caseId: proofCase.id,
-          proofIds: proofCase.proofIds,
-          binding: context.binding,
-          status: CASE_STATUS.ERRORED,
-          error: String(error?.message || error),
-          failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
-          failureReasons: [FAILURE_REASON.CASE_ERRORED],
-        };
-        const evidencePath = await persistEvidence(
-          journeyRequest.evidenceDir,
-          context.system,
-          proofCase.id,
-          erroredCase,
-        );
-        if (evidencePath !== null) {
-          erroredCase.evidencePath = evidencePath;
-        }
-        cases.push(Object.freeze(erroredCase));
-        continue;
-      }
-      assertJourneyActive(journeyRequest, 'run-case', proofCase.id);
-      const current = context;
-      const options = Object.freeze({
-        createAdapter,
-        prepareContext: async () => current,
-        persistentStorage: journeyRequest.persistentStorage,
-        ...(journeyRequest.restartProduct ? {
-          restartCluster: ({context: active}) => awaitWithJourneySignal(
-            () => journeyRequest.restartProduct({context: active}),
-            journeyRequest,
-            'restart-product',
-            proofCase.id,
-          ),
-        } : {}),
-      });
-      cases.push(await runCase(proofCase, current, options, journeyRequest));
-      assertJourneyActive(journeyRequest, 'after-case', proofCase.id);
+      const step = await executeJourneyCaseStep(proofCase, context, createAdapter, journeyRequest);
+      context = step.context;
+      cases.push(step.caseResult);
     }
     return summarizeJourneyCases(request.system, cases);
   } catch (error) {

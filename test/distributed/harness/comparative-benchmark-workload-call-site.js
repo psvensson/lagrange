@@ -411,19 +411,32 @@ function shouldObservePlacement(deployment, outcome, unopened) {
   return typeof deployment?.operations?.observePlacement === 'function';
 }
 
-function assignErrorAttribution(target, error, signal) {
-  const classified = classifyRemoteCommandError(error);
-  target.aborted = Boolean(error?.aborted || classified.aborted || signal?.aborted);
-  target.deadlineExpired = Boolean(error?.deadlineExpired || classified.deadlineExpired);
-  target.timedOut = Boolean(error?.timedOut || classified.timedOut);
-  target.transportError = Boolean(error?.transportError || classified.transportError);
-  target.observerInfrastructure = Boolean(
-    error?.observerInfrastructure || classified.observerInfrastructure,
-  );
+const ATTRIBUTION_FLAG_KEYS = Object.freeze([
+  'deadlineExpired',
+  'timedOut',
+  'transportError',
+  'observerInfrastructure',
+]);
+
+function assignErrorFlagFields(target, error, classified, signal) {
+  const errObj = error ?? {};
+  target.aborted = Boolean(errObj.aborted || classified.aborted || signal?.aborted);
+  for (const key of ATTRIBUTION_FLAG_KEYS) {
+    target[key] = Boolean(errObj[key] || classified[key]);
+  }
+}
+
+function assignErrorProcessFields(target, error, classified) {
   if (classified.exitCode !== null) target.exitCode = classified.exitCode;
   if (classified.signal !== null) target.signal = classified.signal;
   if (classified.killed) target.killed = true;
   target.lastObservation = error?.lastObservation ?? null;
+}
+
+function assignErrorAttribution(target, error, signal) {
+  const classified = classifyRemoteCommandError(error);
+  assignErrorFlagFields(target, error, classified, signal);
+  assignErrorProcessFields(target, error, classified);
 }
 
 function recordPlacementFailure(outcome, error, signal) {

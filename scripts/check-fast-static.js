@@ -155,13 +155,8 @@ export function summaryLine(outcome) {
     `in ${outcome.totalMs}ms`;
 }
 
-export function runFastStatic({base = null, explain = false,
-  range = {base, source: base ? RANGE_SOURCE.FLAG : RANGE_SOURCE.WORKTREE}} = {}) {
-  const changed = changedCandidatePaths({root, base: range.base});
-  const changedJs = javaScriptPaths(changed || []);
-  const warnings = rangeWarnings({range, changedJs});
+function collectFastStaticResults(range, changedJs) {
   const results = [];
-
   for (const script of GLOBAL_CHEAP_CHECKS) results.push(runNpm(script));
   results.push(runNpm(GLOBAL_DEPENDENCY_CHECK));
   results.push(runEslint(changedJs));
@@ -169,20 +164,30 @@ export function runFastStatic({base = null, explain = false,
     results.push(runFileSizeCheck(range, changedJs));
     results.push(runNpm(SCOPED_RATCHET_CHECK, changedJs));
   }
+  return results;
+}
+
+function writeExplainReport(changed, changedJs, results) {
+  process.stdout.write(`changed paths: ${changed.length}` +
+    ` (${changedJs.length} JavaScript)${NEWLINE}`);
+  for (const result of [...results].sort((a, b) => b.ms - a.ms)) {
+    process.stdout.write(
+      `${INDENT}${result.ok ? OK_MARK : FAIL_MARK} ` +
+      `${String(result.ms).padStart(MS_COLUMN_WIDTH)}ms  ${result.script}${NEWLINE}`);
+  }
+}
+
+export function runFastStatic({base = null, explain = false,
+  range = {base, source: base ? RANGE_SOURCE.FLAG : RANGE_SOURCE.WORKTREE}} = {}) {
+  const changed = changedCandidatePaths({root, base: range.base}) || [];
+  const changedJs = javaScriptPaths(changed);
+  const warnings = rangeWarnings({range, changedJs});
+  const results = collectFastStaticResults(range, changedJs);
 
   const failures = results.filter((result) => !result.ok);
   const totalMs = results.reduce((total, result) => total + result.ms, 0);
-  if (explain) {
-    process.stdout.write(`changed paths: ${(changed || []).length}` +
-      ` (${changedJs.length} JavaScript)${NEWLINE}`);
-    for (const result of [...results].sort((a, b) => b.ms - a.ms)) {
-      process.stdout.write(
-        `${INDENT}${result.ok ? OK_MARK : FAIL_MARK} ` +
-        `${String(result.ms).padStart(MS_COLUMN_WIDTH)}ms  ${result.script}${NEWLINE}`);
-    }
-  }
-  return {results, failures, totalMs, changed: changed || [], changedJs,
-    range, warnings};
+  if (explain) writeExplainReport(changed, changedJs, results);
+  return {results, failures, totalMs, changed, changedJs, range, warnings};
 }
 
 function main() {

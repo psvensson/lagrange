@@ -747,6 +747,43 @@ function seedSystemRows(cache, nowMs) {
   }
 }
 
+function stopNodeHosts(existingHosts) {
+  if (!existingHosts) return;
+  existingHosts.heartbeatService.stop();
+  existingHosts.membershipPublicationService.stopOwnerMembershipDriver();
+  existingHosts.rebalanceCoordinator.isShuttingDown = true;
+  existingHosts.controlPlaneReadinessService.shutdown();
+  existingHosts.stopIntervals();
+}
+
+function wipeStoppedNodeData(
+  nodeId,
+  {replicaRuntime, bootIncarnationByNodeId, cache, externalServicesCleanup},
+) {
+  replicaRuntime.wipeNode(nodeId);
+  bootIncarnationByNodeId.delete(nodeId);
+  if (!externalServicesCleanup) return;
+  for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
+    candidate[COLUMN.NODE_ID] === nodeId)) {
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, row);
+  }
+}
+
+function expireStoppedNodeLease(nodeId, {cache, time, clock}) {
+  const existingNode = cache.get(TABLES.NODES, nodeId);
+  if (!existingNode) return;
+  const baseHb = Number(existingNode[COLUMN.LAST_HEARTBEAT] || time.now());
+  while (time.now() < baseHb + 3) {
+    clock.advance(1);
+  }
+  insertStoredRow(cache, TABLES.NODES, {
+    ...existingNode,
+    [COLUMN.UPDATED_AT_HLC]: null,
+    [COLUMN.LAST_HEARTBEAT]: baseHb + 1,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: baseHb + 2,
+  });
+}
+
 /**
  * Build the world: the seed formed alone (its rows as the registration
  * producers write them), no joiner yet.
@@ -971,42 +1008,19 @@ function createFormationWorld() {
         externalServicesCleanup = false,
       } = {},
     ) {
-      const existingHosts = hostsById.get(nodeId);
-      if (existingHosts) {
-        existingHosts.heartbeatService.stop();
-        existingHosts.membershipPublicationService.stopOwnerMembershipDriver();
-        existingHosts.rebalanceCoordinator.isShuttingDown = true;
-        existingHosts.controlPlaneReadinessService.shutdown();
-        existingHosts.stopIntervals();
-      }
+      stopNodeHosts(hostsById.get(nodeId));
       upNodeIds.delete(nodeId);
       if (wipeDataDir) {
-        replicaRuntime.wipeNode(nodeId);
-        bootIncarnationByNodeId.delete(nodeId);
-        if (externalServicesCleanup) {
-          for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
-            candidate[COLUMN.NODE_ID] === nodeId)) {
-            cache.applySystemTableChange(
-              TABLES.SERVICES, CDC_OPERATION.DELETE, row);
-          }
-        }
+        wipeStoppedNodeData(nodeId, {
+          replicaRuntime,
+          bootIncarnationByNodeId,
+          cache,
+          externalServicesCleanup,
+        });
       }
       this.reassignStoppedNodeLeadership(nodeId);
       if (expireLease) {
-        const existingNode = cache.get(TABLES.NODES, nodeId);
-        if (existingNode) {
-          const baseHb = Number(
-            existingNode[COLUMN.LAST_HEARTBEAT] || time.now());
-          while (time.now() < baseHb + 3) {
-            clock.advance(1);
-          }
-          insertStoredRow(cache, TABLES.NODES, {
-            ...existingNode,
-            [COLUMN.UPDATED_AT_HLC]: null,
-            [COLUMN.LAST_HEARTBEAT]: baseHb + 1,
-            [COLUMN.READY_LEASE_EXPIRES_AT]: baseHb + 2,
-          });
-        }
+        expireStoppedNodeLease(nodeId, {cache, time, clock});
       }
     },
     restartSeed() {

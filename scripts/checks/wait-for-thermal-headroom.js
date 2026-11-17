@@ -427,33 +427,61 @@ function observationSensorRowValid(row) {
     typeof row.path === 'string' && path.isAbsolute(row.path);
 }
 
-function observationShape(value) {
-  if (!numberIsSafeInteger(value.observed_at) || value.observed_at < 0) return false;
-  const reasonsValid = arrayEvery(OBSERVATION_REASON_KEYS, (key) =>
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function observationReasonsValid(value) {
+  return arrayEvery(OBSERVATION_REASON_KEYS, (key) =>
     value[key] === null || typeof value[key] === 'string');
-  if (!reasonsValid) return false;
-  if (value.outcome === HEADROOM.UNAVAILABLE) {
-    return value.observations === null && typeof value.reason === 'string' &&
-      value.reason.length > 0 && value.cooling_reason === null && value.abort_reason === null;
-  }
+}
+
+function unavailableObservationValid(value) {
+  return value.observations === null && isNonEmptyString(value.reason) &&
+    value.cooling_reason === null && value.abort_reason === null;
+}
+
+function measuredObservationValid(value) {
   const observations = value.observations;
   if (!isRecord(observations) || !arrayEvery(OBSERVATION_SENSOR_KEYS, (name) =>
     observationSensorRowValid(observations[name]))) {
     return false;
   }
-  return value.reason === null && (value.outcome === HEADROOM.READY ?
+  if (value.reason !== null) return false;
+  return value.outcome === HEADROOM.READY ?
     value.cooling_reason === null && value.abort_reason === null :
-    typeof value.cooling_reason === 'string' && value.cooling_reason.length > 0);
+    isNonEmptyString(value.cooling_reason);
+}
+
+function observationShape(value) {
+  if (!numberIsSafeInteger(value.observed_at) || value.observed_at < 0) return false;
+  if (!observationReasonsValid(value)) return false;
+  if (value.outcome === HEADROOM.UNAVAILABLE) {
+    return unavailableObservationValid(value);
+  }
+  return measuredObservationValid(value);
+}
+
+function observationIdentityMatches(value, endpoint) {
+  return Boolean(value) &&
+    value.schema === OBSERVATION_SCHEMA &&
+    value.source_sha256 === endpoint.sourceSha256 &&
+    value.config_sha256 === endpoint.configSha256 &&
+    value.boot_id === endpoint.bootId;
+}
+
+function observationMatchesContract(value, endpoint, status) {
+  const expectedStatus = value?.outcome === HEADROOM.UNAVAILABLE ?
+    NATIVE_UNAVAILABLE_EXIT : NATIVE_OK_EXIT;
+  return observationIdentityMatches(value, endpoint) &&
+    observationShape(value) &&
+    policyValid(value.execution_policy) &&
+    arrayIncludes(NATIVE_OUTCOMES, value.outcome) &&
+    status === expectedStatus;
 }
 
 export function checkedThermalObservation(value, endpoint, status) {
-  const expectedStatus = value?.outcome === HEADROOM.UNAVAILABLE ?
-    NATIVE_UNAVAILABLE_EXIT : NATIVE_OK_EXIT;
-  if (value?.schema !== OBSERVATION_SCHEMA ||
-      value.source_sha256 !== endpoint.sourceSha256 ||
-      value.config_sha256 !== endpoint.configSha256 || value.boot_id !== endpoint.bootId ||
-      !observationShape(value) || !policyValid(value.execution_policy) ||
-      !arrayIncludes(NATIVE_OUTCOMES, value.outcome) || status !== expectedStatus) {
+  if (!observationMatchesContract(value, endpoint, status)) {
     return unavailable(NATIVE_REASON.CONTRACT_REFUSED);
   }
   if (value.execution_policy.mode === OPERATOR_PACED) {
@@ -585,6 +613,32 @@ function readingText(reading) {
     `nvme ${measuredText(reading.nvmeCelsius, reading.nvmeSource)}`;
 }
 
+function pollWhileHeld({poll, attempts, log, read, sleep, initialReading}) {
+  let reading = initialReading;
+  let polls = 0;
+  while (reading.state === THERMAL_STATE.HOLD && polls < attempts) {
+    polls += 1;
+    log(`${LINE.PREFIX}${THERMAL_STATE.HOLD} ${readingText(reading)} - ${reading.reason}, ` +
+      `waiting ${poll / MS_PER_SECOND}s (poll ${polls}/${attempts})`);
+    sleep(poll);
+    if (polls < attempts) reading = read();
+  }
+  return reading;
+}
+
+function waitForLocalThermalHeadroom({
+  poll = POLL_INTERVAL_MS,
+  attempts = MAX_POLL_ATTEMPTS,
+  log = () => {},
+  read = readThermalHeadroom,
+  sleep = sleepSync,
+  env = process.env,
+}) {
+  const initialReading = env[SKIP_ENV] ? SKIPPED_READING : read();
+  const reading = pollWhileHeld({poll, attempts, log, read, sleep, initialReading});
+  return {outcome: HEADROOM_OF_STATE[reading.state], reading, attempts, poll};
+}
+
 /**
  * Wait, bounded, for thermal headroom. A hold is logged and waited out with
  * the poll; the result is a named outcome, never an inference. When
@@ -595,22 +649,11 @@ function readingText(reading) {
  * @return {Object|Promise<Object>}
  */
 export function waitForThermalHeadroom(options = {}) {
-  const {poll = POLL_INTERVAL_MS, attempts = MAX_POLL_ATTEMPTS,
-    log = () => {}, read = readThermalHeadroom, sleep = sleepSync,
-    env = process.env} = options;
+  const env = options.env === undefined ? process.env : options.env;
   if (env[THERMAL_ENDPOINT_ENV] !== undefined) {
     return waitForNativeThermalHeadroom(options);
   }
-  let reading = env[SKIP_ENV] ? SKIPPED_READING : read();
-  let polls = 0;
-  while (reading.state === THERMAL_STATE.HOLD && polls < attempts) {
-    polls += 1;
-    log(`${LINE.PREFIX}${THERMAL_STATE.HOLD} ${readingText(reading)} - ${reading.reason}, ` +
-      `waiting ${poll / MS_PER_SECOND}s (poll ${polls}/${attempts})`);
-    sleep(poll);
-    if (polls < attempts) reading = read();
-  }
-  return {outcome: HEADROOM_OF_STATE[reading.state], reading, attempts, poll};
+  return waitForLocalThermalHeadroom(options);
 }
 
 /**

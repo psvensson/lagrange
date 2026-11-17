@@ -905,52 +905,101 @@ async function cleanupFailedTiDbDurability({
   }
 }
 
-async function executeTiDbDurabilitySequence({
+function durabilityStageControl(gateControl, stage) {
+  return {
+    ...(gateControl || {}),
+    stage,
+    caseId: DURABILITY_CASE_ID,
+  };
+}
+
+function runTiDbDurabilityBeforeStage({
+  connection,
+  sshRun,
+  opts,
+  loadGeneratorHost,
+  createMysqlConnection,
+  gateControl,
+  runRemoteNodeJson,
+  remoteGateScript,
+  beforeAction,
+  awaitWithGateSignal,
+}) {
+  const control = durabilityStageControl(gateControl, 'durability-before');
+  if (loadGeneratorHost) {
+    return runRemoteNodeJson(
+      sshRun,
+      opts,
+      loadGeneratorHost,
+      remoteGateScript,
+      {action: beforeAction, connection},
+      control,
+    );
+  }
+  return awaitWithGateSignal(
+    () => executeTiDbDurabilityBefore({connection, createMysqlConnection}),
+    control,
+  );
+}
+
+function runTiDbDurabilityAfterStage({
+  connection,
+  binding,
+  before,
+  faultEvidence,
+  sshRun,
+  opts,
+  loadGeneratorHost,
+  createMysqlConnection,
+  gateControl,
+  runRemoteNodeJson,
+  remoteGateScript,
+  afterAction,
+  awaitWithGateSignal,
+}) {
+  const control = durabilityStageControl(gateControl, 'durability-after');
+  if (loadGeneratorHost) {
+    return runRemoteNodeJson(
+      sshRun,
+      opts,
+      loadGeneratorHost,
+      remoteGateScript,
+      {action: afterAction, connection, binding, before, faultEvidence},
+      control,
+    );
+  }
+  return awaitWithGateSignal(
+    () => executeTiDbDurabilityAfter({
+      connection,
+      binding,
+      before,
+      faultEvidence,
+      createMysqlConnection,
+    }),
+    control,
+  );
+}
+
+async function restartTiDbDurabilityTarget({
   connection,
   binding,
   restartProduct,
   sshRun,
   opts,
   loadGeneratorHost,
-  createMysqlConnection,
-  rawCreateMysqlConnection = createMysqlConnection,
+  rawCreateMysqlConnection,
   result,
-  gateControl = null,
-  onCaseDatasetPrepared = null,
+  gateControl,
   runRemoteNodeJson,
   remoteGateScript,
-  beforeAction,
-  afterAction,
   cleanupAction,
   assertSemanticGateActive,
   awaitWithGateSignal,
 }) {
-  const before = loadGeneratorHost ?
-    await runRemoteNodeJson(
-      sshRun,
-      opts,
-      loadGeneratorHost,
-      remoteGateScript,
-      {action: beforeAction, connection},
-      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID},
-    ) :
-    await awaitWithGateSignal(
-      () => executeTiDbDurabilityBefore({
-        connection,
-        createMysqlConnection,
-      }),
-      {...(gateControl || {}), stage: 'durability-before', caseId: DURABILITY_CASE_ID},
-    );
-  onCaseDatasetPrepared?.({caseId: DURABILITY_CASE_ID});
-  let faultEvidence;
   try {
-    const restartControl = {
-      ...(gateControl || {}),
-      stage: 'durability-restart',
-      caseId: DURABILITY_CASE_ID,
-    };
+    const restartControl = durabilityStageControl(gateControl, 'durability-restart');
     assertSemanticGateActive(restartControl);
-    faultEvidence = await awaitWithGateSignal(
+    return await awaitWithGateSignal(
       () => restartProduct({
         context: {
           system: SYSTEM_TIDB,
@@ -979,25 +1028,72 @@ async function executeTiDbDurabilitySequence({
     });
     throw restartError;
   }
-  return loadGeneratorHost ?
-    runRemoteNodeJson(
-      sshRun,
-      opts,
-      loadGeneratorHost,
-      remoteGateScript,
-      {action: afterAction, connection, binding, before, faultEvidence},
-      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID},
-    ) :
-    awaitWithGateSignal(
-      () => executeTiDbDurabilityAfter({
-        connection,
-        binding,
-        before,
-        faultEvidence,
-        createMysqlConnection,
-      }),
-      {...(gateControl || {}), stage: 'durability-after', caseId: DURABILITY_CASE_ID},
-    );
+}
+
+async function executeTiDbDurabilitySequence({
+  connection,
+  binding,
+  restartProduct,
+  sshRun,
+  opts,
+  loadGeneratorHost,
+  createMysqlConnection,
+  rawCreateMysqlConnection = createMysqlConnection,
+  result,
+  gateControl = null,
+  onCaseDatasetPrepared = null,
+  runRemoteNodeJson,
+  remoteGateScript,
+  beforeAction,
+  afterAction,
+  cleanupAction,
+  assertSemanticGateActive,
+  awaitWithGateSignal,
+}) {
+  const before = await runTiDbDurabilityBeforeStage({
+    connection,
+    sshRun,
+    opts,
+    loadGeneratorHost,
+    createMysqlConnection,
+    gateControl,
+    runRemoteNodeJson,
+    remoteGateScript,
+    beforeAction,
+    awaitWithGateSignal,
+  });
+  onCaseDatasetPrepared?.({caseId: DURABILITY_CASE_ID});
+  const faultEvidence = await restartTiDbDurabilityTarget({
+    connection,
+    binding,
+    restartProduct,
+    sshRun,
+    opts,
+    loadGeneratorHost,
+    rawCreateMysqlConnection,
+    result,
+    gateControl,
+    runRemoteNodeJson,
+    remoteGateScript,
+    cleanupAction,
+    assertSemanticGateActive,
+    awaitWithGateSignal,
+  });
+  return runTiDbDurabilityAfterStage({
+    connection,
+    binding,
+    before,
+    faultEvidence,
+    sshRun,
+    opts,
+    loadGeneratorHost,
+    createMysqlConnection,
+    gateControl,
+    runRemoteNodeJson,
+    remoteGateScript,
+    afterAction,
+    awaitWithGateSignal,
+  });
 }
 
 export {

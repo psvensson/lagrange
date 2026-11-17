@@ -70,6 +70,38 @@ async function closeConnections(connections) {
   }
 }
 
+async function rollbackOpenWriter(writer, writerTransactionOpen, primaryError) {
+  if (!writerTransactionOpen || !writer) return primaryError;
+  try {
+    await writer.rollback();
+    return primaryError;
+  } catch (rollbackError) {
+    return primaryError ?
+      new AggregateError(
+        [primaryError, rollbackError],
+        'TiDB visibility probe and rollback both failed',
+      ) :
+      rollbackError;
+  }
+}
+
+async function cleanupProbeConnections(connections, primaryError) {
+  let cleanupError = null;
+  try {
+    await closeConnections(connections);
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (primaryError && cleanupError) {
+    throw new AggregateError(
+      [primaryError, cleanupError],
+      'TiDB visibility probe and cleanup both failed',
+    );
+  }
+  if (primaryError) throw primaryError;
+  if (cleanupError) throw cleanupError;
+}
+
 async function runTiDbVisibilityProbe(options = {}) {
   const endpoint = normalizeEndpoint(options.endpoint);
   const databaseName = normalizeDatabaseName(options.databaseName);
@@ -114,33 +146,8 @@ async function runTiDbVisibilityProbe(options = {}) {
     primaryError = error;
   }
 
-  if (writerTransactionOpen && writer) {
-    try {
-      await writer.rollback();
-    } catch (rollbackError) {
-      primaryError = primaryError ?
-        new AggregateError(
-          [primaryError, rollbackError],
-          'TiDB visibility probe and rollback both failed',
-        ) :
-        rollbackError;
-    }
-  }
-
-  let cleanupError = null;
-  try {
-    await closeConnections([writer, observer]);
-  } catch (error) {
-    cleanupError = error;
-  }
-  if (primaryError && cleanupError) {
-    throw new AggregateError(
-      [primaryError, cleanupError],
-      'TiDB visibility probe and cleanup both failed',
-    );
-  }
-  if (primaryError) throw primaryError;
-  if (cleanupError) throw cleanupError;
+  primaryError = await rollbackOpenWriter(writer, writerTransactionOpen, primaryError);
+  await cleanupProbeConnections([writer, observer], primaryError);
   return result;
 }
 

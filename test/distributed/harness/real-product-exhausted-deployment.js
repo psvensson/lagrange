@@ -45,6 +45,67 @@ async function readVersionsOrRecord(products, readVersions) {
   return products;
 }
 
+function firstNonNullish(values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+}
+
+function extractFailureReadinessContext(failure) {
+  const err = failure ?? {};
+  const diag = err.diagnostic ?? {};
+  const lastObservation = firstNonNullish([
+    err.lastObservation,
+    diag.lastObservation,
+    diag.last,
+  ]);
+  const lastCompletedObservation = firstNonNullish([
+    err.lastCompletedObservation,
+    diag.lastCompletedObservation,
+  ]);
+  const lastProbeError = firstNonNullish([
+    err.lastProbeError,
+    diag.lastProbeError,
+  ]);
+  const aborted = Boolean(
+    err.aborted ||
+    diag.aborted ||
+    err.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
+  );
+  return {aborted, lastObservation, lastCompletedObservation, lastProbeError};
+}
+
+function optionalReadinessFields(lastCompletedObservation, lastProbeError) {
+  return {
+    ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
+    ...(lastProbeError !== null ? {lastProbeError} : {}),
+  };
+}
+
+function buildExhaustedReadiness(failure, observedAt) {
+  const {
+    aborted,
+    lastObservation,
+    lastCompletedObservation,
+    lastProbeError,
+  } = extractFailureReadinessContext(failure);
+  const optional = optionalReadinessFields(lastCompletedObservation, lastProbeError);
+  return {
+    state: READINESS_STATE.EXHAUSTED,
+    observedAt,
+    aborted,
+    lastObservation,
+    ...optional,
+    evidence: {
+      failure: failure.message,
+      diagnostic: failure.diagnostic,
+      lastObservation,
+      ...optional,
+    },
+  };
+}
+
 /**
  * @param {{targetId: string, topology: Object, sshRun: Function, opts: Object,
  *   roles: Array<Object>, endpoint: Object|null, dataDir: string,
@@ -74,28 +135,18 @@ async function describeExhaustedDeployment({targetId, topology, sshRun, opts, ro
     readVersions,
   );
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));
-  const lastObservation = failure?.lastObservation ??
-    failure?.diagnostic?.lastObservation ?? failure?.diagnostic?.last ?? null;
-  const lastCompletedObservation = failure?.lastCompletedObservation ??
-    failure?.diagnostic?.lastCompletedObservation ?? null;
-  const lastProbeError = failure?.lastProbeError ??
-    failure?.diagnostic?.lastProbeError ?? null;
-  const aborted = Boolean(failure?.aborted || failure?.diagnostic?.aborted ||
-    failure?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED);
-  return {targetId, topology, roles: [...roles], storage, runClass: runClassOf(storage),
-    readiness: {state: READINESS_STATE.EXHAUSTED,
-      observedAt: dateToISOString(new DateConstructor(clock())),
-      aborted, lastObservation,
-      ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
-      ...(lastProbeError !== null ? {lastProbeError} : {}),
-      evidence: {
-        failure: failure.message,
-        diagnostic: failure.diagnostic,
-        lastObservation,
-        ...(lastCompletedObservation !== null ? {lastCompletedObservation} : {}),
-        ...(lastProbeError !== null ? {lastProbeError} : {}),
-      }},
-    identity: {products}, placement: null, endpoint};
+  const observedAt = dateToISOString(new DateConstructor(clock()));
+  return {
+    targetId,
+    topology,
+    roles: [...roles],
+    storage,
+    runClass: runClassOf(storage),
+    readiness: buildExhaustedReadiness(failure, observedAt),
+    identity: {products},
+    placement: null,
+    endpoint,
+  };
 }
 
 /**

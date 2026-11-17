@@ -223,36 +223,69 @@ function extractCalleeName(callNode) {
   return null;
 }
 
+function checkConsumerObjectPatternProperties(patternNode, spec, diagnostics) {
+  const props = patternNode.properties || [];
+  for (let i = NUM_ZERO; i < props.length; i += NUM_ONE) {
+    const keyName = extractPropertyKeyName(props[i]);
+    if (keyName !== null && !arrayIncludes(spec.allowedKeys, keyName)) {
+      diagnostics.push({
+        code: DIAGNOSTIC_CODE.PROPERTY_NOT_EXIST,
+        message: `Property '${keyName}' does not exist on type '${spec.recordName}'.`,
+        file: spec.consumerFile,
+        line: props[i].loc?.start?.line ?? null,
+      });
+    }
+  }
+}
+
+function recordConsumerDeclaratorBinding(node, spec, boundNames, diagnostics) {
+  if (node.type !== NODE_TYPE.VAR_DECLARATOR || !node.init) {
+    return;
+  }
+  const calleeName = extractCalleeName(node.init);
+  if (!calleeName || !arrayIncludes(spec.consumerCallNames, calleeName)) {
+    return;
+  }
+  if (node.id?.type === NODE_TYPE.IDENTIFIER) {
+    boundNames.add(node.id.name);
+    return;
+  }
+  if (node.id?.type === NODE_TYPE.OBJECT_PATTERN) {
+    checkConsumerObjectPatternProperties(node.id, spec, diagnostics);
+  }
+}
+
 function collectConsumerRecordBindings(ast, spec, diagnostics) {
   const boundNames = new Set();
-  walkAst(ast, (node) => {
-    if (node.type !== NODE_TYPE.VAR_DECLARATOR || !node.init) {
-      return;
-    }
-    const calleeName = extractCalleeName(node.init);
-    if (!calleeName || !arrayIncludes(spec.consumerCallNames, calleeName)) {
-      return;
-    }
-    if (node.id?.type === NODE_TYPE.IDENTIFIER) {
-      boundNames.add(node.id.name);
-      return;
-    }
-    if (node.id?.type === NODE_TYPE.OBJECT_PATTERN) {
-      const props = node.id.properties || [];
-      for (let i = NUM_ZERO; i < props.length; i += NUM_ONE) {
-        const keyName = extractPropertyKeyName(props[i]);
-        if (keyName !== null && !arrayIncludes(spec.allowedKeys, keyName)) {
-          diagnostics.push({
-            code: DIAGNOSTIC_CODE.PROPERTY_NOT_EXIST,
-            message: `Property '${keyName}' does not exist on type '${spec.recordName}'.`,
-            file: spec.consumerFile,
-            line: props[i].loc?.start?.line ?? null,
-          });
-        }
-      }
-    }
-  });
+  walkAst(ast, (node) =>
+    recordConsumerDeclaratorBinding(node, spec, boundNames, diagnostics));
   return boundNames;
+}
+
+function isTrackedConsumerMemberAccess(node, boundNames) {
+  return node.type === NODE_TYPE.MEMBER &&
+    !node.computed &&
+    node.object?.type === NODE_TYPE.IDENTIFIER &&
+    boundNames.has(node.object.name) &&
+    node.property?.type === NODE_TYPE.IDENTIFIER;
+}
+
+function checkConsumerMemberAccess(node, boundNames, spec, diagnostics) {
+  if (!isTrackedConsumerMemberAccess(node, boundNames)) {
+    return;
+  }
+  const propName = node.property.name;
+  if (objectHasOwn(Object.prototype, propName)) {
+    return;
+  }
+  if (!arrayIncludes(spec.allowedKeys, propName)) {
+    diagnostics.push({
+      code: DIAGNOSTIC_CODE.PROPERTY_NOT_EXIST,
+      message: `Property '${propName}' does not exist on type '${spec.recordName}'.`,
+      file: spec.consumerFile,
+      line: node.property.loc?.start?.line ?? null,
+    });
+  }
 }
 
 function checkConsumerAst(ast, spec, diagnostics) {
@@ -260,29 +293,8 @@ function checkConsumerAst(ast, spec, diagnostics) {
   if (boundNames.size === NUM_ZERO) {
     return;
   }
-  walkAst(ast, (node) => {
-    if (
-      node.type !== NODE_TYPE.MEMBER ||
-      node.computed ||
-      node.object?.type !== NODE_TYPE.IDENTIFIER ||
-      !boundNames.has(node.object.name) ||
-      node.property?.type !== NODE_TYPE.IDENTIFIER
-    ) {
-      return;
-    }
-    const propName = node.property.name;
-    if (objectHasOwn(Object.prototype, propName)) {
-      return;
-    }
-    if (!arrayIncludes(spec.allowedKeys, propName)) {
-      diagnostics.push({
-        code: DIAGNOSTIC_CODE.PROPERTY_NOT_EXIST,
-        message: `Property '${propName}' does not exist on type '${spec.recordName}'.`,
-        file: spec.consumerFile,
-        line: node.property.loc?.start?.line ?? null,
-      });
-    }
-  });
+  walkAst(ast, (node) =>
+    checkConsumerMemberAccess(node, boundNames, spec, diagnostics));
 }
 
 function parseFileForCheck(filePath, sourceOverrides, diagnostics) {

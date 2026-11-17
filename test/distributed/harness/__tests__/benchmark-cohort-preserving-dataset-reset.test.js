@@ -413,93 +413,125 @@ test('cross-deployment-rejection: different deployment cohort between gate and m
   assert.equal(arrayIncludes(multiCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true);
 });
 
+function verifyResetSchemaSelect(store, tableSchemas, colList, table, returnSchemaProbeRow) {
+  if (!store.has(table)) {
+    throw new Error(`Table not found: ${table}`);
+  }
+  const knownCols = tableSchemas.get(table) || new Set();
+  const requestedCols = arrayMap(stringSplit(colList, ','), (c) => stringTrim(c));
+  for (const col of requestedCols) {
+    if (!knownCols.has(col)) {
+      throw new Error(`Column "${col}" does not exist on table "${table}"`);
+    }
+  }
+  const rows = returnSchemaProbeRow ? (store.get(table) || []).slice(0, 1) : [];
+  return {rows, rowCount: 0};
+}
+
+function executeSchemaDdlQuery(state, normalized) {
+  const createMatch = /^CREATE\s+TABLE\s+([a-z_]+)/iu.exec(normalized);
+  if (createMatch) {
+    const table = createMatch[1];
+    state.store.set(table, []);
+    state.tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
+    return {rows: [], rowCount: 0};
+  }
+  const createIndexMatch =
+    /^CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z0-9_]+)\s+ON\s+([a-z0-9_]+)\s*\(([^)]+)\)$/iu
+      .exec(normalized);
+  if (createIndexMatch) {
+    if (state.onCreateIndex) state.onCreateIndex();
+    const indexName = createIndexMatch[1];
+    const tableName = createIndexMatch[2];
+    const cols = arrayMap(stringSplit(createIndexMatch[3], ','), (c) => stringTrim(c));
+    state.createdIndexes.set(indexName, {
+      index_name: indexName,
+      table_name: tableName,
+      column_names: JSON.stringify(cols),
+      state: 'READY',
+    });
+    return {rows: [], rowCount: 0};
+  }
+  const indexCatalogMatch =
+    /^SELECT\s+index_name,\s*table_name,\s*column_names,\s*state\s+FROM\s+indices\s+WHERE\s+table_name\s*=\s*'([a-z0-9_]+)'$/iu
+      .exec(normalized);
+  if (indexCatalogMatch) {
+    const targetTable = indexCatalogMatch[1];
+    const matching = arrayFilter(
+      [...state.createdIndexes.values()],
+      (entry) => entry.table_name === targetTable,
+    );
+    return {rows: matching, rowCount: matching.length};
+  }
+  return null;
+}
+
+function executeSchemaProbeOrTruncate(state, normalized) {
+  const schemaSelectMatch = /^SELECT\s+(.+?)\s+FROM\s+([a-z_]+)\s+LIMIT\s+1$/iu.exec(normalized);
+  if (schemaSelectMatch) {
+    return verifyResetSchemaSelect(
+      state.store,
+      state.tableSchemas,
+      schemaSelectMatch[1],
+      schemaSelectMatch[2],
+      state.returnSchemaProbeRow,
+    );
+  }
+  if (stringStartsWith(normalized, 'TRUNCATE TABLE')) {
+    const table = stringReplace(normalized, /^TRUNCATE TABLE\s+/u, '');
+    if (state.requireTableOnTruncate && !state.store.has(table)) {
+      throw new Error(`Table not found: ${table}`);
+    }
+    state.store.set(table, []);
+    return {rows: [], rowCount: 0};
+  }
+  return null;
+}
+
+function executeRowCountOrInsertQuery(store, normalized, params) {
+  if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
+    const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
+    if (!store.has(table)) {
+      throw new Error(`Table not found: ${table}`);
+    }
+    return {rows: [{row_count: store.get(table).length}]};
+  }
+  if (stringStartsWith(normalized, 'INSERT INTO')) {
+    const table = (/^INSERT INTO\s+([a-z_]+)/u.exec(normalized) || [])[1];
+    if (!store.has(table)) store.set(table, []);
+    store.get(table).push(params);
+    return {rows: [], rowCount: 1};
+  }
+  return null;
+}
+
+async function runCohortResetTestQuery(state, sql, params = []) {
+  state.onSql?.(sql);
+  const normalized = stringTrim(sql);
+  return executeSchemaDdlQuery(state, normalized) ||
+    executeRowCountOrInsertQuery(state.store, normalized, params) ||
+    executeSchemaProbeOrTruncate(state, normalized) ||
+    {rows: [], rowCount: 0};
+}
+
 test('actual-product-reset-and-state-evidence: adapter resetDataset executes TRUNCATE TABLE ' +
   'and restores clean initial dataset counts', async () => {
   const store = new Map();
   const tableSchemas = new Map();
   const createdIndexes = new Map();
   const executedSqls = [];
-
-  function verifySchemaSelect(colList, table) {
-    if (!store.has(table)) {
-      throw new Error(`Table not found: ${table}`);
-    }
-    const knownCols = tableSchemas.get(table) || new Set();
-    const requestedCols = arrayMap(stringSplit(colList, ','), (c) => stringTrim(c));
-    for (const col of requestedCols) {
-      if (!knownCols.has(col)) {
-        throw new Error(`Column "${col}" does not exist on table "${table}"`);
-      }
-    }
-    const rows = store.get(table) || [];
-    return {rows: rows.slice(0, 1), rowCount: 0};
-  }
+  const fakeState = {
+    store,
+    tableSchemas,
+    createdIndexes,
+    onSql: (sql) => executedSqls.push(sql),
+    returnSchemaProbeRow: true,
+    requireTableOnTruncate: true,
+  };
 
   const fakeClient = {
     connect: async () => {},
-    query: async (sql, params = []) => {
-      executedSqls.push(sql);
-      const normalized = stringTrim(sql);
-      const createMatch = /^CREATE\s+TABLE\s+([a-z_]+)/iu.exec(normalized);
-      if (createMatch) {
-        const table = createMatch[1];
-        store.set(table, []);
-        tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
-        return {rows: [], rowCount: 0};
-      }
-      const createIndexMatch =
-        /^CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z0-9_]+)\s+ON\s+([a-z0-9_]+)\s*\(([^)]+)\)$/iu
-          .exec(normalized);
-      if (createIndexMatch) {
-        const indexName = createIndexMatch[1];
-        const tableName = createIndexMatch[2];
-        const cols = arrayMap(stringSplit(createIndexMatch[3], ','), (c) => stringTrim(c));
-        createdIndexes.set(indexName, {
-          index_name: indexName,
-          table_name: tableName,
-          column_names: JSON.stringify(cols),
-          state: 'READY',
-        });
-        return {rows: [], rowCount: 0};
-      }
-      const indexCatalogMatch =
-        /^SELECT\s+index_name,\s*table_name,\s*column_names,\s*state\s+FROM\s+indices\s+WHERE\s+table_name\s*=\s*'([a-z0-9_]+)'$/iu
-          .exec(normalized);
-      if (indexCatalogMatch) {
-        const targetTable = indexCatalogMatch[1];
-        const matching = arrayFilter(
-          [...createdIndexes.values()],
-          (entry) => entry.table_name === targetTable,
-        );
-        return {rows: matching, rowCount: matching.length};
-      }
-      if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
-        const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
-        if (!store.has(table)) {
-          throw new Error(`Table not found: ${table}`);
-        }
-        return {rows: [{row_count: store.get(table).length}]};
-      }
-      const schemaSelectMatch = /^SELECT\s+(.+?)\s+FROM\s+([a-z_]+)\s+LIMIT\s+1$/iu.exec(normalized);
-      if (schemaSelectMatch) {
-        return verifySchemaSelect(schemaSelectMatch[1], schemaSelectMatch[2]);
-      }
-      if (stringStartsWith(normalized, 'TRUNCATE TABLE')) {
-        const table = stringReplace(normalized, /^TRUNCATE TABLE\s+/u, '');
-        if (!store.has(table)) {
-          throw new Error(`Table not found: ${table}`);
-        }
-        store.set(table, []);
-        return {rows: [], rowCount: 0};
-      }
-      if (stringStartsWith(normalized, 'INSERT INTO')) {
-        const table = (/^INSERT INTO\s+([a-z_]+)/u.exec(normalized) || [])[1];
-        if (!store.has(table)) store.set(table, []);
-        store.get(table).push(params);
-        return {rows: [], rowCount: 1};
-      }
-      return {rows: [], rowCount: 0};
-    },
+    query: (sql, params = []) => runCohortResetTestQuery(fakeState, sql, params),
     end: async () => {},
   };
 
@@ -654,81 +686,22 @@ test('interrupted-schema-setup-missing-index: reopening a cohort where all 9 tab
   const createdIndexes = new Map();
   let failCreateIndexOnInitialSetup = true;
 
+  const catalogState = {
+    store,
+    tableSchemas,
+    createdIndexes,
+    onCreateIndex: () => {
+      if (failCreateIndexOnInitialSetup) {
+        throw new Error('simulated connection loss before idx_orders_customer_latest creation');
+      }
+    },
+    returnSchemaProbeRow: false,
+    requireTableOnTruncate: false,
+  };
+
   const catalogClient = {
     connect: async () => {},
-    query: async (sql, params = []) => {
-      const normalized = stringTrim(sql);
-      const createMatch = /^CREATE\s+TABLE\s+([a-z_]+)/iu.exec(normalized);
-      if (createMatch) {
-        const table = createMatch[1];
-        store.set(table, []);
-        tableSchemas.set(table, new Set(CANONICAL_TABLE_COLUMNS[table] || []));
-        return {rows: [], rowCount: 0};
-      }
-      const createIndexMatch =
-        /^CREATE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z0-9_]+)\s+ON\s+([a-z0-9_]+)\s*\(([^)]+)\)$/iu
-          .exec(normalized);
-      if (createIndexMatch) {
-        if (failCreateIndexOnInitialSetup) {
-          throw new Error('simulated connection loss before idx_orders_customer_latest creation');
-        }
-        const indexName = createIndexMatch[1];
-        const tableName = createIndexMatch[2];
-        const cols = arrayMap(stringSplit(createIndexMatch[3], ','), (c) => stringTrim(c));
-        createdIndexes.set(indexName, {
-          index_name: indexName,
-          table_name: tableName,
-          column_names: JSON.stringify(cols),
-          state: 'READY',
-        });
-        return {rows: [], rowCount: 0};
-      }
-      const indexCatalogMatch =
-        /^SELECT\s+index_name,\s*table_name,\s*column_names,\s*state\s+FROM\s+indices\s+WHERE\s+table_name\s*=\s*'([a-z0-9_]+)'$/iu
-          .exec(normalized);
-      if (indexCatalogMatch) {
-        const targetTable = indexCatalogMatch[1];
-        const matching = arrayFilter(
-          [...createdIndexes.values()],
-          (entry) => entry.table_name === targetTable,
-        );
-        return {rows: matching, rowCount: matching.length};
-      }
-      if (stringStartsWith(normalized, 'SELECT COUNT(*) AS row_count FROM')) {
-        const table = stringReplace(normalized, /^SELECT COUNT\(\*\) AS row_count FROM\s+/u, '');
-        if (!store.has(table)) {
-          throw new Error(`Table not found: ${table}`);
-        }
-        return {rows: [{row_count: store.get(table).length}]};
-      }
-      const schemaSelectMatch = /^SELECT\s+(.+?)\s+FROM\s+([a-z_]+)\s+LIMIT\s+1$/iu.exec(normalized);
-      if (schemaSelectMatch) {
-        const table = schemaSelectMatch[2];
-        if (!store.has(table)) {
-          throw new Error(`Table not found: ${table}`);
-        }
-        const knownCols = tableSchemas.get(table) || new Set();
-        const requestedCols = arrayMap(stringSplit(schemaSelectMatch[1], ','), (c) => stringTrim(c));
-        for (const col of requestedCols) {
-          if (!knownCols.has(col)) {
-            throw new Error(`Column "${col}" does not exist on table "${table}"`);
-          }
-        }
-        return {rows: [], rowCount: 0};
-      }
-      if (stringStartsWith(normalized, 'TRUNCATE TABLE')) {
-        const table = stringReplace(normalized, /^TRUNCATE TABLE\s+/u, '');
-        store.set(table, []);
-        return {rows: [], rowCount: 0};
-      }
-      if (stringStartsWith(normalized, 'INSERT INTO')) {
-        const table = (/^INSERT INTO\s+([a-z_]+)/u.exec(normalized) || [])[1];
-        if (!store.has(table)) store.set(table, []);
-        store.get(table).push(params);
-        return {rows: [], rowCount: 1};
-      }
-      return {rows: [], rowCount: 0};
-    },
+    query: (sql, params = []) => runCohortResetTestQuery(catalogState, sql, params),
     end: async () => {},
   };
 

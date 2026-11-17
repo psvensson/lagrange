@@ -434,10 +434,7 @@ function importGraphSealReadersBeyondOne(root) {
   return readers > 1 ? readers - 1 : 0;
 }
 
-// Whole-tree commands of the gate (the static audits, the model contracts,
-// the golden-capability guard, the owner-debt refresh) with no entry in the
-// proof-obligation registry naming the inputs that trigger them.
-function wholeTreeChecksWithoutInputTrigger(root) {
+function declaredObligationCommands(root) {
   const registry = readJsonOrNull(root, PROOF_OBLIGATIONS);
   const obligations = Array.isArray(registry?.obligations) ? registry.obligations : [];
   const declared = Object.create(null);
@@ -447,9 +444,16 @@ function wholeTreeChecksWithoutInputTrigger(root) {
       declared[obligation.command] = true;
     }
   }
+  return declared;
+}
+
+// Whole-tree commands of the gate (the static audits, the model contracts,
+// the golden-capability guard, the owner-debt refresh) with no entry in the
+// proof-obligation registry naming the inputs that trigger them.
+function wholeTreeChecksWithoutInputTrigger(root) {
+  const declared = declaredObligationCommands(root);
   const manifest = readJsonOrNull(root, POSTPUSH_MANIFEST);
-  const commands = [];
-  for (const name of staticAuditScripts(root)) commands.push(`npm run ${name}`);
+  const commands = arrayMap(staticAuditScripts(root), (name) => `npm run ${name}`);
   for (const command of Array.isArray(manifest?.commands) ? manifest.commands : []) {
     if (command.id === FOCUSED_CONTRACTS_ID) continue;
     commands.push(
@@ -486,6 +490,29 @@ function workflowsWithoutConcurrency(root) {
   return missing;
 }
 
+function jobMatchesPlanEntry(jobText, entry) {
+  const timeout = TIMEOUT_PATTERN.exec(jobText);
+  const runsOn = RUNS_ON_PATTERN.exec(jobText);
+  return Boolean(entry && timeout && runsOn) &&
+    Number(timeout[1]) === entry.timeoutMinutes &&
+    stringTrim(runsOn[1]) === entry.runsOn;
+}
+
+function workflowOffendingJobCount(file, text, jobs) {
+  const jobsStart = stringIndexOf(text, `${NEWLINE}jobs:`);
+  if (jobsStart < 0) return 0;
+  const body = text.slice(jobsStart);
+  const headers = [...stringMatchAll(body, JOB_HEADER_PATTERN)];
+  let offending = 0;
+  for (let index = 0; index < headers.length; index += 1) {
+    const start = headers[index].index;
+    const end = index + 1 < headers.length ? headers[index + 1].index : body.length;
+    const key = `${path.posix.basename(file)}/${headers[index][1]}`;
+    if (!jobMatchesPlanEntry(body.slice(start, end), jobs[key])) offending += 1;
+  }
+  return offending;
+}
+
 // Each workflow job's runner and timeout must equal the committed resource
 // plan's entry for `<workflow>/<job>`; a job the plan does not know, or one
 // whose literals differ, is not plan-driven.
@@ -495,25 +522,7 @@ function ciResourcesNotPlanDriven(root) {
   let offending = 0;
   for (const file of filesUnder(root, WORKFLOWS_DIR)) {
     if (!stringEndsWith(file, WORKFLOW_SUFFIX)) continue;
-    const text = readText(root, file);
-    const jobsStart = stringIndexOf(text, `${NEWLINE}jobs:`);
-    if (jobsStart < 0) continue;
-    const body = text.slice(jobsStart);
-    const headers = [...stringMatchAll(body, JOB_HEADER_PATTERN)];
-    for (let index = 0; index < headers.length; index += 1) {
-      const start = headers[index].index;
-      const end = index + 1 < headers.length ? headers[index + 1].index : body.length;
-      const jobText = body.slice(start, end);
-      const key = `${path.posix.basename(file)}/${headers[index][1]}`;
-      const timeout = TIMEOUT_PATTERN.exec(jobText);
-      const runsOn = RUNS_ON_PATTERN.exec(jobText);
-      const entry = jobs[key];
-      if (!entry || !timeout || !runsOn ||
-          Number(timeout[1]) !== entry.timeoutMinutes ||
-          stringTrim(runsOn[1]) !== entry.runsOn) {
-        offending += 1;
-      }
-    }
+    offending += workflowOffendingJobCount(file, readText(root, file), jobs);
   }
   return offending;
 }

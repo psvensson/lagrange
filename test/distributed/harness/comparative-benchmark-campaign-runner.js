@@ -117,10 +117,78 @@ function resolveFailureCode(error, interrupted) {
   return interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : UNCLASSIFIED;
 }
 
+function readinessLastObservationOf(attempt) {
+  const readiness = attempt?.deployment?.readiness;
+  if (!readiness) return null;
+  if (readiness.lastObservation !== undefined && readiness.lastObservation !== null) {
+    return readiness.lastObservation;
+  }
+  return readiness.evidence?.lastObservation ?? null;
+}
+
 function lastObservationOf(error, attempt) {
-  return error?.lastObservation ?? error?.diagnostic?.lastObservation ??
-    attempt?.deployment?.readiness?.lastObservation ??
-    attempt?.deployment?.readiness?.evidence?.lastObservation ?? null;
+  if (!error) return readinessLastObservationOf(attempt);
+  if (error.lastObservation !== undefined && error.lastObservation !== null) {
+    return error.lastObservation;
+  }
+  if (error.diagnostic && error.diagnostic.lastObservation !== undefined &&
+      error.diagnostic.lastObservation !== null) {
+    return error.diagnostic.lastObservation;
+  }
+  return readinessLastObservationOf(attempt);
+}
+
+function classifySetupFailureClass({interrupted, observerInfrastructure, isReadiness}) {
+  if (interrupted) return INTERRUPTED_SETUP_FAILURE_CLASS;
+  if (observerInfrastructure) return INFRASTRUCTURE_SETUP_FAILURE_CLASS;
+  if (isReadiness) return READINESS_SETUP_FAILURE_CLASS;
+  return null;
+}
+
+function composeFailureDiagnostic(rawDiagnostic, semanticGate) {
+  if (!semanticGate) return rawDiagnostic;
+  if (rawDiagnostic && typeof rawDiagnostic === 'object') {
+    return {...rawDiagnostic, semanticGate};
+  }
+  return {semanticGate};
+}
+
+function optionalProcessFailureFields(error) {
+  const fields = {};
+  if (!error) return fields;
+  if (error.exitCode !== undefined && error.exitCode !== null) {
+    fields.exitCode = error.exitCode;
+  }
+  if (typeof error.signal === 'string' && error.signal !== '') {
+    fields.signal = error.signal;
+  }
+  if (error.killed === true) {
+    fields.killed = true;
+  }
+  return fields;
+}
+
+function buildOptionalFailureFlags({
+  failureClass,
+  interrupted,
+  timedOut,
+  transportError,
+  observerInfrastructure,
+  lastObservation,
+}) {
+  const flags = {};
+  if (failureClass) flags.failureClass = failureClass;
+  if (interrupted) flags.aborted = true;
+  if (timedOut) flags.timedOut = true;
+  if (transportError) flags.transportError = true;
+  if (observerInfrastructure) flags.observerInfrastructure = true;
+  if (lastObservation !== null) flags.lastObservation = lastObservation;
+  return flags;
+}
+
+function resolveErrorSemanticGate(error) {
+  if (!error) return null;
+  return error.semanticGate ?? error.attempt?.semanticGate ?? null;
 }
 
 function failureOf(error, signal = null) {
@@ -129,36 +197,27 @@ function failureOf(error, signal = null) {
   const timedOut = !interrupted && isTimedOutFailure(error);
   const transportError = !interrupted && isTransportFailure(error);
   const isReadiness = error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED;
-  let failureClass = null;
-  if (interrupted) {
-    failureClass = INTERRUPTED_SETUP_FAILURE_CLASS;
-  } else if (observerInfrastructure) {
-    failureClass = INFRASTRUCTURE_SETUP_FAILURE_CLASS;
-  } else if (isReadiness) {
-    failureClass = READINESS_SETUP_FAILURE_CLASS;
-  }
+  const failureClass = classifySetupFailureClass({
+    interrupted,
+    observerInfrastructure,
+    isReadiness,
+  });
   const lastObservation = lastObservationOf(error, error?.attempt);
-  const semanticGate = error?.semanticGate ?? error?.attempt?.semanticGate ?? null;
-  const rawDiagnostic = error?.diagnostic ?? null;
-  const diagnostic = semanticGate ?
-    (rawDiagnostic && typeof rawDiagnostic === 'object' ?
-      {...rawDiagnostic, semanticGate} : {semanticGate}) :
-    rawDiagnostic;
+  const semanticGate = resolveErrorSemanticGate(error);
+  const diagnostic = composeFailureDiagnostic(error?.diagnostic ?? null, semanticGate);
   return {
     code: resolveFailureCode(error, interrupted),
     message: errorText(error),
     diagnostic,
-    ...(failureClass ? {failureClass} : {}),
-    ...(interrupted ? {aborted: true} : {}),
-    ...(timedOut ? {timedOut: true} : {}),
-    ...(transportError ? {transportError: true} : {}),
-    ...(observerInfrastructure ? {observerInfrastructure: true} : {}),
-    ...(error?.exitCode !== undefined && error?.exitCode !== null ?
-      {exitCode: error.exitCode} : {}),
-    ...(typeof error?.signal === 'string' && error.signal !== '' ?
-      {signal: error.signal} : {}),
-    ...(error?.killed === true ? {killed: true} : {}),
-    ...(lastObservation !== null ? {lastObservation} : {}),
+    ...buildOptionalFailureFlags({
+      failureClass,
+      interrupted,
+      timedOut,
+      transportError,
+      observerInfrastructure,
+      lastObservation,
+    }),
+    ...optionalProcessFailureFields(error),
   };
 }
 
@@ -280,6 +339,18 @@ async function observeRolesSafely(deployment, events, phase,
   }
 }
 
+function applySemanticGateErrorToAttempt(attempt, error) {
+  if (!attempt) return;
+  attempt.deployment = error?.deployment ?? attempt.deployment;
+  attempt.semanticGate = error?.semanticGate ?? null;
+}
+
+function applySemanticGateStageToAttempt(attempt, staged, deployment) {
+  if (!attempt) return;
+  attempt.deployment = staged.deployment ?? deployment;
+  attempt.semanticGate = staged.gate ?? null;
+}
+
 // The semantic gate before the window; without a gate stage the run says so.
 async function semanticGateStage({run, manifest, deps, attempt = null, deployment, events,
   signal}) {
@@ -300,17 +371,11 @@ async function semanticGateStage({run, manifest, deps, attempt = null, deploymen
     });
   } catch (error) {
     events.push(...(error?.events || []));
-    if (attempt) {
-      attempt.deployment = error?.deployment ?? attempt.deployment;
-      attempt.semanticGate = error?.semanticGate ?? null;
-    }
+    applySemanticGateErrorToAttempt(attempt, error);
     throw error;
   }
   events.push(...(staged.events || []));
-  if (attempt) {
-    attempt.deployment = staged.deployment ?? deployment;
-    attempt.semanticGate = staged.gate ?? null;
-  }
+  applySemanticGateStageToAttempt(attempt, staged, deployment);
   return staged;
 }
 
@@ -320,6 +385,29 @@ async function withAttempt(attempt, step) {
     return await step();
   } catch (error) {
     throw Object.assign(error, {attempt});
+  }
+}
+
+function throwIfWorkloadFailed(workloadFailure, attempt) {
+  if (!workloadFailure) return;
+  const err = deploymentFailure(workloadFailure.code, workloadFailure.message,
+    workloadFailure.diagnostic ?? null);
+  err.aborted = Boolean(workloadFailure.aborted);
+  err.deadlineExpired = Boolean(workloadFailure.deadlineExpired);
+  err.timedOut = Boolean(workloadFailure.timedOut);
+  err.transportError = Boolean(workloadFailure.transportError);
+  err.observerInfrastructure = Boolean(workloadFailure.observerInfrastructure);
+  if (workloadFailure.exitCode !== undefined) err.exitCode = workloadFailure.exitCode;
+  if (workloadFailure.signal !== undefined) err.signal = workloadFailure.signal;
+  if (workloadFailure.killed !== undefined) err.killed = workloadFailure.killed;
+  err.lastObservation = workloadFailure.lastObservation ?? null;
+  throw Object.assign(err, {attempt});
+}
+
+function recordRoleChangeIfNeeded(events, rolesBefore, rolesAfter, nowFn) {
+  if (rolesBefore && rolesAfter && canonicalJson(rolesBefore) !== canonicalJson(rolesAfter)) {
+    events.push({kind: EVENT.ROLE_CHANGED, before: rolesBefore, after: rolesAfter,
+      observedAt: iso(nowFn())});
   }
 }
 
@@ -358,30 +446,13 @@ async function measureRun({run, manifest, deps, events, signal}) {
   const rolesAfter = await withAttempt(attempt, () => observeRolesSafely(deployment, events,
     'after-window', {signal, deadlineAtMs, now: deps.now}));
   attempt.roleObservations = {before: rolesBefore, after: rolesAfter};
-  if (rolesBefore && rolesAfter && canonicalJson(rolesBefore) !== canonicalJson(rolesAfter)) {
-    events.push({kind: EVENT.ROLE_CHANGED, before: rolesBefore, after: rolesAfter,
-      observedAt: iso(deps.now())});
-  }
+  recordRoleChangeIfNeeded(events, rolesBefore, rolesAfter, deps.now);
   if (identityEvents.length > 0) {
     throw Object.assign(deploymentFailure(DEPLOYMENT_FAILURE.PRODUCT_CHANGED,
       'product containers changed across the measured window', {events: identityEvents}),
     {attempt});
   }
-  const workloadFailure = attempt.workload.failure;
-  if (workloadFailure) {
-    const err = deploymentFailure(workloadFailure.code, workloadFailure.message,
-      workloadFailure.diagnostic ?? null);
-    err.aborted = Boolean(workloadFailure.aborted);
-    err.deadlineExpired = Boolean(workloadFailure.deadlineExpired);
-    err.timedOut = Boolean(workloadFailure.timedOut);
-    err.transportError = Boolean(workloadFailure.transportError);
-    err.observerInfrastructure = Boolean(workloadFailure.observerInfrastructure);
-    if (workloadFailure.exitCode !== undefined) err.exitCode = workloadFailure.exitCode;
-    if (workloadFailure.signal !== undefined) err.signal = workloadFailure.signal;
-    if (workloadFailure.killed !== undefined) err.killed = workloadFailure.killed;
-    err.lastObservation = workloadFailure.lastObservation ?? null;
-    throw Object.assign(err, {attempt});
-  }
+  throwIfWorkloadFailed(attempt.workload.failure, attempt);
   if (signal.aborted) {
     throw Object.assign(deploymentFailure(DEPLOYMENT_FAILURE.WATCHDOG_STOPPED,
       'campaign watchdog stopped issuing during the run'), {attempt});
@@ -447,25 +518,46 @@ function resolveRecordCorrectness(workload, attempt) {
   };
 }
 
+function resolveRecordFailureClass(failure, state) {
+  if (failure?.failureClass) return failure.failureClass;
+  return state === RUN_STATE.INTERRUPTED ? INTERRUPTED_SETUP_FAILURE_CLASS : null;
+}
+
+function resolveRecordLastObservation(failure, deployment) {
+  if (failure?.lastObservation !== undefined && failure?.lastObservation !== null) {
+    return failure.lastObservation;
+  }
+  return deployment?.readiness?.lastObservation ??
+    deployment?.readiness?.evidence?.lastObservation ?? null;
+}
+
+function optionalTopLevelRunStatusFields({
+  failureClass,
+  timedOut,
+  lastObservation,
+  recordedClosure,
+}) {
+  return {
+    ...(failureClass ? {failureClass} : {}),
+    ...(timedOut ? {timedOut: true} : {}),
+    ...(lastObservation !== null ? {lastObservation} : {}),
+    ...(recordedClosure ? {cleanup: recordedClosure} : {}),
+  };
+}
+
 function runRecord({run, manifest, header, state, failure, attempt, events, closure,
   startedAt, endedAt, recordOwner}) {
   const workload = attempt?.workload ?? null;
   const deployment = recordedDeployment({attempt, header, events, closure});
-  const failureClass = failure?.failureClass ??
-    (state === RUN_STATE.INTERRUPTED ? INTERRUPTED_SETUP_FAILURE_CLASS : null);
+  const failureClass = resolveRecordFailureClass(failure, state);
   const timedOut = failure?.timedOut === true;
-  const lastObservation = failure?.lastObservation ??
-    deployment?.readiness?.lastObservation ??
-    deployment?.readiness?.evidence?.lastObservation ?? null;
+  const lastObservation = resolveRecordLastObservation(failure, deployment);
   const recordedClosure = deployment?.closure ?? closureOf(closure);
   const record = {recordType: RECORD_TYPE.RUN, schemaVersion: RECORD_SCHEMA,
     campaignId: manifest.campaignId, runId: run.runId, claimKey: run.claimKey,
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
-    ...(failureClass ? {failureClass} : {}),
-    ...(timedOut ? {timedOut: true} : {}),
-    ...(lastObservation !== null ? {lastObservation} : {}),
-    ...(recordedClosure ? {cleanup: recordedClosure} : {}),
+    ...optionalTopLevelRunStatusFields({failureClass, timedOut, lastObservation, recordedClosure}),
     execution: {
       state,
       failure,
@@ -540,6 +632,17 @@ function isDescribedExhaustion(error) {
       error?.aborted === true);
 }
 
+function buildEmptyDeploymentAttempt(error) {
+  if (!error?.deployment) return null;
+  return {
+    deployment: error.deployment,
+    workload: null,
+    semanticGate: error?.semanticGate ?? null,
+    productsAfter: null,
+    roleObservations: null,
+  };
+}
+
 // Measure the run, or record the deployer's described readiness exhaustion;
 // any failure keeps the attempt it reached.
 async function settleAttempt({run, manifest, deps, events, signal}) {
@@ -551,20 +654,18 @@ async function settleAttempt({run, manifest, deps, events, signal}) {
       events.push({kind: EVENT.WATCHDOG_STOP, observedAt: iso(deps.now())});
     }
     if (!isDescribedExhaustion(error)) {
-      const recordedAttempt = hasCampaignAttempt(error) ? error.attempt :
-        (error?.deployment ? {deployment: error.deployment,
-          workload: null, semanticGate: error?.semanticGate ?? null,
-          productsAfter: null, roleObservations: null} : null);
+      const recordedAttempt = hasCampaignAttempt(error) ?
+        error.attempt :
+        buildEmptyDeploymentAttempt(error);
       return {attempt: recordedAttempt, failure};
     }
     try {
       return {attempt: await unmeasuredAttempt({run, manifest, deps, events, error, signal}),
         failure};
     } catch (unrecorded) {
-      const fallbackAttempt = hasCampaignAttempt(unrecorded) ? unrecorded.attempt :
-        {deployment: error.deployment, workload: null,
-          semanticGate: error?.semanticGate ?? null,
-          productsAfter: null, roleObservations: null};
+      const fallbackAttempt = hasCampaignAttempt(unrecorded) ?
+        unrecorded.attempt :
+        buildEmptyDeploymentAttempt(error);
       return {attempt: fallbackAttempt, failure};
     }
   }

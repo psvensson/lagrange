@@ -262,24 +262,39 @@ async function resolveNodePlatform(existing, flags, ssh) {
   return {os, arch};
 }
 
-async function commandNodeAdd(state, name, flags) {
-  const existing = state.nodes[name] || {};
+function resolveNodeMetadata(existing, flags) {
   const roles = flags.roles ? normalizeRoles(flags.roles) : existing.roles || [];
-  const ssh = flags.ssh || existing.ssh || null;
-  const {os, arch} = await resolveNodePlatform(existing, flags, ssh);
-  const node = {
+  const labels = flags.labels ? normalizeLabels(flags.labels) : existing.labels || {};
+  return {
+    roles,
+    labels,
+    ssh: flags.ssh || existing.ssh || null,
+    ip: flags.ip || existing.ip || null,
+  };
+}
+
+function buildAddedNodeRecord(existing, name, flags, platform, metadata) {
+  return {
     ...existing,
     name,
-    ssh,
-    ip: flags.ip || existing.ip || null,
-    os,
-    arch,
-    roles,
-    labels: flags.labels ? normalizeLabels(flags.labels) : existing.labels || {},
+    ssh: metadata.ssh,
+    ip: metadata.ip,
+    os: platform.os,
+    arch: platform.arch,
+    roles: metadata.roles,
+    labels: metadata.labels,
     dockerSocket: flags[FLAG.DOCKER_SOCKET] || existing.dockerSocket || DEFAULT_DOCKER_SOCKET,
     k3sNode: flags[FLAG.K3S_NODE] || existing.k3sNode || name,
   };
-  if ((roles.includes(ROLE.HARNESS) || roles.includes(ROLE.K3S)) && !node.ip) {
+}
+
+async function commandNodeAdd(state, name, flags) {
+  const existing = state.nodes[name] || {};
+  const metadata = resolveNodeMetadata(existing, flags);
+  const platform = await resolveNodePlatform(existing, flags, metadata.ssh);
+  const node = buildAddedNodeRecord(existing, name, flags, platform, metadata);
+  if ((metadata.roles.includes(ROLE.HARNESS) || metadata.roles.includes(ROLE.K3S)) &&
+      !node.ip) {
     throw new Error(ERROR_TEXT.IP_REQUIRED);
   }
   state.nodes[name] = node;
@@ -466,6 +481,29 @@ async function commandHarness(action, args) {
   });
 }
 
+function k3sTargetNodeName(state, name) {
+  const node = requireNode(state, name);
+  return node.k3sNode || node.name;
+}
+
+function runK3sServerAction(state, server, action, name) {
+  if (action === ACTION.JOIN) return joinK3sNode(requireNode(state, name), server);
+  if (action === ACTION.STATUS) return k3sKubectl(server, [...KUBECTL_STATUS]);
+  if (action === ACTION.LABELS) {
+    return syncK3sLabels(server, selectNodesByRole(state, ROLE.K3S));
+  }
+  if (action === ACTION.CORDON || action === ACTION.UNCORDON) {
+    return k3sKubectl(server, [action, k3sTargetNodeName(state, name)]);
+  }
+  if (action === ACTION.DRAIN) {
+    return k3sKubectl(server, [
+      ...KUBECTL_DRAIN, k3sTargetNodeName(state, name),
+      ...KUBECTL_DRAIN_OPTIONS,
+    ]);
+  }
+  throw new Error(`Unknown k3s action: ${action}`);
+}
+
 async function commandK3s(action, args) {
   const state = await loadState();
   const name = args.positional[POSITIONAL.NAME];
@@ -475,23 +513,7 @@ async function commandK3s(action, args) {
     return initK3sServer(requireNode(state, name), {version: args.flags.version});
   }
   if (!server) throw new Error(`k3s ${action} requires --server SERVER`);
-  if (action === ACTION.JOIN) return joinK3sNode(requireNode(state, name), server);
-  if (action === ACTION.STATUS) return k3sKubectl(server, [...KUBECTL_STATUS]);
-  if (action === ACTION.LABELS) {
-    return syncK3sLabels(server, selectNodesByRole(state, ROLE.K3S));
-  }
-  if (action === ACTION.CORDON || action === ACTION.UNCORDON) {
-    const node = requireNode(state, name);
-    return k3sKubectl(server, [action, node.k3sNode || node.name]);
-  }
-  if (action === ACTION.DRAIN) {
-    const node = requireNode(state, name);
-    return k3sKubectl(server, [
-      ...KUBECTL_DRAIN, node.k3sNode || node.name,
-      ...KUBECTL_DRAIN_OPTIONS,
-    ]);
-  }
-  throw new Error(`Unknown k3s action: ${action}`);
+  return runK3sServerAction(state, server, action, name);
 }
 
 async function commandTest(profile, args) {
@@ -526,6 +548,22 @@ async function commandTest(profile, args) {
   }
 }
 
+function validatedLabTestLane(flags) {
+  const lane = flags[LAB_TEST_FLAG.LANE];
+  if (typeof lane !== 'string') throw new Error(ERROR_TEXT.NO_LANE);
+  if (!LAB_TEST_LANES.includes(lane)) {
+    throw new Error(`${ERROR_TEXT.UNKNOWN_LANE}${lane}: ${LAB_TEST_LANES.join(LAB_TEST_CHOICE)}`);
+  }
+  return lane;
+}
+
+function validatedLabTestSplit(flags, lane) {
+  const split = flags[LAB_TEST_FLAG.SPLIT];
+  if (split !== undefined && split !== true) throw new Error(ERROR_TEXT.SPLIT_TAKES_NO_VALUE);
+  if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
+  return split === true;
+}
+
 // Everything a hand lab run can refuse, refused before the inventory, the
 // tree or any machine is looked at.
 function labTestRequest(profile, flags) {
@@ -533,18 +571,12 @@ function labTestRequest(profile, flags) {
     throw new Error(`the ${profile}${ERROR_TEXT.NOT_A_FILE_PLAN}` +
       `${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)}`);
   }
-  const lane = flags[LAB_TEST_FLAG.LANE];
-  if (typeof lane !== 'string') throw new Error(ERROR_TEXT.NO_LANE);
-  if (!LAB_TEST_LANES.includes(lane)) {
-    throw new Error(`${ERROR_TEXT.UNKNOWN_LANE}${lane}: ${LAB_TEST_LANES.join(LAB_TEST_CHOICE)}`);
-  }
-  const split = flags[LAB_TEST_FLAG.SPLIT];
-  if (split !== undefined && split !== true) throw new Error(ERROR_TEXT.SPLIT_TAKES_NO_VALUE);
-  if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
+  const lane = validatedLabTestLane(flags);
+  const split = validatedLabTestSplit(flags, lane);
   if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
   if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
   if (split && flags[LAB_TEST_FLAG.ON] !== undefined) throw new Error(ERROR_TEXT.SPLIT_OR_ON);
-  return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
+  return {lane, split, on: flags[LAB_TEST_FLAG.ON] ?? null,
     sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
 }
 

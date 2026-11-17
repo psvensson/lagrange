@@ -58,24 +58,32 @@ function isTypeofOperand(node) {
     node.operator === LOCAL_STR_TYPEOF;
 }
 
+function isBinaryTypeofComparison(node, parent) {
+  if (parent?.type !== LOCAL_STR_BINARYEXPRESSION ||
+      !EQUALITY_OPERATORS.has(parent.operator)) {
+    return false;
+  }
+  return (parent.left === node && isTypeofOperand(parent.right)) ||
+    (parent.right === node && isTypeofOperand(parent.left));
+}
+
+function isSwitchCaseTypeofComparison(node, parent, ancestors) {
+  if (parent?.type !== LOCAL_STR_SWITCHCASE || parent.test !== node) {
+    return false;
+  }
+  // walkAst ancestors include the direct parent as the last entry, so the
+  // enclosing SwitchStatement sits one position earlier.
+  const switchStatement = ancestors[ancestors.length - LOCAL_NUM_TWO];
+  return switchStatement?.type === LOCAL_STR_SWITCHSTATEMENT &&
+    isTypeofOperand(switchStatement.discriminant);
+}
+
 function isTypeofComparisonLiteral(node, parent, ancestors) {
   if (typeof node.value !== LOCAL_STR_STRING) {
     return false;
   }
-  if (parent?.type === LOCAL_STR_BINARYEXPRESSION &&
-      EQUALITY_OPERATORS.has(parent.operator) &&
-      ((parent.left === node && isTypeofOperand(parent.right)) ||
-       (parent.right === node && isTypeofOperand(parent.left)))) {
-    return true;
-  }
-  if (parent?.type === LOCAL_STR_SWITCHCASE && parent.test === node) {
-    // walkAst ancestors include the direct parent as the last entry, so the
-    // enclosing SwitchStatement sits one position earlier.
-    const switchStatement = ancestors[ancestors.length - LOCAL_NUM_TWO];
-    return switchStatement?.type === LOCAL_STR_SWITCHSTATEMENT &&
-      isTypeofOperand(switchStatement.discriminant);
-  }
-  return false;
+  return isBinaryTypeofComparison(node, parent) ||
+    isSwitchCaseTypeofComparison(node, parent, ancestors);
 }
 
 function isJsLanguagePrimitiveLiteral(node, parent, ancestors) {

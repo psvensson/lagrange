@@ -190,26 +190,38 @@ function evaluateLagrangeServeLane({snapshots}) {
   return {ready: denials.length === 0, denials};
 }
 
-// One node's own serve verdict from its control snapshot: serve-eligible with
-// no denial reason, and no replica operation in flight (an unreadable count is
-// a denial naming `unknown`).
-function nodeServeDenials(nodeId, snapshot) {
+function serveEligibilityDenials(nodeId, readiness) {
   const denials = [];
-  const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
   if (readiness?.dimensions?.serveEligible !== true) {
     denials.push(`${DENIAL.SERVE_NOT_ELIGIBLE}:${nodeId}`);
   }
-  for (const reason of Array.isArray(readiness?.reasons) ? readiness.reasons : []) {
+  const reasons = Array.isArray(readiness?.reasons) ? readiness.reasons : [];
+  for (const reason of reasons) {
     if (typeof reason?.code === 'string' && reason.code.length > 0) {
       denials.push(`${DENIAL.SERVE_DENIED}:${nodeId}:${reason.code}`);
     }
   }
-  const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
-  if (!Number.isInteger(inFlight) || inFlight !== 0) {
-    denials.push(`${DENIAL.REPLICA_OPERATIONS_IN_FLIGHT}:${nodeId}:` +
-      `${Number.isInteger(inFlight) ? inFlight : 'unknown'}`);
-  }
   return denials;
+}
+
+function replicaInFlightDenials(nodeId, snapshot) {
+  const inFlight = Number(snapshot.replicaOperations?.inFlightCount);
+  if (Number.isInteger(inFlight) && inFlight === 0) {
+    return [];
+  }
+  const label = Number.isInteger(inFlight) ? inFlight : 'unknown';
+  return [`${DENIAL.REPLICA_OPERATIONS_IN_FLIGHT}:${nodeId}:${label}`];
+}
+
+// One node's own serve verdict from its control snapshot: serve-eligible with
+// no denial reason, and no replica operation in flight (an unreadable count is
+// a denial naming `unknown`).
+function nodeServeDenials(nodeId, snapshot) {
+  const readiness = snapshot.controlPlaneDiagnostics?.readinessByNodeId?.[nodeId];
+  return [
+    ...serveEligibilityDenials(nodeId, readiness),
+    ...replicaInFlightDenials(nodeId, snapshot),
+  ];
 }
 
 function summarizePartitionSpread({partitions, services, expectedNodeIds}) {

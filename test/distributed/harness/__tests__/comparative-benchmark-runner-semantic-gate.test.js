@@ -286,6 +286,28 @@ function handleDatabaseDdl(store, session, normalized) {
   return null;
 }
 
+function handleIndexAdminSql(db, normalized) {
+  const createIdx = /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu.exec(normalized);
+  if (createIdx) {
+    const cols = arrayMap(stringSplit(createIdx[3], ','), (c) => stringTrim(c));
+    db.indexes.set(createIdx[1], {index_name: createIdx[1], table_name: createIdx[2],
+      column_names: JSON.stringify(cols), state: 'READY',
+      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`});
+    return {rows: [], rowCount: 0};
+  }
+  const idxCat = /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu.exec(normalized);
+  if (idxCat) {
+    return {rows: arrayFilter([...db.indexes.values()], (e) => e.table_name === idxCat[1])};
+  }
+  const pgIdx = /^SELECT indexname, .+ FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/iu.exec(normalized);
+  if (pgIdx) {
+    const e = db.indexes.get(pgIdx[2]);
+    return {rows: e && e.table_name === pgIdx[1] ?
+      [{indexname: e.index_name, tablename: e.table_name, indexdef: e.indexdef}] : []};
+  }
+  return /^(CREATE INDEX|DROP TABLE)/iu.test(normalized) ? {rows: [], rowCount: 0} : null;
+}
+
 function handleAdminSql(store, session, normalized, params) {
   const dbDdl = handleDatabaseDdl(store, session, normalized);
   if (dbDdl) return dbDdl;
@@ -295,28 +317,8 @@ function handleAdminSql(store, session, normalized, params) {
     tableRowsOf(db.tables, createTbl[1]);
     return {rows: [], rowCount: 0};
   }
-  const createIdx = /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu
-    .exec(normalized);
-  if (createIdx) {
-    const cols = arrayMap(stringSplit(createIdx[3], ','), (c) => stringTrim(c));
-    db.indexes.set(createIdx[1], {index_name: createIdx[1], table_name: createIdx[2],
-      column_names: JSON.stringify(cols), state: 'READY',
-      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`});
-    return {rows: [], rowCount: 0};
-  }
-  const idxCat = /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu
-    .exec(normalized);
-  if (idxCat) {
-    return {rows: arrayFilter([...db.indexes.values()], (e) => e.table_name === idxCat[1])};
-  }
-  const pgIdx = /^SELECT indexname, .+ FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/iu
-    .exec(normalized);
-  if (pgIdx) {
-    const e = db.indexes.get(pgIdx[2]);
-    return {rows: e && e.table_name === pgIdx[1] ?
-      [{indexname: e.index_name, tablename: e.table_name, indexdef: e.indexdef}] : []};
-  }
-  if (/^(CREATE INDEX|DROP TABLE)/iu.test(normalized)) return {rows: [], rowCount: 0};
+  const indexRes = handleIndexAdminSql(db, normalized);
+  if (indexRes) return indexRes;
   const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
   if (truncateTbl) {
     db.tables.set(truncateTbl[1], []);
@@ -334,10 +336,8 @@ function handleAdminSql(store, session, normalized, params) {
   const countMatch = COUNT_PATTERN.exec(normalized);
   if (countMatch) return {rows: [{row_count: tableRowsOf(db.tables, countMatch[1]).length}]};
   if (INSERT_BATCH_PATTERN.test(normalized)) return insertBatchRows(db, normalized, params);
-  if (SNAPSHOT_PATTERN.test(normalized)) {
-    return {rows: sortedSnapshotRows(selectReadView(db, session, store.fault), normalized)};
-  }
-  return null;
+  return SNAPSHOT_PATTERN.test(normalized) ?
+    {rows: sortedSnapshotRows(selectReadView(db, session, store.fault), normalized)} : null;
 }
 
 function createTransactionalOltpStore(fault = {}) {

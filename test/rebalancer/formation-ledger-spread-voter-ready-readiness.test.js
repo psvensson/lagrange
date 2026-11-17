@@ -603,6 +603,55 @@ test('converged priorityPartitionSummary refuses surplus seed REMOVE when a remo
   }
 });
 
+function seedStorageIncarnationCacheRows(cache, sourceCache) {
+  for (const tableName of [
+    TABLES.NODES,
+    TABLES.SERVICES,
+    TABLES.PARTITIONS,
+    TABLES.REPLICA_OPERATIONS,
+  ]) {
+    for (const row of sourceCache.getAll(tableName)) {
+      const key =
+        row[COLUMN.NODE_ID] ||
+        row[COLUMN.SERVICE_ID] ||
+        row[COLUMN.PARTITION_ID] ||
+        row[COLUMN.OPERATION_ID];
+      if (key) {
+        cache.set(tableName, key, {...row});
+      }
+    }
+  }
+}
+
+function createStorageIncarnationTestCache(coordinator) {
+  const cache = new SystemTableCache();
+  cache.set = (tableName, key, row) => {
+    cache.tables.get(tableName)?.delete(key);
+    cache.tombstoneStore.clear();
+    cache.applySystemTableChange(tableName, 'INSERT', {...row});
+  };
+  cache.delete = (tableName, key) => {
+    const keyColumnByTable = {
+      [TABLES.NODES]: COLUMN.NODE_ID,
+      [TABLES.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+      [TABLES.SERVICE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
+      [TABLES.SERVICES]: COLUMN.SERVICE_ID,
+      [TABLES.PARTITIONS]: COLUMN.PARTITION_ID,
+      [TABLES.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
+    };
+    const keyColumn = keyColumnByTable[tableName] || COLUMN.SERVICE_ID;
+    cache.applySystemTableChange(tableName, 'DELETE', {[keyColumn]: key});
+  };
+  seedStorageIncarnationCacheRows(cache, coordinator.systemTableCache);
+  return cache;
+}
+
+function readEndpointStorageIncarnation(cache, nodeId) {
+  const endpointRow = cache.get(TABLES.NODE_ENDPOINTS, `ep-${nodeId}-ws`);
+  const metadataText = endpointRow ? endpointRow[COLUMN.METADATA] : '{}';
+  return JSON.parse(metadataText || '{}').storageIncarnation;
+}
+
 test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity contract across durable rejoin, wiped-disk restart with ACTIVE membership row, cleared tombstones, and clock rollback', async (t) => {
   initializeTestEnvironment();
   const coordinator = createWedgeCoordinator({
@@ -612,41 +661,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
   });
   coordinator.initialize();
   try {
-    const cache = new SystemTableCache();
-    cache.set = (tableName, key, row) => {
-      cache.tables.get(tableName)?.delete(key);
-      cache.tombstoneStore.clear();
-      cache.applySystemTableChange(tableName, 'INSERT', {...row});
-    };
-    cache.delete = (tableName, key) => {
-      const keyColumnByTable = {
-        [TABLES.NODES]: COLUMN.NODE_ID,
-        [TABLES.NODE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
-        [TABLES.SERVICE_ENDPOINTS]: COLUMN.ENDPOINT_ID,
-        [TABLES.SERVICES]: COLUMN.SERVICE_ID,
-        [TABLES.PARTITIONS]: COLUMN.PARTITION_ID,
-        [TABLES.REPLICA_OPERATIONS]: COLUMN.OPERATION_ID,
-      };
-      const keyColumn = keyColumnByTable[tableName] || COLUMN.SERVICE_ID;
-      cache.applySystemTableChange(tableName, 'DELETE', {[keyColumn]: key});
-    };
-    for (const tableName of [
-      TABLES.NODES,
-      TABLES.SERVICES,
-      TABLES.PARTITIONS,
-      TABLES.REPLICA_OPERATIONS,
-    ]) {
-      for (const row of coordinator.systemTableCache.getAll(tableName)) {
-        const key =
-          row[COLUMN.NODE_ID] ||
-          row[COLUMN.SERVICE_ID] ||
-          row[COLUMN.PARTITION_ID] ||
-          row[COLUMN.OPERATION_ID];
-        if (key) {
-          cache.set(tableName, key, {...row});
-        }
-      }
-    }
+    const cache = createStorageIncarnationTestCache(coordinator);
 
     const updateWhereCalls = [];
     const servicesOwner = new ServicesOwner({
@@ -876,11 +891,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       'durable rejoin advances boot_incarnation to 2',
     );
     t.equal(
-      JSON.parse(
-        cache.get(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`)?.[
-          COLUMN.METADATA
-        ] || '{}',
-      ).storageIncarnation,
+      readEndpointStorageIncarnation(cache, TEST_JOINER_NODE_ID_B),
       1,
       'durable rejoin preserves storageIncarnation = 1 in NODE_ENDPOINTS.metadata',
     );
@@ -916,11 +927,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
       'wiped-disk registration refuses to reuse old ACTIVE NODES row and mints fresh row even under rolled-back clock',
     );
     t.equal(
-      JSON.parse(
-        cache.get(TABLES.NODE_ENDPOINTS, `ep-${TEST_JOINER_NODE_ID_B}-ws`)?.[
-          COLUMN.METADATA
-        ] || '{}',
-      ).storageIncarnation,
+      readEndpointStorageIncarnation(cache, TEST_JOINER_NODE_ID_B),
       3,
       'wiped-disk registration advances storageIncarnation to 3',
     );

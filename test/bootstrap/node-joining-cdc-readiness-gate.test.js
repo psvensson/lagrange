@@ -33,6 +33,29 @@ const createManualClock = (startMs = 0) => {
   };
 };
 
+const PRIMARY_KEY_FIELDS = Object.freeze([
+  'service_id',
+  'node_id',
+  'endpoint_id',
+  'partition_id',
+  'table_name',
+  'group_id',
+  'operation_id',
+  'id',
+]);
+
+const getPrimaryKey = (row) => {
+  if (!row || typeof row !== 'object') {
+    return undefined;
+  }
+  for (const field of PRIMARY_KEY_FIELDS) {
+    if (row[field] !== undefined && row[field] !== null) {
+      return row[field];
+    }
+  }
+  return undefined;
+};
+
 /**
  * Build a minimal system table cache stub that satisfies the
  * leader-readiness gate and cache-hydration verification.
@@ -48,15 +71,6 @@ const createFullyHydratedCache = () => {
     [SYSTEM_TABLE_NAME.NODES, [{node_id: NODE_ID}]],
   ]);
   const clone = (value) => JSON.parse(JSON.stringify(value));
-  const getPrimaryKey = (row) =>
-    row?.service_id ??
-    row?.node_id ??
-    row?.endpoint_id ??
-    row?.partition_id ??
-    row?.table_name ??
-    row?.group_id ??
-    row?.operation_id ??
-    row?.id;
   const getRows = (tableName) => rowsByTable.has(tableName) ?
     rowsByTable.get(tableName) :
     [{id: '1'}];

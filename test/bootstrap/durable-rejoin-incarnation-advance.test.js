@@ -309,6 +309,63 @@ function buildPublicationOwnerRecorder(calls) {
   };
 }
 
+async function captureReconcileLostStorageError(owner) {
+  try {
+    await owner.reconcileLostStoragePartitionReplicas(NOW);
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
+async function assertWipedStorageReconciliationFailureModes(t, owner) {
+  const unappliedSeededRows = [];
+  const unappliedServicesOwner = new ServicesOwner({
+    controlPlaneSystemTableGateway: {
+      updateSystemTableRow: async () => ({
+        success: true,
+        changes: 0,
+        partitionResult: {affectedRows: 0},
+      }),
+    },
+  });
+  owner.membershipPublicationRuntimeOwner = {
+    ...buildPublicationOwnerRecorder([]),
+    servicesOwner: unappliedServicesOwner,
+  };
+  owner.seedJoinTimeCacheRow = (tableName, row) => {
+    unappliedSeededRows.push({tableName, row});
+  };
+  const unappliedError = await captureReconcileLostStorageError(owner);
+  t.ok(
+    unappliedError,
+    'unapplied ServicesOwner.updateService result must throw',
+  );
+  t.equal(
+    unappliedError?.deferRetry,
+    true,
+    'unapplied ServicesOwner.updateService error is retryable deferred',
+  );
+  t.equal(
+    unappliedSeededRows.some((entry) => entry.tableName === TABLES.SERVICES),
+    false,
+    'local SERVICES cache is never seeded when authoritative update did not apply',
+  );
+
+  stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
+  const unavailableServicesError =
+    await captureReconcileLostStorageError(owner);
+  t.ok(
+    unavailableServicesError,
+    'unavailable authoritative SERVICES read must throw',
+  );
+  t.equal(
+    unavailableServicesError?.authoritativeRowReadState,
+    AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+    'unavailable SERVICES read surfaces typed UNAVAILABLE read state',
+  );
+}
+
 test(
   'NodeRegistrationOwner advances wiped-storage bootIncarnation and ' +
   'storageIncarnation above cluster-observed incarnation when local ' +
@@ -464,61 +521,7 @@ test(
       1,
       'lostStorageReplicas reports the reconciled replica',
     );
-
-    const unappliedSeededRows = [];
-    const unappliedServicesOwner = new ServicesOwner({
-      controlPlaneSystemTableGateway: {
-        updateSystemTableRow: async () => ({
-          success: true,
-          changes: 0,
-          partitionResult: {affectedRows: 0},
-        }),
-      },
-    });
-    owner.membershipPublicationRuntimeOwner = {
-      ...buildPublicationOwnerRecorder([]),
-      servicesOwner: unappliedServicesOwner,
-    };
-    owner.seedJoinTimeCacheRow = (tableName, row) => {
-      unappliedSeededRows.push({tableName, row});
-    };
-    let unappliedError = null;
-    try {
-      await owner.reconcileLostStoragePartitionReplicas(NOW);
-    } catch (error) {
-      unappliedError = error;
-    }
-    t.ok(
-      unappliedError,
-      'unapplied ServicesOwner.updateService result must throw',
-    );
-    t.equal(
-      unappliedError?.deferRetry,
-      true,
-      'unapplied ServicesOwner.updateService error is retryable deferred',
-    );
-    t.equal(
-      unappliedSeededRows.some((entry) => entry.tableName === TABLES.SERVICES),
-      false,
-      'local SERVICES cache is never seeded when authoritative update did not apply',
-    );
-
-    stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
-    let unavailableServicesError = null;
-    try {
-      await owner.reconcileLostStoragePartitionReplicas(NOW);
-    } catch (error) {
-      unavailableServicesError = error;
-    }
-    t.ok(
-      unavailableServicesError,
-      'unavailable authoritative SERVICES read must throw',
-    );
-    t.equal(
-      unavailableServicesError?.authoritativeRowReadState,
-      AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
-      'unavailable SERVICES read surfaces typed UNAVAILABLE read state',
-    );
+    await assertWipedStorageReconciliationFailureModes(t, owner);
   },
 );
 
@@ -747,149 +750,143 @@ test(
   },
 );
 
+function attachOriginHlcStamping(gateway, {prefix, startCounter = 0}) {
+  let hlcCounter = startCounter;
+  const baseUpdate = gateway.updateSystemTableRow;
+  gateway.updateSystemTableRow = async (tableName, whereClause, data) => {
+    const res = await baseUpdate(tableName, whereClause, data);
+    if (Number(res?.partitionResult?.affectedRows) > 0) {
+      hlcCounter += 1;
+      const originHlc = `${prefix}${hlcCounter}-${tableName}`;
+      return {
+        ...res,
+        originHlc,
+        partitionResult: {...res.partitionResult, originHlc},
+      };
+    }
+    return res;
+  };
+}
+
+async function verifyDurableRejoinOriginHlc(t) {
+  const durable = createDurableNodes(previousBootRow({
+    [COLUMN.UPDATED_AT_HLC]: '1710000000000-0000-old',
+  }));
+  attachOriginHlcStamping(durable.gateway, {prefix: '1710000000000-000'});
+
+  const durableSeeded = new Map();
+  const rejoinOwner = createRejoiningOwner(durable);
+  rejoinOwner.seedJoinTimeCacheRow = (tableName, row) => {
+    durableSeeded.set(tableName, row);
+  };
+
+  const rejoinResult = await rejoinOwner.registerNodeInCluster();
+  const expectedNodesHlc = `1710000000000-0001-${TABLES.NODES}`;
+  const expectedNodeEpHlc = `1710000000000-0002-${TABLES.NODE_ENDPOINTS}`;
+  const expectedSvcEpHlc = `1710000000000-0003-${TABLES.SERVICE_ENDPOINTS}`;
+
+  t.equal(
+    rejoinResult.nodeRow[COLUMN.UPDATED_AT_HLC],
+    expectedNodesHlc,
+    'durable rejoin returns NODES row stamped with new updated_at_hlc',
+  );
+  t.equal(
+    rejoinResult.endpointRow[COLUMN.UPDATED_AT_HLC],
+    expectedNodeEpHlc,
+    'durable rejoin returns NODE_ENDPOINTS row stamped with new updated_at_hlc',
+  );
+  t.equal(
+    rejoinResult.metaEndpointRows[0]?.[COLUMN.UPDATED_AT_HLC],
+    expectedSvcEpHlc,
+    'durable rejoin returns SERVICE_ENDPOINTS row stamped with new updated_at_hlc',
+  );
+  t.equal(
+    durableSeeded.get(TABLES.NODES)?.[COLUMN.UPDATED_AT_HLC],
+    expectedNodesHlc,
+    'durable rejoin seeds SystemTableCache NODES with new updated_at_hlc',
+  );
+  t.equal(
+    durableSeeded.get(TABLES.NODE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
+    expectedNodeEpHlc,
+    'durable rejoin seeds SystemTableCache NODE_ENDPOINTS with new updated_at_hlc',
+  );
+  t.equal(
+    durableSeeded.get(TABLES.SERVICE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
+    expectedSvcEpHlc,
+    'durable rejoin seeds SystemTableCache SERVICE_ENDPOINTS with new updated_at_hlc',
+  );
+}
+
+async function verifyResumedJoinProgressOriginHlc(t) {
+  const progressDurable = createDurableNodes(previousBootRow({
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+  }));
+  attachOriginHlcStamping(progressDurable.gateway, {
+    prefix: '1710000000000-00',
+    startCounter: 10,
+  });
+
+  const progressSeeded = new Map();
+  const progressOwner = createRejoiningOwner(progressDurable, THIS_BOOT);
+  progressOwner.delegates.getJoinLifecycleIntentType = () =>
+    MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION;
+  progressOwner.delegates.getClusterIncarnationFence = () => ({
+    allowed: true,
+    durableMembershipState: 'present',
+  });
+  progressOwner.seedJoinTimeCacheRow = (tableName, row) => {
+    progressSeeded.set(tableName, row);
+  };
+  progressOwner.readExistingPartitionServiceRowsForNode = async () => [];
+
+  const progressResult = await progressOwner.registerNodeInCluster();
+  const expectedProgNodesHlc = `1710000000000-0011-${TABLES.NODES}`;
+  const expectedProgNodeEpHlc = `1710000000000-0012-${TABLES.NODE_ENDPOINTS}`;
+  const expectedProgSvcEpHlc =
+    `1710000000000-0013-${TABLES.SERVICE_ENDPOINTS}`;
+
+  t.equal(
+    progressResult.nodeRow?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgNodesHlc,
+    'resumed join progress returns budgetRow stamped with advanced updated_at_hlc',
+  );
+  t.equal(
+    progressResult.endpointRow?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgNodeEpHlc,
+    'resumed join progress returns endpointRow stamped with advanced updated_at_hlc',
+  );
+  t.equal(
+    progressResult.metaEndpointRows?.[0]?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgSvcEpHlc,
+    'resumed join progress returns metaEndpointRows stamped with advanced updated_at_hlc',
+  );
+  t.equal(
+    progressSeeded.get(TABLES.NODES)?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgNodesHlc,
+    'registerNodeInCluster seeds TABLES.NODES with HLC-stamped budgetRow',
+  );
+  t.equal(
+    progressSeeded.get(TABLES.NODE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgNodeEpHlc,
+    'registerNodeInCluster seeds TABLES.NODE_ENDPOINTS with HLC-stamped endpointRow',
+  );
+  t.equal(
+    progressSeeded.get(TABLES.SERVICE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
+    expectedProgSvcEpHlc,
+    'registerNodeInCluster seeds TABLES.SERVICE_ENDPOINTS with HLC-stamped metaEndpointRow',
+  );
+  return progressOwner;
+}
+
 test(
   'durable rejoin and resumed join-admission progress preserve originHlc ' +
   '(updated_at_hlc) across NODES, NODE_ENDPOINTS, SERVICE_ENDPOINTS, and ' +
   'SERVICES return values and SystemTableCache seeds',
   async (t) => {
-    const durable = createDurableNodes(previousBootRow({
-      [COLUMN.UPDATED_AT_HLC]: '1710000000000-0000-old',
-    }));
-    let hlcCounter = 0;
-    const baseUpdate = durable.gateway.updateSystemTableRow;
-    durable.gateway.updateSystemTableRow = async (
-      tableName,
-      whereClause,
-      data,
-    ) => {
-      const res = await baseUpdate(tableName, whereClause, data);
-      if (Number(res?.partitionResult?.affectedRows) > 0) {
-        hlcCounter += 1;
-        const originHlc = `1710000000000-000${hlcCounter}-${tableName}`;
-        return {
-          ...res,
-          originHlc,
-          partitionResult: {...res.partitionResult, originHlc},
-        };
-      }
-      return res;
-    };
-
-    const durableSeeded = new Map();
-    const rejoinOwner = createRejoiningOwner(durable);
-    rejoinOwner.seedJoinTimeCacheRow = (tableName, row) => {
-      durableSeeded.set(tableName, row);
-    };
-
-    const rejoinResult = await rejoinOwner.registerNodeInCluster();
-    const expectedNodesHlc = `1710000000000-0001-${TABLES.NODES}`;
-    const expectedNodeEpHlc = `1710000000000-0002-${TABLES.NODE_ENDPOINTS}`;
-    const expectedSvcEpHlc = `1710000000000-0003-${TABLES.SERVICE_ENDPOINTS}`;
-
-    t.equal(
-      rejoinResult.nodeRow[COLUMN.UPDATED_AT_HLC],
-      expectedNodesHlc,
-      'durable rejoin returns NODES row stamped with new updated_at_hlc',
-    );
-    t.equal(
-      rejoinResult.endpointRow[COLUMN.UPDATED_AT_HLC],
-      expectedNodeEpHlc,
-      'durable rejoin returns NODE_ENDPOINTS row stamped with new updated_at_hlc',
-    );
-    t.equal(
-      rejoinResult.metaEndpointRows[0]?.[COLUMN.UPDATED_AT_HLC],
-      expectedSvcEpHlc,
-      'durable rejoin returns SERVICE_ENDPOINTS row stamped with new updated_at_hlc',
-    );
-    t.equal(
-      durableSeeded.get(TABLES.NODES)?.[COLUMN.UPDATED_AT_HLC],
-      expectedNodesHlc,
-      'durable rejoin seeds SystemTableCache NODES with new updated_at_hlc',
-    );
-    t.equal(
-      durableSeeded.get(TABLES.NODE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
-      expectedNodeEpHlc,
-      'durable rejoin seeds SystemTableCache NODE_ENDPOINTS with new updated_at_hlc',
-    );
-    t.equal(
-      durableSeeded.get(TABLES.SERVICE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
-      expectedSvcEpHlc,
-      'durable rejoin seeds SystemTableCache SERVICE_ENDPOINTS with new updated_at_hlc',
-    );
+    await verifyDurableRejoinOriginHlc(t);
 
     // Resumed join-admission progress path (advanceStaleJoinAdmissionIncarnation)
-    const progressDurable = createDurableNodes(previousBootRow({
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-    }));
-    let progressHlcCounter = 10;
-    const baseProgressUpdate = progressDurable.gateway.updateSystemTableRow;
-    progressDurable.gateway.updateSystemTableRow = async (
-      tableName,
-      whereClause,
-      data,
-    ) => {
-      const res = await baseProgressUpdate(tableName, whereClause, data);
-      if (Number(res?.partitionResult?.affectedRows) > 0) {
-        progressHlcCounter += 1;
-        const originHlc = `1710000000000-00${progressHlcCounter}-${tableName}`;
-        return {
-          ...res,
-          originHlc,
-          partitionResult: {...res.partitionResult, originHlc},
-        };
-      }
-      return res;
-    };
-
-    const progressSeeded = new Map();
-    const progressOwner = createRejoiningOwner(progressDurable, THIS_BOOT);
-    progressOwner.delegates.getJoinLifecycleIntentType = () =>
-      MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION;
-    progressOwner.delegates.getClusterIncarnationFence = () => ({
-      allowed: true,
-      durableMembershipState: 'present',
-    });
-    progressOwner.seedJoinTimeCacheRow = (tableName, row) => {
-      progressSeeded.set(tableName, row);
-    };
-    progressOwner.readExistingPartitionServiceRowsForNode = async () => [];
-
-    const progressResult = await progressOwner.registerNodeInCluster();
-    const expectedProgNodesHlc = `1710000000000-0011-${TABLES.NODES}`;
-    const expectedProgNodeEpHlc = `1710000000000-0012-${TABLES.NODE_ENDPOINTS}`;
-    const expectedProgSvcEpHlc =
-      `1710000000000-0013-${TABLES.SERVICE_ENDPOINTS}`;
-
-    t.equal(
-      progressResult.nodeRow?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgNodesHlc,
-      'resumed join progress returns budgetRow stamped with advanced updated_at_hlc',
-    );
-    t.equal(
-      progressResult.endpointRow?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgNodeEpHlc,
-      'resumed join progress returns endpointRow stamped with advanced updated_at_hlc',
-    );
-    t.equal(
-      progressResult.metaEndpointRows?.[0]?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgSvcEpHlc,
-      'resumed join progress returns metaEndpointRows stamped with advanced updated_at_hlc',
-    );
-    t.equal(
-      progressSeeded.get(TABLES.NODES)?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgNodesHlc,
-      'registerNodeInCluster seeds TABLES.NODES with HLC-stamped budgetRow',
-    );
-    t.equal(
-      progressSeeded.get(TABLES.NODE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgNodeEpHlc,
-      'registerNodeInCluster seeds TABLES.NODE_ENDPOINTS with HLC-stamped endpointRow',
-    );
-    t.equal(
-      progressSeeded.get(TABLES.SERVICE_ENDPOINTS)?.[COLUMN.UPDATED_AT_HLC],
-      expectedProgSvcEpHlc,
-      'registerNodeInCluster seeds TABLES.SERVICE_ENDPOINTS with HLC-stamped metaEndpointRow',
-    );
+    const progressOwner = await verifyResumedJoinProgressOriginHlc(t);
 
     // Readback resolution path (resolveNodeBootIncarnationAdvanceByReadback)
     const readbackHlc = '1710000000000-0099-readback';

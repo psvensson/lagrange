@@ -362,14 +362,7 @@ function insertBatch(state, sql, parameters) {
   return loadBatch(state, sql, parameters);
 }
 
-// Statements outside the canonical set: schema, load, snapshot, admin.
-function administrative(state, sql, parameters) {
-  if (SNAPSHOT_PATTERN.test(sql)) return {rows: snapshotRows(state, sql)};
-  const count = COUNT_PATTERN.exec(sql);
-  if (count) return countTable(state, count[1]);
-  if (INSERT_BATCH_PATTERN.test(sql)) return insertBatch(state, sql, parameters);
-  const created = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
-  if (created) return createTable(state, created[1]);
+function handleIndexStatement(state, sql) {
   const createdIndex =
     /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/u.exec(sql);
   if (createdIndex) {
@@ -401,7 +394,10 @@ function administrative(state, sql, parameters) {
       [{indexname: entry.index_name, tablename: entry.table_name, indexdef: entry.indexdef}] : [];
     return {rows, rowCount: rows.length};
   }
-  if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
+  return null;
+}
+
+function handleTableMaintenance(state, sql) {
   const truncated = /^TRUNCATE TABLE ([a-z_]+)$/u.exec(sql);
   if (truncated) {
     state.tables.set(truncated[1], []);
@@ -413,6 +409,22 @@ function administrative(state, sql, parameters) {
     return {rows: rowsOf(state, schemaProbe[2]).slice(0, 1), rowCount: 0};
   }
   if (/^(CREATE INDEX|DROP |CREATE DATABASE|USE )/u.test(sql)) return {rows: [], rowCount: 0};
+  return null;
+}
+
+// Statements outside the canonical set: schema, load, snapshot, admin.
+function administrative(state, sql, parameters) {
+  if (SNAPSHOT_PATTERN.test(sql)) return {rows: snapshotRows(state, sql)};
+  const count = COUNT_PATTERN.exec(sql);
+  if (count) return countTable(state, count[1]);
+  if (INSERT_BATCH_PATTERN.test(sql)) return insertBatch(state, sql, parameters);
+  const created = /^CREATE TABLE ([a-z_]+)/u.exec(sql);
+  if (created) return createTable(state, created[1]);
+  const indexResult = handleIndexStatement(state, sql);
+  if (indexResult) return indexResult;
+  if (/^SELECT CONNECTION_ID\(\)/u.test(sql)) return {rows: [{connection_id: state.connections}]};
+  const maintenanceResult = handleTableMaintenance(state, sql);
+  if (maintenanceResult) return maintenanceResult;
   throw new Error(`fake product does not know statement: ${sql}`);
 }
 

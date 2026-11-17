@@ -241,6 +241,30 @@ function sleep(delayMs) {
   });
 }
 
+async function executeActiveRebalanceProbe(productionRebalancer) {
+  try {
+    const probeResult =
+      await productionRebalancer.rebalance('s6a_causal_trace_probe');
+    return {
+      ran: true,
+      success: probeResult?.success === true,
+      moves: (probeResult?.moves || []).map(summarizeProbeMove),
+    };
+  } catch (error) {
+    // This is a diagnostic probe against a live production rebalancer. Its
+    // refusal/failure is itself the admission-boundary evidence the trace is
+    // collecting; it must not abort the stage classifier before the evidence
+    // packet names that owner and predicate.
+    return {
+      ran: true,
+      success: false,
+      moves: [],
+      error: error?.message || String(error),
+      code: error?.code || null,
+    };
+  }
+}
+
 // Active probe, only when the ledger arrow is the missing one: ONE
 // evaluation of the partition's OWN production rebalancer (the instance the
 // cluster itself wired - real coordinator, real policy service) splits
@@ -257,7 +281,9 @@ async function runActiveProbeIfNeeded(options) {
   const partitionService = tracedReplicaKey ?
     partitionServices.get(tracedReplicaKey) :
     null;
-  const productionRebalancer = partitionService?.rebalancer || null;
+  const productionRebalancer = partitionService ?
+    (partitionService.rebalancer || null) :
+    null;
   artifact.partitionServicesDiagnostics = {
     keyCount: serviceKeys.length,
     keySample: serviceKeys.slice(0, 5),
@@ -273,27 +299,7 @@ async function runActiveProbeIfNeeded(options) {
     };
     return;
   }
-  try {
-    const probeResult =
-      await productionRebalancer.rebalance('s6a_causal_trace_probe');
-    artifact.activeProbe = {
-      ran: true,
-      success: probeResult?.success === true,
-      moves: (probeResult?.moves || []).map(summarizeProbeMove),
-    };
-  } catch (error) {
-    // This is a diagnostic probe against a live production rebalancer. Its
-    // refusal/failure is itself the admission-boundary evidence the trace is
-    // collecting; it must not abort the stage classifier before the evidence
-    // packet names that owner and predicate.
-    artifact.activeProbe = {
-      ran: true,
-      success: false,
-      moves: [],
-      error: error?.message || String(error),
-      code: error?.code || null,
-    };
-  }
+  artifact.activeProbe = await executeActiveRebalanceProbe(productionRebalancer);
 }
 
 test('critical placement causal trace',
