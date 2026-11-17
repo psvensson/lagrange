@@ -99,8 +99,6 @@ const CLASSIFIED_SITES = Object.freeze({
   // the ADD COLUMN migration of an existing deployment's nodes table
   'src/partition/partition-service-constants.js#schema_default_zero':
     {count: 1, siteClass: SITE_CLASS.LEGACY_ROW_SCHEMA_DEFAULT},
-  'src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js#dropped_field':
-    {count: 1, siteClass: SITE_CLASS.ABSENT_ROW_NOT_STAMPED},
 });
 
 // Every caller of the reservation verb: the runtime entrypoint (the reference

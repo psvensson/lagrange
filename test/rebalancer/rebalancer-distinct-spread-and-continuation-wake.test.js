@@ -597,8 +597,8 @@ test(
       );
       t.equal(
         contenderRebalancer.lastCheckAtMs,
-        INITIAL_LAST_CHECK_AT_MS,
-        'slot-release wake preserves lastCheckAtMs so minInterval paces contenders',
+        ZERO_COUNT,
+        'slot-release wake clears lastCheckAtMs so minInterval never swallows a disarmed wake',
       );
       t.equal(
         contenderRebalancer.currentInterval,
@@ -632,5 +632,171 @@ test(
     } finally {
       ownRebalancer.shutdown();
       contenderRebalancer.shutdown();
+    }
+  });
+
+test(
+  'distinct-spread partitions get short leadership start delay, keep continuation wake armed ' +
+    'and minimum interval on no_changes_needed, and do not hard-skip when all targets are ' +
+    'globally transitional',
+  async (t) => {
+    initializeTestEnvironment();
+    const nowMs = INITIAL_NOW_MS;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const operations = [];
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: CONCENTRATED_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: SPREAD_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services: [
+        ...buildReplicaRows(
+          CONCENTRATED_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
+        ),
+        ...buildReplicaRows(
+          SPREAD_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C],
+        ),
+        ...buildReplicaRows(
+          NON_PRIORITY_NODES_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
+        ),
+      ],
+      operations,
+    });
+
+    const concentrated = createTestRebalancer({
+      entityId: CONCENTRATED_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    const spread = createTestRebalancer({
+      entityId: SPREAD_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    const systemConcentrated = createTestRebalancer({
+      entityId: NON_PRIORITY_NODES_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    concentrated.getAvailableNodes = () => nodes;
+    spread.getAvailableNodes = () => nodes;
+    systemConcentrated.getAvailableNodes = () => nodes;
+    concentrated.isLeader = true;
+    spread.isLeader = true;
+    systemConcentrated.isLeader = true;
+
+    try {
+      const concentratedStartDelay = concentrated.getLeadershipStartDelayMs();
+      const spreadStartDelay = spread.getLeadershipStartDelayMs();
+      t.ok(
+        concentratedStartDelay >= SINGLE_WAKE_COUNT &&
+          concentratedStartDelay <= concentrated.getPriorityRetryDelayMs(),
+        'below-distinct-spread partition uses short priority leadership start delay',
+      );
+      t.ok(
+        spreadStartDelay >= spread.periodicCheckIntervalMs,
+        'already-spread partition keeps 60s..120s leadership start delay',
+      );
+
+      // When no_changes_needed occurs with 0 own in-flight ops, below-spread partition arms
+      // slot-release wake and resets interval to minimum (5s) instead of backing off to 90s.
+      concentrated.currentInterval = concentrated.periodicCheckIntervalMs;
+      concentrated.rebalance = async () => ({
+        success: true,
+        moves: [],
+        reason: 'no_changes_needed',
+      });
+      const forcePriorityRetry = await concentrated.advanceCheckCadence(true);
+      t.equal(
+        forcePriorityRetry,
+        true,
+        'below-distinct-spread partition forces priority retry cadence on 0 executed moves',
+      );
+      t.equal(
+        concentrated.currentInterval,
+        concentrated.getPriorityRetryDelayMs(),
+        'below-distinct-spread partition resets interval to minimum instead of 1.5x backoff',
+      );
+      t.equal(
+        concentrated.operationContinuationWakeState?.awaitingBudgetSlotRelease,
+        true,
+        'below-distinct-spread partition with 0 own ops stays armed for slot release',
+      );
+
+      // When own op is in flight and intermediate check returns no_changes_needed, keep
+      // awaitingOwnOperationCompletion armed.
+      operations.push({
+        operation_id: 'own-in-flight-1',
+        partition_id: CONCENTRATED_PARTITION_ID,
+        entity_type: EntityType.PARTITION,
+        entity_id: CONCENTRATED_PARTITION_ID,
+        type: OperationType.REPLACE,
+        target_node_id: TEST_NODE_B,
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+      });
+      await concentrated.advanceCheckCadence(true);
+      t.equal(
+        concentrated.operationContinuationWakeState?.awaitingOwnOperationCompletion,
+        true,
+        'below-distinct-spread partition with own in-flight op keeps own-completion wake armed',
+      );
+
+      // When BOTH 0002 and 0003 have cross-partition system adds in flight, MovePlanner does NOT
+      // hard-skip all targets to [].
+      const globalOps = [
+        {
+          operation_id: 'sys-op-b',
+          partition_id: PRIORITY_OBSERVER_ID,
+          type: OperationType.REPLACE,
+          target_node_id: TEST_NODE_B,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.PENDING,
+        },
+        {
+          operation_id: 'sys-op-c',
+          partition_id: 'clusters-p1',
+          type: OperationType.REPLACE,
+          target_node_id: TEST_NODE_C,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.PENDING,
+        },
+      ];
+      systemConcentrated.getGlobalTopologyBlockingInFlightOperations = () => globalOps;
+      systemConcentrated.getInFlightOperations = () => [];
+      const currentReplicas = systemConcentrated.getCurrentReplicas();
+      const targetState = await systemConcentrated.calculateTargetState(currentReplicas, {
+        targetReplicaCount: REPLICATION_FACTOR_THREE,
+        minReplicaCount: REPLICATION_FACTOR_THREE,
+        maxReplicaCount: 7,
+        placementConstraints: {spreadAcrossNodes: true},
+      });
+      const moves = systemConcentrated.calculateMoves(currentReplicas, targetState);
+      t.ok(
+        moves.length > ZERO_COUNT,
+        'system partition emits REPLACE move when all needed target nodes are globally transitional',
+      );
+    } finally {
+      concentrated.shutdown();
+      spread.shutdown();
+      systemConcentrated.shutdown();
     }
   });

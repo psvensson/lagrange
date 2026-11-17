@@ -371,3 +371,54 @@ test('Non-leader guard: no wake when rebalancer isLeader is false',
     await ps.shutdown();
     await mg.shutdown();
   });
+
+test('Cold-start rising edge: rebalancer initialized on DEGRADED -> TRAFFIC_READY wakes at t=0ms',
+  async (t) => {
+    const ps = createPartitionService();
+    ps.metadataPublicationReadinessState = readinessStateFor(RECOVERY_DIP_SNAPSHOT);
+    ps.messageRouter = createMockMessageRouter();
+    ps.isLeader = true;
+    ps.setSystemTableCache(createMockCache());
+    ps.setCdcIntegrationService(createMockCdcService());
+    ps.setTablePolicyService(createMockPolicyService());
+    ps.setSqlQueryEngine(createMockSqlEngine());
+    ps.setRebalanceCoordinator(createReadinessHoldingCoordinator());
+
+    t.equal(
+      ps.rebalancer,
+      null,
+      'non-priority partition rebalancer remains null while background work is not ready',
+    );
+
+    const enqueuedReasons = [];
+    const originalInitializeRebalancer = ps.initializeRebalancer.bind(ps);
+    ps.initializeRebalancer = (bundle) => {
+      originalInitializeRebalancer(bundle);
+      const originalEnqueue = ps.rebalancer.enqueueRebalanceCheck.bind(ps.rebalancer);
+      ps.rebalancer.enqueueRebalanceCheck = (reason) => {
+        enqueuedReasons.push(reason);
+        return originalEnqueue(reason);
+      };
+    };
+
+    // Rising edge: DEGRADED -> TRAFFIC_READY initializes this.rebalancer AND wakes it immediately
+    ps.metadataPublicationReadinessState = readinessStateFor(READY_SNAPSHOT);
+    ps.handleMetadataPublicationReadinessTransition();
+
+    t.ok(ps.rebalancer, 'rebalancer initialized on TRAFFIC_READY rising edge');
+    t.equal(ps.rebalancer.isLeader, true, 'newly initialized rebalancer is leader');
+    t.equal(ps.rebalancer.lastCheckAtMs, 0, 'newly initialized rebalancer has lastCheckAtMs = 0');
+    t.equal(
+      ps.rebalancer.lastStateChangeTime,
+      0,
+      'newly initialized rebalancer clears lastStateChangeTime on TRAFFIC_READY edge',
+    );
+    t.same(
+      enqueuedReasons,
+      [RECONCILE_REASON.PERIODIC_CHECK],
+      'cold-start TRAFFIC_READY rising edge immediately enqueues PERIODIC_CHECK',
+    );
+
+    ps.rebalancer.shutdown();
+    await ps.shutdown();
+  });

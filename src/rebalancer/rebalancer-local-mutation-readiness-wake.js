@@ -93,12 +93,9 @@ function scheduleOperationContinuationMicrotask(rebalancer, state) {
       rebalancer.disarmOperationContinuationWake();
       return;
     }
-    const resetCheckFloor = state.pendingOwnMatch === true;
     rebalancer.disarmOperationContinuationWake();
     rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
-    if (resetCheckFloor) {
-      rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
-    }
+    rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
     rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
   });
 }
@@ -250,19 +247,20 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
       hasBudgetExceededRebalanceOutcome(rebalanceResult);
     const underDistinctSpread =
       this.isPartitionBelowDeclaredDistinctHostSpread?.() === true;
-    const awaitingOwnOperationCompletion =
-      executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO &&
-      (hitBudgetExceeded || underDistinctSpread);
-    const awaitingBudgetSlotRelease =
-      executedMoveCount === UNIFIED_REBALANCER_LITERAL.ZERO &&
-      hitBudgetExceeded;
-    if (!awaitingOwnOperationCompletion && !awaitingBudgetSlotRelease) {
+    if (!hitBudgetExceeded && !underDistinctSpread) {
       this.disarmOperationContinuationWake();
       return false;
     }
+    const inFlightOperations = this.getInFlightOperations?.();
+    const ownInFlightCount = Array.isArray(inFlightOperations) ?
+      inFlightOperations.length :
+      UNIFIED_REBALANCER_LITERAL.ZERO;
+    const hasOwnInFlight =
+      executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO ||
+      ownInFlightCount > UNIFIED_REBALANCER_LITERAL.ZERO;
     return this.armOperationContinuationWake({
-      awaitingOwnOperationCompletion,
-      awaitingBudgetSlotRelease,
+      awaitingOwnOperationCompletion: hasOwnInFlight,
+      awaitingBudgetSlotRelease: !hasOwnInFlight,
     });
   },
 

@@ -19,6 +19,7 @@ function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
   ) {
     rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
     rebalancer.lastCheckAtMs = 0;
+    rebalancer.lastStateChangeTime = 0;
     rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
   }
 }
@@ -186,6 +187,11 @@ class PartitionServiceRebalancerMethods {
       return;
     }
     this.initializeRebalancer(bundle);
+    maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
+      readinessTransitionOnly,
+      backgroundReady,
+      wasBackgroundReady,
+    });
   }
   /**
    * Initialize rebalancer components with required dependencies.

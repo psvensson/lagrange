@@ -116,30 +116,31 @@ function countDistinctActiveReplicaNodes(replicas) {
   ).size;
 }
 
-/**
- * MovePlanner calculates replica placement and moves for partitions,
- * message groups, and runtime services.
- *
- * This class is responsible for:
- * - Calculating target replica state based on policy
- * - Filtering infeasible nodes by storage capacity before scoring
- * - Determining optimal node placement for replicas
- * - Calculating the moves needed to reach target state
- * - Sorting nodes by load and suitability
- *
- * Requirements: 1.3, 1.8, 5.1, 5.2, 5.3, 5.4, 5.5, 11.3
- *
- * @constructor
- * @param {Object} options - Configuration options
- * @param {string} options.entityId - Entity ID (partition, message
- *   group, or service definition ID)
- * @param {string} options.entityType - 'partition', 'message_group',
- *   or 'runtime_service'
- * @param {Object} options.moveStateProvider - Provider for state access
- * @param {Object} [options.storageAdmissionService] - Admission gate
- * @param {Object} [options.accountingService] - Capacity accounting
- * @param {Object} [options.storagePressureBehavior] - Pressure behavior
- */
+function appendUnderRepresentedAddMoves(
+  targetMoves,
+  nodeId,
+  targetCount,
+  currentCounts,
+) {
+  const currentCount = currentCounts.get(nodeId) || 0;
+  const needed = targetCount - currentCount;
+  const deficitCure = resolvePlacementCure(
+    PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
+  );
+  for (let i = 0; i < needed; i++) {
+    targetMoves.push({
+      type: deficitCure.moveType,
+      nodeId,
+      reason: deficitCure.moveReason,
+    });
+  }
+}
+
+function selectUnderRepresentedAddMoves(addMoves, deferredSystemAddMoves) {
+  if (addMoves.length === 0 && deferredSystemAddMoves.length > 0) {
+    addMoves.push(...deferredSystemAddMoves);
+  }
+}
 
 class MovePlannerMoveCalculationMethods {
   /**
@@ -427,6 +428,7 @@ class MovePlannerMoveCalculationMethods {
 
     // Generate ADD moves for under-represented nodes FIRST
     const addMoves = [];
+    const deferredSystemAddMoves = [];
     const replaceMoves = [];
     if (!cleanupOnlyWhilePending) {
       for (const [nodeId, targetCount] of targetCounts) {
@@ -446,21 +448,22 @@ class MovePlannerMoveCalculationMethods {
             nodeId,
             globalSystemTargetOccupancy: true,
           });
+          appendUnderRepresentedAddMoves(
+            deferredSystemAddMoves,
+            nodeId,
+            targetCount,
+            currentCounts,
+          );
           continue;
         }
-        const currentCount = currentCounts.get(nodeId) || 0;
-        const needed = targetCount - currentCount;
-        const deficitCure = resolvePlacementCure(
-          PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
+        appendUnderRepresentedAddMoves(
+          addMoves,
+          nodeId,
+          targetCount,
+          currentCounts,
         );
-        for (let i = 0; i < needed; i++) {
-          addMoves.push({
-            type: deficitCure.moveType,
-            nodeId,
-            reason: deficitCure.moveReason,
-          });
-        }
       }
+      selectUnderRepresentedAddMoves(addMoves, deferredSystemAddMoves);
     }
     const targetReplicaCount = targetState.targetReplicaCount;
     // The partition's OWN policy row, resolved LAZILY and at most once per
@@ -503,28 +506,16 @@ class MovePlannerMoveCalculationMethods {
     );
     // In-flight-aware over-creation cap (priority control-plane partitions).
     // Stop minting new replacements only once a SURPLUS of committed voters
-    // already exists (activeCount > target): that is the over-creation pile-up
-    // state observed in the gate — prior replacements promoted to voters but
-    // their sources have not drained (blocked on voter-ready spread), and with
-    // the pending-operation bypass above the planner keeps hopping to fresh
-    // target nodes and re-creating, driving the partition further over target
-    // until learner promotion dead-locks (replica-count-limit) and convergence
-    // times out. At or under target the first concurrent spread-restoration
-    // batch and provisioning fan-out are legitimate (they transiently exceed
-    // target by design as sources drain), so they are untouched; only the
-    // surplus that has not drained must stop growing so existing voters settle.
+    // already exists (activeCount > target): prior replacements promoted to
+    // voters while their sources have not drained (blocked on voter-ready
+    // spread), and re-creating drives the partition further over target. At or
+    // under target, concurrent spread-restoration and provisioning fan-out
+    // remain untouched.
     //
-    // The surplus is counted by the AUTHORITATIVE raft-voter count
-    // (activeVoterCount), not the status===ACTIVE count (activeCount). A
-    // just-promoted voter reads raft_role=follower while its status column still
-    // lags at creating/syncing; the status read misses it, so the cap stayed
-    // blind during the promotion window and kept minting replacements that piled
-    // the group past the voter target until learner promotion dead-locked (the
-    // voter-ready-60s stall). activeVoterCount reads the SAME voters the
-    // promotion guard is blocked by (countActiveVoters), closing that read
-    // disagreement. Take the MAX of the two so the cap is strictly
-    // non-regressive: it never fires LESS than the status-only read did, and
-    // fires MORE (earlier) exactly when raft_role reveals a hidden surplus voter.
+    // Count surplus by the authoritative raft-voter count (activeVoterCount),
+    // not status===ACTIVE (activeCount), since a just-promoted voter reads
+    // raft_role=follower while status still lags at creating/syncing. Take MAX
+    // of the two so the cap is strictly non-regressive.
     const surplusVoterCount = Math.max(
       inFlightAccounting.activeCount,
       inFlightAccounting.activeVoterCount,

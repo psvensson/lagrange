@@ -248,7 +248,10 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * @return {number}
    */
   getLeadershipStartDelayMs() {
-    if (this.isControlPlanePriorityPartition()) {
+    if (
+      this.isControlPlanePriorityPartition() ||
+      this.isPartitionBelowDeclaredDistinctHostSpread()
+    ) {
       return Math.max(
         UNIFIED_REBALANCER_LITERAL.ONE,
         Math.floor(this.randomSource.random() * this.getPriorityRetryDelayMs()),

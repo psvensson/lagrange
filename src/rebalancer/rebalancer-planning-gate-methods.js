@@ -40,6 +40,23 @@ const {
   isRetryableControlPlaneError, ownerNowMs,
 } = UNIFIED_REBALANCER_SHARED;
 
+function applyQuiescentCheckCadence(rebalancer, cureDecision) {
+  if (rebalancer.usesPriorityRebalanceCadence()) {
+    rebalancer.currentInterval = rebalancer.getPriorityRetryDelayMs();
+    return false;
+  }
+  if (rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true) {
+    rebalancer.resetIntervalToMinimum();
+    return true;
+  }
+  if (isUserTableLeaderCureGapActionable(cureDecision)) {
+    rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+    return false;
+  }
+  rebalancer.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
+  return false;
+}
+
 const REBALANCER_PLANNING_GATE_METHODS = {
   scheduleNextCheck(overrideDelayMs = null) {
     if (!this.isLeader || this.isShuttingDown) {
@@ -126,6 +143,16 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       this.currentInterval * multiplier,
       this.maxInterval,
     );
+    return this.currentInterval;
+  },
+
+  /**
+   * Reset the periodic check interval to the minimum priority retry delay.
+   * @return {number}
+   * @private
+   */
+  resetIntervalToMinimum() {
+    this.currentInterval = this.getPriorityRetryDelayMs();
     return this.currentInterval;
   },
 
@@ -644,8 +671,11 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         this.currentInterval = this.usesPriorityRebalanceCadence() ?
           this.getPriorityRetryDelayMs() :
           this.periodicCheckIntervalMs;
-      } else if (this.usesPriorityRebalanceCadence()) {
-        this.currentInterval = this.getPriorityRetryDelayMs();
+      } else if (
+        this.usesPriorityRebalanceCadence() ||
+        this.isPartitionBelowDeclaredDistinctHostSpread?.() === true
+      ) {
+        this.resetIntervalToMinimum();
         forcePriorityRetry = true;
       } else {
         this.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
@@ -659,18 +689,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // recorded anti-churn levers are structurally upstream — the one
     // place the user-table leader-placement cure may act.
     const cureDecision = await applyUserTableLeaderPlacementCure(this);
-
-    if (this.usesPriorityRebalanceCadence()) {
-      this.currentInterval = this.getPriorityRetryDelayMs();
-    } else if (isUserTableLeaderCureGapActionable(cureDecision)) {
-      // An open actionable leader-placement gap holds the cadence flat:
-      // the 1.5x backoff otherwise spaces out exactly the passes that
-      // complete census stability or re-dispatch after the retry window.
-      this.currentInterval = this.periodicCheckIntervalMs;
-    } else {
-      this.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
-    }
-    return forcePriorityRetry;
+    return applyQuiescentCheckCadence(this, cureDecision);
   },
 
   /**

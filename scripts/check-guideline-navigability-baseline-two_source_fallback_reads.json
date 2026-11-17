@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.562Z",
-  "rawViolationCount": 1690,
+  "generatedAt": "2026-11-17T00:07:08.430Z",
+  "rawViolationCount": 1688,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
-      "line": 499,
+      "line": 503,
       "column": 19,
       "functionName": "buildControlSnapshotReplicaOperationSummary",
       "kind": "two_source_fallback_reads",
@@ -59,7 +59,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 447,
+      "line": 491,
       "column": 10,
       "functionName": "buildLocalPartitionDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -617,7 +617,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 238,
+      "line": 325,
       "column": 6,
       "functionName": "handleControlSnapshot",
       "kind": "two_source_fallback_reads",
@@ -1241,24 +1241,6 @@
       "line": 154,
       "column": 34,
       "functionName": "buildBootstrapNotReadyResponse",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 235,
-      "column": 8,
-      "functionName": "evaluateReadinessSnapshotWithPriorityRecoveryHealth",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 256,
-      "column": 8,
-      "functionName": "evaluateReadinessSnapshotWithPriorityRecoveryHealth",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -9194,7 +9176,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 583,
+      "line": 618,
       "column": 12,
       "functionName": "executeOnPartitions",
       "kind": "two_source_fallback_reads",
@@ -9203,7 +9185,7 @@
     },
     {
       "filePath": "src/query/query-executor-join-execution.js",
-      "line": 357,
+      "line": 414,
       "column": 22,
       "functionName": "performJoin",
       "kind": "two_source_fallback_reads",
@@ -9284,7 +9266,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 247,
+      "line": 248,
       "column": 13,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9293,7 +9275,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 280,
+      "line": 281,
       "column": 20,
       "functionName": "computeGroupAggregates",
       "kind": "two_source_fallback_reads",
@@ -9302,7 +9284,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 530,
+      "line": 531,
       "column": 20,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11867,7 +11849,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 390,
+      "line": 417,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11876,7 +11858,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 395,
+      "line": 422,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11885,7 +11867,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 509,
+      "line": 536,
       "column": 6,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11894,7 +11876,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 514,
+      "line": 541,
       "column": 6,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11903,7 +11885,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 521,
+      "line": 548,
       "column": 8,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11912,7 +11894,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 524,
+      "line": 551,
       "column": 8,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11921,7 +11903,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 108,
+      "line": 115,
       "column": 6,
       "functionName": "hasTopologySettlingBlockerForOperationCreationTarget",
       "kind": "two_source_fallback_reads",
@@ -11930,7 +11912,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 121,
+      "line": 128,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11939,7 +11921,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 397,
+      "line": 457,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11948,7 +11930,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 451,
+      "line": 511,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11957,7 +11939,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 457,
+      "line": 517,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11966,7 +11948,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 628,
+      "line": 688,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11975,7 +11957,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 634,
+      "line": 694,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",

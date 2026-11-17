@@ -13,6 +13,7 @@ function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
   ) {
     rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
     rebalancer.lastCheckAtMs = 0;
+    rebalancer.lastStateChangeTime = 0;
     rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
   }
 }
@@ -170,6 +171,11 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
         return;
       }
       this.initializeRebalancer();
+      maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
+        readinessTransitionOnly,
+        backgroundReady,
+        wasBackgroundReady,
+      });
     }
 
     /**
