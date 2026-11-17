@@ -26,17 +26,17 @@ import {
   stringSlice,
 } from '../real-product-captured-intrinsics.js';
 import {
-  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
-  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
   DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
-  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
+  DEFAULT_READINESS,
   DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   isDeploymentFailure,
+  resolveFormationWindow,
   resolveOperationWindow,
+  resolveReadinessBudget,
   stripTransientExecutionOptions,
   withExplicitSignalOption,
 } from '../real-product-deployment-contract.js';
@@ -584,13 +584,13 @@ describe('pollReadiness & typedReadiness attribution matrix', () => {
 describe('deployment contract window & option helpers', () => {
   it('exports canonical deadlines and resolves operation windows & tri-state signal options',
     () => {
-      assert.equal(DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS, 420_000);
+      // One formation bound and one attempt budget for every arm.
+      assert.equal(DEFAULT_READINESS.formationDeadlineMs, 240_000);
+      assert.equal(DEFAULT_READINESS.attempts, 120);
       assert.equal(DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS, 900_000);
       assert.equal(DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS, 15_000);
-      assert.equal(DEFAULT_TIDB_FORMATION_DEADLINE_MS, 240_000);
       assert.equal(DEFAULT_TIDB_PLACEMENT_DEADLINE_MS, 120_000);
       assert.equal(DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS, 30_000);
-      assert.equal(DEFAULT_POSTGRES_FORMATION_DEADLINE_MS, 240_000);
       assert.equal(DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS, 30_000);
       assert.equal(DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS, 30_000);
 
@@ -623,6 +623,18 @@ describe('deployment contract window & option helpers', () => {
         deadlineAtMs: 600_000,
         deadlineMs: 100_000,
       });
+
+      // Every arm's formation window: the one bound from the run's readiness
+      // budget, narrowed by a tighter caller deadline, never widened by it.
+      const budget = resolveReadinessBudget({});
+      assert.equal(resolveFormationWindow({clock: () => 0, budget}).deadlineMs, 240_000);
+      assert.equal(resolveFormationWindow({clock: () => 0, budget,
+        deadlineAtMs: 1000}).deadlineAtMs, 1000);
+      assert.equal(resolveFormationWindow({clock: () => 0, budget,
+        deadlineAtMs: 900_000}).deadlineAtMs, 240_000);
+      assert.equal(resolveFormationWindow({clock: () => 0,
+        budget: resolveReadinessBudget({readiness: {formationDeadlineMs: 5000}})}).deadlineMs,
+      5000);
     });
 });
 

@@ -17,18 +17,16 @@ import {
   arrayMap,
   stringIncludes,
 } from '../real-product-captured-intrinsics.js';
-import {recordedThermalFacts} from '../../../scripts/native-thermal-fixture.js';
+import {THERMAL_SOURCE} from '../../../../scripts/checks/wait-for-thermal-headroom.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
 
 function labNode(name, ip, {lock = 'free', docker = true, roles = ['harness'],
-  bootId = `boot-${name}`, thermal = 'measured'} = {}) {
-  const thermalFacts = recordedThermalFacts(bootId);
+  bootId = `boot-${name}`, thermal = THERMAL_SOURCE.MEASURED} = {}) {
   return {name, ip, ssh: `bench@${ip}`, os: 'linux', roles,
     testCapability: {bootId, dockerReachable: docker, repoPath: '/home/bench/lagrange',
-      nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2', ...thermalFacts,
-      thermalObservation: thermal === 'measured' ? thermalFacts.thermalObservation : null,
+      nodePath: '/usr/bin/node', nodeVersion: 'v22.23.2', thermal,
       dockerRootFreeBytes: 100 * 2 ** 30, repoFreeBytes: 100 * 2 ** 30,
       machineLock: {state: lock, holder: null}}};
 }
@@ -51,7 +49,7 @@ const FLEET = [
   labNode('alpha', '192.168.1.11'), labNode('bravo', '192.168.1.12'),
   labNode('charlie', '192.168.1.13', {lock: 'busy'}),
   labNode('delta', '192.168.1.14'), labNode('echo', '192.168.1.15', {docker: false}),
-  labNode('dwsl', '192.168.1.18', {thermal: 'unmeasurable'}),
+  labNode('dwsl', '192.168.1.18', {thermal: THERMAL_SOURCE.UNMEASURABLE}),
   labNode('foxtrot', '192.168.1.16'), labNode('golf', '192.168.1.17', {roles: ['runner']}),
 ];
 
@@ -121,7 +119,9 @@ test('the lab dry run binds the named load generator and refuses an ineligible o
   assert.deepEqual(arrayMap(plan.wouldLock, (lock) => lock.name),
     ['bravo', 'delta', 'foxtrot', 'alpha']);
   for (const [name, reason] of [['ghost', 'not registered in the lab inventory'],
-    ['golf', 'no harness role in the lab inventory'], ['echo', 'docker not reachable']]) {
+    ['golf', 'no harness role in the lab inventory'], ['echo', 'docker not reachable'],
+    ['dwsl', 'host-ineligible: thermal_unmeasurable (the thermal gate has no sensor source ' +
+      'there)']]) {
     const refused = runCli([...args, name], env);
     assert.equal(refused.status, EXIT_CODES.REFUSED, refused.stderr);
     assert.equal(refused.stdout, '', 'no plan, so no substituted load generator');

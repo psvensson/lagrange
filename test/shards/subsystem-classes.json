@@ -28,7 +28,7 @@
   "censusSize": 2665,
   "digest": "fnv1a32-0af21cc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-913d591b",
+  "observationDigest": "fnv1a32-5d3f00b6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7502,6 +7502,7 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
@@ -7512,8 +7513,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/scripts/native-thermal-fixture.js"
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "src"
@@ -7521,6 +7521,7 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "PATH",
         "XDG_CONFIG_HOME"
       ]
     },

@@ -39,7 +39,6 @@ import {
 } from './real-product-captured-intrinsics.js';
 import {
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
-  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
   DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
@@ -50,6 +49,7 @@ import {
   TIKV_IMAGE_DEFAULT,
   deploymentFailure,
   requireCampaignId,
+  resolveFormationWindow,
   resolveOperationWindow,
   resolveReadinessBudget,
   stripTransientExecutionOptions,
@@ -300,34 +300,17 @@ function resolveOpTimeoutMs(opts, budget, window, hasCallerDeadline) {
   const windowMs = numberIsFinite(window.deadlineMs) ? window.deadlineMs : budget.timeoutMs;
   if (hasCallerDeadline) return windowMs;
   const hasExplicitTimeout = numberIsFinite(opts?.readiness?.timeoutMs);
-  const hasFormationOverride = numberIsFinite(opts?.formationDeadlineMs) ||
-    numberIsFinite(opts?.readiness?.formationDeadlineMs);
+  const hasFormationOverride = numberIsFinite(opts?.readiness?.formationDeadlineMs);
   return hasExplicitTimeout && !hasFormationOverride ?
     Math.min(budget.timeoutMs, windowMs) : windowMs;
-}
-
-function resolveTiDbDefaultDeadlineMs(opts) {
-  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
-  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
-    return opts.readiness.formationDeadlineMs;
-  }
-  return DEFAULT_TIDB_FORMATION_DEADLINE_MS;
-}
-
-function resolveTiDbFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs) {
-  return resolveOperationWindow({
-    clock,
-    defaultDeadlineMs: resolveTiDbDefaultDeadlineMs(opts),
-    callerDeadlineAtMs: deadlineAtMs ?? opts?.deadlineAtMs,
-    callerDeadlineMs: deadlineMs ?? opts?.deadlineMs,
-    callerSignal: signal ?? opts?.signal ?? null,
-  });
 }
 
 function buildTiDbFormationCtx({sshRun, opts, clientIp, sleep, clock, campaignId, signal,
   deadlineAtMs, deadlineMs}) {
   const hostByContainer = new Map();
-  const window = resolveTiDbFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs);
+  const budget = resolveReadinessBudget(opts);
+  const window = resolveFormationWindow({clock, budget, opts, signal, deadlineAtMs,
+    deadlineMs});
   const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, window.signal);
   return {
     sshRun: trackedSshRun,
@@ -339,7 +322,7 @@ function buildTiDbFormationCtx({sshRun, opts, clientIp, sleep, clock, campaignId
     signal: window.signal,
     deadlineAtMs: window.deadlineAtMs,
     campaignId,
-    budget: resolveReadinessBudget(opts),
+    budget,
     hostByContainer,
     provider: createRemoteDockerProvider({
       sshRun: trackedSshRun,
@@ -540,11 +523,9 @@ async function formTiDbCluster({ctx, rawSshRun, hosts, images, formed}) {
     operations: {
       awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
         deadlineMs: readyDeadlineMs} = {}) => {
-        const defaultDeadlineMs = opts?.formationDeadlineMs ??
-          opts?.readiness?.formationDeadlineMs ?? DEFAULT_TIDB_FORMATION_DEADLINE_MS;
         const window = resolveOperationWindow({
           clock: postBaseCtx.now,
-          defaultDeadlineMs,
+          defaultDeadlineMs: budget.formationDeadlineMs,
           callerDeadlineAtMs: readyDeadlineAtMs,
           callerDeadlineMs: readyDeadlineMs,
           callerSignal: readySignal,
