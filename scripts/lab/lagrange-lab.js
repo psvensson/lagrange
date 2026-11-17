@@ -371,6 +371,14 @@ async function controllerPublicKeys(sshTarget) {
   return keys;
 }
 
+const PROVISION_GIT_SHORT_HEAD_ARGS = Object.freeze([
+  '-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD',
+]);
+const PROVISION_GIT_ORIGIN_URL_ARGS = Object.freeze([
+  '-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin',
+]);
+const PROVISION_SCRATCH_PREFIX = 'lab-provision-';
+
 async function commandProvision(args) {
   if (args.flags.copy && args.flags.output) throw new Error(PROVISION_ONE_TARGET);
   const state = await loadState();
@@ -379,18 +387,17 @@ async function commandProvision(args) {
   // Git asks this checkout, never a repository a hook exported GIT_DIR for.
   const gitEnv = {env: gitProcessEnvironment()};
   const gitText = async (args) => (await execGitAsync(args, gitEnv)).stdout.trim();
-  const head = await gitText(['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD']);
+  const head = await gitText(PROVISION_GIT_SHORT_HEAD_ARGS);
   const script = workerSetupScript({
     workflow: parseYaml(readFileSync(joinPath(FLEET_REPO_ROOT, PROVISION_WORKFLOW), FLEET_TEXT)),
     // The engines floor has one reader: the fleet requirement's.
     nodeMinimum: fleetRequirement(FLEET_REPO_ROOT).nodeMinimum,
-    repoUrl: workerCloneUrl(
-      await gitText(['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'])),
+    repoUrl: workerCloneUrl(await gitText(PROVISION_GIT_ORIGIN_URL_ARGS)),
     authorizedKeys: await controllerPublicKeys(node?.ssh),
     generatedFrom: `${manifest.name} ${head}`,
   });
   if (node) {
-    const scratch = mkdtempSync(joinPath(tmpdir(), 'lab-provision-'));
+    const scratch = mkdtempSync(joinPath(tmpdir(), PROVISION_SCRATCH_PREFIX));
     try {
       const file = joinPath(scratch, WORKER_SETUP_FILE);
       writeFileSync(file, script, {mode: PROVISION_FILE_MODE});

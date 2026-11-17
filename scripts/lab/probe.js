@@ -34,24 +34,23 @@ const UNAME = 'uname';
 const UNAME_OS = '-s';
 const UNAME_ARCH = '-m';
 const POWERSHELL = Object.freeze({
-  COMMAND: 'powershell',
-  NO_PROFILE: '-NoProfile',
-  NON_INTERACTIVE: '-NonInteractive',
-  RUN: '-Command',
+  COMMAND: 'powershell', NO_PROFILE: '-NoProfile', NON_INTERACTIVE: '-NonInteractive',
+  RUN: '-Command', STATEMENT_SEPARATOR: '; ',
   SCRIPT: Object.freeze([
     '$os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription',
     '$arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()',
-    'Write-Output $os',
-    'Write-Output $arch',
+    'Write-Output $os', 'Write-Output $arch',
   ]),
-  STATEMENT_SEPARATOR: '; ',
 });
 const WINDOWS_PROBE_LINE_COUNT = 2;
+const EMPTY = '';
 const ERROR_TEXT = Object.freeze({
   INCOMPLETE_WINDOWS_METADATA: 'Windows probe returned incomplete metadata',
   SSH_TARGET_REQUIRED: 'Remote probe requires an ssh target',
 });
-const EMPTY = '';
+const PLACEMENT_SHELL = 'sh';
+const PLACEMENT_VERSION_SEPARATOR = '.';
+const PLACEMENT_SHELL_STDIN = Object.freeze(['-s', '--']);
 
 function normalizeOs(value) {
   const normalized = String(value || EMPTY).trim().toLowerCase();
@@ -70,22 +69,16 @@ function normalizeArch(value) {
 }
 
 async function probePosix(sshTarget) {
-  const os = await capture(SSH, [
-    SSH_OPTION, SSH_BATCH_MODE, sshTarget, UNAME, UNAME_OS,
-  ]);
-  const arch = await capture(SSH, [
-    SSH_OPTION, SSH_BATCH_MODE, sshTarget, UNAME, UNAME_ARCH,
-  ]);
+  const os = await capture(SSH, [SSH_OPTION, SSH_BATCH_MODE, sshTarget, UNAME, UNAME_OS]);
+  const arch = await capture(SSH, [SSH_OPTION, SSH_BATCH_MODE, sshTarget, UNAME, UNAME_ARCH]);
   return {os: normalizeOs(os), arch: normalizeArch(arch)};
 }
 
 async function probeWindows(sshTarget) {
   const script = POWERSHELL.SCRIPT.join(POWERSHELL.STATEMENT_SEPARATOR);
   const output = await capture(SSH, [
-    SSH_OPTION, SSH_BATCH_MODE,
-    sshTarget,
-    POWERSHELL.COMMAND, POWERSHELL.NO_PROFILE, POWERSHELL.NON_INTERACTIVE,
-    POWERSHELL.RUN, script,
+    SSH_OPTION, SSH_BATCH_MODE, sshTarget,
+    POWERSHELL.COMMAND, POWERSHELL.NO_PROFILE, POWERSHELL.NON_INTERACTIVE, POWERSHELL.RUN, script,
   ]);
   const lines = output.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
   if (lines.length < WINDOWS_PROBE_LINE_COUNT) {
@@ -391,16 +384,18 @@ const DEPENDENCIES_MATCH_SCRIPT =
 // text (LOCKFILE_GRAPH_SCRIPT), so it references nothing outside itself; the
 // hash is handed in (graphDigestOf), built on both sides from one constant.
 function lockfileGraphDigest(text, digestOf) {
+  const JSON_ENTRY_SEPARATOR = ',';
+  const UNSAFE_JSON_NUMBER_ERROR = 'a number JSON.parse may round';
   const isRecord = (value) => value !== null && typeof value === 'object' &&
     !Array.isArray(value);
   const canonical = (value) => {
-    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+    if (Array.isArray(value)) return `[${value.map(canonical).join(JSON_ENTRY_SEPARATOR)}]`;
     if (isRecord(value)) {
       return `{${Object.keys(value).sort().map((key) =>
-        `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+        `${JSON.stringify(key)}:${canonical(value[key])}`).join(JSON_ENTRY_SEPARATOR)}}`;
     }
     if (typeof value === 'number' && !(Number.isSafeInteger(value) && !Object.is(value, -0))) {
-      throw new RangeError('a number JSON.parse may round');
+      throw new RangeError(UNSAFE_JSON_NUMBER_ERROR);
     }
     return JSON.stringify(value);
   };
@@ -439,9 +434,9 @@ const CPU_SAMPLE_SCRIPT =
 // so a subshell opened right after `$(` must be separated from it. The file
 // goes in on stdin: GNU sha256sum escapes a name holding a backslash and then
 // prefixes its digest line with one.
+const SHA256_FIRST_FIELD_PIPE = '| awk \'{print $1}\'';
 const sha256Of = (file) =>
-  ` ( sha256sum < "${file}" || shasum -a 256 < "${file}" ) 2>/dev/null ` +
-  '| awk \'{print $1}\'';
+  ` ( sha256sum < "${file}" || shasum -a 256 < "${file}" ) 2>/dev/null ${SHA256_FIRST_FIELD_PIPE}`;
 
 const CAPABILITY_SCRIPT = [
   'set +e',
@@ -604,8 +599,8 @@ export async function probeTestCapability({sshTarget = null, repoPath,
   const args = sshTarget ?
     [SSH_OPTION, SSH_BATCH_MODE, ...SSH_BOUNDED_OPTIONS, sshTarget,
       `sh -s -- ${shellQuote(repoPath)} ${shellQuote(nodeMajor)}`] :
-    ['-s', '--', repoPath, nodeMajor];
-  const text = await captureCommand(sshTarget ? SSH : 'sh', args,
+    [...PLACEMENT_SHELL_STDIN, repoPath, nodeMajor];
+  const text = await captureCommand(sshTarget ? SSH : PLACEMENT_SHELL, args,
     {stdin: `${CAPABILITY_SCRIPT}\n`, timeoutMs: PROBE_DEADLINE_MS});
   return parseCapability(text);
 }
@@ -1032,7 +1027,7 @@ export async function discoverFleet({nodes, controllerRepoPath, lockGraphSha256,
   nodeMinimum, probe = probeTestCapability}) {
   // The node major a run activates, taken from the engines floor rather than
   // written down a second time.
-  const nodeMajor = String(nodeMinimum || EMPTY).split('.')[0];
+  const nodeMajor = String(nodeMinimum || EMPTY).split(PLACEMENT_VERSION_SEPARATOR)[0];
   const targets = [{name: FLEET_CONTROLLER_NAME, controller: true,
     input: {sshTarget: null, repoPath: controllerRepoPath, nodeMajor}}];
   for (const node of nodes) {
@@ -1253,6 +1248,7 @@ const PLACEMENT_LINE = /\r?\n/u;
 // How often a streamed shard's relay files are read for new lines.
 const PLACEMENT_TAIL_POLL_MS = 250;
 const PLACEMENT_READ_FLAG = 'r';
+const PLACEMENT_WRITE_FLAG = 'w';
 const PLACEMENT_STREAM = Object.freeze({OUT: 'out', ERR: 'err'});
 // The controller child's file list, named for this process and a count.
 const PLACEMENT_CHILD_LIST_PREFIX = 'controller-';
@@ -1260,36 +1256,41 @@ const PLACEMENT_CHILD_LIST_SUFFIX = '.files';
 let childListCount = 0;
 // Keepalive for a long run: a dead connection is noticed within a minute.
 const SSH_RUN_OPTIONS = Object.freeze([
-  SSH_OPTION, 'ConnectTimeout=5',
-  SSH_OPTION, 'ServerAliveInterval=15',
+  SSH_OPTION, 'ConnectTimeout=5', SSH_OPTION, 'ServerAliveInterval=15',
   SSH_OPTION, 'ServerAliveCountMax=4',
 ]);
 const TEXT_UTF8 = 'utf8';
-const PLACEMENT_SHELL = 'sh';
-const PLACEMENT_SHELL_STDIN = Object.freeze(['-s', '--']);
 const PLACEMENT_SHELL_COMMAND = '-c';
+const SOLVER_LANDING_ENABLED = '1';
+const GIT_REF_HEAD = 'HEAD';
+const GIT_CMD_UPDATE_REF = 'update-ref';
 const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
 const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
+const PLACEMENT_GIT = Object.freeze({
+  SHOW: 'show', NOT_FLAG: '--not',
+  BUNDLE_CREATE: Object.freeze(['bundle', 'create']),
+  UNSTAGED_NAMES: Object.freeze(['diff', '--name-only']),
+  UNTRACKED_NAMES: Object.freeze(['ls-files', '--others', '--exclude-standard']),
+  STAGED_NAMES: Object.freeze(['diff', '--cached', '--name-only']),
+  WRITE_TREE: Object.freeze(['write-tree']),
+  STATUS_PORCELAIN: Object.freeze(['status', '--porcelain']),
+  COMMIT_TREE: Object.freeze({COMMAND: 'commit-tree', PARENT: '-p', MESSAGE: '-m'}),
+});
 const PLACEMENT_COMMIT_ENV = 'LAGRANGE_PLACEMENT_COMMIT';
 const PLACEMENT_CANDIDATE_REF_PREFIX = 'refs/lagrange-placement/candidate-';
 const COMMIT_CANDIDATE_MESSAGE = 'lagrange-placement-candidate';
-const GIT_REF_HEAD = 'HEAD';
-const GIT_CMD_UPDATE_REF = 'update-ref';
 const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit', CLOSE: 'close',
   DATA: 'data', END: 'end'});
 const PLACEMENT_STDIO_IGNORE = 'ignore';
 const PLACEMENT_NEWLINE = '\n';
-const PLACEMENT_VERSION_SEPARATOR = '.';
 const PLACEMENT_SAFE_CHARACTER = '_';
 const PLACEMENT_RUN_SHA_CHARACTERS = 12;
 const PLACEMENT_RUN_RADIX = 36;
 const REQUIREMENT_FILE = Object.freeze({PACKAGE: 'package.json', LOCK: 'package-lock.json'});
 const REQUIREMENT_TEXT = Object.freeze({
-  UNREADABLE: 'no requirement: cannot read ',
-  AT: ' at ',
-  TOO_LARGE: ' is larger than the requirement read bound of ',
-  BYTES: ' bytes',
+  UNREADABLE: 'no requirement: cannot read ', AT: ' at ',
+  TOO_LARGE: ' is larger than the requirement read bound of ', BYTES: ' bytes',
 });
 // Why discovery for a placed run failed, as a code a caller can name.
 const DISCOVERY_FAILURE = Object.freeze({
@@ -1297,9 +1298,9 @@ const DISCOVERY_FAILURE = Object.freeze({
   REQUIREMENT_TOO_LARGE: 'lab-requirement-too-large',
   INVENTORY_UNREADABLE: 'lab-inventory-unreadable',
 });
-const REQUIREMENT_FAILURES = new Set([DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE,
-  DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE]);
-
+const REQUIREMENT_FAILURES = new Set([
+  DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE, DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE,
+]);
 function discoveryFailure(code, message, cause = undefined) {
   return Object.assign(new Error(message, {cause}), {code});
 }
@@ -1325,17 +1326,10 @@ const PLACEMENT_TEXT = Object.freeze({
   MISS: ' passed on the controller: routed away from ',
   FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
   THERMAL_UNFIT: 'host-thermal-unfit ',
-  HOST_BUSY: 'host-busy ',
-  HELD_BY: ' held-by ',
-  SINCE: ' since ',
-  NO_HOLDER: ' held-by (no holder record)',
-  MOVED_FROM: ' (from ',
-  MOVED_CLOSE: ')',
-  REFUSED_BUSY: 'held by another agent',
-  REFUSED_HOT: 'too hot to run',
-  NO_NEXT_HOST: ', and no ready lab host is left',
-  DEADLINE: 'deadline',
-  INTERRUPTED: 'interrupted',
+  HOST_BUSY: 'host-busy ', HELD_BY: ' held-by ', SINCE: ' since ',
+  NO_HOLDER: ' held-by (no holder record)', MOVED_FROM: ' (from ', MOVED_CLOSE: ')',
+  REFUSED_BUSY: 'held by another agent', REFUSED_HOT: 'too hot to run',
+  NO_NEXT_HOST: ', and no ready lab host is left', DEADLINE: 'deadline', INTERRUPTED: 'interrupted',
 });
 
 /**
@@ -2006,7 +2000,7 @@ export function placementScript(files) {
 // The command that runs a POSIX script on a machine: over ssh for a lab
 // machine, here for none (the controller, and the witnesses).
 function remoteCommand(machine, script, args, {fromStdin = false} = {}) {
-  const quoted = args.map(shellQuote).join(' ');
+  const quoted = args.map(shellQuote).join(PLACEMENT_SHELL_WORD);
   if (!machine.sshTarget) {
     return fromStdin ? [PLACEMENT_SHELL, [...PLACEMENT_SHELL_STDIN, ...args]] :
       [PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, script, PLACEMENT_SHELL, ...args]];
@@ -2092,7 +2086,10 @@ function bundleFor(machine, {root, sha, local}) {
     refToBundle = candidateRef;
   }
   const bundleFile = `${local}.bundle`;
-  const made = gitAt(root, ['bundle', 'create', bundleFile, refToBundle, '--not', machine.repoHead]);
+  const made = gitAt(root, [
+    ...PLACEMENT_GIT.BUNDLE_CREATE, bundleFile, refToBundle,
+    PLACEMENT_GIT.NOT_FLAG, machine.repoHead,
+  ]);
   if (made.status !== 0) throw new Error(`git bundle create exited ${made.status}`);
   return bundleFile;
 }
@@ -2227,8 +2224,8 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
         expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
     scriptFile,
   });
-  const output = fs.openSync(logFile, 'w');
-  const errors = fs.openSync(errorFile, 'w');
+  const output = fs.openSync(logFile, PLACEMENT_WRITE_FLAG);
+  const errors = fs.openSync(errorFile, PLACEMENT_WRITE_FLAG);
   const child = spawn(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, wrapper],
     {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
   fs.closeSync(output);
@@ -2356,7 +2353,7 @@ export function fleetRequirement(root, sha = null) {
     if (!sha) return fs.readFileSync(path.join(root, file), TEXT_UTF8);
     let shown;
     try {
-      shown = gitAt(root, ['show', `${sha}:${file}`]);
+      shown = gitAt(root, [PLACEMENT_GIT.SHOW, `${sha}:${file}`]);
     } catch (error) {
       if (!isGitOutputTooLarge(error)) throw error;
       throw discoveryFailure(DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE,
@@ -2378,24 +2375,27 @@ export function fleetRequirement(root, sha = null) {
 }
 
 function isStagedIndexOnly(root) {
-  const unstaged = gitAt(root, ['diff', '--name-only']);
+  const unstaged = gitAt(root, PLACEMENT_GIT.UNSTAGED_NAMES);
   if (unstaged.status !== 0 || unstaged.stdout.trim().length > 0) return false;
-  const untracked = gitAt(root, ['ls-files', '--others', '--exclude-standard']);
+  const untracked = gitAt(root, PLACEMENT_GIT.UNTRACKED_NAMES);
   if (untracked.status !== 0 || untracked.stdout.trim().length > 0) return false;
-  const staged = gitAt(root, ['diff', '--cached', '--name-only']);
+  const staged = gitAt(root, PLACEMENT_GIT.STAGED_NAMES);
   return staged.status === 0 && staged.stdout.trim().length > 0;
 }
 
 function synthesizeStagedCandidate(root) {
-  const staged = gitAt(root, ['diff', '--cached', '--name-only']);
+  const staged = gitAt(root, PLACEMENT_GIT.STAGED_NAMES);
   if (staged.status !== 0 || staged.stdout.trim().length === 0) return null;
-  const tree = gitAt(root, ['write-tree']);
+  const tree = gitAt(root, PLACEMENT_GIT.WRITE_TREE);
   if (tree.status !== 0 || !tree.stdout.trim()) return null;
   const treeSha = tree.stdout.trim();
   const head = gitAt(root, PLACEMENT_GIT_HEAD);
   if (head.status !== 0 || !head.stdout.trim()) return null;
   const headSha = head.stdout.trim();
-  const commit = gitAt(root, ['commit-tree', treeSha, '-p', headSha, '-m', COMMIT_CANDIDATE_MESSAGE]);
+  const ct = PLACEMENT_GIT.COMMIT_TREE;
+  const commit = gitAt(root, [
+    ct.COMMAND, treeSha, ct.PARENT, headSha, ct.MESSAGE, COMMIT_CANDIDATE_MESSAGE,
+  ]);
   if (commit.status !== 0 || !commit.stdout.trim()) return null;
   const candidateSha = commit.stdout.trim();
   const candidateRef = `${PLACEMENT_CANDIDATE_REF_PREFIX}${process.pid}`;
@@ -2408,12 +2408,12 @@ function synthesizeStagedCandidate(root) {
 // When changes are staged in the index during landing, a candidate commit parented
 // on HEAD is synthesized without moving HEAD so remote lab machines can prove it.
 function commitAt(root, env = process.env) {
-  const status = gitAt(root, ['status', '--porcelain']);
+  const status = gitAt(root, PLACEMENT_GIT.STATUS_PORCELAIN);
   if (status.status === 0 && status.stdout.trim().length === 0) {
     const head = gitAt(root, PLACEMENT_GIT_HEAD);
     return head.status === 0 ? head.stdout.trim() : null;
   }
-  const isCandidateEligible = env?.LAGRANGE_SOLVER_LANDING === '1' ||
+  const isCandidateEligible = env?.LAGRANGE_SOLVER_LANDING === SOLVER_LANDING_ENABLED ||
     Boolean(env?.[PLACEMENT_COMMIT_ENV]) ||
     isStagedIndexOnly(root);
   if (isCandidateEligible) {

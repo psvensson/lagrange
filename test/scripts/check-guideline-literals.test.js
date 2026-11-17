@@ -1,8 +1,12 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   FILE_CLASS,
   applyMagicLiteralBaseline,
   classifyFilePath,
+  collectMagicLiteralViolations,
   collectMagicLiteralViolationsFromSource,
 } from '../../scripts/check-guideline-literals.js';
 
@@ -197,3 +201,241 @@ test('baseline filtering keeps only new literal violations', async (t) => {
   t.equal(report.totalViolationCount, 1);
   t.same(report.violations, [newViolation]);
 });
+
+test('scanner flags calculated local const initializers while accepting named policy constants',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'const RETRY_DELAY_MS = 250;',
+        'const NEGATIVE_OFFSET = -50;',
+        'const FIVE_SECONDS_MS = 5 * 1000;',
+        'const POLICY = Object.freeze({defaultRetryDelayMs: 250});',
+        'function delayDirect(value) {',
+        '  return value > 0 ? value : 250;',
+        '}',
+        'function delayCalculated(value) {',
+        '  const PRIVATE_DELAY_MS = 250;',
+        '  const DERIVED_DELAY_MS = RETRY_DELAY_MS * 5;',
+        '  const PRIVATE_POLICY = Object.freeze({...POLICY, defaultRetryDelayMs: 300});',
+        '  const retryDelayMs = value > 0 ? value : 250;',
+        '  const fallbackMs = value || 400;',
+        '  const scaledMs = value * 500;',
+        '  const isReady = value === \'ready\';',
+        '  const formatted = formatValue(value, \'custom\');',
+        '  const mixedObj = {status: \'timeout\', value};',
+        '  const mixedArr = [\'--flag\', value];',
+        '  const mixedFrozen = Object.freeze({status: \'bad\', value});',
+        '  return isReady ? retryDelayMs : fallbackMs + scaledMs + formatted.length + ' +
+          'PRIVATE_DELAY_MS + DERIVED_DELAY_MS + PRIVATE_POLICY.defaultRetryDelayMs + ' +
+          'mixedObj.status.length + mixedArr.length + mixedFrozen.status.length + ' +
+          'RETRY_DELAY_MS + NEGATIVE_OFFSET + FIVE_SECONDS_MS + POLICY.defaultRetryDelayMs;',
+        '}',
+      ].join('\n'),
+      '/repo/src/runtime/delay-policy.js',
+    );
+
+    t.same(
+      violations.map((violation) => ({line: violation.line, value: violation.value})),
+      [
+        {line: 6, value: '250'},
+        {line: 12, value: '250'},
+        {line: 13, value: '400'},
+        {line: 14, value: '500'},
+        {line: 15, value: '\'ready\''},
+        {line: 16, value: '\'custom\''},
+        {line: 17, value: '\'timeout\''},
+        {line: 18, value: '\'--flag\''},
+        {line: 19, value: '\'bad\''},
+      ],
+      'calculated locals and runtime-mixed containers must be flagged while pure policy ' +
+        'constants remain accepted',
+    );
+  });
+
+test('scanner does not let outer const cross function, arrow, method, or class boundaries',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'const SERVICE = {',
+        '  defaultMs: 250,',
+        '  delay(value) {',
+        '    return value > 0 ? value : 300;',
+        '  },',
+        '};',
+        'const arrowTernary = (value) => value > 0 ? value : 350;',
+        'const arrowDirect = () => 400;',
+        'const arrowDefault = (value = 450) => value;',
+        'const fnExpr = function(value) {',
+        '  return value ?? 500;',
+        '};',
+        'const ServiceClass = class {',
+        '  static TIMEOUT_MS = 550;',
+        '  delay() {',
+        '    return 600;',
+        '  }',
+        '};',
+        'export const EXPORTED_SERVICE = {',
+        '  delay() {',
+        '    return 650;',
+        '  },',
+        '};',
+      ].join('\n'),
+      '/repo/src/runtime/service-methods.js',
+    );
+
+    t.same(
+      violations.map((violation) => ({
+        line: violation.line,
+        value: violation.value,
+        kind: violation.kind,
+      })),
+      [
+        {line: 4, value: '300', kind: 'free_floating_number_literal'},
+        {line: 7, value: '350', kind: 'free_floating_number_literal'},
+        {line: 8, value: '400', kind: 'free_floating_number_literal'},
+        {line: 9, value: '450', kind: 'free_floating_number_literal'},
+        {line: 11, value: '500', kind: 'free_floating_number_literal'},
+        {line: 14, value: '550', kind: 'free_floating_number_literal'},
+        {line: 16, value: '600', kind: 'free_floating_number_literal'},
+        {line: 21, value: '650', kind: 'free_floating_number_literal'},
+      ],
+      'outer const declarations must never exempt literals across function or class boundaries',
+    );
+  });
+
+test('scanner rejects destructuring defaults, let/var, and top-level runtime expressions',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'const TOP_RUNTIME = process.env.DELAY || 250;',
+        'const TOP_COND = process.platform === \'win32\' ? \'npm.cmd\' : \'npm\';',
+        'const TOP_AWAIT = await queryWindow(\'positive-immediate\', 1000);',
+        'const {timeout = 300} = globalThis;',
+        'const [first = 350] = [];',
+        'let mutableLimit = 400;',
+        'var legacyLimit = 450;',
+      ].join('\n'),
+      '/repo/src/runtime/runtime-defaults.js',
+    );
+
+    t.same(
+      violations.map((violation) => violation.value),
+      [
+        '250',
+        '\'win32\'',
+        '\'npm.cmd\'',
+        '\'npm\'',
+        '\'positive-immediate\'',
+        '1000',
+        '300',
+        '350',
+        '400',
+        '450',
+      ],
+    );
+  });
+
+test('scanner accepts genuine module-level tables, catalogs, freeze aliases, and primitives',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'import path from \'node:path\';',
+        'import {TABLES, COL, freezeDefinition} from \'./schema-constants.js\';',
+        'const tap = await import(\'tap\');',
+        'const {freeze: destructuredFreeze} = Object;',
+        'const freezeObject = Object.freeze;',
+        'const POLICY = freezeObject({',
+        '  defaultRetryDelayMs: 250,',
+        '  nested: Object.freeze({maxAttempts: 5}),',
+        '});',
+        'const DESTRUCTURED_POLICY = destructuredFreeze({timeoutMs: 750});',
+        'const ALLOWED = Object.freeze(new Set([\'fast\', \'slow\']));',
+        'const OID_BYTES = Object.freeze({KEY: Buffer.from([0x2b, 0x65])});',
+        'const SCHEMA = {table: TABLES.X, cols: [{name: \'id\', type: COL.TEXT}]};',
+        'const CONFIGS = [{id: \'spec-fixed\', module: path.resolve(\'models\', \'Spec.tla\')}];',
+        'const CATALOG = Object.freeze({',
+        '  [TABLES.X]: freezeDefinition({code: \'snapshot_missing\'}),',
+        '});',
+        'const USAGE = [\'line 1\', \'line 2\'].join(\'\\n\');',
+        'const SQL = \'SELECT * FROM \' + `_${TABLES.X} ` + \'ORDER BY id\';',
+        'function withPrimitives(value) {',
+        '  const a = value > 0 ? value : -1;',
+        '  const b = value || \'\';',
+        '  const c = value ?? 2;',
+        '  return typeof a === \'number\' ? a : b + c + (tap ? 0 : 1) + CONFIGS.length + ' +
+          'Object.keys(CATALOG).length;',
+        '}',
+      ].join('\n'),
+      '/repo/src/runtime/valid-constants.js',
+    );
+
+    t.equal(violations.length, 0);
+  });
+
+test('constants-owner exported tables referencing imported constants remain accepted',
+  async (t) => {
+    const violations = collectMagicLiteralViolationsFromSource(
+      [
+        'import {SUBSYSTEM_PGWIRE_COMPAT} from \'./subsystems.js\';',
+        'const OTHER_REASON = \'other_reason\';',
+        'export const REASON = Object.freeze({',
+        '  PUBLICATION_PUBLISHED: \'publication_published\',',
+        '  OTHER: OTHER_REASON,',
+        '});',
+        'export const RULES = Object.freeze([',
+        '  {id: \'pgwire-basename\', subsystem: SUBSYSTEM_PGWIRE_COMPAT},',
+        ']);',
+      ].join('\n'),
+      '/repo/src/diagnostics/topology-convergence-constants.js',
+    );
+
+    t.equal(violations.length, 0);
+  });
+
+test('collectMagicLiteralViolations scans files end-to-end on control, nested-fn, and freeze cases',
+  async (t) => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'literal-checker-'));
+    try {
+      const targetFile = path.join(tempDir, 'delay-sample.js');
+      await fs.writeFile(
+        targetFile,
+        [
+          'const RETRY_DELAY_MS = 250;',
+          'const POLICY = Object.freeze({defaultRetryDelayMs: 250});',
+          'const SERVICE = {',
+          '  delay(value) {',
+          '    return value > 0 ? value : 300;',
+          '  },',
+          '};',
+          'const arrowDelay = (value) => value > 0 ? value : 350;',
+          'function delayDirect(value) {',
+          '  return value > 0 ? value : 400;',
+          '}',
+          'function delayLocalCalculated(value) {',
+          '  const retryDelayMs = value > 0 ? value : 450;',
+          '  return retryDelayMs;',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const report = await collectMagicLiteralViolations([tempDir]);
+      t.equal(report.scannedFileCount, 1);
+      t.equal(report.totalViolationCount, 4);
+      t.same(
+        report.violations.map((violation) => ({
+          line: violation.line,
+          value: violation.value,
+          kind: violation.kind,
+        })),
+        [
+          {line: 5, value: '300', kind: 'free_floating_number_literal'},
+          {line: 8, value: '350', kind: 'free_floating_number_literal'},
+          {line: 10, value: '400', kind: 'free_floating_number_literal'},
+          {line: 13, value: '450', kind: 'free_floating_number_literal'},
+        ],
+      );
+    } finally {
+      await fs.rm(tempDir, {recursive: true, force: true});
+    }
+  });
