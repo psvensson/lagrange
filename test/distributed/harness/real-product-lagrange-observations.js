@@ -30,6 +30,7 @@ import {
 import {
   evaluateLagrangeClusterReadiness,
   evaluateLagrangeServeLane,
+  summarizePartitionSpread,
 } from './real-product-lagrange-readiness-evaluation.js';
 import {pollReadiness} from './real-product-readiness.js';
 import {
@@ -653,6 +654,11 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
         denials,
         nodes: tables.nodes.length,
         partitions: tables.partitions.length,
+        spreadSummary: summarizePartitionSpread({
+          partitions: tables.partitions,
+          services: tables.services,
+          expectedNodeIds,
+        }),
         tableTimeToRoutableMs: {...tableReadyAt},
       },
     };

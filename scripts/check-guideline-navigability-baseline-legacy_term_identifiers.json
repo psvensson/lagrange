@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.615Z",
-  "rawViolationCount": 2837,
+  "generatedAt": "2026-11-17T04:03:06.139Z",
+  "rawViolationCount": 2836,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -68,7 +68,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 18,
+      "line": 32,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -77,7 +77,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 31,
+      "line": 45,
       "column": 6,
       "functionName": "reportBoundedSnapshotProbeSpent",
       "kind": "legacy_term_identifiers",
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 205,
+      "line": 308,
       "column": 12,
       "functionName": "buildLocalCdcTelemetry",
       "kind": "legacy_term_identifiers",
@@ -95,7 +95,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 251,
+      "line": 354,
       "column": 8,
       "functionName": "buildLocalCdcTelemetry",
       "kind": "legacy_term_identifiers",
@@ -959,7 +959,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-shared.js",
-      "line": 160,
+      "line": 161,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-shared.js",
-      "line": 557,
+      "line": 559,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -1463,7 +1463,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 154,
+      "line": 199,
       "column": 10,
       "functionName": "evaluate",
       "kind": "legacy_term_identifiers",
@@ -1472,7 +1472,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 154,
+      "line": 199,
       "column": 37,
       "functionName": "evaluate",
       "kind": "legacy_term_identifiers",
@@ -1481,7 +1481,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 180,
+      "line": 225,
       "column": 8,
       "functionName": "evaluate",
       "kind": "legacy_term_identifiers",
@@ -1490,7 +1490,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 359,
+      "line": 404,
       "column": 39,
       "functionName": "transitionTo",
       "kind": "legacy_term_identifiers",
@@ -1499,7 +1499,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 370,
+      "line": 415,
       "column": 10,
       "functionName": "transitionTo",
       "kind": "legacy_term_identifiers",
@@ -1508,7 +1508,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 370,
+      "line": 415,
       "column": 37,
       "functionName": "transitionTo",
       "kind": "legacy_term_identifiers",
@@ -1517,7 +1517,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 388,
+      "line": 433,
       "column": 6,
       "functionName": "transitionTo",
       "kind": "legacy_term_identifiers",
@@ -1526,7 +1526,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 452,
+      "line": 497,
       "column": 18,
       "functionName": "getSnapshot",
       "kind": "legacy_term_identifiers",
@@ -1535,7 +1535,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 575,
+      "line": 620,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -1544,7 +1544,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 577,
+      "line": 622,
       "column": 13,
       "functionName": "mapLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1553,7 +1553,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 581,
+      "line": 626,
       "column": 13,
       "functionName": "mapLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1562,7 +1562,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 584,
+      "line": 629,
       "column": 13,
       "functionName": "mapLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1571,7 +1571,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 586,
+      "line": 631,
       "column": 11,
       "functionName": "mapLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1580,7 +1580,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 589,
+      "line": 634,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -1589,7 +1589,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 591,
+      "line": 636,
       "column": 13,
       "functionName": "resolveLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1598,7 +1598,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 593,
+      "line": 638,
       "column": 16,
       "functionName": "resolveLegacyState",
       "kind": "legacy_term_identifiers",
@@ -1607,7 +1607,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 596,
+      "line": 641,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -1616,7 +1616,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 682,
+      "line": 727,
       "column": 18,
       "functionName": "recordTransition",
       "kind": "legacy_term_identifiers",
@@ -18644,7 +18644,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 237,
+      "line": 232,
       "column": 10,
       "functionName": "calculateMoves",
       "kind": "legacy_term_identifiers",
@@ -18653,7 +18653,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 239,
+      "line": 234,
       "column": 10,
       "functionName": "calculateMoves",
       "kind": "legacy_term_identifiers",
@@ -18662,7 +18662,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 436,
+      "line": 431,
       "column": 12,
       "functionName": "calculateMoves",
       "kind": "legacy_term_identifiers",
@@ -18671,7 +18671,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 443,
+      "line": 438,
       "column": 12,
       "functionName": "calculateMoves",
       "kind": "legacy_term_identifiers",
@@ -18680,7 +18680,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 65,
+      "line": 68,
       "column": 8,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18689,7 +18689,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 69,
+      "line": 72,
       "column": 6,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18698,7 +18698,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 81,
+      "line": 84,
       "column": 10,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18707,7 +18707,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 122,
+      "line": 107,
       "column": 4,
       "functionName": "createMovePlannerStateMethods",
       "kind": "legacy_term_identifiers",
@@ -18716,7 +18716,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 465,
+      "line": 450,
       "column": 8,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18725,7 +18725,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 468,
+      "line": 453,
       "column": 12,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18734,8 +18734,8 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 472,
-      "column": 10,
+      "line": 465,
+      "column": 32,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -18743,16 +18743,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 472,
-      "column": 29,
-      "functionName": "buildTopologyTransitionSnapshot",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 479,
+      "line": 470,
       "column": 8,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18761,7 +18752,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 480,
+      "line": 471,
       "column": 8,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",

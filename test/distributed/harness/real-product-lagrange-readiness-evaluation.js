@@ -212,7 +212,32 @@ function nodeServeDenials(nodeId, snapshot) {
   return denials;
 }
 
+function summarizePartitionSpread({partitions, services, expectedNodeIds}) {
+  let rf3Partitions = 0;
+  let rf2Partitions = 0;
+  let rf1Partitions = 0;
+  const twoHostPartitionIds = [];
+  for (const partition of Array.isArray(partitions) ? partitions : []) {
+    const replicas = arrayFilter(services, (row) =>
+      row.partition_id === partition.partition_id &&
+      text(row.status) === ACTIVE &&
+      isVoterRaftRole(row.raft_role) &&
+      arrayIncludes(expectedNodeIds, row.node_id));
+    const distinctHosts = new Set(arrayMap(replicas, (row) => row.node_id)).size;
+    if (distinctHosts >= 3) {
+      rf3Partitions += 1;
+    } else if (distinctHosts === 2) {
+      rf2Partitions += 1;
+      twoHostPartitionIds.push(partition.partition_id);
+    } else {
+      rf1Partitions += 1;
+    }
+  }
+  return {rf3Partitions, rf2Partitions, rf1Partitions, twoHostPartitionIds};
+}
+
 export {
   evaluateLagrangeClusterReadiness,
   evaluateLagrangeServeLane,
+  summarizePartitionSpread,
 };

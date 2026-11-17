@@ -946,3 +946,410 @@ test(
       priorityRebalancer.shutdown();
     }
   });
+
+test(
+  'Phase B enables maxPerTargetNode=2 (with STOPPING drain ops) post-nodes-p1, caps moveLimit=1, ' +
+    'and orders REPLACE targets by least in-flight load',
+  async (t) => {
+    initializeTestEnvironment();
+    const nowMs = INITIAL_NOW_MS;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const operations = [];
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services: [
+        ...buildReplicaRows(
+          NON_PRIORITY_NODES_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C],
+        ),
+        ...buildReplicaRows(
+          ORDINARY_SYSTEM_PARTITION_ID,
+          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
+        ),
+      ],
+      operations,
+    });
+    const ordinary = createTestRebalancer({
+      entityId: ORDINARY_SYSTEM_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    ordinary.isLeader = true;
+    ordinary.getAvailableNodes = () => nodes;
+
+    const policy = {
+      targetReplicaCount: REPLICATION_FACTOR_THREE,
+      minReplicaCount: REPLICATION_FACTOR_THREE,
+      maxReplicaCount: 7,
+      placementConstraints: {spreadAcrossNodes: true},
+    };
+    const executedMoves = [];
+    ordinary.getConfiguredRebalanceBudget = async () => 10;
+    ordinary.getGlobalInFlightOperationCount = async () => 0;
+    ordinary.getOrdinaryPriorityRecoverySerialGateSnapshot = async () => ({
+      blocked: false,
+    });
+    ordinary.executeRebalancingMoves = async (limitedMoves, context) => {
+      executedMoves.push({limitedMoves, moveLimit: context.moveLimit});
+      return limitedMoves.map((move) => ({
+        success: true,
+        operation: move.type,
+        nodeId: move.nodeId,
+      }));
+    };
+
+    try {
+      // 1 SYNCING op on 0002 and 1 STOPPING op on 0003 -> both still < 2 in Phase B.
+      operations.push(
+        {
+          operation_id: 'phase-b-syncing-b',
+          partition_id: 'services-p1',
+          type: OperationType.REPLACE,
+          target_node_id: TEST_NODE_B,
+          status: ReplicaStatus.SYNCING,
+          workflow_step: WORKFLOW_STEP.SYNCING,
+        },
+        {
+          operation_id: 'phase-b-stopping-c',
+          partition_id: 'indices-p1',
+          type: OperationType.REPLACE,
+          target_node_id: TEST_NODE_C,
+          status: ReplicaStatus.REMOVING,
+          workflow_step: WORKFLOW_STEP.STOPPING,
+        },
+      );
+      const replicas = ordinary.getCurrentReplicas();
+      const targetBothAvailable = await ordinary.calculateTargetState(replicas, policy);
+      const movesBothAvailable = ordinary.calculateMoves(replicas, targetBothAvailable);
+      t.equal(
+        movesBothAvailable.length,
+        2,
+        'Phase B maxPerTargetNode=2 allows planning moves when each joiner has 1 op (including STOPPING)',
+      );
+
+      // Adding a STOPPING op on 0002 brings 0002 to 2 ops (1 SYNCING + 1 STOPPING) -> 0002 excluded!
+      operations.push({
+        operation_id: 'phase-b-stopping-b2',
+        partition_id: 'partitions-p1',
+        type: OperationType.REPLACE,
+        target_node_id: TEST_NODE_B,
+        status: ReplicaStatus.REMOVING,
+        workflow_step: WORKFLOW_STEP.STOPPING,
+      });
+      const targetBFull = await ordinary.calculateTargetState(replicas, policy);
+      const transitionNodes =
+        targetBFull.topologyTransitionSnapshot.nodesWithGlobalSystemAddTransitional;
+      t.equal(
+        transitionNodes.has(TEST_NODE_B),
+        true,
+        'Phase B includeDrainPhase=true counts STOPPING toward maxPerTargetNode=2 cap',
+      );
+      t.equal(
+        transitionNodes.has(TEST_NODE_C),
+        false,
+        '0003 with 1 op remains open when 0002 reaches 2 ops',
+      );
+
+      // Priority op in flight forces maxPerTargetNode=1 even when nodes-p1 is spread.
+      operations.push({
+        operation_id: 'priority-op-c',
+        partition_id: PRIORITY_OBSERVER_ID,
+        type: OperationType.REPLACE,
+        target_node_id: TEST_NODE_C,
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+      });
+      const targetWithPriority = await ordinary.calculateTargetState(replicas, policy);
+      const priorityTransitionNodes =
+        targetWithPriority.topologyTransitionSnapshot.nodesWithGlobalSystemAddTransitional;
+      t.equal(
+        priorityTransitionNodes.has(TEST_NODE_C),
+        true,
+        'priority operation in flight restricts maxPerTargetNode back to 1',
+      );
+
+      // Reset to 1 op on 0002 and 0 ops on 0003 -> rebalance() caps moveLimit=1 and prefers 0003.
+      operations.length = ZERO_COUNT;
+      operations.push({
+        operation_id: 'phase-b-load-b',
+        partition_id: 'services-p1',
+        type: OperationType.REPLACE,
+        target_node_id: TEST_NODE_B,
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+      });
+      const rebalanceResult = await ordinary.rebalance('periodic', policy);
+      t.equal(rebalanceResult.success, true, 'rebalance succeeds in Phase B');
+      t.equal(executedMoves.length, SINGLE_WAKE_COUNT, 'one execution batch');
+      t.equal(executedMoves[0].moveLimit, SINGLE_WAKE_COUNT, 'rebalance caps moveLimit=1');
+      t.equal(executedMoves[0].limitedMoves.length, SINGLE_WAKE_COUNT, 'only Move 1 executes');
+      t.equal(
+        executedMoves[0].limitedMoves[0].nodeId,
+        TEST_NODE_C,
+        'least-loaded target ordering prefers 0003 (0 ops) over 0002 (1 op)',
+      );
+    } finally {
+      ordinary.shutdown();
+    }
+  });
+
+test(
+  'continuation coordinator keeps non-winners armed across back-to-back completions, ranks nodes-p1 ' +
+    '-> 2/3 -> 1/3 depth-first, hands off unused slot batons, and uses 3x safety cadence',
+  async (t) => {
+    initializeTestEnvironment();
+    let nowMs = INITIAL_NOW_MS;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const tableOneThirdA = 'tables-p1';
+    const tableOneThirdB = 'indices-p1';
+    const tableTwoThirds = 'services-p1';
+    const services = [
+      ...buildReplicaRows(NON_PRIORITY_NODES_PARTITION_ID, [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C]),
+      ...buildReplicaRows(tableOneThirdA, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ...buildReplicaRows(tableOneThirdB, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ...buildReplicaRows(tableTwoThirds, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_C]),
+    ];
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: tableOneThirdA, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: tableOneThirdB, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: tableTwoThirds, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: 'config-p1', replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services: [
+        ...services,
+        ...buildReplicaRows('config-p1', [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ],
+    });
+
+    const wakeLog = new Map();
+    const makeEntity = (partitionId) => {
+      const log = {enqueued: [], scheduled: []};
+      wakeLog.set(partitionId, log);
+      const entity = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_A,
+        systemTableCache,
+        rebalanceCoordinator: coordinator,
+        nowFn: () => nowMs,
+      });
+      entity.isLeader = true;
+      entity.getAvailableNodes = () => nodes;
+      entity.enqueueRebalanceCheck = (reason) => {
+        log.enqueued.push(reason);
+        return true;
+      };
+      entity.scheduleNextCheck = (delayMs) => {
+        log.scheduled.push(delayMs);
+      };
+      return entity;
+    };
+
+    const oneThirdA = makeEntity(tableOneThirdA);
+    const twoThirds = makeEntity(tableTwoThirds);
+    const oneThirdB = makeEntity(tableOneThirdB);
+    const degradedEntity = makeEntity('config-p1');
+    const priorityEntity = makeEntity(PRIORITY_OBSERVER_ID);
+
+    try {
+      // Fix 3A: disarmLocalMutationReadinessWake does NOT disarm operationContinuationWake,
+      // and DEGRADED traffic-readiness blocker prevents arming non-priority continuation wake.
+      degradedEntity.getCriticalSystemTrafficReadinessBlocker = () => ({phase: 'DEGRADED'});
+      degradedEntity.syncLocalMutationReadinessWake(true);
+      t.equal(
+        Boolean(degradedEntity.operationContinuationWakeState),
+        false,
+        'DEGRADED traffic-readiness blocker prevents arming non-priority continuation wake',
+      );
+      priorityEntity.syncLocalMutationReadinessWake(true);
+      priorityEntity.disarmLocalMutationReadinessWake();
+      t.equal(
+        priorityEntity.operationContinuationWakeState?.clearPriorityCheckFloorOnTerminal,
+        true,
+        'disarmLocalMutationReadinessWake preserves clearPriorityCheckFloorOnTerminal on priority partitions',
+      );
+
+      // Arm 1/3 first, then 2/3, then second 1/3.
+      oneThirdA.syncOperationContinuationWake(null, ZERO_COUNT);
+      twoThirds.syncOperationContinuationWake(null, ZERO_COUNT);
+      oneThirdB.syncOperationContinuationWake(null, ZERO_COUNT);
+      oneThirdA.syncLocalMutationReadinessWake(false);
+      t.equal(
+        oneThirdA.operationContinuationWakeState?.awaitingBudgetSlotRelease,
+        true,
+        'disarmLocalMutationReadinessWake preserves armed slot-release continuation wake',
+      );
+
+      // Fix 3C: Depth-first 2/3 contender beats earlier-registered 1/3 contender on 0002 release.
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'op-release-b',
+          partitionId: 'unrelated-p1',
+          targetNodeId: TEST_NODE_B,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      await Promise.resolve();
+      t.same(
+        wakeLog.get(tableTwoThirds).enqueued,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'Fix 3C: 2/3 contender wins 0ms slot over earlier-registered 1/3 contenders',
+      );
+      t.same(
+        wakeLog.get(tableOneThirdA).enqueued,
+        [],
+        '1/3 contender is staggered instead of stealing 0ms from 2/3',
+      );
+      t.ok(
+        oneThirdA.operationContinuationWakeState !== null &&
+          oneThirdB.operationContinuationWakeState !== null,
+        'Fix 3B: non-winner contenders remain armed after staggered wake',
+      );
+
+      // Fix 3B: Immediate back-to-back completion on 0003 wakes an armed contender at 0ms!
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'op-release-c',
+          partitionId: 'unrelated-p2',
+          targetNodeId: TEST_NODE_C,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      await Promise.resolve();
+      t.same(
+        wakeLog.get(tableOneThirdA).enqueued,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'Fix 3B: non-disarmed contender wins 0ms wake on back-to-back 0003 completion',
+      );
+
+      // Fix 3C Baton Handoff: if the 0ms slot winner finishes checkRebalance with 0 moves,
+      // baton hands off to the next eligible armed contender (oneThirdB) at 0ms.
+      oneThirdA.getPolicy = async () => ({
+        targetReplicaCount: REPLICATION_FACTOR_THREE,
+        placementConstraints: {spreadAcrossNodes: true},
+      });
+      oneThirdA.evaluateState = async () => true;
+      oneThirdA.rebalance = async () => ({success: true, moves: [], reason: 'no_changes_needed'});
+      oneThirdA.lastCheckAtMs = ZERO_COUNT;
+      nowMs += 10_000;
+      await oneThirdA.checkRebalance();
+      t.same(
+        wakeLog.get(tableOneThirdB).enqueued,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'Fix 3C baton handoff wakes next eligible contender when 0ms winner executes 0 moves',
+      );
+
+      // Fix 3D: safety cadence uses ~3x getPriorityRetryDelayMs() + jitter while armed.
+      const scheduledSafetyDelay = oneThirdA.scheduledCheck ?
+        null :
+        wakeLog.get(tableOneThirdA).scheduled.at(-1);
+      t.ok(
+        scheduledSafetyDelay >= 3 * oneThirdA.getPriorityRetryDelayMs(),
+        'Fix 3D: ordinary continuation-armed partition schedules >= 3x priority retry safety check',
+      );
+    } finally {
+      oneThirdA.shutdown();
+      twoThirds.shutdown();
+      oneThirdB.shutdown();
+      degradedEntity.shutdown();
+      priorityEntity.shutdown();
+    }
+  });
+
+test(
+  'ordinary system partitions yield slotMatch to under-spread nodes-p1 until nodes-p1 reaches 3 hosts',
+  async (t) => {
+    initializeTestEnvironment();
+    const nowMs = INITIAL_NOW_MS;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const services = [
+      ...buildReplicaRows(NON_PRIORITY_NODES_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_B]),
+      ...buildReplicaRows(ORDINARY_SYSTEM_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+    ];
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services,
+    });
+    const ordinaryEnqueued = [];
+    const ordinary = createTestRebalancer({
+      entityId: ORDINARY_SYSTEM_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      nowFn: () => nowMs,
+    });
+    ordinary.isLeader = true;
+    ordinary.getAvailableNodes = () => nodes;
+    ordinary.enqueueRebalanceCheck = (reason) => {
+      ordinaryEnqueued.push(reason);
+      return true;
+    };
+    ordinary.syncOperationContinuationWake(null, ZERO_COUNT);
+
+    try {
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'nodes-move-1',
+          partitionId: NON_PRIORITY_NODES_PARTITION_ID,
+          targetNodeId: TEST_NODE_B,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      await Promise.resolve();
+      t.same(
+        ordinaryEnqueued,
+        [],
+        'ordinary system partition yields slotMatch while nodes-p1 has < 3 distinct active hosts',
+      );
+      t.equal(
+        ordinary.operationContinuationWakeState?.awaitingBudgetSlotRelease,
+        true,
+        'ordinary partition remains armed while yielding to nodes-p1',
+      );
+
+      // Once nodes-p1 completes Move 2 onto 0003, ordinary partition wakes immediately on completion.
+      services[1].node_id = TEST_NODE_C;
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'nodes-move-2',
+          partitionId: NON_PRIORITY_NODES_PARTITION_ID,
+          targetNodeId: TEST_NODE_C,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      await Promise.resolve();
+      t.same(
+        ordinaryEnqueued,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'ordinary system partition wakes immediately once nodes-p1 reaches 3 distinct hosts',
+      );
+    } finally {
+      ordinary.shutdown();
+    }
+  });

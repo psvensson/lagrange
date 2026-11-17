@@ -12,7 +12,6 @@ import {runLeaderDeterminismSelfCheck} from
 
 const {
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_RAFT_EVIDENCE,
   PARTITION_SERVICE_REASON,
@@ -123,16 +122,6 @@ function wirePartitionRaftLifecycleEvents(
         term,
         partitionId: service.partitionId,
       });
-      if (
-        service.role === RaftRole.LEARNER &&
-        !previousLeaderId &&
-        leaderId
-      ) {
-        service.wakeLearnerPromotion(
-          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
-            .SERVICES_ROW_VISIBLE,
-        );
-      }
       observeConsensusHold();
     },
   });

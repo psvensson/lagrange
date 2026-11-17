@@ -1,5 +1,14 @@
+import {NUM} from '../constants/index.js';
 import {TABLES} from '../constants/tables.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {
+  collectSlotHandoffEntries,
+  registerArmedSlotContender,
+  resolveRebalancerDispatchHost,
+  selectSlotWakeWinnerIndex,
+  shouldYieldSlotWakeToNodesPartition,
+  unregisterArmedSlotContender,
+} from './continuation-wake-coordinator.js';
 
 const {
   REBALANCE_COORDINATOR_EVENT,
@@ -20,10 +29,11 @@ const LOCAL_MUTATION_READINESS_WAKE_TABLES = Object.freeze(new Set([
   TABLES.CONTROL_PLANE_PUBLICATIONS,
   TABLES.REPLICA_OPERATIONS,
 ]));
-const SLOT_WAKE_STAGGER_BASE_MS = 1000;
-const SLOT_WAKE_STAGGER_STEP_MS = 120;
+const SLOT_WAKE_STAGGER_BASE_MS = 8000;
+const SLOT_WAKE_STAGGER_STEP_MS = 400;
 const SLOT_WAKE_HISTORY_LIMIT = 64;
 const RECENT_CONTINUATION_OP_LIMIT = 16;
+const MAX_SLOT_RELEASE_HANDOFF_HOPS = NUM.TWO;
 
 function isLocalMutationReadinessWakeArmed(rebalancer) {
   return Boolean(
@@ -119,7 +129,7 @@ function resolveSlotWakeCoordinatorHost(state) {
   return null;
 }
 
-function resolveSlotWakeDispatchRecord(state, operationId) {
+function resolveSlotWakeDispatchRecord(state, operationId, targetNodeId = null) {
   if (!operationId) {
     return null;
   }
@@ -133,107 +143,147 @@ function resolveSlotWakeDispatchRecord(state, operationId) {
   const registry = host._slotWakeDispatchState;
   let record = registry.get(operationId);
   if (!record) {
-    record = {winnerAssigned: false, staggerCount: 0};
+    record = {
+      operationId,
+      targetNodeId: targetNodeId || null,
+      winnerAssigned: false,
+      staggerCount: NUM.ZERO,
+      contenders: [],
+      flushScheduled: false,
+    };
     registry.set(operationId, record);
     if (registry.size > SLOT_WAKE_HISTORY_LIMIT) {
       const oldestKey = registry.keys().next().value;
       registry.delete(oldestKey);
     }
+  } else if (!record.targetNodeId && targetNodeId) {
+    record.targetNodeId = targetNodeId;
   }
   return record;
 }
 
-function rebalancerAlreadyHostsNode(rebalancer, targetNodeId) {
-  if (!targetNodeId || !rebalancer.getCurrentReplicas) {
-    return false;
-  }
-  const replicas = rebalancer.getCurrentReplicas();
-  if (!Array.isArray(replicas)) {
-    return false;
-  }
-  return replicas.some((replica) => replica && replica.node_id === targetNodeId);
-}
-
-function resolveSlotWakeDelayMsFromRecord(
+function applyContinuationWakeWakeup(
   rebalancer,
   state,
-  normalized,
-  dispatchRecord,
+  staggerDelayMs,
+  slotTargetNodeId = null,
+  handoffDepth = NUM.ZERO,
 ) {
-  const needsBudgetImmediate = state.awaitingBudgetExhausted === true;
-  const winnerEligible =
-    needsBudgetImmediate ||
-    !rebalancerAlreadyHostsNode(rebalancer, normalized.targetNodeId);
-  if (!dispatchRecord.winnerAssigned && winnerEligible) {
+  if (rebalancer.operationContinuationWakeState !== state) {
+    return;
+  }
+  if (!rebalancer.isLeader || rebalancer.isShuttingDown) {
+    rebalancer.disarmOperationContinuationWake();
+    return;
+  }
+  rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+  rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
+  rebalancer.lastStateChangeTime = UNIFIED_REBALANCER_LITERAL.ZERO;
+  if (staggerDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO) {
+    // Fix 3B: Keep non-winner contenders armed so back-to-back completions on
+    // another joiner still find eligible 0ms contenders.
+    state.pending = false;
+    state.staggerDelayMs = UNIFIED_REBALANCER_LITERAL.ZERO;
+    if (rebalancer.scheduleNextCheck) {
+      rebalancer.scheduleNextCheck(staggerDelayMs);
+    }
+    return;
+  }
+  rebalancer.disarmOperationContinuationWake();
+  rebalancer._slotReleaseWakeContext = slotTargetNodeId ?
+    {targetNodeId: slotTargetNodeId, handoffDepth} :
+    null;
+  rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+}
+
+function flushSlotWakeDispatchRecord(dispatchRecord) {
+  dispatchRecord.flushScheduled = false;
+  const pending = dispatchRecord.contenders.splice(NUM.ZERO);
+  const active = pending.filter(
+    ({rebalancer, state}) =>
+      rebalancer.operationContinuationWakeState === state &&
+      rebalancer.isLeader &&
+      !rebalancer.isShuttingDown &&
+      !state.pendingOwnMatch,
+  );
+  if (active.length === NUM.ZERO) {
+    return;
+  }
+  const winnerIndex = dispatchRecord.winnerAssigned ?
+    -NUM.ONE :
+    selectSlotWakeWinnerIndex(active, dispatchRecord.targetNodeId);
+  if (winnerIndex >= NUM.ZERO) {
     dispatchRecord.winnerAssigned = true;
-    return UNIFIED_REBALANCER_LITERAL.ZERO;
   }
-  const staggerIndex = dispatchRecord.staggerCount;
-  dispatchRecord.staggerCount += 1;
-  return SLOT_WAKE_STAGGER_BASE_MS + staggerIndex * SLOT_WAKE_STAGGER_STEP_MS;
+  for (let index = NUM.ZERO; index < active.length; index += NUM.ONE) {
+    const entry = active[index];
+    if (index === winnerIndex) {
+      applyContinuationWakeWakeup(
+        entry.rebalancer,
+        entry.state,
+        UNIFIED_REBALANCER_LITERAL.ZERO,
+        dispatchRecord.targetNodeId,
+        NUM.ZERO,
+      );
+      continue;
+    }
+    if (shouldYieldSlotWakeToNodesPartition(entry.rebalancer, active)) {
+      continue;
+    }
+    const staggerDelayMs =
+      SLOT_WAKE_STAGGER_BASE_MS +
+      dispatchRecord.staggerCount * SLOT_WAKE_STAGGER_STEP_MS;
+    dispatchRecord.staggerCount += NUM.ONE;
+    applyContinuationWakeWakeup(entry.rebalancer, entry.state, staggerDelayMs);
+  }
 }
 
-function resolveSlotWakeDelayMsSafe(rebalancer, state, normalized) {
-  const dispatchRecord = resolveSlotWakeDispatchRecord(
-    state,
-    normalized.operationId,
-  );
-  if (!dispatchRecord) {
-    return UNIFIED_REBALANCER_LITERAL.ZERO;
-  }
-  return resolveSlotWakeDelayMsFromRecord(
-    rebalancer,
-    state,
-    normalized,
-    dispatchRecord,
-  );
-}
-
-function resolveContinuationWakeDelayMs(rebalancer, wakeState, normalized, ownMatch) {
-  if (ownMatch) {
-    return UNIFIED_REBALANCER_LITERAL.ZERO;
-  }
-  if (wakeState.pendingOwnMatch) {
-    return wakeState.staggerDelayMs;
-  }
-  return resolveSlotWakeDelayMsSafe(rebalancer, wakeState, normalized);
-}
-
-function scheduleOperationContinuationMicrotask(rebalancer, state) {
+function scheduleOwnOperationContinuationMicrotask(rebalancer, state) {
   if (state.pending === true) {
     return;
   }
   state.pending = true;
   queueMicrotask(() => {
-    if (rebalancer.operationContinuationWakeState !== state) {
-      return;
-    }
-    if (!rebalancer.isLeader || rebalancer.isShuttingDown) {
-      rebalancer.disarmOperationContinuationWake();
-      return;
-    }
-    const staggerDelayMs = state.staggerDelayMs;
-    rebalancer.disarmOperationContinuationWake();
-    rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
-    rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
-    rebalancer.lastStateChangeTime = UNIFIED_REBALANCER_LITERAL.ZERO;
-    if (
-      staggerDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO &&
-      rebalancer.scheduleNextCheck
-    ) {
-      rebalancer.scheduleNextCheck(staggerDelayMs);
-      return;
-    }
-    rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+    applyContinuationWakeWakeup(
+      rebalancer,
+      state,
+      UNIFIED_REBALANCER_LITERAL.ZERO,
+    );
   });
 }
 
+function enqueueSlotWakeContender(rebalancer, state, normalized) {
+  const dispatchRecord = resolveSlotWakeDispatchRecord(
+    state,
+    normalized.operationId,
+    normalized.targetNodeId,
+  );
+  if (!dispatchRecord) {
+    scheduleOwnOperationContinuationMicrotask(rebalancer, state);
+    return;
+  }
+  const alreadyQueued = dispatchRecord.contenders.some(
+    (entry) => entry.rebalancer === rebalancer,
+  );
+  if (!alreadyQueued) {
+    dispatchRecord.contenders.push({rebalancer, state});
+  }
+  if (!dispatchRecord.flushScheduled) {
+    dispatchRecord.flushScheduled = true;
+    queueMicrotask(() => flushSlotWakeDispatchRecord(dispatchRecord));
+  }
+}
+
+function canObserveContinuationWake(rebalancer, state) {
+  return (
+    rebalancer.operationContinuationWakeState === state &&
+    rebalancer.isLeader === true &&
+    !rebalancer.isShuttingDown
+  );
+}
+
 function handleOperationContinuationObservation(rebalancer, state, operation) {
-  if (
-    rebalancer.operationContinuationWakeState !== state ||
-    !rebalancer.isLeader ||
-    rebalancer.isShuttingDown
-  ) {
+  if (!canObserveContinuationWake(rebalancer, state)) {
     return;
   }
   const normalized = normalizeReplicaOperationRecord(operation);
@@ -255,17 +305,32 @@ function handleOperationContinuationObservation(rebalancer, state, operation) {
   if (!ownMatch && !slotMatch) {
     return;
   }
+  if (!ownMatch && shouldYieldSlotWakeToNodesPartition(rebalancer)) {
+    return;
+  }
   recordRecentlyWokenOperation(rebalancer, normalized.operationId);
-  state.staggerDelayMs = resolveContinuationWakeDelayMs(
-    rebalancer,
-    state,
-    normalized,
-    ownMatch,
-  );
-  state.pendingOwnMatch = state.pendingOwnMatch || ownMatch;
-  scheduleOperationContinuationMicrotask(rebalancer, state);
+  if (ownMatch) {
+    state.pendingOwnMatch = true;
+    scheduleOwnOperationContinuationMicrotask(rebalancer, state);
+    return;
+  }
+  enqueueSlotWakeContender(rebalancer, state, normalized);
 }
 
+function syncPriorityOperationContinuationWake(rebalancer) {
+  const recoveryActive =
+    rebalancer.isPriorityControlPlaneRecoveryActive?.() === true;
+  const underSpread =
+    rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true;
+  if (recoveryActive || underSpread) {
+    return rebalancer.armOperationContinuationWake({
+      clearPriorityCheckFloorOnTerminal: true,
+      attachCacheListener: false,
+    });
+  }
+  rebalancer.disarmOperationContinuationWake();
+  return false;
+}
 function canReuseContinuationWakeState(existing, rebalancer, attachCacheListener) {
   return Boolean(
     existing &&
@@ -370,7 +435,8 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
           attachCacheListener: false,
         });
       } else if (
-        this.isPartitionBelowDeclaredDistinctHostSpread?.() === true
+        this.isPartitionBelowDeclaredDistinctHostSpread?.() === true &&
+        !this.getCriticalSystemTrafficReadinessBlocker?.()
       ) {
         this.syncOperationContinuationWake(
           null,
@@ -420,7 +486,6 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     if (typeof unsubscribe === 'function') {
       unsubscribe();
     }
-    this.disarmOperationContinuationWake();
   },
 
   resolveLocalMutationReadinessWake() {
@@ -443,7 +508,7 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
 
   syncOperationContinuationWake(rebalanceResult, executedMoveCount) {
     if (this.isControlPlanePriorityPartition() === true) {
-      return false;
+      return syncPriorityOperationContinuationWake(this);
     }
     const hitBudgetExceeded =
       hasBudgetExceededRebalanceOutcome(rebalanceResult);
@@ -476,6 +541,7 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     const existing = this.operationContinuationWakeState;
     if (canReuseContinuationWakeState(existing, this, attachCacheListener)) {
       applyContinuationWakeOptions(existing, options);
+      registerArmedSlotContender(this, existing);
       return true;
     }
     if (existing) {
@@ -487,6 +553,7 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
       this.operationContinuationWakeState = null;
       return false;
     }
+    registerArmedSlotContender(this, state);
     return true;
   },
 
@@ -496,6 +563,7 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     if (!state) {
       return;
     }
+    unregisterArmedSlotContender(this);
     if (state.onTerminal && state.coordinator?.off) {
       state.coordinator.off(
         REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
@@ -509,6 +577,63 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
     if (state.cacheListener && state.cache?.offCacheChange) {
       state.cache.offCacheChange(state.cacheListener);
     }
+  },
+
+  completeSlotReleaseContinuationCycle(executedMoveCount) {
+    const context = this._slotReleaseWakeContext;
+    this._slotReleaseWakeContext = null;
+    if (
+      !context ||
+      executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO ||
+      context.handoffDepth >= MAX_SLOT_RELEASE_HANDOFF_HOPS
+    ) {
+      return false;
+    }
+    return this.handOffUnusedContinuationSlotWake(
+      context.targetNodeId,
+      context.handoffDepth,
+    );
+  },
+
+  handOffUnusedContinuationSlotWake(targetNodeId, handoffDepth = NUM.ZERO) {
+    if (!targetNodeId || handoffDepth >= MAX_SLOT_RELEASE_HANDOFF_HOPS) {
+      return false;
+    }
+    const host = resolveRebalancerDispatchHost(this);
+    const entries = collectSlotHandoffEntries(host, this);
+    const winnerIndex = selectSlotWakeWinnerIndex(entries, targetNodeId);
+    if (winnerIndex < NUM.ZERO) {
+      return false;
+    }
+    const winner = entries[winnerIndex];
+    applyContinuationWakeWakeup(
+      winner.rebalancer,
+      winner.state,
+      UNIFIED_REBALANCER_LITERAL.ZERO,
+      targetNodeId,
+      handoffDepth + NUM.ONE,
+    );
+    return true;
+  },
+
+  resolveContinuationSafetyDelayMs() {
+    const wakeState = this.operationContinuationWakeState;
+    const continuationArmed = Boolean(
+      wakeState?.awaitingOwnOperationCompletion ||
+        wakeState?.awaitingBudgetSlotRelease,
+    );
+    if (
+      this.usesPriorityRebalanceCadence() ||
+      this.isFormationLivenessDependencyPartition() ||
+      !continuationArmed
+    ) {
+      return null;
+    }
+    const priorityRetryDelayMs = this.getPriorityRetryDelayMs();
+    const jitterMs = Math.floor(
+      this.randomSource.random() * priorityRetryDelayMs,
+    );
+    return NUM.THREE * priorityRetryDelayMs + jitterMs;
   },
 };
 

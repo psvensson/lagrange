@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "06fd4c50821249ca2a36b604b4df48b76987eaeee44e2d74b5894bc432cdafcd"
+    "sourceSha256": "67f3e1094610af7ee3d8bc30273fde79abb1fe455e8cb7a759bccab55ae75f49"
   },
   "layerDirection": [
     "raw_observation",
@@ -5145,16 +5145,6 @@
     },
     {
       "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "specifier": "../bootstrap/replication-target-authority.js",
-      "to": "src/bootstrap/replication-target-authority.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
       "specifier": "../control-plane/membership-publication-priority-partition-canonical-data.js",
       "to": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
       "targetModule": false,
@@ -5177,6 +5167,16 @@
       "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
       "specifier": "./rebalancer-planning-gate-constants.js",
       "to": "src/rebalancer/rebalancer-planning-gate-constants.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+      "specifier": "./system-spread-transition-policy.js",
+      "to": "src/rebalancer/system-spread-transition-policy.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

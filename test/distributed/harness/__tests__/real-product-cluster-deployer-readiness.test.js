@@ -1139,6 +1139,15 @@ test('mid-probe deadline/SSH timeout and invalid JSON preserve lastCompletedObse
         error.deployment.readiness.lastCompletedObservation.denials,
         'partition_under_replicated:tables-p1',
       ));
+      assert.deepEqual(
+        error.diagnostic.lastCompletedObservation.spreadSummary,
+        {
+          rf3Partitions: 0,
+          rf2Partitions: 0,
+          rf1Partitions: 1,
+          twoHostPartitionIds: [],
+        },
+      );
       assert.ok(error.deployment.readiness.lastProbeError);
       return true;
     },
@@ -1193,4 +1202,35 @@ test('httpFromHost omits redundant body on valid JSON and preserves parseError o
   assert.ok(typeof badAnswer.parseError === 'string' && badAnswer.parseError.length > 0);
   assert.ok(badAnswer.bodyTruncated === true && badAnswer.body.length < badJson.length);
   assert.match(badAnswer.error, /^invalid_json_response:/u);
+});
+
+test('summarizePartitionSpread counts RF=3, RF=2, RF=1 and lists twoHostPartitionIds in-memory', async () => {
+  const {summarizePartitionSpread} =
+    await import('../real-product-lagrange-readiness-evaluation.js');
+  const summary = summarizePartitionSpread({
+    expectedNodeIds: ['n1', 'n2', 'n3'],
+    partitions: [
+      {partition_id: 'p-rf3'},
+      {partition_id: 'p-rf2-a'},
+      {partition_id: 'p-rf2-b'},
+      {partition_id: 'p-rf1'},
+    ],
+    services: [
+      {partition_id: 'p-rf3', node_id: 'n1', status: 'active', raft_role: 'leader'},
+      {partition_id: 'p-rf3', node_id: 'n2', status: 'active', raft_role: 'follower'},
+      {partition_id: 'p-rf3', node_id: 'n3', status: 'active', raft_role: 'follower'},
+      {partition_id: 'p-rf2-a', node_id: 'n1', status: 'active', raft_role: 'leader'},
+      {partition_id: 'p-rf2-a', node_id: 'n2', status: 'active', raft_role: 'follower'},
+      {partition_id: 'p-rf2-a', node_id: 'n3', status: 'creating', raft_role: 'learner'},
+      {partition_id: 'p-rf2-b', node_id: 'n1', status: 'active', raft_role: 'leader'},
+      {partition_id: 'p-rf2-b', node_id: 'n3', status: 'active', raft_role: 'follower'},
+      {partition_id: 'p-rf1', node_id: 'n1', status: 'active', raft_role: 'leader'},
+    ],
+  });
+  assert.deepEqual(summary, {
+    rf3Partitions: 1,
+    rf2Partitions: 2,
+    rf1Partitions: 1,
+    twoHostPartitionIds: ['p-rf2-a', 'p-rf2-b'],
+  });
 });

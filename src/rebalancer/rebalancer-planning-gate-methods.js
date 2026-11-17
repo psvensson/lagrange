@@ -666,6 +666,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       );
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
       this.syncOperationContinuationWake(rebalanceResult, executedMoveCount);
+      this.completeSlotReleaseContinuationCycle(executedMoveCount);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
         this.currentInterval = this.usesPriorityRebalanceCadence() ?
@@ -689,6 +690,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // recorded anti-churn levers are structurally upstream — the one
     // place the user-table leader-placement cure may act.
     const cureDecision = await applyUserTableLeaderPlacementCure(this);
+    this.completeSlotReleaseContinuationCycle(UNIFIED_REBALANCER_LITERAL.ZERO);
     return applyQuiescentCheckCadence(this, cureDecision);
   },
 
@@ -738,6 +740,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
           this,
           blocker,
         );
+        this.completeSlotReleaseContinuationCycle(UNIFIED_REBALANCER_LITERAL.ZERO);
         return;
       }
 
@@ -773,7 +776,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return;
     }
     if (forcePriorityRetry) {
-      this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+      const safetyDelayMs = this.resolveContinuationSafetyDelayMs();
+      this.scheduleNextCheck(safetyDelayMs ?? this.getPriorityRetryDelayMs());
       return;
     }
     this.scheduleNextCheck();

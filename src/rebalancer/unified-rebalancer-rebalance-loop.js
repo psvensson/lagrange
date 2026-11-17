@@ -8,9 +8,13 @@ import {
 } from './replica-operation-membership-epoch-binding.js';
 import {isGroupRetiringInView} from
   '../partition/group-retirement-evidence.js';
+import {
+  countNonTerminalSystemOpsByTargetNode,
+} from './system-spread-transition-policy.js';
 
 const {
   EntityType,
+  MoveType,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
   REBALANCER_PRE_EXECUTION_RETURN_STATE,
@@ -19,6 +23,54 @@ const {
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
+
+function orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, moves) {
+  if (!Array.isArray(moves) || moves.length <= UNIFIED_REBALANCER_LITERAL.ONE) {
+    return moves;
+  }
+  const countsByTargetNode = countNonTerminalSystemOpsByTargetNode(
+    rebalancer.systemTableCache,
+  );
+  if (countsByTargetNode.size === UNIFIED_REBALANCER_LITERAL.ZERO) {
+    return moves;
+  }
+  return [...moves].sort((left, right) => {
+    if (left?.type !== MoveType.REPLACE || right?.type !== MoveType.REPLACE) {
+      return UNIFIED_REBALANCER_LITERAL.ZERO;
+    }
+    const leftCount =
+      countsByTargetNode.get(left.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
+    const rightCount =
+      countsByTargetNode.get(right.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
+    return leftCount - rightCount;
+  });
+}
+
+function resolveSystemSpreadExecutionPlan(
+  rebalancer,
+  moves,
+  availableBudget,
+  shouldPrioritizeBudgetedTopologyCleanup,
+) {
+  const isNonPriorityUnderSpreadSystemPartition =
+    rebalancer.isSystemPartitionEntity() &&
+    !rebalancer.isControlPlanePriorityPartition() &&
+    rebalancer.isPartitionBelowDeclaredDistinctHostSpread();
+  const rawMoveLimit = Math.max(
+    UNIFIED_REBALANCER_LITERAL.ZERO,
+    Math.min(rebalancer.maxConcurrentMoves, availableBudget),
+  );
+  const moveLimit = isNonPriorityUnderSpreadSystemPartition ?
+    Math.min(rawMoveLimit, UNIFIED_REBALANCER_LITERAL.ONE) :
+    rawMoveLimit;
+  const baseOrderedMoves = shouldPrioritizeBudgetedTopologyCleanup ?
+    rebalancer.prioritizePriorityTopologyCleanupMoves(moves) :
+    rebalancer.prioritizeOperationLedgerQuorumCureMoves(moves);
+  const budgetOrderedMoves = isNonPriorityUnderSpreadSystemPartition ?
+    orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, baseOrderedMoves) :
+    baseOrderedMoves;
+  return {moveLimit, budgetOrderedMoves};
+}
 
 // Whether this rebalancer's partition is a group its durable workflow record
 // retires as a unit (group-retirement-evidence.js), as its view holds it.
@@ -375,13 +427,12 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       targetCount: targetState.targetReplicaCount,
     });
 
-    const moveLimit = Math.max(
-      0,
-      Math.min(this.maxConcurrentMoves, availableBudget),
+    const {moveLimit, budgetOrderedMoves} = resolveSystemSpreadExecutionPlan(
+      this,
+      moves,
+      availableBudget,
+      shouldPrioritizeBudgetedTopologyCleanup,
     );
-    const budgetOrderedMoves = shouldPrioritizeBudgetedTopologyCleanup ?
-      this.prioritizePriorityTopologyCleanupMoves(moves) :
-      this.prioritizeOperationLedgerQuorumCureMoves(moves);
     const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
       if (
         !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
