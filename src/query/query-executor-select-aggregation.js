@@ -258,7 +258,8 @@ function compareOrderByClauseValues(aVal, bVal, dir) {
     typeof aVal === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
     typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
   ) {
-    return aVal.localeCompare(bVal) * dir;
+    // Buffer.from(string) uses the UTF-8 bytes required by SQLite BINARY ordering.
+    return Buffer.compare(Buffer.from(aVal), Buffer.from(bVal)) * dir;
   }
   if (aVal < bVal) {
     return -dir;

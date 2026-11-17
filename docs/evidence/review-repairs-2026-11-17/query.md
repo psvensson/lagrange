@@ -104,6 +104,75 @@ Root retains original workers, native logs and diagnostic records. Earlier
 evidence is not overwritten by repair runs. Native parser/planner/executor and
 public STAGE fixtures do not establish physical-cluster or GCP readiness.
 
+## First implementation attempt: native job 4911
+
+The first frozen draft was local commit
+`50c7fa25631aed8c859d6bb840b9e670b093377b`, tree
+`55c941c27f82c06be0edbd033283b5b725ed7a1d`, staged as remote candidate
+`aa552dae30d7aed5deb53b962b42d8b9f8ee6253`. Managed job 4911 ran on tv-dator
+with Node 22.23.2. Root collected the complete 92,169-byte original native log;
+SHA256 `1eea631bf3b0b25c3913f40fcafabfd8ff625ff4b987a851f4d0731ae8617bb0`.
+
+The classified runner admitted all five selected files. SqlRequest (239 reported
+assertions), budget normalization (26), and execute-request (170) passed. All
+27 ROUND oracle cases passed. The scalar suite had one genuine failure:
+SUBSTR of an empty input BLOB returned an empty Buffer while native SQLite
+returned NULL. The revised draft preserves that input case and adds nonempty
+BLOB inputs yielding empty slices, which must remain zero-byte BLOBs.
+
+The global-merge suite had two genuine failures, the one- and two-partition
+ORDER BY dept oracle cases. The scalar values agreed; native SQLite ordered
+`abc` before the supplementary Unicode label, while the coordinator reversed
+them. The exact ordered assertions remain unchanged. The comparison owner is
+being reviewed separately; no sorted-test normalization or weaker assertion
+is admitted as a repair.
+
+Scoped ESLint, file-size, literal, decision-boundary and silent-catch checks
+passed. The ambient-intrinsic command inspected zero applicable files and does
+not supply a coverage claim for these changes.
+
+The two original frozen replay scripts failed during module import because the
+orchestrator placed them outside their documented `test/query` overlay location.
+Their `ERR_MODULE_NOT_FOUND` results are orchestration failures, not product
+observations or successful regressions. Root will replay the same bytes at the
+documented location, retaining the first failures.
+
+Independent source review also identified a draft conversion regression:
+HAVING comparisons produce JS booleans, so treating `true` as numeric text
+incorrectly produced zero. The revised draft preserves SQL truth values as
+integer 1/0, with grouped production-expression tests, a CASE-to-integer
+control, and TRUE/FALSE literal arguments. A signed-int64 text SUBSTR boundary
+is recorded as an additional native-oracle hypothesis; no correction of that
+hypothesis is claimed before its native observation.
+
+## Producer-bound follow-up: native job 4915
+
+The frozen producer diagnostic ran against the first draft candidate
+`aa552dae30d7aed5deb53b962b42d8b9f8ee6253` with native SQLite 3.49.2.
+Root retained the complete 20,874-byte native log, SHA256
+`37ac3d1a0fa7c2b43a28711e9cb839d657bf2d53bf89cdb353564c2ee2932ccb`.
+The actual parser/planner/executor and both populated partition SQL paths
+engaged; all numeric controls agreed with SQLite.
+
+Four boolean producer cases disagreed: HAVING ROUND of a comparison dropped
+the valid positive group; TRUE precision rounded at zero decimal places;
+TRUE substring start became position zero; TRUE substring length became zero.
+The diagnostic observed the real boolean comparison values and parsed TRUE
+literals. These measurements confirm the previously recorded draft regression.
+
+The signed-int64 text-bound hypothesis also reproduced through the production
+SELECT path and the direct helper. For input `abc`, start
+`-9223372036854775808` and length `9223372036854775807`, SQLite returned `ab`
+and the draft returned an empty string. This observation is recorded before
+the corresponding repair. The bounded repair will preserve exact signed64
+integer conversion and range arithmetic until the range is clamped to the
+actual text/BLOB extent. It will add adjacent exact-bound and saturation
+controls to the existing native oracle; it changes no wire or storage-class
+representation and no scalar admission domain.
+Text conversion compares the significant decimal magnitude with the signed64
+bound before parsing BigInt, so oversized text never requires parsing an
+unbounded integer. Leading-zero and numeric-prefix behavior remains explicit.
+
 ## Exclusions and validation ownership
 
 No new coordinator SQLite connection, SQL execution subsystem, alternate query

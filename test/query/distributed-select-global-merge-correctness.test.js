@@ -17,7 +17,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
+import {QUERY_MESSAGE_TYPE, QUERY_SORT_DIRECTION} from '../../src/query/query-constants.js';
 import {collectBoundedSqliteRows} from '../../src/query/query-result-budget.js';
 import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
 import {SERVICE_STATUS} from '../../src/constants/index.js';
@@ -104,7 +104,7 @@ function buildCluster(partitionRows) {
   const executor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter, systemCache});
-  return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()],
+  return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()], partitionDbs,
     close: () => {
       for (const db of partitionDbs.values()) db.close();
     },
@@ -711,6 +711,21 @@ test('SELECT and HAVING scalar operations match the native SQLite oracle', async
       'HAVING LENGTH(MAX(dept)) = ? ORDER BY dept', [1]],
     ['SELECT dept, COUNT(*) AS cnt' + grouped +
       'HAVING LENGTH(MAX(dept)) = ? ORDER BY dept', [3]],
+    ['SELECT dept, ROUND(SUM(amount) > 0) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(SUM(amount) > 0) = 1 ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(SUM(amount) > 0) = 0 ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(CASE WHEN SUM(amount) > 0 THEN 1 ELSE 0 END) = 1 ORDER BY dept', []],
+    ['SELECT dept, ROUND(SUM(amount), TRUE) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT dept, ROUND(SUM(amount), FALSE) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT SUBSTR(MAX(dept), TRUE, TRUE) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT SUBSTR(MAX(dept), FALSE, 2) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING SUBSTR(MAX(dept), SUM(amount) > 0, 1) = \'a\' ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING LENGTH(SUM(amount) > 0) = 1 ORDER BY dept', []],
     ['SELECT ROUND(SUM(amount), ?) AS value FROM t', [null]],
     ['SELECT COUNT(*) AS cnt FROM t HAVING ROUND(SUM(amount), ?) IS NULL', [null]],
     ['SELECT ROUND(SUM(amount), 0) AS rounded, LENGTH(MAX(dept)) AS length, ' +
@@ -735,4 +750,70 @@ test('SELECT and HAVING scalar operations match the native SQLite oracle', async
       'the repaired scalar is evaluated at the coordinator after native partials');
     }
   }
+});
+
+test('QueryExecutor.applyOrderBy matches SQLite UTF-8 BINARY ordering', async (t) => {
+  const textValues = [
+    'abc', '😀', '\u{10000}', '\uE000', 'a', 'A', 'aa', 'a!', '',
+    'é', 'e\u0301', 'a\u0000a', 'a\u0000b',
+  ];
+  const rows = textValues.flatMap((dept, index) => [
+    {id: index * 2 + 1, amount: 1, dept},
+    {id: index * 2 + 2, amount: 2, dept},
+  ]);
+  const partitionRows = {
+    p1: rows,
+    p2: rows.map((row) => ({...row, id: row.id + rows.length})),
+  };
+  const {executor, deliveredSql, partitionIds, partitionDbs, close} = buildCluster(partitionRows);
+  t.teardown(close);
+  const oracle = createTableDatabase(Object.values(partitionRows).flat());
+  t.teardown(() => oracle.close());
+
+  const encodingPragma = 'encoding';
+  const expectedEncoding = 'UTF-8';
+  for (const [partitionId, db] of partitionDbs) {
+    t.equal(db.pragma(encodingPragma, {simple: true}), expectedEncoding,
+      `${partitionId} executes delivered SQL in a UTF-8 database`);
+  }
+  t.equal(oracle.pragma(encodingPragma, {simple: true}), expectedEncoding,
+    'the independent native oracle uses the same text encoding');
+
+  const projections = [
+    {kind: FANOUT_PLAN_KIND.RAW_ROWS,
+      sql: 'SELECT id, dept, amount FROM t', secondary: 'id'},
+    {kind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
+      sql: 'SELECT dept, amount, COUNT(*) AS cnt FROM t GROUP BY dept, amount',
+      secondary: 'amount'},
+  ];
+  const ascendingDirection = 'ASC';
+  const directions = [ascendingDirection, QUERY_SORT_DIRECTION.DESC];
+  const windows = ['', ' LIMIT 5 OFFSET 3'];
+  for (const projection of projections) {
+    for (const direction of directions) {
+      for (const window of windows) {
+        const sql = `${projection.sql} ORDER BY dept ${direction}, ` +
+          `${projection.secondary} ${QUERY_SORT_DIRECTION.DESC}${window}`;
+        const plan = buildSelectFanoutPlan(new SQLParser(sql).parse());
+        t.equal(plan.kind, projection.kind, 'the intended live merge consumer is admitted');
+        const expected = oracle.prepare(sql).all();
+        t.ok(expected.length > 1, 'the oracle requires a nontrivial ordered result');
+        const deliveryStart = deliveredSql.length;
+        t.same(await select(executor, sql, partitionIds), expected,
+          `${projection.kind}: ${sql}`);
+        const deliveries = deliveredSql.slice(deliveryStart);
+        t.same(new Set(deliveries.map(({partitionId}) => partitionId)), new Set(partitionIds),
+          'actual SQL ran against both native partition databases');
+        if (projection.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
+          t.ok(deliveries.every(({sql: delivered}) =>
+            !/\b(?:ORDER BY|LIMIT)\b/u.test(delivered)),
+          'partial rows reach the coordinator before global sorting and slicing');
+        }
+      }
+    }
+  }
+
+  const numericSql = 'SELECT id, amount, dept FROM t ORDER BY amount DESC, id ASC';
+  t.same(await select(executor, numericSql, partitionIds), oracle.prepare(numericSql).all(),
+    'numeric ordering and its secondary key retain native behavior on the same rows');
 });
