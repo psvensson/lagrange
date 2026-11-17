@@ -32,9 +32,10 @@ import {execWithStatus, shellWord} from './real-product-remote-shell.js';
 
 const FIELD_SEPARATOR = '|';
 const HOST_FACTS_COMMAND = 'echo "$(hostname)|$(cat /proc/sys/kernel/random/boot_id)|' +
-  // awk under LC_ALL=C: a host whose LC_NUMERIC uses a decimal comma
-  // (sv_SE on adam-laptop, adams-gamla) printed `15,5` otherwise.
-  '$(nproc)|$(LC_ALL=C awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
+  // A decimal point on every host: the ssh runner runs each command in the C
+  // locale (fixedLocaleCommand), where gawk under a decimal-comma LC_NUMERIC
+  // (sv_SE on adam-laptop, adams-gamla) would print `15,5`.
+  '$(nproc)|$(awk \'/MemTotal/ {printf "%.1f", $2/1048576}\' /proc/meminfo)|' +
   '$(ip route get 1.1.1.1 | awk \'{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}\')"';
 
 const HOST_FACTS_UNREADABLE = 'host_facts_unreadable';

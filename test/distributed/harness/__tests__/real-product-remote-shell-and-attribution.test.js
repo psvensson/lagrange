@@ -23,6 +23,7 @@ import {
   stringEndsWith,
   stringIncludes,
   stringReplace,
+  stringSlice,
 } from '../real-product-captured-intrinsics.js';
 import {
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
@@ -52,6 +53,7 @@ import {
   createSshCommandRunner,
   createTrackedSshRun,
   errorText,
+  fixedLocaleCommand,
   httpFromHost,
   settleConcurrentBatch,
   sshOptions,
@@ -61,8 +63,20 @@ import {
   createPsqlQueryReader,
 } from '../real-product-sql-clients.js';
 
+const FIXED_LOCALE_FORM = fixedLocaleCommand('');
+
+// The caller's command, from the ssh argv of the runner: a stand-in host gets
+// it only after the check that the runner sent it in the fixed locale.
+function callerCommandOf(args) {
+  const transported = args[args.length - 1];
+  const command = stringSlice(transported, FIXED_LOCALE_FORM.length);
+  assert.equal(transported, fixedLocaleCommand(command),
+    'the ssh runner sends every command in the fixed locale');
+  return command;
+}
+
 function nodeScriptExecFile(_file, args, options, callback) {
-  const script = args[args.length - 1];
+  const script = callerCommandOf(args);
   return execFile(process.execPath, ['-e', script], options, callback);
 }
 
@@ -695,7 +709,7 @@ function buildHealthyImageInspectJson() {
 function createNativeChildRouterExecFile(resolveScriptForCommand) {
   return (_file, args, options, callback) => {
     const target = args[args.length - 2];
-    const command = args[args.length - 1];
+    const command = callerCommandOf(args);
     const childJs = resolveScriptForCommand({target, command, options});
     return execFile(process.execPath, ['-e', childJs], options, callback);
   };
@@ -1136,6 +1150,14 @@ describe('End-to-end native child-process -> SSH wrapper -> adapter -> campaign 
 const NATIVE_HTTP_OPERATION_BUDGET_MS = 1500;
 const NATIVE_HTTP_CALLER_ABORT_MS = 500;
 const NATIVE_HTTP_PROBE_URL = 'http://fixture-node:8080/readyz';
+// The login shell sshd runs a command with on the campaign hosts.
+const NATIVE_HOST_LOGIN_SHELL = '/bin/bash';
+// The operator locale of this workstation and of adam-laptop and adams-gamla,
+// which ssh forwards (ssh_config `SendEnv LANG LC_*`): a decimal comma.
+const DECIMAL_COMMA_OPERATOR_LOCALE = Object.freeze({
+  LC_ALL: 'sv_SE.UTF-8',
+  LC_NUMERIC: 'sv_SE.UTF-8',
+});
 
 function curlTimeoutMsOf(command) {
   const match = command.match(/--max-time ([0-9.]+)/u);
@@ -1143,7 +1165,7 @@ function curlTimeoutMsOf(command) {
   return Number(match[1]) * 1000;
 }
 
-async function createNativeHttpProbe(t) {
+async function createNativeHttpProbe(t, {operatorLocale = {}} = {}) {
   let ready = true;
   let requestCount = 0;
   const calls = [];
@@ -1174,11 +1196,14 @@ async function createNativeHttpProbe(t) {
       try {
         assert.ok(stringEndsWith(command, ` '${NATIVE_HTTP_PROBE_URL}'`));
         call.curlTimeoutMs = curlTimeoutMsOf(command);
-        const localCommand = stringReplace(
+        const hostCommand = stringReplace(
           command, `'${NATIVE_HTTP_PROBE_URL}'`, `'http://127.0.0.1:${port}/readyz'`);
-        // Substitute only the SSH hop. The real shell parses the exact curl
-        // command; exec leaves curl as the native child receiving cancellation.
-        const child = execFile('/bin/sh', ['-c', `exec ${localCommand}`], options,
+        // Substitute only the SSH hop: the hosts' login shell runs the exact
+        // command the runner sent, fixed locale included, in the environment
+        // ssh forwards from the operator. bash execs the command's last simple
+        // command, so curl is the native child receiving cancellation.
+        const child = execFile(NATIVE_HOST_LOGIN_SHELL, ['-c', hostCommand],
+          {...options, env: {...process.env, ...operatorLocale}},
           (error, stdout, stderr) => {
             Object.assign(call, {callbackReceived: true, nativeErrorCode: error?.code ?? null,
               nativeErrorName: error?.name ?? null, stdout, stderr});
@@ -1312,5 +1337,24 @@ describe('HTTP probe total deadline and native timeout attribution', () => {
       assert.equal(cancelled.call.nativeErrorCode, 'ABORT_ERR');
       assert.equal(cancelled.call.signal, 'SIGTERM');
       assert.ok(cancelled.elapsedMs < NATIVE_HTTP_OPERATION_BUDGET_MS);
+      // The signal reached curl itself: a shell above it would have died alone
+      // and left curl holding the pipes until its own timeout.
+      assert.ok(cancelled.elapsedMs < cancelled.call.curlTimeoutMs,
+        `cancellation settled only at curl's own timeout: ${cancelled.elapsedMs}ms`);
+    });
+
+  it('admits readiness from a host shell in the decimal-comma locale ssh forwards',
+    async (t) => {
+      // PR #224's fractional `--max-time 1.25`: curl 7.81 under LC_NUMERIC=sv_SE
+      // refused it (exit 2) before any request, on this workstation and on
+      // adam-laptop; the runner's fixed locale is what makes it parse.
+      const probe = await createNativeHttpProbe(t,
+        {operatorLocale: DECIMAL_COMMA_OPERATOR_LOCALE});
+      const healthy = await probe.observe(true);
+      assert.notEqual(healthy.call.curlTimeoutMs % 1000, 0, 'a fractional --max-time');
+      callerCommandOf([healthy.call.command]);
+      assert.equal(healthy.call.exitCode, 0);
+      assert.equal(healthy.failure, null);
+      assert.equal(healthy.result.state, 'ready');
     });
 });

@@ -23,6 +23,7 @@ import path from 'node:path';
 import {execFile, execFileSync} from 'node:child_process';
 
 import {DOCKER_DEFAULTS} from './constants.js';
+import {fixedLocaleCommand} from './real-product-remote-shell.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -478,6 +479,8 @@ class GCPProvisioner {
     ]);
   }
 
+  // gcloud's ssh forwards the operator's locale like ssh does; the remote
+  // command runs in the harness's fixed locale (real-product-remote-shell.js).
   _gcloudSshAsync(vmName, remoteCmd) {
     return runAsync('gcloud', [
       'compute', 'ssh',
@@ -485,7 +488,7 @@ class GCPProvisioner {
       '--zone', this._zone,
       '--tunnel-through-iap',
       '--quiet',
-      vmName, '--command', remoteCmd,
+      vmName, '--command', fixedLocaleCommand(remoteCmd),
     ]);
   }
 

@@ -16,11 +16,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import {
   GCP_HARNESS_IMAGE_FAMILY,
   GCPProvisioner,
   harnessImageSource,
 } from '../gcp-provisioner.js';
+import {fixedLocaleCommand} from '../real-product-remote-shell.js';
+
+const stringSplit = Function.call.bind(String.prototype.split);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 
 test('GCP provisioner selects the project-local reusable image family', (t) => {
   assert.equal(GCP_HARNESS_IMAGE_FAMILY, 'lagrange-distributed-harness');
@@ -217,6 +222,26 @@ test('certificate distribution fans out across image-backed VMs', async () => {
     assert.equal(tlsVerifyCommandCount, 2);
   } finally {
     fs.rmSync(certDir, {recursive: true, force: true});
+  }
+});
+
+// gcloud's ssh forwards the operator's LANG/LC_* like ssh does: the remote
+// command carries the harness's fixed locale itself.
+test('gcloud compute ssh sends each remote command in the fixed locale', async () => {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-provision-gcloud-'));
+  // A gcloud stand-in that answers its own argv, one word per line.
+  fs.writeFileSync(path.join(binDir, 'gcloud'), '#!/bin/sh\nprintf \'%s\\n\' "$@"\n',
+    {mode: 0o755});
+  const operatorPath = process.env.PATH;
+  process.env.PATH = `${binDir}${path.delimiter}${operatorPath}`;
+  try {
+    const provisioner = new GCPProvisioner({project: 'proj', zone: 'zone-a'});
+    const argv = stringSplit(await provisioner._gcloudSshAsync('vm-a', 'echo ready'), '\n');
+    assert.deepEqual(argv.slice(0, 2), ['compute', 'ssh']);
+    assert.equal(argv[arrayIndexOf(argv, '--command') + 1], fixedLocaleCommand('echo ready'));
+  } finally {
+    process.env.PATH = operatorPath;
+    fs.rmSync(binDir, {recursive: true, force: true});
   }
 });
 
