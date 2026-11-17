@@ -77,6 +77,11 @@ const PGWIRE_AUTH_HANDLER_MODE = Object.freeze({
   PASSWORD: 'password',
 });
 
+// --- Default PG startup identity values ---
+
+const PGWIRE_DEFAULT_TENANT_ID = 'default';
+const PGWIRE_ANONYMOUS_PRINCIPAL = 'anonymous';
+
 // --- Log tag for auth audit entries ---
 
 const PGWIRE_AUTH_LOG_TAG = 'pgwire.auth';
@@ -89,4 +94,6 @@ export {
   PGWIRE_AUTH_ERROR_MSG,
   PGWIRE_AUTH_LOG_TAG,
   PGWIRE_AUTH_HANDLER_MODE,
+  PGWIRE_DEFAULT_TENANT_ID,
+  PGWIRE_ANONYMOUS_PRINCIPAL,
 };

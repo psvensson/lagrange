@@ -73,10 +73,10 @@ import {
   writeCString,
   readCString,
 } from './pgwire-buffer-codec.js';
+import {PGWIRE_AUTH_MODE, PGWIRE_TLS_MODE} from './pgwire-descriptor.js';
 import {
-  PGWIRE_AUTH_MODE,
-  PGWIRE_TLS_MODE,
-} from './pgwire-descriptor.js';
+  PGWIRE_ANONYMOUS_PRINCIPAL, PGWIRE_DEFAULT_TENANT_ID,
+} from './pgwire-auth-constants.js';
 import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
 import {PgWireExtendedQueryHandler} from
   './pgwire-extended-query-handler.js';
@@ -90,6 +90,8 @@ const LOCAL_STR_CLOSE = 'close';
 const LOCAL_NUM_SIXTEEN = 16;
 const LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS = 'current transaction is aborted, commands ignored ';
 const LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK = 'until end of transaction block';
+const STARTUP_PARAMETERS_OFFSET = 8;
+const PASSWORD_ENCODING = 'utf8';
 
 // --- Internal handler states ---
 
@@ -293,7 +295,7 @@ class PgWireProtocolHandler {
     }
 
     // Parse startup parameters (after 4-byte length + 4-byte version)
-    const paramsBuf = msgBuf.subarray(8);
+    const paramsBuf = msgBuf.subarray(STARTUP_PARAMETERS_OFFSET);
     const params = parseStartupParams(paramsBuf);
 
     this._logger.debug(PG_HANDLER_LOG.STARTUP_RECEIVED, {
@@ -361,8 +363,8 @@ class PgWireProtocolHandler {
   async _handleStartup(params) {
     const pendingAuth = Object.freeze({
       sessionId: `pgwire-${randomUUID()}`,
-      tenantId: params.database || 'default',
-      user: params.user || 'anonymous',
+      tenantId: params.database || PGWIRE_DEFAULT_TENANT_ID,
+      user: params.user || PGWIRE_ANONYMOUS_PRINCIPAL,
       database: params.database || null,
     });
 
@@ -409,7 +411,7 @@ class PgWireProtocolHandler {
       this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
       return;
     }
-    const password = payload.subarray(0, -1).toString('utf8');
+    const password = payload.subarray(0, -1).toString(PASSWORD_ENCODING);
     this._buffer = this._buffer.subarray(totalLen);
     await this._completeAuthentication(this._pendingAuth, password);
   }

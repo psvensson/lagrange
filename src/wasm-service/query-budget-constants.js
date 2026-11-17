@@ -110,6 +110,14 @@ const DEFAULT_QUERY_BUDGET = Object.freeze({
   OUT_MAX_BYTES,
 });
 
+const DEFAULT_EFFECTIVE_QUERY_BUDGET = Object.freeze({
+  ...DEFAULT_QUERY_BUDGET,
+  NESTED_MAX_CALLS,
+  NESTED_MAX_KEYS,
+  NESTED_MAX_BYTES,
+  MAX_INFLIGHT,
+});
+
 /**
  * Field name constants for QueryBudget objects (camelCase).
  * @enum {string}
@@ -158,6 +166,96 @@ const QUERY_BUDGET_ERROR_MSG = Object.freeze({
     'Output bytes via ctx.out exceed budget limit',
 });
 
+const QUERY_BUDGET_NORMALIZATION_ERROR_MSG = Object.freeze({
+  INVALID_BUDGET_OBJECT:
+    'Query budget overrides must be a plain object',
+  CONFLICTING_BUDGET_LIMITS:
+    'Conflicting query budget values supplied for the same limit',
+});
+
+const EMPTY_BUDGET = Object.freeze({});
+const DEFAULT_QUERY_BUDGET_KEYS = Object.freeze(
+  Object.keys(DEFAULT_QUERY_BUDGET),
+);
+const QB_FIELD_ENTRIES = Object.freeze(Object.entries(QB_FIELD));
+const QB_FIELD_CAMEL_VALUES = Object.freeze(Object.values(QB_FIELD));
+
+function isUnnormalizedSqlRequestBudgetSpread(source) {
+  return (
+    DEFAULT_QUERY_BUDGET_KEYS.every((key) => Object.hasOwn(source, key)) &&
+    !QB_FIELD_CAMEL_VALUES.every((key) => Object.hasOwn(source, key))
+  );
+}
+
+function resolveDimensionBudgetValue(
+  source,
+  upperKey,
+  camelKey,
+  defaultValue,
+  isSqlRequestSpread,
+) {
+  const hasUpper =
+    Object.hasOwn(source, upperKey) && source[upperKey] !== undefined;
+  const hasCamel =
+    Object.hasOwn(source, camelKey) && source[camelKey] !== undefined;
+  if (hasUpper && hasCamel) {
+    const upperValue = source[upperKey];
+    const camelValue = source[camelKey];
+    if (Object.is(upperValue, camelValue)) {
+      return upperValue;
+    }
+    if (
+      isSqlRequestSpread &&
+      Object.hasOwn(DEFAULT_QUERY_BUDGET, upperKey) &&
+      Object.is(upperValue, DEFAULT_QUERY_BUDGET[upperKey])
+    ) {
+      return camelValue;
+    }
+    throw new Error(
+      `${QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS}: ` +
+        `${upperKey}=${String(upperValue)} vs ${camelKey}=${String(camelValue)}`,
+    );
+  }
+  if (hasUpper) {
+    return source[upperKey];
+  }
+  if (hasCamel) {
+    return source[camelKey];
+  }
+  return defaultValue;
+}
+
+/**
+ * Normalize query budget overrides into one canonical frozen budget shape
+ * containing both uppercase SqlRequest fields and camelCase QB_FIELD keys.
+ * Rejects conflicting values when a caller supplies two different values
+ * for the same limit dimension.
+ *
+ * @param {Object} [budgets] - Raw or partially-populated query budget object.
+ * @return {Readonly<Object>} Frozen normalized query budget.
+ */
+function normalizeQueryBudget(budgets = EMPTY_BUDGET) {
+  const source =
+    budgets === undefined || budgets === null ? EMPTY_BUDGET : budgets;
+  if (typeof source !== 'object' || Array.isArray(source)) {
+    throw new Error(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT);
+  }
+  const isSqlRequestSpread = isUnnormalizedSqlRequestBudgetSpread(source);
+  const normalized = {...source};
+  for (const [upperKey, camelKey] of QB_FIELD_ENTRIES) {
+    const resolvedValue = resolveDimensionBudgetValue(
+      source,
+      upperKey,
+      camelKey,
+      DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey],
+      isSqlRequestSpread,
+    );
+    normalized[upperKey] = resolvedValue;
+    normalized[camelKey] = resolvedValue;
+  }
+  return Object.freeze(normalized);
+}
+
 export {
   LOOKUP_MAX_KEYS,
   LOOKUP_MAX_BYTES,
@@ -174,6 +272,9 @@ export {
   NESTED_MAX_BYTES,
   MAX_INFLIGHT,
   DEFAULT_QUERY_BUDGET,
+  DEFAULT_EFFECTIVE_QUERY_BUDGET,
   QB_FIELD,
   QUERY_BUDGET_ERROR_MSG,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  normalizeQueryBudget,
 };

@@ -46,6 +46,23 @@ describe('BudgetEnforcer', () => {
       assert.equal(enforcer.isExceeded(), true);
     });
 
+    it('should accept SqlRequest uppercase limits and reject conflicts', () => {
+      const enforcer = new BudgetEnforcer({
+        OUT_MAX_BYTES: 1,
+        CPU_TIME_LIMIT_MS: 50,
+      });
+      assert.throws(
+        () => enforcer.recordOutBytes(17),
+        (err) => err instanceof BudgetLimitError &&
+          err.category === BUDGET_CATEGORY.OUT_BYTES &&
+          err.limit === 1,
+      );
+      assert.throws(
+        () => new BudgetEnforcer({OUT_MAX_BYTES: 128, outMaxBytes: 1}),
+        /Conflicting query budget values/,
+      );
+    });
+
     it('should use default constants when no overrides', () => {
       const enforcer = new BudgetEnforcer();
       // Record just under each default limit — should not throw

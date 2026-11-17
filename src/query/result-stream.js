@@ -10,8 +10,8 @@
  */
 
 import {
-  DEFAULT_QUERY_BUDGET,
   QUERY_BUDGET_ERROR_MSG,
+  normalizeQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 
 /**
@@ -56,7 +56,7 @@ class ResultStream {
    *   to DEFAULT_QUERY_BUDGET for missing fields.
    */
   constructor(budgets) {
-    const merged = {...DEFAULT_QUERY_BUDGET, ...budgets};
+    const merged = normalizeQueryBudget(budgets);
     this.maxRows = merged.RESULT_MAX_ROWS;
     this.maxBytes = merged.RESULT_MAX_BYTES;
     this.totalRows = 0;

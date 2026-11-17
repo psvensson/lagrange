@@ -17,6 +17,10 @@ import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from
 import {createTestPostgresWireAdapter} from
   '../helpers/pgwire-auth-handler.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
+import {
+  PGWIRE_ANONYMOUS_PRINCIPAL,
+  PGWIRE_DEFAULT_TENANT_ID,
+} from '../../src/runtime/pgwire-auth-constants.js';
 
 /**
  * Create a minimal mock SqlCore that records executeRequest calls.
@@ -255,5 +259,27 @@ test('PostgresWireAdapter - propagates sqlCore errors', async (t) => {
     adapter.execute('sess-1', 'SELECT * FROM missing'),
     /table not found/,
   );
+  t.end();
+});
+
+test('PostgresWireAdapter - uses canonical PGWIRE_ANONYMOUS_PRINCIPAL ' +
+  'and PGWIRE_DEFAULT_TENANT_ID constants and normalizes wallTimeLimitMs',
+async (t) => {
+  t.equal(PGWIRE_DEFAULT_TENANT_ID, 'default');
+  t.equal(PGWIRE_ANONYMOUS_PRINCIPAL, 'anonymous');
+
+  const mock = createMockSqlCore();
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
+  await adapter.authenticate('sess-anon', {
+    tenantId: PGWIRE_DEFAULT_TENANT_ID,
+  });
+  await adapter.execute('sess-anon', 'SELECT 1', [], {
+    budgets: {wallTimeLimitMs: 4321},
+  });
+
+  t.equal(mock.calls.length, 1);
+  t.equal(mock.calls[0].tenantId, 'default');
+  t.equal(mock.calls[0].securityContext.principal, 'anonymous');
+  t.equal(mock.calls[0].timeoutBudget.configuredBudgetMs, 4321);
   t.end();
 });

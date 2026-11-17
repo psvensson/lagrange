@@ -48,6 +48,16 @@ test('ResultStream - starts in OPEN state', (t) => {
 test('ResultStream - accepts budget overrides', (t) => {
   const stream = new ResultStream({RESULT_MAX_ROWS: 5});
   t.equal(stream.maxRows, 5);
+  const camelStream = new ResultStream({
+    resultMaxRows: 3,
+    resultMaxBytes: 64,
+  });
+  t.equal(camelStream.maxRows, 3);
+  t.equal(camelStream.maxBytes, 64);
+  t.throws(
+    () => new ResultStream({RESULT_MAX_ROWS: 5, resultMaxRows: 2}),
+    /Conflicting query budget values/,
+  );
   t.end();
 });
 

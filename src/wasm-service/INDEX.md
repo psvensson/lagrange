@@ -26,7 +26,7 @@ documentClass: generated
 - [operation-stream.js](operation-stream.js) - EventEmitter-based operation stream publisher. (importers: few)
 - [package-reference.js](package-reference.js) - Package reference parser, formatter, and validator. (importers: one)
 - [port-allocator.js](port-allocator.js) - PortAllocator - node-level port allocation for WASM service replicas. (importers: many)
-- [query-budget-constants.js](query-budget-constants.js) - Query budget constants for distributed SQL primitives. (importers: many)
+- [query-budget-constants.js](query-budget-constants.js) - Query budget constants for distributed SQL primitives. (importers: hub)
 - [read-router.js](read-router.js) - Routing decision constants for read requests. (importers: few)
 - [registry-resolver.js](registry-resolver.js) - Namespace registry mapping resolver. (importers: few)
 - [runtime-descriptor-validator.js](runtime-descriptor-validator.js) - Validation helpers for runtime descriptor envelopes. (importers: many)

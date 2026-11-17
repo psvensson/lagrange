@@ -32,6 +32,8 @@ import {
   STREAM_STATE,
   estimateRowBytes,
 } from './result-stream.js';
+import {normalizeQueryBudget} from
+  '../wasm-service/query-budget-constants.js';
 import {BudgetLimitError} from './budget-limit-error.js';
 import {ExchangeManager} from './distributed/exchange-manager.js';
 import {executeLookup} from './lookup-primitive.js';
@@ -97,6 +99,9 @@ class ExecutionContext {
     this.snapshot = Object.freeze({...deps.snapshot});
 
     /** @private */
+    this._budgets = normalizeQueryBudget(deps.budgets);
+
+    /** @private */
     this._budgetEnforcer = deps.budgetEnforcer;
 
     /** @private */
@@ -110,7 +115,7 @@ class ExecutionContext {
 
     /** @private */
     this._resultStream = deps.resultStream ??
-      new ResultStream();
+      new ResultStream(this._budgets);
 
     /** @private */
     this._exchangeManager = deps.exchangeManager ??
@@ -150,6 +155,7 @@ class ExecutionContext {
     /** @private */
     this._broadcastStore = deps.broadcastStore ||
       new BroadcastStore({
+        maxPayloadBytes: this._budgets.BROADCAST_MAX_PAYLOAD_BYTES,
         lineageTracker: this._lineageTracker,
         stageIndex: LOOKUP_STAGE_INDEX_DEFAULT,
       });
@@ -458,6 +464,7 @@ class ExecutionContext {
         this._lookupPartitionResolver(_table, key),
       fetchFn: (partitionId, table, keys) =>
         this._fetchLookupRows(partitionId, table, keys),
+      budgets: this._budgets,
       lineageTracker: this._lineageTracker,
       stageIndex: LOOKUP_STAGE_INDEX_DEFAULT,
       sequenceNum,

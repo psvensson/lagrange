@@ -8,9 +8,19 @@ import {
   QUERY_CPU_TIME_LIMIT_MS,
   QUERY_MEMORY_LIMIT_BYTES,
   QUERY_WALL_TIME_LIMIT_MS,
+  RESULT_MAX_ROWS,
+  RESULT_MAX_BYTES,
+  OUT_MAX_BYTES,
+  NESTED_MAX_CALLS,
+  NESTED_MAX_KEYS,
+  NESTED_MAX_BYTES,
+  MAX_INFLIGHT,
   DEFAULT_QUERY_BUDGET,
+  DEFAULT_EFFECTIVE_QUERY_BUDGET,
   QB_FIELD,
   QUERY_BUDGET_ERROR_MSG,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 
 describe('query-budget-constants', () => {
@@ -137,6 +147,87 @@ describe('query-budget-constants', () => {
       assert.equal(
         Object.keys(QUERY_BUDGET_ERROR_MSG).length, 10,
       );
+    });
+  });
+
+  describe('normalizeQueryBudget', () => {
+    it('normalizes defaults into both uppercase and camelCase keys', () => {
+      const normalized = normalizeQueryBudget();
+      assert.ok(Object.isFrozen(normalized));
+      assert.equal(normalized.LOOKUP_MAX_KEYS, LOOKUP_MAX_KEYS);
+      assert.equal(normalized[QB_FIELD.LOOKUP_MAX_KEYS], LOOKUP_MAX_KEYS);
+      assert.equal(normalized.LOOKUP_MAX_BYTES, LOOKUP_MAX_BYTES);
+      assert.equal(normalized[QB_FIELD.LOOKUP_MAX_BYTES], LOOKUP_MAX_BYTES);
+      assert.equal(normalized.EMIT_MAX_BYTES, EMIT_MAX_BYTES);
+      assert.equal(normalized[QB_FIELD.EMIT_MAX_BYTES], EMIT_MAX_BYTES);
+      assert.equal(
+        normalized.BROADCAST_MAX_PAYLOAD_BYTES,
+        BROADCAST_MAX_PAYLOAD_BYTES,
+      );
+      assert.equal(
+        normalized[QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES],
+        BROADCAST_MAX_PAYLOAD_BYTES,
+      );
+      assert.equal(normalized.CPU_TIME_LIMIT_MS, QUERY_CPU_TIME_LIMIT_MS);
+      assert.equal(
+        normalized[QB_FIELD.CPU_TIME_LIMIT_MS],
+        QUERY_CPU_TIME_LIMIT_MS,
+      );
+      assert.equal(normalized.MEMORY_LIMIT_BYTES, QUERY_MEMORY_LIMIT_BYTES);
+      assert.equal(
+        normalized[QB_FIELD.MEMORY_LIMIT_BYTES],
+        QUERY_MEMORY_LIMIT_BYTES,
+      );
+      assert.equal(normalized.WALL_TIME_LIMIT_MS, QUERY_WALL_TIME_LIMIT_MS);
+      assert.equal(
+        normalized[QB_FIELD.WALL_TIME_LIMIT_MS],
+        QUERY_WALL_TIME_LIMIT_MS,
+      );
+      assert.equal(normalized.RESULT_MAX_ROWS, RESULT_MAX_ROWS);
+      assert.equal(normalized[QB_FIELD.RESULT_MAX_ROWS], RESULT_MAX_ROWS);
+      assert.equal(normalized.RESULT_MAX_BYTES, RESULT_MAX_BYTES);
+      assert.equal(normalized[QB_FIELD.RESULT_MAX_BYTES], RESULT_MAX_BYTES);
+      assert.equal(normalized.OUT_MAX_BYTES, OUT_MAX_BYTES);
+      assert.equal(normalized[QB_FIELD.OUT_MAX_BYTES], OUT_MAX_BYTES);
+      assert.equal(normalized.NESTED_MAX_CALLS, NESTED_MAX_CALLS);
+      assert.equal(normalized[QB_FIELD.NESTED_MAX_CALLS], NESTED_MAX_CALLS);
+      assert.equal(normalized.NESTED_MAX_KEYS, NESTED_MAX_KEYS);
+      assert.equal(normalized[QB_FIELD.NESTED_MAX_KEYS], NESTED_MAX_KEYS);
+      assert.equal(normalized.NESTED_MAX_BYTES, NESTED_MAX_BYTES);
+      assert.equal(normalized[QB_FIELD.NESTED_MAX_BYTES], NESTED_MAX_BYTES);
+      assert.equal(normalized.MAX_INFLIGHT, MAX_INFLIGHT);
+      assert.equal(normalized[QB_FIELD.MAX_INFLIGHT], MAX_INFLIGHT);
+      assert.equal(Object.keys(DEFAULT_EFFECTIVE_QUERY_BUDGET).length, 14);
+    });
+
+    it('translates uppercase and camelCase overrides across all 14 fields', () => {
+      for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+        const fromUpper = normalizeQueryBudget({[upperKey]: 42});
+        assert.equal(fromUpper[upperKey], 42);
+        assert.equal(fromUpper[camelKey], 42);
+
+        const fromCamel = normalizeQueryBudget({[camelKey]: 42});
+        assert.equal(fromCamel[upperKey], 42);
+        assert.equal(fromCamel[camelKey], 42);
+
+        const fromSqlRequestSpread = normalizeQueryBudget({
+          ...DEFAULT_QUERY_BUDGET,
+          [camelKey]: 42,
+        });
+        assert.equal(fromSqlRequestSpread[upperKey], 42);
+        assert.equal(fromSqlRequestSpread[camelKey], 42);
+      }
+    });
+
+    it('rejects conflicting uppercase and camelCase values for any limit', () => {
+      for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+        assert.throws(
+          () => normalizeQueryBudget({[upperKey]: 128, [camelKey]: 1}),
+          (err) => err.message.includes(
+            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
+          ),
+        );
+      }
     });
   });
 });

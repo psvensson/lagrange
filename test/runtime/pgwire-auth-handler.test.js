@@ -15,6 +15,8 @@ import {
   PGWIRE_AUTH_AUDIT_MSG,
   PGWIRE_AUTH_ERROR_MSG,
   PGWIRE_AUTH_HANDLER_MODE,
+  PGWIRE_DEFAULT_TENANT_ID,
+  PGWIRE_ANONYMOUS_PRINCIPAL,
 } from '../../src/runtime/pgwire-auth-constants.js';
 
 /** Silent logger for tests. */
@@ -521,6 +523,12 @@ describe('PgWireAuthHandler', () => {
 
       assert.ok(authResult.auditRecord.timestamp > 0);
       assert.ok(authzResult.auditRecord.timestamp > 0);
+    });
+
+    it('exports canonical PG startup default tenant and anonymous principal', () => {
+      assert.equal(PGWIRE_DEFAULT_TENANT_ID, 'default');
+      assert.notEqual(PGWIRE_DEFAULT_TENANT_ID, 'system');
+      assert.equal(PGWIRE_ANONYMOUS_PRINCIPAL, 'anonymous');
     });
   });
 });

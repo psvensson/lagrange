@@ -11,8 +11,10 @@
 import {LoggingService} from '../../logging/logging-service.js';
 import {createSqlRequest} from '../sql-request.js';
 import {createTimeoutBudget} from '../../control-plane/timeout-budget.js';
-import {QUERY_WALL_TIME_LIMIT_MS} from
-  '../../wasm-service/query-budget-constants.js';
+import {
+  QUERY_WALL_TIME_LIMIT_MS,
+  normalizeQueryBudget,
+} from '../../wasm-service/query-budget-constants.js';
 import {
   QUERY_ERROR_CODE,
 } from '../query-constants.js';
@@ -30,8 +32,10 @@ import {
   SERVICE_LIFECYCLE_SQL_COMMAND,
   classifyServiceLifecycleSql,
 } from '../service-lifecycle-sql-contract.js';
-import {PGWIRE_AUTH_ACTION} from
-  '../../runtime/pgwire-auth-constants.js';
+import {
+  PGWIRE_ANONYMOUS_PRINCIPAL,
+  PGWIRE_AUTH_ACTION,
+} from '../../runtime/pgwire-auth-constants.js';
 import {
   EXECUTION_MODE,
   ADAPTER_SUBSYSTEM,
@@ -39,12 +43,12 @@ import {
   ADAPTER_LOG_MSG,
 } from '../sql-adapter-constants.js';
 
-const ANONYMOUS_PRINCIPAL = 'anonymous';
 const CLOSED_SESSION_ROLLBACK_STATEMENT = 'ROLLBACK';
 const NO_TRANSACTION_ERROR_CODE = 'NO_TRANSACTION';
 
 function resolvePgWireWallTimeLimitMs(options = {}) {
-  const requested = Number(options?.budgets?.WALL_TIME_LIMIT_MS);
+  const normalizedBudgets = normalizeQueryBudget(options?.budgets);
+  const requested = Number(normalizedBudgets.WALL_TIME_LIMIT_MS);
   return Number.isFinite(requested) && requested > 0 ?
     requested : QUERY_WALL_TIME_LIMIT_MS;
 }
@@ -164,7 +168,7 @@ class PostgresWireAdapter {
     }
 
     const authResult = await this.authHandler.authenticate({
-      user: credentials.user || ANONYMOUS_PRINCIPAL,
+      user: credentials.user || PGWIRE_ANONYMOUS_PRINCIPAL,
       database: credentials.tenantId,
       password: credentials.password,
     });

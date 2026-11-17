@@ -8,19 +8,8 @@
  */
 
 import {
-  QUERY_CPU_TIME_LIMIT_MS,
-  QUERY_MEMORY_LIMIT_BYTES,
-  QUERY_WALL_TIME_LIMIT_MS,
-  LOOKUP_MAX_KEYS,
-  LOOKUP_MAX_BYTES,
-  EMIT_MAX_BYTES,
-  BROADCAST_MAX_PAYLOAD_BYTES,
-  OUT_MAX_BYTES,
-  NESTED_MAX_CALLS,
-  NESTED_MAX_KEYS,
-  NESTED_MAX_BYTES,
-  MAX_INFLIGHT,
   QB_FIELD,
+  normalizeQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 import {
   GUARDRAIL_ERROR_MSG as ERR,
@@ -48,32 +37,21 @@ class BudgetEnforcer {
    *   use defaults from query-budget-constants.
    */
   constructor(budget = {}) {
+    const normalized = normalizeQueryBudget(budget);
     this._limits = {
-      cpuTimeMs: budget[QB_FIELD.CPU_TIME_LIMIT_MS] ??
-        QUERY_CPU_TIME_LIMIT_MS,
-      memoryBytes: budget[QB_FIELD.MEMORY_LIMIT_BYTES] ??
-        QUERY_MEMORY_LIMIT_BYTES,
-      wallTimeMs: budget[QB_FIELD.WALL_TIME_LIMIT_MS] ??
-        QUERY_WALL_TIME_LIMIT_MS,
-      lookupKeys: budget[QB_FIELD.LOOKUP_MAX_KEYS] ??
-        LOOKUP_MAX_KEYS,
-      lookupBytes: budget[QB_FIELD.LOOKUP_MAX_BYTES] ??
-        LOOKUP_MAX_BYTES,
-      emitBytes: budget[QB_FIELD.EMIT_MAX_BYTES] ??
-        EMIT_MAX_BYTES,
+      cpuTimeMs: normalized[QB_FIELD.CPU_TIME_LIMIT_MS],
+      memoryBytes: normalized[QB_FIELD.MEMORY_LIMIT_BYTES],
+      wallTimeMs: normalized[QB_FIELD.WALL_TIME_LIMIT_MS],
+      lookupKeys: normalized[QB_FIELD.LOOKUP_MAX_KEYS],
+      lookupBytes: normalized[QB_FIELD.LOOKUP_MAX_BYTES],
+      emitBytes: normalized[QB_FIELD.EMIT_MAX_BYTES],
       broadcastBytes:
-        budget[QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES] ??
-        BROADCAST_MAX_PAYLOAD_BYTES,
-      outBytes: budget[QB_FIELD.OUT_MAX_BYTES] ??
-        OUT_MAX_BYTES,
-      nestedCalls: budget[QB_FIELD.NESTED_MAX_CALLS] ??
-        NESTED_MAX_CALLS,
-      nestedKeys: budget[QB_FIELD.NESTED_MAX_KEYS] ??
-        NESTED_MAX_KEYS,
-      nestedBytes: budget[QB_FIELD.NESTED_MAX_BYTES] ??
-        NESTED_MAX_BYTES,
-      inflight: budget[QB_FIELD.MAX_INFLIGHT] ??
-        MAX_INFLIGHT,
+        normalized[QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES],
+      outBytes: normalized[QB_FIELD.OUT_MAX_BYTES],
+      nestedCalls: normalized[QB_FIELD.NESTED_MAX_CALLS],
+      nestedKeys: normalized[QB_FIELD.NESTED_MAX_KEYS],
+      nestedBytes: normalized[QB_FIELD.NESTED_MAX_BYTES],
+      inflight: normalized[QB_FIELD.MAX_INFLIGHT],
     };
 
     this._usage = {
