@@ -189,6 +189,108 @@ on every replica. It does not depend on CDC: a user table records no CDC
 obligation (CDC owner decision D2), and its writes still count as traffic, so
 it can split on traffic and a merge sees its real rate.
 
+### Portable logical committed-statement observation (Q1a)
+
+For independent implementations, the first bounded portable observation is
+the **logical result retained for one committed statement entry key**. This is
+a contract for interpreting a partition-local durable observation, **not** a
+new network message, SQLite schema, storage format, public API, or permission
+to answer a new write. The application of an entry is the authority: its
+terminal outcome row is committed in the same SQLite transaction as its SQL
+effects and the rs-raft applied position. Failed environmental application
+rolls back all three; a missing row does not certify that an entry was never
+committed elsewhere. The owner implementations are
+`src/partition/partition-committed-statement-outcome.js`,
+`src/partition/partition-committed-statement-outcome-constants.js`, and
+`src/partition/partition-retained-store-observation.js`.
+
+The independent reference observation has exactly one of these shapes:
+
+| `kind` | Required fields | Meaning and forbidden inference |
+| --- | --- | --- |
+| `settled` | `entryKey`, `outcome`, `logIndex`, `term`, `changes`, `lastInsertRowid`, `failureCode`, `failureMessage`, `ownerResultText` | A retained row exists. `outcome` is `applied` or `statement_failed`; `replayed` is a response classification, **not** another durable terminal outcome. |
+| `unsettled` | `entryKey` | A valid complete local census has no settled row for this key. This is not proof of non-commit on another replica, a never-submitted command, or safe permission to execute again. |
+| `unavailable` | `entryKey`, `reason` | The authoritative local read cannot establish the census: `partition_retained_store_schema_unavailable`, `partition_retained_store_schema_contrary`, or `partition_retained_store_row_contrary`. Never convert it to `unsettled`. |
+| `unknown` | `entryKey`, `reason` | The caller cannot settle write outcome (`partition_write_outcome_unknown`). The owner retains any applicable reconciliation duty; an arbitrary timeout cannot turn it into failure or success. |
+
+There are no extra fields in these **reference envelopes**. The current
+`readCommittedStatementCensusIn(db)` returns the settled **row fields without
+the envelope's `kind`**; `unsettled` is derived only from a successfully read,
+complete census. The existing write-answer and retained-store owners supply
+other states. This reference does **not** claim an already implemented shared
+codec that emits all four envelopes. The raw census reader validates stored
+field types and integer bounds but does not, by itself, validate the closed
+`outcome` vocabulary or generated key prefix; its owning application and
+downstream bootstrap census supply that additional context. This is a
+composition proof gap, not permission to trust an arbitrary stored row.
+
+`entryKey` has two existing owner-generated, disjoint identity families:
+
+- `entry:<nonempty entryId>` for committed ordinary and coordinator entries;
+- `txop:<participantId>:<ordinal>` for each applied TX1 participant operation,
+  where `participantId` is the nonempty composite transaction/partition
+  identity containing a separator `:`, and `ordinal` is canonical nonnegative
+  decimal within the safe integer range. This is a single retained outcome
+  table, **not** two interchangeable replay identities.
+
+The key is exact, case-sensitive UTF-8; a bad prefix, empty required component,
+noncanonical ordinal or malformed Unicode is invalid. Compare complete key
+bytes without locale, normalization or case folding (e.g. `entry:café` is
+distinct from its decomposed Unicode spelling). Implementations must not derive
+a different key on replay, restart or another replica. The precise accepted
+external entry-ID alphabet, participant-ID alphabet and byte bounds still
+require their own ingress/transaction-owner specifications; Q1a does not invent
+them. The ordinary producer is `committedStatementEntryKey`; the TX1 producer
+is `operationOutcomeKeyOf` in
+`src/partition/partition-participant-transaction-bytes.js`.
+
+The retained SQLite `logIndex` and `term` are **positive signed 64-bit** values;
+`changes` is a nullable nonnegative signed 64-bit value;
+`lastInsertRowid` is a nullable signed 64-bit value (including negative row
+identifiers). Each non-null value in this *logical reference* is serialized as
+an exact base-10 string: no sign except a leading `-` for a negative integer,
+no `+`, leading zero, `-0`, fraction, exponent, whitespace, or JSON number.
+Compare these strings by integer value, not by string ordering or conversion
+to a floating-point number. `failureCode`, `failureMessage`, and
+`ownerResultText` are nullable strings. An unavailable retained result is
+`changes: null`, **not** `"0"`; `lastInsertRowid: null` means no authoritative
+inserted-row identity. `statement_failed` consumes the committed entry only
+for deterministic statement failure. A host/SQLite environmental failure
+never becomes a settled row.
+
+The outcome-dependent constraints are also normative: `applied` has null
+failure code and message; `statement_failed` has both failure fields as
+strings, null `changes`, null `lastInsertRowid`, and null `ownerResultText`.
+For `applied`, a non-null inserted-row ID requires **positive** `changes`;
+zero or unknown changes cannot establish an inserted-row identity. An
+`applied` owner-specific result text (the coordinator settlement case) has
+null `changes` and `lastInsertRowid`. Ordinary applied SQL has a retained
+count and no owner result text; older retained rows can lack the count.
+These constraints reflect the actual committed-outcome application callers,
+not arbitrary combinations that SQLite's nullable columns happen to allow.
+
+For the **portable descriptor-epoch comparison subset**, both operands are
+positive JSON integers within `1..9007199254740991` (the safe binary64 integer
+range). Equality is exact; a missing, fractional, textual, boolean, negative,
+zero or unsafe input is invalid, not a match. The partition descriptor version
+is distinct from a retained Raft term/log index, SQLite rowid, physical
+generation, or HLC. This bounded subset must not be mistaken for the complete
+current `normalizeDescriptorEpochVersion` ingress contract: its `Number(value)`
+coercion presently accepts some unsafe/ambiguous inputs. Those inputs remain a
+typed source/target **mismatch to resolve at the descriptor-epoch owner**, not
+silently certified as already refused. Native raft-rs `u64` positions (including
+values above signed 64-bit) and HLC/Call Cell JSON canonicalization remain
+separate Q1 conformance work.
+
+The independent specification fixture and stdlib-only Python decoder live at
+`test/partition/portability-observation-v1.vectors.json` and
+`test/partition/portability-observation-reference.py`. They include accepted,
+refused, ordering, safe-epoch, invalid-epoch and byte-exact identity vectors,
+per-case semantic coverage locks, and mutation controls.
+Passing the vectors shows cross-language agreement **only for this logical
+representation**, not production ingress, real Raft recovery, snapshot exchange,
+same-disk compatibility, or mixed-implementation cluster support.
+
 Until such a span exists, the partition has **no traffic signal** (not zero
 traffic). That is the case after it is created, after a leader change or a
 restart of its partition service, and on a node that does not lead it. With
