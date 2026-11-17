@@ -11,7 +11,16 @@ import {ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} 
   '../../src/transport/transport-error-codes.js';
 import {createMockSystemCache} from './query-executor-test-support.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
-import {PG_ERROR_CODE} from '../../src/runtime/pgwire-protocol-constants.js';
+import {
+  PG_BACKEND_MSG,
+  PG_ERROR_CODE,
+  PG_TRANSACTION_STATE,
+} from '../../src/runtime/pgwire-protocol-constants.js';
+import {answerFailedStatement} from '../../src/runtime/pgwire-transaction-outcome.js';
+import {PgWireSession} from '../../src/runtime/pgwire-session.js';
+import {DistributedWriteCoordinator} from
+  '../../src/query/distributed/distributed-write-coordinator.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTITION = 'q6-write';
@@ -70,3 +79,87 @@ for (const errorCode of [ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIM
     }
   }
 }
+
+// The ErrorResponse fields (by field byte) a PG-wire answer wrote.
+function errorResponseFields(buffers) {
+  const frames = buffers.filter((buffer) =>
+    buffer[0] === PG_BACKEND_MSG.ERROR_RESPONSE);
+  return frames.map((frame) => {
+    const fields = {};
+    for (let offset = 5; frame[offset] !== 0;) {
+      const end = frame.indexOf(0, offset + 1);
+      fields[String.fromCharCode(frame[offset])] =
+        frame.subarray(offset + 1, end).toString('utf8');
+      offset = end + 1;
+    }
+    return fields;
+  });
+}
+
+// The statement's failed engine result as the PG-wire handler receives it.
+function wireFailureOf(result) {
+  return Object.assign(new Error(result.error), result,
+    {statementType: 'UPDATE'});
+}
+
+test('a lost-answer autocommit write answers 08007 end to end: the ' +
+  'executor\'s unknown outcome survives the write coordinator and the ' +
+  'PG-wire answer', async (t) => {
+  ConfigurationManager.getInstance().initialize();
+  let now = 1000;
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    nodeId: 'test-node', systemCache: createMockSystemCache([PARTITION]),
+    messageRouter: {
+      async deliver() {
+        now += BUDGET_MS;
+        return buildDeliveryEnvelope({errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+          error: 'answer lost', deferRetry: true, recoverableBeforeSend: false});
+      },
+    },
+  });
+  executor.nowFn = () => now;
+  executor.delay = async (ms) => {
+    now += ms;
+  };
+  const coordinator = new DistributedWriteCoordinator({
+    partitionResolver: {resolvePartitionForKey: () => PARTITION},
+    queryExecutor: executor,
+    getTablePartitions: () => [{partition_id: PARTITION,
+      partition_key_start: null, partition_key_end: null}],
+    getTableInfo: () => ({primaryKey: 'id'}),
+  });
+  const ast = new SQLParser('UPDATE users SET n = n + 1 WHERE id = 1').parse();
+  const plan = coordinator.createWritePlan(ast, [], {partitionIds: [PARTITION]});
+  const result = await coordinator.executePlan(plan, [], {timeoutMs: BUDGET_MS});
+  t.equal(result.success, false);
+  t.equal(result.participantFailures?.[0]?.failureCode,
+    PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+    'the coordinator carries the participant\'s typed unknown outcome');
+
+  const autocommitSession = new PgWireSession({sessionId: 'autocommit'});
+  const autocommitFrames = [];
+  answerFailedStatement({failure: wireFailureOf(result),
+    stateBefore: PG_TRANSACTION_STATE.IDLE, session: autocommitSession,
+    write: (frame) => autocommitFrames.push(frame)});
+  const [autocommit] = errorResponseFields(autocommitFrames);
+  t.equal(autocommit?.C, PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN,
+    'an autocommit write whose outcome is unknown answers 08007');
+  t.match(autocommit?.M, /some changes may have been committed/u);
+  t.equal(autocommitSession.getTransactionState(), PG_TRANSACTION_STATE.IDLE);
+
+  // Inside a block the statement only fails the block: what it staged never
+  // commits, and the ROLLBACK that ends the block discards it.
+  const blockSession = new PgWireSession({sessionId: 'block'});
+  blockSession.setTransactionState(PG_TRANSACTION_STATE.IN_TRANSACTION);
+  const blockFrames = [];
+  answerFailedStatement({failure: wireFailureOf(result),
+    stateBefore: PG_TRANSACTION_STATE.IN_TRANSACTION, session: blockSession,
+    write: (frame) => blockFrames.push(frame)});
+  const [inBlock] = errorResponseFields(blockFrames);
+  t.not(inBlock?.C, PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN);
+  t.not(inBlock?.C, PG_ERROR_CODE.TRANSACTION_TIMEOUT);
+  t.equal(blockSession.getTransactionState(), PG_TRANSACTION_STATE.FAILED);
+  t.equal(blockSession.takeTransactionOutcomeUnknown(), false,
+    'the ROLLBACK ending the block carries no outcome-unknown warning');
+});

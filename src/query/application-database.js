@@ -26,6 +26,7 @@ import {
 } from './application-database-result.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   './distributed/distributed-transaction-commit-point.js';
+import {isStatementWriteOutcomeUnknown} from './query-execution-budget.js';
 import {turnFromForeignAnswer} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
@@ -39,6 +40,8 @@ const LOCAL_STR_ROLLBACK_OPERATION = 'rollback';
 const LOCAL_STR_VALUE = 'value';
 const LOCAL_STR_TRANSACTION_ID = 'transactionId';
 const LOCAL_STR_STAGE = 'stage';
+const LOCAL_STR_FAILURE_CODE = 'failureCode';
+const LOCAL_STR_PARTICIPANT_FAILURES = 'participantFailures';
 const NO_RETRY_AFTER_MS = null;
 const FAILURE_METADATA_PROPERTY = Object.freeze({
   CODE: 'code',
@@ -127,14 +130,33 @@ function isCommitOutcomeUnknown(source, operation) {
 }
 
 /**
- * The typed outcome-unknown error for a COMMIT that may have committed
- * some changes, never a plain failure that reads as "nothing was
- * committed".
- * @param {*} source - The failed COMMIT answer, or what was thrown.
+ * Whether a failed query sent outside transaction(callback) left a write's
+ * outcome unknown (isStatementWriteOutcomeUnknown, read from the answer's
+ * own data): the statement is its own transaction and may have committed.
+ * Inside transaction(callback) the same failure only fails the transaction,
+ * whose ROLLBACK discards what the statement staged.
+ * @param {*} source - The failed answer, or what was thrown.
+ * @param {boolean} autocommit - Whether the query ran as its own
+ *   transaction.
+ * @return {boolean}
+ */
+function isAutocommitWriteOutcomeUnknown(source, autocommit) {
+  return autocommit && isStatementWriteOutcomeUnknown({
+    failureCode: readOwnData(source, LOCAL_STR_FAILURE_CODE),
+    participantFailures: readOwnData(source, LOCAL_STR_PARTICIPANT_FAILURES),
+  });
+}
+
+/**
+ * The typed outcome-unknown error for a COMMIT, or an autocommit query,
+ * that may have committed some changes, never a plain failure that reads
+ * as "nothing was committed".
+ * @param {*} source - The failed answer, or what was thrown.
+ * @param {string} operation - The facade operation.
  * @param {*} cause - The engine failure cause.
  * @return {ApplicationDatabaseError}
  */
-function createCommitOutcomeUnknownError(source, cause) {
+function createOutcomeUnknownError(source, operation, cause) {
   const engineCause = objectFreeze({
     code: readOwnData(source, FAILURE_METADATA_PROPERTY.ERROR_CODE) ??
       readOwnData(source, FAILURE_METADATA_PROPERTY.CODE) ?? null,
@@ -145,16 +167,18 @@ function createCommitOutcomeUnknownError(source, cause) {
   return createApplicationDatabaseError(
     APPLICATION_DATABASE_ERROR_CODE.TRANSACTION_OUTCOME_UNKNOWN,
     APPLICATION_DATABASE_ERROR_MSG.TRANSACTION_OUTCOME_UNKNOWN,
-    {cause: cause ?? engineCause, operation: LOCAL_STR_COMMIT_OPERATION},
+    {cause: cause ?? engineCause, operation},
   );
 }
 
-function translateQueryFailure(source, operation, cause = null) {
+function translateQueryFailure(source, operation, cause = null,
+  autocommit = false) {
   if (!isProxy(source) && source instanceof ApplicationDatabaseError) {
     return source;
   }
-  if (isCommitOutcomeUnknown(source, operation)) {
-    return createCommitOutcomeUnknownError(source, cause);
+  if (isCommitOutcomeUnknown(source, operation) ||
+      isAutocommitWriteOutcomeUnknown(source, autocommit)) {
+    return createOutcomeUnknownError(source, operation, cause);
   }
   const sourceCode = readOwnData(source, FAILURE_METADATA_PROPERTY.ERROR_CODE) ??
     readOwnData(source, FAILURE_METADATA_PROPERTY.CODE);
@@ -179,7 +203,7 @@ function translateQueryFailure(source, operation, cause = null) {
 }
 
 async function executeCanonical(sqlCore, sql, params, options, operation,
-  project = projectApplicationDatabaseResult) {
+  project = projectApplicationDatabaseResult, autocommit = false) {
   let result;
   try {
     result = await sqlCore.executeQuery(sql, params, options);
@@ -188,10 +212,11 @@ async function executeCanonical(sqlCore, sql, params, options, operation,
       thrown,
       operation,
       projectEngineFailureCause(thrown),
+      autocommit,
     );
   }
   if (readOwnData(result, FAILURE_METADATA_PROPERTY.SUCCESS) !== true) {
-    throw translateQueryFailure(result, operation);
+    throw translateQueryFailure(result, operation, null, autocommit);
   }
   return project(result);
 }
@@ -378,6 +403,8 @@ function createApplicationDatabaseFacade(options) {
       paramsSnapshot,
       createApplicationDatabaseExecutionOptions(sessionId),
       LOCAL_STR_QUERY_OPERATION,
+      projectApplicationDatabaseResult,
+      true,
     );
   }
 

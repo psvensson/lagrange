@@ -106,6 +106,29 @@ describe('ExecutionContext', () => {
       }
     });
 
+    it('should refuse a context constructed with no budget, never ' +
+      'defaulting it', () => {
+      const budgets = normalizeQueryBudget();
+      for (const deps of [
+        {},
+        {budgets: undefined},
+        {budgets: null},
+      ]) {
+        assert.throws(
+          () => new ExecutionContext({
+            session: 'no-budget',
+            snapshot: {mode: SNAPSHOT_MODE.READ_COMMITTED},
+            budgetEnforcer: new BudgetEnforcer(budgets),
+            cancellationToken: new CancellationToken(),
+            lineageTracker: new LineageTracker('no-budget-q'),
+            ...deps,
+          }),
+          (err) => err.message ===
+            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED,
+        );
+      }
+    });
+
     it('should expose budget enforcer', () => {
       const enforcer = new BudgetEnforcer(normalizeQueryBudget());
       const ctx = createCtx({budgetEnforcer: enforcer});

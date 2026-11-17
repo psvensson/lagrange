@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import {PG_ERROR_CODE} from '../../src/runtime/pgwire-protocol-constants.js';
 import {
   OLTP_PAIRED_RETRY_OUTCOME,
   OLTP_SERIALIZATION_FAILURE_SQLSTATE,
@@ -64,10 +65,11 @@ const runCaseGuard = async () => {
     sqlState: '40001',
   });
 
+  // The product's typed unknown outcome is SQLSTATE 08007, as each client
+  // driver presents it (pg: code; mysql2: sqlState).
   for (const variant of [
-    {sqlState: '40001', outcome: 'OUTCOME_UNKNOWN'},
-    {sqlState: '40001', code: 'OUTCOME_UNKNOWN'},
-    {sqlState: '40001', errorCode: 'OUTCOME_UNKNOWN'},
+    {sqlState: PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN},
+    {code: PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN},
   ]) {
     const classified = classifyOltpAttemptError(variant);
     assert.equal(classified.retryable, false);

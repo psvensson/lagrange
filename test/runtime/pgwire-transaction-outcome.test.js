@@ -130,6 +130,37 @@ describe('resolveFailedStatementOutcome', () => {
     assert.equal(refused.state, FAILED);
   });
 
+  it('an autocommit write whose outcome is unknown answers the COMMIT\'s ' +
+    '08007; inside a block it only fails the block', () => {
+    const unknown = {failureCode: 'partition_write_outcome_unknown'};
+    for (const failure of [
+      // The executor's own answer, and the write coordinator's aggregate.
+      {...unknown, errorCode: null, error: 'outcome unknown'},
+      {errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', error: 'participant',
+        participantFailures: [{partitionId: 'p2', errorCode: null,
+          failureCode: 'partition_write_not_leader'},
+        {partitionId: 'p1', errorCode: null, ...unknown}]},
+    ]) {
+      const idle = outcome(IDLE, 'UPDATE', failure);
+      assert.equal(idle.kind, 'error', JSON.stringify(failure));
+      assert.equal(idle.sqlState, '08007');
+      assert.equal(idle.message, 'the transaction\'s outcome is ' +
+        'unknown; some changes may have been committed');
+      assert.equal(idle.detail.engine_error_code, failure.errorCode);
+      assert.equal(idle.state, IDLE);
+      assert.deepEqual(outcome(IN_TRANSACTION, 'UPDATE', failure),
+        {kind: 'engine_error', state: FAILED});
+    }
+    for (const failure of [
+      {errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', participantFailures: [
+        {failureCode: 'partition_write_not_leader'}]},
+      {errorCode: 'X', outcome: 'partition_write_outcome_unknown'},
+    ]) {
+      assert.deepEqual(outcome(IDLE, 'UPDATE', failure),
+        {kind: 'engine_error', state: IDLE}, JSON.stringify(failure));
+    }
+  });
+
   it('other failures: idle stays idle, a block becomes failed', () => {
     assert.deepEqual(outcome(IDLE, 'INSERT', {errorCode: 'SYNTAX_ERROR'}),
       {kind: 'engine_error', state: IDLE});
@@ -379,6 +410,27 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
       assert.equal(committed.errors[0].C, '08007');
       assert.equal(committed.status, 'E');
     });
+
+  it('an autocommit write whose outcome is unknown: 08007, idle, and ' +
+    'the next block carries no warning', async () => {
+    const {handler, socket} = startedHandler([
+      {success: false, errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        error: 'participant failed', statementType: 'INSERT',
+        participantFailures: [{partitionId: 'p1', errorCode: null,
+          failureCode: 'partition_write_outcome_unknown'}]},
+      begun,
+      {success: true, statementType: 'ROLLBACK'},
+    ]);
+    const written = await query(handler, socket,
+      'INSERT INTO t (id) VALUES (1)');
+    assert.equal(written.errors[0].C, '08007');
+    assert.match(written.errors[0].M, /some changes may have been committed/u);
+    assert.match(written.errors[0].D, /DISTRIBUTED_PARTICIPANT_FAILURE/u);
+    assert.equal(written.status, 'I');
+    await query(handler, socket, 'BEGIN');
+    const ended = await query(handler, socket, 'ROLLBACK');
+    assert.deepEqual(ended.notices, []);
+  });
 
   it('a statement for a dropped transaction: 25P04, failed; COMMIT ends ' +
     'the failed block as ROLLBACK', async () => {
