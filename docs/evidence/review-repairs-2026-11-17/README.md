@@ -176,3 +176,54 @@ it does not acquire locks, observe host boot identities or run the scenario.
 The 30-minute harness lock budget is not a total execution deadline. The outer
 managed execution must bound build, run and closure. No additional heavy
 control-snapshot monitor is introduced during cold formation.
+
+## Composed source review and managed metadata
+
+Independent verifier `subagent:core_args_control` approved the bounded source
+and contract composition at local commit
+`f62993c46b116d8c5942849fa976b801987705a7`, tree
+`e12bd4c30510d2482b7527baf7e31881d09a8d23`. Remote preservation commit
+`0dd58de16f2dc32d69b090ae60565806c888db43` has that exact tree and parent
+`4b0c8ec1de59e9a074afa97ce260afb2868685c5`. The integration review retains
+the other authors' independent approvals for the reviewer's own target-slot
+and ordering work. It is not acceptance of unexecuted composed tests.
+
+Managed [job 4922](https://github.com/psvensson/lagrange-lab/issues/4922)
+ran the existing metadata generators in order on that exact clean source.
+The global and priority-recovery inventories, test classification refresh and
+source-owner index generator all completed successfully. Only six generated
+paths changed; source inputs remained unchanged and no untracked artifacts
+escaped the allowed generated surface. The 12,984-byte returned patch has
+SHA256 `e704502acfbe9280af73abccc58ad948f4bc8616070b121c9af72a245d3f9907`.
+Root applied its exact bytes after verifying the original evidence.
+
+The complete 19,364-byte worker log has SHA256
+`6d022046c461dec0eecd8ada6cf7a07f5594e72e25ef4419ceeb137d7658529a`;
+the 24,473-byte native log has SHA256
+`39b15d22adad5fd5d89b07f40fba68325a632c19638dfdf41dc61964f3416d0c`.
+Collection used [4923](https://github.com/psvensson/lagrange-lab/issues/4923),
+[4924](https://github.com/psvensson/lagrange-lab/issues/4924) and
+[4925](https://github.com/psvensson/lagrange-lab/issues/4925). Chunk,
+complete-worker, patch and native-log hashes were verified. All managed
+execution, container and thermal scopes closed.
+
+The selector plan and ordinary physical preview each exited zero. The preview
+named SSH tunnels to the three intended IPs. It did not observe boot IDs,
+acquire holds, build images or start a cluster. The selector's `--explain`
+branch returns before test execution, so the upcoming actual change proof
+must omit both `--explain` and `--list`. Metadata completion and plan admission
+are retained separately from actual test and formation results.
+
+### Measured ratchet tightening
+
+During job 4922 the canonical duplication checker measured 612 test clone
+groups and 21,898 duplicated test lines, against the inherited bounds of 618
+and 22,200. It explicitly printed both tightening hints. `AGENTS.md` requires
+tightening a baseline when its checker reports that hint. Before editing,
+root amends this integration's direct audit-repair scope to the two existing
+test baseline constants in `scripts/check-duplication.js`, reducing them to the
+measured values. The production/scripts bounds remain 35 groups and 1,109 lines.
+No exemption, scope reduction, algorithm change or baseline increase is part of
+this amendment. The checker and its new constants must receive independent
+review and native proof; affected generated provenance must be regenerated
+from that source before exact-candidate acceptance.
