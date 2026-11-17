@@ -184,6 +184,8 @@ function operationRow(type, status, failedPrecondition = null) {
     type,
     partition_id: PARTITION_ID,
     replica_id: TARGET_ID,
+    // A committed row names the coordinator node that wrote it.
+    source_node_id: 'node-1',
     target_node_id: TARGET_NODE,
     status,
     workflow_step: status === ReplicaStatus.FAILED ?

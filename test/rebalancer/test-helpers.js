@@ -16,7 +16,27 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import Database from 'better-sqlite3';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
+import {
+  PARTITIONS_SCHEMA,
+  REPLICA_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  extractSqlOperationKind,
+  extractSystemTableNameFromSql,
+} from '../../src/control-plane/control-plane-system-table-gateway-normalizers.js';
+import {
+  CONTROL_PLANE_SQL_OPERATION,
+} from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -136,10 +156,6 @@ function normalizeReplicaOperationRow(row = {}) {
   normalized.membershipPublicationEpoch = membershipPublicationEpoch;
 
   return normalized;
-}
-
-function isSuccessfulMutationResult(result) {
-  return !result || result.success !== false;
 }
 
 function withSuccessfulStorageReservationInsert(executeQuery) {
@@ -849,23 +865,198 @@ function createMockCoordinator({controlPlaneReadinessService = null,
   };
 }
 
-function isTrackedOperationInFlight(operation) {
-  if (!operation) {
-    return false;
-  }
+// The coordinator double's SQL store holds the owner's own tables, built
+// from the owner's schemas, and answers a statement by executing it in
+// SQLite: never a hand-written reading of the SQL. replica_operations starts
+// from the fixture's committed rows and is the double's own durable ledger
+// (each row it commits is mirrored into the fixture cache, as CDC would);
+// storage_reservations is the double's own too; partitions is empty to SQL
+// (the fixture's partitions live in its cache). A statement on any other
+// table fails, as on a node without it. Services reads alone are still
+// answered from the fixture cache.
+const SQL_STORE_SCHEMAS = Object.freeze([
+  REPLICA_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
+  PARTITIONS_SCHEMA,
+]);
 
-  const workflowStep = operation.workflow_step || operation.workflowStep || null;
-  if (workflowStep === WORKFLOW_STEP.FAILED ||
-      workflowStep === WORKFLOW_STEP.REMOVED) {
-    return false;
-  }
+// Which replica_operations rows a statement wrote (test plumbing beside the
+// owner's tables; it changes no answer the owner's statements give).
+const REPLICA_OPERATION_WRITE_CAPTURE = Object.freeze([
+  'CREATE TABLE replica_operation_writes (operation_id TEXT)',
+  'CREATE TRIGGER replica_operation_insert_capture ' +
+    'AFTER INSERT ON replica_operations BEGIN ' +
+    'INSERT INTO replica_operation_writes VALUES (NEW.operation_id); END',
+  'CREATE TRIGGER replica_operation_update_capture ' +
+    'AFTER UPDATE ON replica_operations BEGIN ' +
+    'INSERT INTO replica_operation_writes VALUES (OLD.operation_id); ' +
+    'INSERT INTO replica_operation_writes VALUES (NEW.operation_id); END',
+  'CREATE TRIGGER replica_operation_delete_capture ' +
+    'AFTER DELETE ON replica_operations BEGIN ' +
+    'INSERT INTO replica_operation_writes VALUES (OLD.operation_id); END',
+]);
+// The tables whose rows the double itself commits (every other table's
+// mutations reach the fixture's CDC double).
+const STORE_OWNED_TABLE_NAMES = Object.freeze(new Set([
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+]));
+// The product's one translation of a system-table mutation into SQL.
+const MUTATION_SQL_PLANNER = new ControlPlaneSystemTableGateway();
 
-  return !(operation.type === 'ADD' && workflowStep === WORKFLOW_STEP.ACTIVE);
+// The owner's tables are built once; each store opens its own copy of them.
+const SQL_STORE_DATABASE_IMAGE = (() => {
+  const database = new Database(':memory:');
+  // Small pages keep each store's image small (thousands live in one run).
+  database.pragma('page_size = 512');
+  for (const schema of SQL_STORE_SCHEMAS) {
+    database.exec(generateCreateTableSQL(schema));
+    for (const indexSql of generateCreateIndexSQL(schema)) {
+      database.exec(indexSql);
+    }
+  }
+  for (const captureSql of REPLICA_OPERATION_WRITE_CAPTURE) {
+    database.exec(captureSql);
+  }
+  const image = database.serialize();
+  database.close();
+  return image;
+})();
+
+// A services read is answered from the fixture cache's services rows.
+// Known gap (WP-K residual): this is still a hand-written reading of the
+// statement (it ignores node_id, for one); the owner's services schema
+// cannot hold the fixtures' rows until they carry created_at/updated_at.
+function answerFixtureServicesRead(cache, sql, params) {
+  let serviceRows = typeof cache.getAll === 'function' ?
+    cache.getAll(SYSTEM_TABLE_NAME.SERVICES) : [];
+  let paramIndex = 0;
+  if (sql.includes('service_id = ?')) {
+    const serviceId = params[paramIndex++];
+    serviceRows = serviceRows.filter((row) => row.service_id === serviceId);
+  }
+  if (sql.includes('service_type = ?')) {
+    const serviceType = params[paramIndex++];
+    serviceRows = serviceRows.filter((row) => row.service_type === serviceType);
+  }
+  if (sql.includes('partition_id = ?')) {
+    const partitionId = params[paramIndex++];
+    serviceRows = serviceRows.filter((row) => row.partition_id === partitionId);
+  }
+  if (sql.includes('group_id = ?')) {
+    const groupId = params[paramIndex++];
+    serviceRows = serviceRows.filter((row) => row.group_id === groupId);
+  }
+  if (sql.includes('service_id LIKE ?')) {
+    const serviceIdPattern = String(params[paramIndex++] || '');
+    const serviceIdPrefix = serviceIdPattern.endsWith('%') ?
+      serviceIdPattern.slice(0, -1) : serviceIdPattern;
+    serviceRows = serviceRows.filter((row) =>
+      String(row.service_id || '').startsWith(serviceIdPrefix));
+  }
+  return {
+    success: true,
+    rows: serviceRows,
+    rowSetComplete: true,
+    readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+  };
+}
+
+function createCoordinatorSqlStore(cache) {
+  // The store outlives its coordinator (a shutdown and re-initialize keeps
+  // the ledger); while no coordinator runs it is held as its serialized
+  // image, so its SQLite connection is released.
+  let image = SQL_STORE_DATABASE_IMAGE;
+  let database = null;
+  let statements = new Map();
+  const prepare = (sql) => {
+    database ??= new Database(image);
+    if (!statements.has(sql)) {
+      statements.set(sql, database.prepare(sql));
+    }
+    return statements.get(sql);
+  };
+  const suspend = () => {
+    if (database) {
+      image = database.serialize();
+      database.close();
+      database = null;
+      statements = new Map();
+    }
+  };
+  // The engine's answer to one statement: its rows, or its change count, or
+  // the failure a partition reports for a statement SQLite refused.
+  const run = (sql, params = []) => {
+    try {
+      const statement = prepare(sql);
+      return statement.reader ?
+        {success: true, rows: statement.all(...params), rowSetComplete: true} :
+        {success: true, changes: statement.run(...params).changes};
+    } catch (error) {
+      return {success: false, error: error.message, errorCode: error.code ?? null};
+    }
+  };
+  const takeWrittenOperationIds = () => {
+    const ids = prepare(
+      'SELECT DISTINCT operation_id FROM replica_operation_writes').pluck().all();
+    prepare('DELETE FROM replica_operation_writes').run();
+    return ids;
+  };
+  const mirrorOperationWrites = () => {
+    for (const operationId of takeWrittenOperationIds()) {
+      const [row] = run('SELECT * FROM replica_operations WHERE operation_id = ?',
+        [operationId]).rows;
+      if (row) {
+        cache.upsert?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          normalizeReplicaOperationRow(row));
+      } else {
+        cache.delete?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId);
+      }
+    }
+  };
+  // The fixture's committed rows enter through the owner's insert; a row the
+  // owner's schema refuses is a fixture defect, never a row to repair here.
+  for (const row of cache.getAll?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) ?? []) {
+    const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan({
+      operation: 'insert', tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, row,
+    });
+    const seeded = run(sql, params);
+    if (!seeded.success) {
+      throw new Error('fixture replica_operations row is not a committed ' +
+        `row of the owner's schema: ${seeded.error}`);
+    }
+  }
+  takeWrittenOperationIds();
+  const execute = (sql, params) => {
+    if (extractSqlOperationKind(sql) === CONTROL_PLANE_SQL_OPERATION.READ &&
+        extractSystemTableNameFromSql(sql) === SYSTEM_TABLE_NAME.SERVICES) {
+      return answerFixtureServicesRead(cache, sql, params);
+    }
+    const result = run(sql, params);
+    if (result.changes > 0) {
+      mirrorOperationWrites();
+    }
+    return result;
+  };
+  return {
+    execute,
+    suspend,
+    ownsTable: (tableName) => STORE_OWNED_TABLE_NAMES.has(tableName),
+    // The CDC ingress's answer: the committed statement's partition result.
+    submitMutation(mutation) {
+      const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan(mutation);
+      const result = execute(sql, params);
+      return result.success ?
+        {success: true, partitionResult: {affectedRows: result.changes}} :
+        result;
+    },
+  };
 }
 
 /**
  * Create a RebalanceCoordinator for testing with all required dependencies.
- * The SQL engine is configured to track operations via INSERT/UPDATE queries.
+ * Its SQL engine executes the owner's statements against the coordinator
+ * SQL store (createCoordinatorSqlStore).
  * @param {Object} options - Options for the coordinator.
  * @return {RebalanceCoordinator} Coordinator instance.
  */
@@ -892,10 +1083,6 @@ function createTestCoordinator(options = {}) {
     witnessRouter :
     withFixtureCommittedMembership(witnessRouter, mockCache);
 
-  // Track operations via SQL engine (not CDC)
-  const trackedOperations = new Map();
-  const trackedReservations = new Map();
-
   // CDC service (not used for persistence in new architecture)
   const mockCdcService = options.cdcIntegrationService || {
     insertSystemTableRow: async () => ({success: true}),
@@ -903,318 +1090,16 @@ function createTestCoordinator(options = {}) {
     refreshAuthoritativeCacheRow: async () => true,
   };
 
-  function syncReplicaOperationRow(row) {
-    const normalized = normalizeReplicaOperationRow(row);
-    if (!normalized.operation_id) {
-      return null;
-    }
-
-    trackedOperations.set(normalized.operation_id, normalized);
-    if (typeof mockCache.upsert === 'function') {
-      mockCache.upsert(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, normalized);
-    }
-    return normalized;
-  }
-
-  function mergeReplicaOperationRow(operationId, patch = {}) {
-    const existing = trackedOperations.get(operationId) || {operation_id: operationId};
-    return syncReplicaOperationRow({
-      ...existing,
-      ...patch,
-      operation_id: operationId,
-      operationId,
-    });
-  }
-
-  function deleteReplicaOperationRow(operationId) {
-    trackedOperations.delete(operationId);
-    if (typeof mockCache.delete === 'function') {
-      mockCache.delete(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId);
-    }
-  }
-
-  function seedReplicaOperationsFromCache() {
-    if (typeof mockCache.getAll !== 'function') {
-      return;
-    }
-
-    const existingOperations = mockCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
-    for (const operation of existingOperations) {
-      syncReplicaOperationRow(operation);
-    }
-  }
-
-  async function submitReplicaOperationMutation(mutation) {
-    switch (mutation?.operation) {
-    case 'insert': {
-      const result = typeof mockCdcService.insertSystemTableRow === 'function' ?
-        await mockCdcService.insertSystemTableRow(
-          mutation.tableName,
-          mutation.row,
-        ) :
-        {success: true, partitionResult: {affectedRows: 1}};
-      if (isSuccessfulMutationResult(result)) {
-        syncReplicaOperationRow(mutation.row);
-      }
-      return result;
-    }
-    case 'update': {
-      const whereClause = mutation.whereClause || mutation.where || {};
-      const operationId = whereClause.operation_id ?? whereClause.operationId ??
-          mutation.data?.operation_id ?? mutation.data?.operationId ?? null;
-      // Gateway whereClause null-sentinel: `{completed_at: null}` is the
-      // terminal-transition CAS (`completed_at IS NULL`). A terminal winner
-      // already in the tracked store makes the guarded write a zero-change
-      // loss (first-terminal-wins; audit finding 6).
-      if (
-        Object.hasOwn(whereClause, 'completed_at') &&
-        whereClause.completed_at === null &&
-        operationId
-      ) {
-        const existingRow = trackedOperations.get(operationId);
-        if (
-          existingRow &&
-          existingRow.completed_at !== null &&
-          existingRow.completed_at !== undefined
-        ) {
-          return {success: true, partitionResult: {affectedRows: 0}};
-        }
-      }
-      const result = typeof mockCdcService.updateSystemTableRow === 'function' ?
-        await mockCdcService.updateSystemTableRow(
-          mutation.tableName,
-          whereClause,
-          mutation.data,
-        ) :
-        {success: true, partitionResult: {affectedRows: 1}};
-      if (isSuccessfulMutationResult(result) && operationId) {
-        mergeReplicaOperationRow(operationId, mutation.data);
-      }
-      return result;
-    }
-    case 'delete': {
-      const whereClause = mutation.whereClause || mutation.where || {};
-      const operationId = whereClause.operation_id ?? whereClause.operationId ?? null;
-      deleteReplicaOperationRow(operationId);
-      return {success: true, partitionResult: {affectedRows: 1}};
-    }
-    default:
-      return {success: true, partitionResult: {affectedRows: 1}};
-    }
-  }
-
-  seedReplicaOperationsFromCache();
-
-  // SQL engine that tracks operations via INSERT/UPDATE queries
+  const sqlStore = createCoordinatorSqlStore(mockCache);
+  // The SQL engine: a test's pattern answers first, then the store.
   const mockSqlEngine = options.sqlQueryEngine || {
     executeQuery: async (sql, params) => {
-      // Check for custom query results first
       for (const [pattern, result] of Object.entries(sqlQueryResults)) {
         if (sql.includes(pattern)) {
           return result;
         }
       }
-
-      // Handle INSERT operations
-      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
-        const [
-          reservationId, operationId, entityType, entityId,
-          partitionId, targetNodeId, estimatedBytes, amplificationFactor,
-          status, reasonCode, createdAt, updatedAt, expiresAt,
-        ] = params;
-        if (trackedReservations.has(reservationId)) {
-          return {success: true, affectedRows: 0, changes: 0};
-        }
-        trackedReservations.set(reservationId, {
-          reservation_id: reservationId,
-          operation_id: operationId,
-          entity_type: entityType,
-          entity_id: entityId,
-          partition_id: partitionId,
-          target_node_id: targetNodeId,
-          estimated_bytes: estimatedBytes,
-          amplification_factor: amplificationFactor,
-          status,
-          reason_code: reasonCode,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          expires_at: expiresAt,
-          released_at: null,
-        });
-        return {success: true, affectedRows: 1, changes: 1};
-      }
-
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId,
-          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory, entityType, entityId, membershipPublicationEpoch,
-        ] = params;
-
-        syncReplicaOperationRow({
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-          membership_publication_epoch: membershipPublicationEpoch,
-        });
-        return {success: true, affectedRows: 1, changes: 1};
-      }
-
-      if (sql.includes('UPDATE storage_reservations')) {
-        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
-          params;
-        const existing = trackedReservations.get(reservationId);
-        if (!existing || existing.status !== expectedStatus) {
-          return {success: true, affectedRows: 0, changes: 0};
-        }
-        trackedReservations.set(reservationId, {
-          ...existing,
-          status,
-          updated_at: updatedAt,
-          released_at: releasedAt,
-        });
-        return {success: true, affectedRows: 1, changes: 1};
-      }
-
-      // Handle UPDATE operations. The terminal-transition statement guards on
-      // `completed_at IS NULL` (first-terminal-wins; audit finding 6): when
-      // the tracked row is already terminal, the write changes zero rows
-      // instead of clobbering the winning terminal — honestly reported as
-      // affectedRows: 0 so the loser-adopts-winner path is exercisable.
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        if (sql.includes('completed_at IS NULL')) {
-          const existingRow = trackedOperations.get(operationId);
-          if (
-            existingRow &&
-            existingRow.completed_at !== null &&
-            existingRow.completed_at !== undefined
-          ) {
-            return {success: true, affectedRows: 0, changes: 0};
-          }
-        }
-
-        mergeReplicaOperationRow(operationId, {
-          status,
-          workflow_step: workflowStep,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          replica_id: replicaId,
-        });
-        return {success: true};
-      }
-
-      if (sql.includes('FROM storage_reservations')) {
-        let rows = Array.from(trackedReservations.values());
-        let paramIndex = 0;
-        if (sql.includes('operation_id = ?')) {
-          const operationId = params[paramIndex++];
-          rows = rows.filter((row) => row.operation_id === operationId);
-        }
-        if (sql.includes('status = ?')) {
-          const status = params[paramIndex++];
-          rows = rows.filter((row) => row.status === status);
-        }
-        if (sql.includes('expires_at <= ?')) {
-          const expiresAt = params[paramIndex++];
-          rows = rows.filter((row) => row.expires_at <= expiresAt);
-        }
-        return {success: true, rows, rowSetComplete: true};
-      }
-
-      // Handle SELECT queries for replica_operations
-      if (sql.includes('replica_operations')) {
-        const allOps = Array.from(trackedOperations.values());
-
-        let filteredOps = allOps;
-        const equalityFilters = [
-          {pattern: 'operation_id = ?', field: 'operation_id'},
-          {pattern: 'target_claim_key = ?', field: 'target_claim_key'},
-          {pattern: 'partition_id = ?', field: 'partition_id'},
-          {pattern: 'target_node_id = ?', field: 'target_node_id'},
-          {pattern: 'source_node_id = ?', field: 'source_node_id'},
-          {pattern: 'entity_type = ?', field: 'entity_type'},
-          {pattern: 'entity_id = ?', field: 'entity_id'},
-        ]
-          .map((filter) => ({...filter, index: sql.indexOf(filter.pattern)}))
-          .filter((filter) => filter.index !== -1)
-          .sort((left, right) => left.index - right.index);
-
-        let paramIndex = 0;
-        for (const filter of equalityFilters) {
-          const value = params[paramIndex++];
-          filteredOps = filteredOps.filter((operation) =>
-            operation[filter.field] === value);
-        }
-
-        // Filter for non-terminal operations if query includes status filter
-        // Matches both old NOT IN syntax and new <> syntax
-        if (sql.includes('workflow_step') ||
-            sql.includes('status <>') ||
-            sql.includes('NOT IN')) {
-          filteredOps = filteredOps.filter((op) =>
-            isTrackedOperationInFlight(op));
-        }
-
-        return {success: true, rows: filteredOps, rowSetComplete: true};
-      }
-
-      if (sql.includes('FROM services')) {
-        let serviceRows = typeof mockCache.getAll === 'function' ?
-          mockCache.getAll(SYSTEM_TABLE_NAME.SERVICES) : [];
-        let paramIndex = 0;
-        if (sql.includes('service_id = ?')) {
-          const serviceId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) => row.service_id === serviceId);
-        }
-        if (sql.includes('service_type = ?')) {
-          const serviceType = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) => row.service_type === serviceType);
-        }
-        if (sql.includes('partition_id = ?')) {
-          const partitionId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) => row.partition_id === partitionId);
-        }
-        if (sql.includes('group_id = ?')) {
-          const groupId = params[paramIndex++];
-          serviceRows = serviceRows.filter((row) => row.group_id === groupId);
-        }
-        if (sql.includes('service_id LIKE ?')) {
-          const serviceIdPattern = String(params[paramIndex++] || '');
-          const serviceIdPrefix = serviceIdPattern.endsWith('%') ?
-            serviceIdPattern.slice(0, -1) : serviceIdPattern;
-          serviceRows = serviceRows.filter((row) =>
-            String(row.service_id || '').startsWith(serviceIdPrefix));
-        }
-        return {
-          success: true,
-          rows: serviceRows,
-          rowSetComplete: true,
-          readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
-        };
-      }
-
-      return {success: true, rows: [], rowSetComplete: true};
+      return sqlStore.execute(sql, params);
     },
   };
   const controlPlaneSystemTableGateway =
@@ -1224,8 +1109,8 @@ function createTestCoordinator(options = {}) {
       readRows: async (_tableName, sql, params = []) => mockSqlEngine.executeQuery(sql, params),
       executeQuery: async (sql, params = []) => mockSqlEngine.executeQuery(sql, params),
       async submitMutation(mutation) {
-        if (mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-          return submitReplicaOperationMutation(mutation);
+        if (sqlStore.ownsTable(mutation?.tableName)) {
+          return sqlStore.submitMutation(mutation);
         }
 
         switch (mutation?.operation) {
@@ -1293,6 +1178,15 @@ function createTestCoordinator(options = {}) {
       .queryTerminalFailedCreateCleanupOperations = async () => [];
   }
   coordinator.initialize();
+  // A stopped coordinator leaves its store suspended, not lost.
+  const baseShutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async (...args) => {
+    try {
+      return await baseShutdown(...args);
+    } finally {
+      sqlStore.suspend();
+    }
+  };
   if (!autoProgressCreatedOperations) {
     const baseCreateOperation = coordinator.createOperation.bind(coordinator);
     coordinator.createOperation = async (move = {}) => {
