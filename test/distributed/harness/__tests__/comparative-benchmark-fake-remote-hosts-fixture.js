@@ -26,15 +26,18 @@ import {
   jsonStringify,
   objectKeys,
   stringReplace,
+  stringSlice,
   stringStartsWith,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
+import {fixedLocaleCommand} from '../real-product-remote-shell.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const STATE_ENV = 'FAKE_REMOTE_HOSTS_STATE';
 const REAL_GIT_ENV = 'FAKE_REMOTE_HOSTS_REAL_GIT';
 const SSH_KEY_ENV = 'FAKE_REMOTE_HOSTS_SSH_KEY';
 const EXIT_SUFFIX = /; printf '\\n__exit_code=%s' "\$\?"$/u;
+const FIXED_LOCALE_FORM = fixedLocaleCommand('');
 // The first command the campaign sends after its host preparation (the
 // controller address as a data host sees it): the scripted hosts stop here.
 const PAST_PREPARATION = 'echo "${SSH_CLIENT%% *}"';
@@ -149,6 +152,13 @@ function sshOptionsRefusal(options) {
   return null;
 }
 
+function refuseUnscripted(state, file, ip, command) {
+  arrayPush(state.unscripted, {ip, command});
+  writeState(file, state);
+  process.stderr.write(`fake-remote-hosts: no answer on ${ip} for: ${command}\n`);
+  return UNSCRIPTED_EXIT;
+}
+
 function runFakeSsh(argv) {
   let at = 0;
   const options = {o: [], i: null};
@@ -158,22 +168,29 @@ function runFakeSsh(argv) {
     at += 2;
   }
   const target = argv[at];
-  const full = arrayJoin(argv.slice(at + 1), ' ');
+  const transported = arrayJoin(argv.slice(at + 1), ' ');
   const ip = stringReplace(target, /^.*@/u, '');
   const file = process.env[STATE_ENV];
   const state = readState(file);
   const refusal = sshOptionsRefusal(options);
   if (refusal) {
-    arrayPush(state.sshRefused, {ip, command: full, refusal});
+    arrayPush(state.sshRefused, {ip, command: transported, refusal});
     writeState(file, state);
     process.stderr.write(`ssh: ${refusal}\n`);
     return UNSCRIPTED_EXIT;
   }
-  if (stringStartsWith(full, 'git-receive-pack ')) {
-    arrayPush(state.receivePacks, {ip, command: full, options});
+  if (stringStartsWith(transported, 'git-receive-pack ')) {
+    arrayPush(state.receivePacks, {ip, command: transported, options});
     writeState(file, state);
     return 0;
   }
+  // Every command of the campaign's ssh runner carries the harness's fixed
+  // locale (fixedLocaleCommand); a host answers the caller's command beneath
+  // it and leaves any other command unanswered.
+  if (!stringStartsWith(transported, FIXED_LOCALE_FORM)) {
+    return refuseUnscripted(state, file, ip, transported);
+  }
+  const full = stringSlice(transported, FIXED_LOCALE_FORM.length);
   arrayPush(state.log, {ip, command: full});
   const host = state.hosts[ip];
   const withStatus = EXIT_SUFFIX.test(full);
@@ -185,12 +202,7 @@ function runFakeSsh(argv) {
     return PAST_PREPARATION_EXIT;
   }
   const rule = host && arrayFind(RULES, ([pattern]) => pattern.test(command));
-  if (!rule) {
-    arrayPush(state.unscripted, {ip, command});
-    writeState(file, state);
-    process.stderr.write(`fake-remote-hosts: no answer on ${ip} for: ${command}\n`);
-    return UNSCRIPTED_EXIT;
-  }
+  if (!rule) return refuseUnscripted(state, file, ip, command);
   const answer = rule[1](host, command, ip);
   state.log[state.log.length - 1].exitCode = answer.code;
   writeState(file, state);

@@ -43,6 +43,7 @@ import {
   stringReplace,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
+import {fixedLocaleCommand} from '../real-product-remote-shell.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
@@ -191,7 +192,8 @@ test('negative twins: without provisioning the campaign refuses with image_unava
   (error) => error.diagnostic?.reason === 'offline_cache_incomplete');
 });
 
-// The fixture's ssh answer, in process, for the consumer half of the cache twin.
+// The fixture's ssh answer, in process, for the consumer half of the cache twin,
+// to the command as the campaign's ssh runner sends it.
 function runInProcess(fake, ip, command) {
   const writes = [];
   const write = process.stdout.write;
@@ -199,7 +201,8 @@ function runInProcess(fake, ip, command) {
   process.stdout.write = (chunk) => writes.push(String(chunk)) > 0;
   let code;
   try {
-    code = runFakeProcess('ssh', ['-o', 'BatchMode=yes', `bench@${ip}`, command]);
+    code = runFakeProcess('ssh', ['-o', 'BatchMode=yes', `bench@${ip}`,
+      fixedLocaleCommand(command)]);
   } finally {
     process.stdout.write = write;
   }

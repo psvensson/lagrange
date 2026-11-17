@@ -1,5 +1,7 @@
 import {execFileSync} from 'node:child_process';
 
+import {fixedLocaleCommand} from './real-product-remote-shell.js';
+
 const ZERO = 0;
 const ONE = 1;
 const GCLOUD_TIMEOUT_MS = 180000;
@@ -186,6 +188,8 @@ class GcpDataDiskOwner {
     return normalizeResourceName(names[ZERO], 'GCP data disk VM name');
   }
 
+  // gcloud's ssh forwards the operator's locale like ssh does; the remote
+  // command runs in the harness's fixed locale (real-product-remote-shell.js).
   _ssh(vmName, command) {
     return this._gcloud([
       'compute', 'ssh', vmName,
@@ -193,7 +197,7 @@ class GcpDataDiskOwner {
       '--zone', this._zone,
       '--tunnel-through-iap',
       '--quiet',
-      '--command', command,
+      '--command', fixedLocaleCommand(command),
     ]);
   }
 

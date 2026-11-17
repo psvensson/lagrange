@@ -18,7 +18,12 @@ import {
   ensureProductImages,
   resolvePinnedImage,
 } from '../comparative-benchmark-host-preparation.js';
-import {dockerRunDetached, dockerRunOnceCommand} from '../real-product-remote-shell.js';
+import {
+  createSshCommandRunner,
+  dockerRunDetached,
+  dockerRunOnceCommand,
+  fixedLocaleCommand,
+} from '../real-product-remote-shell.js';
 import {contentIdentityOf} from '../real-product-identity.js';
 import {
   measureLoadGeneratorRequirement,
@@ -32,6 +37,7 @@ import {
   arrayMap,
   arraySome,
   stringIncludes,
+  stringStartsWith,
 } from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
 
@@ -381,14 +387,25 @@ test('the load-generator requirement is measured from the checkout tree', async 
 // Live campaign bench-live-20261101-b-r3 crashed with an untyped `canonical
 // JSON data required`: adam-laptop and adams-gamla run LC_NUMERIC=sv_SE, their
 // awk printed MemTotal as `15,5`, Number('15,5') is NaN, and the NaN in the
-// run record's host facts failed the record digest. The facts command's
-// numbers are locale-independent, and a fact that is not a number is a typed
-// failure, never NaN.
+// run record's host facts failed the record digest. The facts command reaches a
+// host only through the ssh runner, which runs every command in the fixed C
+// locale; a fact that is not a number is a typed failure, never NaN.
 test('host facts are read locale-independently; a non-numeric fact is typed', async () => {
   const hosts = [{name: 'adam-laptop', ip: '10.0.0.1'}];
-  const good = createScriptedSsh([[/MemTotal/u, (command) => (/LC_ALL=C awk/u.test(command) ?
-    'adam|boot-1|8|15.5|eth0' : 'adam|boot-1|8|15,5|eth0')]]);
-  const [fact] = await collectHostFacts({hosts, sshRun: good.sshRun, opts: {}});
+  const transported = [];
+  // ssh to a decimal-comma host: its awk prints `15,5` unless the command it
+  // receives sets the fixed locale for itself.
+  const sshRun = createSshCommandRunner({hosts,
+    execFileImpl: (_file, args, _options, callback) => {
+      const command = args[args.length - 1];
+      transported.push(command);
+      const memGb = stringStartsWith(command, fixedLocaleCommand('')) ? '15.5' : '15,5';
+      process.nextTick(() => callback(null, `adam|boot-1|8|${memGb}|eth0\n`, ''));
+      return {killed: false, kill: () => {}};
+    }});
+  const [fact] = await collectHostFacts({hosts, sshRun, opts: {}});
+  assert.equal(transported.length, 1);
+  assert.ok(stringIncludes(transported[0], 'MemTotal'));
   assert.equal(fact.memGb, 15.5);
   assert.equal(fact.cpus, 8);
   const comma = createScriptedSsh([[/MemTotal/u, 'adam|boot-1|8|15,5|eth0']]);

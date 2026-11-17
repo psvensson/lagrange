@@ -417,6 +417,13 @@ facts without lossy string or code overloading, preserving `container_absent`,
 `infrastructure_error`, and `interrupted` classifications in the canonical
 campaign record.
 
+Every command a host runs for the harness runs in the C locale, set by the
+command itself (`fixedLocaleCommand`, applied by the ssh runner and by the
+`gcloud compute ssh` paths of `gcp-provisioner.js` and
+`gcp-data-disk-owner.js`). ssh forwards the operator's `LANG`/`LC_*`, and a
+decimal-comma `LC_NUMERIC` otherwise makes curl refuse a fractional
+`--max-time` and gawk print `15,5`; no command carries its own locale patch.
+
 
 ## Deterministic Control-Plane Progression
 

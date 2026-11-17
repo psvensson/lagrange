@@ -39,6 +39,17 @@ import {
 } from './real-product-captured-intrinsics.js';
 
 const SAFE_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/u;
+// Every command a host runs for the harness runs in the C locale, set by the
+// command itself, so neither the transport nor the host decides it. ssh and
+// `gcloud compute ssh` forward the operator's LANG and LC_* (ssh_config
+// `SendEnv LANG LC_*`), and adam-laptop and adams-gamla run a decimal-comma
+// LC_NUMERIC (sv_SE): curl then refuses `--max-time 1.249` (exit 2, no
+// request), gawk prints MemTotal as `15,5`, and a translated message would
+// escape the error classifiers. LC_ALL overrides LANG and every LC_* category.
+// It is set in the remote shell itself rather than through `env LC_ALL=C sh -c
+// '...'`: no second quoting layer, the same interpreter, the command's own exit
+// status, and the same process exec'd or forked for the command as without it.
+const FIXED_LOCALE_PREFIX = 'export LC_ALL=C; ';
 const SINGLE_QUOTE = '\'';
 const ESCAPED_SINGLE_QUOTE = '\'\\\'\'';
 const HTTP_STATUS_MARKER = 'http_status=';
@@ -81,6 +92,17 @@ function shellQuote(value) {
 function shellWord(value) {
   const text = String(value);
   return SAFE_WORD.test(text) ? text : shellQuote(text);
+}
+
+/**
+ * `command` as a remote shell receives it from any harness transport (the
+ * ssh runner here, `gcloud compute ssh --command` in the GCP owners): run in
+ * the C locale (FIXED_LOCALE_PREFIX).
+ * @param {string} command a POSIX shell command line
+ * @return {string}
+ */
+function fixedLocaleCommand(command) {
+  return `${FIXED_LOCALE_PREFIX}${command}`;
 }
 
 // Output followed by `MARKER<value>` on its own last line.
@@ -682,7 +704,7 @@ function executeSshCommand({execFileImpl, target, command, sshOpts, signal,
         timedOutByWrapper = true;
         if (child && typeof child.kill === 'function') child.kill('SIGTERM');
       }, boundedTimeoutMs) : null;
-    const execArgs = [...sshOptions(sshOpts), target, command];
+    const execArgs = [...sshOptions(sshOpts), target, fixedLocaleCommand(command)];
     const execOptions = {timeout: boundedTimeoutMs, maxBuffer, ...(signal ? {signal} : {})};
     child = execFileImpl('ssh', execArgs, execOptions, (error, stdout = '', stderr = '') => {
       if (settled) return;
@@ -795,6 +817,7 @@ export {
   dockerRunOnceCommand,
   errorText,
   execWithStatus,
+  fixedLocaleCommand,
   httpFromHost,
   inspectContainerCommand,
   inspectContainerStateCommand,
