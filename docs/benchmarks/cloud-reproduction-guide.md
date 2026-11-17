@@ -125,6 +125,8 @@ GCP is used only when asked for, with hosts you provisioned; the runner creates 
 export PROJECT_ID="your-gcp-project-id"
 export SSH_USER="bench"
 export SSH_PUBLIC_KEY_FILE="$HOME/.ssh/id_ed25519.pub"
+# Optional: replace the placeholder with the agreed future UTC expiry for a bounded allocation.
+# export VM_TERMINATION_TIME="YYYY-MM-DDTHH:MM:SSZ"
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 Every value is named by you or is a documented default, and the script prints the values in use
@@ -148,6 +150,23 @@ example with `gcloud compute ssh` once per VM) before the run. Put Node at the r
 engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IMAGE_FAMILY`,
 `IMAGE_PROJECT`, `BOOT_DISK_SIZE`, `BOOT_DISK_TYPE` and `FIREWALL_ALLOW` lines the script prints;
 step 2 refuses without any of them and records them for every host.
+
+For an allocation with a provider lifetime backstop, set `VM_TERMINATION_TIME` to an explicit
+absolute UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` form before creating the VMs. The script checks
+the format, calendar date and time ranges before any `gcloud` call. A nonempty valid value is
+passed unchanged to the existing six-VM creation call with `--instance-termination-action=DELETE`
+and `--boot-disk-auto-delete`. Empty or omitted input preserves ordinary creation without a
+provider lifetime bound; the script prints which request it makes. `--place` and `--teardown`
+ignore this creation-only input, so a malformed or expired setting cannot block cleanup.
+
+Choose a future expiry within [Google's supported scheduling limits](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime).
+Local validation proves only the input's format and calendar validity; Google checks the future
+scheduling limits. After creation, verify every named VM's `scheduling.terminationTime`,
+`scheduling.instanceTerminationAction`, effective
+`resourceStatus.scheduling.terminationTimestamp`, and boot disk `disks[].autoDelete` before
+placing a campaign. Retain that provider response with the launch evidence. Printed arguments
+or a successful local test do not verify the live schedule. The absolute expiry is not extended
+by this script; select it to cover preparation, the authorized campaign attempts and cleanup.
 
 ### Step 2 - Place what the campaign needs
 ```sh
@@ -192,6 +211,12 @@ A live GCP run also needs the `--client-checkout` and `--client-node` you placed
 Teardown reports each VM and the firewall rule as deleted, already absent or failed, then asks
 again: it prints `Teardown complete` only when no VM of the prefix remains, and otherwise exits
 non-zero naming what may still be billed.
+Run this cleanup after success, partial creation or failure even when a deletion time was
+requested. A stopped or suspended VM has no active termination timestamp until restarted;
+automatic deletion is therefore a backstop, not proof of closure. Independently confirm that
+the six VMs, their boot disks and the campaign firewall rule are gone. The script's completion
+message does not include a disk inventory, and a campaign watchdog does not bound allocation
+lifetime.
 
 AWS and Azure provisioning scripts exist in [`cloud/`](cloud/) but are not execution targets of
 this runner. Both open SSH (port 22) only to the network you name: `--ssh-cidr <cidr>` is required,
