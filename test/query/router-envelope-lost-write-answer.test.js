@@ -10,6 +10,8 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
   '../../src/transport/transport-error-codes.js';
 import {createMockSystemCache} from './query-executor-test-support.js';
+import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
+import {PG_ERROR_CODE} from '../../src/runtime/pgwire-protocol-constants.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const PARTITION = 'q6-write';
@@ -60,6 +62,10 @@ for (const errorCode of [ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIM
           'a lost answer never reports a definitely failed write');
         t.equal(result.entryId, ENTRY, 'the unresolved answer retains its entry identity');
         t.equal(result.spentWait?.lostAnswers, 1, 'the redelivery owner retained the lost answer');
+        t.equal(result.errorCode, null,
+          'the router code is the cause of the unknown outcome, never its answer');
+        t.not(resolveFailureSqlState(result), PG_ERROR_CODE.TRANSACTION_TIMEOUT,
+          'an unresolved write is never answered as a definite rollback (25P04)');
       });
     }
   }

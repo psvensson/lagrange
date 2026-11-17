@@ -22,6 +22,8 @@ import {
   getRemainingTransactionBudgetMs,
   resolveParticipantCommitMiss,
 } from '../../src/query/distributed/distributed-transaction-protocol.js';
+import {DistributedTransactionCoordinator} from
+  '../../src/query/distributed/distributed-transaction-coordinator.js';
 
 const MAX_RETRIES = 2;
 const BUDGET_MS = 1_000;
@@ -54,6 +56,10 @@ function buildCoordinator() {
     },
     isTransactionBudgetExceeded: () => false,
     getRemainingTransactionBudgetMs,
+    // The coordinator's one participant view (enlisted and read-only
+    // participants) that the budget-spent observation counts.
+    getOrderedParticipantDetails:
+      DistributedTransactionCoordinator.prototype.getOrderedParticipantDetails,
     calculateParticipantRetryDelay,
     emitParticipantRetryDiagnostic,
     resolveParticipantCommitMiss,

@@ -2,6 +2,8 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {TABLES} from '../../src/constants/index.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {STORAGE_RESERVATIONS_SCHEMA} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -214,6 +216,9 @@ function createCache(serviceRows) {
   };
   return {
     getAll: records,
+    // The SystemTableCache keyed read, by each table's canonical key field.
+    get: (tableName, key) => records(tableName).find((row) =>
+      row[getSystemCachePrimaryKeyField(tableName)] === key),
     filter: (tableName, predicate) => records(tableName).filter(predicate),
     find: (tableName, predicate) => records(tableName).find(predicate) || null,
     onCacheChange() {},
