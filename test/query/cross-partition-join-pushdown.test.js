@@ -1332,3 +1332,143 @@ test('transactional reads redirect from follower replicas, pin session ' +
     'stale pin is replaced with the widened leader replica address',
   );
 });
+
+test('JOIN HAVING preserves supplied query parameters, matches literal ' +
+  'HAVING and WHERE controls, and distinguishes bound NULL from unbound ' +
+  'placeholders', async (t) => {
+  const cluster = buildJoinCluster({
+    users_p1: {
+      table: 'users',
+      rows: [
+        [1, 'alice', 35, 'east'],
+      ],
+    },
+    users_p2: {
+      table: 'users',
+      rows: [
+        [2, 'bob', 28, 'west'],
+      ],
+    },
+    orders_p1: {
+      table: 'orders',
+      rows: [
+        [10, 1, 25, 'paid'],
+      ],
+    },
+    orders_p2: {
+      table: 'orders',
+      rows: [
+        [11, 2, 40, 'paid'],
+      ],
+    },
+  });
+
+  // 1. JOIN with literal HAVING u.id > 0 -> 2 rows
+  const literalHavingSql =
+    'SELECT u.id, COUNT(*) AS cnt FROM users AS u ' +
+    'JOIN orders AS o ON u.id = o.user_id ' +
+    'GROUP BY u.id HAVING u.id > 0 ORDER BY u.id';
+  const literalRows = await runJoin(cluster, literalHavingSql);
+  const literalOracle = cluster.oracle.prepare(literalHavingSql).all();
+  t.equal(literalRows.length, 2, 'literal JOIN HAVING u.id > 0 returns 2 rows');
+  t.same(literalRows, literalOracle, 'literal JOIN HAVING matches SQLite oracle');
+
+  // 2. JOIN with parameterized HAVING u.id > ? with [0] -> 2 rows
+  const paramHavingSql =
+    'SELECT u.id, COUNT(*) AS cnt FROM users AS u ' +
+    'JOIN orders AS o ON u.id = o.user_id ' +
+    'GROUP BY u.id HAVING u.id > ? ORDER BY u.id';
+  const paramHavingRows = await runJoin(cluster, paramHavingSql, [0]);
+  const paramHavingOracle = cluster.oracle.prepare(paramHavingSql).all(0);
+  t.equal(paramHavingRows.length, 2, 'parameterized JOIN HAVING u.id > ? [0] returns 2 rows');
+  t.same(paramHavingRows, paramHavingOracle, 'parameterized JOIN HAVING matches SQLite oracle');
+
+  // 3. JOIN with parameterized WHERE control and combined WHERE + HAVING
+  const paramWhereSql =
+    'SELECT u.id, o.amount FROM users AS u ' +
+    'JOIN orders AS o ON u.id = o.user_id ' +
+    'WHERE u.id > ? ORDER BY u.id';
+  const paramWhereRows = await runJoin(cluster, paramWhereSql, [0]);
+  t.equal(paramWhereRows.length, 2, 'parameterized JOIN WHERE control returns 2 rows');
+  t.same(
+    paramWhereRows.map((row) => ({id: row.id, amount: row.amount})),
+    cluster.oracle.prepare(paramWhereSql).all(0),
+    'parameterized JOIN WHERE control matches SQLite oracle',
+  );
+
+  const combinedWhereHavingSql =
+    'SELECT u.id, SUM(o.amount) AS total FROM users AS u ' +
+    'JOIN orders AS o ON u.id = o.user_id ' +
+    'WHERE u.age >= ? AND o.status = ? ' +
+    'GROUP BY u.id HAVING SUM(o.amount) > ? AND u.id IN (?, ?) ORDER BY u.id';
+  const combinedParams = [20, 'paid', 10, 1, 2];
+  const combinedRows = await runJoin(cluster, combinedWhereHavingSql, combinedParams);
+  t.equal(combinedRows.length, 2, 'combined JOIN WHERE + HAVING with IN (?, ?) returns 2 rows');
+  t.same(
+    combinedRows,
+    cluster.oracle.prepare(combinedWhereHavingSql).all(...combinedParams),
+    'combined JOIN WHERE + HAVING matches SQLite oracle',
+  );
+
+  // 4. Non-JOIN parameterized HAVING control on same cluster
+  const nonJoinHavingSql =
+    'SELECT u.id, COUNT(*) AS cnt FROM users AS u ' +
+    'GROUP BY u.id HAVING u.id > ? ORDER BY u.id';
+  const nonJoinAst = new SQLParser(nonJoinHavingSql).parse();
+  const nonJoinRes = await cluster.executor.executeSelect(
+    nonJoinAst,
+    cluster.partitionIdsByTable.users,
+    [0],
+  );
+  t.equal(nonJoinRes.success, true, 'non-JOIN parameterized HAVING control succeeds');
+  t.equal(nonJoinRes.rows.length, 2, 'non-JOIN parameterized HAVING control returns 2 rows');
+  t.same(
+    nonJoinRes.rows,
+    cluster.oracle.prepare(nonJoinHavingSql).all(0),
+    'non-JOIN parameterized HAVING control matches SQLite oracle',
+  );
+
+  // 5. Deliberately bound SQL NULL parameter vs genuinely unbound placeholder
+  const boundNullComparisonRows = await runJoin(cluster, paramHavingSql, [null]);
+  t.same(
+    boundNullComparisonRows,
+    cluster.oracle.prepare(paramHavingSql).all(null),
+    'bound SQL NULL in HAVING u.id > ? returns 0 rows without error',
+  );
+
+  const boundNullIsNullSql =
+    'SELECT u.id, COUNT(*) AS cnt FROM users AS u ' +
+    'JOIN orders AS o ON u.id = o.user_id ' +
+    'GROUP BY u.id HAVING ? IS NULL ORDER BY u.id';
+  const boundNullIsNullRows = await runJoin(cluster, boundNullIsNullSql, [null]);
+  t.equal(boundNullIsNullRows.length, 2, 'bound SQL NULL satisfies HAVING ? IS NULL');
+
+  await t.rejects(
+    cluster.executor.executeSelect(
+      new SQLParser(paramHavingSql).parse(),
+      cluster.partitionIdsByTable.users,
+      [],
+      {distributedPlan: {tablePlans: cluster.tablePlans}},
+    ),
+    {code: 'SYNTAX_ERROR', message: /Unbound parameter index: 0/u},
+    'JOIN HAVING with missing parameter rejects with SYNTAX_ERROR',
+  );
+  await t.rejects(
+    cluster.executor.executeSelect(
+      new SQLParser(paramHavingSql).parse(),
+      cluster.partitionIdsByTable.users,
+      [undefined],
+      {distributedPlan: {tablePlans: cluster.tablePlans}},
+    ),
+    {code: 'SYNTAX_ERROR', message: /Unbound parameter index: 0/u},
+    'JOIN HAVING with undefined parameter rejects with SYNTAX_ERROR',
+  );
+  t.throws(
+    () => cluster.executor.applyHaving(
+      [{id: 1, cnt: 1}],
+      new SQLParser(paramHavingSql).parse().having,
+    ),
+    {code: 'SYNTAX_ERROR', message: /Unbound parameter index: 0/u},
+    'direct applyHaving without params rejects unbound placeholder',
+  );
+});

@@ -47,6 +47,13 @@ function bindableValue(value) {
   return value;
 }
 
+function bindableParamValue(value) {
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  return value;
+}
+
 /**
  * Execute the delivered SQL over the partition's mock rows through a
  * real SQLite database, so the mock behaves like a partition replica.
@@ -88,7 +95,7 @@ function executeSqlOverMockRows(sql, params, data) {
   }
   const rows = db
     .prepare(sql)
-    .all(...(params || []).map((value) => bindableValue(value)));
+    .all(...(params || []).map((value) => bindableParamValue(value)));
   db.close();
   return rows;
 }

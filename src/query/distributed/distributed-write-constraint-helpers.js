@@ -13,6 +13,8 @@ const SQLITE_CONSTRAINT_UNIQUE_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 const CONSTRAINT_TYPE_UNIQUE = 'UNIQUE';
 const ERR_COLUMN_REF_IN_KEY =
   'Column references cannot be used in partition key value';
+const COLUMN_LIST_SEPARATOR = ', ';
+const WHERE_AND_SEPARATOR = ' AND ';
 const FUNCTION_NODE_TYPES = new Set([
   'function',
   'function_call',
@@ -26,22 +28,29 @@ function throwUnsupportedKeyExpression(message) {
 }
 
 function throwUniqueConstraintViolation(tableName, colNames) {
-  const label = Array.isArray(colNames) ? colNames.join(', ') : colNames;
+  const label = Array.isArray(colNames) ? colNames.join(COLUMN_LIST_SEPARATOR) : colNames;
   const error = new Error(`UNIQUE constraint failed: ${tableName}.${label}`);
   error.code = SQLITE_CONSTRAINT_UNIQUE_CODE;
   error.errorCode = SQLITE_CONSTRAINT_UNIQUE_CODE;
   throw error;
 }
 
+const ERR_UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
+
 function extractParameterValue(expr, params) {
+  const index = typeof expr.index === 'number' ? expr.index : 0;
   if (
-    typeof expr.index === 'number' &&
-    expr.index >= 0 &&
-    expr.index < params.length
+    !Array.isArray(params) ||
+    index < 0 ||
+    index >= params.length ||
+    params[index] === undefined
   ) {
-    return params[expr.index];
+    const error = new Error(`${ERR_UNBOUND_PARAMETER_PREFIX}${index}`);
+    error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    error.errorCode = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    throw error;
   }
-  return params[0];
+  return params[index];
 }
 
 function evaluateUnaryKeyValue(coordinator, expr, params) {
@@ -182,7 +191,7 @@ async function assertUniqueAcrossPartitions(
   if (typeof coordinator.queryExecutor?.executeOnPartitions !== 'function') {
     return;
   }
-  const whereClause = colNames.map((c) => `"${c}" = ?`).join(' AND ');
+  const whereClause = colNames.map((c) => `"${c}" = ?`).join(WHERE_AND_SEPARATOR);
   const checkSql = `SELECT 1 FROM "${tableName}" WHERE ${whereClause} LIMIT 1`;
   const results = await coordinator.queryExecutor.executeOnPartitions(
     partitionIds,

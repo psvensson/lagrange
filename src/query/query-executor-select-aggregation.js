@@ -1,14 +1,127 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
   SQL_COMPARISON_AFFINITY,
+  applySqlComparisonAffinity,
   areSqlScalarsEqualWithAffinity,
   compareSqlScalarsWithAffinity,
   resolveOperandComparisonAffinity,
 } from './distributed/residual-predicate-evaluator.js';
 
-const {
-  QUERY_EXECUTOR_LITERAL,
-} = QUERY_EXECUTOR_SHARED;
+const {QUERY_ERROR_CODE, QUERY_EXECUTOR_LITERAL} = QUERY_EXECUTOR_SHARED;
+const UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
+const INVALID_PARAMETER_NAN_MSG = 'Invalid parameter value: NaN is unrepresentable';
+const SUBSTR_WITH_LENGTH_ARG_COUNT = 3;
+const DECIMAL_BASE = 10;
+const GROUP_KEY_DELIMITER = '|';
+const LIKE_ESCAPE_REPLACEMENT = '\\$&';
+const LIKE_ANY_SEQ_PATTERN = '.*';
+const LIKE_ANY_CHAR_PATTERN = '.';
+const SORT_DIR_DESC = 'DESC';
+const EXPR_NODE_TYPE = Object.freeze({
+  CASE: 'case', CAST: 'cast', FUNCTION_CALL: 'function_call', FUNCTION: 'function',
+});
+const ARITHMETIC_OPERATOR = Object.freeze({
+  ADD: '+', SUBTRACT: '-', MULTIPLY: '*', DIVIDE: '/', MODULO: '%', CONCAT: '||',
+});
+const SCALAR_FN = Object.freeze({
+  COALESCE: 'COALESCE', IFNULL: 'IFNULL', NULLIF: 'NULLIF', IIF: 'IIF',
+  ABS: 'ABS', LOWER: 'LOWER', UPPER: 'UPPER', TRIM: 'TRIM', LENGTH: 'LENGTH',
+  SUBSTR: 'SUBSTR', SUBSTRING: 'SUBSTRING', ROUND: 'ROUND',
+});
+
+function defineHiddenRowProperty(target, key, value) {
+  if (!key || Object.prototype.hasOwnProperty.call(target, key)) return;
+  Object.defineProperty(target, key, {
+    value, enumerable: false, configurable: true, writable: true,
+  });
+}
+
+function walkAstAggregates(node, visit) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    node.forEach((entry) => walkAstAggregates(entry, visit));
+    return;
+  }
+  if (node.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE) {
+    visit(node);
+    return;
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') walkAstAggregates(value, visit);
+  }
+}
+
+function resolveParameterNodeIndex(expr) {
+  return Number.isInteger(expr?.__fanoutParamIndex) ?
+    expr.__fanoutParamIndex : expr?.index;
+}
+
+function resolveBoundParameterValue(expr, params) {
+  const index = resolveParameterNodeIndex(expr);
+  if (!Array.isArray(params) || !Number.isInteger(index) ||
+      index < 0 || index >= params.length || params[index] === undefined) {
+    const label = Number.isInteger(index) ?
+      String(index) : QUERY_EXECUTOR_LITERAL.STRING_VALUE_4;
+    const error = new Error(`${UNBOUND_PARAMETER_PREFIX}${label}`);
+    error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    error.errorCode = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    throw error;
+  }
+  const value = params[index];
+  if (typeof value === 'number' && Number.isNaN(value)) {
+    const error = new Error(INVALID_PARAMETER_NAN_MSG);
+    error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    error.errorCode = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    throw error;
+  }
+  return value;
+}
+
+function assertAstParametersBound(node, params) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) assertAstParametersBound(entry, params);
+    return;
+  }
+  if (node.type === QUERY_EXECUTOR_LITERAL.STRING_PARAMETER) {
+    resolveBoundParameterValue(node, params);
+    return;
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') assertAstParametersBound(value, params);
+  }
+}
+
+function evaluateBinaryArithmetic(operator, left, right) {
+  if (operator === ARITHMETIC_OPERATOR.CONCAT) {
+    return left === null || left === undefined || right === null || right === undefined ?
+      {handled: true, value: null} :
+      {handled: true, value: String(left) + String(right)};
+  }
+  if (operator !== ARITHMETIC_OPERATOR.ADD &&
+      operator !== ARITHMETIC_OPERATOR.SUBTRACT &&
+      operator !== ARITHMETIC_OPERATOR.MULTIPLY &&
+      operator !== ARITHMETIC_OPERATOR.DIVIDE &&
+      operator !== ARITHMETIC_OPERATOR.MODULO) {
+    return {handled: false, value: null};
+  }
+  if (left === null || left === undefined || right === null || right === undefined) {
+    return {handled: true, value: null};
+  }
+  const numLeft = Number(left);
+  const numRight = Number(right);
+  if (operator === ARITHMETIC_OPERATOR.ADD) return {handled: true, value: numLeft + numRight};
+  if (operator === ARITHMETIC_OPERATOR.SUBTRACT) return {handled: true, value: numLeft - numRight};
+  if (operator === ARITHMETIC_OPERATOR.MULTIPLY) return {handled: true, value: numLeft * numRight};
+  if (operator === ARITHMETIC_OPERATOR.DIVIDE) {
+    if (numRight === 0) return {handled: true, value: null};
+    const divVal = Number.isInteger(left) && Number.isInteger(right) ?
+      Math.trunc(numLeft / numRight) : numLeft / numRight;
+    return {handled: true, value: divVal};
+  }
+  const divisor = Math.trunc(numRight);
+  return {handled: true, value: divisor === 0 ? null : Math.trunc(numLeft) % divisor};
+}
 
 function evaluateScalarComparisonOperator(operator, left, right, leftNode, rightNode) {
   if (operator === QUERY_EXECUTOR_LITERAL.STRING_VALUE_5) {
@@ -38,11 +151,50 @@ function evaluateScalarComparisonOperator(operator, left, right, leftNode, right
 function applyGroupColumnAggregate(executor, result, rows, col) {
   const expr = col.expression || col;
   if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE) {
-    const alias = col.alias || `${expr.function}(${executor.getArgName(expr)})`;
-    result[alias] = executor.computeAggregate(rows, expr);
+    const canonicalKey = `${expr.function}(${executor.getArgName(expr)})`;
+    const alias = col.alias || canonicalKey;
+    const value = executor.computeAggregate(rows, expr);
+    result[alias] = value;
+    defineHiddenRowProperty(result, canonicalKey, value);
   } else if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF && rows.length > 0) {
-    result[expr.column] = rows[0][expr.column];
+    const value = resolveRowColumnRef(rows[0], expr);
+    const outputKey = col.alias ? col.alias : expr.column;
+    result[outputKey] = value;
+    defineHiddenRowProperty(result, expr.column, value);
+    if (expr.table) {
+      defineHiddenRowProperty(result, `${expr.table}.${expr.column}`, value);
+    }
   }
+}
+
+function attachClauseAggregatesAndHiddenRowKeys(executor, result, rows, ast) {
+  const registerHiddenAggregate = (aggExpr) => {
+    const canonicalKey = `${aggExpr.function}(${executor.getArgName(aggExpr)})`;
+    if (!Object.prototype.hasOwnProperty.call(result, canonicalKey)) {
+      defineHiddenRowProperty(
+        result,
+        canonicalKey,
+        executor.computeAggregate(rows, aggExpr),
+      );
+    }
+  };
+  walkAstAggregates(ast.having, registerHiddenAggregate);
+  walkAstAggregates(ast.orderBy, registerHiddenAggregate);
+  if (rows.length > 0 && rows[0] && typeof rows[0] === 'object') {
+    for (const [key, value] of Object.entries(rows[0])) {
+      defineHiddenRowProperty(result, key, value);
+    }
+  }
+}
+
+function resolveGroupByItemValue(row, groupItem, colName) {
+  if (groupItem && typeof groupItem === 'object') {
+    const expr = groupItem.expression ? groupItem.expression : groupItem;
+    if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF) {
+      return resolveRowColumnRef(row, expr);
+    }
+  }
+  return row[colName];
 }
 
 function collectAggregateValues(rows, arg, distinct) {
@@ -128,7 +280,7 @@ const queryExecutorSelectAggregationMethods = {
    * @return {Object} Aggregated result.
    * @private
    */
-  aggregateSelectResults(results, ast) {
+  aggregateSelectResults(results, ast, params) {
     // Combine rows from all partitions
     let rows = [];
     for (const result of results) {
@@ -152,7 +304,7 @@ const queryExecutorSelectAggregationMethods = {
 
     // Handle HAVING
     if (ast.having) {
-      rows = this.applyHaving(rows, ast.having);
+      rows = this.applyHaving(rows, ast.having, params);
     }
 
     // Handle ORDER BY
@@ -175,12 +327,13 @@ const queryExecutorSelectAggregationMethods = {
    * Requirements: 22.3, 22.7
    * @param {Array} partitionResults - Results from each partition.
    * @param {Object} ast - Parsed SELECT AST.
+   * @param {Array} [params] - Bound query parameters.
    * @return {Object} Combined aggregated result.
    */
-  aggregateCrossPartitionResults(partitionResults, ast) {
+  aggregateCrossPartitionResults(partitionResults, ast, params) {
     // For queries with aggregates, we need to combine partial results
     if (!this.hasAggregates(ast)) {
-      return this.aggregateSelectResults(partitionResults, ast);
+      return this.aggregateSelectResults(partitionResults, ast, params);
     }
 
     // Collect all rows first
@@ -192,15 +345,13 @@ const queryExecutorSelectAggregationMethods = {
     }
 
     // Re-compute aggregates on combined data
-    if (ast.groupBy) {
-      return {
-        rows: this.applyGroupBy(allRows, ast),
-      };
-    } else {
-      return {
-        rows: this.applyAggregates(allRows, ast),
-      };
+    let rows = ast.groupBy ?
+      this.applyGroupBy(allRows, ast) :
+      this.applyAggregates(allRows, ast);
+    if (ast.having) {
+      rows = this.applyHaving(rows, ast.having, params);
     }
+    return {rows};
   },
 
   /**
@@ -250,7 +401,9 @@ const queryExecutorSelectAggregationMethods = {
 
     // Group rows
     for (const row of rows) {
-      const key = groupByColumns.map((col) => row[col]).join('|');
+      const key = groupByColumns
+        .map((col, idx) => resolveGroupByItemValue(row, ast.groupBy[idx], col))
+        .join(GROUP_KEY_DELIMITER);
       if (!groups.has(key)) {
         groups.set(key, []);
       }
@@ -279,12 +432,20 @@ const queryExecutorSelectAggregationMethods = {
       const firstRow = rows[0];
       for (const g of ast.groupBy) {
         const col = g.column || g.expression?.column || g;
-        result[col] = firstRow[col];
+        const value = resolveGroupByItemValue(firstRow, g, col);
+        result[col] = value;
+        const groupExpr = g && typeof g === 'object' ?
+          (g.expression ? g.expression : g) :
+          null;
+        if (groupExpr?.table) {
+          defineHiddenRowProperty(result, `${groupExpr.table}.${col}`, value);
+        }
       }
     }
     for (const col of ast.columns) {
       applyGroupColumnAggregate(this, result, rows, col);
     }
+    attachClauseAggregatesAndHiddenRowKeys(this, result, rows, ast);
     return result;
   },
 
@@ -316,10 +477,14 @@ const queryExecutorSelectAggregationMethods = {
     for (const col of ast.columns) {
       const expr = col.expression || col;
       if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE) {
-        const alias = col.alias || `${expr.function}(${this.getArgName(expr)})`;
-        result[alias] = this.computeAggregate(rows, expr);
+        const canonicalKey = `${expr.function}(${this.getArgName(expr)})`;
+        const alias = col.alias || canonicalKey;
+        const value = this.computeAggregate(rows, expr);
+        result[alias] = value;
+        defineHiddenRowProperty(result, canonicalKey, value);
       }
     }
+    attachClauseAggregatesAndHiddenRowKeys(this, result, rows, ast);
     return [result];
   },
 
@@ -344,27 +509,21 @@ const queryExecutorSelectAggregationMethods = {
     return reduceNumericAggregate(func, values);
   },
 
-  /**
-   * Apply HAVING clause to grouped rows.
-   * @param {Array} rows - Grouped rows.
-   * @param {Object} having - HAVING clause AST.
-   * @return {Array} Filtered rows.
-   * @private
-   */
-  applyHaving(rows, having) {
-    return rows.filter((row) => this.evaluateExpression(row, having));
+  assertQueryParametersBound(ast, params) {
+    assertAstParametersBound(ast, params);
   },
 
-  /**
-   * Evaluate an expression against a row.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - Expression AST.
-   * @return {*} Expression value.
-   * @private
-   */
-  evaluateExpression(row, expr, params = []) {
-    if (!expr) {
-      return true;
+  applyHaving(rows, having, params) {
+    assertAstParametersBound(having, params);
+    return rows.filter((row) =>
+      Boolean(this.evaluateExpression(row, having, params)),
+    );
+  },
+
+  evaluateExpression(row, expr, params) {
+    if (!expr) return true;
+    if (Array.isArray(expr)) {
+      return expr.map((entry) => this.evaluateExpression(row, entry, params));
     }
     switch (expr.type) {
     case QUERY_EXECUTOR_LITERAL.STRING_BINARY:
@@ -377,10 +536,17 @@ const queryExecutorSelectAggregationMethods = {
       return this.evaluateBetween(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_LIKE:
       return this.evaluateLike(row, expr, params);
+    case EXPR_NODE_TYPE.CASE:
+      return this.evaluateCase(row, expr, params);
+    case EXPR_NODE_TYPE.CAST:
+      return this.evaluateCast(row, expr, params);
+    case EXPR_NODE_TYPE.FUNCTION_CALL:
+    case EXPR_NODE_TYPE.FUNCTION:
+      return this.evaluateFunctionCall(row, expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_LITERAL:
       return expr.value;
     case QUERY_EXECUTOR_LITERAL.STRING_PARAMETER:
-      return params[expr.index];
+      return resolveBoundParameterValue(expr, params);
     case QUERY_EXECUTOR_LITERAL.STRING_COLUMN_REF:
       return resolveRowColumnRef(row, expr);
     case QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE:
@@ -390,47 +556,110 @@ const queryExecutorSelectAggregationMethods = {
     }
   },
 
-  /**
-   * Evaluate a binary expression.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - Binary expression.
-   * @param {Array} [params=[]] - Query parameters.
-   * @return {boolean} Expression result.
-   * @private
-   */
-  evaluateBinary(row, expr, params = []) {
-    const left = this.evaluateExpression(row, expr.left, params);
-    const right = this.evaluateExpression(row, expr.right, params);
-    switch (expr.operator) {
-    case QUERY_EXECUTOR_LITERAL.STRING_AND:
-      return left && right;
-    case QUERY_EXECUTOR_LITERAL.STRING_OR:
-      return left || right;
-    case QUERY_EXECUTOR_LITERAL.STRING_IS_NULL:
-      return left === null || left === undefined;
-    case QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL:
-      return left !== null && left !== undefined;
+  evaluateCase(row, expr, params) {
+    const hasOperand = Boolean(expr.operand);
+    const operandVal = hasOperand ?
+      this.evaluateExpression(row, expr.operand, params) : null;
+    for (const cond of expr.conditions || []) {
+      const whenVal = this.evaluateExpression(row, cond.when, params);
+      const matched = hasOperand ?
+        areSqlScalarsEqualWithAffinity(operandVal, whenVal, expr.operand, cond.when) :
+        Boolean(whenVal);
+      if (matched) {
+        return this.evaluateExpression(row, cond.thenExpression, params);
+      }
+    }
+    return expr.elseExpr ?
+      this.evaluateExpression(row, expr.elseExpr, params) : null;
+  },
+
+  evaluateCast(row, expr, params) {
+    const sourceNode = expr.expression ? expr.expression :
+      (expr.expr ? expr.expr : expr.operand);
+    const inner = this.evaluateExpression(row, sourceNode, params);
+    if (inner === null || inner === undefined) return null;
+    return applySqlComparisonAffinity(inner, resolveOperandComparisonAffinity(expr));
+  },
+
+  evaluateFunctionCall(row, expr, params) {
+    const fnName = String(expr.name || '').toUpperCase();
+    const args = (expr.args || []).map((arg) =>
+      this.evaluateExpression(row, arg, params),
+    );
+    const a0 = args[0];
+    const a0Null = a0 === null || a0 === undefined;
+    switch (fnName) {
+    case SCALAR_FN.COALESCE:
+    case SCALAR_FN.IFNULL: {
+      const found = args.find((val) => val !== null && val !== undefined);
+      return found === undefined ? null : found;
+    }
+    case SCALAR_FN.NULLIF:
+      return a0Null || areSqlScalarsEqualWithAffinity(a0, args[1]) ? null : a0;
+    case SCALAR_FN.IIF:
+      return a0 ? (args[1] === undefined ? null : args[1]) :
+        (args[2] === undefined ? null : args[2]);
+    case SCALAR_FN.ABS:
+      return a0Null ? null : Math.abs(Number(a0));
+    case SCALAR_FN.LOWER:
+      return a0Null ? null : String(a0).toLowerCase();
+    case SCALAR_FN.UPPER:
+      return a0Null ? null : String(a0).toUpperCase();
+    case SCALAR_FN.TRIM:
+      return a0Null ? null : String(a0).trim();
+    case SCALAR_FN.LENGTH:
+      return a0Null ? null : String(a0).length;
+    case SCALAR_FN.SUBSTR:
+    case SCALAR_FN.SUBSTRING: {
+      if (a0Null || args[1] === null || args[1] === undefined) return null;
+      const text = String(a0);
+      const start = Math.trunc(Number(args[1]));
+      const zeroStart = start > 0 ? start - 1 :
+        (start < 0 ? Math.max(text.length + start, 0) : 0);
+      if (args.length < SUBSTR_WITH_LENGTH_ARG_COUNT) return text.slice(zeroStart);
+      if (args[2] === null || args[2] === undefined) return null;
+      const len = Math.max(Math.trunc(Number(args[2])), 0);
+      return text.slice(zeroStart, zeroStart + len);
+    }
+    case SCALAR_FN.ROUND: {
+      if (a0Null) return null;
+      const digits = args[1] === undefined || args[1] === null ?
+        0 : Math.trunc(Number(args[1]));
+      const factor = DECIMAL_BASE ** digits;
+      return Math.round(Number(a0) * factor) / factor;
+    }
     default:
-      return evaluateScalarComparisonOperator(
-        expr.operator,
-        left,
-        right,
-        expr.left,
-        expr.right,
-      );
+      return null;
     }
   },
 
-  /**
-   * Evaluate a unary expression.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - Unary expression.
-   * @param {Array} [params=[]] - Query parameters.
-   * @return {*} Expression result.
-   * @private
-   */
-  evaluateUnary(row, expr, params = []) {
+  evaluateBinary(row, expr, params) {
+    const left = this.evaluateExpression(row, expr.left, params);
+    if (expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NULL) {
+      return left === null || left === undefined;
+    }
+    if (expr.operator === QUERY_EXECUTOR_LITERAL.STRING_IS_NOT_NULL) {
+      return left !== null && left !== undefined;
+    }
+    const right = this.evaluateExpression(row, expr.right, params);
+    switch (expr.operator) {
+    case QUERY_EXECUTOR_LITERAL.STRING_AND:
+      return Boolean(left) && Boolean(right);
+    case QUERY_EXECUTOR_LITERAL.STRING_OR:
+      return Boolean(left) || Boolean(right);
+    default: {
+      const arithmetic = evaluateBinaryArithmetic(expr.operator, left, right);
+      if (arithmetic.handled) return arithmetic.value;
+      return evaluateScalarComparisonOperator(
+        expr.operator, left, right, expr.left, expr.right,
+      );
+    }
+    }
+  },
+
+  evaluateUnary(row, expr, params) {
     const operand = this.evaluateExpression(row, expr.operand, params);
+    if (operand === null || operand === undefined) return null;
     switch (expr.operator) {
     case QUERY_EXECUTOR_LITERAL.STRING_NOT:
       return !operand;
@@ -443,37 +672,27 @@ const queryExecutorSelectAggregationMethods = {
     }
   },
 
-  /**
-   * Evaluate an IN/NOT IN expression.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - IN expression AST.
-   * @param {Array} [params=[]] - Query parameters.
-   * @return {boolean} Expression result.
-   * @private
-   */
-  evaluateIn(row, expr, params = []) {
+  evaluateIn(row, expr, params) {
     const value = this.evaluateExpression(row, expr.expression, params);
+    const candidateValues = (expr.values || []).map((v) =>
+      this.evaluateExpression(row, v, params),
+    );
+    if (value === null || value === undefined) return false;
     const exprAffinity = resolveOperandComparisonAffinity(expr.expression);
-    const matches = expr.values.some((v) =>
+    const matches = candidateValues.some((candidate) =>
       areSqlScalarsEqualWithAffinity(
-        value,
-        this.evaluateExpression(row, v, params),
-        exprAffinity,
-        SQL_COMPARISON_AFFINITY.NONE,
+        value, candidate, exprAffinity, SQL_COMPARISON_AFFINITY.NONE,
       ),
     );
-    return expr.negated ? !matches : matches;
+    if (matches) return !expr.negated;
+    if (expr.negated &&
+        candidateValues.some((candidate) => candidate === null || candidate === undefined)) {
+      return false;
+    }
+    return Boolean(expr.negated);
   },
 
-  /**
-   * Evaluate a BETWEEN expression.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - BETWEEN expression AST.
-   * @param {Array} [params=[]] - Query parameters.
-   * @return {boolean} Expression result.
-   * @private
-   */
-  evaluateBetween(row, expr, params = []) {
+  evaluateBetween(row, expr, params) {
     const value = this.evaluateExpression(row, expr.expression, params);
     const low = this.evaluateExpression(row, expr.low, params);
     const high = this.evaluateExpression(row, expr.high, params);
@@ -482,23 +701,11 @@ const queryExecutorSelectAggregationMethods = {
     return lowCmp !== null && lowCmp >= 0 && highCmp !== null && highCmp <= 0;
   },
 
-  /**
-   * Evaluate a LIKE/NOT LIKE expression.
-   * @param {Object} row - Data row.
-   * @param {Object} expr - LIKE expression AST.
-   * @param {Array} [params=[]] - Query parameters.
-   * @return {boolean} Expression result.
-   * @private
-   */
-  evaluateLike(row, expr, params = []) {
+  evaluateLike(row, expr, params) {
     const value = this.evaluateExpression(row, expr.expression, params);
     const pattern = this.evaluateExpression(row, expr.pattern, params);
-    if (
-      value === null ||
-      value === undefined ||
-      pattern === null ||
-      pattern === undefined
-    ) {
+    if (value === null || value === undefined ||
+        pattern === null || pattern === undefined) {
       return false;
     }
     const regex = this.buildLikeRegex(String(pattern));
@@ -506,30 +713,19 @@ const queryExecutorSelectAggregationMethods = {
     return expr.negated ? !matches : matches;
   },
 
-  /**
-   * Build regex for SQL LIKE semantics.
-   * @param {string} pattern - SQL LIKE pattern.
-   * @return {RegExp} Regex matcher.
-   * @private
-   */
   buildLikeRegex(pattern) {
-    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regexPattern = escaped.replace(/%/g, '.*').replace(/_/g, '.');
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, LIKE_ESCAPE_REPLACEMENT);
+    const regexPattern = escaped
+      .replace(/%/g, LIKE_ANY_SEQ_PATTERN)
+      .replace(/_/g, LIKE_ANY_CHAR_PATTERN);
     return new RegExp(`^${regexPattern}$`);
   },
 
-  /**
-   * Apply ORDER BY to rows.
-   * @param {Array} rows - Input rows.
-   * @param {Array} orderBy - ORDER BY clauses.
-   * @return {Array} Sorted rows.
-   * @private
-   */
   applyOrderBy(rows, orderBy) {
     return [...rows].sort((a, b) => {
       for (const clause of orderBy) {
         const col = clause.expression?.column || clause.column;
-        const dir = clause.direction === 'DESC' ? -1 : 1;
+        const dir = clause.direction === SORT_DIR_DESC ? -1 : 1;
         const comparison = compareOrderByClauseValues(a[col], b[col], dir);
         if (comparison !== 0) {
           return comparison;
@@ -539,13 +735,6 @@ const queryExecutorSelectAggregationMethods = {
     });
   },
 
-  /**
-   * Apply LIMIT and OFFSET to rows.
-   * @param {Array} rows - Input rows.
-   * @param {Object} limit - LIMIT clause.
-   * @return {Array} Limited rows.
-   * @private
-   */
   applyLimit(rows, limit) {
     const offset = Number.isInteger(limit.offset) ?
       Math.max(limit.offset, 0) :

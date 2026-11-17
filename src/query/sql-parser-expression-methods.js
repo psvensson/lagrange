@@ -73,6 +73,7 @@ const EXT_EXPR_TYPE = Object.freeze({
 
 const STAR_VALUE = '*';
 const ORIGIN_PARAM = '?';
+const SINGLE_QUOTE_CHAR = '\'';
 
 const sqlParserExpressionMethods = {
   convertExpression(expr) {
@@ -116,7 +117,7 @@ const sqlParserExpressionMethods = {
       return {
         type: EXPR_TYPE.LITERAL,
         value: typeof expr.value === 'string' ?
-          expr.value.replace(/''/g, '\'') :
+          expr.value.replace(/''/g, SINGLE_QUOTE_CHAR) :
           expr.value,
       };
     case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
@@ -199,6 +200,7 @@ const sqlParserExpressionMethods = {
    * @returns {Object} Internal_AST case node.
    */
   convertPgCase(expr) {
+    const operand = expr.expr ? this.convertExpression(expr.expr) : null;
     const conditions = [];
     let elseExpr = null;
 
@@ -215,7 +217,7 @@ const sqlParserExpressionMethods = {
 
     return {
       type: PG_EXPR_TYPE.CASE,
-      operand: expr.expr ? this.convertExpression(expr.expr) : null,
+      operand,
       conditions,
       elseExpr,
     };
@@ -274,13 +276,14 @@ const sqlParserExpressionMethods = {
     }
 
     if (operator === SQL_OPERATOR.IN || operator === SQL_OPERATOR.NOT_IN) {
+      const expression = this.convertExpression(expr.left);
       // IN subquery: right is expr_list with a single element having .ast
       if (Array.isArray(expr.right.value) &&
           expr.right.value.length === 1 &&
           expr.right.value[0]?.ast) {
         return {
           type: EXPR_TYPE.IN,
-          expression: this.convertExpression(expr.left),
+          expression,
           subquery: {
             type: PG_EXPR_TYPE.SUBQUERY,
             query: this.convertSelect(expr.right.value[0].ast),
@@ -296,7 +299,7 @@ const sqlParserExpressionMethods = {
         [this.convertExpression(expr.right)];
       return {
         type: EXPR_TYPE.IN,
-        expression: this.convertExpression(expr.left),
+        expression,
         values,
         negated: operator === SQL_OPERATOR.NOT_IN,
       };
@@ -325,6 +328,7 @@ const sqlParserExpressionMethods = {
       // Only IS [NOT] NULL is supported downstream; collapsing
       // `IS <value>` to IS NULL silently drops the operand, so a
       // non-NULL right side must fail closed at parse time.
+      const leftOperand = this.convertExpression(expr.left);
       const rightOperand = this.convertExpression(expr.right);
       if (rightOperand !== null &&
         !(rightOperand.type === EXPR_TYPE.LITERAL &&
@@ -336,7 +340,7 @@ const sqlParserExpressionMethods = {
         operator: operator === SQL_OPERATOR.IS ?
           SQL_OPERATOR.IS_NULL :
           SQL_OPERATOR.IS_NOT_NULL,
-        left: this.convertExpression(expr.left),
+        left: leftOperand,
         right: {type: EXPR_TYPE.LITERAL, value: null},
       };
     }
@@ -417,7 +421,7 @@ const sqlParserExpressionMethods = {
       return {
         type: EXPR_TYPE.LITERAL,
         value: typeof val.value === 'string' ?
-          val.value.replace(/''/g, '\'') :
+          val.value.replace(/''/g, SINGLE_QUOTE_CHAR) :
           val.value,
       };
     case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:

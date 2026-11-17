@@ -11,41 +11,21 @@ import {
 
 /**
  * SQL three-valued-logic evaluator for coordinator-side residual JOIN
- * WHERE conjuncts. A comparison with a NULL operand is UNKNOWN (not
- * false, not true); AND/OR/NOT combine per 3VL; a row survives the
- * WHERE only when the predicate is exactly TRUE. JS-strict evaluation
- * (QueryExecutor#evaluateExpression) keeps NULL rows that SQLite
- * filters, which is why residual conjuncts must come through here.
- *
- * Operator names mirror the join-pushdown plan's supported set; any
- * conjunct outside that set never reaches this evaluator (the plan
- * routes it to the legacy whole-WHERE path).
+ * WHERE conjuncts.
  */
-
-/** Parser operator names not carried by QUERY_OPERATOR. */
 const RESIDUAL_OPERATOR = Object.freeze({
-  OR: 'OR',
-  IS_NULL: 'IS NULL',
-  IS_NOT_NULL: 'IS NOT NULL',
-  NOT: 'NOT',
-  PLUS: '+',
-  MINUS: '-',
+  OR: 'OR', IS_NULL: 'IS NULL', IS_NOT_NULL: 'IS NOT NULL',
+  NOT: 'NOT', PLUS: '+', MINUS: '-',
 });
-
-/** 3VL truth constants; UNKNOWN is represented as null. */
 const UNKNOWN = null;
-
 const LIKE_REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
 const LIKE_REGEX_ESCAPE_REPLACEMENT = '\\$&';
 const LIKE_ANY_SEQUENCE = /%/g;
 const LIKE_ANY_SINGLE = /_/g;
 const LIKE_REGEX_ANY_SEQUENCE = '.*';
 const LIKE_REGEX_ANY_SINGLE = '.';
-
 const SQL_COMPARISON_AFFINITY = Object.freeze({
-  NUMERIC: 'NUMERIC',
-  TEXT: 'TEXT',
-  NONE: 'NONE',
+  NUMERIC: 'NUMERIC', TEXT: 'TEXT', NONE: 'NONE',
 });
 const CAST_NODE_TYPE = 'cast';
 const INT_TYPE_TOKEN = 'INT';
@@ -77,6 +57,19 @@ const STORAGE_RANK_BLOB = 3;
 const SQLITE_MASTER_DDL_SQL =
   'SELECT sql FROM sqlite_master WHERE type = \'table\' AND lower(name) = lower(?)';
 const EMPTY_STR = '';
+const UNBOUND_PARAMETER_ERROR_CODE = 'SYNTAX_ERROR';
+const UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
+const UNKNOWN_PARAMETER_LABEL = '?';
+
+function throwUnboundResidualParameter(node) {
+  const index = Number.isInteger(node?.__fanoutParamIndex) ?
+    node.__fanoutParamIndex : node?.index;
+  const label = Number.isInteger(index) ? String(index) : UNKNOWN_PARAMETER_LABEL;
+  const error = new Error(`${UNBOUND_PARAMETER_PREFIX}${label}`);
+  error.code = UNBOUND_PARAMETER_ERROR_CODE;
+  error.errorCode = UNBOUND_PARAMETER_ERROR_CODE;
+  throw error;
+}
 
 function isNullValue(value) {
   return value === null || value === undefined;
@@ -467,6 +460,8 @@ function evaluateResidualValue(node, row) {
   switch (node?.type) {
   case EXPR_TYPE.LITERAL:
     return node.value ?? null;
+  case EXPR_TYPE.PARAMETER:
+    return throwUnboundResidualParameter(node);
   case EXPR_TYPE.COLUMN_REF: {
     const value = row[node.column];
     return value === undefined ? null : value;
@@ -505,6 +500,8 @@ function evaluateResidualPredicate(node, row) {
     return evaluateLike(node, row);
   case EXPR_TYPE.LITERAL:
     return isNullValue(node.value) ? UNKNOWN : Boolean(node.value);
+  case EXPR_TYPE.PARAMETER:
+    return throwUnboundResidualParameter(node);
   default:
     return UNKNOWN;
   }
@@ -629,13 +626,14 @@ function buildColumnAffinityMapFromColumns(columns) {
 
 function hasUnannotatedColumnRefs(node) {
   if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(hasUnannotatedColumnRefs);
   if ((node.type === EXPR_TYPE.COLUMN_REF || node.type === EXPR_TYPE.COLUMN) &&
       typeof node.affinity !== 'string') {
     return true;
   }
-  return (Array.isArray(node.values) && node.values.some(hasUnannotatedColumnRefs)) ||
-    [node.left, node.right, node.operand, node.expression, node.low, node.high]
-      .some(hasUnannotatedColumnRefs);
+  return Object.values(node).some(
+    (child) => child && typeof child === 'object' && hasUnannotatedColumnRefs(child),
+  );
 }
 
 function resolveUnqualifiedColumnAffinity(colKey, affinitiesByTable) {
@@ -660,17 +658,22 @@ function resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef) 
 
 function annotateExpressionColumnAffinities(node, affinitiesByTable, defaultTableRef = null) {
   if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) {
+      annotateExpressionColumnAffinities(entry, affinitiesByTable, defaultTableRef);
+    }
+    return;
+  }
   if ((node.type === EXPR_TYPE.COLUMN_REF || node.type === EXPR_TYPE.COLUMN) &&
       typeof node.affinity !== 'string') {
     const resolved = resolveColumnAffinityFromMap(node, affinitiesByTable, defaultTableRef);
     if (resolved !== null) node.affinity = resolved;
     return;
   }
-  for (const entry of node.values || []) {
-    annotateExpressionColumnAffinities(entry, affinitiesByTable, defaultTableRef);
-  }
-  for (const child of [node.left, node.right, node.operand, node.expression, node.low, node.high]) {
-    annotateExpressionColumnAffinities(child, affinitiesByTable, defaultTableRef);
+  for (const child of Object.values(node)) {
+    if (child && typeof child === 'object') {
+      annotateExpressionColumnAffinities(child, affinitiesByTable, defaultTableRef);
+    }
   }
 }
 

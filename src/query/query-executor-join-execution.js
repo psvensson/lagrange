@@ -203,6 +203,8 @@ const queryExecutorJoinExecutionMethods = {
       ],
       ast,
       this,
+      null,
+      params,
     );
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
     const allPartitions = [...mainPartitionIds];
@@ -369,7 +371,13 @@ const queryExecutorJoinExecutionMethods = {
    * @private
    */
   applyResidualJoinWhere(rows, residualConjuncts) {
-    if (residualConjuncts.length === 0 || rows.length === 0) {
+    if (residualConjuncts.length === 0) {
+      return rows;
+    }
+    if (rows.length === 0) {
+      for (const conjunct of residualConjuncts) {
+        residualPredicateAdmitsRow(conjunct, {});
+      }
       return rows;
     }
     const resolved = residualConjuncts.map((conjunct) =>

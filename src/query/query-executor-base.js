@@ -368,6 +368,7 @@ class QueryExecutorBase {
    * @return {Promise<Object>} Query result.
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
+    this.assertQueryParametersBound(ast, params);
     if (partitionIds.length === 0) {
       return {
         success: true,
@@ -525,6 +526,7 @@ class QueryExecutorBase {
       ast,
       this,
       fanoutPlan,
+      params,
     );
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
     try {

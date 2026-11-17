@@ -20,6 +20,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   FANOUT_PLAN_KIND,
   buildSelectFanoutPlan,
+  substituteParameterLiterals,
 } from '../../src/query/distributed/distributed-select-fanout-plan.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
@@ -425,4 +426,238 @@ test('partition SQL carries partials, not the bare aggregate', async (t) => {
   const sql = deliveredSql[deliveredSql.length - 1].sql;
   t.match(sql, /SUM\(amount\)/, 'AVG ships as SUM partial');
   t.match(sql, /COUNT\(amount\)/, 'AVG ships as COUNT partial');
+});
+
+test('substituteParameterLiterals and partial-aggregate HAVING handle root ' +
+  'parameters, IN-list arrays, nested arrays, CASE, and function arguments',
+async (t) => {
+  const {executor, partitionIds} = standardCluster();
+
+  // Direct AST rewrite checks for root node, array entries, and nested arrays
+  t.same(
+    substituteParameterLiterals({type: 'parameter', index: 0}, [1]),
+    {type: 'literal', value: 1},
+    'root parameter node is replaced with literal',
+  );
+  t.same(
+    substituteParameterLiterals(
+      [
+        {type: 'parameter', index: 0},
+        [{type: 'parameter', index: 1}],
+      ],
+      [10, 20],
+    ),
+    [
+      {type: 'literal', value: 10},
+      [{type: 'literal', value: 20}],
+    ],
+    'array and nested-array parameter entries are replaced recursively',
+  );
+
+  // 1. HAVING 1 and HAVING ? ([1] vs [0])
+  t.same(
+    await select(executor, 'SELECT COUNT(*) AS cnt FROM t HAVING 1', partitionIds),
+    [{cnt: 10}],
+    'HAVING 1 keeps the global aggregate row',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING ?',
+      partitionIds,
+      [1],
+    ),
+    [{cnt: 10}],
+    'HAVING ? with [1] rewrites root parameter node and keeps the row',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING ?',
+      partitionIds,
+      [0],
+    ),
+    [],
+    'HAVING ? with [0] filters out the row',
+  );
+
+  // 2. HAVING id IN (1, 2) and HAVING id IN (?, ?) ([1, 2])
+  t.same(
+    await select(
+      executor,
+      'SELECT id, COUNT(*) AS cnt FROM t GROUP BY id ' +
+        'HAVING id IN (1, 2) ORDER BY id',
+      partitionIds,
+    ),
+    [
+      {id: 1, cnt: 1},
+      {id: 2, cnt: 1},
+    ],
+    'HAVING id IN (1, 2) keeps matching groups',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT id, COUNT(*) AS cnt FROM t GROUP BY id ' +
+        'HAVING id IN (?, ?) ORDER BY id',
+      partitionIds,
+      [1, 2],
+    ),
+    [
+      {id: 1, cnt: 1},
+      {id: 2, cnt: 1},
+    ],
+    'HAVING id IN (?, ?) with [1, 2] rewrites array parameter nodes and keeps 2 groups',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t GROUP BY id HAVING id IN (?, ?)',
+      partitionIds,
+      [1, 2],
+    ),
+    [{cnt: 1}, {cnt: 1}],
+    'HAVING id IN (?, ?) works even when id is not projected in SELECT',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING id IN (1, 2)',
+      partitionIds,
+    ),
+    [{cnt: 10}],
+    'un-grouped HAVING id IN (1, 2) ships bare id partial and keeps global count',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING id IN (?, ?)',
+      partitionIds,
+      [1, 2],
+    ),
+    [{cnt: 10}],
+    'un-grouped HAVING id IN (?, ?) with [1, 2] matches literal HAVING id IN (1, 2)',
+  );
+
+  // 3. CASE parameter positions (searched CASE, simple CASE, and SELECT CASE)
+  t.same(
+    await select(
+      executor,
+      'SELECT dept, SUM(amount) AS total FROM t GROUP BY dept ' +
+        'HAVING CASE WHEN SUM(amount) > ? THEN ? ELSE ? END = ? ORDER BY dept',
+      partitionIds,
+      [28, 1, 0, 1],
+    ),
+    [{dept: 'a', total: 30}],
+    'searched CASE with parameters in HAVING filters combined aggregates',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT dept, SUM(amount) AS total FROM t GROUP BY dept ' +
+        'HAVING CASE dept WHEN ? THEN ? ELSE ? END = ? ORDER BY dept',
+      partitionIds,
+      ['b', 7, 0, 7],
+    ),
+    [{dept: 'b', total: 25}],
+    'simple CASE with operand and branch parameters in HAVING',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT dept, CASE WHEN SUM(amount) > ? THEN ? ELSE ? END AS tier ' +
+        'FROM t GROUP BY dept ORDER BY dept',
+      partitionIds,
+      [28, 'high', 'low'],
+    ),
+    [
+      {dept: 'a', tier: 'high'},
+      {dept: 'b', tier: 'low'},
+    ],
+    'SELECT expression column with CASE and parameters evaluates over combined aggregate',
+  );
+
+  // 4. Function-arg parameter positions in HAVING and SELECT
+  t.same(
+    await select(
+      executor,
+      'SELECT dept, SUM(amount) AS total FROM t GROUP BY dept ' +
+        'HAVING COALESCE(SUM(amount), ?) > ? AND LOWER(dept) = LOWER(?)',
+      partitionIds,
+      [0, 20, 'B'],
+    ),
+    [{dept: 'b', total: 25}],
+    'function arguments with parameters in HAVING evaluate correctly',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COALESCE(SUM(amount), ?) + ? AS adjusted FROM t WHERE amount > ?',
+      partitionIds,
+      [0, 5, 100],
+    ),
+    [{adjusted: 5}],
+    'WHERE param + SELECT COALESCE(SUM(amount), ?) + ? over empty filtered set',
+  );
+});
+
+test('bound SQL NULL parameter vs unbound parameter placeholder in ' +
+  'distributed SELECT', async (t) => {
+  const {executor, partitionIds} = standardCluster();
+
+  // Bound SQL NULL parameter is legal and distinct from unbound placeholder
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING ?',
+      partitionIds,
+      [null],
+    ),
+    [],
+    'bound SQL NULL in HAVING ? filters out the row without throwing',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT COUNT(*) AS cnt FROM t HAVING ? IS NULL',
+      partitionIds,
+      [null],
+    ),
+    [{cnt: 10}],
+    'bound SQL NULL in HAVING ? IS NULL evaluates to true',
+  );
+  t.same(
+    await select(
+      executor,
+      'SELECT SUM(amount) + ? AS total FROM t',
+      partitionIds,
+      [null],
+    ),
+    [{total: null}],
+    'bound SQL NULL in SELECT aggregate expression yields null',
+  );
+
+  // Unbound / missing parameter placeholders must throw SYNTAX_ERROR
+  for (const [sql, params, expectedIndex] of [
+    ['SELECT COUNT(*) AS cnt FROM t HAVING ?', [], 0],
+    ['SELECT COUNT(*) AS cnt FROM t HAVING ?', [undefined], 0],
+    ['SELECT id, COUNT(*) AS cnt FROM t GROUP BY id HAVING id IN (?, ?)', [1], 1],
+    [
+      'SELECT dept, COUNT(*) AS cnt FROM t WHERE amount > ? ' +
+        'GROUP BY dept HAVING COUNT(*) > ?',
+      [2],
+      1,
+    ],
+    ['SELECT SUM(amount) + ? AS total FROM t', [], 0],
+  ]) {
+    const ast = new SQLParser(sql).parse();
+    await t.rejects(
+      executor.executeSelect(ast, partitionIds, params),
+      {
+        code: 'SYNTAX_ERROR',
+        message: new RegExp(`Unbound parameter index: ${expectedIndex}`, 'u'),
+      },
+      `unbound parameter at index ${expectedIndex} rejects for: ${sql}`,
+    );
+  }
 });

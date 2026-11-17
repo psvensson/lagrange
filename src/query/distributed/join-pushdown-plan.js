@@ -623,40 +623,34 @@ function canonicalizeQualifiers(conjunct, index) {
 
 /**
  * Replace parameter placeholders inside a residual clone with literal
- * nodes carrying the bound value (the partition SQL consumed only its
- * own parameters).
- * @param {Object} node - Residual conjunct clone (mutated in place).
+ * nodes carrying the bound value (root, object properties, and arrays).
+ * @param {*} node - Residual conjunct clone (mutated in place).
  * @param {Array} params - Original positional parameters.
+ * @return {*} Rewritten residual node.
  */
 function substituteResidualParameterLiterals(node, params) {
   if (!node || typeof node !== 'object') {
-    return;
+    return node;
+  }
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      node[index] = substituteResidualParameterLiterals(node[index], params);
+    }
+    return node;
+  }
+  if (node.type === EXPR_TYPE.PARAMETER) {
+    const ordinal = node.index;
+    const isBound = Array.isArray(params) && Number.isInteger(ordinal) &&
+      ordinal >= 0 && ordinal < params.length && params[ordinal] !== undefined;
+    return isBound ?
+      {type: EXPR_TYPE.LITERAL, value: params[ordinal]} : node;
   }
   for (const [key, value] of Object.entries(node)) {
-    if (Array.isArray(value)) {
-      value.forEach((entry, entryIndex) => {
-        if (entry?.type === EXPR_TYPE.PARAMETER) {
-          value[entryIndex] = {
-            type: EXPR_TYPE.LITERAL,
-            value: params[entry.index],
-          };
-        } else {
-          substituteResidualParameterLiterals(entry, params);
-        }
-      });
-      continue;
-    }
     if (value && typeof value === 'object') {
-      if (value.type === EXPR_TYPE.PARAMETER) {
-        node[key] = {
-          type: EXPR_TYPE.LITERAL,
-          value: params[value.index],
-        };
-        continue;
-      }
-      substituteResidualParameterLiterals(value, params);
+      node[key] = substituteResidualParameterLiterals(value, params);
     }
   }
+  return node;
 }
 
 /**
@@ -669,8 +663,7 @@ function substituteResidualParameterLiterals(node, params) {
  */
 function prepareResidualConjunct(conjunct, params, index) {
   const clone = canonicalizeQualifiers(conjunct, index);
-  substituteResidualParameterLiterals(clone, params);
-  return clone;
+  return substituteResidualParameterLiterals(clone, params);
 }
 
 /**

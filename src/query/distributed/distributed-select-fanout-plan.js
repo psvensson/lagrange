@@ -78,20 +78,19 @@ const COMBINE_MODE_BY_FUNCTION = {
  * the expression.
  */
 const COMBINED_AGGREGATE_MARKER = 'combined_aggregate_marker';
-
-/**
- * Expression node types the coordinator-side scalar evaluator supports.
- * A SELECT expression containing any other node type (CASE, CAST,
- * function calls, subqueries, ...) forces the whole plan back to legacy
- * RAW_ROWS behavior instead of producing silently-wrong values.
- */
+const BARE_HAVING_KEY_TAG = 'h';
+const EXTENDED_EXPR_TYPE = Object.freeze({
+  CASE: 'case', CAST: 'cast', FUNCTION_CALL: 'function_call', FUNCTION: 'function',
+});
+const EVALUABLE_SCALAR_FUNCTIONS = new Set([
+  'COALESCE', 'IFNULL', 'NULLIF', 'IIF', 'ABS',
+  'LOWER', 'UPPER', 'TRIM', 'LENGTH', 'SUBSTR', 'SUBSTRING', 'ROUND',
+]);
 const EVALUABLE_EXPRESSION_TYPES = new Set([
-  EXPR_TYPE.BINARY,
-  EXPR_TYPE.UNARY,
-  EXPR_TYPE.LITERAL,
-  EXPR_TYPE.COLUMN_REF,
-  EXPR_TYPE.PARAMETER,
-  EXPR_TYPE.AGGREGATE,
+  EXPR_TYPE.BINARY, EXPR_TYPE.UNARY, EXPR_TYPE.LITERAL, EXPR_TYPE.COLUMN_REF,
+  EXPR_TYPE.PARAMETER, EXPR_TYPE.AGGREGATE, EXPR_TYPE.IN,
+  EXTENDED_EXPR_TYPE.CASE, EXTENDED_EXPR_TYPE.CAST,
+  EXTENDED_EXPR_TYPE.FUNCTION_CALL, EXTENDED_EXPR_TYPE.FUNCTION,
 ]);
 
 /**
@@ -236,6 +235,7 @@ function collectAggregateSpecs(ast) {
     }
   }
   walkAggregates(ast.having, (expr) => register(expr, null));
+  walkAggregates(ast.orderBy, (expr) => register(expr, null));
   return specs;
 }
 
@@ -250,32 +250,29 @@ function containsAggregate(node) {
 /**
  * Replace every aggregate node inside an expression clone with a
  * combined-aggregate marker pointing at its registered spec.
- * @param {Object} node - Expression AST clone (mutated in place).
+ * @param {*} node - Expression AST clone (mutated in place).
  * @param {Map} specByShape - Canonical shape -> aggregate spec.
+ * @return {*} Rewritten expression node.
  */
 function replaceAggregatesWithMarkers(node, specByShape) {
   if (!node || typeof node !== 'object') {
-    return;
+    return node;
+  }
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      node[index] = replaceAggregatesWithMarkers(node[index], specByShape);
+    }
+    return node;
+  }
+  if (node.type === EXPR_TYPE.AGGREGATE) {
+    return buildAggregateMarker(node, specByShape);
   }
   for (const [key, value] of Object.entries(node)) {
-    if (Array.isArray(value)) {
-      value.forEach((entry, index) => {
-        if (entry?.type === EXPR_TYPE.AGGREGATE) {
-          value[index] = buildAggregateMarker(entry, specByShape);
-        } else {
-          replaceAggregatesWithMarkers(entry, specByShape);
-        }
-      });
-      continue;
-    }
     if (value && typeof value === 'object') {
-      if (value.type === EXPR_TYPE.AGGREGATE) {
-        node[key] = buildAggregateMarker(value, specByShape);
-        continue;
-      }
-      replaceAggregatesWithMarkers(value, specByShape);
+      node[key] = replaceAggregatesWithMarkers(value, specByShape);
     }
   }
+  return node;
 }
 
 function buildAggregateMarker(aggregateNode, specByShape) {
@@ -284,8 +281,7 @@ function buildAggregateMarker(aggregateNode, specByShape) {
 }
 
 /**
- * Visit column refs that sit outside any aggregate (aggregates are
- * already replaced by markers when this runs).
+ * Visit column refs that sit outside any aggregate.
  * @param {Object} node - Expression AST.
  * @param {Function} visit - Called with each column_ref node.
  */
@@ -297,7 +293,10 @@ function collectOutsideColumnRefs(node, visit) {
     visit(node);
     return;
   }
-  if (node.type === COMBINED_AGGREGATE_MARKER) {
+  if (
+    node.type === COMBINED_AGGREGATE_MARKER ||
+    node.type === EXPR_TYPE.AGGREGATE
+  ) {
     return;
   }
   for (const value of Object.values(node)) {
@@ -319,12 +318,20 @@ function expressionEvaluable(node) {
   if (!node || typeof node !== 'object') {
     return true;
   }
+  if (Array.isArray(node)) {
+    return node.every((entry) => expressionEvaluable(entry));
+  }
   if (node.type === EXPR_TYPE.AGGREGATE) {
-    // The aggregate itself is replaced by its combined value; its
-    // argument runs partition-side inside the partial.
     return true;
   }
   if (node.type && !EVALUABLE_EXPRESSION_TYPES.has(node.type)) {
+    return false;
+  }
+  if (
+    (node.type === EXTENDED_EXPR_TYPE.FUNCTION_CALL ||
+      node.type === EXTENDED_EXPR_TYPE.FUNCTION) &&
+    !EVALUABLE_SCALAR_FUNCTIONS.has(String(node.name || '').toUpperCase())
+  ) {
     return false;
   }
   if (node.type === EXPR_TYPE.BINARY &&
@@ -336,14 +343,8 @@ function expressionEvaluable(node) {
     return false;
   }
   for (const value of Object.values(node)) {
-    if (Array.isArray(value)) {
-      if (!value.every((entry) => expressionEvaluable(entry))) {
-        return false;
-      }
-    } else if (value && typeof value === 'object') {
-      if (!expressionEvaluable(value)) {
-        return false;
-      }
+    if (value && typeof value === 'object' && !expressionEvaluable(value)) {
+      return false;
     }
   }
   return true;
@@ -410,16 +411,7 @@ function hasAggregatesOrGroupBy(ast, specs) {
   return specs.length > 0 || Boolean(ast.groupBy);
 }
 
-/**
- * Tag every parameter node with its ordinal in the original render order
- * (columns, where, groupBy, having, orderBy — the clause order
- * buildSelectSQL emits placeholders in for rewrite-eligible shapes).
- * @param {Object} ast - SELECT AST (mutated: parameter nodes get
- *   `__fanoutParamIndex`).
- * @return {number} Total parameter count.
- */
-function tagParameterOrdinals(ast) {
-  let ordinal = 0;
+function walkSelectClauseParameters(ast, onParameter) {
   const visit = (node) => {
     if (!node || typeof node !== 'object') {
       return;
@@ -429,52 +421,38 @@ function tagParameterOrdinals(ast) {
       return;
     }
     if (node.type === EXPR_TYPE.PARAMETER) {
-      node.__fanoutParamIndex = ordinal;
-      ordinal += 1;
+      onParameter(node);
       return;
     }
     for (const value of Object.values(node)) {
       visit(value);
     }
   };
-  visit(ast.columns);
-  visit(ast.where);
-  visit(ast.groupBy);
-  visit(ast.having);
-  visit(ast.orderBy);
+  for (const clause of [
+    ast.columns,
+    ast.where,
+    ast.groupBy,
+    ast.having,
+    ast.orderBy,
+  ]) {
+    visit(clause);
+  }
+}
+
+function tagParameterOrdinals(ast) {
+  let ordinal = 0;
+  walkSelectClauseParameters(ast, (node) => {
+    node.__fanoutParamIndex = ordinal;
+    ordinal += 1;
+  });
   return ordinal;
 }
 
-/**
- * Collect the original ordinals of every parameter node reachable from
- * the (rewritten) partition AST, in partition render order, so the
- * partition params array can be assembled from the original one.
- * @param {Object} partitionAst - Rewritten AST.
- * @return {number[]} Original parameter ordinals in partition order.
- */
 function collectPartitionParamOrdinals(partitionAst) {
   const ordinals = [];
-  const visit = (node) => {
-    if (!node || typeof node !== 'object') {
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (node.type === EXPR_TYPE.PARAMETER) {
-      ordinals.push(node.__fanoutParamIndex);
-      return;
-    }
-    for (const value of Object.values(node)) {
-      visit(value);
-    }
-  };
-  visit(partitionAst.columns);
-  visit(partitionAst.where);
-  visit(partitionAst.groupBy);
-  visit(partitionAst.having);
-  visit(partitionAst.orderBy);
+  walkSelectClauseParameters(partitionAst, (node) => {
+    ordinals.push(node.__fanoutParamIndex);
+  });
   return ordinals;
 }
 
@@ -482,40 +460,48 @@ function cloneAst(node) {
   return structuredClone(node);
 }
 
-/**
- * Replace parameter nodes inside a coordinator-side clause with literal
- * nodes carrying the bound value, so HAVING can be evaluated at the
- * coordinator after the partition SQL (which no longer contains those
- * placeholders) consumed only its own parameters.
- * @param {Object} node - Clause AST (mutated in place).
- * @param {Array} params - Original positional parameters.
- */
-function substituteParameterLiterals(node, params) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-  for (const [key, value] of Object.entries(node)) {
-    if (Array.isArray(value)) {
-      value.forEach((entry) => substituteParameterLiterals(entry, params));
-      continue;
-    }
-    if (value && typeof value === 'object') {
-      if (value.type === EXPR_TYPE.PARAMETER) {
-        node[key] = {
-          type: EXPR_TYPE.LITERAL,
-          value: params[value.__fanoutParamIndex],
-        };
-        continue;
-      }
-      substituteParameterLiterals(value, params);
-    }
-  }
+function resolveParameterNodeOrdinal(node) {
+  return Number.isInteger(node?.__fanoutParamIndex) ?
+    node.__fanoutParamIndex : node?.index;
+}
+
+function hasBoundParameterAt(params, ordinal) {
+  return Array.isArray(params) && Number.isInteger(ordinal) &&
+    ordinal >= 0 && ordinal < params.length && params[ordinal] !== undefined;
 }
 
 /**
- * Build the partition-side over-fetch limit for raw-row fan-out: OFFSET
- * must be applied exactly once globally, so each partition returns its
- * first (count + offset) rows and the coordinator slices.
+ * Replace parameter nodes inside a coordinator-side clause with literal
+ * nodes carrying the bound value (root, object properties, and arrays).
+ * @param {*} node - Clause AST node or array (mutated in place).
+ * @param {Array} params - Original positional parameters.
+ * @return {*} Rewritten AST node.
+ */
+function substituteParameterLiterals(node, params) {
+  if (!node || typeof node !== 'object') {
+    return node;
+  }
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      node[index] = substituteParameterLiterals(node[index], params);
+    }
+    return node;
+  }
+  if (node.type === EXPR_TYPE.PARAMETER) {
+    const ordinal = resolveParameterNodeOrdinal(node);
+    return hasBoundParameterAt(params, ordinal) ?
+      {type: EXPR_TYPE.LITERAL, value: params[ordinal]} : node;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (value && typeof value === 'object') {
+      node[key] = substituteParameterLiterals(value, params);
+    }
+  }
+  return node;
+}
+
+/**
+ * Build the partition-side over-fetch limit for raw-row fan-out.
  * @param {Object} limit - Original limit AST ({count, offset}).
  * @return {Object} Rewritten limit AST.
  */
@@ -546,7 +532,9 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
   groupByEntries.forEach((groupExpr, index) => {
     const alias = `${PARTIAL_ALIAS.GROUP_KEY_PREFIX}${index}`;
     const shape = canonicalExpressionKey(groupExpr);
-    const key = {alias, shape, outputKeys: []};
+    const columnName = groupExpr.type === EXPR_TYPE.COLUMN_REF ?
+      groupExpr.column : null;
+    const key = {alias, shape, outputKeys: [], columnName};
     groupKeyByShape.set(shape, key);
     groupKeys.push(key);
     columns.push({expression: cloneAst(groupExpr), alias});
@@ -599,8 +587,10 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
       // Combined-aggregate expression: replace each aggregate node with
       // a marker resolving to the globally-combined value, and project
       // any raw columns it references as bare partials.
-      const markerExpr = cloneAst(expr);
-      replaceAggregatesWithMarkers(markerExpr, specByShape);
+      const markerExpr = replaceAggregatesWithMarkers(
+        cloneAst(expr),
+        specByShape,
+      );
       collectOutsideColumnRefs(markerExpr, (refExpr) =>
         ensureBareColumn(refExpr, refExpr.column, index, false),
       );
@@ -608,6 +598,11 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
       return;
     }
     ensureBareColumn(expr, outputKey, index, true);
+  });
+  collectOutsideColumnRefs(ast.having, (refExpr) => {
+    if (!groupKeyByShape.has(canonicalExpressionKey(refExpr))) {
+      ensureBareColumn(refExpr, refExpr.column, BARE_HAVING_KEY_TAG, false);
+    }
   });
 
   const distinctArgShapes = new Map();
@@ -756,9 +751,12 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
     specs,
     renderExpr,
   );
-  substituteParameterLiterals(combineSpec.having, params);
+  combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
   for (const expressionColumn of combineSpec.expressionColumns) {
-    substituteParameterLiterals(expressionColumn, params);
+    expressionColumn.expression = substituteParameterLiterals(
+      expressionColumn.expression,
+      params,
+    );
   }
   const ordinals = collectPartitionParamOrdinals(partitionAst);
   return {
@@ -773,8 +771,12 @@ export {
   FANOUT_PLAN_KIND,
   AGGREGATE_COMBINE_MODE,
   COMBINED_AGGREGATE_MARKER,
+  EXTENDED_EXPR_TYPE,
   PARTIAL_ALIAS,
   SCALAR_BINARY_OPS,
   SCALAR_UNARY_OPS,
   buildSelectFanoutPlan,
+  hasBoundParameterAt,
+  resolveParameterNodeOrdinal,
+  substituteParameterLiterals,
 };

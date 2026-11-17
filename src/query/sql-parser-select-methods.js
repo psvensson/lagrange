@@ -101,19 +101,27 @@ const sqlParserSelectMethods = {
       arraySome(ast.with, (c) => !!c.recursive) :
       false;
 
+    const columns = this.convertColumns(ast.columns);
+    const from = this.convertFrom(ast.from);
+    const joins = this.convertJoins(ast.from);
+    const where = ast.where ? this.convertExpression(ast.where) : null;
+    const groupBy = ast.groupby ? this.convertGroupBy(ast.groupby) : null;
+    const having = ast.having ? this.convertExpression(ast.having) : null;
+    const orderBy = ast.orderby ? this.convertOrderBy(ast.orderby) : null;
+    const limit = ast.limit ? this.convertLimit(ast.limit) : null;
     const setOperation = this.convertSetOperation(ast);
 
     return {
       type: AST_TYPE.SELECT,
       distinct,
-      columns: this.convertColumns(ast.columns),
-      from: this.convertFrom(ast.from),
-      joins: this.convertJoins(ast.from),
-      where: ast.where ? this.convertExpression(ast.where) : null,
-      groupBy: ast.groupby ? this.convertGroupBy(ast.groupby) : null,
-      having: ast.having ? this.convertExpression(ast.having) : null,
-      orderBy: ast.orderby ? this.convertOrderBy(ast.orderby) : null,
-      limit: ast.limit ? this.convertLimit(ast.limit) : null,
+      columns,
+      from,
+      joins,
+      where,
+      groupBy,
+      having,
+      orderBy,
+      limit,
       ctes,
       recursive,
       setOperation,

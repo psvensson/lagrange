@@ -27,9 +27,16 @@ class DistributedMergeEngine {
    * @param {Object} queryExecutor - QueryExecutor instance.
    * @param {Object} [fanoutPlan] - Fan-out plan from
    *   buildSelectFanoutPlan; absent for raw coordinator-side row sets.
+   * @param {Array} [params] - Bound query parameters.
    * @return {Object} Aggregated result.
    */
-  mergePartitionResults(partitionResults, ast, queryExecutor, fanoutPlan) {
+  mergePartitionResults(
+    partitionResults,
+    ast,
+    queryExecutor,
+    fanoutPlan,
+    params,
+  ) {
     const aggregator = this.streamingAggregatorFactory();
     for (const partitionResult of partitionResults) {
       if (partitionResult.success && Array.isArray(partitionResult.rows)) {
@@ -37,18 +44,23 @@ class DistributedMergeEngine {
       }
     }
     const mergedRows = aggregator.getAllRows();
+    const effectiveParams = Array.isArray(params) ?
+      params :
+      fanoutPlan?.partitionParams;
     if (fanoutPlan?.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
       return {
         rows: combinePartialAggregateRows(
           mergedRows,
           fanoutPlan.combineSpec,
           queryExecutor,
+          effectiveParams,
         ),
       };
     }
     return queryExecutor.aggregateSelectResults(
       [{success: true, rows: mergedRows}],
       ast,
+      effectiveParams,
     );
   }
 
@@ -57,10 +69,17 @@ class DistributedMergeEngine {
    * @param {Object[]} partitionResults - Partition execution results.
    * @param {Object} ast - SELECT AST with set operation.
    * @param {Object} queryExecutor - QueryExecutor instance.
+   * @param {Array} [params] - Bound query parameters.
    * @return {Object} Aggregated result.
    */
-  mergeSetOperationResults(partitionResults, ast, queryExecutor) {
-    return this.mergePartitionResults(partitionResults, ast, queryExecutor);
+  mergeSetOperationResults(partitionResults, ast, queryExecutor, params) {
+    return this.mergePartitionResults(
+      partitionResults,
+      ast,
+      queryExecutor,
+      null,
+      params,
+    );
   }
 }
 
