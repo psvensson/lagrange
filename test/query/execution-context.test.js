@@ -32,7 +32,8 @@ import {
   BUDGET_CATEGORY,
 } from '../../src/query/budget-limit-error.js';
 import {
-  QB_FIELD,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 import {
 } from '../../src/query/guardrail-constants.js';
@@ -53,13 +54,15 @@ import {
  * @return {ExecutionContext}
  */
 function createCtx(overrides = {}) {
+  const budgets = overrides.budgets ?? normalizeQueryBudget();
   return new ExecutionContext({
     session: overrides.session ?? 'test-session',
     snapshot: overrides.snapshot ?? {
       mode: SNAPSHOT_MODE.READ_COMMITTED,
     },
+    budgets,
     budgetEnforcer: overrides.budgetEnforcer ??
-      new BudgetEnforcer(),
+      new BudgetEnforcer(budgets),
     cancellationToken: overrides.cancellationToken ??
       new CancellationToken(),
     lineageTracker: overrides.lineageTracker ??
@@ -89,8 +92,22 @@ describe('ExecutionContext', () => {
       });
     });
 
+    it('should refuse a budget that is not normalized', () => {
+      for (const budgets of [
+        {},
+        {LOOKUP_MAX_KEYS: 1},
+        Object.freeze({...normalizeQueryBudget(), lookupMaxKeys: 1}),
+      ]) {
+        assert.throws(
+          () => createCtx({budgets}),
+          (err) => err.message ===
+            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED,
+        );
+      }
+    });
+
     it('should expose budget enforcer', () => {
-      const enforcer = new BudgetEnforcer();
+      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
       const ctx = createCtx({budgetEnforcer: enforcer});
       assert.equal(ctx.getBudgetEnforcer(), enforcer);
     });
@@ -405,6 +422,28 @@ describe('ExecutionContext', () => {
       assert.deepEqual(capturedParams, [1]);
     });
 
+    it('ctx.lookup and ctx.broadcast enforce the context budget', async () => {
+      const ctx = createCtx({
+        budgets: normalizeQueryBudget({
+          LOOKUP_MAX_KEYS: 1,
+          BROADCAST_MAX_PAYLOAD_BYTES: 16,
+        }),
+        queryExecutor: async () => ({rows: []}),
+      });
+      await assert.rejects(
+        () => ctx.lookup('users', [
+          {column: 'id', value: 1},
+          {column: 'id', value: 2},
+        ]),
+        (err) => err.message === PRIMITIVE_ERROR_MSG.LOOKUP_MAX_KEYS_EXCEEDED,
+      );
+      await assert.rejects(
+        () => ctx.broadcast('shared', {version: 1, data: 'x'.repeat(32)}),
+        (err) =>
+          err.message === PRIMITIVE_ERROR_MSG.BROADCAST_MAX_PAYLOAD_EXCEEDED,
+      );
+    });
+
     it('ctx.lookup validates key input through lookup primitive', async () => {
       const ctx = createCtx();
       await assert.rejects(
@@ -443,9 +482,9 @@ describe('ExecutionContext', () => {
   describe('ctx.out budget enforcement', () => {
     it('should throw BudgetLimitError when out bytes ' +
       'budget exceeded', async () => {
-      const enforcer = new BudgetEnforcer({
-        [QB_FIELD.OUT_MAX_BYTES]: 10,
-      });
+      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+        OUT_MAX_BYTES: 10,
+      }));
       const ctx = createCtx({budgetEnforcer: enforcer});
       await assert.rejects(
         () => ctx.out({data: 'this is a long value'}),
@@ -461,13 +500,13 @@ describe('ExecutionContext', () => {
 
     it('should throw BudgetLimitError when result stream ' +
       'row limit exceeded', async () => {
-      const stream = new ResultStream({
+      const stream = new ResultStream(normalizeQueryBudget({
         RESULT_MAX_ROWS: 2,
         RESULT_MAX_BYTES: 1048576,
-      });
-      const enforcer = new BudgetEnforcer({
-        [QB_FIELD.OUT_MAX_BYTES]: 1048576,
-      });
+      }));
+      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+        OUT_MAX_BYTES: 1048576,
+      }));
       const ctx = createCtx({
         budgetEnforcer: enforcer,
         resultStream: stream,
@@ -482,7 +521,7 @@ describe('ExecutionContext', () => {
 
     it('should track out bytes in budget enforcer',
       async () => {
-        const enforcer = new BudgetEnforcer();
+        const enforcer = new BudgetEnforcer(normalizeQueryBudget());
         const ctx = createCtx({budgetEnforcer: enforcer});
         await ctx.out({id: 1});
         const usage = enforcer.getUsage();
@@ -490,9 +529,9 @@ describe('ExecutionContext', () => {
       });
 
     it('should succeed within budget', async () => {
-      const enforcer = new BudgetEnforcer({
-        [QB_FIELD.OUT_MAX_BYTES]: 1048576,
-      });
+      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+        OUT_MAX_BYTES: 1048576,
+      }));
       const ctx = createCtx({budgetEnforcer: enforcer});
       await ctx.out('hello');
       await ctx.out('world');
@@ -504,9 +543,9 @@ describe('ExecutionContext', () => {
 
     it('should terminate enforcer on out bytes exceed',
       async () => {
-        const enforcer = new BudgetEnforcer({
-          [QB_FIELD.OUT_MAX_BYTES]: 5,
-        });
+        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+          OUT_MAX_BYTES: 5,
+        }));
         const ctx = createCtx({budgetEnforcer: enforcer});
         await assert.rejects(
           () => ctx.out({large: 'payload-data'}),
@@ -606,9 +645,9 @@ describe('ExecutionContext', () => {
 
     it('should track budget exceeded from enforcer',
       async () => {
-        const enforcer = new BudgetEnforcer({
-          [QB_FIELD.OUT_MAX_BYTES]: 5,
-        });
+        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+          OUT_MAX_BYTES: 5,
+        }));
         const ctx = createCtx({budgetEnforcer: enforcer});
         await assert.rejects(
           () => ctx.out({large: 'payload-data'}),
@@ -625,13 +664,13 @@ describe('ExecutionContext', () => {
 
     it('should track budget exceeded from stream limit',
       async () => {
-        const stream = new ResultStream({
+        const stream = new ResultStream(normalizeQueryBudget({
           RESULT_MAX_ROWS: 1,
           RESULT_MAX_BYTES: 1048576,
-        });
-        const enforcer = new BudgetEnforcer({
-          [QB_FIELD.OUT_MAX_BYTES]: 1048576,
-        });
+        }));
+        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+          OUT_MAX_BYTES: 1048576,
+        }));
         const ctx = createCtx({
           budgetEnforcer: enforcer,
           resultStream: stream,
@@ -706,7 +745,7 @@ describe('ExecutionContext', () => {
 
     it('should record emit bytes in budget enforcer',
       async () => {
-        const enforcer = new BudgetEnforcer();
+        const enforcer = new BudgetEnforcer(normalizeQueryBudget());
         const ctx = createCtx({budgetEnforcer: enforcer});
         await ctx.emit('k1', {data: 'payload'});
         const usage = enforcer.getUsage();
@@ -715,9 +754,9 @@ describe('ExecutionContext', () => {
 
     it('should throw BudgetLimitError when emit bytes ' +
       'budget exceeded', async () => {
-      const enforcer = new BudgetEnforcer({
-        [QB_FIELD.EMIT_MAX_BYTES]: 5,
-      });
+      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
+        EMIT_MAX_BYTES: 5,
+      }));
       const ctx = createCtx({budgetEnforcer: enforcer});
       await assert.rejects(
         () => ctx.emit('k', {large: 'payload-data'}),

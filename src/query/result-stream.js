@@ -11,7 +11,7 @@
 
 import {
   QUERY_BUDGET_ERROR_MSG,
-  normalizeQueryBudget,
+  requireNormalizedQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 
 /**
@@ -52,13 +52,14 @@ function estimateRowBytes(row) {
  */
 class ResultStream {
   /**
-   * @param {Object} [budgets] - Budget overrides. Falls back
-   *   to DEFAULT_QUERY_BUDGET for missing fields.
+   * @param {Readonly<Object>} budgets - The query's budget, as produced by
+   *   normalizeQueryBudget.
+   * @throws {Error} When the budget is not a normalized budget.
    */
   constructor(budgets) {
-    const merged = normalizeQueryBudget(budgets);
-    this.maxRows = merged.RESULT_MAX_ROWS;
-    this.maxBytes = merged.RESULT_MAX_BYTES;
+    const limits = requireNormalizedQueryBudget(budgets);
+    this.maxRows = limits.RESULT_MAX_ROWS;
+    this.maxBytes = limits.RESULT_MAX_BYTES;
     this.totalRows = 0;
     this.totalBytes = 0;
     this.rows = [];

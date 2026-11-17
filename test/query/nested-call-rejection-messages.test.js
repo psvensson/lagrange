@@ -32,6 +32,7 @@ import {
   DEFAULT_SNAPSHOT_MODE,
   DIAGNOSTICS_FIELD as DF,
 } from '../../src/query/runtime-constants.js';
+import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Build deps for executeStage with optional diagnostics.
@@ -42,11 +43,12 @@ import {
 function buildDeps(opts = {}) {
   const mockExecutor = async () => ({rows: [{id: 1}]});
   const cancellationToken = new CancellationToken();
-  const budgetEnforcer = new BudgetEnforcer();
+  const budgetEnforcer = new BudgetEnforcer(normalizeQueryBudget());
   const lineageTracker = new LineageTracker('rej-msg-q');
   const executionContext = new ExecutionContext({
     session: 'rej-msg-session',
     snapshot: {mode: DEFAULT_SNAPSHOT_MODE},
+    budgets: normalizeQueryBudget(),
     budgetEnforcer,
     cancellationToken,
     lineageTracker,

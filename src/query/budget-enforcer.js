@@ -8,8 +8,7 @@
  */
 
 import {
-  QB_FIELD,
-  normalizeQueryBudget,
+  requireNormalizedQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 import {
   GUARDRAIL_ERROR_MSG as ERR,
@@ -33,25 +32,25 @@ const LOCAL_STR_TERMINATED = 'terminated';
  */
 class BudgetEnforcer {
   /**
-   * @param {Object} [budget] - Budget limits. Missing fields
-   *   use defaults from query-budget-constants.
+   * @param {Readonly<Object>} budget - The query's budget, as produced by
+   *   normalizeQueryBudget.
+   * @throws {Error} When the budget is not a normalized budget.
    */
-  constructor(budget = {}) {
-    const normalized = normalizeQueryBudget(budget);
+  constructor(budget) {
+    const limits = requireNormalizedQueryBudget(budget);
     this._limits = {
-      cpuTimeMs: normalized[QB_FIELD.CPU_TIME_LIMIT_MS],
-      memoryBytes: normalized[QB_FIELD.MEMORY_LIMIT_BYTES],
-      wallTimeMs: normalized[QB_FIELD.WALL_TIME_LIMIT_MS],
-      lookupKeys: normalized[QB_FIELD.LOOKUP_MAX_KEYS],
-      lookupBytes: normalized[QB_FIELD.LOOKUP_MAX_BYTES],
-      emitBytes: normalized[QB_FIELD.EMIT_MAX_BYTES],
-      broadcastBytes:
-        normalized[QB_FIELD.BROADCAST_MAX_PAYLOAD_BYTES],
-      outBytes: normalized[QB_FIELD.OUT_MAX_BYTES],
-      nestedCalls: normalized[QB_FIELD.NESTED_MAX_CALLS],
-      nestedKeys: normalized[QB_FIELD.NESTED_MAX_KEYS],
-      nestedBytes: normalized[QB_FIELD.NESTED_MAX_BYTES],
-      inflight: normalized[QB_FIELD.MAX_INFLIGHT],
+      cpuTimeMs: limits.CPU_TIME_LIMIT_MS,
+      memoryBytes: limits.MEMORY_LIMIT_BYTES,
+      wallTimeMs: limits.WALL_TIME_LIMIT_MS,
+      lookupKeys: limits.LOOKUP_MAX_KEYS,
+      lookupBytes: limits.LOOKUP_MAX_BYTES,
+      emitBytes: limits.EMIT_MAX_BYTES,
+      broadcastBytes: limits.BROADCAST_MAX_PAYLOAD_BYTES,
+      outBytes: limits.OUT_MAX_BYTES,
+      nestedCalls: limits.NESTED_MAX_CALLS,
+      nestedKeys: limits.NESTED_MAX_KEYS,
+      nestedBytes: limits.NESTED_MAX_BYTES,
+      inflight: limits.MAX_INFLIGHT,
     };
 
     this._usage = {

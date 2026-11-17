@@ -147,12 +147,19 @@ decisions are exposed in EXPLAIN and query telemetry.
 
 ### Resource Guardrails
 
-`createSqlRequest` normalizes raw caller budget overrides through
-`normalizeQueryBudget` before defaults are applied. Uppercase and camelCase
-aliases name the same limit. Explicit unequal aliases are rejected, including
-when either supplied value equals its default. Direct request admission and
-execution-context construction revalidate the canonical budget idempotently;
-they do not infer caller intent from a default-valued field.
+A query budget has one shape: the uppercase limit names of
+`DEFAULT_QUERY_BUDGET` (`src/wasm-service/query-budget-constants.js`), for
+example `RESULT_MAX_ROWS` and `WALL_TIME_LIMIT_MS`. `normalizeQueryBudget` is
+its only producer and the only place a default is applied. The public budget
+boundaries call it once: `createSqlRequest` (and through it the internal and
+PostgreSQL wire adapters) and `runtime.run`. It refuses an unknown field, such
+as a misspelling or a camelCase name, and any limit that is not a
+non-negative safe integer; it never substitutes a default for a refused value.
+
+Every reader (`BudgetEnforcer`, `ResultStream`, `ExecutionContext`, the lookup
+and broadcast primitives, the PostgreSQL wire statement timeout, and request
+admission through `isSqlRequest`) takes the normalized budget and refuses
+anything else, rather than defaulting a missing or misspelled limit.
 
 Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 

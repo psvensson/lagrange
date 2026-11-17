@@ -9,8 +9,7 @@
  */
 
 import {
-  LOOKUP_MAX_KEYS,
-  LOOKUP_MAX_BYTES,
+  requireNormalizedQueryBudget,
 } from '../wasm-service/query-budget-constants.js';
 import {
   LOOKUP_ACCESS_PATH,
@@ -37,10 +36,12 @@ const ALLOWED_ACCESS_PATHS = new Set([
  *
  * @param {string} table - Table name.
  * @param {Array<Object>} keys - Key-value objects.
- * @param {Object} budgets - Budget limits.
+ * @param {Readonly<Object>} budgets - The query's normalized budget.
  * @return {{valid: boolean, error: string|null}} Validation result.
+ * @throws {Error} When the budget is not a normalized budget.
  */
 function validateLookupArgs(table, keys, budgets) {
+  const {LOOKUP_MAX_KEYS: maxKeys} = requireNormalizedQueryBudget(budgets);
   if (!table) {
     return {valid: false, error: PRIMITIVE_ERROR_MSG.LOOKUP_TABLE_REQUIRED};
   }
@@ -77,7 +78,6 @@ function validateLookupArgs(table, keys, budgets) {
     }
   }
 
-  const maxKeys = budgets?.LOOKUP_MAX_KEYS ?? LOOKUP_MAX_KEYS;
   if (keys.length > maxKeys) {
     return {
       valid: false,
@@ -182,7 +182,8 @@ function estimateLookupBytes(rows) {
  *   partition ID.
  * @param {Function} options.fetchFn - Async function
  *   (partitionId, table, keys) => rows.
- * @param {Object} [options.budgets] - Budget overrides.
+ * @param {Readonly<Object>} options.budgets - The query's normalized
+ *   budget.
  * @param {Function} [options.onTelemetry] - Telemetry callback.
  * @param {Object} [options.lineageTracker] - LineageTracker
  *   instance for attaching lineage IDs.
@@ -240,8 +241,7 @@ async function executeLookup(options) {
 
   // Enforce byte budget
   const byteCount = estimateLookupBytes(allRows);
-  const maxBytes = budgets?.LOOKUP_MAX_BYTES ?? LOOKUP_MAX_BYTES;
-  if (byteCount > maxBytes) {
+  if (byteCount > budgets.LOOKUP_MAX_BYTES) {
     throw new Error(PRIMITIVE_ERROR_MSG.LOOKUP_MAX_BYTES_EXCEEDED);
   }
 

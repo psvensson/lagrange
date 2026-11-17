@@ -19,9 +19,6 @@ import {
   BUDGET_CATEGORY,
   BudgetLimitError,
 } from '../../src/query/budget-limit-error.js';
-import {
-  QB_FIELD,
-} from '../../src/wasm-service/query-budget-constants.js';
 
 const EMPTY_ROWS = [];
 const EMIT_KEY_A = 'keyA';
@@ -66,7 +63,7 @@ describe('exchange-reduce integration', () => {
           await ctx.out(OUT_VAL_A);
         }, {
           budgets: {
-            [QB_FIELD.OUT_MAX_BYTES]: SMALL_OUT_BUDGET,
+            OUT_MAX_BYTES: SMALL_OUT_BUDGET,
           },
         }),
         (err) => {

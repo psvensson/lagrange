@@ -27,7 +27,9 @@ import {
   EXCHANGE_MODE,
   RETRY_SCOPE,
 } from '../../src/query/runtime-constants.js';
-import {QB_FIELD} from '../../src/wasm-service/query-budget-constants.js';
+import {
+  normalizeQueryBudget,
+} from '../../src/wasm-service/query-budget-constants.js';
 import {
   GUARDRAIL_ERROR_MSG,
 } from '../../src/query/guardrail-constants.js';
@@ -43,7 +45,7 @@ function buildCtx(overrides = {}) {
   const token = overrides.cancellationToken ??
     new CancellationToken();
   const budgetEnforcer = overrides.budgetEnforcer ??
-    new BudgetEnforcer();
+    new BudgetEnforcer(normalizeQueryBudget());
   const lineageTracker = overrides.lineageTracker ??
     new LineageTracker('test-query');
   const dedupeRegistry = overrides.dedupeRegistry ??
@@ -53,6 +55,7 @@ function buildCtx(overrides = {}) {
   return new ExecutionContext({
     session: 'test-session',
     snapshot: {mode: 'readCommitted'},
+    budgets: normalizeQueryBudget(),
     budgetEnforcer,
     cancellationToken: token,
     lineageTracker,
@@ -157,9 +160,9 @@ describe('wall-time check at stage batch boundaries', () => {
     async () => {
       // Use a wall time budget of 1ms — already expired by
       // the time the batch loop runs.
-      const budgetEnforcer = new BudgetEnforcer({
-        [QB_FIELD.WALL_TIME_LIMIT_MS]: 1,
-      });
+      const budgetEnforcer = new BudgetEnforcer(normalizeQueryBudget({
+        WALL_TIME_LIMIT_MS: 1,
+      }));
       // Force wallStart into the past so elapsed > 1ms.
       budgetEnforcer._usage.wallStart = Date.now() - 100;
 
@@ -243,9 +246,9 @@ describe('cancellation propagates through reduceByKey', () => {
 
   it('should throw BudgetLimitError on wall-time in reduce',
     async () => {
-      const budgetEnforcer = new BudgetEnforcer({
-        [QB_FIELD.WALL_TIME_LIMIT_MS]: 1,
-      });
+      const budgetEnforcer = new BudgetEnforcer(normalizeQueryBudget({
+        WALL_TIME_LIMIT_MS: 1,
+      }));
       budgetEnforcer._usage.wallStart = Date.now() - 100;
 
       const token = new CancellationToken();

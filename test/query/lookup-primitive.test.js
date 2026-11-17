@@ -24,15 +24,27 @@ import {
 } from '../../src/query/distributed/distributed-context-constants.js';
 import {
   LOOKUP_MAX_KEYS,
+  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 
 // --- validateLookupArgs ---
+
+test('validateLookupArgs - refuses a budget that is not normalized', (t) => {
+  for (const budgets of [undefined, {}, {LOOKUP_MAX_KEYS: 1}, {lookupMaxKeys: 1}]) {
+    t.throws(
+      () => validateLookupArgs('users', [{column: 'id', value: 1}], budgets),
+      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED),
+    );
+  }
+  t.end();
+});
 
 test('validateLookupArgs - valid args', (t) => {
   const result = validateLookupArgs(
     'users',
     [{column: 'id', value: 1}],
-    {},
+    normalizeQueryBudget(),
   );
   t.ok(result.valid);
   t.equal(result.error, null);
@@ -43,7 +55,7 @@ test('validateLookupArgs - missing table', (t) => {
   const result = validateLookupArgs(
     null,
     [{column: 'id', value: 1}],
-    {},
+    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(result.error, PRIMITIVE_ERROR_MSG.LOOKUP_TABLE_REQUIRED);
@@ -54,7 +66,7 @@ test('validateLookupArgs - table not string', (t) => {
   const result = validateLookupArgs(
     123,
     [{column: 'id', value: 1}],
-    {},
+    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(
@@ -65,14 +77,14 @@ test('validateLookupArgs - table not string', (t) => {
 });
 
 test('validateLookupArgs - missing keys', (t) => {
-  const result = validateLookupArgs('users', null, {});
+  const result = validateLookupArgs('users', null, normalizeQueryBudget());
   t.notOk(result.valid);
   t.equal(result.error, PRIMITIVE_ERROR_MSG.LOOKUP_KEYS_REQUIRED);
   t.end();
 });
 
 test('validateLookupArgs - keys not array', (t) => {
-  const result = validateLookupArgs('users', 'bad', {});
+  const result = validateLookupArgs('users', 'bad', normalizeQueryBudget());
   t.notOk(result.valid);
   t.equal(
     result.error,
@@ -82,7 +94,7 @@ test('validateLookupArgs - keys not array', (t) => {
 });
 
 test('validateLookupArgs - empty keys', (t) => {
-  const result = validateLookupArgs('users', [], {});
+  const result = validateLookupArgs('users', [], normalizeQueryBudget());
   t.notOk(result.valid);
   t.equal(result.error, PRIMITIVE_ERROR_MSG.LOOKUP_KEYS_EMPTY);
   t.end();
@@ -92,7 +104,7 @@ test('validateLookupArgs - key missing column', (t) => {
   const result = validateLookupArgs(
     'users',
     [{value: 1}],
-    {},
+    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(
@@ -106,7 +118,7 @@ test('validateLookupArgs - key missing value', (t) => {
   const result = validateLookupArgs(
     'users',
     [{column: 'id'}],
-    {},
+    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(
@@ -121,7 +133,7 @@ test('validateLookupArgs - exceeds max keys', (t) => {
     {length: LOOKUP_MAX_KEYS + 1},
     (_, i) => ({column: 'id', value: i}),
   );
-  const result = validateLookupArgs('users', keys, {});
+  const result = validateLookupArgs('users', keys, normalizeQueryBudget());
   t.notOk(result.valid);
   t.equal(
     result.error,
@@ -132,7 +144,9 @@ test('validateLookupArgs - exceeds max keys', (t) => {
 
 test('validateLookupArgs - custom budget max keys', (t) => {
   const keys = [{column: 'id', value: 1}, {column: 'id', value: 2}];
-  const result = validateLookupArgs('users', keys, {LOOKUP_MAX_KEYS: 1});
+  const result = validateLookupArgs(
+    'users', keys, normalizeQueryBudget({LOOKUP_MAX_KEYS: 1}),
+  );
   t.notOk(result.valid);
   t.equal(
     result.error,
@@ -268,6 +282,7 @@ test('executeLookup - basic lookup with dedupe', async (t) => {
     accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
     partitionResolver: resolver,
     fetchFn,
+    budgets: normalizeQueryBudget(),
   });
 
   t.equal(result[LRF.KEY_COUNT], 3);
@@ -296,6 +311,7 @@ test('executeLookup - multi-partition batching', async (t) => {
     accessPath: LOOKUP_ACCESS_PATH.UNIQUE_INDEX,
     partitionResolver: resolver,
     fetchFn,
+    budgets: normalizeQueryBudget(),
   });
 
   t.equal(partitionCalls.length, 2);
@@ -314,6 +330,7 @@ test('executeLookup - rejects invalid access path', async (t) => {
       accessPath: 'full_scan',
       partitionResolver: () => 'p1',
       fetchFn: async () => [],
+      budgets: normalizeQueryBudget(),
     }),
     {message: PRIMITIVE_ERROR_MSG.LOOKUP_ACCESS_PATH_DENIED},
   );
@@ -328,6 +345,7 @@ test('executeLookup - rejects missing table', async (t) => {
       accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
       partitionResolver: () => 'p1',
       fetchFn: async () => [],
+      budgets: normalizeQueryBudget(),
     }),
     {message: PRIMITIVE_ERROR_MSG.LOOKUP_TABLE_REQUIRED},
   );
@@ -345,7 +363,7 @@ test('executeLookup - enforces byte budget', async (t) => {
       accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
       partitionResolver: () => 'p1',
       fetchFn,
-      budgets: {LOOKUP_MAX_BYTES: 100},
+      budgets: normalizeQueryBudget({LOOKUP_MAX_BYTES: 100}),
     }),
     {message: PRIMITIVE_ERROR_MSG.LOOKUP_MAX_BYTES_EXCEEDED},
   );
@@ -364,6 +382,7 @@ test('executeLookup - calls telemetry callback', async (t) => {
     accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
     partitionResolver: () => 'p1',
     fetchFn,
+    budgets: normalizeQueryBudget(),
     onTelemetry: (data) => {
       telemetryData = data;
     },
@@ -411,6 +430,7 @@ test('executeLookup - attaches lineage when tracker provided',
       accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
       partitionResolver: () => 'p1',
       fetchFn,
+      budgets: normalizeQueryBudget(),
       lineageTracker,
       stageIndex: 2,
       sequenceNum: 5,
@@ -440,6 +460,7 @@ test('executeLookup - lineage defaults stage and seq to zero',
       accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
       partitionResolver: () => 'p1',
       fetchFn,
+      budgets: normalizeQueryBudget(),
       lineageTracker,
     });
 

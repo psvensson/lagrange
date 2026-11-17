@@ -28,6 +28,8 @@ import {
   LOOKUP_ACCESS_PATH,
   PRIMITIVE_TYPE,
 } from '../../src/query/distributed/distributed-context-constants.js';
+import {normalizeQueryBudget} from
+  '../../src/wasm-service/query-budget-constants.js';
 
 // --- ShuffleBuffer (emit) lineage ---
 
@@ -78,6 +80,7 @@ test('lookup attaches lineage to result', async (t) => {
     accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
     partitionResolver: () => 'p1',
     fetchFn,
+    budgets: normalizeQueryBudget(),
     lineageTracker: tracker,
     stageIndex: 5,
     sequenceNum: 2,
@@ -99,6 +102,7 @@ test('lookup omits lineage when no tracker', async (t) => {
     accessPath: LOOKUP_ACCESS_PATH.PRIMARY_KEY,
     partitionResolver: () => 'p1',
     fetchFn,
+    budgets: normalizeQueryBudget(),
   });
 
   t.equal(result[GF.LINEAGE_ID], undefined);
@@ -111,6 +115,7 @@ test('broadcast attaches lineage to descriptor',
   (t) => {
     const tracker = new LineageTracker('q-bcast-1');
     const store = new BroadcastStore({
+      budgets: normalizeQueryBudget(),
       lineageTracker: tracker,
       stageIndex: 4,
     });
@@ -133,7 +138,7 @@ test('broadcast attaches lineage to descriptor',
   });
 
 test('broadcast omits lineage when no tracker', (t) => {
-  const store = new BroadcastStore();
+  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
   store.broadcast('ref-1', {version: 1, data: 'a'});
 
   const view = store.useBroadcast('ref-1');
