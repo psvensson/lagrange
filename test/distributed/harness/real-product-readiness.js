@@ -16,7 +16,9 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   READINESS_STATE,
+  attachRemoteCommandAttribution,
   deploymentFailure,
+  isDeploymentFailure,
 } from './real-product-deployment-contract.js';
 import {classifyRemoteCommandError, errorText} from './real-product-remote-shell.js';
 
@@ -49,8 +51,11 @@ async function probeOnce(component, probe, probeContext) {
       probeFailed: true,
       diagnostic: {
         error: classified.message,
+        exitCode: classified.exitCode,
         aborted: classified.aborted,
         deadlineExpired: classified.deadlineExpired,
+        timedOut: classified.timedOut,
+        ...(classified.httpTimedOut ? {httpTimedOut: true} : {}),
         transportError: classified.transportError,
         observerInfrastructure: classified.observerInfrastructure,
         ...(error?.parseError ? {
@@ -377,12 +382,14 @@ function resolveTypedObserverInfrastructure(error, classified, aborted, deadline
 }
 
 function buildTypedProbeError(error, classified, {aborted, deadlineExpired,
-  observerInfrastructure}) {
+  timedOut, observerInfrastructure}) {
   return {
     error: classified.message,
+    exitCode: classified.exitCode,
     aborted,
     deadlineExpired,
-    transportError: classified.transportError,
+    timedOut,
+    transportError: Boolean(error?.transportError || classified.transportError),
     observerInfrastructure,
     ...(error?.lastResult !== undefined ? {lastResult: error.lastResult} : {}),
     ...(error?.lastError !== undefined ? {lastError: error.lastError} : {}),
@@ -397,25 +404,27 @@ async function typedReadiness(component, run) {
   try {
     return await run();
   } catch (error) {
-    if (error?.code) throw error;
+    if (isDeploymentFailure(error)) throw error;
     const classified = classifyRemoteCommandError(error);
     const aborted = Boolean(error?.aborted || classified.aborted);
     const deadlineExpired = Boolean(error?.deadlineExpired || classified.deadlineExpired);
+    const timedOut = !aborted && Boolean(error?.timedOut || classified.timedOut);
     const observerInfrastructure = resolveTypedObserverInfrastructure(
       error, classified, aborted, deadlineExpired,
     );
     const lastCompletedObservation = error?.lastEvaluation ?? null;
     const lastProbeError = buildTypedProbeError(error, classified, {
-      aborted, deadlineExpired, observerInfrastructure,
+      aborted, deadlineExpired, timedOut, observerInfrastructure,
     });
     const effectiveLast = lastCompletedObservation ?? lastProbeError;
     const failure = deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
       `${component} readiness failed: ${classified.message}`,
-      {component, aborted, deadlineExpired, observerInfrastructure,
+      {component, aborted, deadlineExpired, timedOut, observerInfrastructure,
         last: effectiveLast, lastObservation: effectiveLast,
         lastCompletedObservation, lastProbeError});
+    attachRemoteCommandAttribution(failure, classified, error);
     throw Object.assign(failure, {
-      aborted, deadlineExpired, observerInfrastructure,
+      aborted, deadlineExpired, timedOut, observerInfrastructure,
       lastObservation: effectiveLast, lastCompletedObservation, lastProbeError,
     });
   }

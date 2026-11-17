@@ -11,8 +11,13 @@ import {
   BENCH_LABEL,
   DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
+  attachRemoteCommandAttribution,
+  buildRemoteFailureDiagnostic,
   deploymentFailure,
+  extractCommandProcessFacts,
+  isDeploymentFailure,
   requireCampaignId,
+  resolveNumericExitCode,
 } from './real-product-deployment-contract.js';
 import {
   MapConstructor,
@@ -21,7 +26,6 @@ import {
   mapGet,
   numberIsFinite,
   numberIsInteger,
-  numberIsSafeInteger,
   objectHasOwn,
   promiseAllSettled,
   stringIncludes,
@@ -53,6 +57,8 @@ const DEFAULT_SSH_MAX_BUFFER = 64 * 1024 * 1024;
 const MS_PER_SECOND = 1000;
 const MIN_CURL_TIMEOUT_SECONDS = 1;
 const DIAGNOSTIC_LOG_TAIL = 80;
+const CURL_EXIT_CODE_COULDNT_CONNECT = 7;
+const CURL_EXIT_CODE_OPERATION_TIMEDOUT = 28;
 const SSH_EXIT_CODE_TRANSPORT_FAILURE = 255;
 const DOCKER_EXIT_CODE_CLIENT_ERROR_MIN = 125;
 const DOCKER_EXIT_CODE_COMMAND_NOT_FOUND = 127;
@@ -103,14 +109,8 @@ function clipBodySnippet(payload, maxChars = HTTP_BODY_SNIPPET_MAX_CHARS) {
   return {body: `${stringSlice(text, 0, maxChars)}...`, truncated: true, bodyLength: text.length};
 }
 
-function resolveNumericExitCode(rawCode) {
-  if (rawCode === null || rawCode === undefined || rawCode === '') return null;
-  const parsed = Number(rawCode);
-  return numberIsSafeInteger(parsed) ? parsed : null;
-}
-
-function isAbortCommandError(error, rawCode, message, lower) {
-  if (error?.name === 'AbortError' || error?.aborted === true || rawCode === ABORT_ERROR_CODE) {
+function isAbortCommandError(error, osErrorCode, message, lower) {
+  if (error?.name === 'AbortError' || error?.aborted === true || osErrorCode === ABORT_ERROR_CODE) {
     return true;
   }
   return message === 'aborted' ||
@@ -118,20 +118,37 @@ function isAbortCommandError(error, rawCode, message, lower) {
     stringIncludes(lower, 'readiness probe aborted');
 }
 
-function isTimeoutCommandError(error, rawCode, aborted, lower) {
+function isCurlCommandFailure(numericCode, lower) {
+  if (stringIncludes(lower, 'curl: (')) return true;
+  return (numericCode === CURL_EXIT_CODE_OPERATION_TIMEDOUT ||
+    numericCode === CURL_EXIT_CODE_COULDNT_CONNECT) &&
+    stringIncludes(lower, 'curl');
+}
+
+function isCurlTimeoutError(numericCode, lower, aborted, sshTransport) {
+  if (aborted || sshTransport) return false;
+  if (stringIncludes(lower, 'curl: (28)')) return true;
+  return numericCode === CURL_EXIT_CODE_OPERATION_TIMEDOUT &&
+    (stringIncludes(lower, 'curl') ||
+      stringIncludes(lower, 'operation timed out') ||
+      stringIncludes(lower, 'connection timed out'));
+}
+
+function isTimeoutCommandError(error, osErrorCode, aborted, lower, isCurlFailure) {
   if (aborted) return false;
-  if (error?.timedOut === true || rawCode === 'ETIMEDOUT') return true;
-  if (error?.killed === true && rawCode !== MAXBUFFER_ERROR_CODE) return true;
+  if (error?.timedOut === true || osErrorCode === 'ETIMEDOUT') return true;
+  if (error?.killed === true && osErrorCode !== MAXBUFFER_ERROR_CODE) return true;
+  if (isCurlFailure) return false;
   return stringIncludes(lower, 'ssh timed out') ||
     stringIncludes(lower, 'ssh command timed out') ||
     stringIncludes(lower, 'command timed out') ||
     stringIncludes(lower, 'etimedout');
 }
 
-function isLocalProcessCommandError(error, rawCode, numericCode, aborted) {
+function isLocalProcessCommandError(error, osErrorCode, numericCode, aborted) {
   if (aborted) return false;
   if (typeof error?.syscall === 'string' && stringStartsWith(error.syscall, 'spawn')) return true;
-  if (typeof rawCode === 'string' && LOCAL_INFRA_ERROR_CODES.has(rawCode)) return true;
+  if (typeof osErrorCode === 'string' && LOCAL_INFRA_ERROR_CODES.has(osErrorCode)) return true;
   return numericCode === null && typeof error?.signal === 'string' && error.signal !== '';
 }
 
@@ -144,8 +161,8 @@ function isSshTransportCommandError(numericCode, lower) {
     stringIncludes(lower, 'kex_exchange_identification');
 }
 
-function isDockerDaemonCommandError(numericCode, lower) {
-  if (stringIncludes(lower, 'curl: (')) return false;
+function isDockerDaemonCommandError(numericCode, lower, isCurlFailure) {
+  if (isCurlFailure) return false;
   const clientCode = numericCode !== null &&
     numericCode >= DOCKER_EXIT_CODE_CLIENT_ERROR_MIN &&
     numericCode <= DOCKER_EXIT_CODE_COMMAND_NOT_FOUND;
@@ -154,24 +171,14 @@ function isDockerDaemonCommandError(numericCode, lower) {
     stringIncludes(lower, 'error response from daemon');
 }
 
-function resolveRawCommandExitCode(error) {
-  return error?.exitCode ?? error?.code ?? null;
-}
-
 function isDeadlineExpiredError(error, aborted, lower) {
   if (aborted) return false;
   return error?.deadlineExpired === true || stringIncludes(lower, 'deadline expired');
 }
 
 function computeRemoteTransportAndInfra({
-  error,
-  aborted,
-  deadlineExpired,
-  sshTransport,
-  timedOut,
-  localProcess,
-  isCurlFailure,
-  dockerDaemon,
+  error, aborted, deadlineExpired, sshTransport, timedOut,
+  localProcess, isCurlFailure, dockerDaemon,
 }) {
   const baseInfra = sshTransport || timedOut || localProcess;
   const transportError = Boolean(
@@ -185,34 +192,38 @@ function computeRemoteTransportAndInfra({
 function classifyRemoteCommandError(error) {
   const message = errorText(error);
   const lower = stringToLowerCase(message);
-  const rawCode = resolveRawCommandExitCode(error);
-  const numericCode = resolveNumericExitCode(rawCode);
-  const aborted = isAbortCommandError(error, rawCode, message, lower);
+  const {exitCode, osErrorCode, signal, stdout, stderr} = extractCommandProcessFacts(error);
+  const aborted = isAbortCommandError(error, osErrorCode, message, lower);
   const deadlineExpired = isDeadlineExpiredError(error, aborted, lower);
-  const timedOut = isTimeoutCommandError(error, rawCode, aborted, lower);
-  const localProcess = isLocalProcessCommandError(error, rawCode, numericCode, aborted);
-  const isCurlFailure = stringIncludes(lower, 'curl: (');
-  const sshTransport = isSshTransportCommandError(numericCode, lower);
-  const dockerDaemon = isDockerDaemonCommandError(numericCode, lower);
+  const sshTransport = isSshTransportCommandError(exitCode, lower);
+  const isCurlFailure = !sshTransport && isCurlCommandFailure(exitCode, lower);
+  const timedOut = isTimeoutCommandError(error, osErrorCode, aborted, lower, isCurlFailure);
+  const httpTimedOut = !timedOut && isCurlTimeoutError(exitCode, lower, aborted, sshTransport);
+  const localProcess = isLocalProcessCommandError(error, osErrorCode, exitCode, aborted);
+  const dockerDaemon = isDockerDaemonCommandError(exitCode, lower, isCurlFailure);
+  const killed = Boolean(error?.killed || timedOut);
   const {transportError, observerInfrastructure} = computeRemoteTransportAndInfra({
     error, aborted, deadlineExpired, sshTransport, timedOut, localProcess,
     isCurlFailure, dockerDaemon,
   });
-  return {message, exitCode: rawCode, aborted, deadlineExpired, timedOut, transportError,
-    observerInfrastructure};
+  return {
+    message, exitCode, osErrorCode, signal, killed, stdout, stderr,
+    aborted, deadlineExpired, timedOut, httpTimedOut, transportError, observerInfrastructure,
+  };
 }
 
 function createAbortCommandError(message) {
   return Object.assign(new Error(message), {
-    name: 'AbortError', code: ABORT_ERROR_CODE, aborted: true, deadlineExpired: false,
-    timedOut: false, transportError: false, observerInfrastructure: false,
+    name: 'AbortError', code: ABORT_ERROR_CODE, osErrorCode: ABORT_ERROR_CODE, exitCode: null,
+    signal: null, killed: false, aborted: true, deadlineExpired: false,
+    timedOut: false, httpTimedOut: false, transportError: false, observerInfrastructure: false,
   });
 }
 
 function createDeadlineExpiredCommandError(message) {
   return Object.assign(new Error(message), {
-    aborted: false, deadlineExpired: true, timedOut: false,
-    transportError: false, observerInfrastructure: false,
+    exitCode: null, signal: null, killed: false, aborted: false, deadlineExpired: true,
+    timedOut: false, httpTimedOut: false, transportError: false, observerInfrastructure: false,
   });
 }
 
@@ -220,14 +231,7 @@ function tagClassifiedRemoteError(error) {
   const classified = classifyRemoteCommandError(error);
   const err = error instanceof Error ? error : new Error(classified.message);
   if (classified.message && err.message !== classified.message) err.message = classified.message;
-  Object.assign(err, {
-    aborted: classified.aborted,
-    deadlineExpired: classified.deadlineExpired,
-    timedOut: classified.timedOut,
-    transportError: classified.transportError,
-    observerInfrastructure: classified.observerInfrastructure,
-    ...(classified.timedOut ? {killed: true} : {}),
-  });
+  attachRemoteCommandAttribution(err, classified);
   if (classified.aborted && err.name !== 'AbortError') err.name = 'AbortError';
   return err;
 }
@@ -320,11 +324,12 @@ function precheckHttpFromHost(effectiveSignal, timeoutMs) {
 function decodeCurlRawOutput(raw) {
   const {before: payload, value} = splitTrailer(String(raw ?? ''), HTTP_STATUS_MARKER);
   const status = value === null ? null : Number(value);
-  if (value === null || !numberIsInteger(status)) {
+  if (value === null || !numberIsInteger(status) || status <= 0) {
     const clipped = clipBodySnippet(payload);
     return {status: null, body: clipped.body, bodyTruncated: clipped.truncated,
       bodyLength: clipped.bodyLength, json: null, parseError: null,
-      error: 'missing_http_status_trailer', aborted: false, deadlineExpired: false,
+      error: status === 0 ? 'http_status_000' : 'missing_http_status_trailer',
+      aborted: false, deadlineExpired: false, timedOut: false, httpTimedOut: false,
       transportError: true, observerInfrastructure: false};
   }
   return buildHttpJsonResponse(status, payload);
@@ -335,8 +340,11 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
   const effectiveSignal = resolveEffectiveSignal(opts, signal);
   const early = precheckHttpFromHost(effectiveSignal, timeoutMs);
   if (early !== null) return early;
-  const {effectiveTimeoutMs, sshTimeoutMs} = boundedSshTimeoutMs(
+  const {effectiveTimeoutMs} = boundedSshTimeoutMs(
     timeoutMs, HTTP_TIMEOUT_SECONDS * MS_PER_SECOND);
+  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
+    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
+  const sshTimeoutMs = (curlTimeoutSeconds * MS_PER_SECOND) + SSH_TRANSPORT_GRACE_MS;
   const command = buildCurlHttpCommand({url, method, body, basicAuth, effectiveTimeoutMs});
   const callOpts = mergeCallOpts(opts, {signal: effectiveSignal, timeoutMs: sshTimeoutMs});
   try {
@@ -345,8 +353,10 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
   } catch (error) {
     const classified = classifyRemoteCommandError(error);
     return {status: null, body: null, json: null, error: classified.message,
-      aborted: classified.aborted, deadlineExpired: classified.deadlineExpired,
-      parseError: null, transportError: classified.transportError,
+      exitCode: classified.exitCode, aborted: classified.aborted,
+      deadlineExpired: classified.deadlineExpired, timedOut: classified.timedOut,
+      httpTimedOut: classified.httpTimedOut, parseError: null,
+      transportError: classified.transportError,
       observerInfrastructure: classified.observerInfrastructure};
   }
 }
@@ -511,8 +521,12 @@ async function dockerRunDetached({sshRun, opts, host, campaignId, role, ordinal 
   try {
     out = await sshRun(host, opts, command);
   } catch (error) {
-    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
-      `docker run of ${role} on ${host} failed: ${errorText(error)}`, {host, role, image});
+    if (isDeploymentFailure(error)) throw error;
+    const classified = classifyRemoteCommandError(error);
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+      `docker run of ${role} on ${host} failed: ${classified.message}`,
+      buildRemoteFailureDiagnostic(classified, {host, role, image}));
+    throw attachRemoteCommandAttribution(failure, classified, error);
   }
   const containerId = stringSplit(stringTrim(String(out ?? '')), /\s+/u).pop();
   if (!/^[0-9a-f]{12,64}$/u.test(containerId || '')) {
@@ -609,35 +623,21 @@ function didSshChildTimeOut({signal, timedOutByWrapper, child, error}) {
 }
 
 function buildWrapperTimeoutError({boundedTimeoutMs, target, command, child, outText, errText}) {
+  const exitCode = resolveNumericExitCode(child?.exitCode) ?? 0;
+  const signal = child?.signalCode ?? 'SIGTERM';
   return Object.assign(
     new Error(`Command timed out after ${boundedTimeoutMs}ms: ssh ${target} ${command}`),
     {
-      code: child?.exitCode ?? 0,
-      signal: child?.signalCode ?? 'SIGTERM',
-      killed: true,
-      timedOut: true,
-      aborted: false,
-      deadlineExpired: false,
-      stdout: outText,
-      stderr: errText,
-      transportError: true,
-      observerInfrastructure: true,
+      code: exitCode, exitCode, signal, killed: true, timedOut: true, httpTimedOut: false,
+      aborted: false, deadlineExpired: false, stdout: outText, stderr: errText,
+      transportError: true, observerInfrastructure: true,
     },
   );
 }
 
 function settleSshExecCallback({
-  error,
-  stdout,
-  stderr,
-  signal,
-  timedOutByWrapper,
-  child,
-  boundedTimeoutMs,
-  target,
-  command,
-  resolve,
-  reject,
+  error, stdout, stderr, signal, timedOutByWrapper, child,
+  boundedTimeoutMs, target, command, resolve, reject,
 }) {
   const outText = String(stdout ?? '');
   const errText = String(stderr ?? '');
@@ -649,7 +649,11 @@ function settleSshExecCallback({
   if (error) {
     if (error.stdout === undefined) error.stdout = outText;
     if (error.stderr === undefined) error.stderr = errText;
-    if (childTimedOut) Object.assign(error, {timedOut: true, killed: true});
+    if (childTimedOut) {
+      Object.assign(error, {
+        timedOut: true, killed: true, signal: error.signal ?? child?.signalCode ?? 'SIGTERM',
+      });
+    }
     reject(tagClassifiedRemoteError(error));
     return;
   }

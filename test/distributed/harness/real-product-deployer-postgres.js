@@ -33,6 +33,7 @@ import {
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
+  attachRemoteCommandAttribution,
   requireCampaignId,
   resolveOperationWindow,
   resolveReadinessBudget,
@@ -165,12 +166,7 @@ function callOptsFor(
 function rethrowClassifiedPostgresError(error) {
   const classified = classifyRemoteCommandError(error);
   const err = error instanceof Error ? error : new Error(errorText(error));
-  throw Object.assign(err, {
-    aborted: classified.aborted,
-    deadlineExpired: classified.deadlineExpired,
-    transportError: classified.transportError,
-    observerInfrastructure: classified.observerInfrastructure,
-  });
+  throw attachRemoteCommandAttribution(err, classified);
 }
 
 function serverReady(ctx, role) {

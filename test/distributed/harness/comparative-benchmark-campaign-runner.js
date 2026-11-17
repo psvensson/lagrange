@@ -46,6 +46,7 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   deploymentFailure,
+  isDeploymentFailure,
 } from './real-product-deployment-contract.js';
 import {composeRunHarnessIdentity} from './comparative-benchmark-harness-identity.js';
 import {pinProductIdentity} from './comparative-benchmark-product-pins.js';
@@ -97,6 +98,25 @@ function isObserverInfrastructureFailure(error) {
   );
 }
 
+function isTimedOutFailure(error) {
+  return Boolean(
+    error?.timedOut === true ||
+    error?.diagnostic?.timedOut === true,
+  );
+}
+
+function isTransportFailure(error) {
+  return Boolean(
+    error?.transportError === true ||
+    error?.diagnostic?.transportError === true,
+  );
+}
+
+function resolveFailureCode(error, interrupted) {
+  if (isDeploymentFailure(error)) return error.code;
+  return interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : UNCLASSIFIED;
+}
+
 function lastObservationOf(error, attempt) {
   return error?.lastObservation ?? error?.diagnostic?.lastObservation ??
     attempt?.deployment?.readiness?.lastObservation ??
@@ -106,6 +126,8 @@ function lastObservationOf(error, attempt) {
 function failureOf(error, signal = null) {
   const interrupted = isInterruptedFailure(error, signal);
   const observerInfrastructure = !interrupted && isObserverInfrastructureFailure(error);
+  const timedOut = !interrupted && isTimedOutFailure(error);
+  const transportError = !interrupted && isTransportFailure(error);
   const isReadiness = error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED;
   let failureClass = null;
   if (interrupted) {
@@ -123,11 +145,19 @@ function failureOf(error, signal = null) {
       {...rawDiagnostic, semanticGate} : {semanticGate}) :
     rawDiagnostic;
   return {
-    code: error?.code || (interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : UNCLASSIFIED),
+    code: resolveFailureCode(error, interrupted),
     message: errorText(error),
     diagnostic,
     ...(failureClass ? {failureClass} : {}),
     ...(interrupted ? {aborted: true} : {}),
+    ...(timedOut ? {timedOut: true} : {}),
+    ...(transportError ? {transportError: true} : {}),
+    ...(observerInfrastructure ? {observerInfrastructure: true} : {}),
+    ...(error?.exitCode !== undefined && error?.exitCode !== null ?
+      {exitCode: error.exitCode} : {}),
+    ...(typeof error?.signal === 'string' && error.signal !== '' ?
+      {signal: error.signal} : {}),
+    ...(error?.killed === true ? {killed: true} : {}),
     ...(lastObservation !== null ? {lastObservation} : {}),
   };
 }
@@ -343,7 +373,12 @@ async function measureRun({run, manifest, deps, events, signal}) {
       workloadFailure.diagnostic ?? null);
     err.aborted = Boolean(workloadFailure.aborted);
     err.deadlineExpired = Boolean(workloadFailure.deadlineExpired);
+    err.timedOut = Boolean(workloadFailure.timedOut);
+    err.transportError = Boolean(workloadFailure.transportError);
     err.observerInfrastructure = Boolean(workloadFailure.observerInfrastructure);
+    if (workloadFailure.exitCode !== undefined) err.exitCode = workloadFailure.exitCode;
+    if (workloadFailure.signal !== undefined) err.signal = workloadFailure.signal;
+    if (workloadFailure.killed !== undefined) err.killed = workloadFailure.killed;
     err.lastObservation = workloadFailure.lastObservation ?? null;
     throw Object.assign(err, {attempt});
   }
@@ -418,6 +453,7 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
   const deployment = recordedDeployment({attempt, header, events, closure});
   const failureClass = failure?.failureClass ??
     (state === RUN_STATE.INTERRUPTED ? INTERRUPTED_SETUP_FAILURE_CLASS : null);
+  const timedOut = failure?.timedOut === true;
   const lastObservation = failure?.lastObservation ??
     deployment?.readiness?.lastObservation ??
     deployment?.readiness?.evidence?.lastObservation ?? null;
@@ -427,9 +463,17 @@ function runRecord({run, manifest, header, state, failure, attempt, events, clos
     targetId: run.targetId, scenario: run.scenario, subkind: run.subkind,
     executionTarget: header.executionTarget,
     ...(failureClass ? {failureClass} : {}),
+    ...(timedOut ? {timedOut: true} : {}),
     ...(lastObservation !== null ? {lastObservation} : {}),
     ...(recordedClosure ? {cleanup: recordedClosure} : {}),
-    execution: {state, failure, ...(failureClass ? {failureClass} : {}), startedAt, endedAt},
+    execution: {
+      state,
+      failure,
+      ...(failureClass ? {failureClass} : {}),
+      ...(timedOut ? {timedOut: true} : {}),
+      startedAt,
+      endedAt,
+    },
     identity: recordedIdentity(run, header, attempt),
     plan: recordedPlan(run, manifest, workload),
     deployment,
@@ -465,12 +509,16 @@ async function unmeasuredAttempt({run, manifest, deps, events, error, signal}) {
     failureClass = INFRASTRUCTURE_SETUP_FAILURE_CLASS;
   }
   const lastObservation = lastObservationOf(error, {deployment});
+  const timedOut = !interrupted && isTimedOutFailure(error);
+  const setupCode = isDeploymentFailure(error) ? error.code :
+    (interrupted ? DEPLOYMENT_FAILURE.WATCHDOG_STOPPED : DEPLOYMENT_FAILURE.READINESS_EXHAUSTED);
   const attempt = {deployment, workload: null, productsAfter: null, roleObservations: null};
   attempt.workload = await deps.executeWorkloadRun({run, manifest, deployment,
     signal: null, semanticGate: null,
     setupFailure: {failureClass, sqlState: null,
-      code: error.code, message: errorText(error),
+      code: setupCode, message: errorText(error),
       ...(interrupted ? {aborted: true} : {}),
+      ...(timedOut ? {timedOut: true} : {}),
       ...(lastObservation !== null ? {lastObservation} : {})}});
   events.push(...(attempt.workload.events || []));
   attempt.productsAfter = await deps.inspectProducts(deployment);

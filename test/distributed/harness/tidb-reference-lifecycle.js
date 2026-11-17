@@ -73,6 +73,7 @@ function isAbortedObserverError(error, message, lower) {
 
 function isTimedOutObserverError(error, rawCode, lower) {
   if (error?.timedOut === true || rawCode === 'ETIMEDOUT') return true;
+  if (error?.killed === true && rawCode !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return true;
   return stringIncludes(lower, 'ssh timed out') || stringIncludes(lower, 'command timed out') ||
     stringIncludes(lower, 'etimedout');
 }
@@ -352,7 +353,9 @@ function buildInspectErrorProps(error, callOptions) {
     transportError: anyFlag(error?.transportError, classified.transportError),
     observerInfrastructure: !aborted && !deadlineExpired && classified.observerInfrastructure,
   };
-  if (error?.code) props.code = error.code;
+  if (typeof error?.code === 'string' && /^[a-z][a-z0-9_-]*$/u.test(error.code)) {
+    props.code = error.code;
+  }
   return props;
 }
 

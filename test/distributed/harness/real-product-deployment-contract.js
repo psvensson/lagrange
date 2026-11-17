@@ -10,6 +10,7 @@
 import {
   dateNow,
   numberIsFinite,
+  numberIsSafeInteger,
 } from './real-product-captured-intrinsics.js';
 import {
   TIDB_REFERENCE_DEFAULTS,
@@ -142,8 +143,80 @@ class DeploymentFailure extends Error {
   }
 }
 
+const SEMANTIC_FAILURE_CODE_PATTERN = /^[a-z][a-z0-9_-]*$/u;
+
+function isDeploymentFailure(error) {
+  if (!error || typeof error !== 'object') return false;
+  if (error instanceof DeploymentFailure || error.name === 'DeploymentFailure') {
+    return typeof error.code === 'string' && SEMANTIC_FAILURE_CODE_PATTERN.test(error.code);
+  }
+  if (error.name === 'AbortError' || typeof error.syscall === 'string') return false;
+  return typeof error.code === 'string' && SEMANTIC_FAILURE_CODE_PATTERN.test(error.code);
+}
+
 function deploymentFailure(code, message, diagnostic = null) {
   return new DeploymentFailure(code, message, diagnostic);
+}
+
+function resolveNumericExitCode(rawCode) {
+  if (rawCode === null || rawCode === undefined || rawCode === '' || typeof rawCode === 'boolean') {
+    return null;
+  }
+  const parsed = Number(rawCode);
+  return numberIsSafeInteger(parsed) ? parsed : null;
+}
+
+function extractCommandProcessFacts(error) {
+  const exitCode = resolveNumericExitCode(error?.exitCode) ??
+    (typeof error?.code === 'number' ? resolveNumericExitCode(error.code) : null);
+  let osErrorCode = null;
+  if (typeof error?.osErrorCode === 'string' && error.osErrorCode !== '') {
+    osErrorCode = error.osErrorCode;
+  } else if (typeof error?.code === 'string' && !isDeploymentFailure(error)) {
+    osErrorCode = error.code;
+  }
+  const signal = typeof error?.signal === 'string' && error.signal !== '' ? error.signal : null;
+  const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
+  const stderr = typeof error?.stderr === 'string' ? error.stderr : '';
+  return {exitCode, osErrorCode, signal, stdout, stderr};
+}
+
+function attachRemoteCommandAttribution(failure, classified, cause = null) {
+  if (!failure || typeof failure !== 'object' || !classified) return failure;
+  Object.assign(failure, {
+    exitCode: classified.exitCode ?? null,
+    signal: classified.signal ?? null,
+    killed: Boolean(classified.killed),
+    ...(typeof classified.stdout === 'string' ? {stdout: classified.stdout} : {}),
+    ...(typeof classified.stderr === 'string' ? {stderr: classified.stderr} : {}),
+    ...(typeof classified.osErrorCode === 'string' ?
+      {osErrorCode: classified.osErrorCode} : {}),
+    aborted: Boolean(classified.aborted),
+    deadlineExpired: Boolean(classified.deadlineExpired),
+    timedOut: Boolean(classified.timedOut),
+    httpTimedOut: Boolean(classified.httpTimedOut),
+    transportError: Boolean(classified.transportError),
+    observerInfrastructure: Boolean(classified.observerInfrastructure),
+  });
+  if (cause instanceof Error && cause !== failure && failure.cause === undefined) {
+    failure.cause = cause;
+  }
+  return failure;
+}
+
+function buildRemoteFailureDiagnostic(classified, extra = {}) {
+  return {
+    ...extra,
+    exitCode: classified.exitCode ?? null,
+    signal: classified.signal ?? null,
+    killed: Boolean(classified.killed),
+    aborted: Boolean(classified.aborted),
+    deadlineExpired: Boolean(classified.deadlineExpired),
+    timedOut: Boolean(classified.timedOut),
+    ...(classified.httpTimedOut ? {httpTimedOut: true} : {}),
+    transportError: Boolean(classified.transportError),
+    observerInfrastructure: Boolean(classified.observerInfrastructure),
+  };
 }
 
 function requireCampaignId(campaignId) {
@@ -160,7 +233,13 @@ function resolveReadinessBudget(opts = {}) {
 
 export {
   BENCH_LABEL,
+  DeploymentFailure,
+  attachRemoteCommandAttribution,
+  buildRemoteFailureDiagnostic,
+  extractCommandProcessFacts,
+  isDeploymentFailure,
   isImageId,
+  resolveNumericExitCode,
   CLAIM_STATUS,
   DEFAULT_INSPECT_TIMEOUT_MS,
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,

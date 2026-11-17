@@ -91,6 +91,7 @@ import {
   DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
   deploymentFailure,
+  isDeploymentFailure,
   stripTransientExecutionOptions,
 } from '../../../test/distributed/harness/real-product-deployment-contract.js';
 import {
@@ -630,7 +631,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error instanceof UsageError ? '' : `${error.code || 'error'}: `}` +
+  const codeLabel = isDeploymentFailure(error) ? error.code : 'error';
+  process.stderr.write(`${error instanceof UsageError ? '' : `${codeLabel}: `}` +
     `${error.message}\n`);
   if (error.loadGeneratorWorktree) {
     process.stderr.write('load generator worktree closure: ' +
@@ -642,6 +644,6 @@ main().catch((error) => {
   if (error?.diagnostic != null) {
     process.stderr.write(`diagnostic: ${JSON.stringify(error.diagnostic)}\n`);
   }
-  process.exitCode = String(error.code || '').startsWith('refused_') ?
+  process.exitCode = isDeploymentFailure(error) && error.code.startsWith('refused_') ?
     EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 });

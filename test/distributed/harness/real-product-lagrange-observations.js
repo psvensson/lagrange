@@ -24,7 +24,9 @@ import {
 import {
   DEFAULT_INSPECT_TIMEOUT_MS,
   DEPLOYMENT_FAILURE,
+  attachRemoteCommandAttribution,
   deploymentFailure,
+  isDeploymentFailure,
   withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
@@ -248,21 +250,20 @@ async function inspectWatchedRole(ctx, component, role, pollContext, callOptions
       timeoutMs,
     );
   } catch (error) {
-    if (NO_SUCH_CONTAINER_PATTERN.test(errorText(error))) {
+    const text = errorText(error);
+    const classified = classifyRemoteCommandError(error);
+    const absent = !classified.aborted && !classified.deadlineExpired && !classified.timedOut &&
+      !classified.observerInfrastructure &&
+      (classified.exitCode === null || classified.exitCode === 1) &&
+      NO_SUCH_CONTAINER_PATTERN.test(text);
+    if (absent) {
       throw buildExitedContainerFailure({
-        component,
-        role,
-        state: {Running: false, Status: 'absent', ExitCode: null, Error: errorText(error)},
+        component, role,
+        state: {Running: false, Status: 'absent', ExitCode: null, Error: text},
         pollContext,
       });
     }
-    const classified = classifyRemoteCommandError(error);
-    throw tagProbeError(classified.message, {
-      aborted: classified.aborted,
-      deadlineExpired: classified.deadlineExpired,
-      transportError: classified.transportError,
-      observerInfrastructure: classified.observerInfrastructure,
-    });
+    throw attachRemoteCommandAttribution(new Error(classified.message), classified, error);
   }
   const state = parseInspectState(raw);
   if (state.Running !== true) {
@@ -402,25 +403,24 @@ function deploymentHostOf(roles, nodeId) {
 }
 
 function partitionDiagnosticsFailure(message, answer) {
-  const aborted = answer?.aborted === true;
-  const deadlineExpired = answer?.deadlineExpired === true;
-  const transportError = answer?.transportError === true;
-  const observerInfrastructure = answer?.observerInfrastructure === true;
+  const classified = classifyRemoteCommandError(answer);
+  const aborted = Boolean(answer?.aborted === true || classified.aborted);
+  const deadlineExpired = Boolean(answer?.deadlineExpired === true || classified.deadlineExpired);
+  const timedOut = Boolean(answer?.timedOut === true || classified.timedOut);
+  const httpTimedOut = Boolean(answer?.httpTimedOut === true || classified.httpTimedOut);
+  const transportError = Boolean(answer?.transportError === true || classified.transportError);
+  const observerInfrastructure = Boolean(
+    answer?.observerInfrastructure === true || classified.observerInfrastructure,
+  );
   const code = aborted || deadlineExpired ?
-    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED :
-    DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED;
+    DEPLOYMENT_FAILURE.READINESS_EXHAUSTED : DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED;
   const failure = deploymentFailure(code, message, {
-    answer,
-    aborted,
-    deadlineExpired,
-    transportError,
+    answer, aborted, deadlineExpired, timedOut, httpTimedOut, transportError,
     observerInfrastructure,
   });
-  failure.aborted = aborted;
-  failure.deadlineExpired = deadlineExpired;
-  failure.transportError = transportError;
-  failure.observerInfrastructure = observerInfrastructure;
-  return failure;
+  return Object.assign(failure, {
+    aborted, deadlineExpired, timedOut, httpTimedOut, transportError, observerInfrastructure,
+  });
 }
 
 function isOkDiagnosticsAnswer(answer) {
@@ -479,7 +479,7 @@ async function readPartitions(ctx, seedHost, pollContext = null) {
       pollContext,
     );
   } catch (error) {
-    if (error?.code) throw error;
+    if (isDeploymentFailure(error)) throw error;
     throw partitionDiagnosticsFailure(errorText(error), error);
   }
   assertDiagnosticsWindowOpen(ctx, answer);
@@ -502,7 +502,7 @@ async function observedLeaders(ctx, seedHost) {
   try {
     answer = await readPartitionLeaders(ctx, seedHost);
   } catch (error) {
-    if (error?.code) throw error;
+    if (isDeploymentFailure(error)) throw error;
     throw partitionDiagnosticsFailure(errorText(error), error);
   }
   assertDiagnosticsWindowOpen(ctx, answer);

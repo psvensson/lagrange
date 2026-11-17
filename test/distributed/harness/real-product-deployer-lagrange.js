@@ -56,7 +56,9 @@ import {
   LAGRANGE_IMAGE_DEFAULT,
   POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
+  attachRemoteCommandAttribution,
   deploymentFailure,
+  isDeploymentFailure,
   requireCampaignId,
   resolveOperationWindow,
   resolveReadinessBudget,
@@ -339,21 +341,23 @@ function toReadinessExhausted(component, error, opCtx) {
   const classified = classifyRemoteCommandError(error);
   const aborted = hasAbortedFlag(error, classified, opCtx);
   const deadlineExpired = hasDeadlineExpiredFlag(error, classified, opCtx);
+  const timedOut = !aborted && Boolean(error?.timedOut || classified.timedOut);
   const observerInfrastructure = !aborted && !deadlineExpired &&
     Boolean(error?.observerInfrastructure || classified.observerInfrastructure);
   const lastProbeError = {
-    error: classified.message, aborted, deadlineExpired,
+    error: classified.message, aborted, deadlineExpired, timedOut,
     transportError: Boolean(error?.transportError || classified.transportError),
     observerInfrastructure,
   };
   const diagnostic = {
-    component, aborted, deadlineExpired, observerInfrastructure,
+    component, aborted, deadlineExpired, timedOut, observerInfrastructure,
     last: lastProbeError, lastObservation: lastProbeError, lastProbeError,
   };
   const failure = deploymentFailure(DEPLOYMENT_FAILURE.READINESS_EXHAUSTED,
     `${component} did not complete: ${classified.message}`, diagnostic);
+  attachRemoteCommandAttribution(failure, classified, error);
   return Object.assign(failure, {
-    aborted, deadlineExpired, observerInfrastructure,
+    aborted, deadlineExpired, timedOut, observerInfrastructure,
     lastProbeError, lastObservation: lastProbeError,
   });
 }
@@ -720,8 +724,10 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
           try {
             tables = await readSystemTables(postQuery, readyCtx);
           } catch (error) {
-            if (error?.code) throw error;
+            if (isDeploymentFailure(error)) throw error;
+            const classified = classifyRemoteCommandError(error);
             if (error?.aborted === true || error?.deadlineExpired === true ||
+                classified.aborted || classified.deadlineExpired ||
                 readyCtx.signal?.aborted) {
               throw toReadinessExhausted('lagrange-system-tables', error, readyCtx);
             }

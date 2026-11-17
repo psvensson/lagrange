@@ -32,7 +32,10 @@ import {
   DEPLOYMENT_FAILURE,
   RUN_CLASS,
   STORAGE_KIND,
+  attachRemoteCommandAttribution,
+  buildRemoteFailureDiagnostic,
   deploymentFailure,
+  isDeploymentFailure,
   isImageId,
   withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
@@ -117,6 +120,15 @@ function inspectCallConfig({opts, signal, deadlineAtMs, now, subject, host}) {
   return {callOpts, timeoutMs};
 }
 
+function isMissingDockerObject(classified, text) {
+  if (classified.aborted || classified.deadlineExpired || classified.timedOut ||
+      classified.observerInfrastructure) {
+    return false;
+  }
+  if (classified.exitCode !== null && classified.exitCode !== 1) return false;
+  return NO_SUCH_OBJECT.test(text);
+}
+
 async function inspectJson({sshRun, opts, host, command, subject, signal, deadlineAtMs, now}) {
   const {callOpts, timeoutMs} = inspectCallConfig({
     opts, signal, deadlineAtMs, now, subject, host,
@@ -124,26 +136,18 @@ async function inspectJson({sshRun, opts, host, command, subject, signal, deadli
   try {
     return JSON.parse(stringOf(await sshRun(host, callOpts, command, timeoutMs)));
   } catch (error) {
-    if (error?.code) throw error;
+    if (isDeploymentFailure(error)) throw error;
     const text = errorText(error);
-    if (NO_SUCH_OBJECT.test(text)) {
-      throw deploymentFailure(DEPLOYMENT_FAILURE.CONTAINER_ABSENT,
-        `${subject}: docker answered ${text}`, {host});
-    }
     const classified = classifyRemoteCommandError(error);
+    if (isMissingDockerObject(classified, text)) {
+      const absent = deploymentFailure(DEPLOYMENT_FAILURE.CONTAINER_ABSENT,
+        `${subject}: docker answered ${text}`, {host, exitCode: classified.exitCode});
+      throw attachRemoteCommandAttribution(absent, classified, error);
+    }
     const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
-      `${subject} could not be inspected: ${text}`, {
-        host,
-        aborted: classified.aborted,
-        deadlineExpired: classified.deadlineExpired,
-        transportError: classified.transportError,
-        observerInfrastructure: classified.observerInfrastructure,
-      });
-    failure.aborted = classified.aborted;
-    failure.deadlineExpired = classified.deadlineExpired;
-    failure.transportError = classified.transportError;
-    failure.observerInfrastructure = classified.observerInfrastructure;
-    throw failure;
+      `${subject} could not be inspected: ${text}`,
+      buildRemoteFailureDiagnostic(classified, {host}));
+    throw attachRemoteCommandAttribution(failure, classified, error);
   }
 }
 
@@ -169,22 +173,21 @@ function imageStoreOf(info) {
 }
 
 async function readImageStore({sshRun, opts, host, signal, deadlineAtMs, now}) {
+  const subject = `docker info on ${host}`;
   const {callOpts, timeoutMs} = inspectCallConfig({
-    opts, signal, deadlineAtMs, now, subject: `docker info on ${host}`, host,
+    opts, signal, deadlineAtMs, now, subject, host,
   });
   try {
     return imageStoreOf(await sshRun(host, callOpts,
       'docker info --format \'{{.Driver}}|{{json .DriverStatus}}\'', timeoutMs));
   } catch (error) {
-    if (error?.code) throw error;
+    if (isDeploymentFailure(error)) throw error;
+    const text = errorText(error);
     const classified = classifyRemoteCommandError(error);
-    if (error && typeof error === 'object') {
-      error.aborted = classified.aborted;
-      error.deadlineExpired = classified.deadlineExpired;
-      error.transportError = classified.transportError;
-      error.observerInfrastructure = classified.observerInfrastructure;
-    }
-    throw error;
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED,
+      `${subject} could not be inspected: ${text}`,
+      buildRemoteFailureDiagnostic(classified, {host}));
+    throw attachRemoteCommandAttribution(failure, classified, error);
   }
 }
 
@@ -269,8 +272,9 @@ async function inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs
       containerId: role.containerId, role: role.role, signal, deadlineAtMs, now});
   } catch (error) {
     if (error?.code !== DEPLOYMENT_FAILURE.CONTAINER_ABSENT) throw error;
-    throw deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED, error.message,
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.IDENTITY_UNVERIFIED, error.message,
       error.diagnostic);
+    throw attachRemoteCommandAttribution(failure, classifyRemoteCommandError(error), error);
   }
 }
 

@@ -18,6 +18,7 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   SQL_CLIENT_IMAGE,
+  attachRemoteCommandAttribution,
   deploymentFailure,
   withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
@@ -167,12 +168,8 @@ async function psqlText({sshRun, opts, from, campaignId, endpoint, connection}, 
         '-A', '-F', PSQL_SEPARATOR, '-P', 'footer=off', '-c', sql]}), sshTimeoutMs);
   } catch (error) {
     const classified = classifyRemoteCommandError(error);
-    throw tagCommandError(error, {
-      aborted: classified.aborted,
-      deadlineExpired: classified.deadlineExpired,
-      transportError: classified.transportError,
-      observerInfrastructure: classified.observerInfrastructure,
-    });
+    const err = error instanceof Error ? error : new Error(errorText(error));
+    throw attachRemoteCommandAttribution(err, classified);
   }
 }
 

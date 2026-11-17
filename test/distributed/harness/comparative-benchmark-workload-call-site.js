@@ -37,10 +37,14 @@ import {
 } from './real-product-captured-intrinsics.js';
 import {
   DEPLOYMENT_FAILURE,
+  attachRemoteCommandAttribution,
+  buildRemoteFailureDiagnostic,
   deploymentFailure,
+  isDeploymentFailure,
   withExplicitSignalOption,
 } from './real-product-deployment-contract.js';
 import {
+  classifyRemoteCommandError,
   errorText,
   execWithStatus,
   shellQuote,
@@ -137,10 +141,10 @@ function extractCallerOptions(runOrOpts, perRunOpts) {
   return runOrOpts || {};
 }
 
-function resolveRunTimeoutMs(deadlineAtMs, clock) {
-  if (!numberIsFinite(deadlineAtMs)) return WORKLOAD_TIMEOUT_MS;
+function resolveRunTimeoutMs(deadlineAtMs, clock, workloadTimeoutMs = WORKLOAD_TIMEOUT_MS) {
+  if (!numberIsFinite(deadlineAtMs)) return workloadTimeoutMs;
   const remaining = deadlineAtMs - clock();
-  return Math.max(1, Math.min(WORKLOAD_TIMEOUT_MS, remaining));
+  return Math.max(1, Math.min(workloadTimeoutMs, remaining));
 }
 
 function resolveSettleFunction(callOpts, defaultSettle, opts) {
@@ -179,8 +183,12 @@ async function runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, time
     const stderr = String(await sshRun(host.ip, effectiveOpts,
       `${cd} && tail -n ${LOAD_GENERATOR_STDERR_TAIL_LINES} ${shellQuote(stderrLog)}`,
       timeoutMs));
-    throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-      `load generator exited ${result.exitCode}`, {stdout: result.stdout, stderr});
+    const failure = deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+      `load generator exited ${result.exitCode}`,
+      {exitCode: result.exitCode, stdout: result.stdout, stderr});
+    failure.exitCode = result.exitCode;
+    if (result.observerInfrastructure === true) failure.observerInfrastructure = true;
+    throw failure;
   }
   return JSON.parse(String(await sshRun(host.ip, effectiveOpts,
     `${cd} && tail -n 1 ${shellQuote(`${dir}/records.ndjson`)}`, timeoutMs)));
@@ -191,7 +199,7 @@ async function runLoadGeneratorCliProcess({sshRun, host, cd, effectiveOpts, time
  * after proving that checkout is at the harness commit.
  */
 function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaignId,
-  now = dateNow, settleInFlight = null}) {
+  now = dateNow, settleInFlight = null, workloadTimeoutMs = WORKLOAD_TIMEOUT_MS}) {
   const cd = `cd ${shellQuote(host.repoPath)}`;
   const clock = typeof now === 'function' ? now : dateNow;
   return async (request, runOrOpts = {}, perRunOpts = {}) => {
@@ -201,7 +209,7 @@ function createRemoteWorkloadRunner({sshRun, opts, host, harnessCommit, campaign
     const deadlineAtMs = callOpts.deadlineAtMs ?? runOrOpts?.deadlineAtMs ?? null;
     const settle = resolveSettleFunction(callOpts, settleInFlight, opts);
     const effectiveOpts = withExplicitSignalOption(opts, signal);
-    const timeoutMs = resolveRunTimeoutMs(deadlineAtMs, clock);
+    const timeoutMs = resolveRunTimeoutMs(deadlineAtMs, clock, workloadTimeoutMs);
     try {
       if (request.system === TIDB_SYSTEM) refuseWithoutDrivers(host);
       await assertCheckoutAtHarnessCommit({sshRun, host, cd, effectiveOpts, timeoutMs,
@@ -372,9 +380,15 @@ async function workloadRecord(runWorkload, request, run, callOpts = {}) {
   try {
     return await runWorkload(request, run, callOpts);
   } catch (error) {
-    if (error?.code) throw error;
-    throw deploymentFailure(DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
-      `canonical workload failed: ${errorText(error)}`);
+    if (isDeploymentFailure(error)) throw error;
+    const classified = classifyRemoteCommandError(error);
+    const code = classified.aborted || callOpts?.signal?.aborted ?
+      DEPLOYMENT_FAILURE.WATCHDOG_STOPPED :
+      DEPLOYMENT_FAILURE.WORKLOAD_FAILED;
+    const failure = deploymentFailure(code,
+      `canonical workload failed: ${classified.message}`,
+      buildRemoteFailureDiagnostic(classified));
+    throw attachRemoteCommandAttribution(failure, classified, error);
   }
 }
 
@@ -398,15 +412,23 @@ function shouldObservePlacement(deployment, outcome, unopened) {
 }
 
 function assignErrorAttribution(target, error, signal) {
-  target.aborted = Boolean(error?.aborted || signal?.aborted);
-  target.deadlineExpired = Boolean(error?.deadlineExpired);
-  target.observerInfrastructure = Boolean(error?.observerInfrastructure);
+  const classified = classifyRemoteCommandError(error);
+  target.aborted = Boolean(error?.aborted || classified.aborted || signal?.aborted);
+  target.deadlineExpired = Boolean(error?.deadlineExpired || classified.deadlineExpired);
+  target.timedOut = Boolean(error?.timedOut || classified.timedOut);
+  target.transportError = Boolean(error?.transportError || classified.transportError);
+  target.observerInfrastructure = Boolean(
+    error?.observerInfrastructure || classified.observerInfrastructure,
+  );
+  if (classified.exitCode !== null) target.exitCode = classified.exitCode;
+  if (classified.signal !== null) target.signal = classified.signal;
+  if (classified.killed) target.killed = true;
   target.lastObservation = error?.lastObservation ?? null;
 }
 
 function recordPlacementFailure(outcome, error, signal) {
   const failure = outcome.failure || {
-    code: error?.code || DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
+    code: isDeploymentFailure(error) ? error.code : DEPLOYMENT_FAILURE.WORKLOAD_FAILED,
     message: `placement after the window: ${errorText(error)}`,
     diagnostic: error?.diagnostic ?? null,
   };
