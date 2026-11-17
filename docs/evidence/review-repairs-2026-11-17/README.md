@@ -227,3 +227,37 @@ No exemption, scope reduction, algorithm change or baseline increase is part of
 this amendment. The checker and its new constants must receive independent
 review and native proof; affected generated provenance must be regenerated
 from that source before exact-candidate acceptance.
+
+Independent verifier `subagent:gcp_lifetime_verifier` approved the actual
+two-value diff, checker SHA256
+`210f070b635cdc7b988cf132191d51a4bb81260371b535aa3c9136c1de7e4522`.
+Local preservation commit `04c5346652cc8ffc0deaac7408f7d3c217ed1075`
+and remote `f6e16568941a3cc97b9cb2073d6e2420fa0716f4` share tree
+`5527f938ecd928fac3965ead7f46b26f911eb482`. The remote parent is the
+previous composed preservation commit, `0dd58de16f2dc32d69b090ae60565806c888db43`.
+
+Managed [job 4926](https://github.com/psvensson/lagrange-lab/issues/4926)
+regenerated the same metadata from that clean source and completed at
+2026-11-17 13:34:35 UTC, exit zero, with execution, container and thermal
+scopes closed. All seven generation, planning and preview steps passed.
+The canonical checker now measures exactly 612/612 test clone groups and
+21,898/21,898 test lines; production/scripts remains 35/35 groups and
+1,109/1,109 lines. There is no outstanding tightening hint in this run.
+
+Only the generated global inventory and impact-graph seal identities changed;
+all other generated outputs were stable. Source inputs remained unchanged,
+the staged patch was empty, and no untracked files appeared. Root applied the
+exact 2,766-byte patch, SHA256
+`dc8d3de24ccc549a461648bc1e9b329436c76b6c68fd3c2edb12426d8de12ea0`.
+The 15,025-byte complete worker log has SHA256
+`2ec6eb26fc14857020bc6157102f7b3dc65a8bc42deca64b93e88bb0296c0ae8`;
+the 22,924-byte original native log has SHA256
+`8387af33003d7cbc6365286a712d2ad5cf6850f4155812740ac00d01a81bd72f`.
+Collection [4927](https://github.com/psvensson/lagrange-lab/issues/4927)
+and [4930](https://github.com/psvensson/lagrange-lab/issues/4930) retained
+the original worker stream; root verified every chunk and complete artifact.
+
+The selector again reported WIDENED with 1,022 unique tests. This remains a
+plan, not an executed test result; the final native gate must recompute its
+own selection and execute without `--explain` or `--list`. The ordinary
+three-machine preview again completed without starting a formation.
