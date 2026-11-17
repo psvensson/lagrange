@@ -6,7 +6,7 @@
  * before delegation to SqlCore (SQLQueryEngine).
  */
 
-import {DEFAULT_QUERY_BUDGET} from '../wasm-service/query-budget-constants.js';
+import {normalizeQueryBudget} from '../wasm-service/query-budget-constants.js';
 import {
   EXECUTION_MODE,
   DEFAULT_TENANT_ID,
@@ -131,7 +131,7 @@ function createSqlRequest(fields) {
     parameters: params,
     executionMode: mode,
     runtimeKind: fields.runtimeKind ?? null,
-    budgets: Object.freeze({...DEFAULT_QUERY_BUDGET, ...fields.budgets}),
+    budgets: normalizeQueryBudget(fields.budgets),
     hints: fields.hints ? Object.freeze({...fields.hints}) : null,
     dialect: fields.dialect ?? null,
     // The explicit transaction the session expects to be in (a protocol

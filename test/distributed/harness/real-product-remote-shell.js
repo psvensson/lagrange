@@ -55,7 +55,6 @@ const DEFAULT_EXEC_TIMEOUT_MS = 10000;
 const DEFAULT_SSH_TIMEOUT_MS = 120000;
 const DEFAULT_SSH_MAX_BUFFER = 64 * 1024 * 1024;
 const MS_PER_SECOND = 1000;
-const MIN_CURL_TIMEOUT_SECONDS = 1;
 const DIAGNOSTIC_LOG_TAIL = 80;
 const CURL_EXIT_CODE_COULDNT_CONNECT = 7;
 const CURL_EXIT_CODE_OPERATION_TIMEDOUT = 28;
@@ -250,6 +249,17 @@ function boundedSshTimeoutMs(requestedTimeoutMs, defaultTimeoutMs) {
   return {hasFinite, effectiveTimeoutMs, sshTimeoutMs};
 }
 
+function httpCallBudgets(timeoutMs) {
+  const defaultHttpTimeoutMs = HTTP_TIMEOUT_SECONDS * MS_PER_SECOND;
+  const defaultTotalTimeoutMs = defaultHttpTimeoutMs + SSH_TRANSPORT_GRACE_MS;
+  const {sshTimeoutMs} = boundedSshTimeoutMs(timeoutMs, defaultHttpTimeoutMs);
+  // Keep curl's completion before the SSH deadline without extending the
+  // caller's total budget. Short calls retain the existing HTTP/transport ratio.
+  const httpTimeoutMs = Math.floor(
+    sshTimeoutMs * defaultHttpTimeoutMs / defaultTotalTimeoutMs);
+  return {httpTimeoutMs, sshTimeoutMs};
+}
+
 function resolveEffectiveSignal(opts, signal) {
   if (signal !== undefined) return signal;
   if (opts && objectHasOwn(opts, 'signal')) return opts.signal;
@@ -271,9 +281,8 @@ function mergeCallOpts(opts, {signal = undefined, timeoutMs = undefined} = {}) {
  * load-generator host) with curl. Never throws: a transport failure is a
  * `{status: null, error}` answer the caller decides on.
  */
-function buildCurlHttpCommand({url, method, body, basicAuth, effectiveTimeoutMs}) {
-  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
-    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
+function buildCurlHttpCommand({url, method, body, basicAuth, httpTimeoutMs}) {
+  const curlTimeoutSeconds = httpTimeoutMs / MS_PER_SECOND;
   const words = ['curl', '-sS', '--max-time', String(curlTimeoutSeconds),
     '--max-filesize', String(HTTP_MAX_FILESIZE_BYTES)];
   if (method !== 'GET') words.push('-X', method);
@@ -340,12 +349,11 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
   const effectiveSignal = resolveEffectiveSignal(opts, signal);
   const early = precheckHttpFromHost(effectiveSignal, timeoutMs);
   if (early !== null) return early;
-  const {effectiveTimeoutMs} = boundedSshTimeoutMs(
-    timeoutMs, HTTP_TIMEOUT_SECONDS * MS_PER_SECOND);
-  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
-    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
-  const sshTimeoutMs = (curlTimeoutSeconds * MS_PER_SECOND) + SSH_TRANSPORT_GRACE_MS;
-  const command = buildCurlHttpCommand({url, method, body, basicAuth, effectiveTimeoutMs});
+  const {httpTimeoutMs, sshTimeoutMs} = httpCallBudgets(timeoutMs);
+  // curl --max-time 0 is unbounded; an unallocatable tiny budget must not spawn.
+  const exhausted = precheckHttpFromHost(effectiveSignal, httpTimeoutMs);
+  if (exhausted !== null) return exhausted;
+  const command = buildCurlHttpCommand({url, method, body, basicAuth, httpTimeoutMs});
   const callOpts = mergeCallOpts(opts, {signal: effectiveSignal, timeoutMs: sshTimeoutMs});
   try {
     const raw = await sshRun(from, callOpts, command, sshTimeoutMs);

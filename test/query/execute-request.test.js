@@ -6,6 +6,7 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
+import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
@@ -14,12 +15,21 @@ import {
   ADAPTER_ERROR_MSG,
 } from '../../src/query/sql-adapter-constants.js';
 import {ResultStream} from '../../src/query/result-stream.js';
+import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
+import {
+  collectBoundedSqliteRows,
+  QUERY_RESULT_BUDGET_ERROR_CODE,
+} from '../../src/query/query-result-budget.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {PARTITION_STATE} from '../../src/partition/partition-constants.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {
   BudgetLimitError,
   BUDGET_CATEGORY,
 } from '../../src/query/budget-limit-error.js';
 import {
   QB_FIELD,
+  DEFAULT_QUERY_BUDGET,
   QUERY_BUDGET_ERROR_MSG,
   QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
 } from '../../src/wasm-service/query-budget-constants.js';
@@ -49,27 +59,30 @@ function createMockSystemCache() {
   const partitions = [
     {
       partition_id: 'p1',
+      table_id: 'users',
       table_name: 'users',
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: 'integer',
+      partition_version: 1,
+      replica_count: 1,
+      state: PARTITION_STATE.NORMAL,
+      leader_node_id: 'test-node',
     },
   ];
-  const services = [
-    {
-      service_id: 'p1',
-      service_type: 'partition',
-      partition_id: 'p1',
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: 'test-node/partition/p1',
-      status: 'active',
-    },
-  ];
+  const services = [PartitionServiceRowOwner.buildServiceRow({
+    partitionId: 'p1',
+    replicaId: 'p1',
+    nodeId: 'test-node',
+    status: SERVICE_STATUS.ACTIVE,
+    service: {isLeader: true},
+  })];
   return {
     get: function(type, _key) {
       if (type === 'tables') {
         if (_key === 'users') {
-          return {table_name: 'users', primaryKey: 'id'};
+          return {table_id: 'users', table_name: 'users', primary_key: 'id',
+            active_partition_version: 1};
         }
       }
       return null;
@@ -276,68 +289,94 @@ function createSqliteBackedEngine(seedRows = [
   const runtimeWiring = createRuntimeStartupWiring();
   const moduleMirror = new ModuleMirror();
   const wasmExecutor = new WasmExecutor({moduleMirror});
+  const deliveries = [];
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: createMockSystemCache(),
     messageRouter: {
       deliver: async (_address, message) => {
-        const sql = message?.payload?.sql || 'SELECT * FROM users';
-        const params = message?.payload?.params || [];
-        const rows = db.prepare(sql).all(...params);
+        assert.equal(message.type, QUERY_MESSAGE_TYPE.QUERY);
+        assert.equal(typeof message.sql, 'string');
+        assert.ok(Array.isArray(message.params));
+        const delivery = {sql: message.sql, params: message.params,
+          maxRows: message.resultMaxRows, maxBytes: message.resultMaxBytes};
+        deliveries.push(delivery);
+        let rows;
+        try {
+          rows = collectBoundedSqliteRows(db.prepare(message.sql), message.params, {
+            maxRows: message.resultMaxRows,
+            maxBytes: message.resultMaxBytes,
+            deadlineMs: message.resultDeadlineMs,
+          });
+        } catch (error) {
+          delivery.errorCode = error.code;
+          throw error;
+        }
+        delivery.rowCount = rows.length;
         return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows,
-          changes: 0,
+          count: rows.length,
+          rowSetComplete: true,
+          partitionId: 'p1',
         });
       },
     },
     runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,
     serviceRuntimeLifecycle: runtimeWiring.serviceRuntimeLifecycle,
     wasmExecutor,
+    autoStartDistributedTransactionRecovery: false,
   });
-  return {engine, close: () => db.close()};
+  return {engine, deliveries, close: async () => {
+    await engine.shutdown();
+    db.close();
+  }};
+}
+
+function createExpandingStageRequest(budgets, observations, resultStream) {
+  return Object.freeze({
+    ...createSqlRequest({
+      statement: 'SELECT id, v FROM users WHERE id = ?',
+      parameters: [1],
+      executionMode: EXECUTION_MODE.STAGE,
+      budgets,
+    }),
+    resultStream,
+    handler: async (batch, stageCtx) => {
+      observations.inputs.push(...batch);
+      for (const row of batch) {
+        for (const id of [row.id, row.id + 1]) {
+          const output = {...row, id};
+          await stageCtx.out(output);
+          observations.outputs.push(output);
+        }
+      }
+      return observations.outputs.length;
+    },
+  });
 }
 
 test('executeRequest STAGE - enforces RESULT_MAX_ROWS and result-byte ' +
   'limits on default ResultStream and preserves injected streams',
 async (t) => {
-  const {engine, close} = createSqliteBackedEngine();
+  const {engine, close, deliveries} = createSqliteBackedEngine();
   t.teardown(close);
 
-  // 1) RESULT_MAX_ROWS: 2 on default stream -> 2 ctx.out writes succeed
-  const emittedRows = [];
-  const allowTwoReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {RESULT_MAX_ROWS: 2},
-    }),
-    handler: async (batch, stageCtx) => {
-      for (const row of batch) {
-        await stageCtx.out(row);
-        emittedRows.push(row);
-      }
-      return batch.length;
-    },
-  });
+  // One bounded input row expands into two real ctx.out writes.
+  const allowed = {inputs: [], outputs: []};
+  const allowTwoReq = createExpandingStageRequest({RESULT_MAX_ROWS: 2}, allowed);
   const allowTwoRes = await engine.executeRequest(allowTwoReq);
   t.equal(allowTwoRes.success, true);
   t.same(allowTwoRes.results, [2]);
-  t.same(emittedRows, [{id: 1, v: 'ab'}, {id: 2, v: 'cd'}]);
+  t.same(allowed.inputs, [{id: 1, v: 'ab'}]);
+  t.same(allowed.outputs, [{id: 1, v: 'ab'}, {id: 2, v: 'ab'}]);
+  t.same(deliveries[0].params, [1], 'actual parameters reach SQLite');
+  t.match(deliveries[0].sql, /WHERE/u, 'the delivered predicate reaches SQLite');
+  t.equal(deliveries[0].rowCount, 1);
 
   // 2) RESULT_MAX_ROWS: 1 on default stream -> 2nd write rejected
-  const rejectSecondRowReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {RESULT_MAX_ROWS: 1},
-    }),
-    handler: async (batch, stageCtx) => {
-      for (const row of batch) {
-        await stageCtx.out(row);
-      }
-    },
-  });
+  const rowLimited = {inputs: [], outputs: []};
+  const rejectSecondRowReq = createExpandingStageRequest({RESULT_MAX_ROWS: 1}, rowLimited);
   try {
     await engine.executeRequest(rejectSecondRowReq);
     t.fail('should have rejected 2nd row');
@@ -345,22 +384,14 @@ async (t) => {
     t.ok(err instanceof BudgetLimitError);
     t.equal(err.message, QUERY_BUDGET_ERROR_MSG.RESULT_MAX_ROWS_EXCEEDED);
   }
+  t.same(rowLimited.inputs, [{id: 1, v: 'ab'}], 'input fits the real read budget');
+  t.same(rowLimited.outputs, [{id: 1, v: 'ab'}], 'only the first output was accepted');
 
   // 3) Custom result-byte limit on default stream (both uppercase & camelCase)
   // Each row {"id":1,"v":"ab"} is 17 bytes; limit 20 allows 1st and rejects 2nd
   for (const byteBudget of [{RESULT_MAX_BYTES: 20}, {resultMaxBytes: 20}]) {
-    const byteLimitReq = Object.freeze({
-      ...createSqlRequest({
-        statement: 'SELECT id, v FROM users ORDER BY id',
-        executionMode: EXECUTION_MODE.STAGE,
-        budgets: byteBudget,
-      }),
-      handler: async (batch, stageCtx) => {
-        for (const row of batch) {
-          await stageCtx.out(row);
-        }
-      },
-    });
+    const byteLimited = {inputs: [], outputs: []};
+    const byteLimitReq = createExpandingStageRequest(byteBudget, byteLimited);
     try {
       await engine.executeRequest(byteLimitReq);
       t.fail('should have rejected on result byte budget');
@@ -369,23 +400,16 @@ async (t) => {
       t.equal(err.message, QUERY_BUDGET_ERROR_MSG.RESULT_MAX_BYTES_EXCEEDED);
       t.equal(err.limit, 20);
     }
+    t.same(byteLimited.inputs, [{id: 1, v: 'ab'}]);
+    t.same(byteLimited.outputs, [{id: 1, v: 'ab'}]);
   }
 
   // 4) Explicitly injected budgeted stream -> preserved and enforced
   const injectedStream = new ResultStream({RESULT_MAX_ROWS: 1});
-  const injectedReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {RESULT_MAX_ROWS: 10},
-    }),
-    resultStream: injectedStream,
-    handler: async (batch, stageCtx) => {
-      for (const row of batch) {
-        await stageCtx.out(row);
-      }
-    },
-  });
+  const injected = {inputs: [], outputs: []};
+  const injectedReq = createExpandingStageRequest(
+    {RESULT_MAX_ROWS: 10}, injected, injectedStream,
+  );
   try {
     await engine.executeRequest(injectedReq);
     t.fail('should have rejected on injected stream budget');
@@ -393,6 +417,29 @@ async (t) => {
     t.ok(err instanceof BudgetLimitError);
   }
   t.same(injectedStream.getRows(), [{id: 1, v: 'ab'}]);
+});
+
+test('executeRequest STAGE - bounded input collection refuses before the handler', async (t) => {
+  const {engine, close, deliveries} = createSqliteBackedEngine();
+  t.teardown(close);
+  let handlerCalls = 0;
+  const request = Object.freeze({
+    ...createSqlRequest({
+      statement: 'SELECT id, v FROM users ORDER BY id',
+      executionMode: EXECUTION_MODE.STAGE,
+      budgets: {RESULT_MAX_ROWS: 1},
+    }),
+    handler: async () => {
+      handlerCalls += 1;
+    },
+  });
+  const result = await engine.executeRequest(request);
+  t.equal(result.success, false);
+  t.equal(handlerCalls, 0);
+  t.ok(deliveries.length > 0, 'the production input collection path engaged');
+  t.ok(deliveries.every((delivery) =>
+    delivery.errorCode === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED),
+  'input was refused for the named row bound');
 });
 
 test('executeRequest STAGE - normalizes OUT_MAX_BYTES and outMaxBytes ' +
@@ -448,26 +495,22 @@ async (t) => {
     t.same(okRes.results, [2]);
   }
 
-  // 5c) Conflicting OUT_MAX_BYTES: 128 + outMaxBytes: 1 -> explicit error
-  const conflictReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {OUT_MAX_BYTES: 128, outMaxBytes: 1},
-    }),
-    handler: async (batch, stageCtx) => {
-      await stageCtx.out(batch[0]);
-    },
-  });
-  try {
-    await engine.executeRequest(conflictReq);
-    t.fail('should have rejected conflicting budget limits');
-  } catch (err) {
-    t.ok(
-      err.message.includes(
-        QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
-      ),
+  // Both canonical construction and direct request admission reject conflicts.
+  for (const upperLimit of [128, DEFAULT_QUERY_BUDGET.OUT_MAX_BYTES]) {
+    const budgets = {OUT_MAX_BYTES: upperLimit, outMaxBytes: upperLimit + 1};
+    const conflictPattern = new RegExp(
+      QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
     );
+    t.throws(() => createSqlRequest({statement: 'SELECT 1', budgets}), conflictPattern);
+    const conflictReq = Object.freeze({
+      ...createSqlRequest({
+        statement: 'SELECT id, v FROM users ORDER BY id',
+        executionMode: EXECUTION_MODE.STAGE,
+      }),
+      budgets,
+      handler: async () => t.fail('conflicting budgets must refuse before the handler'),
+    });
+    await t.rejects(engine.executeRequest(conflictReq), conflictPattern);
   }
 
   // 6) Audit all 14 budget dimensions between SqlRequest and BudgetEnforcer / ResultStream

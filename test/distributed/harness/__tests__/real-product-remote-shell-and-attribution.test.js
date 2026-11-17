@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
+import {createServer} from 'node:http';
 import process from 'node:process';
 import {describe, it} from 'node:test';
 
+import {managedTimeout} from '../../../../src/test-helpers/managed-timers.js';
 import {readinessDenialOf} from '../benchmark-readiness-denial.js';
 import {
   COMPARATIVE_SMOKE_PROFILE,
@@ -18,7 +20,9 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  stringEndsWith,
   stringIncludes,
+  stringReplace,
 } from '../real-product-captured-intrinsics.js';
 import {
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
@@ -39,6 +43,7 @@ import {
   inspectProducts,
   observeProductsAfterWindow,
 } from '../real-product-identity.js';
+import {nodeReady} from '../real-product-lagrange-observations.js';
 import {pollReadiness, typedReadiness} from '../real-product-readiness.js';
 import {
   classifyRemoteCommandError,
@@ -1126,4 +1131,186 @@ describe('End-to-end native child-process -> SSH wrapper -> adapter -> campaign 
     assert.equal(isDeploymentFailure({name: 'AbortError', code: 'ABORT_ERR'}), false);
     assert.equal(isDeploymentFailure({code: 'workload_failed'}), true);
   });
+});
+
+const NATIVE_HTTP_OPERATION_BUDGET_MS = 1500;
+const NATIVE_HTTP_CALLER_ABORT_MS = 500;
+const NATIVE_HTTP_PROBE_URL = 'http://fixture-node:8080/readyz';
+
+function curlTimeoutMsOf(command) {
+  const match = command.match(/--max-time ([0-9.]+)/u);
+  assert.ok(match, 'HTTP owner emitted a curl timeout');
+  return Number(match[1]) * 1000;
+}
+
+async function createNativeHttpProbe(t) {
+  let ready = true;
+  let requestCount = 0;
+  const calls = [];
+  const fixtureErrors = [];
+  const children = [];
+  const server = createServer((_request, response) => {
+    requestCount += 1;
+    if (ready) {
+      response.writeHead(200, {'content-type': 'application/json'});
+      response.end(JSON.stringify({ready: true}));
+    }
+  });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    await Promise.all(children);
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const port = server.address().port;
+  const sshRun = createSshCommandRunner({
+    execFileImpl(_file, args, options, callback) {
+      const command = args[args.length - 1];
+      const call = {command, subprocessTimeoutMs: options.timeout, callbackReceived: false};
+      calls.push(call);
+      try {
+        assert.ok(stringEndsWith(command, ` '${NATIVE_HTTP_PROBE_URL}'`));
+        call.curlTimeoutMs = curlTimeoutMsOf(command);
+        const localCommand = stringReplace(
+          command, `'${NATIVE_HTTP_PROBE_URL}'`, `'http://127.0.0.1:${port}/readyz'`);
+        // Substitute only the SSH hop. The real shell parses the exact curl
+        // command; exec leaves curl as the native child receiving cancellation.
+        const child = execFile('/bin/sh', ['-c', `exec ${localCommand}`], options,
+          (error, stdout, stderr) => {
+            Object.assign(call, {callbackReceived: true, nativeErrorCode: error?.code ?? null,
+              nativeErrorName: error?.name ?? null, stdout, stderr});
+            callback(error, stdout, stderr);
+          });
+        children.push(new Promise((resolve) => {
+          child.once('close', (exitCode, signal) => {
+            Object.assign(call, {exitCode, signal});
+            resolve();
+          });
+        }));
+        return child;
+      } catch (error) {
+        fixtureErrors.push({message: error.message, command});
+        t.diagnostic(`native HTTP fixture error: ${error.stack}`);
+        throw error;
+      }
+    },
+  });
+  return {
+    async observe(responseReady, signal = null) {
+      ready = responseReady;
+      const beforeRequests = requestCount;
+      const beforeCalls = calls.length;
+      const window = resolveOperationWindow({clock: Date.now,
+        defaultDeadlineMs: NATIVE_HTTP_OPERATION_BUDGET_MS, callerSignal: signal});
+      let result = null;
+      let failure = null;
+      try {
+        result = await nodeReady({sshRun, opts: {}, clientIp: 'fixture-client',
+          budget: {attempts: 1, intervalMs: 0}, sleep: async () => {}, now: Date.now,
+          signal: window.signal, deadlineAtMs: window.deadlineAtMs,
+          deadlineMs: window.deadlineMs}, 'fixture-node');
+      } catch (error) {
+        failure = error;
+      }
+      await Promise.all(children);
+      const elapsedMs = Date.now() - window.startedAtMs;
+      assert.deepEqual(fixtureErrors, [], 'fixture errors are not product observations');
+      assert.equal(calls.length - beforeCalls, 1, 'one native child is engaged');
+      const call = calls[beforeCalls];
+      assert.equal(call.callbackReceived, true, 'native callback is retained');
+      assert.notEqual(call.nativeErrorCode, 'ENOENT', 'native shell is available');
+      assert.notEqual(call.exitCode, 127, 'native curl is available');
+      assert.equal(requestCount - beforeRequests, 1, 'native curl engaged the HTTP server');
+      t.diagnostic(JSON.stringify({responseReady, elapsedMs,
+        budgetMs: window.deadlineMs, exitCode: call.exitCode, signal: call.signal,
+        subprocessTimeoutMs: call.subprocessTimeoutMs, curlTimeoutMs: call.curlTimeoutMs,
+        failureCode: failure?.code ?? null, aborted: failure?.aborted ?? false}));
+      return {result, failure, elapsedMs, call};
+    },
+  };
+}
+
+describe('HTTP probe total deadline and native timeout attribution', () => {
+  it('fits fractional curl and transport allowances inside the finite caller cap', async () => {
+    const budgets = [
+      {timeoutMs: undefined, sshMs: 12000, curlMs: 10000},
+      {timeoutMs: 20000, sshMs: 12000, curlMs: 10000},
+      {timeoutMs: 10000, sshMs: 10000, curlMs: 8333},
+      {timeoutMs: 1500, sshMs: 1500, curlMs: 1250},
+      {timeoutMs: 500, sshMs: 500, curlMs: 416},
+      {timeoutMs: 2, sshMs: 2, curlMs: 1},
+    ];
+    for (const budget of budgets) {
+      const calls = [];
+      const answer = await httpFromHost({from: 'fixture-client', url: NATIVE_HTTP_PROBE_URL,
+        timeoutMs: budget.timeoutMs, sshRun: async (_host, opts, command, timeoutMs) => {
+          calls.push({opts, command, timeoutMs});
+          return '{"ready":true}\nhttp_status=200';
+        }});
+      assert.equal(answer.json.ready, true);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].timeoutMs, budget.sshMs);
+      assert.equal(calls[0].opts.timeoutMs, budget.sshMs);
+      assert.equal(curlTimeoutMsOf(calls[0].command), budget.curlMs);
+      assert.ok(budget.curlMs > 0 && budget.curlMs < budget.sshMs);
+    }
+  });
+
+  it('refuses expired or unallocatable tiny budgets without an unbounded curl process',
+    async () => {
+      for (const timeoutMs of [-1, 0, 0.5, 1, 1.9]) {
+        let spawned = false;
+        const answer = await httpFromHost({from: 'fixture-client', url: NATIVE_HTTP_PROBE_URL,
+          timeoutMs, sshRun: async () => {
+            spawned = true;
+          }});
+        assert.equal(spawned, false);
+        assert.equal(answer.status, null);
+        assert.equal(answer.deadlineExpired, true);
+        assert.equal(answer.aborted, false);
+        assert.equal(answer.observerInfrastructure, false);
+      }
+    });
+
+  it('admits healthy readiness and observes native curl timeout before the operation deadline',
+    async (t) => {
+      const probe = await createNativeHttpProbe(t);
+      const healthy = await probe.observe(true);
+      assert.equal(healthy.result.state, 'ready');
+      assert.equal(healthy.failure, null);
+      assert.equal(healthy.call.exitCode, 0);
+      const stalled = await probe.observe(false);
+      assert.equal(stalled.failure.code, 'readiness_exhausted');
+      assert.equal(stalled.failure.deadlineExpired, false);
+      assert.equal(stalled.failure.aborted, false);
+      assert.equal(stalled.failure.observerInfrastructure, false);
+      assert.equal(stalled.failure.lastProbeError.httpTimedOut, true);
+      assert.equal(stalled.failure.lastProbeError.timedOut, false);
+      assert.equal(stalled.call.exitCode, 28);
+      assert.equal(stalled.call.signal, null);
+      assert.ok(stalled.call.curlTimeoutMs < stalled.call.subprocessTimeoutMs);
+      assert.ok(stalled.call.subprocessTimeoutMs <= NATIVE_HTTP_OPERATION_BUDGET_MS);
+      assert.ok(stalled.elapsedMs < NATIVE_HTTP_OPERATION_BUDGET_MS,
+        `native HTTP probe exceeded its owner budget: ${stalled.elapsedMs}ms`);
+    });
+
+  it('settles the native child on independent caller cancellation with abort attribution',
+    async (t) => {
+      const probe = await createNativeHttpProbe(t);
+      const controller = new AbortController();
+      managedTimeout({teardown: (cleanup) => t.after(cleanup)},
+        () => controller.abort(), NATIVE_HTTP_CALLER_ABORT_MS);
+      const cancelled = await probe.observe(false, controller.signal);
+      assert.equal(cancelled.failure.code, 'readiness_exhausted');
+      assert.equal(cancelled.failure.aborted, true);
+      assert.equal(cancelled.failure.observerInfrastructure, false);
+      assert.equal(cancelled.failure.lastProbeError.httpTimedOut, false);
+      assert.equal(cancelled.call.nativeErrorName, 'AbortError');
+      assert.equal(cancelled.call.nativeErrorCode, 'ABORT_ERR');
+      assert.equal(cancelled.call.signal, 'SIGTERM');
+      assert.ok(cancelled.elapsedMs < NATIVE_HTTP_OPERATION_BUDGET_MS);
+    });
 });

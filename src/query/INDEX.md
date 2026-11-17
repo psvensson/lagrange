@@ -118,6 +118,7 @@ documentClass: generated
 - [sql-query-engine-write-failure-methods.js](sql-query-engine-write-failure-methods.js) - Return one canonical deferred result when a timed-out SQL request is still better explained by a shared... (importers: one)
 - [sql-query-engine.js](sql-query-engine.js) - Persist a distributed write operation not associated with a transaction. (importers: hub)
 - [sql-request.js](sql-request.js) - Canonical SqlRequest model. (importers: hub)
+- [sql-scalar-functions.js](sql-scalar-functions.js) - SQLite scalar operations shared by the SELECT combiner and HAVING evaluator. (importers: few)
 - [sql-select-execution-helpers.js](sql-select-execution-helpers.js) - Helper routines for select query execution and wait reporting. (importers: one)
 - [sql-statement-ingress.js](sql-statement-ingress.js) - Client SQL ingress and the system-table write admission. (importers: many)
 - [sql-transaction-control-grammar.js](sql-transaction-control-grammar.js) - The transaction-control statement grammar (BEGIN, START TRANSACTION, COMMIT, END, ROLLBACK, ABORT) the SQL parser... (importers: few)

@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 281,
-    "query-sql": 194,
+    "query-sql": 195,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2664,
-  "digest": "fnv1a32-3e475f12",
+  "censusSize": 2665,
+  "digest": "fnv1a32-0af21cc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-78b5a99e",
+  "observationDigest": "fnv1a32-85370ee7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1707,6 +1707,7 @@
     "test/query/sql-query-engine.test.js": "query-sql",
     "test/query/sql-query-pbt.test.js": "query-sql",
     "test/query/sql-request.test.js": "query-sql",
+    "test/query/sql-scalar-functions.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
@@ -17603,9 +17604,11 @@
     },
     "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-facade-compatibility.test.js": {

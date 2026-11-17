@@ -9,14 +9,13 @@ import {
   resolveParameterNodeOrdinal,
 } from './distributed-select-fanout-plan.js';
 import {EXPR_TYPE} from '../parser-constants.js';
+import {sqlLength, sqlSubstr, sqlRound} from '../sql-scalar-functions.js';
 
 const UNBOUND_PARAMETER_ERROR_CODE = 'SYNTAX_ERROR';
 const UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
 const UNKNOWN_PARAMETER_LABEL = '?';
 const INVALID_PARAMETER_NAN_MSG =
   'Invalid parameter value: NaN is unrepresentable';
-const SUBSTR_WITH_LENGTH_ARG_COUNT = 3;
-const DECIMAL_BASE = 10;
 const SCALAR_FN = Object.freeze({
   COALESCE: 'COALESCE',
   IFNULL: 'IFNULL',
@@ -405,25 +404,6 @@ function evaluateScalarCast(node, evalCtx) {
   return inner;
 }
 
-function evaluateScalarSubstr(args) {
-  if (args[0] === null || args[0] === undefined ||
-      args[1] === null || args[1] === undefined) {
-    return null;
-  }
-  const text = String(args[0]);
-  const start = Math.trunc(Number(args[1]));
-  const zeroStart = start > 0 ? start - 1 :
-    (start < 0 ? Math.max(text.length + start, 0) : 0);
-  if (args.length < SUBSTR_WITH_LENGTH_ARG_COUNT) {
-    return text.slice(zeroStart);
-  }
-  if (args[2] === null || args[2] === undefined) {
-    return null;
-  }
-  const length = Math.max(Math.trunc(Number(args[2])), 0);
-  return text.slice(zeroStart, zeroStart + length);
-}
-
 function evaluateScalarFunctionCall(node, evalCtx) {
   const fnName = String(node.name || '').toUpperCase();
   const args = (node.args || []).map((arg) =>
@@ -461,22 +441,12 @@ function evaluateScalarFunctionCall(node, evalCtx) {
       null :
       String(args[0]).trim();
   case SCALAR_FN.LENGTH:
-    return args[0] === null || args[0] === undefined ?
-      null :
-      String(args[0]).length;
+    return sqlLength(args[0]);
   case SCALAR_FN.SUBSTR:
   case SCALAR_FN.SUBSTRING:
-    return evaluateScalarSubstr(args);
-  case SCALAR_FN.ROUND: {
-    if (args[0] === null || args[0] === undefined) {
-      return null;
-    }
-    const digits = args[1] === undefined || args[1] === null ?
-      0 :
-      Math.trunc(Number(args[1]));
-    const factor = DECIMAL_BASE ** digits;
-    return Math.round(Number(args[0]) * factor) / factor;
-  }
+    return sqlSubstr(...args);
+  case SCALAR_FN.ROUND:
+    return sqlRound(...args);
   default:
     return null;
   }

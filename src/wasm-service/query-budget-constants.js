@@ -174,25 +174,13 @@ const QUERY_BUDGET_NORMALIZATION_ERROR_MSG = Object.freeze({
 });
 
 const EMPTY_BUDGET = Object.freeze({});
-const DEFAULT_QUERY_BUDGET_KEYS = Object.freeze(
-  Object.keys(DEFAULT_QUERY_BUDGET),
-);
 const QB_FIELD_ENTRIES = Object.freeze(Object.entries(QB_FIELD));
-const QB_FIELD_CAMEL_VALUES = Object.freeze(Object.values(QB_FIELD));
-
-function isUnnormalizedSqlRequestBudgetSpread(source) {
-  return (
-    DEFAULT_QUERY_BUDGET_KEYS.every((key) => Object.hasOwn(source, key)) &&
-    !QB_FIELD_CAMEL_VALUES.every((key) => Object.hasOwn(source, key))
-  );
-}
 
 function resolveDimensionBudgetValue(
   source,
   upperKey,
   camelKey,
   defaultValue,
-  isSqlRequestSpread,
 ) {
   const hasUpper =
     Object.hasOwn(source, upperKey) && source[upperKey] !== undefined;
@@ -203,13 +191,6 @@ function resolveDimensionBudgetValue(
     const camelValue = source[camelKey];
     if (Object.is(upperValue, camelValue)) {
       return upperValue;
-    }
-    if (
-      isSqlRequestSpread &&
-      Object.hasOwn(DEFAULT_QUERY_BUDGET, upperKey) &&
-      Object.is(upperValue, DEFAULT_QUERY_BUDGET[upperKey])
-    ) {
-      return camelValue;
     }
     throw new Error(
       `${QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS}: ` +
@@ -229,7 +210,8 @@ function resolveDimensionBudgetValue(
  * Normalize query budget overrides into one canonical frozen budget shape
  * containing both uppercase SqlRequest fields and camelCase QB_FIELD keys.
  * Rejects conflicting values when a caller supplies two different values
- * for the same limit dimension.
+ * for the same limit dimension. Defaults are applied only after resolving the
+ * caller's fields, never inferred from a supplied value equaling a default.
  *
  * @param {Object} [budgets] - Raw or partially-populated query budget object.
  * @return {Readonly<Object>} Frozen normalized query budget.
@@ -240,7 +222,6 @@ function normalizeQueryBudget(budgets = EMPTY_BUDGET) {
   if (typeof source !== 'object' || Array.isArray(source)) {
     throw new Error(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT);
   }
-  const isSqlRequestSpread = isUnnormalizedSqlRequestBudgetSpread(source);
   const normalized = {...source};
   for (const [upperKey, camelKey] of QB_FIELD_ENTRIES) {
     const resolvedValue = resolveDimensionBudgetValue(
@@ -248,7 +229,6 @@ function normalizeQueryBudget(budgets = EMPTY_BUDGET) {
       upperKey,
       camelKey,
       DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey],
-      isSqlRequestSpread,
     );
     normalized[upperKey] = resolvedValue;
     normalized[camelKey] = resolvedValue;

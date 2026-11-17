@@ -111,7 +111,46 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (15 November 2026)
+## Current integration summary (17 November 2026)
+
+- **Integration owner and authority:** the current ChatGPT root session,
+  following the operator's 17 November instruction to take over development,
+  fix the verified latest-review errors and continue the existing GCP
+  comparative measurement campaign. Rule-set revision 5 remains governing.
+- **Candidate:** defect baseline
+  `4b0c8ec1de59e9a074afa97ce260afb2868685c5` from
+  `wip/integrated-candidate-20261115`; isolated continuation branch
+  `work/review-fixes-gcp-prep-20261117`. Current main is
+  `fc626cbf377a334c6960836afb92d837acd25ed9`. No new integration or publication
+  acceptance is claimed.
+- **Measured blockers:** native SQL scalar result regressions, explicit budget
+  conflict admission, dropped repository operation observations at Phase B
+  target-slot admission, and HTTP probes extending a caller's total deadline.
+  Their original failures, controls, source identities and evidence hashes are
+  retained in the [repair review record](../../docs/evidence/review-repairs-2026-11-17/README.md).
+- **Component state:** scalar/budget and the separately discovered text-order
+  repair passed native job 4918 (10 files, 1,299 assertions; all seven frozen
+  diagnostics engaged with intended results). Target-slot admission passed
+  job 4910; HTTP deadline and final fixture-static correction passed jobs
+  4908/4915. Independent source/proof reviews and complete log hashes are
+  retained in their component records. Root owns composed metadata, exact
+  candidate gates and physical continuation.
+- **Execution boundary:** repository execution, including tests, audits and
+  generators, remains on the managed lab. Source editing and Git inspection
+  may occur in the collaborator workspace. Existing thermal, physical custody
+  and original-evidence requirements remain unchanged.
+- **Next action:** satisfy the composed candidate's applicable gates, then run the existing
+  small physical-lab pre-gate. The measured-comparisons epic retains GCP
+  topology, semantic parity, repeated measurements and claim admission. No
+  physical campaign has been submitted by this takeover yet.
+- **Separate work:** portability PRs 222/223 and the literal-checker binding
+  residual remain separate units. The measured publication-dependent cached
+  terminal-operation delay is recorded with the target-slot owner and is not
+  claimed fixed. Optional GCP create-time expiry is a separate provisioner
+  contract unit. Historical formation, comparison and
+  release claims below are not promoted by the latest component review.
+
+## Retained integration summary (15 November 2026)
 
 - **Governing rules and source:** rule-set revision 5, integrated from
   `origin/main` `c4f1cd064bee29d174ba63d0d8d52486651bc59f` into candidate branch
