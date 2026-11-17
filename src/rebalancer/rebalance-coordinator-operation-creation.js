@@ -198,7 +198,6 @@ class RebalanceCoordinatorOperationCreation {
       entityId,
       normalizedMoveType,
     );
-    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
     const criticalAddLikeIntentKey = this.buildCriticalAddLikeIntentKey(
       move,
@@ -233,9 +232,7 @@ class RebalanceCoordinatorOperationCreation {
 
     const recentOperation = await this.getRecentOperationIntent(dedupeKey);
     if (recentOperation) {
-      return this.maybeRearmReusedPendingOperation(recentOperation, {
-        shouldEmitOperationCreated,
-      });
+      return this.maybeRearmReusedPendingOperation(recentOperation);
     }
     if (criticalAddLikeIntentKey && criticalAddLikeIntentKey !== dedupeKey) {
       const recentCriticalOperation = await this.getRecentOperationIntent(
@@ -246,9 +243,7 @@ class RebalanceCoordinatorOperationCreation {
           [dedupeKey, criticalAddLikeIntentKey],
           recentCriticalOperation,
         );
-        return this.maybeRearmReusedPendingOperation(recentCriticalOperation, {
-          shouldEmitOperationCreated,
-        });
+        return this.maybeRearmReusedPendingOperation(recentCriticalOperation);
       }
     }
 
@@ -484,9 +479,7 @@ class RebalanceCoordinatorOperationCreation {
         entityType: entityType,
         entityId: entityId,
       });
-      return this.maybeRearmReusedPendingOperation(existing, {
-        shouldEmitOperationCreated,
-      });
+      return this.maybeRearmReusedPendingOperation(existing);
     }
 
     if (criticalAddLikeIntentKey) {
@@ -498,9 +491,7 @@ class RebalanceCoordinatorOperationCreation {
           [dedupeKey, criticalAddLikeIntentKey],
           recentCriticalOperation,
         );
-        return this.maybeRearmReusedPendingOperation(recentCriticalOperation, {
-          shouldEmitOperationCreated,
-        });
+        return this.maybeRearmReusedPendingOperation(recentCriticalOperation);
       }
     }
 

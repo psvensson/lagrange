@@ -3,6 +3,9 @@
  */
 
 import {FIELD, MESSAGE_TYPE} from '../constants/index.js';
+import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
+  '../raft/raft-committed-membership-constants.js';
+import {OperationType} from './replica-operation-progress.js';
 
 const ReplicaOperationMessageType = Object.freeze({
   CREATE_REPLICA: MESSAGE_TYPE.CREATE_REPLICA,
@@ -112,8 +115,20 @@ function isCompletedReplicaOperationAnswer(answer) {
     !(typeof answer.error === 'string' && answer.error.length > 0);
 }
 
+// A founding create: an ADD that opens a new group from the GENESIS stamp the
+// initial provisioner (or the seed) wrote. Every other partition ADD carries
+// the creation owner's COMMITTED stamp, so the stamp's kind, not its
+// presence, names a founding create. The stamp is read as carried on the
+// record, never re-derived.
+function isGenesisFoundingCreateOperation(operation) {
+  return operation?.type === OperationType.ADD &&
+    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]?.kind ===
+      COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS;
+}
+
 export {
   isCompletedReplicaOperationAnswer,
+  isGenesisFoundingCreateOperation,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
   ReplaceWitnessDeliveryOutcome,

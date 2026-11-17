@@ -253,8 +253,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     const messageGroupService =
       options.messageGroupService || this.getLeaderMessageGroupService();
     const partition = new PartitionService({
-      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
       ...options,
+      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
       transport: this.transport,
       messageGroupService,
       messageRouter: this.messageRouter,

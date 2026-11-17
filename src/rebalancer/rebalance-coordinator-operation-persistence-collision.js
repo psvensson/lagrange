@@ -72,9 +72,7 @@ class RebalanceCoordinatorOperationPersistenceCollision {
       [context.dedupeKey, context.criticalAddLikeIntentKey],
       existing,
     );
-    return this.maybeRearmReusedPendingOperation(existing, {
-      shouldEmitOperationCreated: context.shouldEmitOperationCreated,
-    });
+    return this.maybeRearmReusedPendingOperation(existing);
   }
 
   assertReplaceIntentCollisionMatches(context, existing) {

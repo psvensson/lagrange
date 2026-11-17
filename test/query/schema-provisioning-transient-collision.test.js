@@ -32,6 +32,10 @@ import {
 import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
+import {
+  COMMITTED_MEMBERSHIP_STAMP_KIND,
+} from '../../src/raft/raft-committed-membership-constants.js';
 
 class OperationCreationHost {}
 applyRebalanceCoordinatorOperationCreationAdmissionMethods(
@@ -243,18 +247,29 @@ test('bootstrap partition ADD operations defer retryable control-plane ' +
       deferRetry: true,
     },
   );
+  // The founding create carries the provisioner's GENESIS stamp; an
+  // ordinary partition ADD carries the creation owner's COMMITTED stamp
+  // (rebalance-coordinator-operation-creation.js buildOperationBootstrapTopology),
+  // so the stamp kind, not its presence, names the founding create.
   const bootstrapOp = {
     operationId: 'job-1:operation:node-a',
     type: 'ADD',
     entityType: 'partition',
     partitionId: 'tbl-orders-p1',
-    bootstrapMembership: {epoch: 1},
+    bootstrapMembership: genesisStamp(
+      ['job-1:replica:node-a', 'job-1:replica:node-b'],
+      {
+        'job-1:replica:node-a': 'node-a',
+        'job-1:replica:node-b': 'node-b',
+      },
+    ),
   };
   const ordinaryUserOp = {
     operationId: 'rebalance-op-1',
     type: 'ADD',
     entityType: 'partition',
     partitionId: 'tbl-orders-p1',
+    bootstrapMembership: {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED},
   };
 
   t.equal(
@@ -273,6 +288,6 @@ test('bootstrap partition ADD operations defer retryable control-plane ' +
       deferredError,
     ),
     false,
-    'ordinary non-bootstrap user partition move retains existing behavior',
+    'an ordinary committed-stamped partition ADD retains existing behavior',
   );
 });
