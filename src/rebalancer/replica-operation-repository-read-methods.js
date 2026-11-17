@@ -479,7 +479,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       }
       if (
         ownerPersistedTransitionWitness &&
-      this.isReplicaOperationVisibilitySatisfied(
+      this.isAppliedReplicaOperationWriteVisible(
         ownerPersistedTransitionWitness.operation,
         operation,
       )

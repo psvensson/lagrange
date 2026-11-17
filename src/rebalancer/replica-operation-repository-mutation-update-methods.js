@@ -103,7 +103,15 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           );
         }
       }
-      this.syncIncompleteOperationObservation(operation);
+      // A confirmation may observe the row already advanced past this write
+      // (even terminal); the observation records what was confirmed, never
+      // the superseded write.
+      this.syncIncompleteOperationObservation(
+        visibility?.confirmationState ===
+          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED ?
+          visibility.operation :
+          operation,
+      );
       return visibility;
     }
 

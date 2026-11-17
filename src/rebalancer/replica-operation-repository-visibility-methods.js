@@ -145,7 +145,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       }
       if (
         expectedOperation &&
-      !this.isReplicaOperationVisibilitySatisfied(expectedOperation, witness.operation)
+      !this.isAppliedReplicaOperationWriteVisible(expectedOperation, witness.operation)
       ) {
         return null;
       }
@@ -216,7 +216,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       if (!witnessOperation || !this.isOperationLocallyOwned(witnessOperation)) {
         return operation;
       }
-      if (this.isReplicaOperationVisibilitySatisfied(witnessOperation, operation)) {
+      if (this.isAppliedReplicaOperationWriteVisible(witnessOperation, operation)) {
         this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
         return operation;
       }

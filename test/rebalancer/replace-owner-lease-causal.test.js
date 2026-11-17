@@ -51,6 +51,7 @@ import {
   LEASE_VERDICT_REPLICA,
   buildLeaseVerdictReadinessService,
   buildLeaseVerdictOperationRow,
+  buildLeaseVerdictPeerVoterRows,
   buildLeaseVerdictServiceRows,
 } from './replace-owner-lease-verdict-harness.js';
 
@@ -118,7 +119,13 @@ function createCausalCluster(seedOwnerRoutingReady) {
       ),
     },
     cacheData: {
-      services: buildLeaseVerdictServiceRows(ReplicaStatus.ACTIVE),
+      // The source, the target and the partition's two other voters: a
+      // count-neutral REPLACE keeps the voter-ready floor after the source
+      // leaves.
+      services: [
+        ...buildLeaseVerdictServiceRows(ReplicaStatus.ACTIVE),
+        ...buildLeaseVerdictPeerVoterRows(),
+      ],
       replicaOperations: [buildLeaseVerdictOperationRow({
         step: WORKFLOW_STEP.ACTIVE,
         leaseCell: LEASE_CELL.LIVE,

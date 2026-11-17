@@ -660,3 +660,50 @@ test(
     }
   },
 );
+
+test(
+  'an applied insert confirmed against a progressed row records the confirmed ' +
+    'row in the incomplete-operation observation, never the superseded PENDING write',
+  async (t) => {
+    const progressedSteps = [
+      [WORKFLOW_STEP.CREATING, ReplicaStatus.CREATING, false],
+      [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true],
+      [WORKFLOW_STEP.FAILED, ReplicaStatus.FAILED, true],
+    ];
+    for (const [observedStep, observedStatus, terminal] of progressedSteps) {
+      const progressedRow = makeRow({
+        type: OperationType.ADD,
+        status: observedStatus,
+        workflow_step: observedStep,
+        created_at: TEST_CREATED_AT_MS,
+        updated_at: TEST_CREATED_AT_MS + 120,
+        completed_at: terminal ? TEST_CREATED_AT_MS + 120 : null,
+      });
+      const repository = createRepository(async () => ({
+        success: true,
+        rows: [progressedRow],
+      }));
+      const pendingInsertOperation = repository.rowToOperation(makeRow({
+        type: OperationType.ADD,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.PENDING,
+        created_at: TEST_CREATED_AT_MS,
+        updated_at: TEST_CREATED_AT_MS,
+        completed_at: null,
+      }));
+      t.equal(
+        await repository.persistNewOperation(pendingInsertOperation),
+        true,
+        `the applied insert confirms against PENDING -> ${observedStep}`,
+      );
+      const observed = repository.lastIncompleteOperationObservation
+        .filter((entry) => entry.operationId === TEST_OPERATION_ID)
+        .map((entry) => entry.workflowStep);
+      t.same(
+        observed,
+        terminal ? [] : [observedStep],
+        `PENDING -> ${observedStep}: the observation holds the confirmed row`,
+      );
+    }
+  },
+);

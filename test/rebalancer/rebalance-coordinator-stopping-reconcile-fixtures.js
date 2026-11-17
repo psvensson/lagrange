@@ -38,10 +38,11 @@ export const PRIORITY_DRAIN_TEST_PUBLICATION_STATUS = 'PUBLISHED';
 export const PRIORITY_DRAIN_TEST_ENTITY_TYPE = 'partition';
 export const PRIORITY_DRAIN_TEST_SOURCE_NODE_ID = 'node-source';
 export const PRIORITY_DRAIN_TEST_TARGET_NODE_ID = 'node-target';
+export const PRIORITY_DRAIN_TEST_PEER_NODE_ID = 'node-peer';
 export const PRIORITY_DRAIN_TEST_READY_NODE_IDS = Object.freeze([
   PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
   PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-  'node-peer',
+  PRIORITY_DRAIN_TEST_PEER_NODE_ID,
 ]);
 export const PRIORITY_DRAIN_TEST_REQUIRED_DISTINCT_NODE_COUNT = 3;
 export const PRIORITY_DRAIN_TEST_NO_COMPLETED_AT = null;
@@ -79,6 +80,33 @@ export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION =
   'stale direct priority transition should not overwrite terminal step';
 export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION =
   'stale direct priority transition should not overwrite terminal status';
+
+/**
+ * The partition's other voters for a count-neutral priority REPLACE: with the
+ * source they are the partition's policy minimum (three voter-ready replicas
+ * on READY-lease nodes, two of them on the source node, the spread the
+ * REPLACE completes). The source's removal then keeps three voter-ready
+ * replicas on three nodes, so the remove-safety voter-ready floor holds. A
+ * fixture of only the source and target is a one-voter partition whose
+ * source removal the floor rightly defers.
+ * @param {string} partitionId
+ * @return {Object[]}
+ */
+export function buildPriorityDrainPeerVoterRows(partitionId) {
+  return [
+    [`${partitionId}-r1`, PRIORITY_DRAIN_TEST_PEER_NODE_ID],
+    [`${partitionId}-r3`, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID],
+  ].map(([replicaId, nodeId]) => ({
+    service_id: replicaId,
+    replica_id: replicaId,
+    service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    partition_id: partitionId,
+    node_id: nodeId,
+    raft_role: RAFT_ROLE.FOLLOWER,
+    status: ReplicaStatus.ACTIVE,
+    address: `${nodeId}/partition/${replicaId}`,
+  }));
+}
 
 export function buildPriorityDrainConvergedPlanningSnapshot(
   partitionId,

@@ -181,7 +181,6 @@ async function evaluateUniversalPartitionRemoveSafety(
   const simpleFloor = projectQuorumAfterRemoval({
     projectedVoterReadyRows: input.projectedVoterReadyRows,
     minReplicaCount,
-    completionSafe: false,
     scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
   if (!simpleFloor.floorSatisfied) {

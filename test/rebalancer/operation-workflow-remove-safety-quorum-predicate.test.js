@@ -1,9 +1,8 @@
 // R1 — projectQuorumAfterRemoval: the single authoritative post-removal quorum predicate
-// consolidating the three floor sites in operation-workflow-remove-safety-evaluator.js.
-// This is a behavior-PRESERVING consolidation; these tests pin that each `scope`
-// reproduces the decision its former inline site made, and that the structured result
-// exposes both the strict and the optimistic count so a future over-removal fix has one
-// place to branch.
+// for the floor sites in operation-workflow-remove-safety-evaluator.js and the universal
+// tier. The former completion-safe scope, whose optimistic cluster-node union could lift
+// the count to the floor (the over-removal seam), is closed: the voter-ready floor counts
+// only the partition's voter-ready rows on READY-lease nodes, on every path.
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -27,54 +26,31 @@ function rowsOnNodes(nodeIds) {
   }));
 }
 
-test('simple-floor: defers when voter-ready rows drop below min (the non-completion-safe site)', (t) => {
+test('simple-floor: defers when voter-ready rows drop below min (every system and universal removal path)', (t) => {
   const below = projectQuorumAfterRemoval({
     projectedVoterReadyRows: rows(2), minReplicaCount: 3,
-    completionSafe: false, scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
+    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
   t.equal(below.floorSatisfied, false);
   t.equal(below.projectedVoterReadyCount, 2);
   const at = projectQuorumAfterRemoval({
     projectedVoterReadyRows: rows(3), minReplicaCount: 3,
-    completionSafe: false, scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
+    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
   t.equal(at.floorSatisfied, true);
   t.end();
 });
 
-test('simple-floor: ignores the recovery-projection union (strict row count only)', (t) => {
+test('simple-floor: the projection is the strict voter-ready row count', (t) => {
   const r = projectQuorumAfterRemoval({
     projectedVoterReadyRows: rows(2), minReplicaCount: 3,
-    recoveryProjectionNodeIds: ['a', 'b', 'c', 'd'],
-    completionSafe: false, scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
+    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
-  t.equal(r.effectiveProjectedVoterReadyCount, 2, 'non-completion-safe never inflates with the union');
+  t.equal(r.projectedVoterReadyCount, 2);
+  t.same(r.reason, {kind: 'below-min', got: 2, need: 3});
   t.equal(r.floorSatisfied, false);
-  t.end();
-});
-
-test('completion-safe-floor: the optimistic node-union can lift the count to the floor (preserved over-removal seam)', (t) => {
-  const r = projectQuorumAfterRemoval({
-    projectedVoterReadyRows: rows(2), minReplicaCount: 3,
-    recoveryProjectionNodeIds: ['a', 'b', 'c'], // includes a not-yet-ready node
-    completionSafe: true, scope: QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR,
-  });
-  t.equal(r.projectedVoterReadyCount, 2, 'strict count exposed');
-  t.equal(r.effectiveProjectedVoterReadyCount, 3, 'optimistic count exposed (max of rows, union)');
-  t.equal(r.floorSatisfied, true, 'this is the documented over-removal seam, preserved unchanged');
-  t.ok(r.effectiveProjectedVoterReadyCount > r.projectedVoterReadyCount,
-    'the single branch a future fix can key on (learners inflated the count)');
-  t.end();
-});
-
-test('completion-safe-floor: with no recovery projection, effective == strict count', (t) => {
-  const r = projectQuorumAfterRemoval({
-    projectedVoterReadyRows: rows(2), minReplicaCount: 3,
-    recoveryProjectionNodeIds: null,
-    completionSafe: true, scope: QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR,
-  });
-  t.equal(r.effectiveProjectedVoterReadyCount, 2);
-  t.equal(r.floorSatisfied, false, 'no snapshot => strict floor, matching the former resolve fn');
+  t.same(Object.keys(QUORUM_PROJECTION_SCOPE).sort(), ['PUBLISHED_SPREAD', 'SIMPLE_FLOOR'],
+    'no scope admits a cluster-node union into the voter count');
   t.end();
 });
 

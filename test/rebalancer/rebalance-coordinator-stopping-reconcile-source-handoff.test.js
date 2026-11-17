@@ -1,5 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainPeerVoterRows, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
@@ -198,6 +198,7 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
           status: ReplicaStatus.ACTIVE,
           address: TEST_TARGET_ADDRESS,
         },
+        ...buildPriorityDrainPeerVoterRows(TEST_PARTITION_ID),
       ],
       replicaOperations: [
         {
@@ -343,6 +344,7 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
           status: ReplicaStatus.ACTIVE,
           address: TEST_TARGET_ADDRESS,
         },
+        ...buildPriorityDrainPeerVoterRows(TEST_PARTITION_ID),
       ],
       replicaOperations: [
         {
@@ -636,6 +638,7 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
           status: ReplicaStatus.ACTIVE,
           address: TEST_TARGET_ADDRESS,
         },
+        ...buildPriorityDrainPeerVoterRows(TEST_PARTITION_ID),
       ],
       replicaOperations: [operationRow],
     },
@@ -678,4 +681,86 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
   } finally {
     await coordinator.shutdown();
   }
+});
+
+test('RebalanceCoordinator counts only the partition\'s voter-ready replicas ' +
+  'for a completion-safe priority REPLACE source removal, never READY cluster ' +
+  'nodes that hold no voter', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_NOW_MS = Date.now();
+  const replicaRow = (replicaId, nodeId) => ({
+    service_id: replicaId,
+    replica_id: replicaId,
+    service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    partition_id: TEST_PARTITION_ID,
+    node_id: nodeId,
+    raft_role: RAFT_ROLE.FOLLOWER,
+    status: ReplicaStatus.ACTIVE,
+    address: nodeId + '/partition/' + replicaId,
+  });
+  const sourceAndTarget = [
+    replicaRow(TEST_SOURCE_REPLICA_ID, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID),
+    replicaRow(TEST_TARGET_REPLICA_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID),
+  ];
+  const evaluate = async (services) => {
+    const coordinator = createTestCoordinator({
+      nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+      enableTimeouts: false,
+      messageRouter: initiatedDeliveryRouter([]),
+      // All three cluster nodes hold live READY leases and the planning
+      // snapshot is converged: the priority recovery completion is safe.
+      controlPlaneReadinessService:
+        buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+      cacheData: {services, replicaOperations: []},
+    });
+    try {
+      return await coordinator.workflowOwner.evaluateRemoveSafety({
+        operationId: 'priority-replace-voter-floor',
+        type: OperationType.REPLACE,
+        partitionId: TEST_PARTITION_ID,
+        replicaId: TEST_TARGET_REPLICA_ID,
+        sourceNodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+        targetNodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.ACTIVE,
+        workflowStep: WORKFLOW_STEP.ACTIVE,
+        createdAt: TEST_NOW_MS,
+        updatedAt: TEST_NOW_MS,
+        completedAt: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+        errorMessage: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+        entityType: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+        entityId: TEST_PARTITION_ID,
+        stepsHistory: [{
+          step: WORKFLOW_STEP.PENDING,
+          timestamp: TEST_NOW_MS,
+          sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+        }],
+      });
+    } finally {
+      await coordinator.shutdown();
+    }
+  };
+
+  const belowFloor = await evaluate(sourceAndTarget);
+  t.equal(
+    belowFloor.classification,
+    'defer',
+    'a one-voter remainder is deferred although three READY nodes exist',
+  );
+  t.match(
+    belowFloor.error,
+    /would drop voter-ready replicas below minimum \(1\/3\)/u,
+    'the floor counts the partition\'s voter rows, not cluster nodes',
+  );
+
+  const atFloor = await evaluate([
+    ...sourceAndTarget,
+    ...buildPriorityDrainPeerVoterRows(TEST_PARTITION_ID),
+  ]);
+  t.equal(
+    atFloor.classification,
+    'safe',
+    'a count-neutral REPLACE at the policy minimum removes its source',
+  );
 });

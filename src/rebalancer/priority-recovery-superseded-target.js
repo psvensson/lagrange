@@ -120,18 +120,11 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
 
   /**
    * @param {Object|null} planningSnapshot
-   * @param {Object} [options]
    * @return {string[]}
    * @private
    */
-  buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
-    planningSnapshot,
-    options = {},
-  ) {
-    return buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
-      planningSnapshot,
-      options,
-    );
+  buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
+    return buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot);
   }
 
   /**
@@ -146,7 +139,6 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * @param {Object|null} planningSnapshot
    * @param {Object|null} priorityRecoveryContext
    * @param {Object[]} projectedVoterReadyRows
-   * @param {Object} [options]
    * @return {Object}
    * @private
    */
@@ -154,13 +146,11 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     planningSnapshot,
     priorityRecoveryContext,
     projectedVoterReadyRows,
-    options = {},
   ) {
     return resolvePriorityRemoveSafetyMembershipSnapshot(
       planningSnapshot,
       priorityRecoveryContext,
       projectedVoterReadyRows,
-      options,
     );
   }
 
