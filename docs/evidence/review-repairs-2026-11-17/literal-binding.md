@@ -271,3 +271,57 @@ integration candidate, integration and exact-candidate final gates. No final
 gate, merge, publication, product-service readiness, GCP measurement, or release
 acceptance is claimed here. No local project test, audit, build or generator
 was executed for this follow-up.
+
+## Native metadata preparation, 2026-11-17
+
+The first metadata attempt, [5042](https://github.com/psvensson/lagrange-lab/issues/5042),
+was interrupted by the managed thermal guard at CPU 81 degrees C during the
+global-owner-debt refresh. It produced no admissible metadata patch. That
+failure remains part of the record.
+
+The separately admitted [5058](https://github.com/psvensson/lagrange-lab/issues/5058)
+used the existing managed CPU quota of 200 percent, unchanged thermal rules,
+and source `60c15780185fc0a0e35bbf7a97291a310b1ff81d`, tree
+`4b7cdfd1de0129617ae44176afe8400ff35694c0`. Request
+`beb5b3e2bcb04e0dabd62047c7da53b4` had payload SHA-256
+`a46ab205e1d0aca312f6e437b5ef468f508e915e6f2c674957c04d1f24637a73`.
+It completed on local-workstation at 2026-11-17T15:06:51Z with controller
+and worker exit 0, reported CPU 64 degrees C, and all execution, container
+and thermal scopes closed.
+
+Dependency installation, the canonical global-owner-debt refresh,
+priority-recovery-owner generation, test-metadata refresh, source-owner-index
+generation and selector plan all exited zero. Eight source-state records
+retain the same non-generated source and empty live index. All 57 existing
+source indexes remained unchanged. The only generated tracked changes were
+`solve/changes/global-owner-debt-inventory/inventory.json` and
+`test/shards/impact-graph-seal.json`; no unexpected or generated-untracked
+files were reported. The 4,320-byte patch has SHA-256
+`fb86f63b72ad737fdb5ce2512406b50ca3a71fc5c09449eab257bc4d44603541`.
+Root inspected that exact patch and applied it without modification.
+
+The graph now includes 6,215 modules and 35,578 edges; its 39 unresolved
+entries and resolver-state digest are unchanged. The patch updates generated
+report identities and the graph seal. It changes no baseline limits:
+production duplication remains 35 groups / 1,109 lines and test duplication
+remains 612 groups / 21,898 lines.
+
+The selector plan was WIDENED to the test-infrastructure subsystem and
+reported 209 unique selected tests. This invocation planned those tests; it
+did not execute them. Exact combined-candidate gates remain outstanding.
+
+The complete original worker stream is 42,806 bytes, SHA-256
+`44378dfeb398d26c2c8cbea2aaec085523bcdaf5025782458cd6e6c0e2521d57`.
+Its six durable evidence pages are [5066](https://github.com/psvensson/lagrange-lab/issues/5066)
+and [5131](https://github.com/psvensson/lagrange-lab/issues/5131) through
+[5135](https://github.com/psvensson/lagrange-lab/issues/5135), in order, for
+stream `c8cd3785d1f9eebec06ebe8e59ee2aa7ad4e4de8ee7329157884b700de8c146c`.
+All five canonical SDK artifacts and their compressed and raw hashes were
+verified. The native log is 21,489 bytes, SHA-256
+`2530ec052c945f246732d8c166f9850ce5ddf40412f30ef4db0420210e9f64d8`.
+The complete collection is indexed in
+`/workspace/scratch/1d848e6f888d/takeover-literal-metadata-cpu200-artifact-index.json`.
+
+This follow-up preserves actual preparation evidence and generated output.
+It does not establish final integration acceptance, publication, cloud
+readiness or comparative measurements.
