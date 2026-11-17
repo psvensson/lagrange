@@ -5,7 +5,8 @@ documentClass: planning
 
 # Independent implementation portability — approved plan
 
-Status: **approved planning direction; Q0 read-only inventory in progress**.
+Status: **approved direction; bounded Q0 classification recorded in its Solver
+Quest (whose log owns landing status); Q1 representations next**.
 Decision date: 2026-11-17. Initial audit baseline: `main` at
 `f3a1be1eb79e5e6347ddc969968036eda49dcaf2`.
 
@@ -13,6 +14,8 @@ This plan belongs to [Core architecture convergence](../core-architecture-conver
 It is not a second epic, runtime architecture, capability ledger, release gate,
 or supersession of an existing Quest's sealed acceptance. Its initial findings
 are in [the Q0 inventory](independent-portability-q0-inventory-2026-11-17.md).
+The source-pinned formal classification and its retained holds are in the
+[Q0 Quest evidence](../../quests/independent-portability-q0-specification-census/evidence/census.json).
 The integration owner must re-check current Solver status and predecessor
 certification before assigning behavior-changing work; a landed cutover is not
 by itself certified. Existing 0.4.1 correctness work and the 0.5 direction

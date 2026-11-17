@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 228,
     "storage-raft": 151,
-    "test-infrastructure": 172,
+    "test-infrastructure": 173,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-e4e31b18",
+  "censusSize": 2662,
+  "digest": "fnv1a32-b495d7d7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8172836",
+  "observationDigest": "fnv1a32-df238ddc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2351,6 +2351,7 @@
     "test/scripts/impact-proof-cone-producer.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
     "test/scripts/import-graph-repository-boundary.test.js": "test-infrastructure",
+    "test/scripts/independent-portability-q0-census.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
     "test/scripts/lab-census-benchmark-evidence-custody.test.js": "test-infrastructure",
@@ -20377,6 +20378,26 @@
         "NODE_OPTIONS",
         "NODE_PATH",
         "TZ"
+      ]
+    },
+    "test/scripts/independent-portability-q0-census.test.js": {
+      "files": [
+        "architecture/contracts/authority-and-recovery.md",
+        "architecture/contracts/core-system-logic.md",
+        "architecture/contracts/message-group-committed-learner-origin.md",
+        "architecture/rebalance.md",
+        "solve/epics/core-architecture-convergence.md",
+        "solve/quests/independent-portability-q0-specification-census/evidence/census.json",
+        "src/hlc/hlc-timestamp.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-descriptor-epoch-contract.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/runtime/request-cell-invocation-owner.js",
+        "src/service/call-canonical-partial-codec.js",
+        "src/service/request-cell-call-bridge.js",
+        "src/service/service-entry-generator.js",
+        "src/transport/message-router-server-lifecycle.js",
+        "wit/world.wit"
       ]
     },
     "test/scripts/install-git-hooks-stdout-purity.test.js": {

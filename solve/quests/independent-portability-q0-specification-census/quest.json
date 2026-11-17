@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "independent-portability-q0-specification-census",
+  "epic": "core-architecture-convergence",
+  "statement": "Close the bounded, read-only Q0 independent-portability definition census on the exact source baseline. Classify P01-P09 public/document discrepancies and W01-W07 first write/recovery representation questions against their existing owners, retaining source digests, limitations, typed unresolved holds and successor routing. Require a measuring source-pinned inventory checker with inverse negative controls. This certifies classification completeness only, not product correctness, public availability, a full protocol specification or permission to begin behavior-changing convergence.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/independent-portability-q0-census.js --metric",
+      "target": 0,
+      "artifacts": [
+        "solve/quests/independent-portability-q0-specification-census/evidence/census.json"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-pinned-classification",
+      "statement": "Rows classify source and authority questions on fc626cbf377a334c6960836afb92d837acd25ed9; missing or contradictory proof remains explicitly held, not solved by source presence."
+    },
+    {
+      "id": "no-product-write",
+      "statement": "Only the bounded census evidence, check, Quest record and planning pointers may change. No runtime, release, certification or sealed predecessor behavior changes."
+    },
+    {
+      "id": "non-bypass",
+      "statement": "Q0 inventory and checker may not assert public-path proof, readiness, mixed-node support or same-disk migration. Q1 requires its own red witness and independently verified conformance."
+    }
+  ],
+  "sealedAt": "533e59b7511e7342095326723ba87042087baa00"
+}
