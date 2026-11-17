@@ -1,8 +1,20 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_MUTATION_ATTEMPT_KEY,
+  CONTROL_PLANE_MUTATION_OUTCOME_POLICY,
+  CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR,
+  CONTROL_PLANE_MUTATION_WAKE_SOURCE,
   buildControlPlaneMutationOwnerOutcomeEnvelope,
-} from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+} from '../../src/control-plane/control-plane-system-table-gateway-mutation-contracts.js';
+import {
+  PRESSURE_GOVERNOR_ACTION,
+} from '../../src/control-plane/pressure-governor.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,
@@ -170,3 +182,124 @@ test('publication active-gate owner outcome fails closed when handoff is unavail
       terminal: true,
     });
   });
+
+test('gateway mutation outcome uses policy constants and preserves caller ' +
+  'request/idempotency context across submitMutation',
+async (t) => {
+  t.equal(CONTROL_PLANE_MUTATION_OUTCOME_POLICY.defaultRetryDelayMs, 250);
+  t.equal(
+    CONTROL_PLANE_MUTATION_OUTCOME_POLICY.minimumDeadlineWindowMs,
+    30000,
+  );
+  t.equal(CONTROL_PLANE_MUTATION_OUTCOME_POLICY.retryDelayMultiplier, 10);
+  t.equal(
+    CONTROL_PLANE_MUTATION_WAKE_SOURCE.RETRY_REGISTRY,
+    'retry_registry',
+  );
+  t.equal(
+    CONTROL_PLANE_MUTATION_ATTEMPT_KEY.UNKNOWN,
+    'unknown_attempt_key',
+  );
+  t.equal(
+    CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR.ESCALATE,
+    'escalate',
+  );
+
+  const beforeDefaultDeadlineMs = Date.now();
+  const bareDeferredEnvelope = buildControlPlaneMutationOwnerOutcomeEnvelope(
+    {
+      success: false,
+      retryAfterMs: 5000,
+    },
+    CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
+  );
+  const expectedMinWindowMs = Math.max(
+    CONTROL_PLANE_MUTATION_OUTCOME_POLICY.minimumDeadlineWindowMs,
+    5000 * CONTROL_PLANE_MUTATION_OUTCOME_POLICY.retryDelayMultiplier,
+  );
+  t.ok(
+    bareDeferredEnvelope.deadline >= beforeDefaultDeadlineMs + expectedMinWindowMs,
+    'default deadline honors policy window and multiplier',
+  );
+  t.equal(
+    bareDeferredEnvelope.wakeSource,
+    CONTROL_PLANE_MUTATION_WAKE_SOURCE.RETRY_REGISTRY,
+  );
+  t.equal(
+    bareDeferredEnvelope.attemptKey,
+    CONTROL_PLANE_MUTATION_ATTEMPT_KEY.UNKNOWN,
+  );
+  t.equal(
+    bareDeferredEnvelope.terminalEscalationBehavior,
+    CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR.ESCALATE,
+  );
+
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'owner-outcome-gateway-node',
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {
+          success: false,
+          pressureAction: PRESSURE_GOVERNOR_ACTION.DEFER,
+          retryAfterMs: 1000,
+          error: 'control_plane_pressure_degraded',
+        };
+      },
+    },
+  });
+  const submitted = await gateway.submitMutation(
+    {
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {service_id: 'svc-attempt-ctx'},
+      data: {status: 'active'},
+    },
+    {
+      coalescingKey: 'coalesce:svc-attempt-ctx',
+      idempotencyKey: 'idem-svc-attempt-ctx',
+    },
+  );
+  const submittedEnvelope = buildControlPlaneMutationOwnerOutcomeEnvelope(
+    submitted,
+    submitted.outcome,
+  );
+  t.equal(submitted.outcome, CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED);
+  t.equal(submittedEnvelope.attemptKey, 'coalesce:svc-attempt-ctx',
+    'submitMutation preserves caller coalescing/request key into outcome envelope');
+
+  const noCoalescingGateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'owner-outcome-gateway-node-2',
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {
+          success: false,
+          pressureAction: PRESSURE_GOVERNOR_ACTION.DEFER,
+          retryAfterMs: 1000,
+          error: 'control_plane_pressure_degraded',
+        };
+      },
+    },
+  });
+  const submittedWithAutoIdempotency = await noCoalescingGateway.submitMutation(
+    {
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {service_id: 'svc-auto-idem'},
+      data: {status: 'active'},
+    },
+    {idempotencyKey: 'caller-idem-42'},
+  );
+  const autoIdemEnvelope = buildControlPlaneMutationOwnerOutcomeEnvelope(
+    submittedWithAutoIdempotency,
+    submittedWithAutoIdempotency.outcome,
+  );
+  t.equal(
+    autoIdemEnvelope.attemptKey,
+    submittedWithAutoIdempotency.requestKey || 'caller-idem-42',
+    'submitMutation never collapses caller idempotency/request key to unknown_attempt_key',
+  );
+  t.not(
+    autoIdemEnvelope.attemptKey,
+    CONTROL_PLANE_MUTATION_ATTEMPT_KEY.UNKNOWN,
+  );
+});

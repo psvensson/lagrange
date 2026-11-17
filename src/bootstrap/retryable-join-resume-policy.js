@@ -3,10 +3,43 @@ import {
 } from './bootstrap-api-constants.js';
 import {
   JOINING_DEFAULT,
+  JOINING_ERROR_MSG,
   JOINING_SEED_CONTACT_FAILURE_KIND,
   RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
   RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
 } from './node-joining-constants.js';
+import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
+
+/**
+ * Enforce that retryable-join resume classification receives a real phase.
+ * @param {Object|null|undefined} failureContext
+ * @return {string}
+ */
+function requireRetryableJoinResumeFailurePhase(failureContext) {
+  const phase = readStateField(failureContext?.phase);
+  if (phase === STATE_ABSENT) {
+    throw new Error(
+      JOINING_ERROR_MSG.RETRYABLE_JOIN_RESUME_FAILURE_PHASE_REQUIRED,
+    );
+  }
+  return phase;
+}
+
+/**
+ * Capture pre-cleanup join phase and message before failure handling sets FAILED.
+ * @param {string} phase
+ * @param {Error|Object|null|undefined} error
+ * @return {{phase: string, error?: string}}
+ */
+function buildJoiningFailureContext(phase, error) {
+  const context = {
+    phase: requireRetryableJoinResumeFailurePhase({phase}),
+  };
+  if (typeof error?.message === 'string' && error.message.length > 0) {
+    context.error = error.message;
+  }
+  return context;
+}
 
 const LIMITED_RESUME_FAILURE_KINDS = Object.freeze([
   JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
@@ -67,8 +100,10 @@ function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
 }
 
 export {
+  buildJoiningFailureContext,
   isLimitedResumeBootstrapNotReadyFailure,
   normalizeRetryableJoinResumeAttemptBudgetMode,
+  requireRetryableJoinResumeFailurePhase,
   resolveRetryableJoinMinimumMaxElapsedMs,
   resolveRetryableJoinResumeAttemptBudgetMode,
 };

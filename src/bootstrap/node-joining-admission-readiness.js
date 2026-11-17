@@ -3,16 +3,16 @@ import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {
   NodeJoiningReadySignalReadiness,
 } from './node-joining-ready-signal-readiness.js';
-import {
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
-} from './bootstrap-constants.js';
+import {BOOTSTRAP_PIPELINE_ERROR_CODE} from './bootstrap-constants.js';
 import {
   RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
   RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
 } from './node-joining-constants.js';
 import {
+  buildJoiningFailureContext,
   isLimitedResumeBootstrapNotReadyFailure,
   normalizeRetryableJoinResumeAttemptBudgetMode,
+  requireRetryableJoinResumeFailurePhase,
   resolveRetryableJoinMinimumMaxElapsedMs,
   resolveRetryableJoinResumeAttemptBudgetMode,
 } from './retryable-join-resume-policy.js';
@@ -472,7 +472,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         // depends on. Destructive cleanup runs only on the terminal path.
         const resumeDecision = this.resolveRetryableJoinResumeDecision(
           error,
-          null,
+          buildJoiningFailureContext(this.getPhase(), error),
           attempt,
           resumePolicy,
         );
@@ -627,9 +627,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       failureMessage.startsWith(bootstrapNotReadyPrefix);
   }
   resolveRetryableJoinResumeFailureProfile(error, failureResult) {
-    // The failure record (handleJoiningFailure) owns the phase that failed;
-    // after it the join's own phase is FAILED, so it is never substituted.
-    const phase = readStateField(failureResult?.phase);
+    // The failure record (or pre-cleanup failure context) owns the phase that
+    // failed; missing phase context fails loudly instead of masking DEFAULT.
+    const phase = requireRetryableJoinResumeFailurePhase(failureResult);
     if (
       phase === JoiningPhase.CONTACTING_SEED &&
       this.isRetryableJoinResumeBootstrapNotReadyFailure(error, failureResult)

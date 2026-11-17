@@ -181,7 +181,11 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
    * @return {Object|null}
    * @private
    */
-  resolveLocalDeferredMutationReadinessFailure(tableName, writeOptions = {}) {
+  resolveLocalDeferredMutationReadinessFailure(
+    tableName,
+    writeOptions = {},
+    requestKey = null,
+  ) {
     if (
       !requiresStableLocalControlPlaneMutationReadiness(writeOptions?.workClass)
     ) {
@@ -206,6 +210,11 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
         tableName,
         workClass: writeOptions?.workClass || null,
       }),
+      {
+        coalescingKey: writeOptions?.coalescingKey,
+        requestKey,
+        idempotencyKey: writeOptions?.idempotencyKey,
+      },
     );
   },
 

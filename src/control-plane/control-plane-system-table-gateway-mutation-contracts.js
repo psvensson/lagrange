@@ -20,8 +20,13 @@ import {
 import {PRESSURE_GOVERNOR_ACTION} from './pressure-governor.js';
 import {
   CONTROL_PLANE_GATEWAY_OWNER_OUTCOME,
+  CONTROL_PLANE_MUTATION_ATTEMPT_KEY,
+  CONTROL_PLANE_MUTATION_ATTEMPT_KEY_FIELDS,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
+  CONTROL_PLANE_MUTATION_OUTCOME_POLICY,
+  CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR,
+  CONTROL_PLANE_MUTATION_WAKE_SOURCE,
 } from './control-plane-system-table-gateway-constants.js';
 import {
   normalizeDistinctStringArray,
@@ -260,20 +265,42 @@ function resolveControlPlaneWakeSource(result = {}) {
   if (typeof result?.wakeSource === 'string' && result.wakeSource.length > 0) {
     return result.wakeSource;
   }
-  return 'retry_registry';
+  return CONTROL_PLANE_MUTATION_WAKE_SOURCE.RETRY_REGISTRY;
 }
 
 function resolveControlPlaneAttemptKey(result = {}) {
-  if (typeof result?.attemptKey === 'string' && result.attemptKey.length > 0) {
-    return result.attemptKey;
+  for (const field of CONTROL_PLANE_MUTATION_ATTEMPT_KEY_FIELDS) {
+    const candidate = result?.[field];
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      return candidate;
+    }
   }
-  if (typeof result?.coalescingKey === 'string' && result.coalescingKey.length > 0) {
-    return result.coalescingKey;
+  return CONTROL_PLANE_MUTATION_ATTEMPT_KEY.UNKNOWN;
+}
+
+/**
+ * Preserve non-empty attempt/request correlation keys across result normalization.
+ * @param {Object} result
+ * @param {Object} context
+ * @return {Object}
+ */
+function resolveControlPlaneMutationAttemptContext(
+  result = {},
+  context = {},
+) {
+  const propagated = {};
+  for (const field of CONTROL_PLANE_MUTATION_ATTEMPT_KEY_FIELDS) {
+    const existing = result?.[field];
+    if (typeof existing === 'string' && existing.length > 0) {
+      propagated[field] = existing;
+      continue;
+    }
+    const inherited = context?.[field];
+    if (typeof inherited === 'string' && inherited.length > 0) {
+      propagated[field] = inherited;
+    }
   }
-  if (typeof result?.requestKey === 'string' && result.requestKey.length > 0) {
-    return result.requestKey;
-  }
-  return 'unknown_attempt_key';
+  return propagated;
 }
 
 function resolveControlPlaneDeadline(result = {}) {
@@ -282,8 +309,11 @@ function resolveControlPlaneDeadline(result = {}) {
   }
   const retryAfter = Number.isFinite(result?.retryAfterMs) ?
     result.retryAfterMs :
-    250;
-  return Date.now() + Math.max(30000, retryAfter * 10);
+    CONTROL_PLANE_MUTATION_OUTCOME_POLICY.defaultRetryDelayMs;
+  return Date.now() + Math.max(
+    CONTROL_PLANE_MUTATION_OUTCOME_POLICY.minimumDeadlineWindowMs,
+    retryAfter * CONTROL_PLANE_MUTATION_OUTCOME_POLICY.retryDelayMultiplier,
+  );
 }
 
 function resolveControlPlaneTerminalEscalationBehavior(result = {}) {
@@ -299,7 +329,7 @@ function resolveControlPlaneTerminalEscalationBehavior(result = {}) {
   ) {
     return result.terminalEscalationState;
   }
-  return 'escalate';
+  return CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR.ESCALATE;
 }
 
 function buildControlPlaneMutationOwnerOutcomeEnvelope(
@@ -401,10 +431,15 @@ function applyMutationWorkloadProfileDefaults(
 }
 
 export {
+  CONTROL_PLANE_MUTATION_ATTEMPT_KEY,
+  CONTROL_PLANE_MUTATION_OUTCOME_POLICY,
+  CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR,
+  CONTROL_PLANE_MUTATION_WAKE_SOURCE,
   applyMutationWorkloadProfileDefaults,
   buildControlPlaneMutationIntent,
   buildControlPlaneMutationOwnerOutcomeEnvelope,
   canonicalizeControlPlaneMutation,
+  resolveControlPlaneMutationAttemptContext,
   resolveControlPlaneMutationContractOutcome,
   resolveControlPlaneMutationOutcomeSnapshot,
   resolveMutationCompletionState,

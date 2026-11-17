@@ -39,7 +39,6 @@ import {
   isDeleteSupersededByExistingRecord,
   isStaleForExistingRecord,
   mergeRecords,
-  shouldBackfillMissingField,
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
@@ -718,16 +717,6 @@ class SystemTableCache {
     return cloneFieldValue(value);
   }
 
-  /**
-   * Determine if a stale incoming field may backfill an existing missing field.
-   * @param {*} existingValue - Existing field value.
-   * @param {*} incomingValue - Incoming stale field value.
-   * @return {boolean} True when the field should be backfilled.
-   * @private
-   */
-  shouldBackfillMissingField(existingValue, incomingValue) {
-    return shouldBackfillMissingField(existingValue, incomingValue);
-  }
 
   /**
    * Merge records for tables that require monotonic field semantics.

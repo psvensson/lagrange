@@ -214,6 +214,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.resolveLocalDeferredMutationReadinessFailure(
         tableName,
         writeOptions,
+        requestKey,
       );
     if (mutationReadinessFailure) {
       this.recordControlPlaneOperation({
@@ -240,11 +241,17 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       return mutationReadinessFailure;
     }
     const executeIntent = async (deliveryOptions) => {
+      const attemptContext = {
+        coalescingKey: deliveryOptions?.coalescingKey,
+        requestKey,
+        idempotencyKey: deliveryOptions?.idempotencyKey,
+      };
       if (!cdcIntegrationService) {
         if (this.shouldUseSqlMutationFallback(deliveryOptions, tableName)) {
           return this.executeSqlMutationFallback(
             normalizedMutation,
             deliveryOptions,
+            attemptContext,
           );
         }
         throw new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED);
@@ -262,6 +269,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
             normalizedMutation.row,
             deliveryOptions,
           ),
+          attemptContext,
         );
       }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
@@ -284,6 +292,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
             normalizedMutation.data,
             deliveryOptions,
           ),
+          attemptContext,
         );
       }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
@@ -299,6 +308,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
             normalizedMutation.row,
             deliveryOptions,
           ),
+          attemptContext,
         );
       }
       if (
@@ -313,6 +323,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           normalizedMutation.whereClause,
           deliveryOptions,
         ),
+        attemptContext,
       );
     };
     // Every attempt of this logical write - the engine's, the CDC service's

@@ -5,6 +5,7 @@ import {
   buildAuthoritativeControlPlaneReadIntent,
   buildProjectionControlPlaneReadIntent,
   normalizePositiveInteger,
+  resolveControlPlaneMutationAttemptContext,
   resolveControlPlaneMutationContractOutcome,
   resolveControlPlaneMutationOutcomeSnapshot,
 } from './control-plane-system-table-gateway-shared.js';
@@ -134,14 +135,19 @@ class ControlPlaneSystemTableGateway {
     this.recordGatewayRetentionSnapshot();
   }
 
-  normalizeMutationResult(result) {
+  normalizeMutationResult(result, context = {}) {
     const normalizedState = resolveControlPlaneMutationOutcomeSnapshot(result);
     const contractOutcome =
       resolveControlPlaneMutationContractOutcome(
         result,
         normalizedState.outcome,
       );
+    const attemptKeyContext = resolveControlPlaneMutationAttemptContext(
+      result,
+      context,
+    );
     return {
+      ...attemptKeyContext,
       ...result,
       outcome: normalizedState.outcome,
       completionState: normalizedState.completionState,

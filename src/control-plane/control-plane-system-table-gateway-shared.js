@@ -89,6 +89,7 @@ export {
   buildControlPlaneMutationIntent,
   buildControlPlaneMutationOwnerOutcomeEnvelope,
   canonicalizeControlPlaneMutation,
+  resolveControlPlaneMutationAttemptContext,
   resolveControlPlaneMutationContractOutcome,
   resolveControlPlaneMutationOutcomeSnapshot,
   resolveMutationCompletionState,

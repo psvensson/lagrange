@@ -7,6 +7,13 @@
 
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../src/control-plane/owner-contract-outcome.js';
+import {
+  CONTROL_PLANE_MUTATION_OUTCOME,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -167,3 +174,72 @@ test('node-state reporter acknowledged within its bound logs no spent wait',
       resetEnv();
     }
   });
+
+test('shouldTreatEndpointHeartbeatWriteAsDeferred classifies enum-owned ' +
+  'deferred states and actions accurately', async (t) => {
+  const classify =
+    HeartbeatService.prototype.shouldTreatEndpointHeartbeatWriteAsDeferred;
+  const deferOpts = {deferOnPressure: true};
+
+  t.equal(
+    classify(
+      {success: false, contractState: OWNER_CONTRACT_STATE.DEFERRED},
+      deferOpts,
+    ),
+    true,
+    'treats OWNER_CONTRACT_STATE.DEFERRED as deferred under deferOnPressure',
+  );
+  t.equal(
+    classify(
+      {success: false, outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED},
+      deferOpts,
+    ),
+    true,
+    'treats CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED as deferred',
+  );
+  t.equal(
+    classify(
+      {success: false, nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY},
+      deferOpts,
+    ),
+    true,
+    'treats OWNER_CONTRACT_NEXT_ACTION.RETRY as deferred',
+  );
+  t.equal(
+    classify(
+      {success: false, deferRetry: true},
+      deferOpts,
+    ),
+    true,
+    'treats deferRetry flag as deferred',
+  );
+  t.equal(
+    classify(
+      {
+        success: false,
+        contractState: OWNER_CONTRACT_STATE.BLOCKED,
+        outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.STOP,
+      },
+      deferOpts,
+    ),
+    false,
+    'does not treat blocked/rejected/stop failures as deferred',
+  );
+  t.equal(
+    classify(
+      {success: true, outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED},
+      deferOpts,
+    ),
+    false,
+    'successful writes are never treated as deferred',
+  );
+  t.equal(
+    classify(
+      {success: false, contractState: OWNER_CONTRACT_STATE.DEFERRED},
+      {deferOnPressure: false},
+    ),
+    false,
+    'non-deferrable writes never treat failure as deferred',
+  );
+});

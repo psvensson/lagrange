@@ -186,7 +186,7 @@ function createNodeJoiningRuntimeDependencyOwner({service, runtimeWiring}) {
       return service.rebalanceCoordinator?.controlPlaneReadinessService || null;
     },
     get bootstrapReadinessState() {
-      return service.joinReadinessState;
+      return service.bootstrapReadinessState;
     },
     get serviceLifecycleManager() {
       return service.serviceLifecycleManager;

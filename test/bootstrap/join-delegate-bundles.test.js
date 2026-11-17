@@ -272,3 +272,64 @@ test('JoinCleanupHandler receives cleanup+readiness delegates ' +
   t.end();
 });
 
+test('runtimeDependencyOwner and readiness delegate return constructed ' +
+  'bootstrapReadinessState identity', (t) => {
+  initializeTestEnvironment();
+  const readinessState = {probeReady: true};
+  const service = new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    readinessState,
+    config: {cdcPipelineReadinessTimeoutMs: 50},
+  });
+
+  t.equal(
+    service.bootstrapReadinessState,
+    readinessState,
+    'service stores readinessState under bootstrapReadinessState',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.bootstrapReadinessState,
+    readinessState,
+    'runtimeDependencyOwner.bootstrapReadinessState returns the exact constructed instance',
+  );
+  t.equal(
+    service._buildJoinDelegateBundles().readiness.getBootstrapReadinessState(),
+    readinessState,
+    'readiness delegate getBootstrapReadinessState returns the exact constructed instance',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.transport,
+    service.transport,
+    'runtimeDependencyOwner.transport preserves identity',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.messageRouter,
+    service.messageRouter,
+    'runtimeDependencyOwner.messageRouter preserves identity',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.cdcIntegrationService,
+    service.cdcIntegrationService,
+    'runtimeDependencyOwner.cdcIntegrationService preserves identity',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.replicaHandler,
+    service.replicaHandler,
+    'runtimeDependencyOwner.replicaHandler preserves identity',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.rebalanceCoordinator,
+    service.rebalanceCoordinator,
+    'runtimeDependencyOwner.rebalanceCoordinator preserves identity',
+  );
+  t.equal(
+    service.runtimeDependencyOwner.controlPlaneReadinessService,
+    service.rebalanceCoordinator?.controlPlaneReadinessService || null,
+    'runtimeDependencyOwner.controlPlaneReadinessService preserves identity',
+  );
+  t.end();
+});
+

@@ -13,6 +13,7 @@
 import {EventEmitter} from 'events';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  JoiningPhase,
   NodeJoiningService,
 } from '../../src/bootstrap/node-joining-service.js';
 import {
@@ -21,7 +22,18 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {BOOTSTRAP_EVENT} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  BOOTSTRAP_EVENT,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS,
+  JOINING_DEFAULT,
+  JOINING_ERROR_MSG,
+  JOINING_SEED_CONTACT_FAILURE_KIND,
+  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
+  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
+} from '../../src/bootstrap/node-joining-constants.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 
@@ -385,4 +397,211 @@ test('CL-006: resume attempt-budget exhaustion runs the full destructive ' +
     'budget exhaustion must clean up partially initialized services once');
   t.equal(spies.failedEvents, 1,
     'budget exhaustion must emit FAILED exactly once');
+});
+
+test('join() forwards contacting_seed failure context so BOOTSTRAP_NOT_READY ' +
+  'resumes past the 4-attempt default limit without cleanup', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrapNotReadyError = new Error(
+    JOINING_ERROR_MSG.bootstrapNotReady('waiting_for_cluster'),
+  );
+  bootstrapNotReadyError.code =
+    BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+  bootstrapNotReadyError.seedContactFailureKind =
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY;
+  bootstrapNotReadyError.deferRetry = true;
+
+  const {service, spies} = buildResumableJoinHarness({
+    maxAttempts: 4,
+    config: {
+      retryableFailureResumeAttemptBudgetMode:
+        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
+    },
+  });
+  const policy = service.resolveRetryableJoinResumePolicy();
+  t.equal(
+    service.resolveRetryableJoinResumeFailureProfile(bootstrapNotReadyError, {
+      phase: JoiningPhase.CONTACTING_SEED,
+      error: bootstrapNotReadyError.message,
+    }),
+    RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
+      .CONTACTING_SEED_BOOTSTRAP_NOT_READY,
+  );
+
+  let nowMs = 0;
+  service.now = () => nowMs;
+  const decisionsObserved = [];
+  const origResolveDecision =
+    service.resolveRetryableJoinResumeDecision.bind(service);
+  service.resolveRetryableJoinResumeDecision = (
+    error,
+    failureContext,
+    attempt,
+    resumePolicy,
+  ) => {
+    const decision = origResolveDecision(
+      error,
+      failureContext,
+      attempt,
+      resumePolicy,
+    );
+    decisionsObserved.push({attempt, failureContext, decision});
+    return decision;
+  };
+
+  service.joinCoordinator = {
+    run: async () => {
+      spies.coordinatorRuns += 1;
+      nowMs += 500;
+      if (spies.coordinatorRuns <= 5) {
+        await service.executePhase(JoiningPhase.CONTACTING_SEED, async () => {
+          throw bootstrapNotReadyError;
+        });
+      }
+      return {checkpoint: 'FINALIZED'};
+    },
+  };
+
+  t.ok(policy.maxElapsedMs > 2500, 'test elapsed budget covers 5 attempts');
+  const result = await service.join();
+
+  t.equal(result.success, true,
+    'join should resume past attempt 4 and succeed on attempt 6');
+  t.equal(spies.coordinatorRuns, 6,
+    'join should continue past the 4-attempt limited cap');
+  t.equal(decisionsObserved.length, 5,
+    'every failed attempt should pass through resume classification');
+  t.equal(
+    decisionsObserved[3].failureContext.phase,
+    JoiningPhase.CONTACTING_SEED,
+    'join() must pass active contacting_seed phase into failure context',
+  );
+  t.equal(
+    decisionsObserved[3].decision.attemptBudgetMode,
+    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY,
+    'attempt 4 must stay in elapsed_only patience profile',
+  );
+  t.equal(spies.cleanupFailedJoinCalls, 0,
+    'resumable contacting_seed retries must skip destructive cleanup');
+  t.equal(spies.genericCleanupCalls, 0,
+    'resumable contacting_seed retries must preserve services');
+});
+
+test('join() runs full cleanup when contacting_seed BOOTSTRAP_NOT_READY ' +
+  'exhausts elapsed budget and rejects missing failure phase', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrapNotReadyError = new Error(
+    JOINING_ERROR_MSG.bootstrapNotReady('waiting_for_cluster'),
+  );
+  bootstrapNotReadyError.code =
+    BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+  bootstrapNotReadyError.seedContactFailureKind =
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY;
+  bootstrapNotReadyError.deferRetry = true;
+
+  const {service, spies} = buildResumableJoinHarness({maxAttempts: 4});
+  const policy = service.resolveRetryableJoinResumePolicy();
+  let nowMs = 0;
+  service.now = () => nowMs;
+  service.joinCoordinator = {
+    run: async () => {
+      spies.coordinatorRuns += 1;
+      nowMs = spies.coordinatorRuns === 1 ? 1000 : policy.maxElapsedMs + 100;
+      await service.executePhase(JoiningPhase.CONTACTING_SEED, async () => {
+        throw bootstrapNotReadyError;
+      });
+    },
+  };
+
+  const result = await service.join();
+
+  t.equal(result.success, false,
+    'join must fail terminally once elapsed budget is exhausted');
+  t.equal(result.phase, JoiningPhase.CONTACTING_SEED,
+    'terminal failure result preserves the failed contacting_seed phase');
+  t.equal(spies.coordinatorRuns, 2,
+    'join resumes once within budget and stops once elapsed budget spends');
+  t.equal(spies.cleanupFailedJoinCalls, 1,
+    'terminal elapsed-budget exhaustion runs destructive cleanup once');
+  t.equal(spies.genericCleanupCalls, 1,
+    'terminal elapsed-budget exhaustion cleans up services once');
+  t.equal(spies.failedEvents, 1,
+    'terminal elapsed-budget exhaustion emits FAILED once');
+
+  const requiredMsg = new RegExp(
+    JOINING_ERROR_MSG.RETRYABLE_JOIN_RESUME_FAILURE_PHASE_REQUIRED,
+  );
+  for (const invalidContext of [null, undefined, {}, {phase: null}, {phase: ''}]) {
+    t.throws(
+      () => service.resolveRetryableJoinResumeDecision(
+        bootstrapNotReadyError,
+        invalidContext,
+        1,
+        policy,
+      ),
+      requiredMsg,
+      'resolveRetryableJoinResumeDecision rejects missing failure phase',
+    );
+    t.throws(
+      () => service.shouldAutoResumeRetryableJoinFailure(
+        bootstrapNotReadyError,
+        invalidContext,
+        1,
+        policy,
+      ),
+      requiredMsg,
+      'shouldAutoResumeRetryableJoinFailure rejects missing failure phase',
+    );
+  }
+});
+
+test('NodeJoiningService - default deferred message-group activation retry ' +
+  'schedules DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS and clears to ' +
+  'null', async (t) => {
+  initializeTestEnvironment();
+  const {service} = buildResumableJoinHarness();
+  let scheduledDelayMs = null;
+  let scheduledCallback = null;
+  let retried = false;
+  service.setTimeoutFn = (callback, delayMs) => {
+    scheduledDelayMs = delayMs;
+    scheduledCallback = callback;
+    return {
+      unref() {},
+      mockHandle: true,
+    };
+  };
+  service.retryDeferredMessageGroupServiceRowsIfNeeded = async () => {
+    retried = true;
+    return 0;
+  };
+  service.deferredMessageGroupServiceReplicaIds = new Set(['mg-r1']);
+
+  service.scheduleDeferredMessageGroupServiceRowActivationRetry();
+  t.equal(DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS, 250);
+  t.equal(
+    scheduledDelayMs,
+    DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS,
+    'default activation retry uses DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS',
+  );
+  t.equal(
+    DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS,
+    JOINING_DEFAULT.retryableFailureResumeBaseDelayMs,
+    'value is 250ms while keeping an independent semantic constant',
+  );
+  t.ok(
+    service.deferredMessageGroupServiceActivationRetryTimer !== null,
+    'timer handle stays armed until callback or clear runs',
+  );
+
+  scheduledCallback();
+  await Promise.resolve();
+  t.equal(
+    service.deferredMessageGroupServiceActivationRetryTimer,
+    null,
+    'timer callback clears retry handle back to literal null',
+  );
+  t.equal(retried, true);
 });

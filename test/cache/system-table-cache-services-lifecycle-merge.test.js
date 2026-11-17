@@ -3,7 +3,11 @@ import {
   CDC_OPERATIONS,
   SystemTableCache,
 } from '../../src/cache/system-table-cache.js';
-import {TABLES} from '../../src/constants/index.js';
+import {
+  applyStaleRowBackfill,
+  shouldBackfillMissingField,
+} from '../../src/cache/system-table-cache-row-merge.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
   '../../src/cache/cache-constants.js';
 import {
@@ -820,6 +824,81 @@ test(
       'an absent authoritative role keeps the cached non-leader voter role',
     );
     t.equal(absentAuthorityRole.alignedBefore, true);
+    t.end();
+  },
+);
+
+test(
+  'SystemTableCache - 3-arg shouldBackfillMissingField governs stale backfill ' +
+    'and removes broken 2-arg wrapper',
+  (t) => {
+    t.equal(
+      typeof SystemTableCache.prototype.shouldBackfillMissingField,
+      'undefined',
+      'unused broken 2-arg SystemTableCache wrapper should be removed',
+    );
+
+    t.equal(
+      shouldBackfillMissingField(
+        COLUMN.UPDATED_AT_HLC,
+        null,
+        '100-1-services-p1-r1',
+      ),
+      false,
+      '3-arg shouldBackfillMissingField never backfills updated_at_hlc',
+    );
+    t.equal(
+      shouldBackfillMissingField(
+        COLUMN.ADDRESS,
+        null,
+        'node-a/service/svc-1',
+      ),
+      true,
+      '3-arg shouldBackfillMissingField backfills null non-HLC field',
+    );
+    t.equal(
+      shouldBackfillMissingField(
+        COLUMN.ADDRESS,
+        'node-existing/service/svc-1',
+        'node-a/service/svc-1',
+      ),
+      false,
+      '3-arg shouldBackfillMissingField keeps populated existing values',
+    );
+
+    const backingMap = new Map();
+    const existing = {
+      service_id: 'svc-backfill-contract',
+      node_id: 'node-a',
+      address: null,
+      updated_at: 2000,
+    };
+    const incoming = {
+      service_id: 'svc-backfill-contract',
+      node_id: 'node-b',
+      address: 'node-a/service/svc-backfill-contract',
+      updated_at_hlc: '1500-1-services-p1-r1',
+      updated_at: 1000,
+    };
+    const result = applyStaleRowBackfill(
+      TABLES.SERVICES,
+      backingMap,
+      'svc-backfill-contract',
+      existing,
+      incoming,
+    );
+    t.equal(result.applied, true, 'stale backfill applies missing metadata');
+    t.equal(
+      result.record.address,
+      'node-a/service/svc-backfill-contract',
+      'missing address is backfilled',
+    );
+    t.equal(result.record.node_id, 'node-a', 'existing field stays intact');
+    t.equal(
+      result.record.updated_at_hlc,
+      undefined,
+      'updated_at_hlc is not backfilled onto existing row',
+    );
     t.end();
   },
 );

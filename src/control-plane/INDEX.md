@@ -65,7 +65,7 @@ documentClass: generated
 - [control-plane-system-table-gateway-constants.js](control-plane-system-table-gateway-constants.js) - No leading comment; first export: CONTROL_PLANE_AUTHORITATIVE_READ_MODE. (importers: hub)
 - [control-plane-system-table-gateway-dependency-resolution.js](control-plane-system-table-gateway-dependency-resolution.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayDependencyResolution. (importers: one)
 - [control-plane-system-table-gateway-diagnostics.js](control-plane-system-table-gateway-diagnostics.js) - No leading comment; first export: buildGatewayFallbackSystemTableRoutingDiagnostics. (importers: few)
-- [control-plane-system-table-gateway-mutation-contracts.js](control-plane-system-table-gateway-mutation-contracts.js) - No leading comment; first export: applyMutationWorkloadProfileDefaults. (importers: few)
+- [control-plane-system-table-gateway-mutation-contracts.js](control-plane-system-table-gateway-mutation-contracts.js) - Preserve non-empty attempt/request correlation keys across result normalization. (importers: few)
 - [control-plane-system-table-gateway-mutation-submission.js](control-plane-system-table-gateway-mutation-submission.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayMutationSubmission. (importers: one)
 - [control-plane-system-table-gateway-normalizers.js](control-plane-system-table-gateway-normalizers.js) - No leading comment; first export: areCanonicalSystemTableRowsEqual. (importers: few)
 - [control-plane-system-table-gateway-options.js](control-plane-system-table-gateway-options.js) - No leading comment; first export: buildGatewayQueryOptions. (importers: one)

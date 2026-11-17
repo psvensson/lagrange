@@ -293,6 +293,8 @@ const JOINING_ERROR_MSG = Object.freeze({
     'Join finalization requires the canonical lifecycle to reach READY',
   LIFECYCLE_STATE_MACHINE_REBIND_FAILED:
     'Join retry could not restore the canonical lifecycle owner binding',
+  RETRYABLE_JOIN_RESUME_FAILURE_PHASE_REQUIRED:
+    'Retryable join resume classification requires failure context phase',
   MESSAGE_GROUP_LEADER_REQUIRED: 'Message group leader is required for control plane routing',
   leadershipTimeout: (timeoutMs) =>
     `Message group failed to establish leadership within ${timeoutMs}ms`,
@@ -369,10 +371,13 @@ const CDC_SUBSCRIPTION_STATUS = Object.freeze({
   FAILED: 'failed',
 });
 
+const DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS = 250;
+
 
 export {
   CDC_REESTABLISHMENT,
   CDC_SUBSCRIPTION_STATUS,
+  DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS,
   JOIN_BACKFILL_QUERY,
   JOIN_BACKFILL_SCOPE,
   JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,

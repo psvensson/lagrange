@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS} from './node-joining-constants.js';
 import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
 import {isEndpointCurrentForNode} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
@@ -376,7 +377,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       Number.isFinite(this.deferredMessageGroupActivationRetryDelayMs) &&
       this.deferredMessageGroupActivationRetryDelayMs > 0 ?
         Math.floor(this.deferredMessageGroupActivationRetryDelayMs) :
-        250;
+        DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS;
     const setTimeoutFn = typeof this.setTimeoutFn === 'function' ?
       this.setTimeoutFn :
       setTimeout;

@@ -19,7 +19,14 @@ import {
   buildStaleNodeIncarnationError,
   isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
-import {CONTROL_PLANE_MUTATION_MERGE_POLICY} from './control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+  CONTROL_PLANE_MUTATION_OUTCOME,
+} from './control-plane-system-table-gateway.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from './owner-contract-outcome.js';
 import {
   ENDPOINT_INCARNATION_OUTCOME,
   isEndpointIncarnationOutcomeCompleted,
@@ -77,9 +84,9 @@ class HeartbeatServicePublicationMethods {
     return resultOrError.success === false &&
       (
         resultOrError.deferRetry === true ||
-        resultOrError.contractState === 'deferred' ||
-        resultOrError.outcome === 'deferred' ||
-        resultOrError.nextAction === 'retry'
+        resultOrError.contractState === OWNER_CONTRACT_STATE.DEFERRED ||
+        resultOrError.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
+        resultOrError.nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
       );
   }
 
