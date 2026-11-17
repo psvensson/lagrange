@@ -16,6 +16,7 @@ import {fileURLToPath} from 'node:url';
 import {
   arrayFilter,
   arrayFindIndex,
+  arrayIncludes,
   arrayJoin,
   arrayMap,
   arraySome,
@@ -28,6 +29,22 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const SCRIPT = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
 const BASH = stringTrim(spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout);
 const NODES = arrayMap([1, 2, 3, 4, 5, 6], (n) => `lagrange-bench-${n}`);
+// Calendar examples, not a claim that Google's future-time limits admit these dates.
+const VALID_TERMINATION_TIMES = [
+  '2026-11-17T20:00:00Z', '2028-02-29T00:00:00Z', '2000-02-29T23:59:59Z',
+];
+const INVALID_TERMINATION_TIMES = [
+  'tomorrow', '2026-11-17', '2026-11-17T20:00:00', '2026-11-17T20:00:00+00:00',
+  '2026-11-17T20:00:00.5Z', '2026-11-17T20:00:00Z\n', '0000-01-01T00:00:00Z',
+  '2026-00-17T20:00:00Z', '2026-13-17T20:00:00Z', '2026-11-00T20:00:00Z',
+  '2026-11-31T20:00:00Z', '2026-02-29T20:00:00Z', '2100-02-29T20:00:00Z',
+  '2026-11-17T24:00:00Z', '2026-11-17T20:60:00Z', '2026-11-17T20:00:60Z',
+  '2026-11-17T20:00:00Z --instance-termination-action=STOP',
+];
+const TERMINATION_TIME_ERROR = 'VM_TERMINATION_TIME must be a valid UTC date and time in ' +
+  'YYYY-MM-DDTHH:MM:SSZ form';
+const TERMINATION_FLAGS = ['--termination-time=', '--instance-termination-action=',
+  '--boot-disk-auto-delete'];
 
 const GCLOUD = `#!/bin/sh
 S="$GCLOUD_STATE"
@@ -42,6 +59,7 @@ case "$1 $2 $3" in
     echo "lagrange-distributed-harness-v1"; exit 0 ;;
   "compute instances create")
     shift 3
+    printf '%s\\0' "$@" > "$S/create-argv"
     for a in "$@"; do
       case "$a" in
         --metadata-from-file=startup-script=*) cp "\${a#--metadata-from-file=startup-script=}" "$S/startup-script" ;;
@@ -127,6 +145,7 @@ function runScript({args = [], env = {}, instances = [], firewall = {}, flags = 
   const lines = arrayFilter(stringSplit(read(path.join(state, 'log')), '\n'), Boolean);
   return {status: result.status, lines, stderr: read(out),
     calls: arrayFilter(lines, (line) => /^gcloud /u.test(line)),
+    createArgv: arrayFilter(stringSplit(read(path.join(state, 'create-argv')), '\0'), Boolean),
     instances: fs.readdirSync(path.join(state, 'instances')).sort(),
     firewall: fs.readdirSync(path.join(state, 'firewall')),
     startup: read(path.join(state, 'startup-script')),
@@ -142,6 +161,7 @@ function refusedBeforeGcloud(run, message) {
   assert.ok(stringIncludes(run.stderr, message), run.stderr);
   assert.deepEqual(run.calls, [], 'refused before any gcloud call');
   assert.deepEqual(run.instances, []);
+  assert.deepEqual(run.firewall, [], 'refused before creating a firewall rule');
 }
 
 function created(run) {
@@ -186,6 +206,47 @@ test('create: the gcloud account and every value in use, documented defaults inc
   assert.equal(noAccount.status, 1);
   assert.ok(stringIncludes(noAccount.stderr, 'no active gcloud account'), noAccount.stderr);
   assert.deepEqual(called(noAccount, / create /u), []);
+});
+
+test('create: an explicit UTC expiry reaches the six-name creation call with DELETE and ' +
+  'boot-disk auto-deletion; output describes a request, not provider verification', () => {
+  for (const terminationTime of VALID_TERMINATION_TIMES) {
+    const run = runScript({env: {VM_TERMINATION_TIME: terminationTime}});
+    assert.equal(run.status, 0, run.stderr);
+    created(run);
+    assert.deepEqual(arrayFilter(run.createArgv, (arg) => !/^--/u.test(arg)), NODES);
+    assert.deepEqual(run.instances, NODES);
+    for (const arg of [`--termination-time=${terminationTime}`,
+      '--instance-termination-action=DELETE', '--boot-disk-auto-delete']) {
+      assert.ok(arrayIncludes(run.createArgv, arg), arg);
+    }
+    const requestedAt = arrayFindIndex(run.lines, (line) => line ===
+      `[gcp] VM termination requested: ${terminationTime} (DELETE, boot disk auto-delete)`);
+    const firstCreate = arrayFindIndex(run.lines, (line) => / create /u.test(line));
+    assert.ok(requestedAt >= 0 && requestedAt < firstCreate, arrayJoin(run.lines, '\n'));
+  }
+});
+
+test('create: omitted or empty expiry leaves ordinary creation unchanged and requests no ' +
+  'provider lifetime bound', () => {
+  for (const env of [{}, {VM_TERMINATION_TIME: ''}]) {
+    const run = runScript({env});
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.instances, NODES);
+    for (const prefix of TERMINATION_FLAGS) {
+      assert.equal(arraySome(run.createArgv, (arg) => stringIncludes(arg, prefix)), false,
+        prefix);
+    }
+    assert.equal(arraySome(run.lines, (line) => /VM termination requested:/u.test(line)), false);
+  }
+});
+
+test('create: malformed UTC expiry or impossible calendar/time values refuse before any ' +
+  'gcloud call or resource mutation', () => {
+  for (const terminationTime of INVALID_TERMINATION_TIMES) {
+    refusedBeforeGcloud(runScript({env: {VM_TERMINATION_TIME: terminationTime}}),
+      TERMINATION_TIME_ERROR);
+  }
 });
 
 // The stand-in answers a pre-baked family as present: a probe would find it.
@@ -268,7 +329,9 @@ test('create: the startup script installs docker.io and git unconditionally; a V
 test('teardown: reports deleted, already absent and failed; any failure exits non-zero naming ' +
   'what may still be billed; complete only after asking that none remains', () => {
   const rule = {'lagrange-bench-internal': 'created by an earlier run'};
-  const all = runScript({args: ['--teardown'], instances: NODES, firewall: rule});
+  // A creation-only setting cannot prevent cleanup of already-created resources.
+  const all = runScript({args: ['--teardown'], instances: NODES, firewall: rule,
+    env: {VM_TERMINATION_TIME: INVALID_TERMINATION_TIMES[0]}});
   assert.equal(all.status, 0, all.stderr);
   const firstDelete = arrayFindIndex(all.lines, (l) => / delete /u.test(l));
   const accountAt = arrayFindIndex(all.lines, (l) =>
@@ -336,7 +399,7 @@ test('--place: every value the create step printed is required (usage, exit 2, n
       'step printed'), run.stderr);
     assert.equal(run.nodeArgv, null, `${missing}: nothing ran`);
   }
-  const run = place(printed);
+  const run = place({...printed, VM_TERMINATION_TIME: INVALID_TERMINATION_TIMES[0]});
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(run.nodeArgv, [
     path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs'),
