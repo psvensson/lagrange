@@ -1,0 +1,176 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "replica-placement-admission-owner",
+  "status": "seal-measurement",
+  "testFileDigests": {
+    "test/convergence/dt-placement-owner-formation-drain.test.js": "d43bcdd753be380dab33699a88b071b68aed97029a4395d331aac8733a43ed60",
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "942741167e2b328b1cf9a7dab49c0ef7fa74bb00276ef14a922b25e3d4fe6ca0"
+  },
+  "source": {
+    "head": "19a2134c59a3f86129b4c9dfce4accfe9f5acdb0"
+  },
+  "generatedAt": "2026-11-17T20:07:13.674Z",
+  "receipts": [
+    {
+      "id": "reproducer-red-on-candidate",
+      "measured": true,
+      "passed": true,
+      "measuredAsExpected": true,
+      "command": "node --test-reporter=tap test/convergence/dt-placement-owner-formation-drain.test.js",
+      "testFile": "test/convergence/dt-placement-owner-formation-drain.test.js",
+      "expectedRed": [
+        "A1 capacity",
+        "A2 causality",
+        "A3 work conservation",
+        "A4 quiescence",
+        "A6 order",
+        "ledger repair is never starved",
+        "a move whose create FAILED"
+      ],
+      "expectedGreen": [],
+      "unexpected": {
+        "missing": [],
+        "notRed": [],
+        "notGreen": []
+      },
+      "verdicts": [
+        {
+          "name": "A1 capacity: unresolved copy-phase operations never exceed K_src per copy source nor K_tgt per target",
+          "passed": false,
+          "failure": "copy-phase operations exceeded capacity (K_src=2, K_tgt=2): max per copy source {\"seed\":4,\"j1\":1}, per target {\"j1\":4,\"j2\":4}; first at round 25 step placement-timer (source seed=3)"
+        },
+        {
+          "name": "A2 causality: every admission follows a committed change; none is caused by a placement timer or a poll",
+          "passed": false,
+          "failure": "74 of 75 admissions were made while a placement timer fired or a decider was polled (by step {\"placement-timer\":74,\"terminal-redelivery\":1}); in frozen time the run admitted 0 with 46 partitions below spread and 47 placement timers armed"
+        },
+        {
+          "name": "A3 work conservation: no copy source is idle while an admissible copy candidate on it exists",
+          "passed": false,
+          "failure": "516 rounds ended with an idle copy source and an admissible copy candidate on it, e.g. round 1: seed idle with control_plane_publications-p1,replica_operations-p1,schema_operations-p1,sql_transaction_participants-p1; round 2: seed idle with control_plane_publications-p1,replica_operations-p1,schema_operations-p1,sql_transaction_participants-p1; round 3: seed idle with control_plane_publications-p1,replica_operations-p1,schema_operations-p1,sql_transaction_participants-p1; round 5: seed idle with control_plane_publications-p1,replica_operations-p1,schema_operations-p1,sql_transaction_participan"
+        },
+        {
+          "name": "A4 quiescence in frozen time: the drain completes with no placement timer firing, no bound spent and mg-1 unchanged",
+          "passed": false,
+          "failure": "every partition is on min(RF, READY) distinct READY voter nodes at the frozen fixpoint (46/46 below, 0 admissions, 47 placement timers armed: {\"src/rebalancer/rebalancer-planning-gate-methods.js:88:32\":47})"
+        },
+        {
+          "name": "A5 no churn: a duplicate delivery of every terminal row at a fixpoint admits nothing",
+          "passed": false,
+          "failure": "redelivered terminal rows (0 rows -> 0 admissions, 74 rows -> 1 admissions) admitted operations that were admissible and waiting for an edge"
+        },
+        {
+          "name": "A6 order: the formation gate, ledger exclusivity, class order and fewest hosts first",
+          "passed": false,
+          "failure": "Expected values to be strictly deep-equal:"
+        },
+        {
+          "name": "ledger repair is never starved by lower-class work",
+          "passed": false,
+          "failure": "drain: lower-class operations were admitted while the ledger partition had an admissible move waiting"
+        },
+        {
+          "name": "a move whose create FAILED with membership unchanged is admitted again, beside its retained terminal row",
+          "passed": false,
+          "failure": "the same deficit is admitted again before any terminal row is delivered twice (admitted again: [{\"seq\":4,\"operationId\":\"replace-op-8ae2b559362bdf4e8c8c2c5269de5a51\",\"step\":\"terminal-redelivery\",\"round\":408,\"workflowStep\":\"REMOVED\"}]; 45 partitions below spread, formed=false)'"
+        },
+        {
+          "name": "A7 accounting: one unresolved operation per partition, no FAILED operation, one copy per host gained",
+          "passed": true,
+          "failure": null
+        },
+        {
+          "name": "A8 sweep and safety: every arrival order drains in frozen time without a floor violation or an early cluster gate",
+          "passed": false,
+          "failure": "every arrival order completes the drain in frozen time"
+        }
+      ],
+      "detail": "Deterministic drain of a fresh three-node formation in frozen time over the tree's own placement composition: on the candidate no admission happens without a placement timer, the timer probe drives more than K_src=2 concurrent copies from the seed, the background wave starts while nodes-p1 waits, and a failed ledger move is not admitted again until its terminal row is delivered twice."
+    },
+    {
+      "id": "cross-coordinator-target-census-witness",
+      "measured": true,
+      "passed": false,
+      "measuredAsExpected": true,
+      "command": "node --test-reporter=tap test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+      "testFile": "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+      "expectedRed": [
+        "W-T: with B at capacity",
+        "W-T converse"
+      ],
+      "expectedGreen": [
+        "W-T paired control"
+      ],
+      "unexpected": {
+        "missing": [],
+        "notRed": [],
+        "notGreen": []
+      },
+      "verdicts": [
+        {
+          "name": "W-T: with B at capacity through A's copies, C's copy onto B is refused although C's cache has not received them",
+          "passed": false,
+          "failure": "no third unresolved copy onto B is committed: the store holds 3 unresolved copies onto B (tables-p1 from node-a, indices-p1 from node-a, config-p1 from node-c); C's cache holds 0 operation rows; the attempt read the store [{\"statement\":\"SELECT * FROM replica_operations WHERE partition_id = ? AND target_node_\",\"params\":[\"config-p1\",\"node-b\",\"partition\",\"config-p1\"],\"partitionIds\":[]},{\"statement\":\"SELECT * FROM replica_operations WHERE (source_node_id = ? OR target_nod\",\"params\":[\"node-c\",\"node-c\",\"PENDING\",\"SENDING\",\"CREATING\",\"SYNCING\",\"STOPPING\",\"ACTIVE\",\"REPLACE\",\"REMOVE\"],\"partitionIds\":[]"
+        },
+        {
+          "name": "W-T: after a genuine terminal of one of A's copies, C's waiting copy onto B is admitted on the same bindings, once",
+          "passed": true,
+          "failure": null
+        },
+        {
+          "name": "W-T converse: a cached row of a copy that is already terminal does not hold B's slot",
+          "passed": false,
+          "failure": "C's copy is admitted although C's cache still shows the released copy live (system_target_node_slot_limit_reached): the store holds 1 unresolved copies onto B (indices-p1 from node-a); C's cache holds 2 operation rows; the attempt read the store [{\"statement\":\"SELECT * FROM replica_operations WHERE partition_id = ? AND target_node_\",\"params\":[\"config-p1\",\"node-b\",\"partition\",\"config-p1\"],\"partitionIds\":[]},{\"statement\":\"SELECT * FROM replica_operations WHERE (source_node_id = ? OR target_nod\",\"params\":[\"node-c\",\"node-c\",\"PENDING\",\"SENDING\",\"CREATING\",\"SYNCING\",\"STOPPING\",\"ACTIVE\",\"REPLACE\",\"RE"
+        },
+        {
+          "name": "W-T paired control: with both copies published to C, C's copy onto B is refused",
+          "passed": true,
+          "failure": null
+        }
+      ],
+      "detail": "Candidate half of witness W-T: with two live copies onto B created by A, C (its cache publication held) commits a third copy onto B, its owner-scoped census bound to its own node id; a stale cached row of a terminal copy holds B's slot; with both copies published to C the copy is refused (paired control). The receipt holds only once the owner tree turns the witness green."
+    },
+    {
+      "id": "reproducer-and-owned-roots-green",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-F/WP-H: the reproducer, W-T and the owned roots of design section 4.3 green on the owner tree"
+    },
+    {
+      "id": "negative-controls-red",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-I: paired witnesses N1-N4 red on the owner tree"
+    },
+    {
+      "id": "owner-churn-and-host-topology-witnesses",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-F/WP-D: variants V1-V3"
+    },
+    {
+      "id": "single-admission-path-and-removed-mechanism-census-zero",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-G: the caller-set check and the removed-mechanism census"
+    },
+    {
+      "id": "lab-drain-mechanism-and-metrics-product-defaults",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-J: lab drain metrics at product defaults (owner decision D1 = b)"
+    },
+    {
+      "id": "comparative-smoke-setup",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-J: the comparative smoke through the lab target"
+    },
+    {
+      "id": "independent-verification",
+      "measured": false,
+      "passed": false,
+      "detail": "not yet measured: WP-I: a fresh verifier with the seven templates"
+    }
+  ]
+}
