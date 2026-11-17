@@ -12,6 +12,7 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 import {SCRIPT_TEXT} from './guideline-check-constants.js';
+import {createLiteralConstantBindingResolver} from './literal-constant-bindings.js';
 
 const LOCAL_STR_LITERAL = 'Literal';
 const LOCAL_STR_STRING = 'string';
@@ -158,6 +159,7 @@ const OBJECT_GLOBAL_NAME = 'Object';
 const OBJECT_FREEZE_METHOD = 'freeze';
 const BUFFER_GLOBAL_NAME = 'Buffer';
 const BUFFER_FROM_METHOD = 'from';
+const BUFFER_MODULE_SPECIFIERS = new Set(['node:buffer', 'buffer']);
 const PROPERTY_INIT_KIND = 'init';
 const BINARY_EXPRESSION_NODE = 'BinaryExpression';
 const UNARY_EXPRESSION_NODE = 'UnaryExpression';
@@ -223,23 +225,64 @@ function isParseIntRadixLiteral(node, parent) {
     parent.callee.property.name === LOCAL_STR_PARSEINT;
 }
 
-function isStaticMember(expression, objectName, propertyName) {
+function isIntrinsicReference(identifier, resolveBinding) {
+  const binding = resolveBinding(identifier);
+  if (!binding) {
+    return true;
+  }
+  return identifier.name === BUFFER_GLOBAL_NAME &&
+    binding.owner.type === LOCAL_STR_IMPORTDECLARATION &&
+    BUFFER_MODULE_SPECIFIERS.has(binding.owner.source.value) &&
+    binding.owner.specifiers.some((specifier) =>
+      specifier.local === binding.identifier &&
+      specifier.imported?.name === BUFFER_GLOBAL_NAME);
+}
+
+function isStaticMember(expression, objectName, propertyName, resolveBinding) {
   return expression?.type === MEMBER_EXPRESSION_NODE &&
     expression.computed !== true &&
     expression.object?.type === IDENTIFIER_NODE &&
     expression.object.name === objectName &&
     expression.property?.type === IDENTIFIER_NODE &&
-    expression.property.name === propertyName;
+    expression.property.name === propertyName &&
+    isIntrinsicReference(expression.object, resolveBinding);
 }
 
-function isUpperSnakeConstantReference(expression) {
+function isStaticConstantBinding(binding, constantContext) {
+  if (!binding) {
+    return false;
+  }
+  if (binding.owner.type === LOCAL_STR_IMPORTDECLARATION) {
+    return true;
+  }
+  if (binding.owner.type !== VARIABLE_DECLARATION_NODE || binding.owner.kind !== CONST_KIND) {
+    return false;
+  }
+  if (binding.moduleOwned) {
+    return true;
+  }
+  if (binding.declarator.id !== binding.identifier) {
+    return false;
+  }
+  if (!constantContext.staticBindings.has(binding)) {
+    // A cycle is not evidence of a static value. Seed the active lookup with
+    // false before recursively inspecting local constant dependencies.
+    constantContext.staticBindings.set(binding, false);
+    constantContext.staticBindings.set(binding,
+      isStaticConstantExpression(binding.declarator.init, constantContext));
+  }
+  return constantContext.staticBindings.get(binding);
+}
+
+function isUpperSnakeConstantReference(expression, constantContext) {
   if (expression?.type === IDENTIFIER_NODE) {
-    return UPPER_SNAKE_CASE_PATTERN.test(expression.name);
+    return UPPER_SNAKE_CASE_PATTERN.test(expression.name) &&
+      isStaticConstantBinding(constantContext.resolveBinding(expression), constantContext);
   }
   if (expression?.type === MEMBER_EXPRESSION_NODE &&
       expression.computed !== true &&
       expression.property?.type === IDENTIFIER_NODE) {
-    return isUpperSnakeConstantReference(expression.object);
+    return isUpperSnakeConstantReference(expression.object, constantContext);
   }
   return false;
 }
@@ -252,20 +295,21 @@ function isFreezeAliasProperty(property) {
     property.value?.type === IDENTIFIER_NODE;
 }
 
-function collectDestructuredFreezeAliases(declarator, aliases) {
+function collectDestructuredFreezeAliases(declarator, aliases, resolveBinding) {
   if (declarator.id?.type !== OBJECT_PATTERN_NODE ||
       declarator.init?.type !== IDENTIFIER_NODE ||
-      declarator.init.name !== OBJECT_GLOBAL_NAME) {
+      declarator.init.name !== OBJECT_GLOBAL_NAME ||
+      !isIntrinsicReference(declarator.init, resolveBinding)) {
     return;
   }
   for (const property of declarator.id.properties || []) {
     if (isFreezeAliasProperty(property)) {
-      aliases.add(property.value.name);
+      aliases.add(property.value);
     }
   }
 }
 
-function collectDeclarationFreezeAliases(statement, aliases) {
+function collectDeclarationFreezeAliases(statement, aliases, resolveBinding) {
   const declaration = statement?.type === EXPORT_NAMED_NODE ?
     statement.declaration :
     statement;
@@ -275,11 +319,11 @@ function collectDeclarationFreezeAliases(statement, aliases) {
   }
   for (const declarator of declaration.declarations || []) {
     if (declarator.id?.type === IDENTIFIER_NODE &&
-        isStaticMember(declarator.init, OBJECT_GLOBAL_NAME, OBJECT_FREEZE_METHOD)) {
-      aliases.add(declarator.id.name);
+        isStaticMember(declarator.init, OBJECT_GLOBAL_NAME, OBJECT_FREEZE_METHOD, resolveBinding)) {
+      aliases.add(declarator.id);
       continue;
     }
-    collectDestructuredFreezeAliases(declarator, aliases);
+    collectDestructuredFreezeAliases(declarator, aliases, resolveBinding);
   }
 }
 
@@ -287,15 +331,15 @@ function collectDeclarationFreezeAliases(statement, aliases) {
  * Collect top-level const identifiers initialized directly to Object.freeze
  * (for modules avoiding direct ambient intrinsics).
  */
-function collectObjectFreezeAliases(ast) {
+function collectObjectFreezeAliases(ast, resolveBinding) {
   const aliases = new Set();
   for (const statement of ast?.body || []) {
-    collectDeclarationFreezeAliases(statement, aliases);
+    collectDeclarationFreezeAliases(statement, aliases, resolveBinding);
   }
   return aliases;
 }
 
-function isObjectFreezeCall(expression, freezeAliases) {
+function isObjectFreezeCall(expression, constantContext) {
   if (expression?.type !== CALL_EXPRESSION_NODE ||
       expression.arguments.length !== LOCAL_NUM_ONE) {
     return false;
@@ -304,89 +348,94 @@ function isObjectFreezeCall(expression, freezeAliases) {
     expression.callee,
     OBJECT_GLOBAL_NAME,
     OBJECT_FREEZE_METHOD,
+    constantContext.resolveBinding,
   )) {
     return true;
   }
   return expression.callee?.type === IDENTIFIER_NODE &&
-    freezeAliases.has(expression.callee.name);
+    constantContext.freezeAliases.has(
+      constantContext.resolveBinding(expression.callee)?.identifier,
+    );
 }
 
-function isConstantCollectionNew(expression) {
+function isConstantCollectionNew(expression, constantContext) {
   return expression?.type === NEW_EXPRESSION_NODE &&
     expression.callee?.type === IDENTIFIER_NODE &&
     CONSTANT_COLLECTION_CONSTRUCTORS.has(expression.callee.name) &&
+    isIntrinsicReference(expression.callee, constantContext.resolveBinding) &&
     expression.arguments.length <= LOCAL_NUM_ONE;
 }
 
-function isStaticBufferFromCall(expression, freezeAliases) {
+function isStaticBufferFromCall(expression, constantContext) {
   if (expression?.type !== CALL_EXPRESSION_NODE ||
-      !isStaticMember(expression.callee, BUFFER_GLOBAL_NAME, BUFFER_FROM_METHOD)) {
+      !isStaticMember(expression.callee, BUFFER_GLOBAL_NAME, BUFFER_FROM_METHOD,
+        constantContext.resolveBinding)) {
     return false;
   }
   const argCount = expression.arguments.length;
   return argCount >= LOCAL_NUM_ONE &&
     argCount <= BUFFER_FROM_MAX_ARGS &&
     expression.arguments.every((argument) =>
-      isStaticConstantExpression(argument, freezeAliases));
+      isStaticConstantExpression(argument, constantContext));
 }
 
-function isStaticArrayElement(element, freezeAliases) {
+function isStaticArrayElement(element, constantContext) {
   if (!element) {
     return false;
   }
   if (element.type === SPREAD_ELEMENT_NODE) {
-    return isStaticConstantExpression(element.argument, freezeAliases);
+    return isStaticConstantExpression(element.argument, constantContext);
   }
-  return isStaticConstantExpression(element, freezeAliases);
+  return isStaticConstantExpression(element, constantContext);
 }
 
-function isStaticObjectProperty(property, freezeAliases) {
+function isStaticObjectProperty(property, constantContext) {
   if (property?.type === SPREAD_ELEMENT_NODE) {
-    return isStaticConstantExpression(property.argument, freezeAliases);
+    return isStaticConstantExpression(property.argument, constantContext);
   }
   if (property?.type !== PROPERTY_NODE || property.kind !== PROPERTY_INIT_KIND) {
     return false;
   }
   if (property.computed === true &&
-      !isStaticConstantExpression(property.key, freezeAliases)) {
+      !isStaticConstantExpression(property.key, constantContext)) {
     return false;
   }
-  return isStaticConstantExpression(property.value, freezeAliases);
+  return isStaticConstantExpression(property.value, constantContext);
 }
 
-function isStaticCallExpression(expression, freezeAliases) {
-  if (isObjectFreezeCall(expression, freezeAliases)) {
-    return isStaticConstantExpression(expression.arguments[0], freezeAliases);
+function isStaticCallExpression(expression, constantContext) {
+  if (isObjectFreezeCall(expression, constantContext)) {
+    return isStaticConstantExpression(expression.arguments[0], constantContext);
   }
-  return isStaticBufferFromCall(expression, freezeAliases);
+  return isStaticBufferFromCall(expression, constantContext);
 }
 
-function isStaticNewExpression(expression, freezeAliases) {
-  if (!isConstantCollectionNew(expression)) {
+function isStaticNewExpression(expression, constantContext) {
+  if (!isConstantCollectionNew(expression, constantContext)) {
     return false;
   }
   return expression.arguments.length === NUMERIC_LITERAL_ZERO ||
-    isStaticConstantExpression(expression.arguments[0], freezeAliases);
+    isStaticConstantExpression(expression.arguments[0], constantContext);
 }
 
 const STATIC_EXPRESSION_EVALUATORS = Object.freeze(new Map([
   [LITERAL_NODE, () => true],
-  [UNARY_EXPRESSION_NODE, (expression, freezeAliases) =>
+  [UNARY_EXPRESSION_NODE, (expression, constantContext) =>
     CONSTANT_UNARY_OPERATORS.has(expression.operator) &&
-    isStaticConstantExpression(expression.argument, freezeAliases)],
-  [BINARY_EXPRESSION_NODE, (expression, freezeAliases) =>
+    isStaticConstantExpression(expression.argument, constantContext)],
+  [BINARY_EXPRESSION_NODE, (expression, constantContext) =>
     CONSTANT_BINARY_OPERATORS.has(expression.operator) &&
-    isStaticConstantExpression(expression.left, freezeAliases) &&
-    isStaticConstantExpression(expression.right, freezeAliases)],
-  [TEMPLATE_LITERAL_NODE, (expression, freezeAliases) =>
+    isStaticConstantExpression(expression.left, constantContext) &&
+    isStaticConstantExpression(expression.right, constantContext)],
+  [TEMPLATE_LITERAL_NODE, (expression, constantContext) =>
     expression.expressions.every((embedded) =>
-      isStaticConstantExpression(embedded, freezeAliases))],
-  [ARRAY_EXPRESSION_NODE, (expression, freezeAliases) =>
+      isStaticConstantExpression(embedded, constantContext))],
+  [ARRAY_EXPRESSION_NODE, (expression, constantContext) =>
     expression.elements.every((element) =>
-      isStaticArrayElement(element, freezeAliases))],
-  [OBJECT_EXPRESSION_NODE, (expression, freezeAliases) =>
+      isStaticArrayElement(element, constantContext))],
+  [OBJECT_EXPRESSION_NODE, (expression, constantContext) =>
     expression.properties.every((property) =>
-      isStaticObjectProperty(property, freezeAliases))],
+      isStaticObjectProperty(property, constantContext))],
   [CALL_EXPRESSION_NODE, isStaticCallExpression],
   [NEW_EXPRESSION_NODE, isStaticNewExpression],
 ]));
@@ -395,15 +444,15 @@ const STATIC_EXPRESSION_EVALUATORS = Object.freeze(new Map([
  * Determine whether a local const initializer defines a static constant or
  * frozen table rather than a calculated runtime local variable.
  */
-function isStaticConstantExpression(expression, freezeAliases) {
+function isStaticConstantExpression(expression, constantContext) {
   if (!expression) {
     return false;
   }
-  if (isUpperSnakeConstantReference(expression)) {
+  if (isUpperSnakeConstantReference(expression, constantContext)) {
     return true;
   }
   const evaluator = STATIC_EXPRESSION_EVALUATORS.get(expression.type);
-  return evaluator ? evaluator(expression, freezeAliases) : false;
+  return evaluator ? evaluator(expression, constantContext) : false;
 }
 
 function isModuleTopLevelDeclaration(ancestors, declaratorIndex, exported) {
@@ -430,7 +479,7 @@ function resolveConstDeclarator(
   declaratorIndex,
   node,
   ancestors,
-  freezeAliases,
+  constantContext,
 ) {
   const declaration = ancestors[declaratorIndex - 1];
   const exportDeclaration = ancestors[declaratorIndex - LOCAL_NUM_TWO];
@@ -451,7 +500,7 @@ function resolveConstDeclarator(
   );
   const isConstantInit = isTopLevel ?
     !hasTopLevelRuntimeBranchOnPath(ancestors, declaratorIndex) :
-    isStaticConstantExpression(declarator.init, freezeAliases);
+    isStaticConstantExpression(declarator.init, constantContext);
   return isConstantInit ? {declaration, declarator, exported} : null;
 }
 
@@ -459,7 +508,7 @@ function resolveConstDeclarator(
  * Resolve an enclosing named-constant declaration without crossing scope
  * boundaries or exempting runtime-calculated local initializers.
  */
-function findConstDeclarationContext(node, ancestors, freezeAliases) {
+function findConstDeclarationContext(node, ancestors, constantContext) {
   for (let index = ancestors.length - LOCAL_NUM_ONE;
     index >= LOCAL_NUM_ZERO; index -= LOCAL_NUM_ONE) {
     const ancestor = ancestors[index];
@@ -472,7 +521,7 @@ function findConstDeclarationContext(node, ancestors, freezeAliases) {
         index,
         node,
         ancestors,
-        freezeAliases,
+        constantContext,
       );
     }
   }
@@ -483,9 +532,9 @@ function shouldIgnoreBecauseNamedConstant(
   node,
   ancestors,
   fileClass,
-  freezeAliases,
+  constantContext,
 ) {
-  const context = findConstDeclarationContext(node, ancestors, freezeAliases);
+  const context = findConstDeclarationContext(node, ancestors, constantContext);
   if (!context) {
     return false;
   }
@@ -496,8 +545,8 @@ function shouldIgnoreBecauseNamedConstant(
   return context.exported !== true;
 }
 
-function buildViolationKind(node, ancestors, fileClass, freezeAliases) {
-  const context = findConstDeclarationContext(node, ancestors, freezeAliases);
+function buildViolationKind(node, ancestors, fileClass, constantContext) {
+  const context = findConstDeclarationContext(node, ancestors, constantContext);
   if (context?.exported === true && fileClass !== FILE_CLASS.CONSTANTS_OWNER) {
     return LOCAL_STR_1RKTJ;
   }
@@ -513,7 +562,7 @@ function buildViolationReason(kind) {
   return LOCAL_STR_B3TUC;
 }
 
-function isExemptLiteral(node, parent, ancestors, fileClass, freezeAliases) {
+function isExemptLiteral(node, parent, ancestors, fileClass, constantContext) {
   return isDirectiveLiteral(node, parent, ancestors) ||
     isModuleSourceLiteral(node, parent) ||
     isObjectKeyLiteral(node, parent) ||
@@ -523,7 +572,7 @@ function isExemptLiteral(node, parent, ancestors, fileClass, freezeAliases) {
       node,
       ancestors,
       fileClass,
-      freezeAliases,
+      constantContext,
     );
 }
 
@@ -538,18 +587,23 @@ function collectMagicLiteralViolationsFromSource(
   }
 
   const ast = parseSourceFile(source);
-  const freezeAliases = collectObjectFreezeAliases(ast);
+  const resolveBinding = createLiteralConstantBindingResolver(ast);
+  const constantContext = {
+    resolveBinding,
+    freezeAliases: collectObjectFreezeAliases(ast, resolveBinding),
+    staticBindings: new Map(),
+  };
   const violations = [];
 
   walkAst(ast, (node, parent, ancestors) => {
     if (!isLiteralNode(node)) {
       return;
     }
-    if (isExemptLiteral(node, parent, ancestors, fileClass, freezeAliases)) {
+    if (isExemptLiteral(node, parent, ancestors, fileClass, constantContext)) {
       return;
     }
 
-    const kind = buildViolationKind(node, ancestors, fileClass, freezeAliases);
+    const kind = buildViolationKind(node, ancestors, fileClass, constantContext);
     violations.push({
       filePath,
       line: node.loc?.start?.line || LOCAL_NUM_ONE,

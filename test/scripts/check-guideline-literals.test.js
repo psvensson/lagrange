@@ -252,6 +252,163 @@ test('scanner flags calculated local const initializers while accepting named po
     );
   });
 
+test('scanner distinguishes native-confirmed runtime names from their constant bindings',
+  async (t) => {
+    const cases = [
+      {
+        name: 'lowercase runtime parameter',
+        source: 'function delay(budget) { const wait = budget * 500; return wait; }',
+        expected: ['500'],
+      },
+      {
+        name: 'uppercase runtime parameter',
+        source: 'function delay(BUDGET) { const wait = BUDGET * 500; return wait; }',
+        expected: ['500'],
+      },
+      {
+        name: 'actual module constant',
+        source: 'const BUDGET = 10; ' +
+          'function delay() { const wait = BUDGET * 500; return wait; }',
+        expected: [],
+      },
+      {
+        name: 'runtime call without an alias',
+        source: 'function delay(freeze) { const policy = freeze({waitMs: 500}); return policy; }',
+        expected: ['500'],
+      },
+      {
+        name: 'runtime call shadowing a module freeze alias',
+        source: 'const freeze = Object.freeze; ' +
+          'function delay(freeze) { const policy = freeze({waitMs: 500}); return policy; }',
+        expected: ['500'],
+      },
+      {
+        name: 'actual module freeze alias',
+        source: 'const freeze = Object.freeze; ' +
+          'function delay() { const policy = freeze({waitMs: 500}); return policy; }',
+        expected: [],
+      },
+    ];
+    for (const {name, source, expected} of cases) {
+      const violations = collectMagicLiteralViolationsFromSource(
+        source,
+        '/repo/src/runtime/literal-binding-witness.js',
+      );
+      t.same(violations.map((violation) => violation.value), expected, name);
+    }
+  });
+
+test('scanner resolves the nearest lexical binding across runtime shadowing forms',
+  async (t) => {
+    const owners = 'const BUDGET = 10; const freeze = Object.freeze; ';
+    const calculated = 'const wait = BUDGET * 500; const policy = freeze({waitMs: 600});';
+    const cases = [
+      ['object parameter', `function run({BUDGET, freeze}) { ${calculated} }`],
+      ['array parameter', `function run([BUDGET, freeze]) { ${calculated} }`],
+      ['rest parameter', `function run(...[BUDGET, freeze]) { ${calculated} }`],
+      ['default parameter', `function run(BUDGET = 1, freeze = fallback) { ${calculated} }`],
+      ['closure over parameters',
+        `function run(BUDGET, freeze) { return () => { ${calculated} }; }`],
+      ['block bindings',
+        `function run(input) { { let BUDGET = input, freeze = input; ${calculated} } }`],
+      ['loop destructuring',
+        `function run(inputs) { for (const [BUDGET, freeze] of inputs) { ${calculated} } }`],
+      ['catch destructuring',
+        `function run() { try {} catch ({BUDGET, freeze}) { ${calculated} } }`],
+      ['hoisted var declarations',
+        `function run() { ${calculated} var BUDGET, freeze; }`],
+      ['hoisted function declarations',
+        `function run() { ${calculated} function BUDGET() {} function freeze() {} }`],
+      ['named function expression', `const run = function freeze(BUDGET) { ${calculated} };`],
+      ['named class expression', `const Run = class freeze { run(BUDGET) { ${calculated} } };`],
+      ['switch case bindings',
+        'function run(input) { switch (input) { case 0: ' +
+          `let BUDGET = input, freeze = input; ${calculated} } }`],
+      ['local runtime const bindings',
+        `function run(input) { const BUDGET = input, freeze = input; ${calculated} }`],
+    ];
+    for (const [name, source] of cases) {
+      const violations = collectMagicLiteralViolationsFromSource(
+        owners + source,
+        '/repo/src/runtime/literal-binding-shadows.js',
+      );
+      t.same(violations.map((violation) => violation.value), ['500', '600'], name);
+    }
+  });
+
+test('scanner preserves real constant identities without borrowing unrelated shadows',
+  async (t) => {
+    const cases = [
+      ['imported constant',
+        'import {BUDGET} from "./policy-constants.js"; ' +
+          'function run() { const wait = BUDGET * 500; }'],
+      ['imported Node Buffer intrinsic',
+        'import {Buffer} from "node:buffer"; ' +
+          'function run() { const bytes = Buffer.from([500]); }'],
+      ['static local constant',
+        'function run() { const BUDGET = 10; const wait = BUDGET * 500; }'],
+      ['nearest static const overrides a runtime parameter',
+        'function run(BUDGET) { { const BUDGET = 10; const wait = BUDGET * 500; } }'],
+      ['destructured module freeze alias',
+        'const {freeze} = Object; function run() { const policy = freeze({waitMs: 500}); }'],
+      ['unrelated parameter shadows do not affect a module owner',
+        'const BUDGET = 10; const freeze = Object.freeze; ' +
+          'function unrelated(BUDGET, freeze) {} ' +
+          'function run() { const wait = BUDGET * 500; const policy = freeze({waitMs: 600}); }'],
+      ['body var declarations do not shadow parameter initializers',
+        'const BUDGET = 10; const freeze = Object.freeze; ' +
+          'function run(value = (() => { const wait = BUDGET * 500; ' +
+          'const policy = freeze({waitMs: 600}); return policy; })()) { var BUDGET, freeze; }'],
+      ['switch case bindings do not shadow the discriminant',
+        'const BUDGET = 10; const freeze = Object.freeze; ' +
+          'switch ((() => { const wait = BUDGET * 500; ' +
+          'const policy = freeze({waitMs: 600}); return wait; })()) { ' +
+          'case 0: let BUDGET, freeze; }'],
+      ['an Object parameter does not change the captured module freeze alias',
+        'const freeze = Object.freeze; ' +
+          'function run(Object) { const policy = freeze({waitMs: 500}); }'],
+    ];
+    for (const [name, source] of cases) {
+      t.same(collectMagicLiteralViolationsFromSource(
+        source,
+        '/repo/src/runtime/literal-binding-controls.js',
+      ), [], name);
+    }
+  });
+
+test('scanner rejects unresolved, mutable, cyclic, and shadowed intrinsic references',
+  async (t) => {
+    const cases = [
+      ['unresolved uppercase reference',
+        'function run() { const wait = BUDGET * 500; }', ['500']],
+      ['mutable module reference',
+        'let BUDGET = 1; function run() { const wait = BUDGET * 500; }', ['500']],
+      ['parameter shadows an imported constant',
+        'import {BUDGET} from "./policy-constants.js"; ' +
+          'function run(BUDGET) { const wait = BUDGET * 500; }', ['500']],
+      ['local runtime const member',
+        'function run(input) { const BUDGET = {input}; const wait = BUDGET.input * 500; }',
+        ['500']],
+      ['cyclic local const references',
+        'function run() { const FIRST = SECOND; const SECOND = FIRST; ' +
+          'const wait = FIRST * 500; }', ['500']],
+      ['shadowed intrinsic names',
+        'function run(Object, Buffer, Set, Map) { const a = Object.freeze({waitMs: 500}); ' +
+          'const b = Buffer.from([600]); const c = new Set([700]); ' +
+          'const d = new Map([[800, 1]]); }', ['500', '600', '700', '800']],
+      ['freeze alias of a shadowed Object',
+        'const Object = custom; const freeze = Object.freeze; ' +
+          'function run() { const policy = freeze({waitMs: 500}); }', ['500']],
+    ];
+    for (const [name, source, expected] of cases) {
+      const violations = collectMagicLiteralViolationsFromSource(
+        source,
+        '/repo/src/runtime/literal-binding-rejections.js',
+      );
+      t.same(violations.map((violation) => violation.value), expected, name);
+    }
+  });
+
 test('scanner does not let outer const cross function, arrow, method, or class boundaries',
   async (t) => {
     const violations = collectMagicLiteralViolationsFromSource(
@@ -392,7 +549,7 @@ test('constants-owner exported tables referencing imported constants remain acce
     t.equal(violations.length, 0);
   });
 
-test('collectMagicLiteralViolations scans files end-to-end on control, nested-fn, and freeze cases',
+test('collectMagicLiteralViolations preserves binding violations in filesystem reports',
   async (t) => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'literal-checker-'));
     try {
@@ -415,13 +572,16 @@ test('collectMagicLiteralViolations scans files end-to-end on control, nested-fn
           '  const retryDelayMs = value > 0 ? value : 450;',
           '  return retryDelayMs;',
           '}',
+          'const freeze = Object.freeze;',
+          'function delayUpper(BUDGET) { const wait = BUDGET * 500; return wait; }',
+          'function delayFreeze(freeze) { const policy = freeze({waitMs: 500}); return policy; }',
         ].join('\n'),
         'utf8',
       );
 
       const report = await collectMagicLiteralViolations([tempDir]);
       t.equal(report.scannedFileCount, 1);
-      t.equal(report.totalViolationCount, 4);
+      t.equal(report.totalViolationCount, 6);
       t.same(
         report.violations.map((violation) => ({
           line: violation.line,
@@ -433,6 +593,8 @@ test('collectMagicLiteralViolations scans files end-to-end on control, nested-fn
           {line: 8, value: '350', kind: 'free_floating_number_literal'},
           {line: 10, value: '400', kind: 'free_floating_number_literal'},
           {line: 13, value: '450', kind: 'free_floating_number_literal'},
+          {line: 17, value: '500', kind: 'free_floating_number_literal'},
+          {line: 18, value: '500', kind: 'free_floating_number_literal'},
         ],
       );
     } finally {
