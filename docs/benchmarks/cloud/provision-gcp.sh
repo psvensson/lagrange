@@ -30,6 +30,10 @@
 #   SSH_USER             SSH username for the benchmark runner (create, --place)
 #   SSH_PUBLIC_KEY_FILE  public key installed for SSH_USER on every VM (create); it must exist
 #                        and be readable; VMs are never created without it
+# Optional creation lifetime:
+#   VM_TERMINATION_TIME  absolute UTC expiry, YYYY-MM-DDTHH:MM:SSZ; requests DELETE and
+#                        boot-disk auto-deletion for every VM. Empty/omitted means no
+#                        provider lifetime bound. Ignored by --place and --teardown.
 # Documented defaults (environment overrides):
 #   ZONE            GCP zone (default: us-central1-a)
 #   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
@@ -60,6 +64,26 @@ usage() {
 fail() {
   echo "Error: $1" >&2
   exit 1
+}
+
+validate_termination_time() {
+  local message="VM_TERMINATION_TIME must be a valid UTC date and time in YYYY-MM-DDTHH:MM:SSZ form"
+  local utc_pattern='^([0-9]{4})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'
+  utc_pattern+='T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$'
+  [[ "$1" =~ ${utc_pattern} ]] || usage "${message}"
+  local year=$((10#${BASH_REMATCH[1]}))
+  local month=$((10#${BASH_REMATCH[2]}))
+  local day=$((10#${BASH_REMATCH[3]}))
+  local max_day=31
+  case "${month}" in
+    2)
+      max_day=28
+      if ((year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))); then
+        max_day=29
+      fi ;;
+    4|6|9|11) max_day=30 ;;
+  esac
+  ((year > 0 && day <= max_day)) || usage "${message}"
 }
 
 if [ "${1:-}" = "--place" ]; then
@@ -169,6 +193,13 @@ if [ "${1:-}" = "--teardown" ]; then
   exit 0
 fi
 
+TERMINATION_ARGS=()
+if [ -n "${VM_TERMINATION_TIME:-}" ]; then
+  validate_termination_time "${VM_TERMINATION_TIME}"
+  TERMINATION_ARGS=(--termination-time="${VM_TERMINATION_TIME}"
+    --instance-termination-action=DELETE --boot-disk-auto-delete)
+fi
+
 [ -n "${SSH_USER:-}" ] || usage "SSH_USER is not set: export SSH_USER=<the user the runner connects as>"
 [ -n "${SSH_PUBLIC_KEY_FILE:-}" ] ||
   usage "SSH_PUBLIC_KEY_FILE is not set: export SSH_PUBLIC_KEY_FILE=<path to the public key for ${SSH_USER}>"
@@ -181,6 +212,11 @@ echo "[gcp] project ${PROJECT_ID}, zone ${ZONE}, machine type ${MACHINE_TYPE}, p
 echo "[gcp] VM image: family ${IMAGE_FAMILY} in project ${IMAGE_PROJECT}"
 echo "[gcp] boot disk ${BOOT_DISK_SIZE} ${BOOT_DISK_TYPE}, firewall allows ${FIREWALL_ALLOW}"
 echo "[gcp] ssh user ${SSH_USER}, key ${SSH_PUBLIC_KEY_FILE}"
+if [ -n "${VM_TERMINATION_TIME:-}" ]; then
+  echo "[gcp] VM termination requested: ${VM_TERMINATION_TIME} (DELETE, boot disk auto-delete)"
+else
+  echo "[gcp] VM termination time not set; no provider-enforced lifetime bound requested"
+fi
 
 # The run creates its firewall rule; a rule of that name that already exists was not created
 # by this run and is never reused.
@@ -227,6 +263,7 @@ gcloud compute instances create "${NODES[@]}" \
   --boot-disk-size="${BOOT_DISK_SIZE}" \
   --boot-disk-type="${BOOT_DISK_TYPE}" \
   --tags="${NETWORK_TAG}" \
+  "${TERMINATION_ARGS[@]}" \
   "${META_ARGS[@]}"
 
 echo "[gcp] Resolving internal and external IP addresses..."
