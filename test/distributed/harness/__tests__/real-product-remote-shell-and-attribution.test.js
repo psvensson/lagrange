@@ -20,7 +20,9 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  stringEndsWith,
   stringIncludes,
+  stringReplace,
 } from '../real-product-captured-intrinsics.js';
 import {
   DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
@@ -1170,10 +1172,10 @@ async function createNativeHttpProbe(t) {
       const call = {command, subprocessTimeoutMs: options.timeout, callbackReceived: false};
       calls.push(call);
       try {
-        assert.ok(command.endsWith(` '${NATIVE_HTTP_PROBE_URL}'`));
+        assert.ok(stringEndsWith(command, ` '${NATIVE_HTTP_PROBE_URL}'`));
         call.curlTimeoutMs = curlTimeoutMsOf(command);
-        const localCommand = command.replace(
-          `'${NATIVE_HTTP_PROBE_URL}'`, `'http://127.0.0.1:${port}/readyz'`);
+        const localCommand = stringReplace(
+          command, `'${NATIVE_HTTP_PROBE_URL}'`, `'http://127.0.0.1:${port}/readyz'`);
         // Substitute only the SSH hop. The real shell parses the exact curl
         // command; exec leaves curl as the native child receiving cancellation.
         const child = execFile('/bin/sh', ['-c', `exec ${localCommand}`], options,
@@ -1262,7 +1264,9 @@ describe('HTTP probe total deadline and native timeout attribution', () => {
       for (const timeoutMs of [-1, 0, 0.5, 1, 1.9]) {
         let spawned = false;
         const answer = await httpFromHost({from: 'fixture-client', url: NATIVE_HTTP_PROBE_URL,
-          timeoutMs, sshRun: async () => { spawned = true; }});
+          timeoutMs, sshRun: async () => {
+            spawned = true;
+          }});
         assert.equal(spawned, false);
         assert.equal(answer.status, null);
         assert.equal(answer.deadlineExpired, true);

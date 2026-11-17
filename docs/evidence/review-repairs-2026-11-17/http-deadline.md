@@ -114,3 +114,52 @@ SSH runner; subsequent readiness attempts retain their existing policy.
 Native subprocess evidence does not claim physical SSH, full cluster formation,
 GCP comparative performance, or publishable campaign admission. No new test or
 acceptance result is claimed by this preparation record.
+
+## First managed native attempt: job 4908
+
+Managed [job 4908](https://github.com/psvensson/lagrange-lab/issues/4908)
+tested the new regression against the defect baseline
+`4b0c8ec1de59e9a074afa97ce260afb2868685c5`, then tested the fixed candidate
+`670a6acfa41b3ebaa6a6ffe43a868ea90a055eb4`. The candidate tree
+`5afb08e5e25031893bd3177ff6a8a7bbab5bc274` is identical to local commit
+`1bb07bc458aa362610dbbba60366fea9b55c3daa`. Root retained the 18814-byte native
+log as `takeover-http-proof-native.log`, SHA256
+`622ce9a7ca05119d11fcfa58e99f6ab97f620cfbdca93565628291cfebdfb28e`.
+
+The baseline failed three new behavioral subtests: the forwarded subprocess
+budget exceeded the caller cap, a tiny budget still spawned a subprocess,
+and native stalled HTTP exhausted the operation deadline before the probe
+returned. Its stalled request took 2005 ms against 1500 ms, with curl exit 28,
+curl allowance 2000 ms and subprocess allowance 4000 ms. The healthy control
+took 7 ms; independent cancellation took 502 ms and retained SIGTERM/abort
+attribution. These are known-bad baseline observations, not repaired timings.
+
+The fixed candidate passed all four selected files: the remote-shell and
+attribution suite, workload-call-site suite, campaign suite, and cluster
+deployer readiness suite. The classified runner reported 109 passing
+assertions. The new native assertions require stalled curl exit 28 and child
+settlement before the 1500 ms operation bound, healthy readiness, and
+independent caller-cancellation attribution. The retained passing summary
+does not expose exact repaired elapsed times, so none are claimed here.
+
+This attempt did not satisfy all static gates. ESLint reported four style
+errors on one single-line callback at test line 1265. The ambient-intrinsics
+audit scanned both changed JavaScript files and reported two new violations
+in the fixture: direct `command.endsWith` and `command.replace` calls at
+lines 1173 and 1175. Source inspection of the checker confirms that these
+method names are governed; the clock calls are not those violations. The
+file-size gate passed. The literal, decision-boundary and silent-catch checks
+each reported zero scanned JavaScript files and do not establish coverage
+of this harness change.
+
+The follow-up expands that callback and uses the existing shared
+`stringEndsWith` and `stringReplace` captures. It changes neither production
+code nor the allocation, command, timing, assertion or cleanup semantics.
+No baseline, exemption, deadline or ratchet is increased. This correction
+has not run locally; root owns exact-candidate managed verification.
+
+Job 4908 is native component and interaction evidence through a substituted
+SSH hop and a real local HTTP server. It does not certify physical SSH,
+distributed formation, GCP measurements or campaign admission. Its original
+static failures remain part of the record. Final acceptance, independent
+review and publication remain pending.
