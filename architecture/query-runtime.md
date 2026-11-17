@@ -146,6 +146,14 @@ User hints can override the default, validated against guardrails. Strategy
 decisions are exposed in EXPLAIN and query telemetry.
 
 ### Resource Guardrails
+
+`createSqlRequest` normalizes raw caller budget overrides through
+`normalizeQueryBudget` before defaults are applied. Uppercase and camelCase
+aliases name the same limit. Explicit unequal aliases are rejected, including
+when either supplied value equals its default. Direct request admission and
+execution-context construction revalidate the canonical budget idempotently;
+they do not infer caller intent from a default-valued field.
+
 Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 
 - CPU time, memory, wall time limits
@@ -154,3 +162,18 @@ Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 - Broadcast max payload bytes
 
 Budget violations terminate the operation with a descriptive `BudgetLimitError`.
+
+### Coordinator Scalar Semantics
+
+The SELECT partial-aggregate combiner and the HAVING evaluator share
+`src/query/sql-scalar-functions.js` for ROUND, LENGTH and SUBSTR/SUBSTRING.
+Native SQLite supplies the expected values in scalar and complete query
+regressions, including both consumers and one- and two-partition delivery.
+Changes to these semantics must preserve the parser's actual value
+representations and run those consumer regressions, rather than testing only
+the helper with hand-built values.
+
+Coordinator JavaScript numbers do not preserve SQLite INTEGER/REAL storage-class
+metadata. This shared helper does not reconstruct that metadata or establish
+complete numeric-to-text affinity equivalence. Any extension requiring those
+distinctions must address the row representation and planner boundary explicitly.

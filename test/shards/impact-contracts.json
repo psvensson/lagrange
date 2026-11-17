@@ -2211,6 +2211,42 @@
         "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js"
       ]
     },
+    "coordinator-scalar-semantics": {
+      "description": "SELECT partial aggregation and HAVING evaluation preserve the same admitted scalar semantics, using native SQLite expected values and actual parser/planner/partition deliveries.",
+      "owners": [
+        "src/query/sql-scalar-functions.js",
+        "src/query/distributed/partial-aggregate-combiner.js",
+        "src/query/distributed/distributed-select-fanout-plan.js",
+        "src/query/query-executor-select-aggregation.js"
+      ],
+      "tests": [
+        "test/query/sql-scalar-functions.test.js",
+        "test/query/distributed-select-global-merge-correctness.test.js",
+        "test/query/cross-partition-join-pushdown.test.js"
+      ]
+    },
+    "query-budget-normalization-and-enforcement": {
+      "description": "Raw request aliases resolve before defaults, explicit conflicts refuse before dispatch, and actual bounded input collection and output owners preserve the selected limits across query and PG admission.",
+      "owners": [
+        "src/query/sql-request.js",
+        "src/wasm-service/query-budget-constants.js",
+        "src/query/execution-context.js",
+        "src/query/budget-enforcer.js",
+        "src/query/result-stream.js",
+        "src/query/sql-query-engine-request-dispatch.js",
+        "src/query/query-result-budget.js",
+        "src/query/pg/postgres-wire-adapter.js"
+      ],
+      "tests": [
+        "test/query/sql-request.test.js",
+        "test/query/execute-request.test.js",
+        "test/query/execution-context.test.js",
+        "test/query/budget-enforcer.test.js",
+        "test/query/result-stream.test.js",
+        "test/query/postgres-wire-adapter.test.js",
+        "test/wasm-service/query-budget-constants.test.js"
+      ]
+    },
     "benchmark-remote-shell-identity-campaign-attribution": {
       "description": "Remote SSH command execution and native process termination preserve explicit transport and timeout facts across container identity and workload adapters into the final campaign runner without lossy code overloading.",
       "owners": [

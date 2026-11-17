@@ -2,8 +2,7 @@
  * Guard: distributed SELECT global-merge correctness.
  *
  * The partition side executes the DELIVERED SQL against a real SQLite
- * database — exactly like partition-service-write-metrics-base
- * executeQuery (`db.prepare(sql).all(...params)`) — so the guard proves
+ * database through the partition's bounded collector — so the guard proves
  * the real pushdown/merge interaction, not a raw-row mock. Covers the
  * defects where multi-partition COUNT(*) returned the number of
  * partitions, SUM returned 0, AVG/MIN/MAX returned null, GROUP BY
@@ -13,10 +12,15 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
+import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {QUERY_MESSAGE_TYPE, QUERY_SORT_DIRECTION} from '../../src/query/query-constants.js';
+import {collectBoundedSqliteRows} from '../../src/query/query-result-budget.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {
   FANOUT_PLAN_KIND,
   buildSelectFanoutPlan,
@@ -32,48 +36,58 @@ if (!config.isInitialized()) {
 const TABLE_DDL =
   'CREATE TABLE t (id INTEGER PRIMARY KEY, amount INTEGER, dept TEXT)';
 
-function buildCluster(partitionRows) {
-  const partitionDbs = new Map();
-  for (const [partitionId, rows] of Object.entries(partitionRows)) {
-    const db = new Database(':memory:');
-    db.exec(TABLE_DDL);
-    const insert = db.prepare(
-      'INSERT INTO t (id, amount, dept) VALUES (?, ?, ?)',
-    );
-    for (const row of rows) {
-      insert.run(row.id, row.amount, row.dept ?? null);
-    }
-    partitionDbs.set(partitionId, db);
+function createTableDatabase(rows) {
+  const db = new Database(':memory:');
+  db.exec(TABLE_DDL);
+  const insert = db.prepare(
+    'INSERT INTO t (id, amount, dept) VALUES (?, ?, ?)',
+  );
+  for (const row of rows) {
+    insert.run(row.id, row.amount, row.dept ?? null);
   }
+  return db;
+}
+
+function buildCluster(partitionRows) {
+  const partitionDbs = new Map(Object.entries(partitionRows).map(
+    ([partitionId, rows]) => [partitionId, createTableDatabase(rows)],
+  ));
 
   const deliveredSql = [];
   const messageRouter = {
     async deliver(address, message) {
-      if (message.type !== 'QUERY') {
+      if (message.type !== QUERY_MESSAGE_TYPE.QUERY) {
         return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       const db = partitionDbs.get(partitionId);
-      deliveredSql.push({partitionId, sql: message.sql});
-      const rows = db.prepare(message.sql).all(...(message.params || []));
+      assert.equal(typeof message.sql, 'string');
+      assert.ok(Array.isArray(message.params));
+      deliveredSql.push({partitionId, sql: message.sql, params: message.params});
+      const rows = collectBoundedSqliteRows(db.prepare(message.sql), message.params, {
+        maxRows: message.resultMaxRows,
+        maxBytes: message.resultMaxBytes,
+        deadlineMs: message.resultDeadlineMs,
+      });
       return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
         count: rows.length,
+        rowSetComplete: true,
         partitionId,
       });
     },
   };
 
-  const services = [...partitionDbs.keys()].map((partitionId) => ({
-    service_id: partitionId,
-    service_type: 'partition',
-    partition_id: partitionId,
-    node_id: 'test-node',
-    raft_role: 'leader',
-    address: `test-node/partition/${partitionId}`,
-    status: 'active',
-  }));
+  const services = [...partitionDbs.keys()].map((partitionId) =>
+    PartitionServiceRowOwner.buildServiceRow({
+      partitionId,
+      replicaId: partitionId,
+      nodeId: 'test-node',
+      status: SERVICE_STATUS.ACTIVE,
+      service: {isLeader: true},
+    }),
+  );
   const systemCache = {
     services,
     filter(type, predicate) {
@@ -90,7 +104,11 @@ function buildCluster(partitionRows) {
   const executor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter, systemCache});
-  return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()]};
+  return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()], partitionDbs,
+    close: () => {
+      for (const db of partitionDbs.values()) db.close();
+    },
+  };
 }
 
 // amounts 1..10 (sum 55), depts alternate a/b, spread over 2 partitions.
@@ -660,4 +678,142 @@ test('bound SQL NULL parameter vs unbound parameter placeholder in ' +
       `unbound parameter at index ${expectedIndex} rejects for: ${sql}`,
     );
   }
+});
+
+test('SELECT and HAVING scalar operations match the native SQLite oracle', async (t) => {
+  const partitionRows = {
+    p1: [
+      {id: 1, amount: -1.5, dept: '😀'},
+      {id: 2, amount: 1.5, dept: 'abc'},
+    ],
+    p2: [
+      {id: 3, amount: -1, dept: '😀'},
+      {id: 4, amount: 1, dept: 'abc'},
+    ],
+  };
+  const {executor, deliveredSql, close} = buildCluster(partitionRows);
+  t.teardown(close);
+  const grouped = ' FROM t GROUP BY dept ';
+  const cases = [
+    ['SELECT dept, ROUND(SUM(amount), 0) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT SUBSTR(MAX(dept), 3, -2) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT SUBSTRING(MAX(dept), 3, -2) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT SUBSTR(MAX(dept), 1, 2) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT LENGTH(MAX(dept)) AS value FROM t WHERE dept = ?', ['😀']],
+    ['SELECT LENGTH(MAX(dept)) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT dept, SUM(amount) AS total' + grouped +
+      'HAVING ROUND(SUM(amount), ?) = SUM(amount) - ? ORDER BY dept', [0, 0.5]],
+    ['SELECT dept, SUM(amount) AS total' + grouped +
+      'HAVING ROUND(SUM(amount), ?) = SUM(amount) + ? ORDER BY dept', [0, 0.5]],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING SUBSTR(MAX(dept), ?, ?) = ? ORDER BY dept', [3, -2, 'ab']],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING LENGTH(MAX(dept)) = ? ORDER BY dept', [1]],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING LENGTH(MAX(dept)) = ? ORDER BY dept', [3]],
+    ['SELECT dept, ROUND(SUM(amount) > 0) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(SUM(amount) > 0) = 1 ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(SUM(amount) > 0) = 0 ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING ROUND(CASE WHEN SUM(amount) > 0 THEN 1 ELSE 0 END) = 1 ORDER BY dept', []],
+    ['SELECT dept, ROUND(SUM(amount), TRUE) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT dept, ROUND(SUM(amount), FALSE) AS value' + grouped + 'ORDER BY dept', []],
+    ['SELECT SUBSTR(MAX(dept), TRUE, TRUE) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT SUBSTR(MAX(dept), FALSE, 2) AS value FROM t WHERE dept = ?', ['abc']],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING SUBSTR(MAX(dept), SUM(amount) > 0, 1) = \'a\' ORDER BY dept', []],
+    ['SELECT dept, COUNT(*) AS cnt' + grouped +
+      'HAVING LENGTH(SUM(amount) > 0) = 1 ORDER BY dept', []],
+    ['SELECT ROUND(SUM(amount), ?) AS value FROM t', [null]],
+    ['SELECT COUNT(*) AS cnt FROM t HAVING ROUND(SUM(amount), ?) IS NULL', [null]],
+    ['SELECT ROUND(SUM(amount), 0) AS rounded, LENGTH(MAX(dept)) AS length, ' +
+      'SUBSTR(MAX(dept), 1, 2) AS part FROM t WHERE id < ?', [0]],
+  ];
+  for (const partitionIds of [['p1'], ['p1', 'p2']]) {
+    const oracle = createTableDatabase(partitionIds.flatMap((id) => partitionRows[id]));
+    t.teardown(() => oracle.close());
+    for (const [sql, params] of cases) {
+      const plan = buildSelectFanoutPlan(new SQLParser(sql).parse(), params);
+      t.equal(plan.kind, FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
+        'the existing coordinator expression path is admitted');
+      const expected = oracle.prepare(sql).all(...params);
+      const deliveryStart = deliveredSql.length;
+      t.same(await select(executor, sql, partitionIds, params), expected,
+        `${partitionIds.join(',')}: ${sql}`);
+      const deliveries = deliveredSql.slice(deliveryStart);
+      t.same(new Set(deliveries.map(({partitionId}) => partitionId)), new Set(partitionIds),
+        'actual partition SQL ran on every selected partition');
+      t.ok(deliveries.every(({sql: delivered}) =>
+        !/\b(?:ROUND|LENGTH|SUBSTR(?:ING)?)\s*\(/u.test(delivered)),
+      'the repaired scalar is evaluated at the coordinator after native partials');
+    }
+  }
+});
+
+test('QueryExecutor.applyOrderBy matches SQLite UTF-8 BINARY ordering', async (t) => {
+  const textValues = [
+    'abc', '😀', '\u{10000}', '\uE000', 'a', 'A', 'aa', 'a!', '',
+    'é', 'e\u0301', 'a\u0000a', 'a\u0000b',
+  ];
+  const rows = textValues.flatMap((dept, index) => [
+    {id: index * 2 + 1, amount: 1, dept},
+    {id: index * 2 + 2, amount: 2, dept},
+  ]);
+  const partitionRows = {
+    p1: rows,
+    p2: rows.map((row) => ({...row, id: row.id + rows.length})),
+  };
+  const {executor, deliveredSql, partitionIds, partitionDbs, close} = buildCluster(partitionRows);
+  t.teardown(close);
+  const oracle = createTableDatabase(Object.values(partitionRows).flat());
+  t.teardown(() => oracle.close());
+
+  const encodingPragma = 'encoding';
+  const expectedEncoding = 'UTF-8';
+  for (const [partitionId, db] of partitionDbs) {
+    t.equal(db.pragma(encodingPragma, {simple: true}), expectedEncoding,
+      `${partitionId} executes delivered SQL in a UTF-8 database`);
+  }
+  t.equal(oracle.pragma(encodingPragma, {simple: true}), expectedEncoding,
+    'the independent native oracle uses the same text encoding');
+
+  const projections = [
+    {kind: FANOUT_PLAN_KIND.RAW_ROWS,
+      sql: 'SELECT id, dept, amount FROM t', secondary: 'id'},
+    {kind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
+      sql: 'SELECT dept, amount, COUNT(*) AS cnt FROM t GROUP BY dept, amount',
+      secondary: 'amount'},
+  ];
+  const ascendingDirection = 'ASC';
+  const directions = [ascendingDirection, QUERY_SORT_DIRECTION.DESC];
+  const windows = ['', ' LIMIT 5 OFFSET 3'];
+  for (const projection of projections) {
+    for (const direction of directions) {
+      for (const window of windows) {
+        const sql = `${projection.sql} ORDER BY dept ${direction}, ` +
+          `${projection.secondary} ${QUERY_SORT_DIRECTION.DESC}${window}`;
+        const plan = buildSelectFanoutPlan(new SQLParser(sql).parse());
+        t.equal(plan.kind, projection.kind, 'the intended live merge consumer is admitted');
+        const expected = oracle.prepare(sql).all();
+        t.ok(expected.length > 1, 'the oracle requires a nontrivial ordered result');
+        const deliveryStart = deliveredSql.length;
+        t.same(await select(executor, sql, partitionIds), expected,
+          `${projection.kind}: ${sql}`);
+        const deliveries = deliveredSql.slice(deliveryStart);
+        t.same(new Set(deliveries.map(({partitionId}) => partitionId)), new Set(partitionIds),
+          'actual SQL ran against both native partition databases');
+        if (projection.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
+          t.ok(deliveries.every(({sql: delivered}) =>
+            !/\b(?:ORDER BY|LIMIT)\b/u.test(delivered)),
+          'partial rows reach the coordinator before global sorting and slicing');
+        }
+      }
+    }
+  }
+
+  const numericSql = 'SELECT id, amount, dept FROM t ORDER BY amount DESC, id ASC';
+  t.same(await select(executor, numericSql, partitionIds), oracle.prepare(numericSql).all(),
+    'numeric ordering and its secondary key retain native behavior on the same rows');
 });

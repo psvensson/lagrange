@@ -86,7 +86,39 @@ product results, and deployment guidance permitting local artifact sources,
 external repair or optional-store success. Historical observations and sealed
 records remain intact; successor work records the correction explicitly.
 
-## Current summary
+## Current summary (17 November 2026)
+
+- The operator assigned the current ChatGPT root session to repair the verified
+  latest candidate errors and continue this existing GCP comparative campaign.
+  The candidate baseline is
+  `4b0c8ec1de59e9a074afa97ce260afb2868685c5`, with continuation isolated on
+  `work/review-fixes-gcp-prep-20261117` under rule-set revision 5.
+- Native review established four bounded blockers in scalar SQL evaluation,
+  budget conflict validation, Phase B target-slot observation consumption and
+  probe deadline preservation. Their scope, authors and original evidence are
+  retained in the [repair review record](../../docs/evidence/review-repairs-2026-11-17/README.md).
+  Repair acceptance and this epic's comparative acceptance remain separate.
+- Reconcile current campaign capability through read-only managed-lab and GCP
+  observations. The retained Class A shakedown used project
+  `something-2e584`, zone `us-central1-a`, `e2-standard-4` VMs and a distinct
+  client; it does not establish that those instances still exist or grant new
+  spending authority. Current topology and budget must be resolved before
+  billable provisioning.
+- Next: independently verify and integrate the repairs, execute the existing
+  small physical-lab pre-gate, then advance through the canonical real-product
+  GCP runner. Retain Lagrange/TiDB/PostgreSQL semantic parity, separate load
+  generation, exact image/source identity and original result admission.
+- Component review is complete: native query job 4918 passed 1,299 assertions
+  and all frozen diagnostics, target-slot job 4910 passed, and HTTP jobs
+  4908/4915 established the repair and final static correction. Root is
+  composing generated metadata and exact-candidate proof before the physical
+  pre-gate. A separate optional create-time GCP expiry proposal is unverified
+  preparation; it has created no resources or measurement result.
+- No comparative run is queued by this takeover yet. Root owns observation
+  and continuation. Existing source, sealed quests and historical observations
+  below retain exactly their recorded acceptance ceilings.
+
+## Retained summary (10 November 2026)
 
 - Reviewed implementation source: `947fbe658ebb2efe993900b672ded51d5610dbcb`.
   Published v0.4.0 remains the earlier release baseline, not acceptance of this
