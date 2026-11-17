@@ -87,8 +87,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
 
     this.scheduledCheck = this.setTimeoutFn(() => {
       this.scheduledCheck = null;
+      this._scheduledCheckDueAtMs = null;
       this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
     }, delay);
+    this._scheduledCheckDueAtMs = ownerNowMs(this) + delay;
 
     this.logger.debug(REBALANCER_LOG_MSG.SCHEDULE_NEXT, {
       entityId: this.entityId,
@@ -104,6 +106,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       this.clearTimeoutFn(this.scheduledCheck);
       this.scheduledCheck = null;
     }
+    this._scheduledCheckDueAtMs = null;
   },
 
   /**
@@ -710,9 +713,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     }
 
     const now = ownerNowMs(this);
-    const minInterval = this.usesPriorityRebalanceCadence() ?
-      UNIFIED_REBALANCER_LITERAL.THOUSAND :
-      NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
+    const minInterval = resolveCheckRebalanceMinIntervalMs(this);
 
     if (
       this.lastCheckAtMs &&
@@ -737,15 +738,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       await this.refreshDeferredAvailableNodeReadiness?.();
       const blocker = await this.getCheckRebalanceBlocker(evaluationContext);
       this.recordPriorityRecoveryPlanningGateDecisionDiagnostic(
-        blocker?.decision || null,
-        evaluationContext,
-      );
+        blocker ? blocker.decision : null, evaluationContext);
       if (blocker) {
         blocker.apply();
-        await evaluateLeaderPlacementCureBehindPrioritySpreadGate(
-          this,
-          blocker,
-        );
+        await evaluateLeaderPlacementCureBehindPrioritySpreadGate(this, blocker);
         this.completeSlotReleaseContinuationCycle(UNIFIED_REBALANCER_LITERAL.ZERO);
         return;
       }
@@ -755,14 +751,9 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       // evaluation observed.
       const evaluatedPolicy = await this.getPolicy();
       const needsRebalance = await this.evaluateState(
-        evaluatedPolicy,
-        evaluationContext,
-      );
+        evaluatedPolicy, evaluationContext);
       forcePriorityRetry = await this.advanceCheckCadence(
-        needsRebalance,
-        evaluatedPolicy,
-        evaluationContext,
-      );
+        needsRebalance, evaluatedPolicy, evaluationContext);
     } catch (error) {
       this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
         entityId: this.entityId,
@@ -789,5 +780,11 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     this.scheduleNextCheck();
   },
 };
+
+function resolveCheckRebalanceMinIntervalMs(rebalancer) {
+  return rebalancer.usesPriorityRebalanceCadence() ?
+    UNIFIED_REBALANCER_LITERAL.THOUSAND :
+    NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
+}
 
 export {REBALANCER_PLANNING_GATE_METHODS};

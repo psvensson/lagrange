@@ -157,6 +157,23 @@ function buildReplicaRows(partitionId, nodeIds) {
   }));
 }
 
+function buildReplaceOpRow(
+  operationId,
+  partitionId,
+  targetNodeId,
+  status = ReplicaStatus.SYNCING,
+  step = WORKFLOW_STEP.SYNCING,
+) {
+  return {
+    operation_id: operationId,
+    partition_id: partitionId,
+    type: OperationType.REPLACE,
+    target_node_id: targetNodeId,
+    status,
+    workflow_step: step,
+  };
+}
+
 function createClearReadinessService(systemTableCache, activeNodes) {
   return {
     ...createMockControlPlaneReadinessService({systemTableCache}),
@@ -216,43 +233,30 @@ test('distinct-host under-spread partition bypasses 70s dwell while spread and s
       {partition_id: EMPTY_REPLICAS_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
     ];
     const services = [
-      ...buildReplicaRows(
-        CONCENTRATED_PARTITION_ID,
-        [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
-      ),
-      ...buildReplicaRows(
-        SPREAD_PARTITION_ID,
-        [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C],
-      ),
+      ...buildReplicaRows(CONCENTRATED_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ...buildReplicaRows(SPREAD_PARTITION_ID, [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C]),
     ];
-    const systemTableCache = createObservableSystemTableCache({
-      nodes,
-      partitions,
-      services,
-    });
-    const readinessService = createClearReadinessService(
-      systemTableCache,
-      nodes,
-    );
+    const systemTableCache = createObservableSystemTableCache({nodes, partitions, services});
+    const readinessService = createClearReadinessService(systemTableCache, nodes);
     armActivePrioritySpreadFence(readinessService, nowFn);
 
-    const makeEntity = (entityId) => createTestRebalancer({
-      entityId,
-      entityType: EntityType.PARTITION,
-      nodeId: TEST_NODE_A,
-      systemTableCache,
-      controlPlaneReadinessService: readinessService,
-      nowFn,
-    });
+    const makeEntity = (entityId) => {
+      const entity = createTestRebalancer({
+        entityId,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_A,
+        systemTableCache,
+        controlPlaneReadinessService: readinessService,
+        nowFn,
+      });
+      entity.getAvailableNodes = () => nodes;
+      return entity;
+    };
 
     const concentrated = makeEntity(CONCENTRATED_PARTITION_ID);
     const spread = makeEntity(SPREAD_PARTITION_ID);
     const undeclared = makeEntity(UNDECLARED_PARTITION_ID);
     const emptyReplicas = makeEntity(EMPTY_REPLICAS_PARTITION_ID);
-    concentrated.getAvailableNodes = () => nodes;
-    spread.getAvailableNodes = () => nodes;
-    undeclared.getAvailableNodes = () => nodes;
-    emptyReplicas.getAvailableNodes = () => nodes;
 
     try {
       t.equal(
@@ -265,7 +269,6 @@ test('distinct-host under-spread partition bypasses 70s dwell while spread and s
         null,
         'concentrated partition bypasses the 70s post-clear stability dwell',
       );
-
       t.equal(
         spread.isPartitionBelowDeclaredDistinctHostSpread(),
         false,
@@ -282,7 +285,6 @@ test('distinct-host under-spread partition bypasses 70s dwell while spread and s
         REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
         'already-spread partition logs stability wait',
       );
-
       t.equal(
         undeclared.isPartitionBelowDeclaredDistinctHostSpread(),
         false,
@@ -293,7 +295,6 @@ test('distinct-host under-spread partition bypasses 70s dwell while spread and s
         REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
         'synthetic UNDECLARED partition still honors the 70s dwell',
       );
-
       t.equal(
         emptyReplicas.isPartitionBelowDeclaredDistinctHostSpread(),
         false,
@@ -305,10 +306,9 @@ test('distinct-host under-spread partition bypasses 70s dwell while spread and s
         'synthetic empty-replica fixture still honors the 70s dwell',
       );
     } finally {
-      concentrated.shutdown();
-      spread.shutdown();
-      undeclared.shutdown();
-      emptyReplicas.shutdown();
+      for (const entity of [concentrated, spread, undeclared, emptyReplicas]) {
+        entity.shutdown();
+      }
     }
   });
 
@@ -340,46 +340,32 @@ test('non-priority REPLACE/REMOVE never re-lock or reset 70s fence while priorit
     background.randomSource = {random: () => 0};
 
     try {
-      const nonPriorityReplace = {
-        operation_id: 'nodes-replace-1',
-        type: OperationType.REPLACE,
-        partition_id: NON_PRIORITY_NODES_PARTITION_ID,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
+      const buildOp = (id, type, partitionId, status, step) => ({
+        operation_id: id,
+        type,
+        partition_id: partitionId,
+        status,
+        workflow_step: step,
         created_at: nowMs,
         updated_at: nowMs,
         completed_at: null,
-      };
-      const nonPriorityRemove = {
-        operation_id: 'ordinary-remove-1',
-        type: OperationType.REMOVE,
-        partition_id: SPREAD_PARTITION_ID,
-        status: ReplicaStatus.REMOVING,
-        workflow_step: WORKFLOW_STEP.STOPPING,
-        created_at: nowMs,
-        updated_at: nowMs,
-        completed_at: null,
-      };
-      const priorityReplace = {
-        operation_id: 'priority-replace-1',
-        type: OperationType.REPLACE,
-        partition_id: PRIORITY_OBSERVER_ID,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-        created_at: nowMs,
-        updated_at: nowMs,
-        completed_at: null,
-      };
-      const schemaAdd = {
-        operation_id: 'schema-add-1',
-        type: OperationType.ADD,
-        partition_id: SCHEMA_PROVISIONING_PARTITION_ID,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-        created_at: nowMs,
-        updated_at: nowMs,
-        completed_at: null,
-      };
+      });
+      const nonPriorityReplace = buildOp(
+        'nodes-replace-1', OperationType.REPLACE, NON_PRIORITY_NODES_PARTITION_ID,
+        ReplicaStatus.SYNCING, WORKFLOW_STEP.SYNCING,
+      );
+      const nonPriorityRemove = buildOp(
+        'ordinary-remove-1', OperationType.REMOVE, SPREAD_PARTITION_ID,
+        ReplicaStatus.REMOVING, WORKFLOW_STEP.STOPPING,
+      );
+      const priorityReplace = buildOp(
+        'priority-replace-1', OperationType.REPLACE, PRIORITY_OBSERVER_ID,
+        ReplicaStatus.SYNCING, WORKFLOW_STEP.SYNCING,
+      );
+      const schemaAdd = buildOp(
+        'schema-add-1', OperationType.ADD, SCHEMA_PROVISIONING_PARTITION_ID,
+        ReplicaStatus.SYNCING, WORKFLOW_STEP.SYNCING,
+      );
 
       t.equal(
         background.isPrioritySpreadFenceHoldingOperation(nonPriorityReplace),
@@ -654,22 +640,13 @@ test(
         {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
       ],
       services: [
-        ...buildReplicaRows(
-          CONCENTRATED_PARTITION_ID,
-          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
-        ),
-        ...buildReplicaRows(
-          SPREAD_PARTITION_ID,
-          [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C],
-        ),
+        ...buildReplicaRows(CONCENTRATED_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+        ...buildReplicaRows(SPREAD_PARTITION_ID, [TEST_NODE_A, TEST_NODE_B, TEST_NODE_C]),
         ...buildReplicaRows(
           NON_PRIORITY_NODES_PARTITION_ID,
           [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
         ),
-        ...buildReplicaRows(
-          ORDINARY_SYSTEM_PARTITION_ID,
-          [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A],
-        ),
+        ...buildReplicaRows(ORDINARY_SYSTEM_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
       ],
       operations,
     });
@@ -712,9 +689,7 @@ test(
 
       concentrated.currentInterval = concentrated.periodicCheckIntervalMs;
       concentrated.rebalance = async () => ({
-        success: true,
-        moves: [],
-        reason: 'no_changes_needed',
+        success: true, moves: [], reason: 'no_changes_needed',
       });
       const forcePriorityRetry = await concentrated.advanceCheckCadence(true);
       t.equal(forcePriorityRetry, true, 'below-spread partition forces priority retry cadence');
@@ -750,22 +725,14 @@ test(
       );
 
       const globalOps = [
-        {
-          operation_id: 'sys-op-b',
-          partition_id: PRIORITY_OBSERVER_ID,
-          type: OperationType.REPLACE,
-          target_node_id: TEST_NODE_B,
-          status: ReplicaStatus.PENDING,
-          workflow_step: WORKFLOW_STEP.PENDING,
-        },
-        {
-          operation_id: 'sys-op-c',
-          partition_id: 'services-p1',
-          type: OperationType.REPLACE,
-          target_node_id: TEST_NODE_C,
-          status: ReplicaStatus.PENDING,
-          workflow_step: WORKFLOW_STEP.PENDING,
-        },
+        buildReplaceOpRow(
+          'sys-op-b', PRIORITY_OBSERVER_ID, TEST_NODE_B,
+          ReplicaStatus.PENDING, WORKFLOW_STEP.PENDING,
+        ),
+        buildReplaceOpRow(
+          'sys-op-c', 'services-p1', TEST_NODE_C,
+          ReplicaStatus.PENDING, WORKFLOW_STEP.PENDING,
+        ),
       ];
       const policy = {
         targetReplicaCount: REPLICATION_FACTOR_THREE,
@@ -1009,22 +976,11 @@ test(
     try {
       // 1 SYNCING op on 0002 and 1 STOPPING op on 0003 -> both still < 2 in Phase B.
       operations.push(
-        {
-          operation_id: 'phase-b-syncing-b',
-          partition_id: 'services-p1',
-          type: OperationType.REPLACE,
-          target_node_id: TEST_NODE_B,
-          status: ReplicaStatus.SYNCING,
-          workflow_step: WORKFLOW_STEP.SYNCING,
-        },
-        {
-          operation_id: 'phase-b-stopping-c',
-          partition_id: 'indices-p1',
-          type: OperationType.REPLACE,
-          target_node_id: TEST_NODE_C,
-          status: ReplicaStatus.REMOVING,
-          workflow_step: WORKFLOW_STEP.STOPPING,
-        },
+        buildReplaceOpRow('phase-b-syncing-b', 'services-p1', TEST_NODE_B),
+        buildReplaceOpRow(
+          'phase-b-stopping-c', 'indices-p1', TEST_NODE_C,
+          ReplicaStatus.REMOVING, WORKFLOW_STEP.STOPPING,
+        ),
       );
       const replicas = ordinary.getCurrentReplicas();
       const targetBothAvailable = await ordinary.calculateTargetState(replicas, policy);
@@ -1036,14 +992,12 @@ test(
       );
 
       // Adding a STOPPING op on 0002 brings 0002 to 2 ops (1 SYNCING + 1 STOPPING) -> 0002 excluded!
-      operations.push({
-        operation_id: 'phase-b-stopping-b2',
-        partition_id: 'partitions-p1',
-        type: OperationType.REPLACE,
-        target_node_id: TEST_NODE_B,
-        status: ReplicaStatus.REMOVING,
-        workflow_step: WORKFLOW_STEP.STOPPING,
-      });
+      operations.push(
+        buildReplaceOpRow(
+          'phase-b-stopping-b2', 'partitions-p1', TEST_NODE_B,
+          ReplicaStatus.REMOVING, WORKFLOW_STEP.STOPPING,
+        ),
+      );
       const targetBFull = await ordinary.calculateTargetState(replicas, policy);
       const transitionNodes =
         targetBFull.topologyTransitionSnapshot.nodesWithGlobalSystemAddTransitional;
@@ -1059,14 +1013,7 @@ test(
       );
 
       // Priority op in flight forces maxPerTargetNode=1 even when nodes-p1 is spread.
-      operations.push({
-        operation_id: 'priority-op-c',
-        partition_id: PRIORITY_OBSERVER_ID,
-        type: OperationType.REPLACE,
-        target_node_id: TEST_NODE_C,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-      });
+      operations.push(buildReplaceOpRow('priority-op-c', PRIORITY_OBSERVER_ID, TEST_NODE_C));
       const targetWithPriority = await ordinary.calculateTargetState(replicas, policy);
       const priorityTransitionNodes =
         targetWithPriority.topologyTransitionSnapshot.nodesWithGlobalSystemAddTransitional;
@@ -1078,14 +1025,7 @@ test(
 
       // Reset to 1 op on 0002 and 0 ops on 0003 -> rebalance() caps moveLimit=1 and prefers 0003.
       operations.length = ZERO_COUNT;
-      operations.push({
-        operation_id: 'phase-b-load-b',
-        partition_id: 'services-p1',
-        type: OperationType.REPLACE,
-        target_node_id: TEST_NODE_B,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-      });
+      operations.push(buildReplaceOpRow('phase-b-load-b', 'services-p1', TEST_NODE_B));
       const rebalanceResult = await ordinary.rebalance('periodic', policy);
       t.equal(rebalanceResult.success, true, 'rebalance succeeds in Phase B');
       t.equal(executedMoves.length, SINGLE_WAKE_COUNT, 'one execution batch');
@@ -1118,6 +1058,11 @@ test(
       ...buildReplicaRows(tableOneThirdB, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
       ...buildReplicaRows(tableTwoThirds, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_C]),
     ];
+    const operations = [
+      buildReplaceOpRow('busy-b-1', 'config-p1', TEST_NODE_B),
+      buildReplaceOpRow('busy-c-1', 'config-p1', TEST_NODE_C),
+      buildReplaceOpRow('busy-c-2', 'config-p1', TEST_NODE_C),
+    ];
     const systemTableCache = createObservableSystemTableCache({
       nodes,
       partitions: [
@@ -1131,6 +1076,7 @@ test(
         ...services,
         ...buildReplicaRows('config-p1', [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
       ],
+      operations,
     });
 
     const wakeLog = new Map();
@@ -1221,6 +1167,7 @@ test(
       );
 
       // Fix 3B: Immediate back-to-back completion on 0003 wakes an armed contender at 0ms!
+      operations[1].target_node_id = TEST_NODE_B;
       coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
         operation: {
           operationId: 'op-release-c',
@@ -1273,40 +1220,50 @@ test(
   });
 
 test(
-  'ordinary system partitions yield slotMatch to under-spread nodes-p1 until nodes-p1 reaches 3 hosts',
+  'ordinary system partitions yield to under-spread nodes-p1, wake 4 contenders across 4 open ' +
+    'Phase B slots at 0ms, and preserve earlier stagger timer deadlines across 6s completions',
   async (t) => {
     initializeTestEnvironment();
-    const nowMs = INITIAL_NOW_MS;
+    let nowMs = INITIAL_NOW_MS;
     const nodes = buildReadyThreeNodes(nowMs);
     const coordinator = createEventedTestCoordinator();
+    const contenderIds = ['tables-p1', 'services-p1', 'indices-p1', 'partitions-p1', 'clusters-p1'];
+    const operations = [];
     const services = [
       ...buildReplicaRows(NON_PRIORITY_NODES_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_B]),
-      ...buildReplicaRows(ORDINARY_SYSTEM_PARTITION_ID, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ...contenderIds.flatMap((id) =>
+        buildReplicaRows(id, [TEST_NODE_A, TEST_NODE_A, TEST_NODE_A]),
+      ),
     ];
     const systemTableCache = createObservableSystemTableCache({
       nodes,
-      partitions: [
-        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
-        {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
-      ],
+      partitions: [NON_PRIORITY_NODES_PARTITION_ID, ...contenderIds].map((id) => ({
+        partition_id: id,
+        replica_count: REPLICATION_FACTOR_THREE,
+      })),
       services,
+      operations,
     });
-    const ordinaryEnqueued = [];
-    const ordinary = createTestRebalancer({
-      entityId: ORDINARY_SYSTEM_PARTITION_ID,
-      entityType: EntityType.PARTITION,
-      nodeId: TEST_NODE_A,
-      systemTableCache,
-      rebalanceCoordinator: coordinator,
-      nowFn: () => nowMs,
+    const enqueuedById = new Map();
+    const contenders = contenderIds.map((partitionId) => {
+      enqueuedById.set(partitionId, []);
+      const entity = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_NODE_A,
+        systemTableCache,
+        rebalanceCoordinator: coordinator,
+        nowFn: () => nowMs,
+      });
+      entity.isLeader = true;
+      entity.getAvailableNodes = () => nodes;
+      entity.enqueueRebalanceCheck = (reason) => {
+        enqueuedById.get(partitionId).push(reason);
+        return true;
+      };
+      entity.syncOperationContinuationWake(null, ZERO_COUNT);
+      return entity;
     });
-    ordinary.isLeader = true;
-    ordinary.getAvailableNodes = () => nodes;
-    ordinary.enqueueRebalanceCheck = (reason) => {
-      ordinaryEnqueued.push(reason);
-      return true;
-    };
-    ordinary.syncOperationContinuationWake(null, ZERO_COUNT);
 
     try {
       coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
@@ -1320,18 +1277,13 @@ test(
         },
       });
       await Promise.resolve();
-      t.same(
-        ordinaryEnqueued,
-        [],
-        'ordinary system partition yields slotMatch while nodes-p1 has < 3 distinct active hosts',
-      );
       t.equal(
-        ordinary.operationContinuationWakeState?.awaitingBudgetSlotRelease,
+        contenders.every((c) => enqueuedById.get(c.entityId).length === ZERO_COUNT),
         true,
-        'ordinary partition remains armed while yielding to nodes-p1',
+        'ordinary system partitions yield slotMatch while nodes-p1 has < 3 distinct active hosts',
       );
 
-      // Once nodes-p1 completes Move 2 onto 0003, ordinary partition wakes immediately on completion.
+      // Once nodes-p1 completes Move 2 onto 0003, all 4 Phase B slots (2 on 0002 + 2 on 0003) open.
       services[1].node_id = TEST_NODE_C;
       coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
         operation: {
@@ -1344,13 +1296,63 @@ test(
         },
       });
       await Promise.resolve();
+      const wokenIds = contenderIds.filter(
+        (id) => enqueuedById.get(id).length === SINGLE_WAKE_COUNT,
+      );
       t.same(
-        ordinaryEnqueued,
-        [RECONCILE_REASON.PERIODIC_CHECK],
-        'ordinary system partition wakes immediately once nodes-p1 reaches 3 distinct hosts',
+        wokenIds,
+        ['tables-p1', 'services-p1', 'indices-p1', 'partitions-p1'],
+        '4 distinct eligible partitions wake at 0ms when 4 Phase B joiner slots open',
+      );
+      const assignedTargets = contenders.slice(0, 4).map(
+        (c) => c._slotReleaseWakeContext?.targetNodeId,
+      );
+      t.same(
+        assignedTargets,
+        [TEST_NODE_C, TEST_NODE_B, TEST_NODE_C, TEST_NODE_B],
+        '4 woken partitions interleave target slot contexts across 0003 (2) and 0002 (2)',
+      );
+      const fifth = contenders[4];
+      t.same(enqueuedById.get(fifth.entityId), [], '5th contender is staggered at 8000ms');
+      const initialTimerHandle = fifth.scheduledCheck;
+      const initialDueAtMs = fifth._scheduledCheckDueAtMs;
+      t.ok(initialTimerHandle !== null, '5th contender arms scheduledCheck timer');
+      t.equal(initialDueAtMs, nowMs + 8000, '5th contender records _scheduledCheckDueAtMs = now + 8000');
+
+      // Re-arm a 4th contender and simulate a 6s completion while 3 slots remain occupied:
+      // 5th contender is staggered again at t + 6s, which MUST NOT push back its t + 8s deadline.
+      contenders[0].syncOperationContinuationWake(null, ZERO_COUNT);
+      operations.push(
+        buildReplaceOpRow('in-b-1', 'services-p1', TEST_NODE_B),
+        buildReplaceOpRow('in-c-1', 'indices-p1', TEST_NODE_C),
+        buildReplaceOpRow('in-c-2', 'partitions-p1', TEST_NODE_C),
+      );
+      nowMs += 6000;
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: 'wave-1-complete-b',
+          partitionId: 'other-p1',
+          targetNodeId: TEST_NODE_B,
+          type: OperationType.REPLACE,
+          status: ReplicaStatus.REMOVED,
+          workflowStep: WORKFLOW_STEP.REMOVED,
+        },
+      });
+      await Promise.resolve();
+      t.equal(
+        fifth.scheduledCheck,
+        initialTimerHandle,
+        '6s completion does not cancel or replace earlier armed 8s stagger timer',
+      );
+      t.equal(
+        fifth._scheduledCheckDueAtMs,
+        initialDueAtMs,
+        '6s completion preserves earlier _scheduledCheckDueAtMs deadline without pushback',
       );
     } finally {
-      ordinary.shutdown();
+      for (const entity of contenders) {
+        entity.shutdown();
+      }
     }
   });
 

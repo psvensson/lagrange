@@ -24,6 +24,34 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
+function compareSystemSpreadReplaceTargets(
+  left,
+  right,
+  countsByTargetNode,
+  preferredTargetNodeId,
+) {
+  if (left?.type !== MoveType.REPLACE || right?.type !== MoveType.REPLACE) {
+    return UNIFIED_REBALANCER_LITERAL.ZERO;
+  }
+  const leftCount =
+    countsByTargetNode.get(left.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
+  const rightCount =
+    countsByTargetNode.get(right.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
+  if (leftCount !== rightCount) {
+    return leftCount - rightCount;
+  }
+  if (!preferredTargetNodeId || left.nodeId === right.nodeId) {
+    return UNIFIED_REBALANCER_LITERAL.ZERO;
+  }
+  if (left.nodeId === preferredTargetNodeId) {
+    return -UNIFIED_REBALANCER_LITERAL.ONE;
+  }
+  if (right.nodeId === preferredTargetNodeId) {
+    return UNIFIED_REBALANCER_LITERAL.ONE;
+  }
+  return UNIFIED_REBALANCER_LITERAL.ZERO;
+}
+
 function orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, moves) {
   if (!Array.isArray(moves) || moves.length <= UNIFIED_REBALANCER_LITERAL.ONE) {
     return moves;
@@ -31,19 +59,22 @@ function orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, moves) {
   const countsByTargetNode = countNonTerminalSystemOpsByTargetNode(
     rebalancer.systemTableCache,
   );
-  if (countsByTargetNode.size === UNIFIED_REBALANCER_LITERAL.ZERO) {
+  const preferredTargetNodeId =
+    rebalancer._slotReleaseWakeContext?.targetNodeId || null;
+  if (
+    countsByTargetNode.size === UNIFIED_REBALANCER_LITERAL.ZERO &&
+    !preferredTargetNodeId
+  ) {
     return moves;
   }
-  return [...moves].sort((left, right) => {
-    if (left?.type !== MoveType.REPLACE || right?.type !== MoveType.REPLACE) {
-      return UNIFIED_REBALANCER_LITERAL.ZERO;
-    }
-    const leftCount =
-      countsByTargetNode.get(left.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
-    const rightCount =
-      countsByTargetNode.get(right.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
-    return leftCount - rightCount;
-  });
+  return [...moves].sort((left, right) =>
+    compareSystemSpreadReplaceTargets(
+      left,
+      right,
+      countsByTargetNode,
+      preferredTargetNodeId,
+    ),
+  );
 }
 
 function resolveSystemSpreadExecutionPlan(
@@ -105,6 +136,269 @@ function resolveLedgerSurplusDrainTargetState(
   });
 }
 
+function resolveBatchExecutionConfig(rebalancer) {
+  const batchSize =
+    Number.isFinite(rebalancer.moveBatchSize) && rebalancer.moveBatchSize > 0 ?
+      Math.floor(rebalancer.moveBatchSize) :
+      1;
+  const interBatchDelayMs =
+    Number.isFinite(rebalancer.interBatchDelayMs) &&
+    rebalancer.interBatchDelayMs > 0 ?
+      rebalancer.interBatchDelayMs :
+      0;
+  return {batchSize, interBatchDelayMs};
+}
+
+function appendSkippedNodeMoves(results, moves, skipDetail) {
+  for (const move of moves) {
+    results.push({
+      success: false,
+      skipped: true,
+      reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+      skipDetail,
+      operation: move.type,
+      nodeId: move.nodeId,
+      replicaId: move.replicaId,
+    });
+  }
+}
+
+async function checkMidBatchNodeReadinessSkip(
+  rebalancer,
+  nodeId,
+  groupHasDeferredTargetReadiness,
+  nodeMoves,
+  nextIndex,
+  results,
+) {
+  if (!nodeId || groupHasDeferredTargetReadiness === true) {
+    return false;
+  }
+  const midBatchSkip = await rebalancer.getNodeReadinessSkipReason(nodeId);
+  if (midBatchSkip === null) {
+    return false;
+  }
+  const remainingMoves = nodeMoves.slice(nextIndex);
+  rebalancer.logger.debug(REBALANCER_LOG_MSG.NODE_DISCONNECTED_BATCH, {
+    entityId: rebalancer.entityId,
+    nodeId,
+    remainingMoves: remainingMoves.length,
+    skipDetail: midBatchSkip,
+  });
+  appendSkippedNodeMoves(results, remainingMoves, midBatchSkip);
+  return true;
+}
+
+async function executeGroupMoveBatches(
+  rebalancer,
+  group,
+  batchSize,
+  interBatchDelayMs,
+  results,
+) {
+  const {nodeId, nodeMoves} = group;
+  const groupHasDeferredTargetReadiness = nodeMoves.some(
+    (move) => !rebalancer.shouldRequireMoveTargetReadiness(move),
+  );
+  for (
+    let i = UNIFIED_REBALANCER_LITERAL.ZERO;
+    i < nodeMoves.length;
+    i += batchSize
+  ) {
+    if (rebalancer.isShuttingDown) {
+      break;
+    }
+    const batch = nodeMoves.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((move) => rebalancer.executeMove(move)),
+    );
+    results.push(...batchResults);
+    if (
+      await checkMidBatchNodeReadinessSkip(
+        rebalancer,
+        nodeId,
+        groupHasDeferredTargetReadiness,
+        nodeMoves,
+        i + batch.length,
+        results,
+      )
+    ) {
+      break;
+    }
+    if (
+      interBatchDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO &&
+      i + batchSize < nodeMoves.length
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs));
+    }
+  }
+}
+
+function resolveRebalancePreflightRefusal(rebalancer) {
+  if (rebalancer.isShuttingDown) {
+    return rebalancer.buildRebalanceResult(false, {
+      skipped: true,
+      reason: REBALANCER_RUNTIME_REASON.SHUTDOWN_IN_PROGRESS,
+    });
+  }
+  if (!rebalancer.isLeader) {
+    rebalancer.logger.debug(REBALANCER_LOG_MSG.NOT_LEADER_SKIP, {
+      entityId: rebalancer.entityId,
+    });
+    return rebalancer.buildRebalanceResult(false, {
+      reason: REBALANCER_RUNTIME_REASON.NOT_LEADER,
+    });
+  }
+  const membershipChangeRefusal = rebalancer.messageGroupMembershipChangeRefusal();
+  if (membershipChangeRefusal !== null) {
+    return membershipChangeRefusal;
+  }
+  if (isEntityGroupRetiring(rebalancer)) {
+    return rebalancer.buildRebalanceResult(true, {
+      skipped: true,
+      moves: [],
+      reason: REBALANCER_SKIP_REASON.GROUP_RETIRING,
+    });
+  }
+  return null;
+}
+
+async function resolveZeroBudgetBypassAllowance(
+  rebalancer,
+  moves,
+  shouldPrioritizeBudgetedTopologyCleanup,
+) {
+  if (shouldPrioritizeBudgetedTopologyCleanup === true) {
+    return true;
+  }
+  return (await rebalancer.canBypassGlobalBudgetForPriorityRecovery(moves)) === true;
+}
+
+async function computeRebalanceAvailableBudget(
+  rebalancer,
+  moves,
+  currentReplicas,
+  effectivePolicy,
+  availableNodes,
+  shouldPrioritizeBudgetedTopologyCleanup,
+) {
+  const configuredBudget = await rebalancer.getConfiguredRebalanceBudget();
+  const inFlightCount = await rebalancer.getGlobalInFlightOperationCount();
+  const isCritical = rebalancer.movePlanner.isCriticalState(
+    currentReplicas,
+    effectivePolicy,
+    availableNodes,
+  );
+  const effectiveBudget = isCritical ?
+    configuredBudget * rebalancer.criticalBudgetMultiplier :
+    configuredBudget;
+  const reservedPriorityRecoveryMoveSlots =
+    rebalancer.getReservedPriorityRecoveryMoveSlots();
+  const availableBudget = Math.max(
+    0,
+    effectiveBudget - inFlightCount - reservedPriorityRecoveryMoveSlots,
+  );
+  if (availableBudget > UNIFIED_REBALANCER_LITERAL.ZERO) {
+    return availableBudget;
+  }
+  const allowZeroBudgetBypass = await resolveZeroBudgetBypassAllowance(
+    rebalancer,
+    moves,
+    shouldPrioritizeBudgetedTopologyCleanup,
+  );
+  return allowZeroBudgetBypass ? 1 : 0;
+}
+
+async function planRebalanceCycleMoves(
+  rebalancer,
+  effectivePolicy,
+  evaluationContext,
+) {
+  await rebalancer.refreshDeferredAvailableNodeReadiness?.();
+  const inventorySourceStateBefore =
+    rebalancer.movePlanner.captureReplicaInventorySourceState();
+  const currentReplicas = rebalancer.getCurrentReplicas();
+  const availableNodes = rebalancer.getAvailableNodes();
+  const operationCreationGate =
+    rebalancer.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+      evaluationContext,
+    );
+  const ledgerSurplusDrainPlanningCapability =
+    operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
+  if (
+    availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
+    !ledgerSurplusDrainPlanningCapability
+  ) {
+    rebalancer.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
+      entityId: rebalancer.entityId,
+      entityType: rebalancer.entityType,
+    });
+    return {
+      earlyResult: rebalancer.buildRebalanceResult(false, {
+        reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
+      }),
+    };
+  }
+  const calculatedTargetState = await rebalancer.movePlanner.calculateTargetState(
+    currentReplicas,
+    effectivePolicy,
+    inventorySourceStateBefore,
+  );
+  const targetState = resolveLedgerSurplusDrainTargetState(
+    calculatedTargetState,
+    ledgerSurplusDrainPlanningCapability,
+  );
+  const planningMembershipPublicationEpoch =
+    rebalancer.resolvePublishedMembershipPlanningEpoch();
+  await rebalancer.refreshFailedCreateTargetCleanupDecisions();
+  const calculatedMoves = rebalancer.movePlanner.calculateMoves(
+    currentReplicas,
+    targetState,
+    {membershipPublicationEpoch: planningMembershipPublicationEpoch},
+  );
+  const priorityRecoveryAwareMoves =
+    await rebalancer.augmentMovesWithPriorityRecoveryFollowUp(calculatedMoves, {
+      currentReplicas,
+      targetState,
+    });
+  const moves = (
+    await rebalancer.movePlanner.applyPressureGating(priorityRecoveryAwareMoves)
+  ).map((move) => canonicalizeRebalancerMove(move, rebalancer));
+  if (moves.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+    rebalancer.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {
+      entityId: rebalancer.entityId,
+      currentCount: currentReplicas.length,
+      targetCount: targetState.targetReplicaCount,
+    });
+    return {
+      earlyResult: rebalancer.buildRebalanceResult(true, {
+        moves: [],
+        reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
+      }),
+    };
+  }
+  const ordinaryPriorityRecoverySerialGate =
+    await rebalancer.getOrdinaryPriorityRecoverySerialGateSnapshot(moves);
+  if (ordinaryPriorityRecoverySerialGate?.blocked === true) {
+    return {
+      earlyResult: rebalancer.buildRebalanceResult(true, {
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        moves: [],
+        ordinaryPriorityRecoverySerialGate,
+      }),
+    };
+  }
+  return {
+    earlyResult: null,
+    currentReplicas,
+    availableNodes,
+    targetState,
+    planningMembershipPublicationEpoch,
+    moves,
+  };
+}
+
 class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
   /**
    * The one planning refusal for message groups (owner decision 2026-10-04):
@@ -149,14 +443,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
 
   async executeRebalancingMoves(moves, context = {}) {
     const normalizedMoves = Array.isArray(moves) ? moves : [];
-    const batchSize =
-      Number.isFinite(this.moveBatchSize) && this.moveBatchSize > 0 ?
-        Math.floor(this.moveBatchSize) :
-        1;
-    const interBatchDelayMs =
-      Number.isFinite(this.interBatchDelayMs) && this.interBatchDelayMs > 0 ?
-        this.interBatchDelayMs :
-        0;
+    const {batchSize, interBatchDelayMs} = resolveBatchExecutionConfig(this);
     const handoffPlan = await this.buildPreExecutionHandoffPlan(
       normalizedMoves,
       context,
@@ -173,85 +460,27 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     }
 
     for (const group of handoffPlan.executableGroups) {
-      const {nodeId, nodeMoves, skipBeforeExecute, skipDetail} = group;
-      const groupHasDeferredTargetReadiness = nodeMoves.some((move) =>
-        !this.shouldRequireMoveTargetReadiness(move),
-      );
       if (this.isShuttingDown) {
         break;
       }
-      if (skipBeforeExecute === true) {
+      if (group.skipBeforeExecute === true) {
         this.logger.debug(REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY, {
           entityId: this.entityId,
-          nodeId,
-          moveCount: nodeMoves.length,
-          skipDetail,
+          nodeId: group.nodeId,
+          moveCount: group.nodeMoves.length,
+          skipDetail: group.skipDetail,
         });
-        for (const move of nodeMoves) {
-          results.push({
-            success: false,
-            skipped: true,
-            reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
-            skipDetail,
-            operation: move.type,
-            nodeId: move.nodeId,
-            replicaId: move.replicaId,
-          });
-        }
+        appendSkippedNodeMoves(results, group.nodeMoves, group.skipDetail);
         continue;
       }
 
-      for (
-        let i = UNIFIED_REBALANCER_LITERAL.ZERO;
-        i < nodeMoves.length;
-        i += batchSize
-      ) {
-        if (this.isShuttingDown) {
-          break;
-        }
-        const batch = nodeMoves.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch.map((move) => {
-            return this.executeMove(move);
-          }),
-        );
-
-        results.push(...batchResults);
-
-        if (nodeId && groupHasDeferredTargetReadiness !== true) {
-          const midBatchSkip = await this.getNodeReadinessSkipReason(nodeId);
-          if (midBatchSkip !== null) {
-            this.logger.debug(REBALANCER_LOG_MSG.NODE_DISCONNECTED_BATCH, {
-              entityId: this.entityId,
-              nodeId,
-              remainingMoves: nodeMoves.length - (i + batch.length),
-              skipDetail: midBatchSkip,
-            });
-            const remainingMoves = nodeMoves.slice(i + batch.length);
-            for (const move of remainingMoves) {
-              results.push({
-                success: false,
-                skipped: true,
-                reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
-                skipDetail: midBatchSkip,
-                operation: move.type,
-                nodeId: move.nodeId,
-                replicaId: move.replicaId,
-              });
-            }
-            break;
-          }
-        }
-
-        if (
-          interBatchDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO &&
-          i + batchSize < nodeMoves.length
-        ) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, interBatchDelayMs),
-          );
-        }
-      }
+      await executeGroupMoveBatches(
+        this,
+        group,
+        batchSize,
+        interBatchDelayMs,
+        results,
+      );
     }
 
     return results;
@@ -262,156 +491,50 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     policy = null,
     evaluationContext = null,
   ) {
-    if (this.isShuttingDown) {
-      return this.buildRebalanceResult(false, {
-        skipped: true,
-        reason: REBALANCER_RUNTIME_REASON.SHUTDOWN_IN_PROGRESS,
-      });
-    }
-
-    if (!this.isLeader) {
-      this.logger.debug(REBALANCER_LOG_MSG.NOT_LEADER_SKIP, {
-        entityId: this.entityId,
-      });
-      return this.buildRebalanceResult(false, {
-        reason: REBALANCER_RUNTIME_REASON.NOT_LEADER,
-      });
-    }
-
-    const membershipChangeRefusal = this.messageGroupMembershipChangeRefusal();
-    if (membershipChangeRefusal !== null) {
-      return membershipChangeRefusal;
-    }
-
-    // A group retired as a unit has a frozen member set: plan nothing for it
-    // (a skipped cycle backs the cadence off; nothing loops).
-    if (isEntityGroupRetiring(this)) {
-      return this.buildRebalanceResult(true, {skipped: true, moves: [],
-        reason: REBALANCER_SKIP_REASON.GROUP_RETIRING});
+    const preflightRefusal = resolveRebalancePreflightRefusal(this);
+    if (preflightRefusal !== null) {
+      return preflightRefusal;
     }
 
     let rebalanceResult = null;
     try {
       const effectivePolicy = policy || (await this.getPolicy());
-      await this.refreshDeferredAvailableNodeReadiness?.();
-      const inventorySourceStateBefore =
-        this.movePlanner.captureReplicaInventorySourceState();
-      const currentReplicas = this.getCurrentReplicas();
-      const availableNodes = this.getAvailableNodes();
-      const operationCreationGate =
-        this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
-          evaluationContext,
-        );
-      const ledgerSurplusDrainPlanningCapability =
-        operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
-      if (
-        availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
-        !ledgerSurplusDrainPlanningCapability
-      ) {
-        this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
-          entityId: this.entityId,
-          entityType: this.entityType,
-        });
-        rebalanceResult = this.buildRebalanceResult(false, {
-          reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
-        });
-        return rebalanceResult;
-      }
-
-      const calculatedTargetState = await this.movePlanner.calculateTargetState(
-        currentReplicas,
+      const plannedCycle = await planRebalanceCycleMoves(
+        this,
         effectivePolicy,
-        inventorySourceStateBefore,
+        evaluationContext,
       );
-      const targetState = resolveLedgerSurplusDrainTargetState(
-        calculatedTargetState,
-        ledgerSurplusDrainPlanningCapability,
-      );
-      const planningMembershipPublicationEpoch =
-        this.resolvePublishedMembershipPlanningEpoch();
-      await this.refreshFailedCreateTargetCleanupDecisions();
-      const calculatedMoves = this.movePlanner.calculateMoves(
+      if (plannedCycle.earlyResult !== null) {
+        rebalanceResult = plannedCycle.earlyResult;
+        return rebalanceResult;
+      }
+      const {
         currentReplicas,
+        availableNodes,
         targetState,
-        // The SAME epoch this cycle stamps on every planned move below, read
-        // once: an authorization minted under one epoch and a row fenced at
-        // another would be two observations of one fact.
-        {membershipPublicationEpoch: planningMembershipPublicationEpoch},
-      );
-      const priorityRecoveryAwareMoves =
-        await this.augmentMovesWithPriorityRecoveryFollowUp(calculatedMoves, {
-          currentReplicas,
-          targetState,
-        });
-      const moves = (
-        await this.movePlanner.applyPressureGating(priorityRecoveryAwareMoves)
-      ).map((move) => canonicalizeRebalancerMove(move, this));
-
-      if (moves.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
-        this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {
-          entityId: this.entityId,
-          currentCount: currentReplicas.length,
-          targetCount: targetState.targetReplicaCount,
-        });
-        rebalanceResult = this.buildRebalanceResult(true, {
-          moves: [],
-          reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
-        });
-        return rebalanceResult;
-      }
-
-      const ordinaryPriorityRecoverySerialGate =
-        await this.getOrdinaryPriorityRecoverySerialGateSnapshot(moves);
-      if (ordinaryPriorityRecoverySerialGate?.blocked === true) {
-        rebalanceResult = this.buildRebalanceResult(true, {
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-          moves: [],
-          ordinaryPriorityRecoverySerialGate,
-        });
-        return rebalanceResult;
-      }
+        planningMembershipPublicationEpoch,
+        moves,
+      } = plannedCycle;
 
       let availableBudget = this.maxConcurrentMoves;
       const shouldPrioritizeBudgetedTopologyCleanup =
         this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
       try {
-        const configuredBudget = await this.getConfiguredRebalanceBudget();
-        const inFlightCount = await this.getGlobalInFlightOperationCount();
-        const isCritical = this.movePlanner.isCriticalState(
+        availableBudget = await computeRebalanceAvailableBudget(
+          this,
+          moves,
           currentReplicas,
           effectivePolicy,
           availableNodes,
-        );
-        const effectiveBudget = isCritical ?
-          configuredBudget * this.criticalBudgetMultiplier :
-          configuredBudget;
-        const reservedPriorityRecoveryMoveSlots =
-          this.getReservedPriorityRecoveryMoveSlots();
-
-        availableBudget = Math.max(
-          0,
-          effectiveBudget - inFlightCount - reservedPriorityRecoveryMoveSlots,
+          shouldPrioritizeBudgetedTopologyCleanup,
         );
         if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
-          const priorityTopologyCleanupBudgetBypass =
-            shouldPrioritizeBudgetedTopologyCleanup;
-          if (priorityTopologyCleanupBudgetBypass === true) {
-            availableBudget = 1;
-          } else {
-            const priorityBudgetBypass =
-              await this.canBypassGlobalBudgetForPriorityRecovery(moves);
-            if (priorityBudgetBypass === true) {
-              availableBudget = 1;
-            } else {
-              rebalanceResult = this.buildRebalanceResult(true, {
-                skipped: true,
-                reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-                moves: [],
-              });
-              return rebalanceResult;
-            }
-          }
+          rebalanceResult = this.buildRebalanceResult(true, {
+            skipped: true,
+            reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+            moves: [],
+          });
+          return rebalanceResult;
         }
       } catch (error) {
         this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {

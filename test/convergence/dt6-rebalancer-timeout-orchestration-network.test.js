@@ -76,6 +76,8 @@ function hostCheckTimeoutsLoop(net, nodeId, backoffMs) {
     lastEmptyIncompleteOperationQueryAtMs: 0,
     incompleteOperationQueryEmptyBackoffMs: backoffMs,
     resolveTimeoutCheckNowMs: ownerProto.resolveTimeoutCheckNowMs,
+    reconcilePeriodicReservations: ownerProto.reconcilePeriodicReservations,
+    reconcileReservations: async () => {},
     resolveTimeoutIncompleteVisibilitySupplementMode:
       ownerProto.resolveTimeoutIncompleteVisibilitySupplementMode,
     buildTimeoutIncompleteVisibilitySupplementEvidence:

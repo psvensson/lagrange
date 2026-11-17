@@ -202,6 +202,7 @@ function serviceRows() {
 function buildStubRebalancer(state) {
   const deliveries = [];
   const stub = {
+    completeSlotReleaseContinuationCycle: () => false,
     deliveries,
     entityId: P2,
     entityType: 'partition',

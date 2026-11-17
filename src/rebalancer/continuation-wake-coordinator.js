@@ -2,6 +2,7 @@ import {NUM} from '../constants/index.js';
 import {
   countDistinctActiveHostsFromReplicas,
   doesOperationTransitionReleaseSystemTargetNodeSlot,
+  evaluateSystemPartitionTargetNodeSlotAdmission,
   isNodesPartitionPresentAndUnderSpread,
 } from './system-spread-transition-policy.js';
 
@@ -127,10 +128,17 @@ function classifySlotContender(entry, targetNodeId) {
   return {eligible: true, tier: CONTENDER_RANK_TIER.OTHER_ELIGIBLE};
 }
 
-function selectSlotWakeWinnerIndex(contenders, targetNodeId) {
+function selectSlotWakeWinnerIndex(
+  contenders,
+  targetNodeId,
+  excludedIndices = null,
+) {
   let bestIndex = -NUM.ONE;
   let bestTier = CONTENDER_RANK_TIER.INELIGIBLE;
   for (let index = NUM.ZERO; index < contenders.length; index += NUM.ONE) {
+    if (excludedIndices?.has(index)) {
+      continue;
+    }
     const classification = classifySlotContender(
       contenders[index],
       targetNodeId,
@@ -141,6 +149,162 @@ function selectSlotWakeWinnerIndex(contenders, targetNodeId) {
     }
   }
   return bestIndex;
+}
+
+function collectCandidatePhaseBTargetNodeIds(
+  contenders,
+  primaryTargetNodeId,
+  availableNodes,
+) {
+  const orderedNodeIds = [];
+  const seenNodeIds = new Set();
+  const pushCandidate = (nodeId) => {
+    if (!nodeId || seenNodeIds.has(nodeId)) {
+      return;
+    }
+    const neededByContender = contenders.some(
+      (entry) => !rebalancerAlreadyHostsNode(entry.rebalancer, nodeId),
+    );
+    if (!neededByContender) {
+      return;
+    }
+    seenNodeIds.add(nodeId);
+    orderedNodeIds.push(nodeId);
+  };
+  pushCandidate(primaryTargetNodeId);
+  for (const node of availableNodes) {
+    pushCandidate(node?.node_id || null);
+  }
+  return orderedNodeIds;
+}
+
+function countOpenPhaseBSlotsForTarget(
+  sampleRebalancer,
+  availableNodes,
+  targetNodeId,
+  completedOperationId,
+) {
+  const admission = evaluateSystemPartitionTargetNodeSlotAdmission({
+    systemTableCache: sampleRebalancer.systemTableCache,
+    controlPlaneReadinessService:
+      sampleRebalancer.controlPlaneReadinessService || null,
+    partitionId: sampleRebalancer.entityId,
+    targetNodeId,
+    operations:
+      sampleRebalancer.getGlobalTopologyBlockingInFlightOperations?.() || [],
+    currentReplicas: sampleRebalancer.getCurrentReplicas?.(),
+    resolveAvailableNodes: () => availableNodes,
+  });
+  if (admission.usePhaseBCapacity !== true) {
+    return -NUM.ONE;
+  }
+  const effectiveOccupied =
+    completedOperationId &&
+    admission.occupyingOperationIds.includes(completedOperationId) ?
+      Math.max(NUM.ZERO, admission.occupiedCount - NUM.ONE) :
+      admission.occupiedCount;
+  return Math.max(NUM.ZERO, admission.maxPerTargetNode - effectiveOccupied);
+}
+
+function interleaveTargetSlotSchedule(openSlotsByNode) {
+  const schedule = [];
+  let remaining = true;
+  let round = NUM.ZERO;
+  while (remaining) {
+    remaining = false;
+    for (const entry of openSlotsByNode) {
+      if (round < entry.openSlots) {
+        schedule.push(entry.nodeId);
+        if (round + NUM.ONE < entry.openSlots) {
+          remaining = true;
+        }
+      }
+    }
+    round += NUM.ONE;
+  }
+  return schedule;
+}
+
+function collectOpenSlotsByCandidateNode(
+  sampleRebalancer,
+  availableNodes,
+  candidateNodeIds,
+  completedOperationId,
+) {
+  const openSlotsByNode = [];
+  for (const nodeId of candidateNodeIds) {
+    const openSlots = countOpenPhaseBSlotsForTarget(
+      sampleRebalancer,
+      availableNodes,
+      nodeId,
+      completedOperationId,
+    );
+    if (openSlots < NUM.ZERO) {
+      return {phaseBActive: false, openSlotsByNode: []};
+    }
+    if (openSlots > NUM.ZERO) {
+      openSlotsByNode.push({nodeId, openSlots});
+    }
+  }
+  return {phaseBActive: true, openSlotsByNode};
+}
+
+function resolveSlotWakeTargetSchedule(
+  contenders,
+  primaryTargetNodeId,
+  completedOperationId,
+) {
+  const sampleRebalancer = contenders[NUM.ZERO]?.rebalancer;
+  const availableNodes = sampleRebalancer?.getAvailableNodes?.();
+  if (
+    !sampleRebalancer?.systemTableCache ||
+    !Array.isArray(availableNodes) ||
+    availableNodes.length === NUM.ZERO
+  ) {
+    return [primaryTargetNodeId];
+  }
+  const candidateNodeIds = collectCandidatePhaseBTargetNodeIds(
+    contenders,
+    primaryTargetNodeId,
+    availableNodes,
+  );
+  const {phaseBActive, openSlotsByNode} = collectOpenSlotsByCandidateNode(
+    sampleRebalancer,
+    availableNodes,
+    candidateNodeIds,
+    completedOperationId,
+  );
+  if (!phaseBActive) {
+    return [primaryTargetNodeId];
+  }
+  const schedule = interleaveTargetSlotSchedule(openSlotsByNode);
+  return schedule.length > NUM.ZERO ? schedule : [primaryTargetNodeId];
+}
+
+function selectSlotWakeWinners(
+  contenders,
+  primaryTargetNodeId,
+  completedOperationId = null,
+) {
+  const schedule = resolveSlotWakeTargetSchedule(
+    contenders,
+    primaryTargetNodeId,
+    completedOperationId,
+  );
+  const winnersByIndex = new Map();
+  const excludedIndices = new Set();
+  for (const slotTargetNodeId of schedule) {
+    const winnerIndex = selectSlotWakeWinnerIndex(
+      contenders,
+      slotTargetNodeId,
+      excludedIndices,
+    );
+    if (winnerIndex >= NUM.ZERO) {
+      excludedIndices.add(winnerIndex);
+      winnersByIndex.set(winnerIndex, slotTargetNodeId);
+    }
+  }
+  return winnersByIndex;
 }
 
 function isEligibleSlotHandoffCandidate(candidate, sourceRebalancer) {
@@ -185,6 +349,7 @@ export {
   registerArmedSlotContender,
   resolveRebalancerDispatchHost,
   selectSlotWakeWinnerIndex,
+  selectSlotWakeWinners,
   shouldYieldSlotWakeToNodesPartition,
   unregisterArmedSlotContender,
 };

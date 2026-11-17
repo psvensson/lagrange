@@ -7,6 +7,7 @@ import {
   registerArmedSlotContender,
   resolveRebalancerDispatchHost,
   selectSlotWakeWinnerIndex,
+  selectSlotWakeWinners,
   shouldYieldSlotWakeToNodesPartition,
   unregisterArmedSlotContender,
 } from './continuation-wake-coordinator.js';
@@ -17,6 +18,7 @@ const {
   RECONCILE_REASON,
   UNIFIED_REBALANCER_LITERAL,
   normalizeReplicaOperationRecord,
+  ownerNowMs,
 } = UNIFIED_REBALANCER_SHARED;
 
 // The rows whose change can end a local mutation-readiness deferral: the
@@ -161,6 +163,17 @@ function resolveSlotWakeDispatchRecord(state, operationId, targetNodeId = null) 
   return record;
 }
 
+function hasEarlierScheduledCheckDeadline(rebalancer, staggerDelayMs) {
+  if (!rebalancer.scheduledCheck) {
+    return false;
+  }
+  const dueAtMs = rebalancer._scheduledCheckDueAtMs;
+  if (!Number.isFinite(dueAtMs)) {
+    return false;
+  }
+  return dueAtMs <= ownerNowMs(rebalancer) + staggerDelayMs;
+}
+
 function applyContinuationWakeWakeup(
   rebalancer,
   state,
@@ -180,10 +193,14 @@ function applyContinuationWakeWakeup(
   rebalancer.lastStateChangeTime = UNIFIED_REBALANCER_LITERAL.ZERO;
   if (staggerDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO) {
     // Fix 3B: Keep non-winner contenders armed so back-to-back completions on
-    // another joiner still find eligible 0ms contenders.
+    // another joiner still find eligible 0ms contenders, and never push back
+    // an already-armed earlier check timer.
     state.pending = false;
     state.staggerDelayMs = UNIFIED_REBALANCER_LITERAL.ZERO;
-    if (rebalancer.scheduleNextCheck) {
+    if (
+      !hasEarlierScheduledCheckDeadline(rebalancer, staggerDelayMs) &&
+      rebalancer.scheduleNextCheck
+    ) {
       rebalancer.scheduleNextCheck(staggerDelayMs);
     }
     return;
@@ -208,20 +225,24 @@ function flushSlotWakeDispatchRecord(dispatchRecord) {
   if (active.length === NUM.ZERO) {
     return;
   }
-  const winnerIndex = dispatchRecord.winnerAssigned ?
-    -NUM.ONE :
-    selectSlotWakeWinnerIndex(active, dispatchRecord.targetNodeId);
-  if (winnerIndex >= NUM.ZERO) {
+  const winnersByIndex = dispatchRecord.winnerAssigned ?
+    new Map() :
+    selectSlotWakeWinners(
+      active,
+      dispatchRecord.targetNodeId,
+      dispatchRecord.operationId,
+    );
+  if (winnersByIndex.size > NUM.ZERO) {
     dispatchRecord.winnerAssigned = true;
   }
   for (let index = NUM.ZERO; index < active.length; index += NUM.ONE) {
     const entry = active[index];
-    if (index === winnerIndex) {
+    if (winnersByIndex.has(index)) {
       applyContinuationWakeWakeup(
         entry.rebalancer,
         entry.state,
         UNIFIED_REBALANCER_LITERAL.ZERO,
-        dispatchRecord.targetNodeId,
+        winnersByIndex.get(index),
         NUM.ZERO,
       );
       continue;
@@ -290,6 +311,9 @@ function handleOperationContinuationObservation(rebalancer, state, operation) {
     return;
   }
   if (state.clearPriorityCheckFloorOnTerminal === true) {
+    if (normalized.partitionId === rebalancer.entityId) {
+      return;
+    }
     recordRecentlyWokenOperation(rebalancer, normalized.operationId);
     rebalancer.lastCheckAtMs = UNIFIED_REBALANCER_LITERAL.ZERO;
     rebalancer.disarmOperationContinuationWake();
@@ -316,20 +340,6 @@ function handleOperationContinuationObservation(rebalancer, state, operation) {
   enqueueSlotWakeContender(rebalancer, state, normalized);
 }
 
-function syncPriorityOperationContinuationWake(rebalancer) {
-  const recoveryActive =
-    rebalancer.isPriorityControlPlaneRecoveryActive?.() === true;
-  const underSpread =
-    rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true;
-  if (recoveryActive || underSpread) {
-    return rebalancer.armOperationContinuationWake({
-      clearPriorityCheckFloorOnTerminal: true,
-      attachCacheListener: false,
-    });
-  }
-  rebalancer.disarmOperationContinuationWake();
-  return false;
-}
 function canReuseContinuationWakeState(existing, rebalancer, attachCacheListener) {
   return Boolean(
     existing &&
@@ -390,6 +400,7 @@ function attachOperationContinuationListeners(
   };
   let attached = false;
   if (state.coordinator?.on) {
+    state.coordinator.setMaxListeners?.(NUM.ZERO);
     state.coordinator.on(
       REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
       onTerminal,
@@ -504,7 +515,8 @@ const REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS = {
 
   syncOperationContinuationWake(rebalanceResult, executedMoveCount) {
     if (this.isControlPlanePriorityPartition() === true) {
-      return syncPriorityOperationContinuationWake(this);
+      this.disarmOperationContinuationWake();
+      return false;
     }
     const hitBudgetExceeded =
       hasBudgetExceededRebalanceOutcome(rebalanceResult);

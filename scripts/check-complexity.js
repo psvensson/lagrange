@@ -152,8 +152,8 @@ const TARGET_THRESHOLD = 12;
 // checker's hint (the merged tree).
 // 2026-11-09 (candidate-integration): tightened 1699 -> 1698 on the checker hint.
 // 2026-11-14 (formation-ready-lease-independent-of-spread): tightened 1698 -> 1695 on the checker hint.
-// 2026-11-17 (complexity-ratchet-closure): tightened 1695 -> 1694 on the checker hint.
-const BASELINE_COUNT = 1694;
+// 2026-11-17 (complexity-ratchet-closure): tightened 1695 -> 1692 on the checker hint.
+const BASELINE_COUNT = 1692;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
