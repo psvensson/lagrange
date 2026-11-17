@@ -255,17 +255,19 @@ function resolvePhaseBSystemTransitionSnapshotOptions({
       resolveAvailableNodes,
       controlPlaneReadinessService,
     );
-  const nodesSpreadSatisfied =
-    isFormationDependencyPartition === true ||
-    isNodesPartitionSpreadInCache(
-      systemTableCache,
-      resolveAvailableNodes(),
-      controlPlaneReadinessService,
-    );
+  // Phase B reads nothing for an entity it cannot apply to: the nodes-spread
+  // condition is evaluated only for an eligible entity.
   const baseConditionsMet =
     phaseBEligibleEntity &&
     Boolean(systemTableCache) &&
-    nodesSpreadSatisfied;
+    (
+      isFormationDependencyPartition === true ||
+      isNodesPartitionSpreadInCache(
+        systemTableCache,
+        resolveAvailableNodes(),
+        controlPlaneReadinessService,
+      )
+    );
   const cachedNonTerminalOperations = baseConditionsMet && systemTableCache?.filter ?
     systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,

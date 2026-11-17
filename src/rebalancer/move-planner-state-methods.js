@@ -6,6 +6,11 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EMPTY_REPLICA_LIST = Object.freeze([]);
+const NON_PARTITION_ENTITY_CLASSIFICATION = Object.freeze({
+  systemTable: false,
+  priorityControlPlane: false,
+  formationLivenessDependency: false,
+});
 const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
   PRESENT: 'present',
   EMPTY: 'empty',
@@ -257,15 +262,7 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {boolean}
      */
     isControlPlanePriorityPartition() {
-      if (this.entityType !== EntityType.PARTITION) {
-        return false;
-      }
-      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
-      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-      return classifySystemPartition({
-        partitionId: this.entityId,
-        partitionRow,
-      }).priorityControlPlane;
+      return this.classifyPlannerEntityPartition().priorityControlPlane;
     }
 
     /**
@@ -274,15 +271,7 @@ function createMovePlannerStateMethods(deps = {}) {
      * @return {boolean}
      */
     isFormationLivenessDependencyPartition() {
-      if (this.entityType !== EntityType.PARTITION) {
-        return false;
-      }
-      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
-      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-      return classifySystemPartition({
-        partitionId: this.entityId,
-        partitionRow,
-      }).formationLivenessDependency;
+      return this.classifyPlannerEntityPartition().formationLivenessDependency;
     }
 
     /**
@@ -301,15 +290,25 @@ function createMovePlannerStateMethods(deps = {}) {
      * @private
      */
     isSystemPartitionEntity() {
+      return this.classifyPlannerEntityPartition().systemTable;
+    }
+
+    /**
+     * Classify this planner's entity from its one partition row read. A
+     * non-partition entity is no system, priority or formation partition.
+     * @return {Object}
+     * @private
+     */
+    classifyPlannerEntityPartition() {
       if (this.entityType !== EntityType.PARTITION) {
-        return false;
+        return NON_PARTITION_ENTITY_CLASSIFICATION;
       }
       const systemTableCache = this.moveStateProvider?.systemTableCache || null;
       const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
       return classifySystemPartition({
         partitionId: this.entityId,
         partitionRow,
-      }).systemTable;
+      });
     }
 
     /**
@@ -448,16 +447,17 @@ function createMovePlannerStateMethods(deps = {}) {
       });
       const {nodesWithEntityAddTransitional, replicasInRemoving} =
         buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
+      const entityClassification = this.classifyPlannerEntityPartition();
       const nodesWithGlobalSystemAddTransitional =
         buildPhaseBGlobalSystemTransitionNodeSet({
           systemTableCache: this.moveStateProvider?.systemTableCache || null,
           controlPlaneReadinessService:
             this.moveStateProvider?.controlPlaneReadinessService || null,
           entityId: this.entityId,
-          isSystemPartition: this.isSystemPartitionEntity(),
-          isPriorityPartition: this.isControlPlanePriorityPartition(),
+          isSystemPartition: entityClassification.systemTable,
+          isPriorityPartition: entityClassification.priorityControlPlane,
           isFormationDependencyPartition:
-            this.isFormationLivenessDependencyPartition(),
+            entityClassification.formationLivenessDependency,
           currentReplicas,
           resolveAvailableNodes: () => this.moveStateProvider.getAvailableNodes(),
           globalInFlightOperations,
