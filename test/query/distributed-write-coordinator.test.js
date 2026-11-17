@@ -537,10 +537,22 @@ test('executePlan - rejected promises captured as failures', async (t) => {
   t.equal(result.success, false);
   t.equal(result.affectedRows, 1);
 
+  // A rejected participant is attributed to its own partition (settled
+  // outcomes keep the plan's partition order), so the failure names which
+  // participant failed instead of an anonymous null-partition entry.
   const rejectedEntry = result.participantResults.find(
-    (r) => r.partitionId === null,
+    (r) => r.partitionId === 'p2',
   );
-  t.ok(rejectedEntry, 'rejected promise produces a null-partitionId entry');
-  t.equal(rejectedEntry.success, false);
-  t.equal(rejectedEntry.error, 'connection reset');
+  t.ok(rejectedEntry, 'rejected promise produces an entry for its partition');
+  t.equal(rejectedEntry?.success, false);
+  t.equal(rejectedEntry?.error, 'connection reset');
+  t.equal(rejectedEntry?.errorCode, null);
+  t.equal(
+    result.participantResults.some((r) => r.partitionId === null),
+    false,
+    'no participant result is left without its partition',
+  );
+  t.same(result.failedPartitions, ['p2']);
+  t.equal(result.firstFailedParticipant.partitionId, 'p2');
+  t.equal(result.firstFailedParticipant.error, 'connection reset');
 });

@@ -28,7 +28,7 @@
   "censusSize": 2665,
   "digest": "fnv1a32-0af21cc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-85370ee7",
+  "observationDigest": "fnv1a32-a1e7061a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14167,6 +14167,11 @@
         "test/test-helpers/transaction-coordinator-unit-fixture.js"
       ]
     },
+    "test/query/distributed-transaction-wait-bound-spent.test.js": {
+      "files": [
+        "src/query/distributed/distributed-transaction-coordinator.js"
+      ]
+    },
     "test/query/distributed-write-coordinator-participant-failure-log.test.js": {
       "files": [
         "src/query/distributed/distributed-write-coordinator.js"
@@ -14180,6 +14185,7 @@
     "test/query/durable-provisioning-job-owner-directed.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/cache/system-cache-key-descriptor.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/owner-contract-outcome.js",
