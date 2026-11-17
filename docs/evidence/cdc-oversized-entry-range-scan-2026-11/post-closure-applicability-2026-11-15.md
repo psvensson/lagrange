@@ -1,3 +1,9 @@
+---
+audience: evidence
+recorded: 2026-11-15
+quest: cdc-oversized-entry-range-scan
+---
+
 # CDC Oversized-Entry Range Scan: Post-Closure Applicability and Transaction Tally Finalization (2026-11-15)
 
 ## Scope and Review Follow-Up
@@ -7,7 +13,7 @@ This applicability note records the closure of Independent Review #2 (Finding 3)
 1. **Review #2 (Finding 3) - Single `SELECT_OWED_ENTRY_BYTES` query per oversized entry across full drain (`4202994aa9e7181305a8b10f28d3eb1fa8d495e2`)**:
    - Updated `PARTITION_CDC_OBLIGATION_SQL.MARK_DELIVERED` in `src/partition/partition-cdc-obligation-constants.js` to `RETURNING log_index, octet_length(event_json) AS event_bytes` without modifying the SQLite table, column, index, or trigger schema of `_cdc_obligations` or `_cdc_obligation_progress`.
    - Added connection-scoped `_cdcOwedEntryBytes` on the `db` owner in `src/partition/partition-cdc-obligation-ledger.js` and `owedEntryPositionsAfter` in `src/partition/partition-cdc-obligation-range.js` so `SELECT_OWED_ENTRY_BYTES` executes once per oversized entry across an entire drain and whole-entry tail transitions page by `BOUND.DRIVE_PAGE_ROWS` (`256`).
-   - Verified on `adams-gamla` in lab job `9f6d4ede-a952-418b-a775-0dc425c40785` (`solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/`).
+   - Verified on `adams-gamla` in lab job `9f6d4ede-a952-418b-a775-0dc425c40785` (`docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-9f6d4ede-a952-418b-a775-0dc425c40785/`).
 
 2. **Review #3 (P2) - Explicit transaction commit/rollback finalization of `_cdcOwedEntryBytes`**:
    - Added `commitOwedEntryByteTallies(db)` and `rollbackOwedEntryByteTallies(db)` in `src/partition/partition-cdc-obligation-ledger.js` and wired them into `applyCdcAcknowledgementCommand` (`src/partition/partition-cdc-obligation.js`) via `committed.afterCommit` and `committed.afterRollback`.
@@ -22,9 +28,9 @@ This applicability note records the closure of Independent Review #2 (Finding 3)
 - **Transport Commit**: `743df82b452b08917c026e9f1169f11b15ae46b7`
 - **Measured Transport Tree**: `22627ea07b0979b6021e6674e46fbe431e3f5165`
 - **Retained Artifacts**:
-  - `solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/job.json`
-  - `solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/summary.json`
-  - `solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/tap.txt`
+  - `docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/job.json`
+  - `docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/summary.json`
+  - `docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/tap.txt`
 
 | File | Assertions | Duration | Result |
 | --- | ---: | ---: | --- |

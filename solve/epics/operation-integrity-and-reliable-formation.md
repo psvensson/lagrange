@@ -173,7 +173,7 @@ invalid evidence before integration.
     (verified on `adams-gamla` in lab jobs `9f6d4ede-a952-418b-a775-0dc425c40785`
     and `58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d`, 9/9 test files, 328 assertions;
     post-closure applicability recorded in
-    [post-closure-applicability-2026-11-15.md](../quests/cdc-oversized-entry-range-scan/evidence/post-closure-applicability-2026-11-15.md)).
+    [post-closure-applicability-2026-11-15.md](../../docs/evidence/cdc-oversized-entry-range-scan-2026-11/post-closure-applicability-2026-11-15.md)).
   - **Stream 5a -- [node-ready-lease-renewal-cadence](../quests/node-ready-lease-renewal-cadence/quest.json) & authoritative `SERVICES` incarnation supersession (`fb634397f`, `678b9492f`, `19ff97346` / component `2005ad36e`):**
     derives `HeartbeatService` renewal cadence and `metadataUpdateCooldown` from
     `leaseTtlMs` (`floor(leaseTtlMs / 3)`), separates `SERVICES` birth
