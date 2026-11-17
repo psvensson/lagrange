@@ -2,17 +2,28 @@ import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
-import {TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
+import {TYPEOF} from '../constants/index.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
 } from './replica-operation-message-group-membership-fields.js';
+import {
+  hasReplicaOperationProgressedPastPending,
+  isMonotonicReplicaOperationStepProgression,
+} from './replica-operation-progress.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
 const SETTLED_MEMBERSHIP_OBLIGATION_STATE = 'settled';
+const VISIBILITY_IDENTITY_FIELDS = Object.freeze([
+  'partitionId',
+  'type',
+  'replicaId',
+  'sourceNodeId',
+  'targetNodeId',
+]);
 const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
@@ -76,8 +87,8 @@ function createAdmissionVisibilitySatisfied(expected, observed) {
   ];
   if (fields.every((field) => observed[field] === expected[field])) return true;
   return Boolean(
-    expected.workflowStep &&
-    expected.workflowStep !== WORKFLOW_STEP.PENDING &&
+    (hasReplicaOperationProgressedPastPending(expected) ||
+      hasReplicaOperationProgressedPastPending(observed)) &&
     typeof observed.createAdmissionState === TYPEOF.STRING &&
     observed.createAdmissionToken === expected.createAdmissionToken &&
     Number(observed.createAdmissionAttemptSeq) >=
@@ -103,7 +114,11 @@ function membershipVisibilitySatisfied(expected, observed) {
     return true;
   }
   const expectedStep = readStateField(expected.workflowStep);
-  if (expectedStep === STATE_ABSENT || expectedStep === WORKFLOW_STEP.PENDING) {
+  if (
+    expectedStep === STATE_ABSENT ||
+    (!hasReplicaOperationProgressedPastPending(expected) &&
+      !hasReplicaOperationProgressedPastPending(observed))
+  ) {
     return false;
   }
   const identityFields = ['sourceReplicaId', 'messageGroupMembershipIdentity'];
@@ -111,6 +126,16 @@ function membershipVisibilitySatisfied(expected, observed) {
     expected[field] == null ||
     nullableOperationValue(observed[field]) === nullableOperationValue(expected[field])) &&
     membershipLaneKeyVisibilitySatisfied(expected, observed);
+}
+
+function isReplicaOperationIdentitySatisfied(expected, observed) {
+  if (!observed || observed.operationId !== expected.operationId) {
+    return false;
+  }
+  return VISIBILITY_IDENTITY_FIELDS.every((field) =>
+    expected[field] === null ||
+    expected[field] === undefined ||
+    observed[field] === expected[field]);
 }
 
 function isReplicaOperationUniqueConstraintFailure(result) {
@@ -610,30 +635,25 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       expectedOperation,
       observedOperation,
     ) {
-      if (
-        !observedOperation ||
-        observedOperation.operationId !== expectedOperation.operationId
-      ) {
+      if (!isReplicaOperationIdentitySatisfied(
+        expectedOperation,
+        observedOperation,
+      )) {
         return false;
       }
+      const exactStepAndStatusMatch =
+        (expectedOperation.workflowStep === null ||
+          expectedOperation.workflowStep === undefined ||
+          observedOperation.workflowStep === expectedOperation.workflowStep) &&
+        (expectedOperation.status === null ||
+          expectedOperation.status === undefined ||
+          observedOperation.status === expectedOperation.status);
       if (
-        expectedOperation.replicaId !== null &&
-        expectedOperation.replicaId !== undefined &&
-        observedOperation.replicaId !== expectedOperation.replicaId
-      ) {
-        return false;
-      }
-      if (
-        expectedOperation.workflowStep !== null &&
-        expectedOperation.workflowStep !== undefined &&
-        observedOperation.workflowStep !== expectedOperation.workflowStep
-      ) {
-        return false;
-      }
-      if (
-        expectedOperation.status !== null &&
-        expectedOperation.status !== undefined &&
-        observedOperation.status !== expectedOperation.status
+        !exactStepAndStatusMatch &&
+        !isMonotonicReplicaOperationStepProgression(
+          expectedOperation,
+          observedOperation,
+        )
       ) {
         return false;
       }

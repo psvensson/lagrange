@@ -1,4 +1,5 @@
 import {NUM} from '../constants/index.js';
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -15,9 +16,52 @@ import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
 import {
   OperationType,
   ReplicaStatus,
+  isCoordinatorOwnedOperationType,
   isTerminalReplicaOperationRecord,
 } from './replica-status.js';
 import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
+import {
+  doesWorkflowStepOccupySystemTargetNodeSlot,
+} from './replica-operation-step-policy.js';
+
+const ACTIVE_NODE_STATUS = 'active';
+const TARGET_SLOT_LIMIT_REASON_CODE = 'system_target_node_slot_limit_reached';
+
+function collectActiveNodeIdsFromRows(rows, targetSet) {
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const nodeId = row?.node_id || null;
+    if (!nodeId) {
+      continue;
+    }
+    const status = readLowerStateField(row?.status);
+    if (status === ACTIVE_NODE_STATUS) {
+      targetSet.add(nodeId);
+    }
+  }
+}
+
+function resolveCommittedActiveClusterHostCount(
+  systemTableCache,
+  availableNodes,
+  controlPlaneReadinessService = null,
+) {
+  const availableHostCount = Array.isArray(availableNodes) ?
+    availableNodes.length :
+    NUM.ZERO;
+  const activeNodeIds = new Set();
+  const committedAnswer = controlPlaneReadinessService?.answerCommittedNodes?.();
+  if (Array.isArray(committedAnswer?.nodeRows)) {
+    collectActiveNodeIdsFromRows(committedAnswer.nodeRows, activeNodeIds);
+  }
+  if (systemTableCache?.filter) {
+    const cachedNodeRows = systemTableCache.filter(
+      SYSTEM_TABLE_NAME.NODES,
+      (row) => Boolean(row?.node_id),
+    );
+    collectActiveNodeIdsFromRows(cachedNodeRows, activeNodeIds);
+  }
+  return Math.max(availableHostCount, activeNodeIds.size);
+}
 
 function countDistinctActiveHostsFromReplicas(replicas) {
   if (!Array.isArray(replicas)) {
@@ -39,6 +83,7 @@ function isReplicasBelowDeclaredDistinctHostSpread(
   partitionId,
   replicas,
   resolveAvailableNodes,
+  controlPlaneReadinessService = null,
 ) {
   const desired = resolveDesiredReplicationFactor(
     getPartitionRowFromCache(systemTableCache, partitionId),
@@ -68,12 +113,14 @@ function isReplicasBelowDeclaredDistinctHostSpread(
     return true;
   }
   const availableNodes = resolveAvailableNodes();
-  const availableHostCount = Array.isArray(availableNodes) ?
-    availableNodes.length :
-    NUM.ZERO;
+  const clusterHostCount = resolveCommittedActiveClusterHostCount(
+    systemTableCache,
+    availableNodes,
+    controlPlaneReadinessService,
+  );
   return (
-    availableHostCount > NUM.ONE &&
-    activeNodeIds.size < Math.min(desired.replicationFactor, availableHostCount)
+    clusterHostCount > NUM.ONE &&
+    activeNodeIds.size < Math.min(desired.replicationFactor, clusterHostCount)
   );
 }
 
@@ -86,11 +133,17 @@ function getNodesPartitionDistinctActiveHostCount(systemTableCache) {
   return countDistinctActiveHostsFromReplicas(serviceRows);
 }
 
-function isNodesPartitionSpreadInCache(systemTableCache, availableNodes) {
-  const availableHostCount = Array.isArray(availableNodes) ?
-    availableNodes.length :
-    NUM.ZERO;
-  if (!systemTableCache || availableHostCount <= NUM.ONE) {
+function isNodesPartitionSpreadInCache(
+  systemTableCache,
+  availableNodes,
+  controlPlaneReadinessService = null,
+) {
+  const clusterHostCount = resolveCommittedActiveClusterHostCount(
+    systemTableCache,
+    availableNodes,
+    controlPlaneReadinessService,
+  );
+  if (!systemTableCache || clusterHostCount <= NUM.ONE) {
     return false;
   }
   const nodesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
@@ -99,18 +152,21 @@ function isNodesPartitionSpreadInCache(systemTableCache, availableNodes) {
   }
   return (
     getNodesPartitionDistinctActiveHostCount(systemTableCache) >=
-    Math.min(NUM.THREE, availableHostCount)
+    Math.min(NUM.THREE, clusterHostCount)
   );
 }
 
 function isNodesPartitionPresentAndUnderSpread(
   systemTableCache,
   availableNodes,
+  controlPlaneReadinessService = null,
 ) {
-  const availableHostCount = Array.isArray(availableNodes) ?
-    availableNodes.length :
-    NUM.ZERO;
-  if (!systemTableCache || availableHostCount <= NUM.ONE) {
+  const clusterHostCount = resolveCommittedActiveClusterHostCount(
+    systemTableCache,
+    availableNodes,
+    controlPlaneReadinessService,
+  );
+  if (!systemTableCache || clusterHostCount <= NUM.ONE) {
     return false;
   }
   const nodesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
@@ -123,8 +179,8 @@ function isNodesPartitionPresentAndUnderSpread(
   }
   const desired = resolveDesiredReplicationFactor(partitionRow);
   const requiredHosts = desired.replicationFactor > NUM.ZERO ?
-    Math.min(desired.replicationFactor, availableHostCount) :
-    Math.min(NUM.THREE, availableHostCount);
+    Math.min(desired.replicationFactor, clusterHostCount) :
+    Math.min(NUM.THREE, clusterHostCount);
   return (
     getNodesPartitionDistinctActiveHostCount(systemTableCache) < requiredHosts
   );
@@ -156,8 +212,31 @@ function isPriorityControlPlaneOperation(systemTableCache, operation) {
   );
 }
 
+function doesOperationOccupySystemTargetNodeSlot(
+  operation,
+  {includeDrainPhase = false} = {},
+) {
+  if (!isNonTerminalSystemAddOrReplaceOperation(operation)) {
+    return false;
+  }
+  const normalized = normalizeReplicaOperationRecord(operation);
+  return doesWorkflowStepOccupySystemTargetNodeSlot(
+    normalized.workflowStep,
+    includeDrainPhase,
+  );
+}
+
+function doesOperationTransitionReleaseSystemTargetNodeSlot(operation) {
+  const normalized = normalizeReplicaOperationRecord(operation);
+  if (!isCoordinatorOwnedOperationType(normalized.type)) {
+    return false;
+  }
+  return isTerminalReplicaOperationRecord(normalized);
+}
+
 function resolvePhaseBSystemTransitionSnapshotOptions({
   systemTableCache,
+  controlPlaneReadinessService = null,
   entityId,
   isSystemPartition,
   isPriorityPartition,
@@ -169,18 +248,25 @@ function resolvePhaseBSystemTransitionSnapshotOptions({
   const phaseBEligibleEntity =
     isSystemPartition &&
     !isPriorityPartition &&
-    !isFormationDependencyPartition &&
     isReplicasBelowDeclaredDistinctHostSpread(
       systemTableCache,
       entityId,
       currentReplicas,
       resolveAvailableNodes,
+      controlPlaneReadinessService,
+    );
+  const nodesSpreadSatisfied =
+    isFormationDependencyPartition === true ||
+    isNodesPartitionSpreadInCache(
+      systemTableCache,
+      resolveAvailableNodes(),
+      controlPlaneReadinessService,
     );
   const baseConditionsMet =
     phaseBEligibleEntity &&
     Boolean(systemTableCache) &&
-    isNodesPartitionSpreadInCache(systemTableCache, resolveAvailableNodes());
-  const allNonTerminalOperations = baseConditionsMet ?
+    nodesSpreadSatisfied;
+  const cachedNonTerminalOperations = baseConditionsMet && systemTableCache?.filter ?
     systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) =>
@@ -188,6 +274,28 @@ function resolvePhaseBSystemTransitionSnapshotOptions({
           normalizeReplicaOperationRecord(operation),
         ),
     ) :
+    [];
+  const mergedNonTerminalOperations = [];
+  const seenOperationIds = new Set();
+  for (const operation of [
+    ...cachedNonTerminalOperations,
+    ...(Array.isArray(globalInFlightOperations) ? globalInFlightOperations : []),
+  ]) {
+    const normalized = normalizeReplicaOperationRecord(operation);
+    if (isTerminalReplicaOperationRecord(normalized)) {
+      continue;
+    }
+    const operationId = normalized.operationId || null;
+    if (operationId && seenOperationIds.has(operationId)) {
+      continue;
+    }
+    if (operationId) {
+      seenOperationIds.add(operationId);
+    }
+    mergedNonTerminalOperations.push(operation);
+  }
+  const allNonTerminalOperations = baseConditionsMet ?
+    mergedNonTerminalOperations :
     globalInFlightOperations;
   const priorityOperationActive =
     baseConditionsMet &&
@@ -199,6 +307,7 @@ function resolvePhaseBSystemTransitionSnapshotOptions({
       ));
   const usePhaseBCapacity = baseConditionsMet && !priorityOperationActive;
   return {
+    usePhaseBCapacity,
     maxPerTargetNode: usePhaseBCapacity ? NUM.TWO : NUM.ONE,
     includeDrainPhase: usePhaseBCapacity,
     operations: usePhaseBCapacity ?
@@ -272,6 +381,7 @@ function countNonTerminalSystemOpsByTargetNode(systemTableCache) {
 
 function buildPhaseBGlobalSystemTransitionNodeSet({
   systemTableCache,
+  controlPlaneReadinessService = null,
   entityId,
   isSystemPartition,
   isPriorityPartition,
@@ -283,6 +393,7 @@ function buildPhaseBGlobalSystemTransitionNodeSet({
 }) {
   const phaseBOptions = resolvePhaseBSystemTransitionSnapshotOptions({
     systemTableCache,
+    controlPlaneReadinessService,
     entityId,
     isSystemPartition,
     isPriorityPartition,
@@ -296,10 +407,142 @@ function buildPhaseBGlobalSystemTransitionNodeSet({
     maxPerTargetNode: phaseBOptions.maxPerTargetNode,
     operations: phaseBOptions.operations,
     isAddOperation: phaseBOptions.includeDrainPhase ?
-      isNonTerminalSystemAddOrReplaceOperation :
-      isAddActiveOperation,
+      (operation) =>
+        doesOperationOccupySystemTargetNodeSlot(operation, {
+          includeDrainPhase: true,
+        }) :
+      isAddActiveOperation ||
+        ((operation) =>
+          doesOperationOccupySystemTargetNodeSlot(operation, {
+            includeDrainPhase: false,
+          })),
     isSystemPartition: (options) =>
-      classifySystemPartition(options).systemTable,
+      classifySystemPartition({
+        partitionId: options.partitionId,
+        partitionRow: getPartitionRowFromCache(
+          systemTableCache,
+          options.partitionId,
+        ),
+      }).systemTable,
+  });
+}
+
+function evaluateSystemPartitionTargetNodeSlotAdmission({
+  systemTableCache,
+  controlPlaneReadinessService = null,
+  partitionId,
+  targetNodeId,
+  operations = [],
+  currentReplicas = null,
+  resolveAvailableNodes = null,
+}) {
+  const normalizedPartitionId = String(partitionId || '').trim();
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedPartitionId || !normalizedTargetNodeId) {
+    return Object.freeze({
+      allowed: true,
+      maxPerTargetNode: NUM.ONE,
+      occupiedCount: NUM.ZERO,
+      includeDrainPhase: false,
+      usePhaseBCapacity: false,
+      occupyingOperationIds: Object.freeze([]),
+      reasonCode: null,
+    });
+  }
+  const partitionRow = getPartitionRowFromCache(
+    systemTableCache,
+    normalizedPartitionId,
+  );
+  const classification = classifySystemPartition({
+    partitionId: normalizedPartitionId,
+    partitionRow,
+  });
+  if (
+    classification.systemTable !== true ||
+    classification.priorityControlPlane === true
+  ) {
+    return Object.freeze({
+      allowed: true,
+      maxPerTargetNode: NUM.ONE,
+      occupiedCount: NUM.ZERO,
+      includeDrainPhase: false,
+      usePhaseBCapacity: false,
+      occupyingOperationIds: Object.freeze([]),
+      reasonCode: null,
+    });
+  }
+  const resolvedReplicas = Array.isArray(currentReplicas) ?
+    currentReplicas :
+    systemTableCache?.filter ?
+      systemTableCache.filter(
+        SYSTEM_TABLE_NAME.SERVICES,
+        (row) => normalizeServiceRow(row).partitionId === normalizedPartitionId,
+      ) :
+      [];
+  const resolveAvailableNodesFn = () => {
+    const provided = resolveAvailableNodes?.();
+    if (Array.isArray(provided)) {
+      return provided;
+    }
+    return systemTableCache?.filter ?
+      systemTableCache.filter(
+        SYSTEM_TABLE_NAME.NODES,
+        (row) => readLowerStateField(row?.status) === ACTIVE_NODE_STATUS,
+      ) :
+      [];
+  };
+  const phaseBOptions = resolvePhaseBSystemTransitionSnapshotOptions({
+    systemTableCache,
+    controlPlaneReadinessService,
+    entityId: normalizedPartitionId,
+    isSystemPartition: classification.systemTable,
+    isPriorityPartition: classification.priorityControlPlane,
+    isFormationDependencyPartition: classification.formationLivenessDependency,
+    currentReplicas: resolvedReplicas,
+    resolveAvailableNodes: resolveAvailableNodesFn,
+    globalInFlightOperations: Array.isArray(operations) ? operations : [],
+  });
+  const occupyingOperationIds = [];
+  const seenOperationIds = new Set();
+  for (const operation of phaseBOptions.operations) {
+    if (
+      !doesOperationOccupySystemTargetNodeSlot(operation, {
+        includeDrainPhase: phaseBOptions.includeDrainPhase,
+      })
+    ) {
+      continue;
+    }
+    const normalized = normalizeReplicaOperationRecord(operation);
+    const opPartitionId = normalized.partitionId || null;
+    if (
+      !opPartitionId ||
+      !classifySystemPartition({
+        partitionId: opPartitionId,
+        partitionRow: getPartitionRowFromCache(systemTableCache, opPartitionId),
+      }).systemTable
+    ) {
+      continue;
+    }
+    if (normalized.targetNodeId !== normalizedTargetNodeId) {
+      continue;
+    }
+    const operationId =
+      normalized.operationId || `${opPartitionId}:${normalizedTargetNodeId}`;
+    if (seenOperationIds.has(operationId)) {
+      continue;
+    }
+    seenOperationIds.add(operationId);
+    occupyingOperationIds.push(operationId);
+  }
+  const allowed = occupyingOperationIds.length < phaseBOptions.maxPerTargetNode;
+  return Object.freeze({
+    allowed,
+    maxPerTargetNode: phaseBOptions.maxPerTargetNode,
+    occupiedCount: occupyingOperationIds.length,
+    includeDrainPhase: phaseBOptions.includeDrainPhase,
+    usePhaseBCapacity: phaseBOptions.usePhaseBCapacity,
+    occupyingOperationIds: Object.freeze(occupyingOperationIds),
+    reasonCode: allowed ? null : TARGET_SLOT_LIMIT_REASON_CODE,
   });
 }
 
@@ -307,6 +550,12 @@ export {
   buildPhaseBGlobalSystemTransitionNodeSet,
   countDistinctActiveHostsFromReplicas,
   countNonTerminalSystemOpsByTargetNode,
+  doesOperationOccupySystemTargetNodeSlot,
+  doesOperationTransitionReleaseSystemTargetNodeSlot,
+  evaluateSystemPartitionTargetNodeSlotAdmission,
   isNodesPartitionPresentAndUnderSpread,
+  isNodesPartitionSpreadInCache,
   isReplicasBelowDeclaredDistinctHostSpread,
+  resolveCommittedActiveClusterHostCount,
+  resolvePhaseBSystemTransitionSnapshotOptions,
 };

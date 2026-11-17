@@ -659,14 +659,19 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     let forcePriorityRetry = false;
 
     if (needsRebalance) {
-      const rebalanceResult = await this.rebalance(
-        TriggerType.PERIODIC,
-        evaluatedPolicy,
-        evaluationContext,
-      );
-      const executedMoveCount = this.countExecutedMoves(rebalanceResult);
-      this.syncOperationContinuationWake(rebalanceResult, executedMoveCount);
-      this.completeSlotReleaseContinuationCycle(executedMoveCount);
+      let rebalanceResult = null;
+      let executedMoveCount = UNIFIED_REBALANCER_LITERAL.ZERO;
+      try {
+        rebalanceResult = await this.rebalance(
+          TriggerType.PERIODIC,
+          evaluatedPolicy,
+          evaluationContext,
+        );
+        executedMoveCount = this.countExecutedMoves(rebalanceResult);
+      } finally {
+        this.syncOperationContinuationWake(rebalanceResult, executedMoveCount);
+        this.completeSlotReleaseContinuationCycle(executedMoveCount);
+      }
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
         this.currentInterval = this.usesPriorityRebalanceCadence() ?
@@ -729,6 +734,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       // check, including diagnostics, so every stage consumes one answer.
       const evaluationContext =
         this.createRebalancePlanningGateEvaluationContext();
+      await this.refreshDeferredAvailableNodeReadiness?.();
       const blocker = await this.getCheckRebalanceBlocker(evaluationContext);
       this.recordPriorityRecoveryPlanningGateDecisionDiagnostic(
         blocker?.decision || null,

@@ -2,13 +2,75 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   buildAfterCreateBudgetTurnArmContext,
 } from './operation-workflow-owner-create-budget-dispatch.js';
+import {
+  evaluateSystemPartitionTargetNodeSlotAdmission,
+} from './system-spread-transition-policy.js';
+import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
+import {isTerminalReplicaOperationRecord} from './replica-status.js';
 
 const {
   OperationType,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
+  SYSTEM_TABLE_NAME,
   TOPOLOGY_GUARD_ERROR_MSG,
 } = REBALANCE_COORDINATOR_SHARED;
+
+function collectCurrentOperationsForTargetSlotAdmission(coordinator) {
+  const terminalOperationIds = new Set();
+  const operationsById = new Map();
+  const appendCandidate = (operation, allowOverwrite = false) => {
+    if (!operation) {
+      return;
+    }
+    const normalized = normalizeReplicaOperationRecord(operation);
+    const operationId = normalized.operationId || null;
+    if (
+      isTerminalReplicaOperationRecord(normalized) ||
+      coordinator.isOperationTerminal?.(operation) === true
+    ) {
+      if (operationId) {
+        terminalOperationIds.add(operationId);
+        operationsById.delete(operationId);
+      }
+      return;
+    }
+    if (!operationId) {
+      return;
+    }
+    if (terminalOperationIds.has(operationId)) {
+      return;
+    }
+    if (allowOverwrite || !operationsById.has(operationId)) {
+      operationsById.set(operationId, operation);
+    }
+  };
+  if (coordinator.systemTableCache?.filter) {
+    const cachedOperations = coordinator.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      () => true,
+    );
+    for (const operation of Array.isArray(cachedOperations) ? cachedOperations : []) {
+      appendCandidate(operation, true);
+    }
+  }
+  if (coordinator.operations instanceof Map) {
+    for (const operation of coordinator.operations.values()) {
+      appendCandidate(operation, true);
+    }
+  }
+  const observedOperations =
+    coordinator.repository?.lastIncompleteOperationObservation?.operations;
+  for (const operation of Array.isArray(observedOperations) ? observedOperations : []) {
+    appendCandidate(operation, false);
+  }
+  if (coordinator.recentOperationIntents instanceof Map) {
+    for (const entry of coordinator.recentOperationIntents.values()) {
+      appendCandidate(entry?.operation || entry, false);
+    }
+  }
+  return [...operationsById.values()];
+}
 
 class RebalanceCoordinatorConcurrentBudgetGate {
   /**
@@ -85,13 +147,19 @@ class RebalanceCoordinatorConcurrentBudgetGate {
               options.entityType,
             ),
         });
-      if (canStart) {
-        return;
+      if (!canStart) {
+        throw this.createConcurrentOperationBudgetError(
+          normalizedMoveType,
+          concurrentAddLimit,
+        );
       }
-      throw this.createConcurrentOperationBudgetError(
-        normalizedMoveType,
-        concurrentAddLimit,
-      );
+      if (!usePriorityConcurrentAddLane && options.targetNodeId) {
+        this.ensureSystemPartitionTargetNodeSlotAllowed(
+          normalizedMoveType,
+          options,
+        );
+      }
+      return;
     }
 
     if (normalizedMoveType === OperationType.REMOVE) {
@@ -108,6 +176,32 @@ class RebalanceCoordinatorConcurrentBudgetGate {
         this.config.maxConcurrentRemoves,
       );
     }
+  }
+
+  ensureSystemPartitionTargetNodeSlotAllowed(normalizedMoveType, options = {}) {
+    if (!options?.targetNodeId || !options?.partitionId) {
+      return null;
+    }
+    const operations = collectCurrentOperationsForTargetSlotAdmission(this);
+    const decision = evaluateSystemPartitionTargetNodeSlotAdmission({
+      systemTableCache: this.systemTableCache || null,
+      controlPlaneReadinessService: this.controlPlaneReadinessService || null,
+      partitionId: options.partitionId,
+      targetNodeId: options.targetNodeId,
+      operations,
+    });
+    if (decision.allowed) {
+      return decision;
+    }
+    throw this.createConcurrentOperationBudgetError(
+      normalizedMoveType,
+      decision.maxPerTargetNode,
+      {
+        targetNodeId: options.targetNodeId,
+        conflictingOperationId: decision.occupyingOperationIds[0] || null,
+        reasonCode: decision.reasonCode,
+      },
+    );
   }
 
   /**
@@ -130,6 +224,12 @@ class RebalanceCoordinatorConcurrentBudgetGate {
     error.rebalanceSkipReason = REBALANCER_SKIP_REASON.BUDGET_EXCEEDED;
     error.operationType = normalizedMoveType || null;
     error.limit = limit;
+    if (options.targetNodeId) {
+      error.targetNodeId = options.targetNodeId;
+    }
+    if (options.reasonCode) {
+      error.reasonCode = options.reasonCode;
+    }
     if (options.conflictingOperationId) {
       error.conflictingOperationId = options.conflictingOperationId;
     }

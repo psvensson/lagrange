@@ -81,6 +81,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @return {Promise<boolean>} True if ready.
    */
   async isNodeReady(nodeId) {
+    await this.refreshDeferredAvailableNodeReadiness?.([nodeId]);
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
     const readinessOptions = {

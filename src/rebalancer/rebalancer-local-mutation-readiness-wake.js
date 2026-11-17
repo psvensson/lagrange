@@ -3,6 +3,7 @@ import {TABLES} from '../constants/tables.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   collectSlotHandoffEntries,
+  doesOperationTransitionReleaseSystemTargetNodeSlot,
   registerArmedSlotContender,
   resolveRebalancerDispatchHost,
   selectSlotWakeWinnerIndex,
@@ -15,8 +16,6 @@ const {
   REBALANCER_SKIP_REASON,
   RECONCILE_REASON,
   UNIFIED_REBALANCER_LITERAL,
-  isCoordinatorOwnedOperationType,
-  isTerminalReplicaOperationRecord,
   normalizeReplicaOperationRecord,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -384,10 +383,7 @@ function attachOperationContinuationListeners(
       return;
     }
     const normalized = normalizeReplicaOperationRecord(record);
-    if (
-      !isCoordinatorOwnedOperationType(normalized.type) ||
-      !isTerminalReplicaOperationRecord(normalized)
-    ) {
+    if (!doesOperationTransitionReleaseSystemTargetNodeSlot(normalized)) {
       return;
     }
     handleOperationContinuationObservation(rebalancer, state, normalized);

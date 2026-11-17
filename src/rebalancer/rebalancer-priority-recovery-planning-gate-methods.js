@@ -190,6 +190,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       this.entityId,
       this.getCurrentReplicas(),
       () => this.getAvailableNodes(),
+      this.controlPlaneReadinessService,
     );
   },
 

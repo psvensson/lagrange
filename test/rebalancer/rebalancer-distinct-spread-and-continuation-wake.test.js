@@ -1353,3 +1353,137 @@ test(
       ordinary.shutdown();
     }
   });
+
+test(
+  'freshness_not_current async readiness refresh restores joiners before planning gates, ' +
+    'preserves nodes-p1 Move 2 spread exemption + Phase B capacity, and runs continuation wake in finally',
+  async (t) => {
+    initializeTestEnvironment();
+    const nowMs = INITIAL_NOW_MS;
+    const nowFn = () => nowMs;
+    const nodes = buildReadyThreeNodes(nowMs);
+    const coordinator = createEventedTestCoordinator();
+    const operations = [{
+      operation_id: 'other-sys-op-c',
+      partition_id: ORDINARY_SYSTEM_PARTITION_ID,
+      type: OperationType.REPLACE,
+      target_node_id: TEST_NODE_C,
+      status: ReplicaStatus.SYNCING,
+      workflow_step: WORKFLOW_STEP.SYNCING,
+      created_at: nowMs,
+      updated_at: nowMs,
+      completed_at: null,
+    }];
+    const systemTableCache = createObservableSystemTableCache({
+      nodes,
+      partitions: [
+        {partition_id: NON_PRIORITY_NODES_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+        {partition_id: ORDINARY_SYSTEM_PARTITION_ID, replica_count: REPLICATION_FACTOR_THREE},
+      ],
+      services: [
+        ...buildReplicaRows(NON_PRIORITY_NODES_PARTITION_ID, [
+          TEST_NODE_A, TEST_NODE_A, TEST_NODE_B,
+        ]),
+        ...buildReplicaRows(ORDINARY_SYSTEM_PARTITION_ID, [
+          TEST_NODE_A, TEST_NODE_A, TEST_NODE_A,
+        ]),
+      ],
+      operations,
+    });
+    const baseReadiness = createMockControlPlaneReadinessService({
+      systemTableCache, now: nowFn,
+    });
+    const refreshedNodeIds = [];
+    const refreshedSet = new Set();
+    const readinessService = {
+      ...baseReadiness,
+      getNodeReadinessSync(nodeId, options = {}) {
+        const fresh = baseReadiness.getNodeReadinessSync(nodeId, options);
+        if (nodeId !== TEST_NODE_A && !refreshedSet.has(nodeId)) {
+          return {
+            ...fresh,
+            state: 'deferred',
+            readinessPlanningTokenStatus: 'stale',
+            failedTerms: ['freshness_not_current'],
+            reasons: [{code: 'planning_snapshot_refresh_pending'}],
+            dimensions: {
+              ...fresh.dimensions,
+              controlPlaneRecoveryEligible: false,
+              repairEligible: false,
+            },
+          };
+        }
+        return fresh;
+      },
+      async getNodeReadiness(nodeId, options = {}) {
+        refreshedNodeIds.push(nodeId);
+        refreshedSet.add(nodeId);
+        return baseReadiness.getNodeReadinessSync(nodeId, options);
+      },
+    };
+    armActivePrioritySpreadFence(readinessService, nowFn);
+    const nodesRebalancer = createTestRebalancer({
+      entityId: NON_PRIORITY_NODES_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_A,
+      systemTableCache,
+      rebalanceCoordinator: coordinator,
+      controlPlaneReadinessService: readinessService,
+      nowFn,
+    });
+    nodesRebalancer.isLeader = true;
+    try {
+      t.equal(
+        nodesRebalancer.isPartitionBelowDeclaredDistinctHostSpread(),
+        true,
+        'nodes-p1 at [0001, 0001, 0002] remains below declared spread against 3 committed cluster hosts',
+      );
+      t.equal(
+        nodesRebalancer.resolvePrioritySpreadPlanningGateDecision(),
+        null,
+        'nodes-p1 at [0001, 0001, 0002] bypasses the 70s stability fence',
+      );
+      const policy = {
+        targetReplicaCount: REPLICATION_FACTOR_THREE,
+        minReplicaCount: REPLICATION_FACTOR_THREE,
+        maxReplicaCount: 7,
+        placementConstraints: {spreadAcrossNodes: true},
+      };
+      t.equal(
+        await nodesRebalancer.evaluateState(policy),
+        true,
+        'evaluateState refreshes freshness_not_current joiners and detects Move 2 needed',
+      );
+      t.same(refreshedNodeIds.sort(), [TEST_NODE_B, TEST_NODE_C]);
+      t.equal(nodesRebalancer.getAvailableNodes().length, REPLICATION_FACTOR_THREE);
+      const currentReplicas = nodesRebalancer.getCurrentReplicas();
+      const targetState = await nodesRebalancer.calculateTargetState(currentReplicas, policy);
+      const plannedMoves = nodesRebalancer.calculateMoves(currentReplicas, targetState);
+      t.equal(plannedMoves.length, SINGLE_WAKE_COUNT);
+      t.equal(plannedMoves[0].nodeId, TEST_NODE_C, 'nodes-p1 Move 2 targets joiner 0003');
+      refreshedSet.delete(TEST_NODE_C);
+      t.equal(
+        nodesRebalancer.getAvailableNodes().length,
+        2,
+        'later deferred getNodeReadinessSync fails closed without serving a shadow-cached refresh',
+      );
+      refreshedSet.add(TEST_NODE_C);
+      nodesRebalancer.disarmOperationContinuationWake();
+      nodesRebalancer.rebalance = async () => {
+        throw new Error('simulated rebalance failure');
+      };
+      await t.rejects(
+        nodesRebalancer.advanceCheckCadence(true, policy),
+        /simulated rebalance failure/,
+        'advanceCheckCadence propagates unexpected rebalance error',
+      );
+      t.equal(
+        nodesRebalancer.operationContinuationWakeState?.awaitingBudgetSlotRelease,
+        true,
+        'finally block in advanceCheckCadence arms continuation wake even when rebalance() throws',
+      );
+    } finally {
+      nodesRebalancer.shutdown();
+    }
+  },
+);

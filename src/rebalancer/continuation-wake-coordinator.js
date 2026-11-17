@@ -1,6 +1,7 @@
 import {NUM} from '../constants/index.js';
 import {
   countDistinctActiveHostsFromReplicas,
+  doesOperationTransitionReleaseSystemTargetNodeSlot,
   isNodesPartitionPresentAndUnderSpread,
 } from './system-spread-transition-policy.js';
 
@@ -95,6 +96,7 @@ function shouldYieldSlotWakeToNodesPartition(rebalancer, contenders = []) {
     isNodesPartitionPresentAndUnderSpread(
       rebalancer.systemTableCache,
       rebalancer.getAvailableNodes?.(),
+      rebalancer.controlPlaneReadinessService || null,
     )
   ) {
     return true;
@@ -179,6 +181,7 @@ function collectSlotHandoffEntries(host, sourceRebalancer) {
 
 export {
   collectSlotHandoffEntries,
+  doesOperationTransitionReleaseSystemTargetNodeSlot,
   registerArmedSlotContender,
   resolveRebalancerDispatchHost,
   selectSlotWakeWinnerIndex,

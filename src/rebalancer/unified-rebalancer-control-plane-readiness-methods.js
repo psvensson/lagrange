@@ -19,6 +19,41 @@ const {
 } = UNIFIED_REBALANCER_SHARED;
 
 const CONTROL_PLANE_READINESS_CONSTRUCTOR = 'constructor';
+const STALE_PLANNING_TOKEN_STATUS = 'stale';
+const DEFERRED_READINESS_STATE = 'deferred';
+const FRESHNESS_NOT_CURRENT_TERM = 'freshness_not_current';
+const PLANNING_REFRESH_PENDING_REASON = 'planning_snapshot_refresh_pending';
+
+function hasDeferredReasonOrTerm(entries) {
+  if (!Array.isArray(entries)) {
+    return false;
+  }
+  return entries.some((entry) => {
+    const code = typeof entry === 'string' ? entry : entry?.code;
+    return (
+      code === FRESHNESS_NOT_CURRENT_TERM ||
+      code === PLANNING_REFRESH_PENDING_REASON
+    );
+  });
+}
+
+function isDeferredNodeReadinessSnapshot(readiness) {
+  if (!readiness || typeof readiness !== 'object') {
+    return false;
+  }
+  if (
+    readLowerStateField(readiness.readinessPlanningTokenStatus) ===
+      STALE_PLANNING_TOKEN_STATUS ||
+    readLowerStateField(readiness.state) === DEFERRED_READINESS_STATE
+  ) {
+    return true;
+  }
+  return (
+    hasDeferredReasonOrTerm(readiness.failedTerms) ||
+    hasDeferredReasonOrTerm(readiness.reasonCodes) ||
+    hasDeferredReasonOrTerm(readiness.reasons)
+  );
+}
 
 class UnifiedRebalancerControlPlaneReadinessMethods {
   /**
@@ -63,10 +98,88 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    * @private
    */
   resolveNodeReadinessSyncSnapshot(nodeId, readinessOptions = {}) {
-    return this.controlPlaneReadinessService?.getNodeReadinessSync(
+    const readinessService = this.controlPlaneReadinessService;
+    const snapshot = readinessService?.getNodeReadinessSync(
       nodeId,
       readinessOptions,
     );
+    if (!isDeferredNodeReadinessSnapshot(snapshot)) {
+      return snapshot;
+    }
+    const reconciled =
+      readinessService?.readinessPlanningSnapshotOwner?.reconcile?.(nodeId, {
+        options: readinessOptions,
+      });
+    if (reconciled && !isDeferredNodeReadinessSnapshot(reconciled)) {
+      return reconciled;
+    }
+    return snapshot;
+  }
+
+  async refreshDeferredAvailableNodeReadiness(candidateNodeIds = null) {
+    const readinessService = this.controlPlaneReadinessService;
+    if (!readinessService) {
+      return;
+    }
+    const nodeIds = new Set();
+    if (Array.isArray(candidateNodeIds)) {
+      for (const nodeId of candidateNodeIds) {
+        if (typeof nodeId === 'string' && nodeId.length > 0) {
+          nodeIds.add(nodeId);
+        }
+      }
+    } else {
+      const committedAnswer = readinessService.answerCommittedNodes?.();
+      for (const row of Array.isArray(committedAnswer?.nodeRows) ?
+        committedAnswer.nodeRows :
+        []) {
+        if (row?.node_id) {
+          nodeIds.add(row.node_id);
+        }
+      }
+      for (const row of readAllSharedRows(
+        this.systemTableCache,
+        SYSTEM_TABLE_NAME.NODES,
+      )) {
+        if (row?.node_id) {
+          nodeIds.add(row.node_id);
+        }
+      }
+    }
+    if (nodeIds.size === 0) {
+      return;
+    }
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
+    const readinessOptions = {
+      decisionDimension: readinessDecisionDimension,
+    };
+    if (this.isFormationLivenessDependencyPartition()) {
+      readinessOptions.allowStaleOnCacheChange = false;
+    }
+    for (const nodeId of nodeIds) {
+      const syncSnapshot = readinessService.getNodeReadinessSync?.(
+        nodeId,
+        readinessOptions,
+      );
+      if (!isDeferredNodeReadinessSnapshot(syncSnapshot)) {
+        continue;
+      }
+      const reconciled =
+        readinessService.readinessPlanningSnapshotOwner?.reconcile?.(nodeId, {
+          options: readinessOptions,
+        });
+      if (reconciled && !isDeferredNodeReadinessSnapshot(reconciled)) {
+        continue;
+      }
+      await readinessService.getNodeReadiness?.(nodeId, {
+        ...readinessOptions,
+        requireFreshOnIneligible: true,
+      });
+      readinessService.readinessPlanningSnapshotOwner?.reconcile?.(nodeId, {
+        options: readinessOptions,
+      });
+    }
   }
 
   /**

@@ -575,3 +575,88 @@ test(
     );
   },
 );
+
+test(
+  'persistNewOperation and confirmReplicaOperationVisibility accept monotonically progressed workflowStep ' +
+    'when remote leader advances PENDING -> SENDING / CREATING / ACTIVE mid-insert',
+  async (t) => {
+    const progressedSteps = [
+      [WORKFLOW_STEP.SENDING, ReplicaStatus.PENDING],
+      [WORKFLOW_STEP.CREATING, ReplicaStatus.CREATING],
+      [WORKFLOW_STEP.SYNCING, ReplicaStatus.SYNCING],
+      [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE],
+      [WORKFLOW_STEP.FAILED, ReplicaStatus.FAILED],
+    ];
+    for (const [observedStep, observedStatus] of progressedSteps) {
+      let authoritativePolls = 0;
+      const progressedRow = makeRow({
+        type: OperationType.ADD,
+        status: observedStatus,
+        workflow_step: observedStep,
+        created_at: TEST_CREATED_AT_MS,
+        updated_at: TEST_CREATED_AT_MS + 120,
+        completed_at:
+          observedStep === WORKFLOW_STEP.ACTIVE ||
+          observedStep === WORKFLOW_STEP.FAILED ?
+            TEST_CREATED_AT_MS + 120 :
+            null,
+        create_admission_state: CREATE_ADMISSION_STATE.MATERIALIZED,
+        create_admission_token: 'adm-token-progressed',
+        create_admission_attempt_seq: 2,
+      });
+      const repository = createRepository(async () => {
+        authoritativePolls += 1;
+        return {
+          success: true,
+          rows: [progressedRow],
+        };
+      });
+      const pendingInsertOperation = repository.rowToOperation(makeRow({
+        type: OperationType.ADD,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.PENDING,
+        created_at: TEST_CREATED_AT_MS,
+        updated_at: TEST_CREATED_AT_MS,
+        completed_at: null,
+        create_admission_state: CREATE_ADMISSION_STATE.ADMITTED,
+        create_admission_token: 'adm-token-progressed',
+        create_admission_attempt_seq: 1,
+      }));
+      const persisted = await repository.persistNewOperation(
+        pendingInsertOperation,
+      );
+      t.equal(
+        persisted,
+        true,
+        `persistNewOperation confirms immediately when remote leader advanced PENDING -> ${observedStep}`,
+      );
+      t.equal(
+        authoritativePolls,
+        1,
+        `PENDING -> ${observedStep} confirms on first authoritative poll without 5s retry loop`,
+      );
+      t.equal(
+        repository.isReplicaOperationVisibilitySatisfied(
+          pendingInsertOperation,
+          {
+            ...repository.rowToOperation(progressedRow),
+            targetNodeId: 'node-wrong',
+          },
+        ),
+        false,
+        `progressed ${observedStep} row with mismatched targetNodeId is rejected`,
+      );
+      t.equal(
+        repository.isReplicaOperationVisibilitySatisfied(
+          pendingInsertOperation,
+          {
+            ...repository.rowToOperation(progressedRow),
+            partitionId: 'other-partition-p1',
+          },
+        ),
+        false,
+        `progressed ${observedStep} row with mismatched partitionId is rejected`,
+      );
+    }
+  },
+);

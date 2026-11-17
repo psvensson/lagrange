@@ -4,72 +4,31 @@ import {WORKFLOW_STEP} from '../constants/index.js';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 
-/**
- * ReplicaStatus - Single source of truth for replica states.
- * Used by RebalanceCoordinator, ReplicaHandler, CDC, and Admin CLI.
- *
- * @enum {string}
- */
 const ReplicaStatus = {
-  /** Operation created, not yet sent */
   PENDING: 'pending',
-  /** Request sent, awaiting creation */
   CREATING: 'creating',
-  /** Replica created, syncing data */
   SYNCING: 'syncing',
-  /** Fully operational */
   ACTIVE: 'active',
-  /** Removal in progress */
   REMOVING: 'removing',
-  /** Fully removed */
   REMOVED: 'removed',
-  /** Operation failed */
   FAILED: 'failed',
-  /**
-   * A retained bound creation not yet serving or projected (design
-   * ACTIVATION-DISCOVERY-DESIGN-20261017 RV2.2): peer-excluded, never a row.
-   */
   HELD: 'held',
 };
 
-/**
- * Terminal statuses represent completed or failed operations.
- * A replica in one of these statuses has reached a final state.
- *
- * @type {string[]}
- */
 const TERMINAL_STATUSES = [
   ReplicaStatus.ACTIVE,
   ReplicaStatus.REMOVED,
   ReplicaStatus.FAILED,
 ];
 
-/**
- * SQL clause fragment for filtering by terminal statuses.
- * Built programmatically from TERMINAL_STATUSES to ensure consistency.
- * Usage: `WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`
- *
- * @type {string}
- */
 const TERMINAL_STATUS_SQL_CLAUSE =
   TERMINAL_STATUSES.map((s) => `'${s}'`).join(', ');
 
-/**
- * Direction constants for adjustToOddCount function.
- *
- * @enum {string}
- */
 const ADJUST_DIRECTION = Object.freeze({
   UP: 'up',
   DOWN: 'down',
 });
 
-/**
- * Workflow steps map to statuses.
- * Maps workflow step names to their corresponding ReplicaStatus values.
- *
- * @type {Object.<string, string>}
- */
 const WORKFLOW_STEP_TO_STATUS = {
   [WORKFLOW_STEP.PENDING]: ReplicaStatus.PENDING,
   [WORKFLOW_STEP.SENDING]: ReplicaStatus.PENDING,
@@ -94,17 +53,9 @@ const TERMINAL_REPLICA_OPERATION_SEMANTIC_PHASES = Object.freeze([
   REPLICA_OPERATION_SEMANTIC_PHASE.FAILED,
 ]);
 
-/**
- * Operation types for replica operations.
- *
- * @enum {string}
- */
 const OperationType = {
-  /** Add a new replica */
   ADD: 'ADD',
-  /** Remove an existing replica */
   REMOVE: 'REMOVE',
-  /** Replace an existing replica (create/sync/promote/remove source) */
   REPLACE: 'REPLACE',
 };
 
@@ -287,6 +238,17 @@ const REPLICA_OPERATION_FAILED_STATUSES = Object.freeze(
 const REPLACE_REMOVE_DISPATCH_WORKFLOW_STEPS = Object.freeze(
   new Set([WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]),
 );
+
+const MONOTONIC_VISIBILITY_WORKFLOW_STEP_ORDER = Object.freeze([
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.ACTIVE,
+  WORKFLOW_STEP.STOPPING,
+  WORKFLOW_STEP.REMOVED,
+  WORKFLOW_STEP.FAILED,
+]);
 
 const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
   new Map([
@@ -752,8 +714,57 @@ function isReplaceRemoveDispatchPhase(operation) {
     );
 }
 
+function hasReplicaOperationProgressedPastPending(record) {
+  const workflowStep = readReplicaOperationRecordWorkflowStep(record);
+  return workflowStep.length > 0 && workflowStep !== WORKFLOW_STEP.PENDING;
+}
+
+function isMonotonicReplicaOperationStepProgression(
+  expectedOperation,
+  observedOperation,
+) {
+  if (
+    !expectedOperation ||
+    !observedOperation ||
+    typeof expectedOperation !== LOCAL_STR_OBJECT ||
+    typeof observedOperation !== LOCAL_STR_OBJECT ||
+    isTerminalReplicaOperationRecord(expectedOperation) ||
+    Number.isFinite(expectedOperation.completedAt)
+  ) {
+    return false;
+  }
+  const expectedStep = readReplicaOperationRecordWorkflowStep(expectedOperation);
+  const observedStep = readReplicaOperationRecordWorkflowStep(observedOperation);
+  if (!expectedStep || !observedStep || expectedStep === observedStep) {
+    return false;
+  }
+  const operationType =
+    readReplicaOperationRecordType(expectedOperation) ||
+    readReplicaOperationRecordType(observedOperation);
+  const typeSteps = getWorkflowSteps(operationType);
+  const stepOrder = typeSteps.length > 0 ?
+    [...typeSteps, WORKFLOW_STEP.FAILED] :
+    MONOTONIC_VISIBILITY_WORKFLOW_STEP_ORDER;
+  const expectedIndex = stepOrder.indexOf(expectedStep);
+  const observedIndex = stepOrder.indexOf(observedStep);
+  if (expectedIndex === -1 || observedIndex <= expectedIndex) {
+    return false;
+  }
+  const observedStatus = readReplicaOperationRecordStatus(observedOperation);
+  if (observedStatus.length === 0) {
+    return true;
+  }
+  const expectedStatusForObservedStep =
+    observedStep === WORKFLOW_STEP.FAILED ?
+      ReplicaStatus.FAILED :
+      WORKFLOW_STEP_TO_STATUS[observedStep];
+  return observedStatus === expectedStatusForObservedStep;
+}
+
 export {
   readOperationRecordWorkflowStep,
+  hasReplicaOperationProgressedPastPending,
+  isMonotonicReplicaOperationStepProgression,
   ReplicaStatus,
   TERMINAL_STATUSES,
   TERMINAL_STATUS_SQL_CLAUSE,

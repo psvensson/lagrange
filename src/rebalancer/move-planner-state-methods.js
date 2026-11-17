@@ -446,21 +446,20 @@ function createMovePlannerStateMethods(deps = {}) {
         captureBefore,
         captureAfter,
       });
-      const {
-        nodesWithEntityAddTransitional,
-        replicasInRemoving,
-      } = buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
+      const {nodesWithEntityAddTransitional, replicasInRemoving} =
+        buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
       const nodesWithGlobalSystemAddTransitional =
         buildPhaseBGlobalSystemTransitionNodeSet({
           systemTableCache: this.moveStateProvider?.systemTableCache || null,
+          controlPlaneReadinessService:
+            this.moveStateProvider?.controlPlaneReadinessService || null,
           entityId: this.entityId,
           isSystemPartition: this.isSystemPartitionEntity(),
           isPriorityPartition: this.isControlPlanePriorityPartition(),
           isFormationDependencyPartition:
             this.isFormationLivenessDependencyPartition(),
           currentReplicas,
-          resolveAvailableNodes: () =>
-            this.moveStateProvider.getAvailableNodes(),
+          resolveAvailableNodes: () => this.moveStateProvider.getAvailableNodes(),
           globalInFlightOperations,
           isAddActiveOperation: isReplicaInventoryAddTransitionalOperation,
         });

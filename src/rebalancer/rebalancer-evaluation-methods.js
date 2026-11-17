@@ -31,6 +31,7 @@ const REBALANCER_EVALUATION_METHODS = {
    * @return {Promise<boolean>} True if rebalancing is needed.
    */
   async evaluateState(policy = null, evaluationContext = null) {
+    await this.refreshDeferredAvailableNodeReadiness?.();
     const currentReplicas = this.getCurrentReplicas();
     const effectivePolicy = policy || (await this.getPolicy());
     const availableNodes = this.getAvailableNodes();

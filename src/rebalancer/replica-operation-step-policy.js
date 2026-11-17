@@ -529,7 +529,43 @@ function shouldClearPriorityDeferredClaim(step) {
   return step === WORKFLOW_STEP.CREATING;
 }
 
+const SYSTEM_TARGET_SLOT_ADD_PHASE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+    WORKFLOW_STEP.SYNCING,
+  ]),
+);
+
+const SYSTEM_TARGET_SLOT_DRAIN_PHASE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+    WORKFLOW_STEP.SYNCING,
+    WORKFLOW_STEP.ACTIVE,
+    WORKFLOW_STEP.STOPPING,
+  ]),
+);
+
+function doesWorkflowStepOccupySystemTargetNodeSlot(
+  workflowStep,
+  includeDrainPhase = false,
+) {
+  const normalizedStep = readUpperStateField(workflowStep);
+  if (!normalizedStep) {
+    return true;
+  }
+  return includeDrainPhase === true ?
+    SYSTEM_TARGET_SLOT_DRAIN_PHASE_WORKFLOW_STEPS.has(normalizedStep) :
+    SYSTEM_TARGET_SLOT_ADD_PHASE_WORKFLOW_STEPS.has(normalizedStep);
+}
+
 export {
+  SYSTEM_TARGET_SLOT_ADD_PHASE_WORKFLOW_STEPS,
+  SYSTEM_TARGET_SLOT_DRAIN_PHASE_WORKFLOW_STEPS,
+  doesWorkflowStepOccupySystemTargetNodeSlot,
   REPLACE_OWNER_PHASE_WORKFLOW_STEPS,
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,

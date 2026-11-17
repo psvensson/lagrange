@@ -1,4 +1,6 @@
 import {readStateField} from '../utils/state-field-read.js';
+
+const STALE_PLANNING_TOKEN_STATUS = 'stale';
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
 import {policyRefusalReason} from '../policy/table-policy-validation.js';
 import {
@@ -340,23 +342,48 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       typeof this.controlPlaneReadinessService
         .getControlPlaneParticipationSync === 'function'
     ) {
-      const participation =
+      const participationOptions = {
+        decisionDimension,
+        participationKind,
+        partitionId: options?.partitionId || null,
+      };
+      let participation =
         this.controlPlaneReadinessService.getControlPlaneParticipationSync(
           nodeId,
-          {
-            decisionDimension,
-            participationKind,
-            partitionId: options?.partitionId || null,
-          },
+          participationOptions,
         );
+      if (
+        participation?.eligible !== true &&
+        participation?.readiness?.readinessPlanningTokenStatus ===
+          STALE_PLANNING_TOKEN_STATUS
+      ) {
+        this.controlPlaneReadinessService.readinessPlanningSnapshotOwner
+          ?.reconcile?.(nodeId, {options: participationOptions});
+        participation =
+          this.controlPlaneReadinessService.getControlPlaneParticipationSync(
+            nodeId,
+            participationOptions,
+          );
+      }
       return participation?.eligible === true;
     }
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+    const readinessOptions = {
+      decisionDimension: decisionDimension,
+    };
+    let readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
       nodeId,
-      {
-        decisionDimension: decisionDimension,
-      },
+      readinessOptions,
     );
+    if (
+      readiness?.readinessPlanningTokenStatus === STALE_PLANNING_TOKEN_STATUS
+    ) {
+      const reconciled =
+        this.controlPlaneReadinessService.readinessPlanningSnapshotOwner
+          ?.reconcile?.(nodeId, {options: readinessOptions});
+      if (reconciled) {
+        readiness = reconciled;
+      }
+    }
     return this.isReadinessDimensionSatisfied(readiness, decisionDimension);
   }
 

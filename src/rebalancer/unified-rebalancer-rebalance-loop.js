@@ -290,183 +290,203 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         reason: REBALANCER_SKIP_REASON.GROUP_RETIRING});
     }
 
-    const effectivePolicy = policy || (await this.getPolicy());
-    const inventorySourceStateBefore =
-      this.movePlanner.captureReplicaInventorySourceState();
-    const currentReplicas = this.getCurrentReplicas();
-    const availableNodes = this.getAvailableNodes();
-    const operationCreationGate =
-      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
-        evaluationContext,
-      );
-    const ledgerSurplusDrainPlanningCapability =
-      operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
-    if (
-      availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
-      !ledgerSurplusDrainPlanningCapability
-    ) {
-      this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
-        entityId: this.entityId,
-        entityType: this.entityType,
-      });
-      return this.buildRebalanceResult(false, {
-        reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
-      });
-    }
+    let rebalanceResult = null;
+    try {
+      const effectivePolicy = policy || (await this.getPolicy());
+      await this.refreshDeferredAvailableNodeReadiness?.();
+      const inventorySourceStateBefore =
+        this.movePlanner.captureReplicaInventorySourceState();
+      const currentReplicas = this.getCurrentReplicas();
+      const availableNodes = this.getAvailableNodes();
+      const operationCreationGate =
+        this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+          evaluationContext,
+        );
+      const ledgerSurplusDrainPlanningCapability =
+        operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
+      if (
+        availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
+        !ledgerSurplusDrainPlanningCapability
+      ) {
+        this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+        });
+        rebalanceResult = this.buildRebalanceResult(false, {
+          reason: REBALANCER_RUNTIME_REASON.NO_AVAILABLE_NODES,
+        });
+        return rebalanceResult;
+      }
 
-    const calculatedTargetState = await this.movePlanner.calculateTargetState(
-      currentReplicas,
-      effectivePolicy,
-      inventorySourceStateBefore,
-    );
-    const targetState = resolveLedgerSurplusDrainTargetState(
-      calculatedTargetState,
-      ledgerSurplusDrainPlanningCapability,
-    );
-    const planningMembershipPublicationEpoch =
-      this.resolvePublishedMembershipPlanningEpoch();
-    await this.refreshFailedCreateTargetCleanupDecisions();
-    const calculatedMoves = this.movePlanner.calculateMoves(
-      currentReplicas,
-      targetState,
-      // The SAME epoch this cycle stamps on every planned move below, read
-      // once: an authorization minted under one epoch and a row fenced at
-      // another would be two observations of one fact.
-      {membershipPublicationEpoch: planningMembershipPublicationEpoch},
-    );
-    const priorityRecoveryAwareMoves =
-      await this.augmentMovesWithPriorityRecoveryFollowUp(calculatedMoves, {
+      const calculatedTargetState = await this.movePlanner.calculateTargetState(
+        currentReplicas,
+        effectivePolicy,
+        inventorySourceStateBefore,
+      );
+      const targetState = resolveLedgerSurplusDrainTargetState(
+        calculatedTargetState,
+        ledgerSurplusDrainPlanningCapability,
+      );
+      const planningMembershipPublicationEpoch =
+        this.resolvePublishedMembershipPlanningEpoch();
+      await this.refreshFailedCreateTargetCleanupDecisions();
+      const calculatedMoves = this.movePlanner.calculateMoves(
         currentReplicas,
         targetState,
-      });
-    const moves = (
-      await this.movePlanner.applyPressureGating(priorityRecoveryAwareMoves)
-    ).map((move) => canonicalizeRebalancerMove(move, this));
+        // The SAME epoch this cycle stamps on every planned move below, read
+        // once: an authorization minted under one epoch and a row fenced at
+        // another would be two observations of one fact.
+        {membershipPublicationEpoch: planningMembershipPublicationEpoch},
+      );
+      const priorityRecoveryAwareMoves =
+        await this.augmentMovesWithPriorityRecoveryFollowUp(calculatedMoves, {
+          currentReplicas,
+          targetState,
+        });
+      const moves = (
+        await this.movePlanner.applyPressureGating(priorityRecoveryAwareMoves)
+      ).map((move) => canonicalizeRebalancerMove(move, this));
 
-    if (moves.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
-      this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {
+      if (moves.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+        this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {
+          entityId: this.entityId,
+          currentCount: currentReplicas.length,
+          targetCount: targetState.targetReplicaCount,
+        });
+        rebalanceResult = this.buildRebalanceResult(true, {
+          moves: [],
+          reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
+        });
+        return rebalanceResult;
+      }
+
+      const ordinaryPriorityRecoverySerialGate =
+        await this.getOrdinaryPriorityRecoverySerialGateSnapshot(moves);
+      if (ordinaryPriorityRecoverySerialGate?.blocked === true) {
+        rebalanceResult = this.buildRebalanceResult(true, {
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          moves: [],
+          ordinaryPriorityRecoverySerialGate,
+        });
+        return rebalanceResult;
+      }
+
+      let availableBudget = this.maxConcurrentMoves;
+      const shouldPrioritizeBudgetedTopologyCleanup =
+        this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
+      try {
+        const configuredBudget = await this.getConfiguredRebalanceBudget();
+        const inFlightCount = await this.getGlobalInFlightOperationCount();
+        const isCritical = this.movePlanner.isCriticalState(
+          currentReplicas,
+          effectivePolicy,
+          availableNodes,
+        );
+        const effectiveBudget = isCritical ?
+          configuredBudget * this.criticalBudgetMultiplier :
+          configuredBudget;
+        const reservedPriorityRecoveryMoveSlots =
+          this.getReservedPriorityRecoveryMoveSlots();
+
+        availableBudget = Math.max(
+          0,
+          effectiveBudget - inFlightCount - reservedPriorityRecoveryMoveSlots,
+        );
+        if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
+          const priorityTopologyCleanupBudgetBypass =
+            shouldPrioritizeBudgetedTopologyCleanup;
+          if (priorityTopologyCleanupBudgetBypass === true) {
+            availableBudget = 1;
+          } else {
+            const priorityBudgetBypass =
+              await this.canBypassGlobalBudgetForPriorityRecovery(moves);
+            if (priorityBudgetBypass === true) {
+              availableBudget = 1;
+            } else {
+              rebalanceResult = this.buildRebalanceResult(true, {
+                skipped: true,
+                reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+                moves: [],
+              });
+              return rebalanceResult;
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
+          entityId: this.entityId,
+          error: error.message,
+        });
+        rebalanceResult = this.buildRebalanceResult(false, {
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
+          moves: [],
+        });
+        return rebalanceResult;
+      }
+
+      this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
         entityId: this.entityId,
+        entityType: this.entityType,
+        trigger,
+        moveCount: moves.length,
         currentCount: currentReplicas.length,
         targetCount: targetState.targetReplicaCount,
       });
-      return this.buildRebalanceResult(true, {
-        moves: [],
-        reason: REBALANCER_RUNTIME_REASON.NO_CHANGES_NEEDED,
-      });
-    }
 
-    const ordinaryPriorityRecoverySerialGate =
-      await this.getOrdinaryPriorityRecoverySerialGateSnapshot(moves);
-    if (ordinaryPriorityRecoverySerialGate?.blocked === true) {
-      return this.buildRebalanceResult(true, {
-        skipped: true,
-        reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-        moves: [],
-        ordinaryPriorityRecoverySerialGate,
-      });
-    }
-
-    let availableBudget = this.maxConcurrentMoves;
-    const shouldPrioritizeBudgetedTopologyCleanup =
-      this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
-    try {
-      const configuredBudget = await this.getConfiguredRebalanceBudget();
-      const inFlightCount = await this.getGlobalInFlightOperationCount();
-      const isCritical = this.movePlanner.isCriticalState(
-        currentReplicas,
-        effectivePolicy,
-        availableNodes,
+      const {moveLimit, budgetOrderedMoves} = resolveSystemSpreadExecutionPlan(
+        this,
+        moves,
+        availableBudget,
+        shouldPrioritizeBudgetedTopologyCleanup,
       );
-      const effectiveBudget = isCritical ?
-        configuredBudget * this.criticalBudgetMultiplier :
-        configuredBudget;
-      const reservedPriorityRecoveryMoveSlots =
-        this.getReservedPriorityRecoveryMoveSlots();
-
-      availableBudget = Math.max(
-        0,
-        effectiveBudget - inFlightCount - reservedPriorityRecoveryMoveSlots,
-      );
-      if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
-        const priorityTopologyCleanupBudgetBypass =
-          shouldPrioritizeBudgetedTopologyCleanup;
-        if (priorityTopologyCleanupBudgetBypass === true) {
-          availableBudget = 1;
-        } else {
-          const priorityBudgetBypass =
-            await this.canBypassGlobalBudgetForPriorityRecovery(moves);
-          if (priorityBudgetBypass === true) {
-            availableBudget = 1;
-          } else {
-            return this.buildRebalanceResult(true, {
-              skipped: true,
-              reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-              moves: [],
-            });
-          }
+      const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
+        if (
+          !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
+        ) {
+          return move;
         }
-      }
-    } catch (error) {
-      this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
+        return {
+          ...move,
+          membershipPublicationEpoch: planningMembershipPublicationEpoch,
+        };
+      });
+      const results = await this.executeRebalancingMoves(limitedMoves, {
+        trigger,
+        plannedMoveCount: moves.length,
+        moveLimit,
+      });
+
+      // The planning cycle's own clock. This owner holds nowFn; reading the
+      // ambient one here made a deterministic node's cycle depend on host time.
+      this.lastRebalanceTime = this.nowFn();
+      this.rebalanceCount++;
+
+      this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
         entityId: this.entityId,
-        error: error.message,
+        entityType: this.entityType,
+        trigger,
+        results,
       });
-      return this.buildRebalanceResult(false, {
-        skipped: true,
-        reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
-        moves: [],
+
+      rebalanceResult = this.buildRebalanceResult(true, {
+        moves: results,
+        trigger,
+        timestamp: this.lastRebalanceTime,
       });
-    }
-
-    this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      trigger,
-      moveCount: moves.length,
-      currentCount: currentReplicas.length,
-      targetCount: targetState.targetReplicaCount,
-    });
-
-    const {moveLimit, budgetOrderedMoves} = resolveSystemSpreadExecutionPlan(
-      this,
-      moves,
-      availableBudget,
-      shouldPrioritizeBudgetedTopologyCleanup,
-    );
-    const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
-      if (
-        !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
-      ) {
-        return move;
+      return rebalanceResult;
+    } finally {
+      if (rebalanceResult === null) {
+        this.syncOperationContinuationWake?.(
+          null,
+          UNIFIED_REBALANCER_LITERAL.ZERO,
+        );
+        this.completeSlotReleaseContinuationCycle?.(
+          UNIFIED_REBALANCER_LITERAL.ZERO,
+        );
       }
-      return {
-        ...move,
-        membershipPublicationEpoch: planningMembershipPublicationEpoch,
-      };
-    });
-    const results = await this.executeRebalancingMoves(limitedMoves, {
-      trigger,
-      plannedMoveCount: moves.length,
-      moveLimit,
-    });
-
-    // The planning cycle's own clock. This owner holds nowFn; reading the
-    // ambient one here made a deterministic node's cycle depend on host time.
-    this.lastRebalanceTime = this.nowFn();
-    this.rebalanceCount++;
-
-    this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      trigger,
-      results,
-    });
-
-    return this.buildRebalanceResult(true, {
-      moves: results,
-      trigger,
-      timestamp: this.lastRebalanceTime,
-    });
+    }
   }
 
   resolvePublishedMembershipPlanningEpoch() {

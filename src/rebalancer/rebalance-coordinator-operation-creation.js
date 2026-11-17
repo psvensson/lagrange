@@ -534,11 +534,8 @@ class RebalanceCoordinatorOperationCreation {
     if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
       return this.createOperationWithinConcurrentCreateBudgetTurn(
         normalizedMoveType,
-        {
-          partitionId,
-          entityType,
-          entityId,
-        },
+        {partitionId, entityType, entityId, targetNodeId: move?.nodeId || null,
+          sourceNodeId: sourceNodeId || null},
         recordContext,
       );
     }
