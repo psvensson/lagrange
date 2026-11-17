@@ -21,13 +21,20 @@ const reference = path.join(testDirectory, 'portability-observation-reference.py
 const fixturePath = path.join(testDirectory, 'portability-observation-v1.vectors.json');
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 const sqliteSql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
+// The reference prints exactly one non-negative decimal; blank or malformed
+// output is a failed run, never a deficit count of 0.
+const REFERENCE_METRIC_LINE = /^(0|[1-9][0-9]*)\n?$/u;
 
 function referenceDeficit(vectors) {
   const result = spawnSync('python3', [reference], {
     input: JSON.stringify(vectors), encoding: 'utf8',
   });
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null, result.stderr);
   assert.equal(result.status, 0, result.stderr);
-  return Number(result.stdout.trim());
+  assert.equal(result.stderr, '');
+  assert.match(result.stdout, REFERENCE_METRIC_LINE);
+  return Number.parseInt(result.stdout, 10);
 }
 
 function inMemoryStore(t) {

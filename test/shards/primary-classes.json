@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2307,
+    "unit": 2308,
     "integration": 124,
     "bootstrap": 224,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2662,
-  "digest": "fnv1a32-b7f975c0",
+  "censusSize": 2663,
+  "digest": "fnv1a32-90c2b5b5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1488,6 +1488,7 @@
     "test/partition/pending-request-round-trip.property.test.js": "unit",
     "test/partition/pending-request-tracker-wait-bound-spent.test.js": "unit",
     "test/partition/pending-request-tracker.test.js": "unit",
+    "test/partition/portability-observation-conformance.test.js": "unit",
     "test/partition/portability-observation-v1.test.js": "unit",
     "test/partition/proposal-queue-capacity.property.test.js": "unit",
     "test/partition/proposal-queue-size-invariant.property.test.js": "unit",

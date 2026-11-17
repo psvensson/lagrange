@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 229,
+    "storage-partition": 230,
     "storage-raft": 151,
     "test-infrastructure": 172,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2662,
-  "digest": "fnv1a32-0244777f",
+  "censusSize": 2663,
+  "digest": "fnv1a32-27027610",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-52a90d6c",
+  "observationDigest": "fnv1a32-6f283b64",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1507,6 +1507,7 @@
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
     "test/partition/pending-request-tracker-wait-bound-spent.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
+    "test/partition/portability-observation-conformance.test.js": "storage-partition",
     "test/partition/portability-observation-v1.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
     "test/partition/proposal-queue-size-invariant.property.test.js": "storage-partition",
@@ -13516,6 +13517,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/portability-observation-conformance.test.js": {
+      "files": [
+        "scripts/checks/q1-partition-observation-conformance.js"
       ]
     },
     "test/partition/portability-observation-v1.test.js": {
