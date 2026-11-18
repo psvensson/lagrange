@@ -405,7 +405,7 @@ test('expression evaluation matches SQLite affinity and fallback', async (t) => 
   const unsupported = new SQLParser(
     'SELECT SUM(amount) > 50 AND COUNT(*) > 2 AS x FROM t',
   ).parse();
-  const plan = buildSelectFanoutPlan(unsupported, []);
+  const plan = buildSelectFanoutPlan(unsupported, [], 2);
   t.equal(
     plan.kind,
     FANOUT_PLAN_KIND.RAW_ROWS,
@@ -735,7 +735,8 @@ test('SELECT and HAVING scalar operations match the native SQLite oracle', async
     const oracle = createTableDatabase(partitionIds.flatMap((id) => partitionRows[id]));
     t.teardown(() => oracle.close());
     for (const [sql, params] of cases) {
-      const plan = buildSelectFanoutPlan(new SQLParser(sql).parse(), params);
+      const plan = buildSelectFanoutPlan(new SQLParser(sql).parse(), params,
+        partitionIds.length);
       t.equal(plan.kind, FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
         'the existing coordinator expression path is admitted');
       const expected = oracle.prepare(sql).all(...params);
@@ -794,7 +795,7 @@ test('QueryExecutor.applyOrderBy matches SQLite UTF-8 BINARY ordering', async (t
       for (const window of windows) {
         const sql = `${projection.sql} ORDER BY dept ${direction}, ` +
           `${projection.secondary} ${QUERY_SORT_DIRECTION.DESC}${window}`;
-        const plan = buildSelectFanoutPlan(new SQLParser(sql).parse());
+        const plan = buildSelectFanoutPlan(new SQLParser(sql).parse(), [], 2);
         t.equal(plan.kind, projection.kind, 'the intended live merge consumer is admitted');
         const expected = oracle.prepare(sql).all();
         t.ok(expected.length > 1, 'the oracle requires a nontrivial ordered result');

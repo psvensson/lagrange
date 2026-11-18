@@ -1,4 +1,6 @@
 import {EXPR_TYPE} from '../parser-constants.js';
+import {QUERY_ERROR_CODE} from '../query-constants.js';
+import {resultColumnName} from '../sql-statement-renderer.js';
 
 /** Aggregate function names as the parser normalizes them. */
 const AGGREGATE_FN = Object.freeze({
@@ -78,6 +80,20 @@ const COMBINE_MODE_BY_FUNCTION = {
  * the expression.
  */
 const COMBINED_AGGREGATE_MARKER = 'combined_aggregate_marker';
+const INTERIM_POSITION = Object.freeze({
+  HAVING: 'HAVING',
+  ORDER_BY: 'ORDER BY (or a select-list expression an ORDER BY can sort by) applied ' +
+    'by the coordinator',
+  SELECT_LIST: 'the select list of a multi-partition statement',
+  GROUP_BY: 'GROUP BY of a multi-partition statement',
+});
+const INTERIM_REFUSAL_MSG = Object.freeze({
+  OPAQUE_PREFIX: 'COLLATE and LIKE ... ESCAPE in ',
+  OPAQUE_SUFFIX: ' are not supported yet: the coordinator evaluates that position ' +
+    '(interim I1a, until WP3)',
+  LIMIT_PARAMETER: 'LIMIT or OFFSET bound to a parameter is not supported yet: the ' +
+    'coordinator applies the limit (interim, until WP3)',
+});
 const BARE_HAVING_KEY_TAG = 'h';
 const EXTENDED_EXPR_TYPE = Object.freeze({
   CASE: 'case', CAST: 'cast', FUNCTION_CALL: 'function_call', FUNCTION: 'function',
@@ -162,18 +178,6 @@ function normalizeForKey(node) {
 }
 
 /**
- * The alias the legacy coordinator aggregation gives an aggregate output
- * row key: user alias when present, otherwise `FUNC(argName)` where
- * argName mirrors QueryExecutor#getArgName.
- * @param {Object} col - SELECT column AST entry.
- * @param {Object} expr - The aggregate expression inside it.
- * @return {string} Output row key.
- */
-function aggregateOutputKey(col, expr) {
-  return col.alias || canonicalAggregateName(expr);
-}
-
-/**
  * Canonical `FUNC(arg)` name; matches evaluateExpression's HAVING lookup.
  * @param {Object} expr - Aggregate expression AST.
  * @return {string} Canonical aggregate name.
@@ -226,7 +230,7 @@ function collectAggregateSpecs(ast) {
   for (const col of ast.columns) {
     const expr = col.expression || col;
     if (expr.type === EXPR_TYPE.AGGREGATE) {
-      register(expr, aggregateOutputKey(col, expr));
+      register(expr, resultColumnName(col));
     } else {
       // Aggregates nested inside a SELECT expression (SUM(x) + 1) still
       // need partials shipped; the expression itself is evaluated at the
@@ -520,7 +524,7 @@ function buildOverfetchLimit(limit) {
  * @param {Array} specs - Aggregate specs from collectAggregateSpecs.
  * @return {{partitionAst: Object, combineSpec: Object}} Plan parts.
  */
-function buildPartialAggregateParts(ast, specs, renderExpression) {
+function buildPartialAggregateParts(ast, specs) {
   const partitionAst = cloneAst(ast);
   const columns = [];
   const groupKeys = [];
@@ -574,10 +578,7 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
       return;
     }
     const shape = canonicalExpressionKey(expr);
-    const outputKey = col.alias ||
-      (expr.type === EXPR_TYPE.COLUMN_REF ?
-        expr.column :
-        renderExpression(expr));
+    const outputKey = resultColumnName(col);
     const groupKey = groupKeyByShape.get(shape);
     if (groupKey) {
       groupKey.outputKeys.push(outputKey);
@@ -693,23 +694,124 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
 }
 
 /**
+ * Whether an expression holds a node the coordinator's evaluators cannot
+ * evaluate as SQLite does: an explicit COLLATE, or LIKE ... ESCAPE.
+ * @param {*} node - Expression AST (or array of them).
+ * @return {boolean}
+ */
+function holdsCoordinatorOpaqueNode(node) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  if (Array.isArray(node)) {
+    return node.some(holdsCoordinatorOpaqueNode);
+  }
+  if (node.type === EXPR_TYPE.COLLATE ||
+      (node.type === EXPR_TYPE.LIKE && Boolean(node.escape))) {
+    return true;
+  }
+  return Object.values(node).some(holdsCoordinatorOpaqueNode);
+}
+
+/**
+ * Whether the coordinator's re-sort keeps a single partition's ORDER BY
+ * order: the merge sorts again by the ORDER BY terms it can evaluate, and an
+ * explicit COLLATE term compares equal there, so the partition's order
+ * survives only when no evaluable term follows a COLLATE term and none sorts
+ * by a select-list COLLATE expression through its alias.
+ * @param {Object} ast - SELECT AST.
+ * @param {boolean} inSelectList - The select list holds an opaque node.
+ * @return {boolean}
+ */
+function singlePartitionOrderSurvivesResort(ast, inSelectList) {
+  const opaqueTerms = ast.orderBy.map((term) => holdsCoordinatorOpaqueNode(term));
+  const firstOpaque = opaqueTerms.indexOf(true);
+  const evaluableAfterOpaque = firstOpaque >= 0 &&
+    opaqueTerms.slice(firstOpaque).includes(false);
+  return !evaluableAfterOpaque && !(inSelectList && opaqueTerms.includes(false));
+}
+
+/**
+ * The coordinator-evaluated position of a single-table SELECT that holds an
+ * explicit COLLATE or an ESCAPE (interim I1a, removed by WP3, design §5.1).
+ * The coordinator merge runs at every partition count:
+ * - HAVING is evaluated by it at every count;
+ * - ORDER BY is applied by it: with several partitions, or a partial
+ *   aggregate (the partitions do not sort), always; with one partition's
+ *   raw rows, when its re-sort would not keep the partition's order;
+ * - the select list (aggregate arguments included) and GROUP BY are combined
+ *   by it once rows of several partitions meet.
+ * @param {Object} ast - SELECT AST.
+ * @param {number} partitionCount - Partitions the statement fans out to.
+ * @param {string} buildState - FANOUT_BUILD_STATE of the plan.
+ * @return {?string} The refused position, or null.
+ */
+function coordinatorOpaquePosition(ast, partitionCount, buildState) {
+  const multiPartition = partitionCount > 1;
+  const inSelectList = ast.columns.some((col) =>
+    holdsCoordinatorOpaqueNode(col.expression));
+  if (holdsCoordinatorOpaqueNode(ast.having)) {
+    return INTERIM_POSITION.HAVING;
+  }
+  const sortedByMerge = Boolean(ast.orderBy) && (inSelectList ||
+    holdsCoordinatorOpaqueNode(ast.orderBy));
+  if (sortedByMerge && (multiPartition ||
+      buildState === FANOUT_BUILD_STATE.PARTIAL_AGGREGATE ||
+      !singlePartitionOrderSurvivesResort(ast, inSelectList))) {
+    return INTERIM_POSITION.ORDER_BY;
+  }
+  if (multiPartition && inSelectList) {
+    return INTERIM_POSITION.SELECT_LIST;
+  }
+  return multiPartition && holdsCoordinatorOpaqueNode(ast.groupBy) ?
+    INTERIM_POSITION.GROUP_BY : null;
+}
+
+function interimRefusal(message) {
+  const error = new Error(message);
+  error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  return error;
+}
+
+/**
+ * Refuse a SELECT the coordinator merge cannot answer as SQLite would until
+ * WP3: COLLATE/ESCAPE in a coordinator-evaluated position (I1a), or a
+ * LIMIT/OFFSET bound to a parameter, which the coordinator applies and must
+ * not re-implement SQLite's integer conversion for.
+ * @param {Object} ast - SELECT AST.
+ * @param {number} partitionCount - Partitions the statement fans out to.
+ * @param {string} buildState - FANOUT_BUILD_STATE of the plan.
+ */
+function refuseCoordinatorInterims(ast, partitionCount, buildState) {
+  const position = coordinatorOpaquePosition(ast, partitionCount, buildState);
+  if (position !== null) {
+    throw interimRefusal(INTERIM_REFUSAL_MSG.OPAQUE_PREFIX + position +
+      INTERIM_REFUSAL_MSG.OPAQUE_SUFFIX);
+  }
+  if (ast.limit && (typeof ast.limit.count !== 'number' ||
+      (ast.limit.offset !== null && ast.limit.offset !== undefined &&
+        typeof ast.limit.offset !== 'number'))) {
+    throw interimRefusal(INTERIM_REFUSAL_MSG.LIMIT_PARAMETER);
+  }
+}
+
+/**
  * Build the fan-out plan for a distributed SELECT: what SQL each
  * partition executes and how the coordinator must merge the results so
  * aggregates, GROUP BY/HAVING, and LIMIT/OFFSET are applied with global
- * semantics exactly once.
+ * semantics exactly once. Unaliased outputs are named as SQLite names them
+ * (resultColumnName).
  * @param {Object} ast - Parsed SELECT AST (not mutated).
  * @param {Array} params - Original positional parameters.
- * @param {Function} renderExpression - Renders an expression AST to SQL
- *   text (QueryExecutor#buildExpressionSQL); names unaliased outputs.
+ * @param {number} partitionCount - Partitions the statement fans out to.
  * @return {{kind: string, partitionAst: Object, partitionParams: Array,
  *   combineSpec: (Object|null)}} Fan-out plan.
+ * @throws {Error} UNSUPPORTED_SQL_FEATURE for an interim refusal.
  */
-function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
+function buildSelectFanoutPlan(ast, params, partitionCount) {
   const workingAst = cloneAst(ast);
   tagParameterOrdinals(workingAst);
   const specs = collectAggregateSpecs(workingAst);
-  const renderExpr = renderExpression ||
-    ((expr) => canonicalExpressionKey(expr));
 
   const hasAggregatePlan = hasAggregatesOrGroupBy(workingAst, specs);
   const mustUseOriginalRows = !fanoutRewriteApplies(workingAst) ||
@@ -720,6 +822,7 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
     hasAggregatePlan ?
       FANOUT_BUILD_STATE.PARTIAL_AGGREGATE :
       FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS;
+  refuseCoordinatorInterims(ast, partitionCount, buildState);
 
   switch (buildState) {
   case FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS:
@@ -749,7 +852,6 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
   const {partitionAst, combineSpec} = buildPartialAggregateParts(
     workingAst,
     specs,
-    renderExpr,
   );
   combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
   for (const expressionColumn of combineSpec.expressionColumns) {
@@ -769,6 +871,7 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
 
 export {
   FANOUT_PLAN_KIND,
+  holdsCoordinatorOpaqueNode,
   AGGREGATE_COMBINE_MODE,
   COMBINED_AGGREGATE_MARKER,
   EXTENDED_EXPR_TYPE,

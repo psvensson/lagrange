@@ -1,3 +1,4 @@
+import {EXPR_TYPE} from '../parser-constants.js';
 import {QUERY_AST_NODE, QUERY_AST_TYPE, QUERY_ERROR_CODE} from '../query-constants.js';
 
 const UNARY_MINUS = '-';
@@ -13,6 +14,10 @@ const SQLITE_CONSTRAINT_UNIQUE_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 const CONSTRAINT_TYPE_UNIQUE = 'UNIQUE';
 const ERR_COLUMN_REF_IN_KEY =
   'Column references cannot be used in partition key value';
+// Interim I1c (removed by WP4, design §5.1): the coordinator evaluates a
+// write-key expression in JavaScript, which cannot apply a collation.
+const ERR_COLLATE_IN_KEY =
+  'COLLATE in a partition key value is not supported yet (interim I1c, until WP4)';
 const COLUMN_LIST_SEPARATOR = ', ';
 const WHERE_AND_SEPARATOR = ' AND ';
 const FUNCTION_NODE_TYPES = new Set([
@@ -130,6 +135,9 @@ function extractCoordinatorKeyValue(coordinator, expr, params = []) {
   }
   if (COLUMN_REF_NODE_TYPES.has(expr.type)) {
     return throwUnsupportedKeyExpression(ERR_COLUMN_REF_IN_KEY);
+  }
+  if (expr.type === EXPR_TYPE.COLLATE) {
+    return throwUnsupportedKeyExpression(ERR_COLLATE_IN_KEY);
   }
   return expr.value !== undefined ?
     expr.value :

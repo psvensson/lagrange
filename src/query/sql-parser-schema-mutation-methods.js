@@ -1,6 +1,7 @@
-import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
+import {AST_TYPE, EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {renderExpression} from './sql-statement-renderer.js';
 
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_EMPTY = '';
@@ -32,16 +33,6 @@ const ERR_INDEX_MUST_HAVE_ONE_COLUMN = 'Index must have at least one column';
 const ERR_EXPRESSION_INDEXES_NOT_SUPPORTED = 'Expression indexes are not supported';
 const FK_KEYWORD_FOREIGN_KEY = 'FOREIGN KEY';
 const FK_KEYWORD_REFERENCES = 'REFERENCES';
-const NODE_TYPE_SINGLE_QUOTE_STRING = 'single_quote_string';
-const NODE_TYPE_BOOL = 'bool';
-const NODE_TYPE_NULL = 'null';
-const NODE_TYPE_BINARY_EXPR = 'binary_expr';
-const NODE_TYPE_FUNCTION = 'function';
-const SQL_ESCAPED_SINGLE_QUOTE = '\'\'';
-const SQL_BOOL_TRUE = '1';
-const SQL_BOOL_FALSE = '0';
-const SQL_NULL_LITERAL = 'NULL';
-const SQL_COMMA_SEPARATOR = ', ';
 const SUBQUERY_MUTATION_TYPES = new Set([
   'subquery',
   'SUBQUERY',
@@ -75,7 +66,7 @@ function convertLiteralDefaultValueNode(parser, valueNode) {
     const numeric = valueNode.operator === '-' ?
       -valueNode.expr.value :
       valueNode.expr.value;
-    return {type: EXPR_TYPE.LITERAL, value: numeric};
+    return {type: EXPR_TYPE.LITERAL, value: numeric, sqlType: SQL_STORAGE_CLASS.INTEGER};
   }
   if (!LITERAL_DEFAULT_TYPES.has(valueNode?.type)) {
     throwNonLiteralDefaultError();
@@ -183,36 +174,19 @@ function isForeignKeyDefinition(def) {
   );
 }
 
-function renderCheckColumnRef(node) {
-  const col = typeof node.column === 'object' && node.column?.expr ?
-    node.column.expr.value :
-    node.column;
-  return typeof col === LOCAL_STR_STRING ? col : String(col || LOCAL_STR_EMPTY);
-}
-
-function renderCheckLiteralOrSimple(node) {
-  switch (node.type) {
-  case LOCAL_STR_COLUMN_REF:
-    return renderCheckColumnRef(node);
-  case LOCAL_STR_NUMBER:
-    return String(node.value);
-  case NODE_TYPE_SINGLE_QUOTE_STRING:
-  case LOCAL_STR_STRING:
-    return `'${String(node.value).replace(/'/g, SQL_ESCAPED_SINGLE_QUOTE)}'`;
-  case NODE_TYPE_BOOL:
-    return node.value ? SQL_BOOL_TRUE : SQL_BOOL_FALSE;
-  case NODE_TYPE_NULL:
-    return SQL_NULL_LITERAL;
-  default:
-    return null;
-  }
-}
-
+// A CHECK expression goes through the one expression converter and the one
+// renderer, so it is carried exactly (COLLATE, ESCAPE, literal classes) or
+// refused.
 function extractFirstCheckSql(parser, definitionList) {
   if (!Array.isArray(definitionList) || definitionList.length === 0) {
     return null;
   }
-  return parser.renderCheckExpr(definitionList[0]) || null;
+  return renderExpression(parser.convertExpression(definitionList[0]));
+}
+
+function columnCollation(def) {
+  const clause = def.collate?.collate ?? def.collate;
+  return clause?.name ? String(clause.name).toUpperCase() : null;
 }
 
 function buildCreateTableColumn(parser, def) {
@@ -221,12 +195,15 @@ function buildCreateTableColumn(parser, def) {
   }
   return {
     name: externalSchemaIdentifier(def.column.column),
-    dataType: {
+    // A column declared without a type has no dataType (schema derivation
+    // records the type of the same affinity).
+    dataType: def.definition ? {
       name: def.definition.dataType,
       length: def.definition.length || null,
       precision: null,
       scale: null,
-    },
+    } : null,
+    collation: columnCollation(def),
     primaryKey: !!def.primary_key,
     notNull: def.nullable?.type === SQL_SCHEMA_NOT_NULL,
     unique: !!def.unique,
@@ -380,25 +357,6 @@ const sqlParserSchemaMutationMethods = {
       .replace(/"[^"]*"/g, LOCAL_STR_EMPTY);
     return /\bREFERENCES\b/iu.test(unquoted) ||
       /\bFOREIGN\s+KEY\b/iu.test(unquoted);
-  },
-
-  renderCheckExpr(node) {
-    if (!node) return LOCAL_STR_EMPTY;
-    const simple = renderCheckLiteralOrSimple(node);
-    if (simple !== null) return simple;
-    if (node.type === NODE_TYPE_BINARY_EXPR) {
-      return `${this.renderCheckExpr(node.left)} ${node.operator} ${this.renderCheckExpr(node.right)}`;
-    }
-    if (node.type === LOCAL_STR_UNARY_EXPR) {
-      return `${node.operator} ${this.renderCheckExpr(node.expr || node.operand)}`;
-    }
-    if (node.type === NODE_TYPE_FUNCTION) {
-      const args = (node.args?.value || [])
-        .map((a) => this.renderCheckExpr(a))
-        .join(SQL_COMMA_SEPARATOR);
-      return `${node.name}(${args})`;
-    }
-    return node.value !== undefined ? String(node.value) : LOCAL_STR_EMPTY;
   },
 
   convertCreateTable(ast) {
