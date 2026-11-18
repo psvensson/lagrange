@@ -295,6 +295,26 @@ async (t) => {
   t.end();
 });
 
+test('PostgresWireAdapter - WALL_TIME_LIMIT_MS 0 is a zero wall-time ' +
+  'budget (spent at once), never the default', async (t) => {
+  const mock = createMockSqlCore();
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
+  await adapter.authenticate('sess-zero', {
+    tenantId: PGWIRE_DEFAULT_TENANT_ID,
+  });
+  await adapter.execute('sess-zero', 'SELECT 1', [], {
+    budgets: {WALL_TIME_LIMIT_MS: 0},
+  });
+  t.equal(mock.calls.length, 1);
+  t.equal(mock.calls[0].budgets.WALL_TIME_LIMIT_MS, 0);
+  t.equal(mock.calls[0].timeoutBudget.configuredBudgetMs, 0,
+    'the normalizer\'s 0 is read as 0 ms');
+  t.equal(mock.calls[0].timeoutBudget.deadlineMs,
+    mock.calls[0].timeoutBudget.startedAtMs,
+    'the statement\'s deadline is its start: no wall time to spend');
+  t.end();
+});
+
 test('PostgresWireAdapter - refuses a misspelled or invalid budget ' +
   'instead of running with the default', async (t) => {
   const mock = createMockSqlCore();

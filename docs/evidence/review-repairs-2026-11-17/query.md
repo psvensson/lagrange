@@ -84,6 +84,16 @@ case shows oversized input is refused. Original row/output-byte witnesses remain
 valid. The budget claim concerns conflict admission and effective limit selection,
 not an observed resource overrun or a bypass of PG's earlier raw validation.
 
+**Superseded 2026-11-17.** The two-spelling alias contract above (camelCase and
+uppercase keys, equal aliases accepted, conflicting aliases refused) was
+superseded by commit `9905a06e2` (`9905a06e22551db6c714a4543b175327bb4591ba`): a query budget now has one
+UPPER_SNAKE shape built only by `normalizeQueryBudget`, which refuses any
+unknown field (including every former camelCase alias) and any limit that is
+not a non-negative safe integer; readers refuse a budget that is not its
+frozen output. The acceptance list and the evidence below are kept as the
+record of what this repair proved at the time; they no longer describe the
+current contract (`architecture/query-runtime.md`).
+
 ## Original immutable evidence
 
 - Candidate native job 4896: three scalar mismatches with valid controls;

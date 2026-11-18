@@ -99,6 +99,13 @@ does not claim physical SSH, cluster effect dispatch or distributed durability.
 The budget witness proves conflict admission and limit selection, not resource
 overrun or bypass of the PG adapter's earlier raw-override validation.
 
+**Superseded 2026-11-17.** The raw-budget-provenance acceptance in the unit
+table above (camel-only, uppercase-only and equal aliases valid) was
+superseded by commit `9905a06e2` (`9905a06e22551db6c714a4543b175327bb4591ba`): one UPPER_SNAKE budget shape built
+only by `normalizeQueryBudget`; unknown fields, including the former camelCase
+aliases, and invalid limits are refused. The table and the witnesses are kept
+as history; see the matching note in `query.md`.
+
 ## Deferred review observations
 
 The literal checker still mistakes upper-snake runtime bindings and shadowed

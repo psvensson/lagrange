@@ -16,6 +16,13 @@
  *   unqualified claim that the transaction rolled back).
  * - Inside a block, a statement for a transaction the engine dropped is an
  *   error and the block is failed until ROLLBACK (never run outside it).
+ * - An autocommit statement (sent while idle) that left a write's outcome
+ *   unknown (isStatementWriteOutcomeUnknown: the write kernel's typed
+ *   unknown outcome on the statement or one of its participants) is its own
+ *   implicit transaction past its commit point: it answers the COMMIT's
+ *   08007 transaction_resolution_unknown, never XX000 or a definite failure.
+ *   Inside a block the same statement only fails the block: nothing it
+ *   staged commits, and the ROLLBACK that ends the block discards it.
  *
  * @module runtime/pgwire-transaction-outcome
  */
@@ -24,6 +31,8 @@ import {readExecutedStatementType} from
   '../query/application-database-result.js';
 import {AST_TYPE} from '../query/parser-constants.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {isStatementWriteOutcomeUnknown} from
+  '../query/query-execution-budget.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   '../query/distributed/distributed-transaction-commit-point.js';
 import {SESSION_TRANSACTION_ACTIVE_FIELD} from
@@ -165,7 +174,11 @@ function resolveFailedStatementOutcome({
     return failedTransactionEndOutcome({idle, noTransaction, statementType,
       failure, engineHoldsTransaction});
   }
-  if (idle) return engineError(PG_TRANSACTION_STATE.IDLE);
+  if (idle) {
+    return isStatementWriteOutcomeUnknown(failure) ?
+      outcomeUnknownError(failure, PG_TRANSACTION_STATE.IDLE) :
+      engineError(PG_TRANSACTION_STATE.IDLE);
+  }
   if (noTransaction) {
     return rolledBackError(failure, failure.error ?? failure.message,
       PG_TRANSACTION_STATE.FAILED);

@@ -1,5 +1,8 @@
 import {ERRORS} from '../constants/index.js';
-import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
+import {
+  isWriteOutcomeUnknown,
+  pickTypedWriteAnswer,
+} from '../partition/partition-write-kernel.js';
 
 const QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE =
   'pre_submission_route_unavailable';
@@ -118,6 +121,22 @@ export function buildParticipantFailureEntry(result) {
     backpressured: resolveParticipantBackpressureState(answer),
     failedTable: normalizeParticipantFailureString(answer.failedTable),
   };
+}
+
+/**
+ * Whether a failed statement left a write's outcome unknown: the statement's
+ * own answer, or one of its participant failure entries
+ * (buildParticipantFailureEntry), is the write kernel's typed unknown outcome
+ * (isWriteOutcomeUnknown). Such a statement may have applied that write,
+ * whatever its other failures say; only a re-delivery under the write's
+ * entryId settles it.
+ * @param {Object} failure - A failed statement result.
+ * @return {boolean}
+ */
+export function isStatementWriteOutcomeUnknown(failure) {
+  return isWriteOutcomeUnknown(failure) ||
+    (Array.isArray(failure?.participantFailures) &&
+      failure.participantFailures.some(isWriteOutcomeUnknown));
 }
 
 export function buildDistributedFailureSummary(failedResults) {
