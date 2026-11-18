@@ -8,6 +8,7 @@ results are imported into this witness.
 
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 
 
@@ -16,6 +17,7 @@ REFERENCE_PATH = Path(__file__).with_name(
 )
 SPEC = importlib.util.spec_from_file_location("finite_json_reference", REFERENCE_PATH)
 REFERENCE = importlib.util.module_from_spec(SPEC)
+sys.dont_write_bytecode = True
 SPEC.loader.exec_module(REFERENCE)
 
 
