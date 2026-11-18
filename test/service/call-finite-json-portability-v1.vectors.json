@@ -45,6 +45,8 @@
     {"id": "unsafe-positive-integer", "wire": "9007199254740992", "code": "unsafe_integer_value"},
     {"id": "unsafe-negative-integer", "wire": "-9007199254740992", "code": "unsafe_integer_value"},
     {"id": "nonfinite-overflow", "wire": "1e309", "code": "invalid_partial_value"},
+    {"id": "nan-token", "wire": "NaN", "code": "malformed_partial_wire"},
+    {"id": "infinity-token", "wire": "Infinity", "code": "malformed_partial_wire"},
     {"id": "invalid-json", "wire": "{\"a\":", "code": "malformed_partial_wire"},
     {"id": "trailing-comma", "wire": "[1,]", "code": "malformed_partial_wire"}
   ]
