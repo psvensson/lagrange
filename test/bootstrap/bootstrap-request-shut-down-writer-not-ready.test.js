@@ -25,6 +25,8 @@ import * as CDC_CONSTANTS from '../../src/cdc/cdc-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HTTP_STATUS} from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const SEED_NODE_ID = 'seed-node-1';
 const SEED_NODE_ADDRESS = 'ws://localhost:8080';
@@ -92,7 +94,8 @@ test('a bootstrap request whose seed writer shut down is answered ' +
     const response = await api.getFastify().inject({
       method: 'POST',
       url: '/bootstrap',
-      payload: {nodeId: JOINER_NODE_ID, nodeAddress: JOINER_NODE_ADDRESS},
+      payload: {...clusterFormatRevisionClaim(),
+        nodeId: JOINER_NODE_ID, nodeAddress: JOINER_NODE_ADDRESS},
     });
     assert.equal(response.statusCode, HTTP_STATUS.SERVICE_UNAVAILABLE,
       'the seed answers the retryable 503, not a terminal 500');
@@ -115,7 +118,8 @@ test('a bootstrap request whose seed writer shut down is answered ' +
     const control = await api.getFastify().inject({
       method: 'POST',
       url: '/bootstrap',
-      payload: {nodeId: JOINER_NODE_ID, nodeAddress: JOINER_NODE_ADDRESS},
+      payload: {...clusterFormatRevisionClaim(),
+        nodeId: JOINER_NODE_ID, nodeAddress: JOINER_NODE_ADDRESS},
     });
     assert.equal(control.statusCode, HTTP_STATUS.INTERNAL_SERVER_ERROR,
       'an untyped failure of the same work is not answered not-ready');

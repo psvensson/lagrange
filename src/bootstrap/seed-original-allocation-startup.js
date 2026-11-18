@@ -10,6 +10,8 @@ import {isFreshSeedMembershipOutcome} from './rejoin-hints-constants.js';
 import {createSeedOriginalAllocation, originalSeedAnchor} from
   './seed-original-allocation-declaration.js';
 import {readOriginalSeedRetainedEffects} from './seed-retained-effects.js';
+import {assertCurrentClusterFormatDeclaration} from
+  './owners/support-envelope-owner.js';
 import {SEED_RETAINED_EFFECT_STATE,
   SEED_RETAINED_EFFECT_KIND as SEED_RETAINED_ENTRY_KIND} from
   './seed-retained-effects-constants.js';
@@ -107,6 +109,11 @@ async function initializeOriginalSeedAttempt(service) {
     assertStartupStillOwnsAttempt(service);
     const retained = preparation.readDeclaration(originalSeedAnchor(dataDir));
     if (retained.state === STATE.PRESENT) {
+      // The release version fence: a retained allocation founded at another
+      // cluster format revision (or before revisions existed) is refused
+      // typed ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED before any
+      // founder opens. Such a cluster is re-founded, never reopened.
+      assertCurrentClusterFormatDeclaration(retained.declaration);
       inspectRetainedOriginalSeedAttempt(
         service, preparation, retained.declaration, options,
       );

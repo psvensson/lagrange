@@ -24,6 +24,7 @@ import {
   BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION,
   normalizeBootstrapRequestClientAttemptDeadlineSnapshot,
 } from './bootstrap-request-owner-deadline.js';
+import {clusterFormatRevisionClaim} from './support-envelope-owner.js';
 
 const LOCAL_STR_MOVE_REPLICA_HANDOFF_STABILIZING = 'move_replica_handoff_stabilizing';
 const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
@@ -224,6 +225,7 @@ const bootstrapRequestOwnerHandlerMethods = {
         expectedClusterId: typeof requestBody.expectedClusterId === 'string' ?
           requestBody.expectedClusterId :
           null,
+        clusterFormatClaim: requestBody,
       },
     );
     if (conflictError) {
@@ -550,6 +552,9 @@ const bootstrapRequestOwnerHandlerMethods = {
 
       const response = {
         success: true,
+        // The admitting node's own revision: the joiner refuses an admission
+        // from a node of another revision (the fence decides on both sides).
+        ...clusterFormatRevisionClaim(),
         seedNodeId: this.getSeedNodeId(),
         clusterId: this.getClusterId?.() || null,
         seedNodeAddress: this.getSeedNodeAddress(),

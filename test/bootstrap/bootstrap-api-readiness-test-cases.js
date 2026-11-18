@@ -37,6 +37,8 @@ import {
 import {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_BOOTSTRAP_JOIN_AUTHORITY_BLOCKER =
   'control_snapshot_authority_unavailable';
@@ -255,6 +257,7 @@ export function registerBootstrapApiReadinessTests() {
         method: TEST_HTTP_METHOD_POST,
         url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_BOOTSTRAP_REQUEST_NODE_ID,
           nodeAddress: TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS,
         },

@@ -41,6 +41,13 @@ For the complete guide on Kubernetes deployment and cloud benchmark automation, 
   set it. On a rolling upgrade from a chart without host identity, a pod not
   yet restarted keeps a membership record without a host (`HOST_UNDECLARED`)
   and is not a placement target until it restarts with the new template.
+- **Upgrades across a cluster format revision.** An image of another cluster
+  format revision never reopens the release's PVCs: the seed refuses its
+  retained founding (`ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED`) and a
+  joining pod is refused `OUTSIDE_SUPPORT_ENVELOPE`. There is no in-place
+  `helm upgrade` or rollback across a revision: export the data, uninstall the
+  release, delete its PVCs, install the new release and reload (the
+  re-founding procedure in `docs/operations-readiness.md`).
 - **Ports**: REST `node.restPort` (default 8080), admin WS restPort+1, and
   transport WS restPort+2. Set `admin.websocketPort` or `node.wsPort` to
   override either derived WS port. Admin WS remains pod-local on loopback;

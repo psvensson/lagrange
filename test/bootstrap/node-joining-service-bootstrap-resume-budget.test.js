@@ -29,6 +29,8 @@ import {
   NUM,
   TIME_MS,
 } from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 
 test('NodeJoiningService - move-replica bootstrap defer keeps configured ' +
@@ -242,6 +244,7 @@ test('NodeJoiningService - retained bootstrap-not-ready timeout clears stale ' +
   const TEST_SEED_NODE_WS_ADDRESS = 'ws://localhost:9091';
   const TEST_SUCCESSFUL_RESPONSE = Object.freeze({
     success: true,
+    ...clusterFormatRevisionClaim(),
     seedNodeId: TEST_SEED_NODE_ID,
     seedNodeWsAddress: TEST_SEED_NODE_WS_ADDRESS,
     messageGroupAssignment: Object.freeze({

@@ -940,11 +940,10 @@ function inspectOriginalAllocationDb(dbPath, groupId, replicaIdentity, isAnchor,
     const transferred = row?.[ORIGINAL_COLUMN.SERVICE_RIGHT] === ORIGINAL.TRANSFERRED &&
       (!isAnchor || (present.has(ORIGINAL_COLUMN.IDENTITY_RIGHT) &&
         row?.[ORIGINAL_COLUMN.IDENTITY_RIGHT] === ORIGINAL.TRANSFERRED));
-    return Object.freeze({
-      state: transferred ?
-        ORIGINAL_SEED_LIFECYCLE.TRANSFERRED :
-        ORIGINAL_SEED_LIFECYCLE.UNTRANSFERRED,
-    });
+    const state = transferred ? ORIGINAL_SEED_LIFECYCLE.TRANSFERRED :
+      ORIGINAL_SEED_LIFECYCLE.UNTRANSFERRED;
+    // The founding declaration that names this founder, for the reopen fence.
+    return Object.freeze({state, declaration: declaration.declaration});
   } finally {
     db.close();
   }

@@ -284,6 +284,11 @@
       "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
     },
     {
+      "id": "cluster-format-revision-fence",
+      "area": "Operations",
+      "summary": "A cluster is founded at one cluster format revision, written by the seed into its original allocation. A node joins, and a seed reopens its founding, only at the build's revision: an absent or different revision is refused (OUTSIDE_SUPPORT_ENVELOPE at join admission, on both sides, and for management release transitions and rollbacks; ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED at seed restart). In-place upgrade and downgrade across a revision are unsupported; such a cluster is re-founded on empty data directories."
+    },
+    {
       "id": "upgrade-from-message-group-move-builds",
       "area": "Operations",
       "summary": "In-place upgrade is unsupported from any pre-0.2.6 build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5) and main before the 0.2.6 identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them."

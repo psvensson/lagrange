@@ -24,6 +24,8 @@ import {
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const BOOTSTRAP_ADMISSION_LEASE_TEST_NAME =
   'BootstrapAPI - expires stale bootstrap admission lease before admitting retry';
@@ -202,6 +204,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440011',
           nodeAddress: 'ws://localhost:9091',
         },
@@ -220,6 +223,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440012',
           nodeAddress: 'ws://localhost:9092',
         },
@@ -259,6 +263,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440013',
           nodeAddress: 'ws://localhost:9093',
         },
@@ -315,6 +320,7 @@ export function registerBootstrapRequestAdmissionTests() {
       method: 'POST',
       url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ID,
         nodeAddress: BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ADDRESS,
       },
@@ -338,6 +344,7 @@ export function registerBootstrapRequestAdmissionTests() {
       method: 'POST',
       url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ID,
         nodeAddress: BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ADDRESS,
       },
@@ -409,6 +416,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440013',
           nodeAddress: 'ws://localhost:9093',
         },
@@ -484,6 +492,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440112',
           nodeAddress: 'ws://localhost:9092',
         },
@@ -544,6 +553,7 @@ export function registerBootstrapRequestAdmissionTests() {
       method: 'POST',
       url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ID,
         nodeAddress: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ADDRESS,
       },
@@ -628,6 +638,7 @@ export function registerBootstrapRequestAdmissionTests() {
       method: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_METHOD,
       url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ID,
         nodeAddress: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ADDRESS,
       },
@@ -757,6 +768,7 @@ export function registerBootstrapRequestAdmissionTests() {
       method: 'POST',
       url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ID,
         nodeAddress: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ADDRESS,
       },
@@ -815,6 +827,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440111',
           nodeAddress: 'ws://localhost:9091',
           startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -866,6 +879,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440014',
           nodeAddress: 'ws://localhost:9094',
         },
@@ -880,6 +894,7 @@ export function registerBootstrapRequestAdmissionTests() {
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440015',
           nodeAddress: 'ws://localhost:9095',
         },

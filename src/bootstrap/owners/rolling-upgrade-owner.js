@@ -35,7 +35,7 @@ const OWNER_DEFAULTS = Object.freeze({
   onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
   onTriggerNodeRestart: UNSET, onPersistState: UNSET, activeOperation: UNSET,
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
-  initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET, exactVersionPair: UNSET,
+  initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET,
 });
 
 function createNodeVersionsMap(source) {
@@ -109,10 +109,12 @@ function isClusterNotReady(snap) {
   return (snap.ready !== undefined && snap.ready !== true) ||
     resolveReadyCount(snap) < snap.nodeIds.length;
 }
+// The release version fence decides every in-place transition: only a pair
+// certified by a support envelope of this build's cluster format revision is
+// admitted. Without a configured envelope nothing is certified, so the pair
+// is refused (fail closed), never admitted by the semver rule alone.
 function isOutsideSupportEnvelope(owner, targetVersion) {
-  const configuredEnvelope = owner.supportEnvelope || owner.exactVersionPair;
-  if (!configuredEnvelope) return false;
-  const check = validateVersionPairAdmission(configuredEnvelope, {
+  const check = validateVersionPairAdmission(owner.supportEnvelope, {
     sourceVersion: owner.currentVersion,
     targetVersion,
   });
@@ -406,14 +408,10 @@ class RollingUpgradeOwner {
       (this.activeOperation?.operationId === opId ? this.activeOperation : UNSET);
     return op ? {...op} : UNSET;
   }
+  // A downgrade is admitted only back to the source of a pair certified at
+  // this build's cluster format revision; without an envelope it is refused.
   executeRollback(options = {}) {
-    const configuredEnvelope = this.supportEnvelope || this.exactVersionPair || {
-      versionPair: {
-        sourceVersion: options.targetVersion || this.currentVersion,
-        targetVersion: this.currentVersion,
-      },
-    };
-    const eligibility = evaluateRollbackEligibility(configuredEnvelope, options);
+    const eligibility = evaluateRollbackEligibility(this.supportEnvelope, options);
     if (!eligibility.eligible) {
       return {
         message: eligibility.message,

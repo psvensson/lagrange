@@ -74,7 +74,6 @@ const MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME = Object.freeze({
 class BootstrapJoinAdmissionOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.supportEnvelope = options.supportEnvelope || null;
     this.moveReplicaAssignmentReservationLock = Promise.resolve();
   }
 
@@ -262,14 +261,14 @@ class BootstrapJoinAdmissionOwner {
     });
   }
 
+  // The release version fence: the joiner's request carries its build's
+  // cluster format revision, and only this build's revision is admitted. An
+  // absent claim is refused; nothing here defaults or infers a revision.
   resolveSupportEnvelopeConflict(nodeId, nodeAddress, options) {
     return resolveJoinSupportEnvelopeConflict({
-      defaultEnvelope: this.supportEnvelope,
-      getReleaseVersion: this.delegates.getReleaseVersion,
-      getSupportEnvelope: this.delegates.getSupportEnvelope,
       nodeAddress,
       nodeId,
-      options,
+      carrier: options.clusterFormatClaim,
     });
   }
 

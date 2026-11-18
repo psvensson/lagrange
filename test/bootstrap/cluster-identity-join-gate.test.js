@@ -21,6 +21,14 @@ import {
   BOOTSTRAP_API_ERROR,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
+
+// Every joiner carries its build's cluster format revision (the release
+// version fence); these cases exercise the takeover decision behind it.
+const JOINER_FORMAT_CLAIM = Object.freeze({
+  clusterFormatClaim: clusterFormatRevisionClaim(),
+});
 
 const SEED_NODE_ID = 'seed-node-1';
 const SEED_NODE_ADDRESS = 'ws://localhost:8080';
@@ -72,7 +80,7 @@ test('checkForConflicts rejects a foreign cluster identity with the typed ' +
   const result = await api.checkForConflicts(
     JOINER_NODE_ID,
     JOINER_NODE_ADDRESS,
-    {expectedClusterId: CLUSTER_ID_B},
+    {...JOINER_FORMAT_CLAIM, expectedClusterId: CLUSTER_ID_B},
   );
   t.equal(
     result,
@@ -94,7 +102,7 @@ test('checkForConflicts accepts the matching cluster identity and the ' +
     await api.checkForConflicts(
       JOINER_NODE_ID,
       JOINER_NODE_ADDRESS,
-      {expectedClusterId: CLUSTER_ID_A},
+      {...JOINER_FORMAT_CLAIM, expectedClusterId: CLUSTER_ID_A},
     ),
     null,
     'a matching expectedClusterId passes the gate',
@@ -103,7 +111,7 @@ test('checkForConflicts accepts the matching cluster identity and the ' +
     await api.checkForConflicts(
       JOINER_NODE_ID,
       JOINER_NODE_ADDRESS,
-      {},
+      JOINER_FORMAT_CLAIM,
     ),
     null,
     'a pre-identity joiner (no expectedClusterId) is accepted by policy',
@@ -123,7 +131,7 @@ test('a pre-identity seed accepts any named cluster by compatibility ' +
     await api.checkForConflicts(
       JOINER_NODE_ID,
       JOINER_NODE_ADDRESS,
-      {expectedClusterId: CLUSTER_ID_A},
+      {...JOINER_FORMAT_CLAIM, expectedClusterId: CLUSTER_ID_A},
     ),
     null,
     'a seed with no durable identity yet does not fence (UNKNOWN, not match)',

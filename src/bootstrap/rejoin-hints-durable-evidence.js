@@ -16,6 +16,8 @@ import {
 } from './rejoin-hints-constants.js';
 import {extractPeerAddresses, normalizeAddress} from
   './rejoin-hints-addresses.js';
+import {isCurrentClusterFormatDeclaration} from
+  './owners/support-envelope-owner.js';
 import {originalSeedAnchor} from
   './seed-original-allocation-declaration.js';
 import {
@@ -508,25 +510,42 @@ function buildOriginalSeedAllocationCandidates(dataDir) {
   return candidates;
 }
 
+function isFoundedAtAnotherRevision(state, declaration) {
+  return (state === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED ||
+    state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) &&
+    !isCurrentClusterFormatDeclaration(declaration);
+}
+
 async function resolveOriginalSeedAllocationState(dataDir) {
   const normalizedDataDir = normalizeAddress(dataDir);
   if (!normalizedDataDir) {
     return ORIGINAL_SEED_ALLOCATION_STATE.MISSING;
   }
   let observedTransferred = false;
+  let observedUnreadable = false;
   let observedUntransferred = false;
   for (const candidate of buildOriginalSeedAllocationCandidates(
     normalizedDataDir,
   )) {
-    const {state} = inspectReplicaLifecycleForOriginalAllocation(candidate);
-    if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE) {
-      return ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE;
+    const {state, declaration} =
+      inspectReplicaLifecycleForOriginalAllocation(candidate);
+    // The release version fence on the seed's reopen: any readable founder
+    // founded at another cluster format revision proves this directory holds a
+    // pre-fence or other-revision cluster, even when an earlier founder DB is
+    // unreadable. Refuse before any founder opens or any override applies.
+    if (isFoundedAtAnotherRevision(state, declaration)) {
+      return ORIGINAL_SEED_ALLOCATION_STATE.FOUNDING_LAYOUT_UNSUPPORTED;
     }
-    if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) {
+    if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE) {
+      observedUnreadable = true;
+    } else if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) {
       observedUntransferred = true;
     } else if (state === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED) {
       observedTransferred = true;
     }
+  }
+  if (observedUnreadable) {
+    return ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE;
   }
   if (observedUntransferred) {
     return ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED;

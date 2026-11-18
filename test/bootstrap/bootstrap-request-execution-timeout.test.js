@@ -21,6 +21,8 @@ import {
   getRemainingBudgetMs,
 } from
   '../../src/control-plane/timeout-budget.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_NAME =
   'BootstrapAPI returns bootstrap-not-ready when admitted bootstrap work' +
@@ -163,6 +165,7 @@ test(TEST_NAME, async (t) => {
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: TEST_REQUEST_NODE_ID,
         nodeAddress: TEST_REQUEST_NODE_ADDRESS,
       },
@@ -260,6 +263,7 @@ test(
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_REQUEST_NODE_ID,
           nodeAddress: TEST_REQUEST_NODE_ADDRESS,
         },
@@ -332,6 +336,7 @@ test(
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_REQUEST_NODE_ID,
           nodeAddress: TEST_REQUEST_NODE_ADDRESS,
           [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
@@ -438,6 +443,7 @@ test(
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_REQUEST_NODE_ID,
           nodeAddress: TEST_REQUEST_NODE_ADDRESS,
           [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
@@ -557,6 +563,7 @@ test(
           method: 'POST',
           url: '/bootstrap',
           payload: {
+            ...clusterFormatRevisionClaim(),
             nodeId: TEST_REQUEST_NODE_ID,
             nodeAddress: TEST_REQUEST_NODE_ADDRESS,
             [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:

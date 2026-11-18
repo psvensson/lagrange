@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-17T04:03:06.139Z",
-  "rawViolationCount": 2836,
+  "generatedAt": "2026-11-18T06:01:34.719Z",
+  "rawViolationCount": 2835,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -1274,7 +1274,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 50,
+      "line": 51,
       "column": 9,
       "functionName": "finiteNumberOrFallback",
       "kind": "legacy_term_identifiers",
@@ -1283,7 +1283,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 50,
+      "line": 51,
       "column": 39,
       "functionName": "finiteNumberOrFallback",
       "kind": "legacy_term_identifiers",
@@ -1292,7 +1292,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 51,
+      "line": 52,
       "column": 42,
       "functionName": "finiteNumberOrFallback",
       "kind": "legacy_term_identifiers",
@@ -1301,7 +1301,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 61,
+      "line": 63,
       "column": 24,
       "functionName": "buildSeedNodeRegistrationRow",
       "kind": "legacy_term_identifiers",
@@ -1310,7 +1310,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 63,
+      "line": 65,
       "column": 22,
       "functionName": "buildSeedNodeRegistrationRow",
       "kind": "legacy_term_identifiers",
@@ -1319,7 +1319,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 64,
+      "line": 66,
       "column": 32,
       "functionName": "buildSeedNodeRegistrationRow",
       "kind": "legacy_term_identifiers",
@@ -1328,7 +1328,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 65,
+      "line": 67,
       "column": 35,
       "functionName": "buildSeedNodeRegistrationRow",
       "kind": "legacy_term_identifiers",
@@ -1337,7 +1337,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 66,
+      "line": 68,
       "column": 33,
       "functionName": "buildSeedNodeRegistrationRow",
       "kind": "legacy_term_identifiers",
@@ -1364,7 +1364,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 461,
+      "line": 464,
       "column": 8,
       "functionName": "constructor",
       "kind": "legacy_term_identifiers",
@@ -1652,7 +1652,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 304,
+      "line": 307,
       "column": 8,
       "functionName": "constructor",
       "kind": "legacy_term_identifiers",
@@ -2273,7 +2273,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 215,
+      "line": 217,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2282,7 +2282,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 216,
+      "line": 218,
       "column": 29,
       "functionName": "checkVersionCompatible",
       "kind": "legacy_term_identifiers",
@@ -2507,7 +2507,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 28,
+      "line": 39,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2516,7 +2516,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 70,
+      "line": 83,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -2525,7 +2525,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 241,
+      "line": 359,
       "column": 30,
       "functionName": "validateMixedVersionNodeAdmission",
       "kind": "legacy_term_identifiers",
@@ -2534,7 +2534,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 257,
+      "line": 377,
       "column": 7,
       "functionName": "validateMixedVersionNodeAdmission",
       "kind": "legacy_term_identifiers",
@@ -2543,7 +2543,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 261,
+      "line": 381,
       "column": 6,
       "functionName": "validateMixedVersionNodeAdmission",
       "kind": "legacy_term_identifiers",
@@ -2552,16 +2552,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 328,
-      "column": 4,
-      "functionName": "resolveJoinSupportEnvelopeConflict",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 381,
+      "line": 435,
       "column": 6,
       "functionName": "buildDefaultDrills",
       "kind": "legacy_term_identifiers",
@@ -2615,7 +2606,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-constants.js",
-      "line": 30,
+      "line": 34,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -3101,7 +3092,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 86,
+      "line": 85,
       "column": 9,
       "functionName": "mutationOperationCompatible",
       "kind": "legacy_term_identifiers",
@@ -3110,7 +3101,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 94,
+      "line": 93,
       "column": 9,
       "functionName": "mutationTableCompatible",
       "kind": "legacy_term_identifiers",
@@ -3119,7 +3110,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 101,
+      "line": 100,
       "column": 9,
       "functionName": "mutationObservationCompatible",
       "kind": "legacy_term_identifiers",
@@ -3128,7 +3119,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 632,
+      "line": 631,
       "column": 23,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -3137,7 +3128,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 633,
+      "line": 632,
       "column": 9,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -3146,7 +3137,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 634,
+      "line": 633,
       "column": 9,
       "functionName": "validateMutationMode",
       "kind": "legacy_term_identifiers",
@@ -5360,7 +5351,7 @@
     },
     {
       "filePath": "src/config/config-constants.js",
-      "line": 194,
+      "line": 195,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -5369,7 +5360,7 @@
     },
     {
       "filePath": "src/config/config-constants.js",
-      "line": 231,
+      "line": 232,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -6764,7 +6755,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-constants.js",
-      "line": 233,
+      "line": 258,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -6944,7 +6935,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 244,
+      "line": 250,
       "column": 17,
       "functionName": "executeIntent",
       "kind": "legacy_term_identifiers",
@@ -6953,7 +6944,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 245,
+      "line": 251,
       "column": 22,
       "functionName": "executeIntent",
       "kind": "legacy_term_identifiers",
@@ -7205,7 +7196,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 269,
+      "line": 271,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -10373,7 +10364,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 87,
+      "line": 95,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -10382,7 +10373,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 252,
+      "line": 260,
       "column": 6,
       "functionName": "probeAutoRejoinPeerPath",
       "kind": "legacy_term_identifiers",
@@ -10391,7 +10382,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 270,
+      "line": 278,
       "column": 6,
       "functionName": "probeAutoRejoinPeerPath",
       "kind": "legacy_term_identifiers",
@@ -13955,7 +13946,7 @@
     },
     {
       "filePath": "src/partition/partition-service-table-bootstrap.js",
-      "line": 95,
+      "line": 96,
       "column": 8,
       "functionName": "ensureNodesTableColumns",
       "kind": "legacy_term_identifiers",
@@ -13964,7 +13955,7 @@
     },
     {
       "filePath": "src/partition/partition-service-table-bootstrap.js",
-      "line": 129,
+      "line": 130,
       "column": 30,
       "functionName": "ensureNodesTableColumns",
       "kind": "legacy_term_identifiers",
@@ -14153,7 +14144,7 @@
     },
     {
       "filePath": "src/query/application-database.js",
-      "line": 95,
+      "line": 98,
       "column": 37,
       "functionName": "resolveFailureString",
       "kind": "legacy_term_identifiers",
@@ -14162,7 +14153,7 @@
     },
     {
       "filePath": "src/query/application-database.js",
-      "line": 98,
+      "line": 101,
       "column": 4,
       "functionName": "resolveFailureString",
       "kind": "legacy_term_identifiers",
@@ -14342,7 +14333,7 @@
     },
     {
       "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 729,
+      "line": 722,
       "column": 9,
       "functionName": "buildLegacyPlan",
       "kind": "legacy_term_identifiers",
@@ -14351,7 +14342,7 @@
     },
     {
       "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 758,
+      "line": 751,
       "column": 11,
       "functionName": "buildJoinPushdownPlan",
       "kind": "legacy_term_identifiers",
@@ -14360,7 +14351,7 @@
     },
     {
       "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 762,
+      "line": 755,
       "column": 11,
       "functionName": "buildJoinPushdownPlan",
       "kind": "legacy_term_identifiers",
@@ -17951,7 +17942,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 356,
+      "line": 338,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -17960,7 +17951,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 359,
+      "line": 341,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -17969,7 +17960,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 361,
+      "line": 343,
       "column": 19,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18014,7 +18005,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 367,
+      "line": 361,
       "column": 18,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18023,7 +18014,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 370,
+      "line": 364,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18032,7 +18023,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 372,
+      "line": 366,
       "column": 19,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -18680,7 +18671,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 68,
+      "line": 73,
       "column": 8,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18689,7 +18680,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 72,
+      "line": 77,
       "column": 6,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18698,7 +18689,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 84,
+      "line": 89,
       "column": 10,
       "functionName": "buildEntityTransitionSets",
       "kind": "legacy_term_identifiers",
@@ -18707,7 +18698,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 107,
+      "line": 112,
       "column": 4,
       "functionName": "createMovePlannerStateMethods",
       "kind": "legacy_term_identifiers",
@@ -18716,8 +18707,8 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 450,
-      "column": 8,
+      "line": 448,
+      "column": 13,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -18725,7 +18716,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 453,
+      "line": 451,
       "column": 12,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18734,7 +18725,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 465,
+      "line": 464,
       "column": 32,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18743,7 +18734,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 470,
+      "line": 469,
       "column": 8,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -18752,7 +18743,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 471,
+      "line": 470,
       "column": 8,
       "functionName": "buildTopologyTransitionSnapshot",
       "kind": "legacy_term_identifiers",
@@ -19076,7 +19067,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 431,
+      "line": 421,
       "column": 4,
       "functionName": "deferDispatchRetry",
       "kind": "legacy_term_identifiers",
@@ -19085,7 +19076,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 505,
+      "line": 495,
       "column": 2,
       "functionName": "getDeferredDispatchRetryOperation",
       "kind": "legacy_term_identifiers",
@@ -19094,7 +19085,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 514,
+      "line": 504,
       "column": 4,
       "functionName": "getDeferredDispatchRetryOperation",
       "kind": "legacy_term_identifiers",
@@ -19103,7 +19094,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 520,
+      "line": 510,
       "column": 2,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19112,7 +19103,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 525,
+      "line": 515,
       "column": 48,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19121,7 +19112,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 529,
+      "line": 519,
       "column": 38,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "legacy_term_identifiers",
@@ -19940,7 +19931,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 453,
+      "line": 449,
       "column": 10,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19949,7 +19940,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 454,
+      "line": 450,
       "column": 17,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19958,7 +19949,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 458,
+      "line": 454,
       "column": 8,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19967,7 +19958,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 459,
+      "line": 455,
       "column": 30,
       "functionName": "createOperationInternal",
       "kind": "legacy_term_identifiers",
@@ -19976,7 +19967,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 856,
+      "line": 843,
       "column": 39,
       "functionName": "createOperationRecordInternal",
       "kind": "legacy_term_identifiers",
@@ -21029,7 +21020,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 320,
+      "line": 327,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21038,7 +21029,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 374,
+      "line": 381,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21155,7 +21146,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 205,
+      "line": 318,
       "column": 8,
       "functionName": "resolvePriorityControlPlaneQuorumDistinctNodeCount",
       "kind": "legacy_term_identifiers",
@@ -21164,7 +21155,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 220,
+      "line": 333,
       "column": 13,
       "functionName": "getPriorityControlPlaneTargetReplicaCount",
       "kind": "legacy_term_identifiers",
@@ -21173,7 +21164,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 235,
+      "line": 348,
       "column": 11,
       "functionName": "getPriorityControlPlaneTargetReplicaCount",
       "kind": "legacy_term_identifiers",
@@ -21182,7 +21173,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 402,
+      "line": 515,
       "column": 11,
       "functionName": "getLatestPublishedMembershipRow",
       "kind": "legacy_term_identifiers",
@@ -21191,7 +21182,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 415,
+      "line": 528,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21488,7 +21479,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 260,
+      "line": 261,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21497,7 +21488,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 277,
+      "line": 278,
       "column": 18,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21506,7 +21497,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 296,
+      "line": 297,
       "column": 11,
       "functionName": "getCurrentReplicas",
       "kind": "legacy_term_identifiers",
@@ -21515,7 +21506,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 356,
+      "line": 357,
       "column": 10,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21524,7 +21515,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 356,
+      "line": 357,
       "column": 35,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21533,7 +21524,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 369,
+      "line": 370,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "legacy_term_identifiers",
@@ -21542,7 +21533,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 627,
+      "line": 628,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21551,7 +21542,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 628,
+      "line": 629,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21560,7 +21551,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 650,
+      "line": 651,
       "column": 12,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21569,7 +21560,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 654,
+      "line": 655,
       "column": 10,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21578,7 +21569,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 655,
+      "line": 656,
       "column": 8,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21587,7 +21578,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 655,
+      "line": 656,
       "column": 30,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21596,7 +21587,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 658,
+      "line": 659,
       "column": 11,
       "functionName": "getTerminalRetiredReplicaIds",
       "kind": "legacy_term_identifiers",
@@ -21605,7 +21596,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 666,
+      "line": 667,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -21614,7 +21605,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 668,
+      "line": 669,
       "column": 10,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21623,7 +21614,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 668,
+      "line": 669,
       "column": 35,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21632,7 +21623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 669,
+      "line": 670,
       "column": 8,
       "functionName": "filterReplicasRetiredByTerminalOperations",
       "kind": "legacy_term_identifiers",
@@ -21641,7 +21632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 676,
+      "line": 677,
       "column": 9,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",

@@ -1,3 +1,5 @@
+import {SUPPORT_ENVELOPE_REASON_CODE} from './owners/support-envelope-owner.js';
+
 const REJOIN_HINTS_FILENAME = 'cluster-rejoin-hints.json';
 const REJOIN_HINTS_WRITE_INTERVAL_MS = 1000;
 const STARTUP_JOIN_MODE = Object.freeze({
@@ -22,6 +24,8 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
   FRESH_SEED: 'fresh_seed',
   IDENTITY_MISMATCH: 'identity_mismatch',
   INVALID_STARTUP_MODE: 'invalid_startup_mode',
+  ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED:
+    SUPPORT_ENVELOPE_REASON_CODE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED,
   CONFLICTING_DURABLE_EVIDENCE: 'conflicting_durable_evidence',
   JOIN_PROBED_PEER: 'join_probed_peer',
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
@@ -36,6 +40,8 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
  * so the outcome-by-state map below and rejoin-hints.js share one owner).
  */
 const AUTO_REJOIN_DECISION_STATE = Object.freeze({
+  ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED:
+    'original_allocation_founding_layout_unsupported',
   IDENTITY_MISMATCH: 'identity_mismatch',
   CLUSTER_ID_MISMATCH: 'cluster_id_mismatch',
   CONFLICTING_DURABLE_EVIDENCE: 'conflicting_durable_evidence',
@@ -54,6 +60,12 @@ const AUTO_REJOIN_DECISION_STATE = Object.freeze({
  * rejoin-hints.js stays under the file-size ratchet.
  */
 const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
+  [AUTO_REJOIN_DECISION_STATE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED]:
+    Object.freeze({
+      outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+      reasonCode:
+        MEMBERSHIP_OWNER_REASON.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED,
+    }),
   [AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
     reasonCode: MEMBERSHIP_OWNER_REASON.IDENTITY_MISMATCH,
@@ -121,6 +133,7 @@ const ORIGINAL_SEED_ALLOCATION_STATE = Object.freeze({
   UNTRANSFERRED: 'untransferred',
   TRANSFERRED: 'transferred',
   UNREADABLE: 'unreadable',
+  FOUNDING_LAYOUT_UNSUPPORTED: 'founding_layout_unsupported',
 });
 
 /**
