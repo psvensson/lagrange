@@ -64,6 +64,22 @@ function referenceResults(vectors) {
   }
 }
 
+function limitsMatch(actual) {
+  return Object.entries(EXPECTED_LIMITS).every(
+    ([key, limit]) => actual?.[key] === limit);
+}
+
+function casesCoverDomain(vectors) {
+  const ids = [
+    ...vectors.encode.map((item) => item.id),
+    ...vectors.rejectWire.map((item) => item.id),
+  ];
+  return new Set(ids).size === ids.length &&
+    REQUIRED_IDS.every((id) => ids.includes(id)) &&
+    new Set(vectors.encode.map((item) => item.wire)).size >=
+      EXPECTED_POSITIVE_COUNT;
+}
+
 function shapeProblems(vectors) {
   if (!vectors || vectors.schema !== EXPECTED_SCHEMA ||
       vectors.scope !== EXPECTED_SCOPE ||
@@ -72,17 +88,9 @@ function shapeProblems(vectors) {
   }
   if (vectors.encode.length < EXPECTED_POSITIVE_COUNT ||
       vectors.rejectWire.length < EXPECTED_REFUSAL_COUNT) return 1;
-  for (const [key, limit] of Object.entries(EXPECTED_LIMITS)) {
-    if (vectors.defaultLimits?.[key] !== limit) return 1;
+  if (!limitsMatch(vectors.defaultLimits) || !casesCoverDomain(vectors)) {
+    return 1;
   }
-  const ids = [
-    ...vectors.encode.map((item) => item.id),
-    ...vectors.rejectWire.map((item) => item.id),
-  ];
-  if (new Set(ids).size !== ids.length ||
-      REQUIRED_IDS.some((id) => !ids.includes(id))) return 1;
-  if (new Set(vectors.encode.map((item) => item.wire)).size <
-      EXPECTED_POSITIVE_COUNT) return 1;
   return 0;
 }
 
