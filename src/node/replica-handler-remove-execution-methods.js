@@ -336,7 +336,11 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         );
         throw error;
       }
-      return execution.serviceRowRemoved && guard.requireAbsent();
+      // Completion has one predicate, the removal authority's
+      // requireComplete: the released row is absent, or a failed-create
+      // cleanup's operation-bound receipt is current (that row is kept until
+      // the terminal REMOVE releases it, so it is never absent here).
+      return true;
     },
     () => {
       if (!execution.cleanupError) handler.localServices.delete(replicaId);

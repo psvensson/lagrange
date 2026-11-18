@@ -235,7 +235,6 @@ function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
       return deletedGenerationBound;
     },
     confirmCleanupComplete: completionReceipt.confirm,
-    requireAbsent,
     requireComplete: () => deletedGenerationBound ?
       requireAbsent() : completionReceipt.requireCurrent(),
   });

@@ -489,6 +489,121 @@ test('cleanup completion receipt survives a fresh handler and lost final ACK',
       ReplicaState.CREATING);
   });
 
+// Pre-gate 219c27bfe, replace-replica-7951c147 (service_endpoints-p1): the
+// cleanup REMOVE was redelivered while the SERVICES authority read did not
+// answer, and the unanswered read was refused as a precondition that no
+// longer matched, failing the REMOVE terminally with its receipt durable.
+test('a completed failed-create cleanup redelivered while its lifecycle ' +
+  'authority is unavailable is deferred, never refused', async (t) => {
+  initializeEnvironment();
+  const failed = serviceRow(
+    'replica-failed-create-cleanup-authority-blip',
+    ReplicaState.FAILED,
+    200,
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  handler.localReplicas.set(failed.service_id, {
+    replicaId: failed.service_id,
+    partitionId: failed.partition_id,
+    status: ReplicaStatus.FAILED,
+    service: null,
+  });
+  const firstPass = new Promise((resolve) => {
+    handler.once('replicaRemoved', () => resolve(true));
+    handler.once('replicaRemovalFailed', () => resolve(false));
+  });
+  const request = {
+    operationId: 'cleanup-authority-blip-same-operation',
+    partitionId: failed.partition_id,
+    replicaId: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      failed,
+  };
+  t.equal((await handler.handleRemoveReplica(request)).status,
+    ReplicaOperationResponseStatus.INITIATED);
+  t.equal(await firstPass, true, 'the cleanup completes on its first pass');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    'cleanup_complete', 'its completion is the operation-bound receipt');
+
+  store.setAuthoritativeReadAvailable(false);
+  const deferred = await handler.handleRemoveReplica(request);
+  t.equal(deferred.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(deferred.deferRetry, true,
+    'an unanswered authority read is a typed retryable deferral');
+  t.equal(deferred.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED',
+    'the deferral names the unavailable authority, not a refusal');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    'cleanup_complete', 'the durable receipt is untouched');
+
+  store.setAuthoritativeReadAvailable(true);
+  t.equal((await handler.handleRemoveReplica(request)).status,
+    ReplicaOperationResponseStatus.COMPLETED,
+    'the next delivery answers the same operation from its receipt');
+  await handler.shutdown();
+});
+
+test('a failed-create cleanup whose admission read does not answer is ' +
+  'deferred, never refused', async (t) => {
+  initializeEnvironment();
+  const failed = serviceRow(
+    'replica-failed-create-cleanup-admission-blip',
+    ReplicaState.FAILED,
+    200,
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  handler.localReplicas.set(failed.service_id, {
+    replicaId: failed.service_id,
+    partitionId: failed.partition_id,
+    status: ReplicaStatus.FAILED,
+    service: null,
+  });
+  let asyncStarts = 0;
+  handler.startRemoveReplicaAsync = () => {
+    asyncStarts += 1;
+  };
+  const request = {
+    operationId: 'cleanup-admission-blip-same-operation',
+    partitionId: failed.partition_id,
+    replicaId: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      failed,
+  };
+  // The receipt read answers (no receipt yet); every later read does not.
+  let servicesReads = 0;
+  store.setBeforeAuthoritativeRead((tableName) => {
+    if (tableName !== SERVICES) return;
+    servicesReads += 1;
+    if (servicesReads === 2) store.setAuthoritativeReadAvailable(false);
+  });
+  const deferred = await handler.handleRemoveReplica(request);
+  t.equal(deferred.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(deferred.deferRetry, true,
+    'an unanswered admission read is a typed retryable deferral');
+  t.equal(deferred.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED');
+  t.equal(asyncStarts, 0, 'nothing destructive starts without authority');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    ReplicaState.FAILED, 'the FAILED generation is untouched');
+
+  store.setBeforeAuthoritativeRead(null);
+  store.setAuthoritativeReadAvailable(true);
+  t.equal((await handler.handleRemoveReplica(request)).status,
+    ReplicaOperationResponseStatus.INITIATED,
+    'the redelivered operation is admitted once the authority answers');
+  t.equal(asyncStarts, 1, 'cleanup execution starts exactly once');
+});
+
 test('stale local REMOVING cannot shortcut a failed-create cleanup token',
   async (t) => {
     initializeEnvironment();

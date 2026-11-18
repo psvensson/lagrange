@@ -10,6 +10,7 @@ import {REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 const REPLICA_REMOVAL_COMPLETION_DEFERRED =
   'REPLICA_REMOVAL_COMPLETION_DEFERRED';
 const REPLICA_LEADER_CLEAR_DEFERRED = 'REPLICA_LEADER_CLEAR_DEFERRED';
+const REPLICA_REMOVAL_AUTHORITY_DEFERRED = 'REPLICA_REMOVAL_AUTHORITY_DEFERRED';
 
 function retryableRemovalDebtError(code, message, metadata = {}) {
   const error = new Error(message);
@@ -33,6 +34,15 @@ function removalRowDeleteDeferred(replicaId, metadata = {}) {
   );
 }
 
+// The authoritative lifecycle read a removal decision needs did not answer:
+// an unavailability, never a refusal of the removal.
+function removalAuthorityDeferred(replicaId) {
+  return retryableRemovalDebtError(
+    REPLICA_REMOVAL_AUTHORITY_DEFERRED,
+    `Replica removal lifecycle authority unavailable for ${replicaId}`,
+  );
+}
+
 function buildFailedRemovalOutcome(replicaId, error) {
   const outcome = {replicaId, errorMessage: error.message};
   if (error?.deferRetry === true) outcome.deferRetry = true;
@@ -53,6 +63,7 @@ export {
   REPLICA_LEADER_CLEAR_DEFERRED,
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
   buildFailedRemovalOutcome,
+  removalAuthorityDeferred,
   removalRowDeleteDeferred,
   retryableRemovalDebtError,
 };

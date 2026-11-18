@@ -73,7 +73,7 @@ documentClass: generated
 - [replica-recovery-service-row-admission.js](replica-recovery-service-row-admission.js) - No leading comment; first export: insertRecoveryServiceRow. (importers: one)
 - [replica-recovery-service.js](replica-recovery-service.js) - Replica Recovery Service - Creates replacement replicas on healthy nodes. (importers: few)
 - [replica-removal-consensus-exit.js](replica-removal-consensus-exit.js) - Owner contract: Owner: when a replica being removed leaves consensus (owner ruling F2, 2026-09-26). (importers: many)
-- [replica-removal-debt-errors.js](replica-removal-debt-errors.js) - The replica removal's typed, retryable debt errors and the failed-removal outcome built from them: a removal step... (importers: one)
+- [replica-removal-debt-errors.js](replica-removal-debt-errors.js) - The replica removal's typed, retryable debt errors and the failed-removal outcome built from them: a removal step... (importers: few)
 - [replica-runtime-cleanup-custody.js](replica-runtime-cleanup-custody.js) - Host custody of exact replica objects whose shutdown has not completed. (importers: one)
 - [replica-state-machine-authoritative-transition.js](replica-state-machine-authoritative-transition.js) - Apply one partition lifecycle transition from exact authoritative evidence. (importers: one)
 - [replica-state-machine-constants.js](replica-state-machine-constants.js) - No leading comment; first export: REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED. (importers: hub)

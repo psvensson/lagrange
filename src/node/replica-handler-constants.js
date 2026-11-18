@@ -65,6 +65,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
   REMOVE_CLEANUP_PRECONDITION_REFUSED:
     'Failed-create target cleanup precondition was refused',
+  REMOVE_CLEANUP_AUTHORITY_DEFERRED:
+    'Failed-create target cleanup deferred: lifecycle authority unavailable',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
