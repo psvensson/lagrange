@@ -44,6 +44,7 @@ const STARTUP_JOIN_DECISION_MODE = Object.freeze({
 });
 
 const EXPLICIT_SEED_DECISION_STATE = Object.freeze({
+  FOUNDING_LAYOUT_UNSUPPORTED: 'founding_layout_unsupported',
   IDENTITY_MISMATCH: 'identity_mismatch',
   DURABLE_PROBED_PEER: 'durable_probed_peer',
   DURABLE_EXPLICIT_SEED: 'durable_explicit_seed',
@@ -58,6 +59,13 @@ function normalizeForceNewClusterEnv(value) {
 }
 
 const EXPLICIT_SEED_DECISION_TABLE = Object.freeze([
+  // The release version fence: an operator-provided seed never overrides the
+  // refusal of a retained founding of another cluster format revision.
+  Object.freeze({
+    state: EXPLICIT_SEED_DECISION_STATE.FOUNDING_LAYOUT_UNSUPPORTED,
+    matches: (snapshot) => snapshot.autoRejoinState ===
+      AUTO_REJOIN_DECISION_STATE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED,
+  }),
   Object.freeze({
     state: EXPLICIT_SEED_DECISION_STATE.IDENTITY_MISMATCH,
     matches: (snapshot) => snapshot.identityMismatch === true,
@@ -315,6 +323,18 @@ function resolveExplicitSeedDecisionState(snapshot) {
   ).state;
 }
 
+// Preserve the membership owner's refusal through the public startup
+// boundary. This is still the same FAIL decision, never recovery authority
+// or an original-allocation classification supplied by this adapter.
+function blockedStartupError(autoRejoinDecision) {
+  const membershipOwnerOutcome = Object.freeze({...autoRejoinDecision.membershipOwnerOutcome});
+  return Object.assign(new Error(autoRejoinDecision.error), {
+    code: membershipOwnerOutcome.outcomeType,
+    reason: membershipOwnerOutcome.reasonCode,
+    membershipOwnerOutcome,
+  });
+}
+
 /**
  * Build the startup decision when an operator-provided seed is available.
  * @param {Object} options
@@ -331,6 +351,8 @@ function buildExplicitSeedStartupDecision(options) {
   const state = resolveExplicitSeedDecisionState(snapshot);
 
   switch (state) {
+  case EXPLICIT_SEED_DECISION_STATE.FOUNDING_LAYOUT_UNSUPPORTED:
+    throw blockedStartupError(autoRejoinDecision);
   case EXPLICIT_SEED_DECISION_STATE.IDENTITY_MISMATCH:
     throw new Error(autoRejoinDecision.error);
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_PROBED_PEER:
@@ -441,15 +463,7 @@ async function resolveStartupJoinDecision(options) {
     });
   }
   if (autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.FAIL) {
-    // Preserve the membership owner's refusal through the public startup
-    // boundary. This is still the same FAIL decision, never recovery authority
-    // or an original-allocation classification supplied by this adapter.
-    const membershipOwnerOutcome = Object.freeze({...autoRejoinDecision.membershipOwnerOutcome});
-    throw Object.assign(new Error(autoRejoinDecision.error), {
-      code: membershipOwnerOutcome.outcomeType,
-      reason: membershipOwnerOutcome.reasonCode,
-      membershipOwnerOutcome,
-    });
+    throw blockedStartupError(autoRejoinDecision);
   }
   if (autoRejoinDecision.mode !== STARTUP_JOIN_DECISION_MODE.JOIN) {
     return {

@@ -182,9 +182,13 @@ until its deadline or completion.
 
 When operating within the certified pilot support envelope
 ([`support-envelope.json`](support-envelope.json)), in-place rollback from
-`0.5.0` to `0.4.1` is permitted only before `BEFORE_TARGET_SCHEMA_FINALIZE`;
+`0.5.0` to `0.4.1` is permitted only before `BEFORE_TARGET_SCHEMA_FINALIZE`,
+and only when both releases are of the envelope's cluster format revision;
 after that cutoff, rollback is refused with `ROLLBACK_CUTOFF_EXCEEDED` and
 operators must restore from an independent export or certified snapshot.
+Rollback or upgrade across a cluster format revision is never in place: it is
+refused with `OUTSIDE_SUPPORT_ENVELOPE`, and the cluster is re-founded (see
+[operations readiness](operations-readiness.md#cluster-format-revision-no-in-place-upgrade-no-downgrade)).
 
 ## Exit planning
 

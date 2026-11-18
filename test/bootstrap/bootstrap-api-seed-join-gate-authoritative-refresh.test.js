@@ -11,6 +11,8 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_PARTITION_ID = 'nodes-p1';
 const TEST_SECOND_PARTITION_ID = 'tables-p1';
@@ -120,6 +122,7 @@ test('seed join gate refreshes stale leader metadata from bounded authoritative 
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: '550e8400-e29b-41d4-a716-446655440730',
         nodeAddress: 'ws://localhost:9730',
       },

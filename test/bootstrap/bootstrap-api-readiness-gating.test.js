@@ -31,6 +31,8 @@ import {
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 function createSatisfiedControlPlaneReadinessService() {
   const diagnostics = Object.freeze({
@@ -693,7 +695,7 @@ test('BootstrapAPI - bootstrap validation', async (t) => {
   let response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(), nodeAddress: 'ws://localhost:9090'},
   });
 
   t.equal(response.statusCode, 400, 'should return 400 for missing nodeId');
@@ -704,7 +706,8 @@ test('BootstrapAPI - bootstrap validation', async (t) => {
   response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId: 'invalid-uuid', nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(),
+      nodeId: 'invalid-uuid', nodeAddress: 'ws://localhost:9090'},
   });
 
   t.equal(response.statusCode, 400, 'should return 400 for invalid nodeId');
@@ -715,7 +718,7 @@ test('BootstrapAPI - bootstrap validation', async (t) => {
   response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId: '550e8400-e29b-41d4-a716-446655440000'},
+    payload: {...clusterFormatRevisionClaim(), nodeId: '550e8400-e29b-41d4-a716-446655440000'},
   });
 
   t.equal(response.statusCode, 400, 'should return 400 for missing nodeAddress');
@@ -822,7 +825,7 @@ test('BootstrapAPI - bootstrap conflict detection', async (t) => {
   let response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(), nodeId, nodeAddress: 'ws://localhost:9090'},
   });
 
   t.equal(response.statusCode, 200, 'first bootstrap should succeed');
@@ -834,7 +837,7 @@ test('BootstrapAPI - bootstrap conflict detection', async (t) => {
   response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: 'ws://localhost:9091'},
+    payload: {...clusterFormatRevisionClaim(), nodeId, nodeAddress: 'ws://localhost:9091'},
   });
 
   t.equal(response.statusCode, 409, 'duplicate nodeId should return 409');
@@ -846,6 +849,7 @@ test('BootstrapAPI - bootstrap conflict detection', async (t) => {
     method: 'POST',
     url: '/bootstrap',
     payload: {
+      ...clusterFormatRevisionClaim(),
       nodeId: 'seed-node-1',
       nodeAddress: 'ws://localhost:9092',
     },
@@ -893,6 +897,7 @@ test('BootstrapAPI - returns bootstrap not ready before touching cache', async (
     method: 'POST',
     url: '/bootstrap',
     payload: {
+      ...clusterFormatRevisionClaim(),
       nodeId: '550e8400-e29b-41d4-a716-446655440010',
       nodeAddress: 'ws://localhost:9090',
     },
@@ -975,6 +980,7 @@ test('BootstrapAPI - returns bootstrap not ready while partition leaders are sti
     method: 'POST',
     url: '/bootstrap',
     payload: {
+      ...clusterFormatRevisionClaim(),
       nodeId: '550e8400-e29b-41d4-a716-446655440000',
       nodeAddress: 'ws://localhost:9090',
     },

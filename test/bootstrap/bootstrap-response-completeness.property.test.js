@@ -15,6 +15,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -210,6 +212,7 @@ test('Property 1: Bootstrap response contains all system table snapshots', async
             method: 'POST',
             url: '/bootstrap',
             payload: {
+              ...clusterFormatRevisionClaim(),
               nodeId: '550e8400-e29b-41d4-a716-446655440000',
               nodeAddress: 'ws://localhost:9090',
             },
@@ -313,6 +316,7 @@ test('Property 1: Bootstrap response snapshots match cache data', async (t) => {
             method: 'POST',
             url: '/bootstrap',
             payload: {
+              ...clusterFormatRevisionClaim(),
               nodeId: '550e8400-e29b-41d4-a716-446655440000',
               nodeAddress: 'ws://localhost:9090',
             },
@@ -373,6 +377,7 @@ test('Property 1: Bootstrap response structure is correct', async (t) => {
             method: 'POST',
             url: '/bootstrap',
             payload: {
+              ...clusterFormatRevisionClaim(),
               nodeId: '550e8400-e29b-41d4-a716-446655440000',
               nodeAddress: 'ws://localhost:9090',
             },
@@ -430,6 +435,7 @@ test('Property 1: Empty cache produces empty snapshots', async (t) => {
             method: 'POST',
             url: '/bootstrap',
             payload: {
+              ...clusterFormatRevisionClaim(),
               nodeId: '550e8400-e29b-41d4-a716-446655440000',
               nodeAddress: 'ws://localhost:9090',
             },

@@ -1,5 +1,16 @@
 import {createHash} from 'node:crypto';
 
+// The cluster format revision is the release-keyed version fence (founding
+// D7, placement P6, latch rev. 3 point B). A seed writes the revision of its
+// build into the original allocation it founds (the retained, write-once
+// declaration), so it is the one fact that a cluster was founded at format R.
+// Every admission into a cluster and every reopen of a seed's founding
+// declaration compares against this build's revision, and only equality is
+// admitted: an absent or different revision is refused, never inferred.
+// There is no in-place upgrade and no downgrade across a revision; a cluster
+// of another revision is re-founded.
+const CLUSTER_FORMAT_REVISION = 1;
+const CLUSTER_FORMAT_REVISION_FIELD = 'clusterFormatRevision';
 const SUPPORT_ENVELOPE_SCHEMA_VERSION = 1;
 const HASH_ALGORITHM_SHA256 = 'sha256';
 const DIGEST_ENCODING_HEX = 'hex';
@@ -63,6 +74,8 @@ const SUPPORT_ENVELOPE_REASON_CODE = Object.freeze({
   MISSING_OR_INVALID_DRILL_RECEIPT: 'MISSING_OR_INVALID_DRILL_RECEIPT',
   MIXED_VERSION_UNSUPPORTED: 'MIXED_VERSION_UNSUPPORTED',
   OK: 'OK',
+  ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED:
+    'ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED',
   OUTSIDE_SUPPORT_ENVELOPE: 'OUTSIDE_SUPPORT_ENVELOPE',
   REBUILD_WINDOW_EXCEEDED: 'REBUILD_WINDOW_EXCEEDED',
   REPLICA_SIZE_EXCEEDS_ENVELOPE: 'REPLICA_SIZE_EXCEEDS_ENVELOPE',
@@ -93,6 +106,106 @@ const POST_CUTOFF_PHASES = Object.freeze([
   'FINALIZED',
   'AFTER_ROLLBACK_CUTOFF',
 ]);
+
+/**
+ * The one comparison of the fence: only this build's revision is admitted.
+ * @param {*} revision A claimed or retained cluster format revision.
+ * @return {boolean}
+ */
+function isCurrentClusterFormatRevision(revision) {
+  return revision === CLUSTER_FORMAT_REVISION;
+}
+
+/**
+ * This build's revision as the wire and declaration field that carries it:
+ * the join request, the admission response, the original allocation and the
+ * support-envelope record all carry it through this one claim.
+ * @return {Object} {clusterFormatRevision}.
+ */
+function clusterFormatRevisionClaim() {
+  return {[CLUSTER_FORMAT_REVISION_FIELD]: CLUSTER_FORMAT_REVISION};
+}
+
+function claimedClusterFormatRevision(carrier) {
+  return carrier !== null && typeof carrier === 'object' &&
+    Object.hasOwn(carrier, CLUSTER_FORMAT_REVISION_FIELD) ?
+    carrier[CLUSTER_FORMAT_REVISION_FIELD] :
+    null;
+}
+
+function outsideClusterFormatMessage(subject, revision) {
+  return `${subject} cluster format revision ${String(revision)} is ` +
+    'outside the support envelope of this build (revision ' +
+    `${CLUSTER_FORMAT_REVISION}); a cluster is re-founded across a format ` +
+    'revision, never upgraded or downgraded in place.';
+}
+
+/**
+ * Join admission across the fence, decided identically on both sides of a
+ * join: the admitting node checks the joiner's request, and the joiner checks
+ * the admitting node's response. The peer's revision is read from the
+ * carrier's claim only; an absent claim is refused.
+ * @param {Object} request {nodeId, nodeAddress, carrier}: the peer and the
+ *   request or response body that carries its claim.
+ * @return {Object|null} The typed OUTSIDE_SUPPORT_ENVELOPE refusal, or null
+ *   when the peer is of this build's revision.
+ */
+function resolveJoinSupportEnvelopeConflict({nodeAddress, nodeId, carrier}) {
+  const peerClusterFormatRevision = claimedClusterFormatRevision(carrier);
+  if (isCurrentClusterFormatRevision(peerClusterFormatRevision)) {
+    return null;
+  }
+  return {
+    code: SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
+    error: outsideClusterFormatMessage('Peer', peerClusterFormatRevision),
+    localClusterFormatRevision: CLUSTER_FORMAT_REVISION,
+    nodeAddress,
+    nodeId,
+    peerClusterFormatRevision,
+    reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
+  };
+}
+
+/**
+ * The seed's reopen fence on its retained original allocation: a founding
+ * declaration without this build's revision is refused before any founder
+ * opens.
+ * @param {Object} declaration A retained original-allocation declaration.
+ * @return {boolean}
+ */
+function isCurrentClusterFormatDeclaration(declaration) {
+  return isCurrentClusterFormatRevision(
+    claimedClusterFormatRevision(declaration));
+}
+
+/**
+ * Refuse a retained original allocation of another cluster format revision,
+ * typed ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED.
+ * @param {Object} declaration A retained original-allocation declaration.
+ */
+function assertCurrentClusterFormatDeclaration(declaration) {
+  if (isCurrentClusterFormatDeclaration(declaration)) {
+    return;
+  }
+  const retainedClusterFormatRevision =
+    claimedClusterFormatRevision(declaration);
+  const code =
+    SUPPORT_ENVELOPE_REASON_CODE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED;
+  throw Object.assign(new Error(outsideClusterFormatMessage(
+    'Retained original allocation', retainedClusterFormatRevision)), {
+    code,
+    reasonCode: code,
+    clusterFormatRevision: CLUSTER_FORMAT_REVISION,
+    retainedClusterFormatRevision,
+  });
+}
+
+function outsideClusterFormatEnvelopeRefusal(envelope) {
+  const revision = claimedClusterFormatRevision(envelope);
+  return isCurrentClusterFormatRevision(revision) ?
+    null :
+    outsideClusterFormatMessage('Support envelope', revision);
+}
 
 function canonicalizeEnvelopeValue(value) {
   if (Array.isArray(value)) {
@@ -134,7 +247,9 @@ function validateVersionPairAdmission(
   {sourceVersion, targetVersion} = {},
 ) {
   const certified = resolveVersionPair(envelope);
+  const formatRefusal = outsideClusterFormatEnvelopeRefusal(envelope);
   const exactMatch =
+    formatRefusal === null &&
     typeof sourceVersion === 'string' &&
     typeof targetVersion === 'string' &&
     sourceVersion === certified.sourceVersion &&
@@ -142,12 +257,14 @@ function validateVersionPairAdmission(
   const code = exactMatch ?
     SUPPORT_ENVELOPE_REASON_CODE.OK :
     SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE;
+  const outsidePairMessage =
+    `Version transition ${String(sourceVersion)} -> ${String(targetVersion)} ` +
+    'is outside the certified support envelope (' +
+    `${certified.sourceVersion} -> ${certified.targetVersion}).`;
   const message = exactMatch ?
     `Version pair ${sourceVersion} -> ${targetVersion} is within the ` +
       'certified support envelope.' :
-    `Version transition ${String(sourceVersion)} -> ${String(targetVersion)} ` +
-      'is outside the certified support envelope (' +
-      `${certified.sourceVersion} -> ${certified.targetVersion}).`;
+    formatRefusal ?? outsidePairMessage;
   return {
     admitted: exactMatch,
     certifiedSourceVersion: certified.sourceVersion,
@@ -206,12 +323,13 @@ function evaluateRollbackEligibility(
 ) {
   const certified = resolveVersionPair(envelope);
   const cutoffName = resolveRollbackCutoffName(envelope);
+  const formatRefusal = outsideClusterFormatEnvelopeRefusal(envelope);
   const targetMatchesSource =
     targetVersion === undefined || targetVersion === certified.sourceVersion;
-  if (!targetMatchesSource) {
+  if (formatRefusal !== null || !targetMatchesSource) {
     return {
       eligible: false,
-      message:
+      message: formatRefusal ??
         `Rollback target ${String(targetVersion)} is outside the certified ` +
         `support envelope (${certified.sourceVersion}).`,
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
@@ -245,7 +363,9 @@ function validateMixedVersionNodeAdmission(
     certified.sourceVersion,
     certified.targetVersion,
   ]);
+  const formatRefusal = outsideClusterFormatEnvelopeRefusal(envelope);
   const bothKnown =
+    formatRefusal === null &&
     typeof localVersion === 'string' &&
     typeof peerVersion === 'string' &&
     allowedVersions.has(localVersion) &&
@@ -261,7 +381,7 @@ function validateMixedVersionNodeAdmission(
       SCHEMA_INCOMPATIBLE_SUFFIX;
   } else if (!bothKnown) {
     code = SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE;
-    message =
+    message = formatRefusal ??
       `Mixed-version peer (${String(localVersion)} <-> ` +
       `${String(peerVersion)}) is outside the certified support envelope (` +
       `${certified.sourceVersion} -> ${certified.targetVersion}).`;
@@ -272,72 +392,6 @@ function validateMixedVersionNodeAdmission(
     message,
     peerVersion,
     reasonCode: code,
-  };
-}
-
-function resolveJoinEnvelope(options, defaultEnvelope, getSupportEnvelope) {
-  if (options?.supportEnvelope) {
-    return options.supportEnvelope;
-  }
-  if (defaultEnvelope) {
-    return defaultEnvelope;
-  }
-  return typeof getSupportEnvelope === 'function' ?
-    getSupportEnvelope() :
-    null;
-}
-
-function resolveJoinLocalVersion(options, envelope, getReleaseVersion) {
-  if (options?.localVersion) {
-    return options.localVersion;
-  }
-  if (typeof getReleaseVersion === 'function') {
-    const version = getReleaseVersion();
-    if (version) {
-      return version;
-    }
-  }
-  return envelope?.versionPair?.sourceVersion || null;
-}
-
-function resolveJoinSupportEnvelopeConflict({
-  defaultEnvelope = null,
-  getReleaseVersion = null,
-  getSupportEnvelope = null,
-  nodeAddress,
-  nodeId,
-  options = {},
-} = {}) {
-  const envelope = resolveJoinEnvelope(
-    options,
-    defaultEnvelope,
-    getSupportEnvelope,
-  );
-  const peerVersion = options.peerVersion || options.releaseVersion || null;
-  if (!envelope || !peerVersion) {
-    return null;
-  }
-  const localVersion = resolveJoinLocalVersion(
-    options,
-    envelope,
-    getReleaseVersion,
-  );
-  const admission = validateMixedVersionNodeAdmission(envelope, {
-    localVersion,
-    peerVersion,
-    schemaBoundaryCompatible: options.schemaBoundaryCompatible !== false,
-  });
-  if (admission.admitted) {
-    return null;
-  }
-  return {
-    code: SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
-    error: admission.message,
-    localVersion,
-    nodeAddress,
-    nodeId,
-    peerVersion,
-    reasonCode: admission.reasonCode,
   };
 }
 
@@ -449,6 +503,7 @@ function resolveVersionPairSection(versionPair = {}) {
 
 function buildSupportEnvelopeRecord(input = {}) {
   const baseRecord = {
+    ...clusterFormatRevisionClaim(),
     boundaries: resolveBoundariesSection(input.boundaries),
     dependencyReceipts:
       input.dependencyReceipts || buildDefaultDependencyReceipts(),
@@ -573,6 +628,9 @@ function isTopologyBoundsValid(topology) {
 }
 
 function checkTopologyAndDigest(record, options, collectedCodes) {
+  if (outsideClusterFormatEnvelopeRefusal(record) !== null) {
+    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
+  }
   if (!isEnvelopeDigestMatch(record, options)) {
     collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.ENVELOPE_DIGEST_MISMATCH);
   }
@@ -630,6 +688,7 @@ class SupportEnvelopeOwner {
     const validation = this.validateEnvelope();
     return {
       boundaries: this.envelope.boundaries,
+      clusterFormatRevision: this.envelope.clusterFormatRevision,
       certifiedDrillIds: Object.keys(this.envelope.drills || {}),
       envelopeDigest: this.envelope.envelopeDigest,
       rebuildEnvelope: this.envelope.rebuildEnvelope,
@@ -643,6 +702,8 @@ class SupportEnvelopeOwner {
 }
 
 export {
+  CLUSTER_FORMAT_REVISION,
+  CLUSTER_FORMAT_REVISION_FIELD,
   DEFAULT_ROLLBACK_CUTOFF_PHASE,
   DEFAULT_SOURCE_VERSION,
   DEFAULT_TARGET_VERSION,
@@ -653,9 +714,12 @@ export {
   SUPPORT_ENVELOPE_REASON_CODE,
   SUPPORT_ENVELOPE_SCHEMA_VERSION,
   SupportEnvelopeOwner,
+  assertCurrentClusterFormatDeclaration,
   buildSupportEnvelopeRecord,
+  clusterFormatRevisionClaim,
   computeSupportEnvelopeDigest,
   evaluateRollbackEligibility,
+  isCurrentClusterFormatDeclaration,
   resolveJoinSupportEnvelopeConflict,
   validateMixedVersionNodeAdmission,
   validateSupportEnvelopeRecord,

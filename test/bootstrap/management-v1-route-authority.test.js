@@ -27,6 +27,8 @@ import {
   evaluatePartitionQuorumAuthority,
 } from '../../src/bootstrap/owners/partition-quorum-authority.js';
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
+import {buildSupportEnvelopeRecord} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   buildLocalPartitionService,
@@ -85,6 +87,13 @@ const BACKUP_PARAMS = Object.freeze({backupId: 'bkp-auth-1', destinationUri: 'me
 const RELEASE_PARAMS = Object.freeze({
   targetVersion: '0.5.0', targetArtifactDigest: `sha256:${'5'.repeat(64)}`,
 });
+// An in-place release transition is admitted only for a pair certified by a
+// support envelope of this build's cluster format revision (the release
+// version fence); without one it is refused OUTSIDE_SUPPORT_ENVELOPE.
+const CERTIFIED_RELEASE_ENVELOPE = buildSupportEnvelopeRecord({versionPair: {
+  sourceVersion: C.DEFAULT_RELEASE_VERSION,
+  targetVersion: RELEASE_PARAMS.targetVersion,
+}});
 
 /** Every declared management adapter port, each recording its use. */
 function recordingAdapters() {
@@ -457,6 +466,7 @@ function physicalCapabilityAdapters() {
   const effects = {exports: 0, drains: 0, restarts: 0, decommissions: 0};
   const storage = new MemoryBackupStorageAdapter();
   const adapters = {
+    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
     storageAdapter: storage,
     exportPartitionSnapshots: () => {
       effects.exports += 1;
@@ -1075,6 +1085,7 @@ test('PartitionService.prototype.getStatus contract parity, ready-node quorum, a
   for (const missingQuorum of [null, undefined]) {
     let drained = 0;
     const upg = new RollingUpgradeOwner({
+      supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
       onDrainNodeLeadership: () => {
         drained += 1;
       },

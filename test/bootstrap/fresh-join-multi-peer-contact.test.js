@@ -31,6 +31,8 @@ import {
   JOINING_ERROR_MSG,
   JOINING_HTTP,
 } from '../../src/bootstrap/node-joining-constants.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_NODE_ADDRESS = 'node-local:8080';
@@ -148,6 +150,7 @@ function buildTransportRefusedError() {
 function buildBootstrapSuccessResponse() {
   return {
     success: true,
+    ...clusterFormatRevisionClaim(),
     seedNodeId: CONTACT_SEED_NODE_ID,
     seedNodeWsAddress: CONTACT_SEED_WS_ADDRESS,
   };

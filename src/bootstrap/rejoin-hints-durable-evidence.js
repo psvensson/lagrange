@@ -16,6 +16,8 @@ import {
 } from './rejoin-hints-constants.js';
 import {extractPeerAddresses, normalizeAddress} from
   './rejoin-hints-addresses.js';
+import {isCurrentClusterFormatDeclaration} from
+  './owners/support-envelope-owner.js';
 import {originalSeedAnchor} from
   './seed-original-allocation-declaration.js';
 import {
@@ -508,6 +510,12 @@ function buildOriginalSeedAllocationCandidates(dataDir) {
   return candidates;
 }
 
+function isFoundedAtAnotherRevision(state, declaration) {
+  return (state === ORIGINAL_SEED_ALLOCATION_STATE.TRANSFERRED ||
+    state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) &&
+    !isCurrentClusterFormatDeclaration(declaration);
+}
+
 async function resolveOriginalSeedAllocationState(dataDir) {
   const normalizedDataDir = normalizeAddress(dataDir);
   if (!normalizedDataDir) {
@@ -518,9 +526,17 @@ async function resolveOriginalSeedAllocationState(dataDir) {
   for (const candidate of buildOriginalSeedAllocationCandidates(
     normalizedDataDir,
   )) {
-    const {state} = inspectReplicaLifecycleForOriginalAllocation(candidate);
+    const {state, declaration} =
+      inspectReplicaLifecycleForOriginalAllocation(candidate);
     if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE) {
       return ORIGINAL_SEED_ALLOCATION_STATE.UNREADABLE;
+    }
+    // The release version fence on the seed's reopen: a retained founding
+    // that names this founder (a corrupted one is unreadable above) but was
+    // founded at another cluster format revision is refused, whatever its
+    // rights, before any founder opens.
+    if (isFoundedAtAnotherRevision(state, declaration)) {
+      return ORIGINAL_SEED_ALLOCATION_STATE.FOUNDING_LAYOUT_UNSUPPORTED;
     }
     if (state === ORIGINAL_SEED_ALLOCATION_STATE.UNTRANSFERRED) {
       observedUntransferred = true;

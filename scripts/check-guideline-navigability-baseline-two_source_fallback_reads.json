@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-17T00:07:08.430Z",
-  "rawViolationCount": 1688,
+  "generatedAt": "2026-11-18T06:01:32.038Z",
+  "rawViolationCount": 1687,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 307,
+      "line": 309,
       "column": 16,
       "functionName": "onRetry",
       "kind": "two_source_fallback_reads",
@@ -1067,7 +1067,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 28,
+      "line": 29,
       "column": 6,
       "functionName": "createJoinPartitionReplica",
       "kind": "two_source_fallback_reads",
@@ -1076,7 +1076,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 62,
+      "line": 63,
       "column": 6,
       "functionName": "startJoinPartitionReplica",
       "kind": "two_source_fallback_reads",
@@ -1085,7 +1085,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 94,
+      "line": 95,
       "column": 6,
       "functionName": "stopJoinPartitionReplica",
       "kind": "two_source_fallback_reads",
@@ -1094,7 +1094,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 391,
+      "line": 394,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotActiveNodeIds",
       "kind": "two_source_fallback_reads",
@@ -1103,7 +1103,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 400,
+      "line": 403,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotEpoch",
       "kind": "two_source_fallback_reads",
@@ -1112,7 +1112,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 471,
+      "line": 474,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1121,7 +1121,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 546,
+      "line": 550,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1337,7 +1337,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 360,
+      "line": 362,
       "column": 26,
       "functionName": "resumeFromPersistedState",
       "kind": "two_source_fallback_reads",
@@ -1346,18 +1346,9 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 361,
+      "line": 363,
       "column": 33,
       "functionName": "resumeFromPersistedState",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 412,
-      "column": 23,
-      "functionName": "executeRollback",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1409,7 +1400,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 178,
+      "line": 295,
       "column": 4,
       "functionName": "resolveRollbackCutoffName",
       "kind": "two_source_fallback_reads",
@@ -1418,7 +1409,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 552,
+      "line": 607,
       "column": 25,
       "functionName": "isEnvelopeDigestMatch",
       "kind": "two_source_fallback_reads",
@@ -1427,7 +1418,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/contact-seed-phase.js",
-      "line": 640,
+      "line": 677,
       "column": 11,
       "functionName": "buildBootstrapFailureError",
       "kind": "two_source_fallback_reads",
@@ -1670,7 +1661,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js",
-      "line": 447,
+      "line": 449,
       "column": 8,
       "functionName": "advanceNodeBootIncarnation",
       "kind": "two_source_fallback_reads",
@@ -1688,7 +1679,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner.js",
-      "line": 147,
+      "line": 156,
       "column": 10,
       "functionName": "registerNodeInCluster",
       "kind": "two_source_fallback_reads",
@@ -1850,7 +1841,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 281,
+      "line": 280,
       "column": 25,
       "functionName": "applySystemTableChange",
       "kind": "two_source_fallback_reads",
@@ -1859,7 +1850,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 537,
+      "line": 536,
       "column": 10,
       "functionName": "applySystemTableChange",
       "kind": "two_source_fallback_reads",
@@ -2003,7 +1994,7 @@
     },
     {
       "filePath": "src/cdc/cdc-pipeline-readiness-gate.js",
-      "line": 64,
+      "line": 86,
       "column": 6,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -2885,7 +2876,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 224,
+      "line": 225,
       "column": 10,
       "functionName": "submitMutation",
       "kind": "two_source_fallback_reads",
@@ -2894,7 +2885,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 390,
+      "line": 401,
       "column": 10,
       "functionName": "executeMutationWithDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -2903,7 +2894,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 395,
+      "line": 406,
       "column": 10,
       "functionName": "executeMutationWithDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -2912,7 +2903,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 413,
+      "line": 424,
       "column": 10,
       "functionName": "executeMutationWithDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -2921,7 +2912,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 416,
+      "line": 427,
       "column": 10,
       "functionName": "executeMutationWithDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -2930,7 +2921,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 428,
+      "line": 439,
       "column": 10,
       "functionName": "executeMutationWithDiagnostics",
       "kind": "two_source_fallback_reads",
@@ -3002,7 +2993,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 427,
+      "line": 432,
       "column": 8,
       "functionName": "executeQuery",
       "kind": "two_source_fallback_reads",
@@ -3191,7 +3182,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 114,
+      "line": 121,
       "column": 20,
       "functionName": "sendHeartbeat",
       "kind": "two_source_fallback_reads",
@@ -3200,7 +3191,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 137,
+      "line": 144,
       "column": 8,
       "functionName": "sendHeartbeat",
       "kind": "two_source_fallback_reads",
@@ -6107,7 +6098,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 294,
+      "line": 302,
       "column": 21,
       "functionName": "buildExplicitSeedDecisionSnapshot",
       "kind": "two_source_fallback_reads",
@@ -6116,7 +6107,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 296,
+      "line": 304,
       "column": 6,
       "functionName": "buildExplicitSeedDecisionSnapshot",
       "kind": "two_source_fallback_reads",
@@ -6125,7 +6116,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 303,
+      "line": 311,
       "column": 12,
       "functionName": "buildExplicitSeedDecisionSnapshot",
       "kind": "two_source_fallback_reads",
@@ -6134,7 +6125,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 387,
+      "line": 409,
       "column": 34,
       "functionName": "resolveStartupJoinDecision",
       "kind": "two_source_fallback_reads",
@@ -6467,7 +6458,7 @@
     },
     {
       "filePath": "src/lagrange-runtime-startup.js",
-      "line": 473,
+      "line": 476,
       "column": 16,
       "functionName": "startSeedNode",
       "kind": "two_source_fallback_reads",
@@ -6476,7 +6467,7 @@
     },
     {
       "filePath": "src/lagrange-runtime-startup.js",
-      "line": 625,
+      "line": 628,
       "column": 28,
       "functionName": "resolveConfigurationOverrides",
       "kind": "two_source_fallback_reads",
@@ -7232,7 +7223,7 @@
     },
     {
       "filePath": "src/node/replica-handler-release-recovery.js",
-      "line": 81,
+      "line": 90,
       "column": 20,
       "functionName": "statusReportOf",
       "kind": "two_source_fallback_reads",
@@ -7241,7 +7232,7 @@
     },
     {
       "filePath": "src/node/replica-handler-release-recovery.js",
-      "line": 82,
+      "line": 91,
       "column": 22,
       "functionName": "statusReportOf",
       "kind": "two_source_fallback_reads",
@@ -9104,7 +9095,7 @@
     },
     {
       "filePath": "src/query/pg/postgres-wire-adapter.js",
-      "line": 173,
+      "line": 169,
       "column": 8,
       "functionName": "authenticate",
       "kind": "two_source_fallback_reads",
@@ -9113,7 +9104,7 @@
     },
     {
       "filePath": "src/query/pg/postgres-wire-adapter.js",
-      "line": 229,
+      "line": 225,
       "column": 8,
       "functionName": "execute",
       "kind": "two_source_fallback_reads",
@@ -9131,7 +9122,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 39,
+      "line": 42,
       "column": 17,
       "functionName": "participantFailureAnswerOf",
       "kind": "two_source_fallback_reads",
@@ -9140,7 +9131,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 40,
+      "line": 43,
       "column": 17,
       "functionName": "participantFailureAnswerOf",
       "kind": "two_source_fallback_reads",
@@ -9149,7 +9140,7 @@
     },
     {
       "filePath": "src/query/query-execution-budget.js",
-      "line": 111,
+      "line": 114,
       "column": 11,
       "functionName": "buildParticipantFailureEntry",
       "kind": "two_source_fallback_reads",
@@ -9176,7 +9167,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 618,
+      "line": 620,
       "column": 12,
       "functionName": "executeOnPartitions",
       "kind": "two_source_fallback_reads",
@@ -9185,7 +9176,7 @@
     },
     {
       "filePath": "src/query/query-executor-join-execution.js",
-      "line": 414,
+      "line": 422,
       "column": 22,
       "functionName": "performJoin",
       "kind": "two_source_fallback_reads",
@@ -9266,7 +9257,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 248,
+      "line": 399,
       "column": 13,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9275,7 +9266,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 281,
+      "line": 434,
       "column": 20,
       "functionName": "computeGroupAggregates",
       "kind": "two_source_fallback_reads",
@@ -9284,7 +9275,7 @@
     },
     {
       "filePath": "src/query/query-executor-select-aggregation.js",
-      "line": 531,
+      "line": 713,
       "column": 20,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9311,7 +9302,7 @@
     },
     {
       "filePath": "src/query/query-executor-unknown-outcome.js",
-      "line": 144,
+      "line": 147,
       "column": 30,
       "functionName": "observeAnswer",
       "kind": "two_source_fallback_reads",
@@ -9392,7 +9383,7 @@
     },
     {
       "filePath": "src/query/runtime-runner.js",
-      "line": 155,
+      "line": 152,
       "column": 6,
       "functionName": "run",
       "kind": "two_source_fallback_reads",
@@ -9590,7 +9581,7 @@
     },
     {
       "filePath": "src/query/sql-parser-select-methods.js",
-      "line": 129,
+      "line": 137,
       "column": 19,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9599,7 +9590,7 @@
     },
     {
       "filePath": "src/query/sql-parser-select-methods.js",
-      "line": 130,
+      "line": 138,
       "column": 22,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9608,7 +9599,7 @@
     },
     {
       "filePath": "src/query/sql-parser-select-methods.js",
-      "line": 239,
+      "line": 247,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -9671,7 +9662,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 594,
+      "line": 544,
       "column": 12,
       "functionName": "provisionInitialTablePartition",
       "kind": "two_source_fallback_reads",
@@ -9761,7 +9752,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 413,
+      "line": 407,
       "column": 6,
       "functionName": "isPlanningIdentityChangedReentryError",
       "kind": "two_source_fallback_reads",
@@ -9797,7 +9788,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-request-dispatch.js",
-      "line": 145,
+      "line": 146,
       "column": 22,
       "functionName": "createRequestExecutionContext",
       "kind": "two_source_fallback_reads",
@@ -9806,7 +9797,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-request-dispatch.js",
-      "line": 287,
+      "line": 289,
       "column": 17,
       "functionName": "executePlanRequest",
       "kind": "two_source_fallback_reads",
@@ -10058,7 +10049,7 @@
     },
     {
       "filePath": "src/query/sql-request.js",
-      "line": 41,
+      "line": 44,
       "column": 19,
       "functionName": "buildSqlRequestSecurityFields",
       "kind": "two_source_fallback_reads",
@@ -10067,7 +10058,7 @@
     },
     {
       "filePath": "src/query/sql-request.js",
-      "line": 124,
+      "line": 136,
       "column": 15,
       "functionName": "createSqlRequest",
       "kind": "two_source_fallback_reads",
@@ -10454,7 +10445,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 200,
+      "line": 190,
       "column": 23,
       "functionName": "calculateTargetReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -10463,7 +10454,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 201,
+      "line": 191,
       "column": 23,
       "functionName": "calculateTargetReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -10472,7 +10463,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 627,
+      "line": 617,
       "column": 8,
       "functionName": "isCriticalState",
       "kind": "two_source_fallback_reads",
@@ -10481,7 +10472,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 661,
+      "line": 651,
       "column": 8,
       "functionName": "getCriticalReason",
       "kind": "two_source_fallback_reads",
@@ -10679,7 +10670,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 400,
+      "line": 390,
       "column": 4,
       "functionName": "resolveDispatchRearmFromProgressReconcileState",
       "kind": "two_source_fallback_reads",
@@ -11300,7 +11291,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 196,
+      "line": 198,
       "column": 12,
       "functionName": "getEntityRemoveSafetyMinReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -11309,7 +11300,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 318,
+      "line": 320,
       "column": 12,
       "functionName": "getCriticalMinReplicaCount",
       "kind": "two_source_fallback_reads",
@@ -11381,7 +11372,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 323,
+      "line": 313,
       "column": 8,
       "functionName": "buildDeferredRemoveSafetyEvaluation",
       "kind": "two_source_fallback_reads",
@@ -11390,7 +11381,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 425,
+      "line": 415,
       "column": 8,
       "functionName": "evaluateRemoveSafety",
       "kind": "two_source_fallback_reads",
@@ -11579,7 +11570,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 451,
+      "line": 447,
       "column": 8,
       "functionName": "createOperationInternal",
       "kind": "two_source_fallback_reads",
@@ -11588,7 +11579,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 781,
+      "line": 768,
       "column": 6,
       "functionName": "createOperationRecordInternal",
       "kind": "two_source_fallback_reads",
@@ -11597,7 +11588,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 535,
+      "line": 537,
       "column": 6,
       "functionName": "getRecentOperationIntentTtlMs",
       "kind": "two_source_fallback_reads",
@@ -11606,7 +11597,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 562,
+      "line": 564,
       "column": 6,
       "functionName": "resolveRecentOperationMissReuseSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11849,7 +11840,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 417,
+      "line": 420,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11858,7 +11849,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 422,
+      "line": 425,
       "column": 6,
       "functionName": "buildTopologySettlingPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11867,7 +11858,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 536,
+      "line": 539,
       "column": 6,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11876,17 +11867,8 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 541,
+      "line": 544,
       "column": 6,
-      "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
-      "line": 548,
-      "column": 8,
       "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
@@ -11902,8 +11884,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/rebalancer-planning-gate-methods.js",
+      "line": 554,
+      "column": 8,
+      "functionName": "buildLocalMutationReadinessPlanningGateSnapshot",
+      "kind": "two_source_fallback_reads",
+      "reason": "one fact read from two sources; read the one authority for that fact",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 115,
+      "line": 111,
       "column": 6,
       "functionName": "hasTopologySettlingBlockerForOperationCreationTarget",
       "kind": "two_source_fallback_reads",
@@ -11912,7 +11903,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 128,
+      "line": 124,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11921,7 +11912,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 457,
+      "line": 427,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -11930,7 +11921,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 511,
+      "line": 481,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11939,7 +11930,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 517,
+      "line": 487,
       "column": 6,
       "functionName": "buildPriorityRecoveryPublicationEventSchedulingSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11948,7 +11939,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 688,
+      "line": 658,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11957,7 +11948,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 694,
+      "line": 664,
       "column": 6,
       "functionName": "buildPriorityRecoveryPlanningGateBypassSnapshot",
       "kind": "two_source_fallback_reads",
@@ -11993,7 +11984,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-progress.js",
-      "line": 688,
+      "line": 650,
       "column": 9,
       "functionName": "resolveReplicaOperationSemanticPhase",
       "kind": "two_source_fallback_reads",
@@ -12146,7 +12137,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 325,
+      "line": 332,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -12596,7 +12587,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 374,
+      "line": 375,
       "column": 8,
       "functionName": "projectPriorityTerminalCreateTargets",
       "kind": "two_source_fallback_reads",
@@ -12605,7 +12596,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 569,
+      "line": 570,
       "column": 6,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12614,7 +12605,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 579,
+      "line": 580,
       "column": 8,
       "functionName": "getReplaceSourceReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12623,7 +12614,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 597,
+      "line": 598,
       "column": 6,
       "functionName": "getReplicaIdFromOperationRow",
       "kind": "two_source_fallback_reads",
@@ -12632,7 +12623,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 610,
+      "line": 611,
       "column": 6,
       "functionName": "getReplicaIdFromServiceRow",
       "kind": "two_source_fallback_reads",
@@ -12641,7 +12632,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 755,
+      "line": 756,
       "column": 6,
       "functionName": "getNormalizedOperationType",
       "kind": "two_source_fallback_reads",
@@ -12902,7 +12893,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 128,
+      "line": 130,
       "column": 21,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -12911,7 +12902,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 129,
+      "line": 131,
       "column": 20,
       "functionName": "constructor",
       "kind": "two_source_fallback_reads",
@@ -12920,7 +12911,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 640,
+      "line": 642,
       "column": 10,
       "functionName": "_executeAndSend",
       "kind": "two_source_fallback_reads",

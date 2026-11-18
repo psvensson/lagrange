@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.603Z",
-  "rawViolationCount": 596,
+  "generatedAt": "2026-11-18T06:01:33.237Z",
+  "rawViolationCount": 594,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 206,
+      "line": 309,
       "column": 8,
       "functionName": "buildLocalCdcTelemetry",
       "kind": "typeof_dual_paths",
@@ -95,7 +95,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 508,
+      "line": 552,
       "column": 8,
       "functionName": "buildLocalSqlDiagnostics",
       "kind": "typeof_dual_paths",
@@ -104,7 +104,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 513,
+      "line": 557,
       "column": 6,
       "functionName": "buildLocalSqlDiagnostics",
       "kind": "typeof_dual_paths",
@@ -230,7 +230,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 141,
+      "line": 147,
       "column": 14,
       "functionName": "resolveSpentControlSnapshotRetry",
       "kind": "typeof_dual_paths",
@@ -320,7 +320,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 219,
+      "line": 222,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -383,7 +383,7 @@
     },
     {
       "filePath": "src/bootstrap/lifecycle-controller.js",
-      "line": 79,
+      "line": 82,
       "column": 16,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -437,7 +437,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 380,
+      "line": 381,
       "column": 25,
       "functionName": "scheduleDeferredMessageGroupServiceRowActivationRetry",
       "kind": "typeof_dual_paths",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 146,
+      "line": 149,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 148,
+      "line": 151,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -464,7 +464,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 150,
+      "line": 153,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 171,
+      "line": 174,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 177,
+      "line": 180,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 196,
+      "line": 199,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 207,
+      "line": 210,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -563,8 +563,8 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 37,
-      "column": 4,
+      "line": 154,
+      "column": 11,
       "functionName": "evaluateReadinessSnapshot",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -572,7 +572,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 41,
+      "line": 158,
       "column": 6,
       "functionName": "evaluateReadinessSnapshot",
       "kind": "typeof_dual_paths",
@@ -581,7 +581,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 43,
+      "line": 160,
       "column": 13,
       "functionName": "evaluateReadinessSnapshot",
       "kind": "typeof_dual_paths",
@@ -590,8 +590,8 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js",
-      "line": 71,
-      "column": 4,
+      "line": 198,
+      "column": 11,
       "functionName": "evaluateReadinessSnapshotAsync",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
@@ -665,15 +665,6 @@
       "line": 45,
       "column": 11,
       "functionName": "getCompatibilityOverride",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 285,
-      "column": 9,
-      "functionName": "resolveJoinEnvelope",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -788,7 +779,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/query-system-state-phase.js",
-      "line": 346,
+      "line": 348,
       "column": 6,
       "functionName": "resolveSnapshotBackfillPlan",
       "kind": "typeof_dual_paths",
@@ -797,7 +788,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/query-system-state-phase.js",
-      "line": 592,
+      "line": 594,
       "column": 10,
       "functionName": "registerNodeInCluster",
       "kind": "typeof_dual_paths",
@@ -896,7 +887,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 132,
+      "line": 137,
       "column": 14,
       "functionName": "readCachedClusterId",
       "kind": "typeof_dual_paths",
@@ -905,7 +896,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 143,
+      "line": 148,
       "column": 19,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -914,7 +905,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 168,
+      "line": 173,
       "column": 17,
       "functionName": "buildRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -923,7 +914,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 209,
+      "line": 214,
       "column": 17,
       "functionName": "buildBootstrapRejoinHintsSnapshot",
       "kind": "typeof_dual_paths",
@@ -932,7 +923,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 671,
+      "line": 697,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -941,7 +932,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 674,
+      "line": 700,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1418,7 +1409,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 170,
+      "line": 169,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1562,7 +1553,7 @@
     },
     {
       "filePath": "src/cdc/cdc-pipeline-readiness-gate.js",
-      "line": 67,
+      "line": 89,
       "column": 16,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1571,7 +1562,7 @@
     },
     {
       "filePath": "src/cdc/cdc-pipeline-readiness-gate.js",
-      "line": 70,
+      "line": 92,
       "column": 18,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1949,7 +1940,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 54,
+      "line": 55,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1958,7 +1949,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 58,
+      "line": 59,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1967,7 +1958,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 62,
+      "line": 63,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1976,7 +1967,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 66,
+      "line": 67,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1985,7 +1976,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 70,
+      "line": 71,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1994,7 +1985,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway.js",
-      "line": 76,
+      "line": 77,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -2786,7 +2777,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 392,
+      "line": 414,
       "column": 4,
       "functionName": "resolveStartupJoinDecision",
       "kind": "typeof_dual_paths",
@@ -3515,7 +3506,7 @@
     },
     {
       "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 80,
+      "line": 154,
       "column": 4,
       "functionName": "applyRebalancerDependencies",
       "kind": "typeof_dual_paths",
@@ -3524,7 +3515,7 @@
     },
     {
       "filePath": "src/partition/partition-service-rebalancer-methods.js",
-      "line": 98,
+      "line": 172,
       "column": 8,
       "functionName": "applyRebalancerDependencies",
       "kind": "typeof_dual_paths",
@@ -3788,15 +3779,6 @@
       "line": 232,
       "column": 2,
       "functionName": "rollbackConflictingSession",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 580,
-      "column": 8,
-      "functionName": "provisionInitialTablePartition",
       "kind": "typeof_dual_paths",
       "reason": "typeof dual path; keep one path and delete the other",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -4109,7 +4091,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 396,
+      "line": 380,
       "column": 13,
       "functionName": "resolveMovePlannerNowMs",
       "kind": "typeof_dual_paths",
@@ -4118,7 +4100,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 505,
+      "line": 495,
       "column": 6,
       "functionName": "resolvePartitionDescriptorEpochDecision",
       "kind": "typeof_dual_paths",
@@ -4406,7 +4388,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 397,
+      "line": 424,
       "column": 18,
       "functionName": "resolvePriorityRecoveryPlanningReadContext",
       "kind": "typeof_dual_paths",
@@ -4613,7 +4595,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 356,
+      "line": 386,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationCreationRequiredForPlanningGate",
       "kind": "typeof_dual_paths",
@@ -4622,7 +4604,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 371,
+      "line": 401,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationCreationRequiredForPlanningGate",
       "kind": "typeof_dual_paths",
@@ -4712,7 +4694,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 284,
+      "line": 397,
       "column": 6,
       "functionName": "hasControlPlanePublicationTrimOverflow",
       "kind": "typeof_dual_paths",
@@ -4721,7 +4703,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 375,
+      "line": 488,
       "column": 4,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "typeof_dual_paths",

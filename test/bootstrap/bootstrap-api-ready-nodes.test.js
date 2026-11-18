@@ -20,6 +20,8 @@ import {
 } from './bootstrap-api-test-fixtures.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 
 test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
@@ -621,6 +623,7 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
     method: 'POST',
     url: '/bootstrap',
     payload: {
+      ...clusterFormatRevisionClaim(),
       nodeId: '550e8400-e29b-41d4-a716-446655440000',
       nodeAddress: 'ws://localhost:9090',
     },
@@ -733,6 +736,7 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: '550e8400-e29b-41d4-a716-446655440123',
         nodeAddress: 'ws://localhost:9090',
       },

@@ -24,6 +24,14 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {COLUMN, TABLES, SERVICE_STATUS, HTTP_STATUS} from
   '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
+
+// Every joiner carries its build's cluster format revision (the release
+// version fence); these cases exercise the takeover decision behind it.
+const JOINER_FORMAT_CLAIM = Object.freeze({
+  clusterFormatClaim: clusterFormatRevisionClaim(),
+});
 
 const SEED_NODE_ID = 'seed-node-1';
 const SEED_NODE_ADDRESS = 'ws://localhost:8080';
@@ -88,6 +96,7 @@ test('seed returns a typed retryable conflict for an in-lease-window ' +
   const conflict = await api.checkForConflicts(
     REJOIN_NODE_ID,
     'ws://localhost:9091',
+    JOINER_FORMAT_CLAIM,
   );
 
   t.equal(
@@ -189,6 +198,7 @@ test('readmission proceeds after the lease expires (stale rejoin ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     'ws://localhost:9091',
+    JOINER_FORMAT_CLAIM,
   );
 
   t.equal(result, null,
