@@ -1,4 +1,13 @@
+/**
+ * Canonical durable intent projection for CREATE TABLE provisioning jobs.
+ * Preserves column types, collations, nullability, uniqueness, CHECK SQL,
+ * typed literal defaults, and table constraints across recovery.
+ *
+ * @module query/schema-provisioning-intent
+ */
+
 import {createHash} from 'node:crypto';
+import {SQL_DEFAULT_COLLATION} from './parser-constants.js';
 import {
   SCHEMA_PROVISIONING_DEFAULT,
   SCHEMA_PROVISIONING_INTENT_VERSION,
@@ -6,12 +15,14 @@ import {
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
+const TYPEOF_OBJECT = 'object';
+const TYPEOF_STRING = 'string';
 
 function sortObject(value) {
   if (Array.isArray(value)) {
     return value.map(sortObject);
   }
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== TYPEOF_OBJECT) {
     return value;
   }
   return Object.fromEntries(
@@ -27,10 +38,13 @@ function normalizeColumn(column = {}) {
   return sortObject({
     name: String(column.name || '').trim(),
     dataType: column.dataType || null,
+    collation: typeof column.collation === TYPEOF_STRING ?
+      column.collation.toUpperCase() : SQL_DEFAULT_COLLATION,
     primaryKey: column.primaryKey === true,
     nullable: column.notNull !== true && column.nullable !== false,
     unique: column.unique === true,
-    defaultValue: column.defaultValue ?? column.default ?? null,
+    checkSql: column.checkSql || null,
+    defaultValue: column.defaultValue ?? null,
     constraints: column.constraints || [],
   });
 }
@@ -48,6 +62,8 @@ function canonicalizeSchemaProvisioningIntent(ast = {}) {
     ),
     primaryKey: (Array.isArray(ast.primaryKey) ? ast.primaryKey : [])
       .map((columnName) => String(columnName || '').trim().toLowerCase()),
+    tableConstraints: Array.isArray(ast.tableConstraints) ?
+      ast.tableConstraints : [],
     options: ast.options || {},
   });
   const normalizedDdl = JSON.stringify(intent);

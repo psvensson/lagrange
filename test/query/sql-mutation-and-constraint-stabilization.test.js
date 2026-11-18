@@ -7,8 +7,8 @@ import {
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {
-  partitionServiceTableSql,
-} from '../../src/partition/partition-service-table-bootstrap.js';
+  renderTableDefinitionSql,
+} from '../../src/query/sql-table-definition.js';
 import {
   DistributedWriteCoordinator,
 } from '../../src/query/distributed/distributed-write-coordinator.js';
@@ -103,21 +103,28 @@ test('Q01: QueryExecutor buildExpressionSQL safely escapes single quotes and sup
     systemCache: createMockSystemCache([], [{partition_id: 'p1'}], [], []),
   });
 
-  const stringLiteral = {type: 'literal', value: 'O\'Reilly'};
+  const stringLiteral = {type: 'literal', value: 'O\'Reilly', sqlType: 'TEXT'};
   assert.equal(executor.buildExpressionSQL(stringLiteral), '\'O\'\'Reilly\'');
 
-  const castExpr = {type: 'cast', expr: {type: 'literal', value: 5}, affinity: 'INTEGER'};
+  const castExpr = {type: 'cast', expression: {type: 'literal', value: 5, sqlType: 'INTEGER'},
+    targetType: 'INTEGER', affinity: 'INTEGER'};
   assert.equal(executor.buildExpressionSQL(castExpr), 'CAST(5 AS INTEGER)');
 
   const caseExpr = {
     type: 'case',
-    conditions: [{when: {type: 'literal', value: 1}, thenExpression: {type: 'literal', value: 'yes'}}],
-    elseExpr: {type: 'literal', value: 'no'},
+    conditions: [{when: {type: 'literal', value: 1, sqlType: 'INTEGER'},
+      thenExpression: {type: 'literal', value: 'yes', sqlType: 'TEXT'}}],
+    elseExpr: {type: 'literal', value: 'no', sqlType: 'TEXT'},
   };
   assert.equal(executor.buildExpressionSQL(caseExpr), 'CASE WHEN 1 THEN \'yes\' ELSE \'no\' END');
 
   assert.throws(
     () => executor.buildExpressionSQL({type: 'unknown_special_node'}),
+    (err) => err.code === 'UNSUPPORTED_SQL_FEATURE',
+  );
+  // A literal is rendered only in the storage class it carries.
+  assert.throws(
+    () => executor.buildExpressionSQL({type: 'literal', value: 5}),
     (err) => err.code === 'UNSUPPORTED_SQL_FEATURE',
   );
 });
@@ -134,12 +141,12 @@ test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params
     table: 't',
     columns: ['id', 'amount'],
     values: [[
-      {type: 'literal', value: 2},
+      {type: 'literal', value: 2, sqlType: 'INTEGER'},
       {
         type: 'binary',
         operator: '+',
-        left: {type: 'literal', value: 2},
-        right: {type: 'literal', value: 3},
+        left: {type: 'literal', value: 2, sqlType: 'INTEGER'},
+        right: {type: 'literal', value: 3, sqlType: 'INTEGER'},
       },
     ]],
   };
@@ -158,14 +165,14 @@ test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params
         type: 'binary',
         operator: '+',
         left: {type: 'column_ref', column: 'amount'},
-        right: {type: 'literal', value: 1},
+        right: {type: 'literal', value: 1, sqlType: 'INTEGER'},
       },
     }],
     where: {
       type: 'binary',
       operator: '=',
       left: {type: 'column_ref', column: 'id'},
-      right: {type: 'literal', value: 1},
+      right: {type: 'literal', value: 1, sqlType: 'INTEGER'},
     },
   };
 
@@ -236,8 +243,8 @@ test('Q02: CHECK constraints are parsed and preserved in column checkSql and tab
   const amountSchema = schema.columns.find((c) => c.name === 'amount');
   assert.equal(amountSchema.checkSql, amountCol.checkSql);
 
-  const ddl = partitionServiceTableSql('t_check', schema);
-  assert.match(ddl, /amount INTEGER CHECK \(amount\s*>=\s*0\)/);
+  const ddl = renderTableDefinitionSql('t_check', schema);
+  assert.match(ddl, /amount INTEGER CHECK \(\(amount\s*>=\s*0\)\)/);
 });
 
 test('Q02: Composite primary key emits table-level PRIMARY KEY and omits individual column PRIMARY KEY', async () => {
@@ -248,7 +255,7 @@ test('Q02: Composite primary key emits table-level PRIMARY KEY and omits individ
   const schema = TableCreationService.prototype.buildSchemaDefinition(ast.columns);
   assert.deepEqual(schema.primaryKey, ['id', 'name']);
 
-  const ddl = partitionServiceTableSql('t_composite', schema);
+  const ddl = renderTableDefinitionSql('t_composite', schema);
   assert.match(ddl, /id INTEGER, name TEXT, PRIMARY KEY \(id, name\)/);
   assert.ok(!ddl.includes('id INTEGER PRIMARY KEY'));
   assert.ok(!ddl.includes('name TEXT PRIMARY KEY'));
@@ -261,7 +268,7 @@ test('Q02: Single-column table PRIMARY KEY sets col.primaryKey = true and emits 
   assert.equal(idCol.primaryKey, true);
 
   const schema = TableCreationService.prototype.buildSchemaDefinition(ast.columns);
-  const ddl = partitionServiceTableSql('t_pk', schema);
+  const ddl = renderTableDefinitionSql('t_pk', schema);
   assert.match(ddl, /id INTEGER PRIMARY KEY/);
   assert.match(ddl, /UNIQUE \(amount\)/);
 });

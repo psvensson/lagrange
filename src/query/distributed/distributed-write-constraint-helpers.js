@@ -1,4 +1,7 @@
+import {EXPR_TYPE, SQL_DEFAULT_COLLATION} from '../parser-constants.js';
 import {QUERY_AST_NODE, QUERY_AST_TYPE, QUERY_ERROR_CODE} from '../query-constants.js';
+
+const TYPEOF_STRING = 'string';
 
 const UNARY_MINUS = '-';
 const UNARY_PLUS = '+';
@@ -13,6 +16,13 @@ const SQLITE_CONSTRAINT_UNIQUE_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 const CONSTRAINT_TYPE_UNIQUE = 'UNIQUE';
 const ERR_COLUMN_REF_IN_KEY =
   'Column references cannot be used in partition key value';
+// Interim I1c (removed by WP4, design §5.1): the coordinator evaluates a
+// write-key expression in JavaScript, which cannot apply a collation.
+const ERR_COLLATE_IN_KEY =
+  'COLLATE in a partition key value is not supported yet (interim I1c, until WP4)';
+const ERR_NON_BINARY_UNIQUE_BATCH =
+  'Multi-row INSERT on a UNIQUE column with non-BINARY collation is not supported yet ' +
+  '(interim I1c, until WP4)';
 const COLUMN_LIST_SEPARATOR = ', ';
 const WHERE_AND_SEPARATOR = ' AND ';
 const FUNCTION_NODE_TYPES = new Set([
@@ -131,6 +141,9 @@ function extractCoordinatorKeyValue(coordinator, expr, params = []) {
   if (COLUMN_REF_NODE_TYPES.has(expr.type)) {
     return throwUnsupportedKeyExpression(ERR_COLUMN_REF_IN_KEY);
   }
+  if (expr.type === EXPR_TYPE.COLLATE) {
+    return throwUnsupportedKeyExpression(ERR_COLLATE_IN_KEY);
+  }
   return expr.value !== undefined ?
     expr.value :
     throwUnsupportedKeyExpression(
@@ -145,12 +158,11 @@ function resolveCoordinatorTableSchema(coordinator, tableName) {
     coordinator.systemTableCache?.getTable?.(tableName) ||
     null;
   if (!tableInfo) return null;
-  if (typeof tableInfo.schema === 'string') {
-    try {
-      return JSON.parse(tableInfo.schema);
-    } catch {
-      return null;
-    }
+  if (typeof tableInfo.schema_definition === TYPEOF_STRING) {
+    return JSON.parse(tableInfo.schema_definition);
+  }
+  if (typeof tableInfo.schema === TYPEOF_STRING) {
+    return JSON.parse(tableInfo.schema);
   }
   return tableInfo.schema || (tableInfo.columns ? tableInfo : null);
 }
@@ -203,14 +215,33 @@ async function assertUniqueAcrossPartitions(
   }
 }
 
+function columnSetHoldsNonBinaryCollation(schema, colNames) {
+  if (!Array.isArray(schema?.columns)) return false;
+  const targets = new Set(colNames.map((name) => String(name).toLowerCase()));
+  return schema.columns.some((col) =>
+    typeof col?.name === TYPEOF_STRING &&
+    targets.has(col.name.toLowerCase()) &&
+    typeof col.collation === TYPEOF_STRING &&
+    col.collation.toUpperCase() !== SQL_DEFAULT_COLLATION,
+  );
+}
+
+function resolveInsertColumnNames(ast, schema) {
+  if (Array.isArray(ast.columns) && ast.columns.length > 0) {
+    return ast.columns;
+  }
+  return Array.isArray(schema?.columns) ? schema.columns.map((col) => col.name) : [];
+}
+
 async function checkInsertColumnSetUniqueness(
   coordinator,
   ast,
   params,
   partitionIds,
   colNames,
+  schema,
 ) {
-  const astColumns = ast.columns || [];
+  const astColumns = resolveInsertColumnNames(ast, schema);
   const colIndices = colNames.map((name) =>
     astColumns.findIndex(
       (c) => String(c).toLowerCase() === String(name).toLowerCase(),
@@ -218,6 +249,10 @@ async function checkInsertColumnSetUniqueness(
   );
   if (!colIndices.every((idx) => idx >= 0)) {
     return;
+  }
+  if (Array.isArray(ast.values) && ast.values.length > 1 &&
+      columnSetHoldsNonBinaryCollation(schema, colNames)) {
+    throwUnsupportedKeyExpression(ERR_NON_BINARY_UNIQUE_BATCH);
   }
   const seenValues = new Set();
   for (const row of ast.values || []) {
@@ -288,6 +323,7 @@ async function enforceCoordinatorUniqueConstraints(coordinator, ast, params = []
         params,
         partitionIds,
         colNames,
+        schema,
       );
     } else {
       await checkUpdateColumnSetUniqueness(

@@ -1338,6 +1338,7 @@
         "src/bootstrap/seed-retained-partition-effects.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-service-table-bootstrap.js",
+        "src/query/sql-table-definition.js",
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
@@ -1363,7 +1364,8 @@
         "test/bootstrap/seed-registration-phase.test.js",
         "test/bootstrap/seed-original-attempt-lifetime.test.js",
         "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
-        "test/partition/partition-cdc-obligation-reclamation.test.js"
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/query/sql-table-definition.test.js"
       ]
     },
     "cdc-source-native-delivery": {
@@ -2214,12 +2216,14 @@
     "coordinator-scalar-semantics": {
       "description": "SELECT partial aggregation and HAVING evaluation preserve the same admitted scalar semantics, using native SQLite expected values and actual parser/planner/partition deliveries.",
       "owners": [
+        "src/query/coordinator-sql-admission.js",
         "src/query/sql-scalar-functions.js",
         "src/query/distributed/partial-aggregate-combiner.js",
         "src/query/distributed/distributed-select-fanout-plan.js",
         "src/query/query-executor-select-aggregation.js"
       ],
       "tests": [
+        "test/query/coordinator-interim-refusals.test.js",
         "test/query/sql-scalar-functions.test.js",
         "test/query/distributed-select-global-merge-correctness.test.js",
         "test/query/cross-partition-join-pushdown.test.js"
@@ -3695,6 +3699,7 @@
             "src/bootstrap/seed-retained-partition-effects.js",
             "src/partition/partition-service-entry-apply-base.js",
             "src/partition/partition-service-table-bootstrap.js",
+            "src/query/sql-table-definition.js",
             "src/partition/partition-participant-transaction-store.js",
             "src/partition/partition-committed-statement-outcome.js",
             "src/partition/partition-committed-statement-outcome-constants.js",
@@ -3712,7 +3717,8 @@
         "test/bootstrap/seed-retained-effects.test.js",
         "test/bootstrap/seed-retained-effects.integration.test.js",
         "test/bootstrap/seed-retained-effects-preparation.test.js",
-        "test/partition/partition-cdc-obligation-reclamation.test.js"
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/query/sql-table-definition.test.js"
       ]
     },
     "cdc-source-native-delivery": {

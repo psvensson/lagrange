@@ -711,6 +711,9 @@ const queryExecutorSelectAggregationMethods = {
     return [...rows].sort((a, b) => {
       for (const clause of orderBy) {
         const col = clause.expression?.column || clause.column;
+        if (!col) {
+          continue;
+        }
         const dir = clause.direction === SORT_DIR_DESC ? -1 : 1;
         const comparison = compareOrderByClauseValues(a[col], b[col], dir);
         if (comparison !== 0) {

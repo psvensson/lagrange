@@ -26,9 +26,9 @@ import {
 import {
   PARTITION_TABLE_OBSERVATION,
   createPartitionServiceTable,
-  partitionServiceTableSql,
   readPartitionServiceTableSchemaIn,
 } from '../../src/partition/partition-service-table-bootstrap.js';
+import {renderTableDefinitionSql} from '../../src/query/sql-table-definition.js';
 import {PartitionServiceEntryApplyBase} from
   '../../src/partition/partition-service-entry-apply-base.js';
 import {
@@ -110,7 +110,7 @@ test('apply-time column add: an existing NODES table without host_id gains ' +
   const previousSchema = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns
     .filter((column) => column.name !== COLUMN.HOST_ID)};
   assert.equal(previousSchema.columns.length, NODES_SCHEMA.columns.length - 1);
-  db.exec(partitionServiceTableSql(SYSTEM_TABLE_NAME.NODES, previousSchema));
+  db.exec(renderTableDefinitionSql(SYSTEM_TABLE_NAME.NODES, previousSchema));
   db.prepare('INSERT INTO nodes (node_id, node_address, cpu_cores, memory_mb, ' +
     'disk_gb, last_heartbeat, created_at) VALUES (?, ?, 1, 1, 1, 1, 1)')
     .run(NODE_ID, 'old:8080');

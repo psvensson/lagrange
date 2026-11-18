@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 282,
-    "query-sql": 197,
+    "query-sql": 201,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2672,
-  "digest": "fnv1a32-b96b550a",
+  "censusSize": 2676,
+  "digest": "fnv1a32-9cd85cb7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f131dcea",
+  "observationDigest": "fnv1a32-18b47d99",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1580,6 +1580,7 @@
     "test/query/call-stage.test.js": "query-sql",
     "test/query/cancellation-token.test.js": "query-sql",
     "test/query/catalog-authority-and-visible-reconciliation.test.js": "query-sql",
+    "test/query/coordinator-interim-refusals.test.js": "query-sql",
     "test/query/coordinator-resource-limits.property.test.js": "query-sql",
     "test/query/create-table-policy-option.test.js": "query-sql",
     "test/query/cross-partition-join-pushdown.test.js": "query-sql",
@@ -1624,6 +1625,7 @@
     "test/query/nested-call-rejection.test.js": "query-sql",
     "test/query/parallel-query-coordinator.test.js": "query-sql",
     "test/query/parallel-query-execution.property.test.js": "query-sql",
+    "test/query/partition-resolver-collate-pruning.test.js": "query-sql",
     "test/query/partition-resolver.test.js": "query-sql",
     "test/query/partition-transaction-seam-falsifiers.test.js": "query-sql",
     "test/query/partition-transparency.property.test.js": "query-sql",
@@ -1681,6 +1683,7 @@
     "test/query/service-read-locality-routing.test.js": "query-sql",
     "test/query/settled-replay-sql-surface.test.js": "query-sql",
     "test/query/sql-execution-guard.test.js": "query-sql",
+    "test/query/sql-front-end-fidelity.test.js": "query-sql",
     "test/query/sql-mutation-and-constraint-stabilization.test.js": "query-sql",
     "test/query/sql-parse-cache.property.test.js": "query-sql",
     "test/query/sql-parse-cache.test.js": "query-sql",
@@ -1712,6 +1715,7 @@
     "test/query/sql-scalar-functions.test.js": "query-sql",
     "test/query/sql-semantics-differential-oracle.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
+    "test/query/sql-table-definition.test.js": "query-sql",
     "test/query/sql-value-codec.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
@@ -14193,6 +14197,13 @@
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
+    "test/query/coordinator-interim-refusals.test.js": {
+      "files": [
+        "src/query/distributed/distributed-write-constraint-helpers.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/query/sql-query-engine-select-execution.js"
+      ]
+    },
     "test/query/create-table-policy-option.test.js": {
       "files": [
         "src/query/schema-provisioning-intent.js",
@@ -14805,6 +14816,11 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/query/sql-front-end-fidelity.test.js": {
+      "files": [
+        "src/query/sql-statement-renderer.js"
+      ]
+    },
     "test/query/sql-mutation-and-constraint-stabilization.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
@@ -15038,7 +15054,6 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
-        "src/partition/partition-service-table-bootstrap.js",
         "src/transport/message-router-delivery-encoding.js",
         "test/control-plane/serve-eligibility-test-support.js",
         "test/query/sql-semantics-oracle/cluster.js",
@@ -15059,6 +15074,11 @@
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/sql-table-definition.test.js": {
+      "files": [
+        "src/partition/partition-service-table-bootstrap.js"
       ]
     },
     "test/query/system-table-ingress-boundary-adversarial.test.js": {

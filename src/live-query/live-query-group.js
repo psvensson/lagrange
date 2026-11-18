@@ -95,7 +95,11 @@ class QueryGroup extends EventEmitter {
     this.table = table;
     this.isComplex = isComplexQuery(this.parsedQuery);
 
-    const {whereClause, predicate} = resolveWhereInfo(this.parsedQuery, this.params);
+    const {whereClause, predicate} = resolveWhereInfo(
+      this.parsedQuery,
+      this.params,
+      (tableName) => this.getTableInfo(tableName),
+    );
     this.whereClause = whereClause;
     this.predicate = predicate;
 

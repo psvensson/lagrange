@@ -17,9 +17,7 @@ import {
 } from './distributed-query-plan-constants.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
-import {
-  renderPlannerExpression,
-} from './distributed-query-planner-expression-renderer.js';
+import {renderExpression} from '../sql-statement-renderer.js';
 import {
   collectProjectedColumns,
   expressionReferencesAlias,
@@ -710,19 +708,9 @@ class DistributedQueryPlanner {
       `SELECT ${projection} FROM ` +
       `${renderSqliteIdentifier(tablePlan.tableName)}${aliasSuffix}`;
     if (tablePlan.localPredicate) {
-      sql += ` WHERE ${this.renderExpression(tablePlan.localPredicate)}`;
+      sql += ` WHERE ${renderExpression(tablePlan.localPredicate)}`;
     }
     return sql;
-  }
-
-  /**
-   * Render a planner expression to SQL for fragment diagnostics.
-   * @param {Object} expr - Expression AST.
-   * @return {string} SQL expression.
-   * @private
-   */
-  renderExpression(expr) {
-    return renderPlannerExpression(expr);
   }
 }
 

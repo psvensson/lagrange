@@ -8,7 +8,7 @@
  * statements come from (QueryExecutor.buildSelectSQL); `parse` is SQLParser.
  *
  * DDL. For a CREATE TABLE, the table the catalog path creates (SQLParser ->
- * buildSchemaDefinition -> partitionServiceTableSql) must store and compare
+ * buildSchemaDefinition -> renderTableDefinitionSql) must store and compare
  * every column the way SQLite stores and compares the declared table:
  * affinity and collation are read back from SQLite (schema.js
  * columnBehaviour), never inferred here.

@@ -480,14 +480,8 @@ test(
       getTableInfo: () => ({primaryKey: 'id'}),
     });
     const ast = new SQLParser(
-      'UPDATE counters SET value = 1 WHERE id = 1',
+      'UPDATE counters SET value = value + 1 WHERE id = 1',
     ).parse();
-    ast.assignments[0].value = {
-      type: 'binary',
-      operator: '+',
-      left: {type: 'column_ref', table: null, column: 'value'},
-      right: {type: 'literal', value: 1},
-    };
     const plan = coordinator.createWritePlan(ast, [], {
       partitionIds: ['counters-p1'],
       sessionId: 'response-loss-client-write',

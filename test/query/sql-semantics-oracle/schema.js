@@ -1,7 +1,7 @@
 /**
  * The differential oracle's tables, declared through the real catalog path:
  * SQLParser -> TableCreationService.buildSchemaDefinition -> the partition DDL
- * renderer (partitionServiceTableSql). The partitions create their table from
+ * renderer (renderTableDefinitionSql, src/query/sql-table-definition.js). The partitions create their table from
  * that schema themselves; the single-database oracle executes the same
  * rendered DDL, so both sides hold exactly the tables the product creates.
  * Whether the rendered DDL keeps the user's declared affinity and collation is
@@ -14,8 +14,7 @@ import Database from 'better-sqlite3';
 import {generateCreateIndexSQL} from '../../../src/bootstrap/system-table-schema-sql.js';
 import {SQLParser} from '../../../src/query/sql-parser.js';
 import {TableCreationService} from '../../../src/query/table-creation-service.js';
-import {partitionServiceTableSql} from
-  '../../../src/partition/partition-service-table-bootstrap.js';
+import {renderTableDefinitionSql} from '../../../src/query/sql-table-definition.js';
 
 // §4.1 declares `a` and `v` without a type. The front end refuses a column
 // without a type (an untyped TypeError, kept as the round-trip golden cases
@@ -97,7 +96,7 @@ function declareCatalogTable(tableName, ddl) {
     tableName,
     declaredDdl: ddl,
     schema,
-    renderedDdl: partitionServiceTableSql(tableName, schema),
+    renderedDdl: renderTableDefinitionSql(tableName, schema),
     columns: Object.freeze(schema.columns.map((column) => column.name)),
     primaryKey: schema.primaryKey[0],
     keyKind: TABLE_KEY_KIND[tableName] ?? KEY_KIND.INTEGER,

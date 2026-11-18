@@ -11,6 +11,11 @@ import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-
 import {TABLES} from '../constants/index.js';
 import {extractReferencedTables} from './live-query-sql-renderer.js';
 import {
+  assertLiveQueryGroupAdmissible,
+  assertLiveQueryPredicateAdmissible,
+} from '../query/coordinator-sql-admission.js';
+import {PartitionResolver} from '../query/partition-resolver.js';
+import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_CONFIG_KEY,
   LIVE_QUERY_CURSOR,
@@ -47,7 +52,8 @@ const BINARY_COMPARATORS = Object.freeze({
  * @param {Array} [params] - Bound query parameters.
  * @return {Function} Predicate function that takes a row and returns boolean.
  */
-function compilePredicate(whereClause, params = []) {
+function compilePredicate(whereClause, params = [], schemas = null) {
+  assertLiveQueryPredicateAdmissible(whereClause, schemas);
   if (!whereClause) {
     // No WHERE clause - match all rows
     return () => true;
@@ -395,6 +401,12 @@ function resolveLiveQueryTtlMs(config) {
     LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
 }
 
+function buildLiveQueryServiceTableLookup(systemCache) {
+  if (!systemCache) return null;
+  const resolver = new PartitionResolver({systemCache});
+  return (tableName) => resolver.getTableInfo(tableName);
+}
+
 /**
  * LiveQueryService manages a single live query subscription.
  */
@@ -421,7 +433,10 @@ class LiveQueryService {
     // Compile predicate from WHERE clause
     this.params = options.params || [];
     this.whereClause = this.parsedQuery?.where ?? null;
-    this.predicate = compilePredicate(this.whereClause, this.params);
+    const tableLookup = buildLiveQueryServiceTableLookup(this.systemCache);
+    assertLiveQueryGroupAdmissible(this.parsedQuery, tableLookup);
+    const schemas = tableLookup ? this.tables.map(tableLookup).filter(Boolean) : null;
+    this.predicate = compilePredicate(this.whereClause, this.params, schemas);
 
     // Partition key value (extracted lazily)
     this.partitionKeyValue = null;

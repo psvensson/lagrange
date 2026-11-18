@@ -18,6 +18,10 @@ import {
   extractReferencedTables,
   isComplexQuery as baseIsComplexQuery,
 } from './live-query-sql-renderer.js';
+import {
+  assertLiveQueryGroupAdmissible,
+  assertLiveQueryRendererAdmissible,
+} from '../query/coordinator-sql-admission.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const WILDCARD_COLUMN = '*';
@@ -60,9 +64,11 @@ function resolveTableInfo(parsedAst) {
  * Compile WHERE clause predicate from parsed AST.
  * @param {Object} parsedAst
  * @param {Array|Object} [params]
+ * @param {Function|null} [resolveTableSchema]
  * @return {{whereClause: Object|null, predicate: Function}}
  */
-function resolveWhereInfo(parsedAst, params = []) {
+function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null) {
+  assertLiveQueryGroupAdmissible(parsedAst, resolveTableSchema);
   const whereClause = parsedAst?.where ?? null;
   return {whereClause, predicate: compilePredicate(whereClause, params)};
 }
@@ -201,6 +207,7 @@ function resolveExecutionSQL(sql, sqlQueryEngine, parsedQuery) {
   if (sqlQueryEngine?.executor?.buildSelectSQL) {
     return sqlQueryEngine.executor.buildSelectSQL(parsedQuery);
   }
+  assertLiveQueryRendererAdmissible(parsedQuery);
   return buildSelectSQL(parsedQuery);
 }
 

@@ -29,6 +29,7 @@ import {
   buildSelectSQL as renderSelectSQL,
   extractReferencedTables,
 } from './live-query-sql-renderer.js';
+import {assertLiveQueryRendererAdmissible} from '../query/coordinator-sql-admission.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const CANONICAL_SEPARATOR = ',';
@@ -106,6 +107,7 @@ function resolveSnapshotExecutionSql(manager, group) {
   if (manager.sqlQueryEngine?.executor?.buildSelectSQL) {
     return manager.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery);
   }
+  assertLiveQueryRendererAdmissible(group.parsedQuery);
   return manager.buildSelectSQL(group.parsedQuery);
 }
 

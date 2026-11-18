@@ -965,17 +965,22 @@ test('buildSchemaDefinition round-trips string defaults as SQL literals',
         name: 'source_snapshot_json',
         dataType: {name: 'TEXT'},
         notNull: true,
-        defaultValue: {type: 'literal', value: '{}'},
+        defaultValue: {type: 'literal', value: '{}', sqlType: 'TEXT'},
       },
       {
         name: 'computed_at',
         dataType: {name: 'INTEGER'},
-        defaultValue: {type: 'literal', value: 0},
+        defaultValue: {type: 'literal', value: 0, sqlType: 'INTEGER'},
       },
       {
         name: 'note',
         dataType: {name: 'TEXT'},
-        defaultValue: {type: 'literal', value: 'it\'s'},
+        defaultValue: {type: 'literal', value: 'it\'s', sqlType: 'TEXT'},
+      },
+      {
+        name: 'ratio',
+        dataType: null,
+        defaultValue: {type: 'literal', value: '2.0', sqlType: 'REAL'},
       },
     ]);
     const byName = Object.fromEntries(
@@ -1002,6 +1007,10 @@ test('buildSchemaDefinition round-trips string defaults as SQL literals',
       undefined,
       'columns without defaults must stay undefined',
     );
+    t.equal(byName.ratio.defaultValue, '2.0',
+      'a decimal default stays a REAL literal, never the text \'2.0\'');
+    t.equal(byName.ratio.type, 'BLOB',
+      'an untyped column is recorded as BLOB, the type of the same affinity');
     // The DDL every re-emitter builds from this schema must parse in SQLite.
     const {default: Database} = await import('better-sqlite3');
     const db = new Database(':memory:');
@@ -1019,5 +1028,7 @@ test('buildSchemaDefinition round-trips string defaults as SQL literals',
     const row = db.prepare('SELECT * FROM round_trip').get();
     t.equal(row.source_snapshot_json, '{}',
       'inserted rows must materialize the unquoted default value');
+    t.equal(db.prepare('SELECT typeof(ratio) AS c FROM round_trip').get().c, 'real',
+      'the decimal default is stored as a REAL in an untyped (BLOB) column');
     db.close();
   });

@@ -15,9 +15,16 @@ import {
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {
+  COORDINATOR_ADMISSION_DECISION,
+  evaluateCrossPartitionJoinAdmission,
+} from './coordinator-sql-admission.js';
+import {renderSelect} from './sql-statement-renderer.js';
+import {EXPR_TYPE} from './parser-constants.js';
 
 const {
   QUERY_AST_NODE,
+  QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
@@ -26,6 +33,24 @@ const {
   QUERY_OPERATOR,
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
+
+// The SELECT one join-side fetch runs: rendered by the one renderer.
+function tableFetchAst(columns, from, where, distinct) {
+  return {
+    type: QUERY_AST_TYPE.SELECT,
+    distinct,
+    columns,
+    from,
+    joins: [],
+    where: where || null,
+    groupBy: null,
+    having: null,
+    orderBy: null,
+    limit: null,
+    ctes: null,
+    setOperation: null,
+  };
+}
 
 /** Canonical outcomes for one join-table fetch decision. */
 const JOIN_TABLE_FETCH_KIND = Object.freeze({
@@ -88,6 +113,14 @@ const queryExecutorJoinExecutionMethods = {
     options,
     queryTimestamp,
   ) {
+    const admission = evaluateCrossPartitionJoinAdmission(
+      ast,
+      mainPartitionIds,
+      this.resolveTableInfo,
+    );
+    if (admission.decision === COORDINATOR_ADMISSION_DECISION.REFUSED) {
+      return admission.response;
+    }
     const {joinPartitions} = options;
     const fanoutMetrics = [];
     const pushdownPlan = buildJoinPushdownPlan(ast, params);
@@ -346,19 +379,15 @@ const queryExecutorJoinExecutionMethods = {
    * @private
    */
   buildJoinTableFetchSql(edgePlan, whereAst) {
-    const projectionSql = edgePlan.projection ?
-      edgePlan.projection.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14) :
-      QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
-    let sql =
-      `${QUERY_EXECUTOR_LITERAL.STRING_SELECT}${projectionSql}` +
-      ` FROM ${edgePlan.tableName}`;
-    if (edgePlan.alias) {
-      sql += ` AS ${edgePlan.alias}`;
-    }
-    if (whereAst) {
-      sql += ` WHERE ${this.buildExpressionSQL(whereAst)}`;
-    }
-    return sql;
+    const columns = edgePlan.projection ?
+      edgePlan.projection.map((column) => ({
+        type: EXPR_TYPE.COLUMN,
+        expression: {type: EXPR_TYPE.COLUMN_REF, table: null, column},
+        alias: null,
+      })) :
+      [{type: EXPR_TYPE.STAR, table: null}];
+    return renderSelect(tableFetchAst(columns,
+      {name: edgePlan.tableName, alias: edgePlan.alias || null}, whereAst, false));
   },
 
   /**
@@ -686,26 +715,8 @@ const queryExecutorJoinExecutionMethods = {
    * @private
    */
   buildSelectSQLWithoutJoins(ast, mainWhere) {
-    let sql = QUERY_EXECUTOR_LITERAL.STRING_SELECT;
-    if (ast.distinct) {
-      sql += QUERY_EXECUTOR_LITERAL.STRING_DISTINCT;
-    }
-
-    sql += QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
-
-    if (ast.from.subquery) {
-      sql += ` FROM (${this.buildSelectSQL(ast.from.subquery)})`;
-    } else {
-      sql += ` FROM ${ast.from.name}`;
-    }
-    if (ast.from.alias) {
-      sql += ` AS ${ast.from.alias}`;
-    }
-
-    if (mainWhere) {
-      sql += ` WHERE ${this.buildExpressionSQL(mainWhere)}`;
-    }
-    return sql;
+    return renderSelect(tableFetchAst([{type: EXPR_TYPE.STAR, table: null}], ast.from,
+      mainWhere, ast.distinct === true));
   },
 };
 

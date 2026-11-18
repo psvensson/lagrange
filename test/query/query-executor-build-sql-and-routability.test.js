@@ -62,12 +62,12 @@ test('QueryExecutor - buildExpressionSQL emits searched CASE WHEN',
             type: 'binary',
             operator: '>',
             left: {type: 'column_ref', table: null, column: 'age'},
-            right: {type: 'literal', value: 18},
+            right: {type: 'literal', value: 18, sqlType: 'INTEGER'},
           },
-          thenExpression: {type: 'literal', value: 'adult'},
+          thenExpression: {type: 'literal', value: 'adult', sqlType: 'TEXT'},
         },
       ],
-      elseExpr: {type: 'literal', value: 'minor'},
+      elseExpr: {type: 'literal', value: 'minor', sqlType: 'TEXT'},
     };
     const sql = executor.buildExpressionSQL(expr);
 
@@ -90,21 +90,21 @@ test('QueryExecutor - buildExpressionSQL emits CASE with multiple WHEN',
             type: 'binary',
             operator: '=',
             left: {type: 'column_ref', table: null, column: 'status'},
-            right: {type: 'literal', value: 'active'},
+            right: {type: 'literal', value: 'active', sqlType: 'TEXT'},
           },
-          thenExpression: {type: 'literal', value: 1},
+          thenExpression: {type: 'literal', value: 1, sqlType: 'INTEGER'},
         },
         {
           when: {
             type: 'binary',
             operator: '=',
             left: {type: 'column_ref', table: null, column: 'status'},
-            right: {type: 'literal', value: 'pending'},
+            right: {type: 'literal', value: 'pending', sqlType: 'TEXT'},
           },
-          thenExpression: {type: 'literal', value: 2},
+          thenExpression: {type: 'literal', value: 2, sqlType: 'INTEGER'},
         },
       ],
-      elseExpr: {type: 'literal', value: 0},
+      elseExpr: {type: 'literal', value: 0, sqlType: 'INTEGER'},
     };
     const sql = executor.buildExpressionSQL(expr);
 
@@ -126,8 +126,8 @@ test('QueryExecutor - buildExpressionSQL emits simple CASE with operand',
       operand: {type: 'column_ref', table: null, column: 'status'},
       conditions: [
         {
-          when: {type: 'literal', value: 'active'},
-          thenExpression: {type: 'literal', value: 1},
+          when: {type: 'literal', value: 'active', sqlType: 'TEXT'},
+          thenExpression: {type: 'literal', value: 1, sqlType: 'INTEGER'},
         },
       ],
       elseExpr: null,
@@ -150,7 +150,7 @@ test('QueryExecutor - buildExpressionSQL emits subquery',
       type: 'subquery',
       query: {
         type: 'SELECT',
-        columns: [{type: 'column_ref', table: null, column: 'id'}],
+        columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
         from: {type: 'table', name: 'users', alias: null},
         joins: [],
         where: null,
@@ -178,7 +178,7 @@ test('QueryExecutor - buildExpressionSQL emits EXISTS subquery',
       type: 'exists',
       query: {
         type: 'SELECT',
-        columns: [{type: 'literal', value: 1}],
+        columns: [{type: 'column', expression: {type: 'literal', value: 1, sqlType: 'INTEGER'}, alias: null}],
         from: {type: 'table', name: 'orders', alias: null},
         joins: [],
         where: {
@@ -236,7 +236,7 @@ test('QueryExecutor - buildExpressionSQL emits function_call with multiple args'
       args: [
         {type: 'column_ref', table: null, column: 'nickname'},
         {type: 'column_ref', table: null, column: 'name'},
-        {type: 'literal', value: 'unknown'},
+        {type: 'literal', value: 'unknown', sqlType: 'TEXT'},
       ],
     };
     const sql = executor.buildExpressionSQL(expr);
@@ -254,7 +254,7 @@ test('QueryExecutor - buildExpressionSQL emits function_call with no args',
     const expr = {
       type: 'function_call',
       name: 'datetime',
-      args: [{type: 'literal', value: 'now'}],
+      args: [{type: 'literal', value: 'now', sqlType: 'TEXT'}],
     };
     const sql = executor.buildExpressionSQL(expr);
 
@@ -272,7 +272,7 @@ test('QueryExecutor - buildSelectSQL emits CTE prefix',
     });
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: '*'}],
+      columns: [{type: 'star', value: '*'}],
       from: {type: 'table', name: 'active_users', alias: null},
       joins: [],
       where: null,
@@ -284,14 +284,14 @@ test('QueryExecutor - buildSelectSQL emits CTE prefix',
         name: 'active_users',
         query: {
           type: 'SELECT',
-          columns: [{type: 'column_ref', table: null, column: '*'}],
+          columns: [{type: 'star', value: '*'}],
           from: {type: 'table', name: 'users', alias: null},
           joins: [],
           where: {
             type: 'binary',
             operator: '=',
             left: {type: 'column_ref', table: null, column: 'status'},
-            right: {type: 'literal', value: 'active'},
+            right: {type: 'literal', value: 'active', sqlType: 'TEXT'},
           },
           groupBy: null,
           having: null,
@@ -318,7 +318,7 @@ test('QueryExecutor - buildSelectSQL emits WITH RECURSIVE prefix',
     });
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: '*'}],
+      columns: [{type: 'star', value: '*'}],
       from: {type: 'table', name: 'tree', alias: null},
       joins: [],
       where: null,
@@ -330,7 +330,7 @@ test('QueryExecutor - buildSelectSQL emits WITH RECURSIVE prefix',
         name: 'tree',
         query: {
           type: 'SELECT',
-          columns: [{type: 'column_ref', table: null, column: 'id'}],
+          columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
           from: {type: 'table', name: 'nodes', alias: null},
           joins: [],
           where: null,
@@ -357,7 +357,7 @@ test('QueryExecutor - buildSelectSQL emits multiple CTEs',
     });
     const innerSelect = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'users', alias: null},
       joins: [],
       where: null,
@@ -368,7 +368,7 @@ test('QueryExecutor - buildSelectSQL emits multiple CTEs',
     };
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: '*'}],
+      columns: [{type: 'star', value: '*'}],
       from: {type: 'table', name: 'cte_a', alias: null},
       joins: [],
       where: null,
@@ -413,7 +413,7 @@ test('QueryExecutor - buildSelectSQL emits UNION',
     });
     const rightSelect = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'archived_users', alias: null},
       joins: [],
       where: null,
@@ -424,7 +424,7 @@ test('QueryExecutor - buildSelectSQL emits UNION',
     };
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'users', alias: null},
       joins: [],
       where: null,
@@ -448,7 +448,7 @@ test('QueryExecutor - buildSelectSQL emits UNION ALL',
     });
     const rightSelect = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'name'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'name'}, alias: null}],
       from: {type: 'table', name: 'contacts', alias: null},
       joins: [],
       where: null,
@@ -459,7 +459,7 @@ test('QueryExecutor - buildSelectSQL emits UNION ALL',
     };
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'name'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'name'}, alias: null}],
       from: {type: 'table', name: 'users', alias: null},
       joins: [],
       where: null,
@@ -483,7 +483,7 @@ test('QueryExecutor - buildSelectSQL emits INTERSECT',
     });
     const rightSelect = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'premium', alias: null},
       joins: [],
       where: null,
@@ -494,7 +494,7 @@ test('QueryExecutor - buildSelectSQL emits INTERSECT',
     };
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'users', alias: null},
       joins: [],
       where: null,
@@ -518,7 +518,7 @@ test('QueryExecutor - buildSelectSQL emits EXCEPT',
     });
     const rightSelect = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'banned', alias: null},
       joins: [],
       where: null,
@@ -529,7 +529,7 @@ test('QueryExecutor - buildSelectSQL emits EXCEPT',
     };
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'column_ref', table: null, column: 'id'}],
+      columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
       from: {type: 'table', name: 'users', alias: null},
       joins: [],
       where: null,

@@ -29,6 +29,10 @@ import {
   refreshTableRoutingMetadataFromAuthority,
   resolveSelectExecutionPlanWithAuthorityRefresh,
 } from './sql-query-engine-metadata-authority-refresh.js';
+import {
+  COORDINATOR_ADMISSION_DECISION,
+  evaluateCoordinatorSelectAdmission,
+} from './coordinator-sql-admission.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -330,6 +334,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
   async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
     transactionRead = null) {
+    const admission = evaluateCoordinatorSelectAdmission(ast);
+    if (admission.decision === COORDINATOR_ADMISSION_DECISION.REFUSED) {
+      return admission.response;
+    }
     if (!ast.from) {
       return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
         transactionRead);

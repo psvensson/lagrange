@@ -7,7 +7,7 @@ documentClass: generated
 
 ## Files
 
-- [pg-compat-constants.js](pg-compat-constants.js) - PostgreSQL compatibility layer constants. (importers: many)
+- [pg-compat-constants.js](pg-compat-constants.js) - PostgreSQL compatibility layer constants. (importers: hub)
 - [pg-function-registry.js](pg-function-registry.js) - PostgreSQL function name translation registry. (importers: few)
 - [pg-translate.js](pg-translate.js) - Stateless PG-to-SQLite AST translation functions. (importers: many)
 - [pg-type-affinity.js](pg-type-affinity.js) - PostgreSQL type to SQLite affinity mapping. (importers: few)

@@ -1,4 +1,9 @@
+import {
+  SELECT_MERGE_MODE,
+  assertSelectFanoutAdmissible,
+} from '../coordinator-sql-admission.js';
 import {EXPR_TYPE} from '../parser-constants.js';
+import {resultColumnName} from '../sql-statement-renderer.js';
 
 /** Aggregate function names as the parser normalizes them. */
 const AGGREGATE_FN = Object.freeze({
@@ -26,11 +31,7 @@ const FANOUT_PLAN_KIND = {
 };
 
 /** Internal construction states before the public plan kind is emitted. */
-const FANOUT_BUILD_STATE = {
-  ORIGINAL_RAW_ROWS: 'original_raw_rows',
-  DISTRIBUTED_RAW_ROWS: 'distributed_raw_rows',
-  PARTIAL_AGGREGATE: 'partial_aggregate',
-};
+const FANOUT_BUILD_STATE = SELECT_MERGE_MODE;
 
 /**
  * Deterministic partition-side aliases for combinable partial columns.
@@ -162,18 +163,6 @@ function normalizeForKey(node) {
 }
 
 /**
- * The alias the legacy coordinator aggregation gives an aggregate output
- * row key: user alias when present, otherwise `FUNC(argName)` where
- * argName mirrors QueryExecutor#getArgName.
- * @param {Object} col - SELECT column AST entry.
- * @param {Object} expr - The aggregate expression inside it.
- * @return {string} Output row key.
- */
-function aggregateOutputKey(col, expr) {
-  return col.alias || canonicalAggregateName(expr);
-}
-
-/**
  * Canonical `FUNC(arg)` name; matches evaluateExpression's HAVING lookup.
  * @param {Object} expr - Aggregate expression AST.
  * @return {string} Canonical aggregate name.
@@ -226,7 +215,7 @@ function collectAggregateSpecs(ast) {
   for (const col of ast.columns) {
     const expr = col.expression || col;
     if (expr.type === EXPR_TYPE.AGGREGATE) {
-      register(expr, aggregateOutputKey(col, expr));
+      register(expr, resultColumnName(col));
     } else {
       // Aggregates nested inside a SELECT expression (SUM(x) + 1) still
       // need partials shipped; the expression itself is evaluated at the
@@ -520,7 +509,7 @@ function buildOverfetchLimit(limit) {
  * @param {Array} specs - Aggregate specs from collectAggregateSpecs.
  * @return {{partitionAst: Object, combineSpec: Object}} Plan parts.
  */
-function buildPartialAggregateParts(ast, specs, renderExpression) {
+function buildPartialAggregateParts(ast, specs) {
   const partitionAst = cloneAst(ast);
   const columns = [];
   const groupKeys = [];
@@ -574,10 +563,7 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
       return;
     }
     const shape = canonicalExpressionKey(expr);
-    const outputKey = col.alias ||
-      (expr.type === EXPR_TYPE.COLUMN_REF ?
-        expr.column :
-        renderExpression(expr));
+    const outputKey = resultColumnName(col);
     const groupKey = groupKeyByShape.get(shape);
     if (groupKey) {
       groupKey.outputKeys.push(outputKey);
@@ -696,20 +682,19 @@ function buildPartialAggregateParts(ast, specs, renderExpression) {
  * Build the fan-out plan for a distributed SELECT: what SQL each
  * partition executes and how the coordinator must merge the results so
  * aggregates, GROUP BY/HAVING, and LIMIT/OFFSET are applied with global
- * semantics exactly once.
+ * semantics exactly once. Unaliased outputs are named as SQLite names them
+ * (resultColumnName).
  * @param {Object} ast - Parsed SELECT AST (not mutated).
  * @param {Array} params - Original positional parameters.
- * @param {Function} renderExpression - Renders an expression AST to SQL
- *   text (QueryExecutor#buildExpressionSQL); names unaliased outputs.
+ * @param {number} partitionCount - Partitions the statement fans out to.
  * @return {{kind: string, partitionAst: Object, partitionParams: Array,
  *   combineSpec: (Object|null)}} Fan-out plan.
+ * @throws {Error} UNSUPPORTED_SQL_FEATURE for an interim refusal.
  */
-function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
+function buildSelectFanoutPlan(ast, params, partitionCount, options = {}) {
   const workingAst = cloneAst(ast);
   tagParameterOrdinals(workingAst);
   const specs = collectAggregateSpecs(workingAst);
-  const renderExpr = renderExpression ||
-    ((expr) => canonicalExpressionKey(expr));
 
   const hasAggregatePlan = hasAggregatesOrGroupBy(workingAst, specs);
   const mustUseOriginalRows = !fanoutRewriteApplies(workingAst) ||
@@ -720,6 +705,11 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
     hasAggregatePlan ?
       FANOUT_BUILD_STATE.PARTIAL_AGGREGATE :
       FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS;
+  assertSelectFanoutAdmissible(ast, partitionCount, {
+    mergeMode: buildState,
+    hasAggregatePlan,
+    resolveTableSchema: options.resolveTableSchema ?? null,
+  });
 
   switch (buildState) {
   case FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS:
@@ -749,7 +739,6 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
   const {partitionAst, combineSpec} = buildPartialAggregateParts(
     workingAst,
     specs,
-    renderExpr,
   );
   combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
   for (const expressionColumn of combineSpec.expressionColumns) {

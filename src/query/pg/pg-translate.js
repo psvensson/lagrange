@@ -6,7 +6,7 @@
  *               6.1, 6.2, 14.1, 14.2
  */
 
-import {EXPR_TYPE} from '../parser-constants.js';
+import {EXPR_TYPE, SQL_STORAGE_CLASS} from '../parser-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query-constants.js';
 import {PG_TRANSLATE_ERROR, PG_EXPR_TYPE} from './pg-compat-constants.js';
 import {resolveAffinity} from './pg-type-affinity.js';
@@ -56,7 +56,7 @@ const EMPTY_ACTION_FALLBACK = '';
  */
 function translateBooleanLiteral(expr) {
   const value = expr.value === true ? BOOLEAN_VALUE.TRUE : BOOLEAN_VALUE.FALSE;
-  return {type: EXPR_TYPE.LITERAL, value};
+  return {type: EXPR_TYPE.LITERAL, value, sqlType: SQL_STORAGE_CLASS.INTEGER};
 }
 
 /**
@@ -86,6 +86,7 @@ function translateTypeCast(expr, convertExprFn) {
   return {
     type: PG_EXPR_TYPE.CAST,
     expression: innerExpr,
+    targetType: affinity,
     affinity,
   };
 }

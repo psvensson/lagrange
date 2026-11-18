@@ -173,6 +173,7 @@ function recoverIntentFromRow(row) {
       tableName: intent.tableName,
       columns: intent.columns,
       primaryKey: intent.primaryKey,
+      tableConstraints: intent.tableConstraints,
       options: intent.options,
       ifNotExists: true,
     },

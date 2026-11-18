@@ -154,7 +154,7 @@ documentClass: generated
 - [partition-split-routing.js](partition-split-routing.js) - Preserve the source write's idempotency identity through the mirror: the child partition's replay registry keys on... (importers: many)
 - [partition-sql-parser.js](partition-sql-parser.js) - SQL parsing helpers for CDC event generation. (importers: few)
 - [partition-statement-admission-constants.js](partition-statement-admission-constants.js) - The vocabulary of the statement-admission owner (partition-statement-admission.js): the one owner of what... (importers: many)
-- [partition-statement-admission-lexer.js](partition-statement-admission-lexer.js) - The statement-admission owner's lexer: a pure function of the SQL text, pinned to SQLite's own tokenizer... (importers: few)
+- [partition-statement-admission-lexer.js](partition-statement-admission-lexer.js) - The statement-admission owner's lexer: a pure function of the SQL text, pinned to SQLite's own tokenizer... (importers: many)
 - [partition-statement-admission-names.js](partition-statement-admission-names.js) - The statement-admission owner's reading of names (TX1 design revision 10, section 3.3; independent review of... (importers: few)
 - [partition-statement-admission-rowid-rules.js](partition-statement-admission-rowid-rules.js) - The rowid rules of the statement-admission owner (TX1 design revision 10, section 3.3, R1-R3; owner rowid acceptance... (importers: few)
 - [partition-statement-admission.js](partition-statement-admission.js) - The statement-admission owner: the single owner of what caller-supplied SQL text may be prepared on a partition's... (importers: many)

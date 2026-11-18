@@ -768,7 +768,7 @@ function registerSqlQueryEngineExecutionTestCases({
       messageRouter,
     });
 
-    const result = await engine.executeQuery('INSERT INTO ffr_probe (id, val) VALUES ("k1", "ok")');
+    const result = await engine.executeQuery('INSERT INTO ffr_probe (id, val) VALUES (\'k1\', \'ok\')');
 
     t.equal(result.success, true, 'INSERT should succeed after authoritative metadata refresh');
     t.equal(authoritativeQueries.length, 3, 'should query tables, partitions, and services from authority');

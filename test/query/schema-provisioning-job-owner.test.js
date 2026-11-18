@@ -42,7 +42,7 @@ function createNotNullDefaultAst() {
     name: 'source_snapshot_json',
     dataType: {name: 'TEXT'},
     notNull: true,
-    defaultValue: {type: 'literal', value: '{}'},
+    defaultValue: {type: 'literal', value: '{}', sqlType: 'TEXT'},
   });
 }
 
@@ -684,6 +684,55 @@ test('durable schema recovery preserves NOT NULL DEFAULT metadata identity',
     t.equal(resumedCalls.length, 1);
     t.equal(gateway.rows.get(`tables:${jobRow.table_id}`).table_id,
       jobRow.table_id, 'restart preserves the deterministic table identity');
+  });
+
+test('durable schema recovery preserves COLLATE and CHECK metadata identity',
+  async (t) => {
+    const gateway = createGateway();
+    const now = {value: 100};
+    const firstCalls = [];
+    const firstOwner = createService(gateway, firstCalls, {
+      now: () => now.value,
+      schemaProvisioningOwnerId: 'schema-worker-first',
+      schemaProvisioningLeaseMs: 30,
+      schemaProvisioningRetrySetTimeoutFn() {
+        return {unref() {}};
+      },
+      schemaProvisioningRetryClearTimeoutFn() {},
+      async partitionProvisioner(context) {
+        firstCalls.push(context);
+        return {
+          resolvedReplicaCount: 1,
+          routableReplicaCount: 1,
+          fullReplicaCountConverged: false,
+          contractState: OWNER_CONTRACT_STATE.PENDING,
+          nextAction: 'retry',
+        };
+      },
+    });
+    const parsedAst = new SQLParser(
+      'CREATE TABLE accounts (id TEXT PRIMARY KEY, ' +
+      'handle TEXT COLLATE NOCASE NOT NULL CHECK (handle <> \'\'), ' +
+      'tier INTEGER DEFAULT 2.0, CHECK (tier >= 0))',
+    ).parse();
+
+    const pending = await firstOwner.createTable(parsedAst);
+    t.equal(pending.contractState, OWNER_CONTRACT_STATE.PENDING);
+
+    now.value = 40000;
+    const resumedCalls = [];
+    const resumedOwner = createService(gateway, resumedCalls, {
+      now: () => now.value,
+      schemaProvisioningOwnerId: 'schema-worker-restart',
+    });
+    const [result] = await resumedOwner.resumeDurableProvisioningJobs();
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.READY);
+    const tableRow = gateway.rows.get(`tables:${result.tableId}`);
+    const projectedSchema = JSON.parse(tableRow.schema_definition);
+    t.equal(projectedSchema.columns[1].collation, 'NOCASE');
+    t.equal(projectedSchema.columns[1].checkSql, '(handle <> \'\')');
+    t.equal(projectedSchema.columns[2].defaultValue, '2.0');
+    t.equal(projectedSchema.tableConstraints[0].checkSql, '(tier >= 0)');
   });
 
 test('client deadline returns a stable job and retry survives stale worker ' +

@@ -11,6 +11,23 @@ import {
 import {
   buildSelectFanoutPlan,
 } from './distributed/distributed-select-fanout-plan.js';
+import {PartitionResolver} from './partition-resolver.js';
+
+function createExecutorTableInfoResolver(executor, options) {
+  if (options.getTableInfo) {
+    return options.getTableInfo;
+  }
+  let cachedCache = null;
+  let resolver = null;
+  return (tableName) => {
+    if (!executor.systemCache) return null;
+    if (executor.systemCache !== cachedCache) {
+      cachedCache = executor.systemCache;
+      resolver = new PartitionResolver({systemCache: cachedCache});
+    }
+    return resolver.getTableInfo(tableName);
+  };
+}
 
 function partitionBudgetShare(limit, partitionCount) {
   if (!Number.isSafeInteger(limit) || limit < 0) return null;
@@ -54,6 +71,7 @@ class QueryExecutorBase {
   constructor(options = {}) {
     this.messageRouter = options.messageRouter || null;
     this.systemCache = options.systemCache || null;
+    this.resolveTableInfo = createExecutorTableInfoResolver(this, options);
     this.routingMetadataOverlay = options.routingMetadataOverlay || null;
     this.bootstrapTopologySnapshotOwner =
       options.bootstrapTopologySnapshotOwner || null;
@@ -456,11 +474,9 @@ class QueryExecutorBase {
     // Build the fan-out plan: partition-side SQL with combinable partial
     // aggregates and over-fetched LIMIT, so global clauses (aggregates,
     // GROUP BY/HAVING, OFFSET) are applied exactly once at the merge.
-    const fanoutPlan = buildSelectFanoutPlan(
-      ast,
-      params,
-      (expr) => this.buildExpressionSQL(expr),
-    );
+    const fanoutPlan = buildSelectFanoutPlan(ast, params, partitionIds.length, {
+      resolveTableSchema: this.resolveTableInfo,
+    });
     const sql = this.buildSelectSQL(fanoutPlan.partitionAst);
     const resultMaxBytes = partitionBudgetShare(
       options.resultMaxBytes,

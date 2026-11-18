@@ -229,6 +229,7 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     nowFn: engine.nowFn,
     messageRouter: engine.messageRouter,
     systemCache: engine.systemCache,
+    getTableInfo: (tableName) => engine.getTableInfo(tableName),
     bootstrapTopologySnapshotOwner:
       options.bootstrapTopologySnapshotOwner || null,
     controlPlaneReadinessService: engine.controlPlaneReadinessService,

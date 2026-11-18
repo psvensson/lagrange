@@ -12,6 +12,11 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {ensureSqlTransactionParticipantsTableColumns} from
   './partition-coordinator-table-columns.js';
+import {
+  renderColumnDefinitionSql,
+  renderTableDefinitionSql,
+  tableColumnSqlShape,
+} from '../query/sql-table-definition.js';
 
 const {
   COLUMN,
@@ -59,7 +64,7 @@ function readPartitionTableDefinitionIn(db, schema, objects, table) {
   if (!table || missingColumns.length > 0) {
     return {...observation, state: PARTITION_TABLE_OBSERVATION.UNAVAILABLE};
   } else if (columns.length !== schema.columns.length ||
-      table.sql !== partitionServiceTableSql(schema.tableName, schema)) {
+      table.sql !== renderTableDefinitionSql(schema.tableName, schema)) {
     return {...observation, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
   } else if (indexes.some(({sql}) => !expectedIndexes.includes(sql))) {
     return {...observation, state: PARTITION_TABLE_OBSERVATION.CONTRARY};
@@ -169,8 +174,7 @@ const NODES_TABLE_ADDED_COLUMNS = Object.freeze([COLUMN.HOST_ID]);
 const LOG_ADDED_NODES_COLUMN = 'Added column to nodes table';
 
 function ensureNodesTableAddedColumns(service, columns) {
-  const {isCompositePk, hasSqlConstraints} =
-    partitionColumnSqlShape(service.schema);
+  const shape = tableColumnSqlShape(service.schema);
   for (const columnName of NODES_TABLE_ADDED_COLUMNS) {
     if (columns.some((col) => col.name === columnName)) {
       continue;
@@ -178,7 +182,7 @@ function ensureNodesTableAddedColumns(service, columns) {
     const definition = service.schema.columns.find(
       (col) => col.name === columnName);
     service.db.exec(`ALTER TABLE ${service.tableName} ADD COLUMN ` +
-      formatPartitionColumnSql(definition, isCompositePk, hasSqlConstraints));
+      renderColumnDefinitionSql(definition, shape));
     service.logger.info(LOG_ADDED_NODES_COLUMN, {
       tableName: service.tableName,
       partitionId: service.partitionId,
@@ -217,120 +221,11 @@ function ensureEndpointTableColumns(service) {
     {tableName: service.tableName, partitionId: service.partitionId});
 }
 
-const SINGLE_QUOTED_SQL_LITERAL_PATTERN = /^'(?:[^']|'')*'$/u;
-const NUMERIC_SQL_LITERAL_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)$/u;
-const NULL_SQL_LITERAL_PATTERN = /^NULL$/iu;
-const UNSUPPORTED_DEFAULT_CODE = 'UNSUPPORTED_SQL_FEATURE';
-const UNSUPPORTED_DEFAULT_MSG =
-  'Non-literal or nondeterministic column DEFAULT is not supported in partition schema';
-
-function isLiteralPartitionDefault(defaultValue) {
-  if (typeof defaultValue === 'number') {
-    return Number.isFinite(defaultValue);
-  }
-  if (typeof defaultValue === 'boolean' || typeof defaultValue === 'bigint') {
-    return true;
-  }
-  return typeof defaultValue === 'string' && (
-    SINGLE_QUOTED_SQL_LITERAL_PATTERN.test(defaultValue) ||
-    NUMERIC_SQL_LITERAL_PATTERN.test(defaultValue) ||
-    NULL_SQL_LITERAL_PATTERN.test(defaultValue)
-  );
-}
-
-function requireLiteralPartitionDefault(defaultValue) {
-  if (isLiteralPartitionDefault(defaultValue)) {
-    return defaultValue;
-  }
-  const error = new Error(UNSUPPORTED_DEFAULT_MSG);
-  error.code = UNSUPPORTED_DEFAULT_CODE;
-  throw error;
-}
-
-const SQL_FRAGMENT_UNIQUE = ' UNIQUE';
-const SQL_CONSTRAINT_CHECK = 'CHECK';
-const SQL_CONSTRAINT_UNIQUE = 'UNIQUE';
-const SQL_CONSTRAINT_PRIMARY_KEY = 'PRIMARY_KEY';
-
-function formatPartitionColumnSql(col, isCompositePk, hasSqlConstraints) {
-  let def = `${col.name} ${col.type}`;
-  if (col.primaryKey && !isCompositePk) {
-    def += PARTITION_SERVICE_SQL_FRAGMENT.PRIMARY_KEY;
-  }
-  if (col.notNull) {
-    def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
-  }
-  if (hasSqlConstraints && col.unique === true) {
-    def += SQL_FRAGMENT_UNIQUE;
-  }
-  if (col.checkSql) {
-    def += ` CHECK (${col.checkSql})`;
-  }
-  if (col.defaultValue !== void 0 && col.defaultValue !== null) {
-    def += ` DEFAULT ${requireLiteralPartitionDefault(col.defaultValue)}`;
-  }
-  return def;
-}
-
-function formatPartitionTableConstraintSql(constraint, isCompositePk) {
-  if (!constraint || typeof constraint.type !== 'string') return null;
-  const cType = constraint.type.toUpperCase();
-  if (cType === SQL_CONSTRAINT_CHECK) {
-    return constraint.checkSql ? `CHECK (${constraint.checkSql})` : null;
-  }
-  const cols = constraint.columns;
-  if (!Array.isArray(cols) || cols.length === 0) return null;
-  const joined = cols.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-  if (cType === SQL_CONSTRAINT_UNIQUE) return `UNIQUE (${joined})`;
-  if (cType === SQL_CONSTRAINT_PRIMARY_KEY && cols.length > 1 && !isCompositePk) {
-    return `PRIMARY KEY (${joined})`;
-  }
-  return null;
-}
-
-/**
- * Create the partition's state table from its schema, apply the system-table
- * column upgrades, and create the schema's indexes (verbatim behavior of the
- * former PartitionServiceRaftInitBase.createTable body).
- * @param {Object} service the partition service (open db, schema, logger)
- */
-// How a schema's column definitions are rendered: composite primary keys
-// and table constraints move clauses off the columns.
-function partitionColumnSqlShape(schema) {
-  const hasSqlConstraints = Array.isArray(schema.tableConstraints);
-  return {
-    hasSqlConstraints,
-    isCompositePk: hasSqlConstraints &&
-      Array.isArray(schema.primaryKey) &&
-      schema.primaryKey.length > 1,
-  };
-}
-
-function partitionServiceTableSql(tableName, schema) {
-  const {hasSqlConstraints, isCompositePk} = partitionColumnSqlShape(schema);
-  const items = schema.columns.map((col) =>
-    formatPartitionColumnSql(col, isCompositePk, hasSqlConstraints),
-  );
-  if (isCompositePk) {
-    items.push(
-      `PRIMARY KEY (${schema.primaryKey.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)})`,
-    );
-  }
-  for (const constraint of schema.tableConstraints || []) {
-    const clause = formatPartitionTableConstraintSql(constraint, isCompositePk);
-    if (clause) {
-      items.push(clause);
-    }
-  }
-  const columnsDef = items.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-  return `CREATE TABLE ${quoteSqliteIdentifier(tableName)} (${columnsDef})`;
-}
-
 function createPartitionServiceTable(service) {
   if (!service.schema || !service.schema.columns) {
     return;
   }
-  const sql = partitionServiceTableSql(service.tableName, service.schema)
+  const sql = renderTableDefinitionSql(service.tableName, service.schema)
     .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
   service.db.exec(sql);
   ensureNodesTableColumns(service);
@@ -359,5 +254,5 @@ function createPartitionServiceTable(service) {
   });
 }
 
-export {createPartitionServiceTable, partitionServiceTableSql, readPartitionServiceTableSchemaIn,
+export {createPartitionServiceTable, readPartitionServiceTableSchemaIn,
   PARTITION_TABLE_OBSERVATION};

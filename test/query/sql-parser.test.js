@@ -138,7 +138,8 @@ test('SQLParser - parses SQLite CASE, function, and CAST expressions',
     t.equal(expression.conditions.length, 1);
     t.equal(expression.conditions[0].when.type, 'binary');
     t.equal(expression.conditions[0].when.left.type, 'function_call');
-    t.equal(expression.conditions[0].when.left.name, 'coalesce');
+    // SQLite mode keeps a call as written (no PostgreSQL canonicalization).
+    t.equal(expression.conditions[0].when.left.name, 'COALESCE');
     t.equal(
       expression.conditions[0].when.left.args[0].args[0].type,
       'cast',
@@ -375,7 +376,7 @@ test('SQLParser - IN-list members keep column refs (not NULL literals)',
     t.equal(ast.where.type, 'in');
     t.same(
       ast.where.values[0],
-      {type: 'literal', value: 'paid'},
+      {type: 'literal', value: 'paid', sqlType: 'TEXT'},
       'literal member preserved',
     );
     t.same(
@@ -715,7 +716,7 @@ test('SQLParser - parses simple CTE in SQLite mode', async (t) => {
 test('SQLParser - parses multiple CTEs in SQLite mode', async (t) => {
   const parser = new SQLParser(
     'WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) ' +
-    'SELECT * FROM a, b',
+    'SELECT * FROM a JOIN b ON a.x < b.y',
   );
   const ast = parser.parse();
 
@@ -763,7 +764,7 @@ test('SQLParser - parses WITH RECURSIVE in PG mode', async (t) => {
 test('SQLParser - parses multiple CTEs in PG mode', async (t) => {
   const parser = new SQLParser(
     'WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) ' +
-    'SELECT * FROM a, b',
+    'SELECT * FROM a JOIN b ON a.x < b.y',
     {dialect: PARSER_DIALECT.POSTGRESQL},
   );
   const ast = parser.parse();

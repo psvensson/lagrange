@@ -44,14 +44,21 @@ test('PG mode - SELECT without LIMIT omits the parser sentinel',
   },
 );
 
-test('PG mode - parameterized LIMIT fails instead of becoming unbounded',
+test('PG mode - parameterized LIMIT is a parameter, never unbounded',
   async (t) => {
+    // The coordinator refuses a parameter LIMIT, typed, until WP3 applies the
+    // original clause (distributed-select-fanout-plan.js).
+    const ast = new SQLParser(
+      'SELECT key FROM "global.request_binding_audit" LIMIT $1',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    ).parse();
+    t.same(ast.limit, {count: {type: 'parameter', index: 0}, offset: null});
     t.throws(
       () => new SQLParser(
-        'SELECT key FROM "global.request_binding_audit" LIMIT $1',
+        'SELECT key FROM "global.request_binding_audit" LIMIT 1.5',
         {dialect: PARSER_DIALECT.POSTGRESQL},
       ).parse(),
-      /LIMIT count must be an integer literal/u,
+      /LIMIT count must be an integer literal or a parameter/u,
     );
   },
 );
