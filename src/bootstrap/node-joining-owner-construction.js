@@ -103,6 +103,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     });
     this.nodeId = options.nodeId || uuidv4();
     this.nodeAddress = options.nodeAddress || null;
+    // The declared host identity (topology/node-host-identity.js); the NODES
+    // registration refuses without it.
+    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
     this.seedNodeAddresses =
@@ -537,6 +540,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.querySystemStatePhase = new QuerySystemStatePhase({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      hostId: this.hostId,
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       delegates: {
         getLogger: () => this.logger,

@@ -27,5 +27,6 @@ documentClass: generated
 - [latency-topology-constants.js](latency-topology-constants.js) - Constants for latency-aware topology ownership and configuration. (importers: hub)
 - [latency-tree-constants.js](latency-tree-constants.js) - Constants for LatencyTreeService. (importers: few)
 - [latency-tree-service.js](latency-tree-service.js) - LatencyTreeService - single owner for in-memory latency topology ordering. (importers: many)
+- [node-host-identity.js](node-host-identity.js) - The node's host identity (owner decision D3, 2026-11-17): the machine a node runs on, the unit replica placement... (importers: many)
 - [topology-anti-entropy-constants.js](topology-anti-entropy-constants.js) - Constants for periodic durable topology truth reconciliation. (importers: few)
 - [topology-anti-entropy-reconciler.js](topology-anti-entropy-reconciler.js) - TopologyAntiEntropyReconciler scans durable topology truth and enqueues exact owner-key reconcile work. (importers: one)

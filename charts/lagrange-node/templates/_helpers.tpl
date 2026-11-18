@@ -109,6 +109,18 @@ values nor extraEnv may make the pod-local admin listener externally reachable.
 {{- end -}}
 
 {{/*
+The host identity has one source, the pod's Kubernetes node (downward API
+spec.nodeName in envCommon): extraEnv may not replace it.
+*/}}
+{{- define "lagrange-node.validateHostIdentity" -}}
+{{- range .Values.node.extraEnv -}}
+{{- if eq (toString .name) "NODE_HOST_ID" -}}
+{{- fail "node.extraEnv name NODE_HOST_ID is reserved: the host identity is the pod's Kubernetes node (spec.nodeName)" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Shared container spec for a node. The runtime image is distroless with
 ENTRYPOINT /nodejs/bin/node, so `args` supplies everything node receives.
 Per-pod stable DNS identity is composed with Kubernetes $(VAR) env expansion
@@ -162,6 +174,7 @@ volumeMounts:
 {{- define "lagrange-node.envCommon" -}}
 {{- include "lagrange-node.validateAdminSafety" . -}}
 {{- include "lagrange-node.validateListenerPorts" . -}}
+{{- include "lagrange-node.validateHostIdentity" . -}}
 - name: POD_NAME
   valueFrom:
     fieldRef:
@@ -170,6 +183,13 @@ volumeMounts:
   valueFrom:
     fieldRef:
       fieldPath: metadata.namespace
+# NODE_HOST_ID is the node's required host identity: the Kubernetes node the
+# pod is scheduled on (downward API), the unit replica placement spreads
+# across. A rescheduled pod re-declares it at its next start.
+- name: NODE_HOST_ID
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
 # NODE_ID is deliberately NOT set: join admission requires a UUID, so the
 # runtime mints one on first boot and restores it from the data directory
 # (rejoin hints) on every restart — identity is durable via the PVC.

@@ -10,6 +10,7 @@
  *     incarnation (readSupersededBootIncarnation) to the reattempt, which
  *     raises the floor so the reattempt reserves above it.
  */
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -65,6 +66,7 @@ function staleRegistrationError() {
 async function registerSeedRefusedWith(dataDir, refusal) {
   initializeTestEnvironment();
   const service = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: NODE_ID,
     nodeAddress: 'ws://localhost:19101',

@@ -14,6 +14,7 @@ import {ensureSqlTransactionParticipantsTableColumns} from
   './partition-coordinator-table-columns.js';
 
 const {
+  COLUMN,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_LOG_MSG,
@@ -156,6 +157,34 @@ function ensureNodesTableColumns(service) {
       partitionId: service.partitionId,
     });
   }
+  ensureNodesTableAddedColumns(service, columns);
+}
+
+// NODES columns added after the table first shipped. Each is added in place
+// from its own schema definition, which lists it last, so an upgraded
+// table's DDL is the DDL a fresh table is created with. host_id is the
+// declared host identity (topology/node-host-identity.js): rows already
+// present keep it NULL (HOST_UNDECLARED) until their node re-registers.
+const NODES_TABLE_ADDED_COLUMNS = Object.freeze([COLUMN.HOST_ID]);
+const LOG_ADDED_NODES_COLUMN = 'Added column to nodes table';
+
+function ensureNodesTableAddedColumns(service, columns) {
+  const {isCompositePk, hasSqlConstraints} =
+    partitionColumnSqlShape(service.schema);
+  for (const columnName of NODES_TABLE_ADDED_COLUMNS) {
+    if (columns.some((col) => col.name === columnName)) {
+      continue;
+    }
+    const definition = service.schema.columns.find(
+      (col) => col.name === columnName);
+    service.db.exec(`ALTER TABLE ${service.tableName} ADD COLUMN ` +
+      formatPartitionColumnSql(definition, isCompositePk, hasSqlConstraints));
+    service.logger.info(LOG_ADDED_NODES_COLUMN, {
+      tableName: service.tableName,
+      partitionId: service.partitionId,
+      columnName,
+    });
+  }
 }
 
 // Endpoint rows carry the exact owning node boot incarnation. Existing
@@ -265,12 +294,20 @@ function formatPartitionTableConstraintSql(constraint, isCompositePk) {
  * former PartitionServiceRaftInitBase.createTable body).
  * @param {Object} service the partition service (open db, schema, logger)
  */
-function partitionServiceTableSql(tableName, schema) {
+// How a schema's column definitions are rendered: composite primary keys
+// and table constraints move clauses off the columns.
+function partitionColumnSqlShape(schema) {
   const hasSqlConstraints = Array.isArray(schema.tableConstraints);
-  const isCompositePk =
-    hasSqlConstraints &&
-    Array.isArray(schema.primaryKey) &&
-    schema.primaryKey.length > 1;
+  return {
+    hasSqlConstraints,
+    isCompositePk: hasSqlConstraints &&
+      Array.isArray(schema.primaryKey) &&
+      schema.primaryKey.length > 1,
+  };
+}
+
+function partitionServiceTableSql(tableName, schema) {
+  const {hasSqlConstraints, isCompositePk} = partitionColumnSqlShape(schema);
   const items = schema.columns.map((col) =>
     formatPartitionColumnSql(col, isCompositePk, hasSqlConstraints),
   );

@@ -5,6 +5,7 @@
  * final durable mutation; a lost acknowledgement resolves by authoritative
  * readback of that exact incarnation, with no retry queue.
  */
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -87,6 +88,7 @@ function shutdownService(gateway, bootIncarnation) {
 
 function withdrawalOwner(gateway, bootIncarnation) {
   const owner = new NodeRegistrationOwner({
+    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: NODE_ID,
     nodeAddress: '10.0.0.9:8080',
     delegates: {

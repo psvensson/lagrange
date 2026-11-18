@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -525,6 +526,7 @@ test(
       DURABLE_PEER_B,
     ]);
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,

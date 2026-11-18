@@ -4,6 +4,7 @@
  * writing this boot's), so the lifecycle owner's READY CAS for this boot can
  * match. Without the advance the READY CAS could never apply.
  */
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
@@ -110,6 +111,7 @@ function createDurableNodes(initialRow) {
 
 function createRejoiningOwner(durable, bootIncarnation = THIS_BOOT) {
   const owner = new NodeRegistrationOwner({
+    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     membershipPublicationRuntimeOwner: new MembershipPublicationRuntimeOwner({
@@ -399,6 +401,7 @@ test(
       servicesOwner,
     };
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -651,6 +654,7 @@ test(
       },
     };
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       membershipPublicationRuntimeOwner,

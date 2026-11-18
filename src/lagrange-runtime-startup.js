@@ -31,6 +31,7 @@ import {
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
   resolveRuntimeAddresses,
+  resolveRuntimeHostId,
   resolveRolloutControlsFromEnvironment,
   resolveStartupJoinDecision,
   reportStartupRuntimeHandoff,
@@ -151,6 +152,7 @@ async function startJoinNode(options) {
   const nodeJoiningService = new NodeJoiningService({
     nodeId,
     nodeAddress: joiningNodeAddress,
+    hostId: options.hostId,
     advertisedNodeWsAddress,
     seedNodeAddress: seedUrl,
     seedNodeAddresses: seedUrls,
@@ -419,6 +421,7 @@ async function startSeedNode(options) {
   const bootstrapService = new BootstrapService({
     nodeId,
     nodeAddress: seedNodeHttpAddress,
+    hostId: options.hostId,
     advertisedNodeWsAddress,
     dataDirectoryManager,
     dataDirectoryProcessOwner: options.dataDirectoryProcessOwner,
@@ -695,6 +698,10 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {
     categories: config.getCategories(),
   });
+  // Required at boot: a node without a declared host refuses to start here,
+  // before it acquires its data directory (topology/node-host-identity.js).
+  const hostId = resolveRuntimeHostId(config);
+  mainLogger.info(ENTRYPOINT_LOG_MSG.HOST_IDENTITY_DECLARED, {hostId});
 
   const dataDirectoryManager = DataDirectoryManager.getInstance();
   dataDirectoryManager.initialize();
@@ -740,7 +747,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   let runtime;
   if (startupJoinDecision.seedNodeAddress) {
     runtime = await startJoinNode({
-      cleanupLedger, config, mainLogger, dataDirectoryManager, rolloutControls,
+      cleanupLedger, config, mainLogger, dataDirectoryManager, rolloutControls, hostId,
       seedNodeAddress: startupJoinDecision.seedNodeAddress,
       seedNodeAddresses: startupJoinDecision.seedNodeAddresses,
       startupMode: startupJoinDecision.startupMode,
@@ -750,7 +757,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   } else {
     runtime = await startSeedNode({
       cleanupLedger, config, mainLogger, dataDirectoryManager, dataDirectoryProcessOwner,
-      rolloutControls, env: environment,
+      rolloutControls, hostId, env: environment,
       membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       signal: options.signal,
     });

@@ -1,5 +1,6 @@
 // Real process/SQLite custody with injected collaborator failure. No RF3 claim.
 import Database from 'better-sqlite3';
+import {hostname} from 'node:os';
 import {join} from 'node:path';
 import {setImmediate as nextTurn} from 'node:timers/promises';
 import {
@@ -69,7 +70,7 @@ async function failActualStartup() {
         node: {id: 'process-custody-review'},
         storage: {dataDir},
       },
-      environment: {NODE_ID: 'process-custody-review'},
+      environment: {NODE_ID: 'process-custody-review', NODE_HOST_ID: hostname()},
     });
   } catch (error) {
     rejected = error;

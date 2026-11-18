@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {createWriteStream} from 'node:fs';
 import {mkdir, readFile, rm} from 'node:fs/promises';
+import {hostname} from 'node:os';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
@@ -38,6 +39,8 @@ async function startLocalNode(index, dataRoot) {
   const env = {
     ...process.env,
     NODE_ADDRESS: `localhost:${restPort}`,
+    // Every local node runs on this machine (required host identity).
+    NODE_HOST_ID: hostname(),
     REST_API_PORT: String(restPort),
     ADMIN_WS_PORT: String(adminPort),
     DATA_DIR: dataDir,

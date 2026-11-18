@@ -12,6 +12,8 @@ import {
   LAGRANGE_IMAGE,
   LAGRANGE_IMAGE_ID,
   createContainerLedger,
+  dataHostName,
+  dataHostNameRules,
   dockerRules,
   http,
   lagrangeHealthyRules,
@@ -52,6 +54,7 @@ test('D05/J7: Lagrange readiness never reached throws readiness_exhausted with t
   const ledger = createContainerLedger();
   const notReady = http(503, {ready: false, phase: 'init', reasons: ['seed-contact']});
   const {sshRun, calls} = createScriptedSsh([
+    ...dataHostNameRules(),
     ...dockerRules(ledger),
     [/curl/u, notReady],
   ]);
@@ -316,6 +319,7 @@ test('predicate step 5: time-to-routable is recorded per canonical table', {time
 // were tuning: 30 s, 60 s and 240 s against the shipped 5 s, 10 s and 30 s).
 const LAGRANGE_DEPLOYMENT_FACT_ENV = Object.freeze({
   NODE_ID: 'node identity',
+  NODE_HOST_ID: 'host identity: the name of the machine the node runs on, as it answers there',
   DATA_DIR: 'storage path: the directory the image hands its runtime user',
   NODE_ADDRESS: 'the address the node advertises to its peers',
   REST_API_PORT: 'listener port',
@@ -410,6 +414,7 @@ test('Lagrange runs at its shipped defaults: every node environment variable is 
       const expected = arrayFilter(Object.keys(LAGRANGE_DEPLOYMENT_FACT_ENV),
         (key) => index > 0 || key !== 'SEED_NODE_ADDRESS').sort();
       assert.deepEqual(keys, expected);
+      assert.equal(census.env.NODE_HOST_ID, dataHostName(HOSTS[index]));
       assert.equal(census.env.NODE_ADDRESS, `${HOSTS[index]}:8080`);
       if (index > 0) assert.equal(census.env.SEED_NODE_ADDRESS, `${HOSTS[0]}:8080`);
       assert.deepEqual([census.env.REST_API_PORT, census.env.ADMIN_WS_PORT,
@@ -432,7 +437,8 @@ test('every arm forms under the one readiness bound: the same attempt budget and
   assert.equal(bound.attempts, 120);
   assert.equal(bound.formationDeadlineMs, 240_000);
   const neverReady = {
-    'lagrange': [[/curl/u, http(503, {ready: false, phase: 'init', reasons: ['seed-contact']})]],
+    'lagrange': [...dataHostNameRules(),
+      [/curl/u, http(503, {ready: false, phase: 'init', reasons: ['seed-contact']})]],
     'tidb-tikv': [[/curl/u, http(503, {health: false})]],
     'pg-single-primary': [[/pg_isready/u, new Error('127.0.0.1:5432 - no response (exit 2)')]],
   };

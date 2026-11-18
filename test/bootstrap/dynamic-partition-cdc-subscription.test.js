@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -224,6 +225,7 @@ test('BootstrapService dynamic user partition CDC subscription', async (t) => {
   initializeTestEnvironment();
 
   const service = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'seed-node',
     nodeAddress: 'ws://localhost:9001',
@@ -257,6 +259,7 @@ test('NodeJoiningService dynamic user partition CDC subscription', async (t) => 
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'join-node',
     nodeAddress: 'ws://localhost:9002',
@@ -292,6 +295,7 @@ test('BootstrapService dynamic system partition CDC subscription reuses captured
     initializeTestEnvironment();
 
     const service = new BootstrapService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'ws://localhost:9001',
@@ -329,6 +333,7 @@ test('NodeJoiningService dynamic system partition CDC subscription reuses captur
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: 'ws://localhost:9002',
@@ -367,6 +372,7 @@ test('NodeJoiningService can defer priority CDC handshake behind replica lifecyc
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: 'ws://localhost:9002',
@@ -448,6 +454,7 @@ test('BootstrapService keeps CDC propagation attached after bootstrap completes'
     initializeTestEnvironment();
 
     const service = new BootstrapService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'ws://localhost:9001',
@@ -478,6 +485,7 @@ test('NodeJoiningService keeps CDC propagation attached after join completes',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: 'ws://localhost:9002',
@@ -509,6 +517,7 @@ test('BootstrapService dynamic partition factory injects the current SQL engine'
     initializeTestEnvironment();
 
     const service = new BootstrapService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'ws://localhost:9001',
@@ -552,6 +561,7 @@ test('NodeJoiningService dynamic partition factory injects the current SQL engin
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: 'ws://localhost:9002',
