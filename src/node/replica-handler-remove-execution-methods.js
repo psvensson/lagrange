@@ -28,6 +28,8 @@ import {
   removalRowDeleteDeferred,
   retryableRemovalDebtError,
 } from './replica-removal-debt-errors.js';
+import {closeRetiringGenerationCreateAdmission} from
+  './replica-removal-create-admission-close.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 
@@ -149,12 +151,8 @@ async function takeoverRemovingRowForCleanupOrThrow(
   guard,
   reason,
 ) {
-  if (!await guard.requireRemoving() || !guard.isCurrent()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  const admissionClosed = await handler.getReplicaCreateAdmissionOwner()
-    .closeForLifecycle(authority.replicaState);
-  if (admissionClosed !== true || !guard.isCurrent() ||
+  // CREATE admission closed before the REMOVING intent: no census here.
+  if (!await guard.requireRemoving() || !guard.isCurrent() ||
       guard.beginExactDelete() !== true) {
     throw removalRowDeleteDeferred(replicaId);
   }
@@ -336,10 +334,8 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         );
         throw error;
       }
-      // Completion has one predicate, the removal authority's
-      // requireComplete: the released row is absent, or a failed-create
-      // cleanup's operation-bound receipt is current (that row is kept until
-      // the terminal REMOVE releases it, so it is never absent here).
+      // One completion predicate, the guard's requireComplete: the row is
+      // absent, or a failed-create cleanup's operation-bound receipt current.
       return true;
     },
     () => {
@@ -543,7 +539,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
     /**
      * Publish the replica's retiring row (REMOVING): the signal on which the
      * group's leader proposes its RemoveNode. A replica whose row already
-     * reads REMOVING has already published it.
+     * reads REMOVING has already published it. Only on the generation
+     * whose CREATE admission was closed first.
      * @param {Object} context - {operationId, replicaId, partitionId,
      *   service, removalLifecycleSnapshot}.
      * @return {Promise<Object>} {skipRemovingStatusWrite, deferred}; deferred
@@ -558,11 +555,16 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           deferred: false,
         };
       }
+      const {closed, generation: closedCreateGeneration} =
+        await closeRetiringGenerationCreateAdmission(this,
+          {operationId, replicaId, partitionId});
+      if (!closed) return {skipRemovingStatusWrite: false, deferred: true};
       try {
         await this.persistReplicaStatusWithRetry(
           replicaId,
           ReplicaStatus.REMOVING,
-          triggerReason === null ? {partitionId} : {partitionId, triggerReason},
+          triggerReason === null ? {partitionId, closedCreateGeneration} :
+            {partitionId, closedCreateGeneration, triggerReason},
         );
         return {skipRemovingStatusWrite: false,
           deferred: false};

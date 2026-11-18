@@ -22,15 +22,18 @@ import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
 } from './replica-handler-leader-handoff-methods.js';
 import {removalAuthorityDeferred} from './replica-removal-debt-errors.js';
+import {closeRemovalCreateAdmission} from
+  './replica-removal-create-admission-close.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-// A failed-create cleanup request's two authority decisions. UNAVAILABLE is
-// an authority read that did not answer: a typed retryable deferral, never
-// the terminal refusal of a precondition that no longer matches.
+// A failed-create cleanup request's two authority decisions. A deferral (an
+// authority read that did not answer, or the generation's CREATE admission
+// not yet closed) is a typed retryable answer, never the terminal refusal of
+// a precondition that no longer matches.
 const FAILED_CREATE_CLEANUP_ADMISSION = Object.freeze({
   ADMITTED: 'admitted',
   REFUSED: 'refused',
-  UNAVAILABLE: 'unavailable',
+  DEFERRED: 'deferred',
 });
 const FAILED_CREATE_CLEANUP_RECEIPT = Object.freeze({
   COMPLETE: 'complete',
@@ -109,13 +112,15 @@ function validFailedCreateCleanupRequest(
       ?.transitionAuthoritativeReplicaGeneration === 'function';
 }
 
+function cleanupAdmissionVerdict(kind, deferral = null) {
+  return Object.freeze({kind, deferral});
+}
+
 async function applyFailedCreateCleanupTransition(
   handler,
   precondition,
   request,
-  replicaId,
-  partitionId,
-  cleanupToken,
+  {replicaId, partitionId, cleanupToken, closedCreateGeneration},
 ) {
   try {
     return await handler.replicaStateMachine
@@ -128,6 +133,7 @@ async function applyFailedCreateCleanupTransition(
           serviceId: replicaId,
           errorMessage: request?.[ReplicaOperationField.REASON] || null,
           cleanupToken,
+          closedCreateGeneration,
         },
       ) === true;
   } catch (_error) {
@@ -207,12 +213,16 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * The state machine performs the authoritative read and exact-generation
      * FAILED -> REMOVING CAS in its per-replica mutation lane. A token is only
      * a predicate; absence or a newer generation refuses the destructive
-     * request before the local serving fence is raised. An authority read
-     * that did not answer refuses nothing: it is UNAVAILABLE.
+     * request before the local serving fence is raised. The CREATE admission
+     * of the precondition's generation is closed before the REMOVING CAS
+     * names it. An authority read that did not answer, or an admission not
+     * yet closable, refuses nothing: it defers.
      * @param {Object} request
      * @param {string} replicaId
      * @param {string} partitionId
-     * @return {Promise<string>} A FAILED_CREATE_CLEANUP_ADMISSION verdict.
+     * @return {Promise<Object>} Frozen {kind, deferral}: kind is a
+     *   FAILED_CREATE_CLEANUP_ADMISSION value, deferral the typed retryable
+     *   error of a DEFERRED verdict.
      * @private
      */
     async admitFailedCreateTargetCleanup(request, replicaId, partitionId) {
@@ -220,30 +230,45 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
       ];
       if (precondition === undefined) {
-        return FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED;
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED);
       }
       if (!validFailedCreateCleanupRequest(
         this, precondition, replicaId, partitionId)) {
-        return FAILED_CREATE_CLEANUP_ADMISSION.REFUSED;
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.REFUSED);
       }
       const cleanupToken = buildFailedCreateRemoveToken(
         request?.[ReplicaOperationField.OPERATION_ID],
       );
-      if (!cleanupToken) return FAILED_CREATE_CLEANUP_ADMISSION.REFUSED;
-      if (await applyFailedCreateCleanupTransition(
-        this, precondition, request, replicaId, partitionId, cleanupToken)) {
-        return FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED;
+      if (!cleanupToken) {
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.REFUSED);
+      }
+      const closure = await closeRemovalCreateAdmission(this, {
+        replicaId,
+        createdAt: precondition.created_at,
+        createAttemptToken: precondition.create_attempt_token,
+      });
+      if (closure.closed !== true) {
+        return cleanupAdmissionVerdict(
+          FAILED_CREATE_CLEANUP_ADMISSION.DEFERRED, closure.deferral);
+      }
+      if (await applyFailedCreateCleanupTransition(this, precondition, request,
+        {replicaId, partitionId, cleanupToken,
+          closedCreateGeneration: closure.generation})) {
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED);
       }
       const observation = await this.replicaStateMachine
         .observeAuthoritativeReplicaLifecycle(replicaId);
       if (observation?.available !== true) {
-        return FAILED_CREATE_CLEANUP_ADMISSION.UNAVAILABLE;
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.DEFERRED,
+          removalAuthorityDeferred(replicaId));
       }
       if (!matchesClaimedFailedCreateRemoval(
         observation.row,
         precondition,
         cleanupToken,
-      )) return FAILED_CREATE_CLEANUP_ADMISSION.REFUSED;
+      )) {
+        return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.REFUSED);
+      }
       const version = durableRowVersion(observation.row);
       const snapshot = {
         partitionId,
@@ -261,11 +286,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         durableVersion: version?.value,
         authoritativeSnapshot: true,
       };
-      return this.replicaStateMachine.registerReplicaSnapshot(
-        replicaId,
-        snapshot,
-      ) === true ? FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED :
-        FAILED_CREATE_CLEANUP_ADMISSION.REFUSED;
+      return cleanupAdmissionVerdict(
+        this.replicaStateMachine.registerReplicaSnapshot(replicaId, snapshot) ===
+          true ? FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED :
+          FAILED_CREATE_CLEANUP_ADMISSION.REFUSED);
     }
     /**
      * The failed-create cleanup's operation-bound completion receipt, decided
@@ -314,19 +338,21 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       return FAILED_CREATE_CLEANUP_RECEIPT.ABSENT;
     }
     /**
-     * The typed retryable answer of a failed-create cleanup whose lifecycle
-     * authority did not answer: the durable owner re-delivers the same
+     * The typed retryable answer of a deferred failed-create cleanup (its
+     * lifecycle authority did not answer, or its generation's CREATE
+     * admission is not closed yet): the durable owner re-delivers the same
      * operation; nothing was refused.
-     * @param {Object} context - {operationId, replicaId, partitionId}.
+     * @param {Object} context - {operationId, replicaId, partitionId,
+     *   deferral}.
      * @return {Object} Response.
      * @private
      */
-    answerFailedCreateCleanupAuthorityDeferred({operationId, replicaId,
-      partitionId}) {
-      const deferral = removalAuthorityDeferred(replicaId);
+    answerFailedCreateCleanupDeferred({operationId, replicaId, partitionId,
+      deferral}) {
       this.logger.warn(
-        REPLICA_HANDLER_LOG_MSG.REMOVE_CLEANUP_AUTHORITY_DEFERRED,
-        {operationId, replicaId, partitionId, nodeId: this.nodeId},
+        REPLICA_HANDLER_LOG_MSG.REMOVE_CLEANUP_DEFERRED,
+        {operationId, replicaId, partitionId, nodeId: this.nodeId,
+          error: deferral.message},
       );
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
@@ -356,8 +382,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         partitionId,
       );
       if (receipt === FAILED_CREATE_CLEANUP_RECEIPT.UNAVAILABLE) {
-        return this.answerFailedCreateCleanupAuthorityDeferred(
-          {operationId, replicaId, partitionId});
+        return this.answerFailedCreateCleanupDeferred({operationId, replicaId,
+          partitionId, deferral: removalAuthorityDeferred(replicaId)});
       }
       if (receipt !== FAILED_CREATE_CLEANUP_RECEIPT.COMPLETE) return null;
       return this.buildReplicaOperationResponse(
@@ -559,11 +585,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         replicaId,
         partitionId,
       );
-      if (cleanupAdmission === FAILED_CREATE_CLEANUP_ADMISSION.UNAVAILABLE) {
-        return this.answerFailedCreateCleanupAuthorityDeferred(
-          {operationId, replicaId, partitionId});
+      if (cleanupAdmission.kind === FAILED_CREATE_CLEANUP_ADMISSION.DEFERRED) {
+        return this.answerFailedCreateCleanupDeferred({operationId, replicaId,
+          partitionId, deferral: cleanupAdmission.deferral});
       }
-      if (cleanupAdmission !== FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED) {
+      if (cleanupAdmission.kind !== FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED) {
         this.logger.warn(
           REPLICA_HANDLER_LOG_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
           {operationId, replicaId, partitionId, nodeId: this.nodeId},

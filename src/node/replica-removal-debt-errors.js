@@ -11,6 +11,16 @@ const REPLICA_REMOVAL_COMPLETION_DEFERRED =
   'REPLICA_REMOVAL_COMPLETION_DEFERRED';
 const REPLICA_LEADER_CLEAR_DEFERRED = 'REPLICA_LEADER_CLEAR_DEFERRED';
 const REPLICA_REMOVAL_AUTHORITY_DEFERRED = 'REPLICA_REMOVAL_AUTHORITY_DEFERRED';
+const REPLICA_REMOVAL_CREATE_ADMISSION_DEFERRED =
+  'REPLICA_REMOVAL_CREATE_ADMISSION_DEFERRED';
+// Why the CREATE admission of the generation a REMOVING intent would name is
+// not closed yet; each is cleared by its own owner's fact, never by time.
+const CREATE_ADMISSION_CLOSE_DEFERRAL = Object.freeze({
+  LIFECYCLE_AUTHORITY_UNAVAILABLE: 'lifecycle_authority_unavailable',
+  LIFECYCLE_ROW_ABSENT: 'lifecycle_row_absent',
+  CENSUS_UNAVAILABLE: 'census_unavailable',
+  ADMISSION_HELD: 'admission_held',
+});
 
 function retryableRemovalDebtError(code, message, metadata = {}) {
   const error = new Error(message);
@@ -43,6 +53,19 @@ function removalAuthorityDeferred(replicaId) {
   );
 }
 
+// The removal is deferred before its durable REMOVING intent: the CREATE
+// admission of the generation that intent would name is not closed.
+function createAdmissionCloseDeferred(replicaId, reason, cause = null) {
+  const error = retryableRemovalDebtError(
+    REPLICA_REMOVAL_CREATE_ADMISSION_DEFERRED,
+    `Replica removal deferred before its REMOVING intent for ${replicaId}: ` +
+      `CREATE admission not closed (${reason})`,
+  );
+  error.deferralReason = reason;
+  if (cause) error.cause = cause;
+  return error;
+}
+
 function buildFailedRemovalOutcome(replicaId, error) {
   const outcome = {replicaId, errorMessage: error.message};
   if (error?.deferRetry === true) outcome.deferRetry = true;
@@ -60,9 +83,11 @@ function buildFailedRemovalOutcome(replicaId, error) {
 }
 
 export {
+  CREATE_ADMISSION_CLOSE_DEFERRAL,
   REPLICA_LEADER_CLEAR_DEFERRED,
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
   buildFailedRemovalOutcome,
+  createAdmissionCloseDeferred,
   removalAuthorityDeferred,
   removalRowDeleteDeferred,
   retryableRemovalDebtError,

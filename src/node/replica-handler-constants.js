@@ -65,8 +65,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
   REMOVE_CLEANUP_PRECONDITION_REFUSED:
     'Failed-create target cleanup precondition was refused',
-  REMOVE_CLEANUP_AUTHORITY_DEFERRED:
-    'Failed-create target cleanup deferred: lifecycle authority unavailable',
+  REMOVE_CLEANUP_DEFERRED:
+    'Failed-create target cleanup deferred (typed retryable)',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
@@ -83,6 +83,9 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_COMPLETED: 'Replica removal completed',
   REMOVE_DEFERRED_WITHOUT_ROW:
     'Replica removal deferred: its REMOVING row could not be made durable',
+  REMOVE_CREATE_ADMISSION_DEFERRED:
+    'Replica removal deferred before its REMOVING intent: ' +
+      'CREATE admission not closed',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
   OPENED_INTO_RETIRED_GROUP:

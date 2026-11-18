@@ -112,11 +112,15 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
- * @return {Object} {handler, service, outcomes, exits, removeRequest,
- *   dispose}.
+ * @param {string|null} [options.createAttemptToken] - The replica's create
+ *   attempt (its generation's CREATE admission is in replicaOperations).
+ * @param {Array<Object>} [options.replicaOperations] - replica_operations
+ *   rows served by the same lifecycle authority.
+ * @return {Object} {handler, service, outcomes, exits, lifecycleStore,
+ *   removeRequest, dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf}) {
+  cache, rowOf, createAttemptToken = null, replicaOperations = []}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
@@ -127,6 +131,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     status: ReplicaStatus.ACTIVE,
     createdAt: 1,
     stateEnteredAt: 1,
+    createAttemptToken,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
   const lifecycleStore = createLifecycleStateStore({
@@ -136,6 +141,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       leaderNodeId: null,
     })],
   });
+  lifecycleStore.durable.replica_operations = new Map(
+    replicaOperations.map((row) => [row.operation_id, {...row}]));
   const submitMutation = lifecycleStore.gateway.submitMutation.bind(
     lifecycleStore.gateway,
   );
@@ -217,6 +224,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     service,
     outcomes,
     exits,
+    lifecycleStore,
     removeRequest(operationId, reason = 'rebalancing') {
       return handler.handleRemoveReplica({
         [ReplicaOperationField.TYPE]:

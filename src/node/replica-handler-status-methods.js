@@ -150,6 +150,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           cleanupToken: additionalData.cleanupToken,
           createAttemptToken: additionalData.createAttemptToken,
           createAdmissionEvidence: additionalData.createAdmissionEvidence,
+          // A REMOVING intent: the create generation whose CREATE admission
+          // the removal closed first; the lifecycle owner refuses any other.
+          closedCreateGeneration: additionalData.closedCreateGeneration,
           serviceId: existing?.service_id || replicaId,
           serviceType:
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
@@ -204,6 +207,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
                 createAttemptToken: additionalData.createAttemptToken,
                 createAdmissionEvidence:
                   additionalData.createAdmissionEvidence,
+                closedCreateGeneration: additionalData.closedCreateGeneration,
                 serviceId: existing?.service_id || replicaId,
                 serviceType:
                   existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,

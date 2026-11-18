@@ -604,6 +604,132 @@ test('a failed-create cleanup whose admission read does not answer is ' +
   t.equal(asyncStarts, 1, 'cleanup execution starts exactly once');
 });
 
+// A census-aware gateway: replica_operations reads (the CREATE admission
+// census) do not answer while census.answers is false.
+function withCensusAvailability(store, census) {
+  const read = store.gateway.readAuthoritativeRows;
+  const censusAwareRead = (tableName, ...args) =>
+    tableName === 'replica_operations' && !census.answers ?
+      Promise.resolve({success: false, error: 'fixture census timeout'}) :
+      read(tableName, ...args);
+  store.gateway.readAuthoritativeRows = censusAwareRead;
+  store.gateway.executeAuthoritativeSystemTableRead = censusAwareRead;
+}
+
+function openCreateAdmission(row, operationId, state) {
+  return {
+    operation_id: operationId,
+    type: OperationType.REPLACE,
+    entity_type: 'partition',
+    entity_id: row.partition_id,
+    partition_id: row.partition_id,
+    replica_id: row.service_id,
+    target_node_id: row.node_id,
+    completed_at: null,
+    create_admission_state: state,
+    create_admission_token: `admission:${row.service_id}`,
+    create_admission_replica_created_at: row.created_at,
+    create_admission_attempt_token: row.create_attempt_token,
+    create_admission_attempt_seq: 1,
+  };
+}
+
+test('a failed-create cleanup closes its generation\'s CREATE admission ' +
+  'before the REMOVING CAS; an unanswered census defers it', async (t) => {
+  initializeEnvironment();
+  const failed = serviceRow(
+    'replica-failed-create-cleanup-census',
+    ReplicaState.FAILED,
+    200,
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const createOperationId = 'create-replica-failed-create-cleanup-census';
+  store.durable.replica_operations = new Map([[createOperationId,
+    openCreateAdmission(failed, createOperationId, 'FAILED')]]);
+  const census = {answers: false};
+  withCensusAvailability(store, census);
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  handler.localReplicas.set(failed.service_id, {
+    replicaId: failed.service_id,
+    partitionId: failed.partition_id,
+    status: ReplicaStatus.FAILED,
+    service: null,
+  });
+  let asyncStarts = 0;
+  handler.startRemoveReplicaAsync = () => {
+    asyncStarts += 1;
+  };
+  const request = {
+    operationId: 'cleanup-census-same-operation',
+    partitionId: failed.partition_id,
+    replicaId: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      failed,
+  };
+  const admissionState = () => store.durable.replica_operations
+    .get(createOperationId)?.create_admission_state;
+
+  const deferred = await handler.handleRemoveReplica(request);
+  t.equal(deferred.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(deferred.deferRetry, true, 'a typed retryable deferral');
+  t.equal(deferred.errorCode, 'REPLICA_REMOVAL_CREATE_ADMISSION_DEFERRED',
+    'naming the CREATE admission it could not close');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    ReplicaState.FAILED, 'no REMOVING intent while the admission is open');
+  t.equal(admissionState(), 'FAILED', 'the admission is untouched');
+  t.equal(asyncStarts, 0, 'nothing destructive starts');
+
+  census.answers = true;
+  t.equal((await handler.handleRemoveReplica(request)).status,
+    ReplicaOperationResponseStatus.INITIATED,
+    'the redelivered cleanup is admitted once the census answers');
+  t.equal(admissionState(), 'CLOSED',
+    'the generation\'s CREATE admission is closed');
+  const removing = store.durable[SERVICES].get(failed.service_id);
+  t.equal(removing?.status, ReplicaState.REMOVING,
+    'then the exact FAILED generation enters REMOVING');
+  t.equal(removing?.created_at, failed.created_at, 'the closed generation');
+  t.equal(removing?.create_attempt_token, failed.create_attempt_token,
+    'with the closed create attempt');
+  t.equal(asyncStarts, 1, 'cleanup execution starts exactly once');
+});
+
+test('the lifecycle owner writes a REMOVING intent only on the create ' +
+  'generation whose CREATE admission its writer closed', async (t) => {
+  initializeEnvironment();
+  const active = serviceRow('replica-removing-closed-generation',
+    ReplicaState.ACTIVE, 200, 'partition-1',
+    {createAttemptToken: 'create-attempt:replica-removing-closed:2'});
+  const store = createLifecycleRowStore({
+    services: [active],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, active);
+  const context = (createAttemptToken) => ({
+    partitionId: active.partition_id,
+    nodeId: NODE_ID,
+    closedCreateGeneration: {createdAt: active.created_at, createAttemptToken},
+  });
+
+  t.equal(await stateMachine.transition(active.service_id,
+    ReplicaState.REMOVING,
+    context('create-attempt:replica-removing-closed:1')), false,
+  'a closed admission of another create attempt authorizes no intent');
+  t.equal(store.durable[SERVICES].get(active.service_id)?.status,
+    ReplicaState.ACTIVE, 'the live generation is untouched');
+  t.equal(await stateMachine.transition(active.service_id,
+    ReplicaState.REMOVING, context(active.create_attempt_token)), true,
+  'the closed generation enters REMOVING');
+  t.equal(store.durable[SERVICES].get(active.service_id)?.status,
+    ReplicaState.REMOVING);
+});
+
 test('stale local REMOVING cannot shortcut a failed-create cleanup token',
   async (t) => {
     initializeEnvironment();
