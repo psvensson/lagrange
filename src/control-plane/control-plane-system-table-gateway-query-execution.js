@@ -369,15 +369,10 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   async executeSqlMutationFallback(
     mutation = {},
     writeOptions = {},
-    mutationContext = null,
+    attemptContext = {},
   ) {
     const sqlQueryEngine = this.assertSqlQueryEngine();
     const {sql, params} = this.buildSqlMutationPlan(mutation);
-    const attemptContext = mutationContext || {
-      coalescingKey: writeOptions?.coalescingKey,
-      requestKey: writeOptions?.requestKey,
-      idempotencyKey: writeOptions?.idempotencyKey,
-    };
     return this.normalizeMutationResult(
       await sqlQueryEngine.executeQuery(sql, params, writeOptions),
       attemptContext,

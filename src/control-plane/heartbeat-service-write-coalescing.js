@@ -119,7 +119,17 @@ function buildNodeHeartbeatWriteAssessment(updateRow, now, options = {}) {
     });
   }
   const elapsedMs = now - options.lastNodeHeartbeatWriteAt;
-  if (options.heartbeatConsecutiveFailures > 0) {
+  // Only a failed ESCALATED (maintenance/recovery) attempt re-enters the
+  // recovery lane. A failed or pressure-deferred steady write stays on its
+  // own cadence: lease maintenance is owned by the staleness bound below and
+  // by the lifecycle owner's lease-recovery admission, never by turning
+  // every failure into a standing critical lane.
+  if (
+    options.heartbeatConsecutiveFailures > 0 &&
+    options.isHeartbeatEscalatedPublicationMode(
+      options.lastHeartbeatPublicationDecision?.publicationMode,
+    )
+  ) {
     return Object.freeze({
       state: options.writeDecisionState.RECOVERY_FAILURE_RETRY,
       elapsedMs,

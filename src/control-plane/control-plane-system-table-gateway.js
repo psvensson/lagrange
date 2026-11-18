@@ -142,13 +142,9 @@ class ControlPlaneSystemTableGateway {
         result,
         normalizedState.outcome,
       );
-    const attemptKeyContext = resolveControlPlaneMutationAttemptContext(
-      result,
-      context,
-    );
     return {
-      ...attemptKeyContext,
       ...result,
+      ...resolveControlPlaneMutationAttemptContext(context),
       outcome: normalizedState.outcome,
       completionState: normalizedState.completionState,
       contractState: contractOutcome.contractState,
