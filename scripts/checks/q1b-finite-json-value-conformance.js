@@ -21,7 +21,7 @@ const METRIC_FLAG = '--metric';
 const EXPECTED_SCHEMA = 'lagrange-portability-finite-json-value-v1';
 const EXPECTED_SCOPE = 'value-only';
 const EXPECTED_POSITIVE_COUNT = 18;
-const EXPECTED_REFUSAL_COUNT = 17;
+const EXPECTED_REFUSAL_COUNT = 19;
 const OUTPUT_LIMIT_BYTES = 1024 * 1024;
 const PYTHON_TIMEOUT_MS = 15000;
 const REQUIRED_IDS = Object.freeze([
@@ -41,6 +41,8 @@ const REQUIRED_IDS = Object.freeze([
   'unsafe-positive-integer',
   'unsafe-negative-integer',
   'nonfinite-overflow',
+  'nan-token',
+  'infinity-token',
 ]);
 const EXPECTED_LIMITS = Object.freeze({
   maxDepth: 16,
