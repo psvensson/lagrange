@@ -6,11 +6,16 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {promisify} from 'node:util';
-import {nativeThermalFixture, recordedThermalFacts}
-  from '../../../scripts/native-thermal-fixture.js';
 import {test} from 'node:test';
+
+import {THERMAL_SKIP_ENV, THERMAL_SOURCE, readThermalHeadroom, waitForThermalHeadroom}
+  from '../../../../scripts/checks/wait-for-thermal-headroom.js';
+import {capture} from '../../../../scripts/lab/process.js';
+import {CAPABILITY_SCRIPT, discoverFleet, probeTestCapability, recordFleet}
+  from '../../../../scripts/lab/probe.js';
 
 import {
   campaignImagesByRole,
@@ -37,6 +42,7 @@ import {
   arrayMap,
   arraySome,
   stringIncludes,
+  stringReplace,
   stringStartsWith,
 } from '../real-product-captured-intrinsics.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
@@ -45,9 +51,6 @@ import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js
 // test below); selection compares a host's free checkout space with it.
 const REQUIREMENT = Object.freeze({checkoutBytes: 150 * 2 ** 20,
   evidenceMarginBytes: 64 * 2 ** 20, requiredBytes: 214 * 2 ** 20});
-
-const SENSOR_POLICY = Object.freeze({mode: 'sensor-required', cadence_ms: 0, max_concurrency: 4});
-const PACED_POLICY = Object.freeze({mode: 'operator-paced', cadence_ms: 5000, max_concurrency: 1});
 
 const HOSTS = arrayMap(['delta', 'alpha', 'charlie'], (name, index) => ({name,
   ip: `10.0.0.${index + 1}`, sshTarget: `bench@${name}`, repoPath: '/srv/lagrange',
@@ -89,46 +92,67 @@ test('a busy host releases the holds taken and names its holder', async () => {
   assert.deepEqual(log.slice(2), [['release', 'alpha'], ['release', 'charlie']]);
 });
 
-test('the thermal gate carries the endpoint and a fixed remote deadline through a real shell',
-  async (t) => {
-    const native = nativeThermalFixture(t);
-    const hosts = arrayMap(HOSTS, (host) => ({...host, repoPath: process.cwd(),
-      nodePath: process.execPath, thermalEndpoint: native.endpoint,
-      executionPolicy: SENSOR_POLICY}));
-    const calls = [];
-    const sshRun = async (_ip, _opts, command, timeoutMs) => {
-      calls.push({command, timeoutMs});
-      const child = await promisify(execFile)('/bin/sh', ['-c', command], {timeout: timeoutMs});
-      assert.equal(child.stderr, '', 'the imported owner must not invoke its CLI');
-      return child.stdout;
-    };
-    const results = await checkLabThermalHeadroom({hosts, sshRun, opts: {}});
-    assert.equal(calls.length, 3);
-    assert.ok(arrayEvery(calls, (call) => call.timeoutMs === 11 * 60 * 1000));
-    assert.match(calls[0].command, /600000/u, 'one remote-clock ten-minute budget plus transport slack');
-    assert.ok(stringIncludes(calls[0].command, native.endpoint.sourceSha256));
-    assert.equal(results.alpha.outcome, 'READY');
-    assert.equal(results.alpha.config_sha256, native.endpoint.configSha256);
-    assert.equal(fs.readFileSync(native.counter, 'utf8'), '3');
-    const wrong = {...hosts[0], thermalEndpoint: {...native.endpoint, configSha256: '0'.repeat(64)}};
-    await assert.rejects(checkLabThermalHeadroom({hosts: [wrong], sshRun, opts: {}}),
-      (error) => error.code === 'thermal_exhausted');
-    assert.equal(fs.readFileSync(native.counter, 'utf8'), '3', 'mismatched bytes never invoke observer');
-    const staleRepo = path.join(native.root, 'stale-repo');
-    const staleGate = path.join(staleRepo, 'scripts/checks/wait-for-thermal-headroom.js');
-    fs.mkdirSync(path.dirname(staleGate), {recursive: true});
-    fs.writeFileSync(staleGate, 'throw new Error("stale source must not execute");');
-    await assert.rejects(checkLabThermalHeadroom({hosts: [{...hosts[0], repoPath: staleRepo}],
-      sshRun, opts: {}}), (error) => error.code === 'thermal_exhausted' &&
-      /thermal client source differs/u.test(error.message));
-  });
+// What `sensors -j` answers on a host: the CPU package and the NVMe hot
+// sensor the thermal owner reads first (scripts/checks/wait-for-thermal-headroom.js).
+function sensorsDocument(celsius) {
+  return {'coretemp-isa-0000': {'Adapter': 'ISA adapter', 'Package id 0': {temp1_input: celsius}},
+    'nvme-pci-0100': {'Adapter': 'PCI adapter', 'Sensor 2': {temp3_input: celsius}}};
+}
+
+function stubSensorsPath(t, celsius) {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-thermal-sensors-'));
+  t.after(() => fs.rmSync(bin, {recursive: true, force: true}));
+  fs.writeFileSync(path.join(bin, 'sensors'),
+    `#!/bin/sh\necho '${JSON.stringify(sensorsDocument(celsius))}'\n`, {mode: 0o755});
+  return `${bin}${path.delimiter}${process.env.PATH}`;
+}
+
+// The held host runs the controller's thermal owner, byte-identical, from its
+// own checkout through a real shell, as a library caller; its decision record
+// comes back. The host's sensors are a stub on its PATH, so the real owner
+// reads them and never this machine's.
+test('the thermal gate runs the controller\'s thermal owner on every held host through a ' +
+  'real shell, bounded by the gate\'s own wait', async (t) => {
+  const hosts = arrayMap(HOSTS, (host) => ({...host, repoPath: process.cwd(),
+    nodePath: process.execPath}));
+  const calls = [];
+  const env = {...process.env, PATH: stubSensorsPath(t, 41)};
+  delete env[THERMAL_SKIP_ENV];
+  const shell = (hostEnv) => async (_ip, _opts, command, timeoutMs) => {
+    calls.push({command, timeoutMs});
+    const child = await promisify(execFile)('/bin/sh', ['-c', command],
+      {timeout: timeoutMs, env: hostEnv});
+    assert.equal(child.stderr, '', 'the imported owner must not invoke its CLI');
+    return child.stdout;
+  };
+  const results = await checkLabThermalHeadroom({hosts, sshRun: shell(env), opts: {}});
+  assert.equal(calls.length, 3);
+  assert.ok(arrayEvery(calls, (call) => call.timeoutMs === 11 * 60 * 1000),
+    'the gate\'s own bound (twenty 30 s polls) plus one minute of ssh slack');
+  assert.equal(results.alpha.outcome, 'headroom-ok');
+  assert.equal(results.alpha.reading.cpuSource, 'coretemp/Package id 0');
+  assert.equal(results.alpha.reading.nvmeSource, 'nvme/Sensor 2');
+  // A host told to skip the gate measured nothing: refused, never a pass.
+  await assert.rejects(checkLabThermalHeadroom({hosts: [hosts[0]],
+    sshRun: shell({...env, [THERMAL_SKIP_ENV]: '1'}), opts: {}}), (error) =>
+    error.code === 'thermal_unmeasurable' &&
+    error.diagnostic.result.outcome === 'headroom-skipped');
+  const staleRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-thermal-stale-'));
+  t.after(() => fs.rmSync(staleRepo, {recursive: true, force: true}));
+  const staleGate = path.join(staleRepo, 'scripts/checks/wait-for-thermal-headroom.js');
+  fs.mkdirSync(path.dirname(staleGate), {recursive: true});
+  fs.writeFileSync(staleGate, 'throw new Error("stale source must not execute");');
+  await assert.rejects(checkLabThermalHeadroom({hosts: [{...hosts[0], repoPath: staleRepo}],
+    sshRun: shell(env), opts: {}}), (error) => error.code === 'thermal_exhausted' &&
+    /thermal gate source differs/u.test(error.message));
+});
 
 function inventory(entries) {
   return {version: 1, nodes: Object.fromEntries(arrayMap(entries, ([name, lock, extra]) =>
     [name, {name, ip: `192.168.9.${name.length}${name.charCodeAt(0)}`, ssh: `b@${name}`,
       os: 'linux', roles: ['harness'], testCapability: {bootId: `boot-${name}`,
         dockerReachable: true, repoPath: '/srv/lagrange', nodePath: '/usr/bin/node',
-        nodeVersion: 'v22.23.2', ...recordedThermalFacts(`boot-${name}`),
+        nodeVersion: 'v22.23.2', thermal: THERMAL_SOURCE.MEASURED,
         dockerRootFreeBytes: 100 * 2 ** 30, repoFreeBytes: 100 * 2 ** 30,
         machineLock: {state: lock, holder: null}}, ...extra}]))};
 }
@@ -138,7 +162,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
   const state = inventory([['a', 'busy'], ['b', 'free'], ['c', 'free'],
     ['d', 'free', {lastProbeFailure: {error: 'ssh timeout'}, testCapability: null}],
     ['e', 'stale-record'], ['f', 'busy'], ['g', 'free',
-      {testCapability: {bootId: 'boot-b', dockerReachable: true, ...recordedThermalFacts('boot-b'),
+      {testCapability: {bootId: 'boot-b', dockerReachable: true, thermal: THERMAL_SOURCE.MEASURED,
         machineLock: {state: 'free'}}}]]);
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role, host.lock.state]),
@@ -149,7 +173,7 @@ test('selection prefers free hosts, then held ones the hold will wait for; unrea
 test('a host whose checkout runs an old Node is never the load generator', () => {
   const old = {testCapability: {bootId: 'boot-old', dockerReachable: true,
     repoPath: '/srv/lagrange', nodePath: '/usr/bin/node', nodeVersion: 'v14.21.3',
-    ...recordedThermalFacts('boot-old'), dockerRootFreeBytes: 100 * 2 ** 30,
+    thermal: THERMAL_SOURCE.MEASURED, dockerRootFreeBytes: 100 * 2 ** 30,
     machineLock: {state: 'free'}}};
   const state = inventory([['a', 'free', old], ['b', 'free', {testCapability: {...old.testCapability,
     bootId: 'boot-b'}}], ['c', 'free', {testCapability: {...old.testCapability,
@@ -165,62 +189,141 @@ test('a host whose checkout runs an old Node is never the load generator', () =>
   assert.equal(hosts[0].name, 'a', 'an old-Node host can still be a data host');
 });
 
-test('sensor unavailability refuses while explicit operator pacing preserves unmeasured facts',
-  async (t) => {
-    for (const policy of [SENSOR_POLICY, PACED_POLICY]) {
-      const native = nativeThermalFixture(t, {policy, outcomes: ['UNAVAILABLE']});
-      const host = {...HOSTS[0], repoPath: process.cwd(), nodePath: process.execPath,
-        thermalEndpoint: native.endpoint, executionPolicy: policy};
-      const sshRun = async (_ip, _opts, command, timeoutMs) =>
-        (await promisify(execFile)('/bin/sh', ['-c', command], {timeout: timeoutMs})).stdout;
-      if (policy === SENSOR_POLICY) {
-        await assert.rejects(checkLabThermalHeadroom({hosts: [host], sshRun, opts: {}}),
-          (error) => error.code === 'thermal_exhausted');
-      } else {
-        const result = (await checkLabThermalHeadroom({hosts: [host], sshRun, opts: {}})).delta;
-        assert.equal(result.outcome, 'OPERATOR_PACED');
-        assert.equal(result.observation_outcome, 'UNAVAILABLE');
-        assert.equal(result.observations, null);
-      }
-    }
-    const old = createScriptedSsh([[/wait-for-thermal-headroom/u, 'thermal: ok cpu 51C']]);
-    const facts = recordedThermalFacts('boot-delta');
-    await assert.rejects(checkLabThermalHeadroom({hosts: [{...HOSTS[0],
-      thermalEndpoint: facts.thermalEndpoint, executionPolicy: SENSOR_POLICY}], sshRun: old.sshRun,
+// Only measured headroom admits a held host. Each outcome is the thermal
+// owner's own decision record (its readings from a sensors document, no sysfs).
+test('only measured headroom admits a held host: exhausted headroom refuses as ' +
+  'thermal_exhausted, a gate that measured nothing refuses as thermal_unmeasurable', async (t) => {
+  const noSysfs = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-thermal-sysfs-'));
+  t.after(() => fs.rmSync(noSysfs, {recursive: true, force: true}));
+  const decide = (document, env = {}) => waitForThermalHeadroom({env, attempts: 1,
+    sleep: () => {}, read: () => readThermalHeadroom({sensors: () => document,
+      sysRoot: noSysfs})});
+  const gate = async (result) => checkLabThermalHeadroom({hosts: [HOSTS[0]],
+    sshRun: async () => JSON.stringify(result), opts: {}});
+  const cool = decide(sensorsDocument(41));
+  assert.equal((await gate(cool)).delta.outcome, 'headroom-ok');
+  const hot = decide(sensorsDocument(90));
+  assert.equal(hot.outcome, 'headroom-exhausted');
+  await assert.rejects(gate(hot), (error) => error.code === 'thermal_exhausted' &&
+    /CPU package 90C >= 75C/u.test(error.message));
+  for (const blind of [decide(null), decide(sensorsDocument(41), {[THERMAL_SKIP_ENV]: '1'})]) {
+    await assert.rejects(gate(blind), (error) => error.code === 'thermal_unmeasurable' &&
+      error.diagnostic.host === 'delta' && error.diagnostic.result.outcome === blind.outcome);
+  }
+  // An answer that is not the owner's decision record is refused.
+  const old = createScriptedSsh([[/wait-for-thermal-headroom/u, 'thermal: ok cpu 51C']]);
+  await assert.rejects(checkLabThermalHeadroom({hosts: [HOSTS[0]], sshRun: old.sshRun,
     opts: {}}), (error) => error.code === 'thermal_exhausted');
-  });
+});
 
-test('selection requires native identity and policy; fresh missing members never use cached facts', () => {
-  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free']]);
-  Object.assign(state.nodes.b.testCapability, recordedThermalFacts('boot-b', 'UNAVAILABLE'));
-  delete state.nodes.c.testCapability.thermalEndpoint;
-  const recordedEndpoint = state.nodes.d.testCapability.thermalEndpoint;
-  state.nodes.d.testCapability.thermalEndpoint = {schema: 'not-an-endpoint'};
+test('selection requires the probe\'s measured thermal fact, each exclusion typed; fresh ' +
+  'missing members never use cached facts', () => {
+  const state = inventory([['a', 'free'], ['b', 'free'], ['c', 'free'], ['d', 'free'],
+    ['e', 'free']]);
+  state.nodes.b.testCapability.thermal = THERMAL_SOURCE.UNMEASURABLE;
+  delete state.nodes.c.testCapability.thermal;
+  state.nodes.d.testCapability.thermal = 'hot';
   const select = (fleet = null) => selectLabBenchmarkHosts({state, fleet, dataHostCount: 3,
     nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.throws(() => select(), (error) => {
     const reasons = Object.fromEntries(arrayMap(error.diagnostic.excluded,
       (entry) => [entry.name, entry.reason]));
-    // Each exclusion keeps its own typed cause: an unavailable native decision
-    // carries the native reason, a missing endpoint says it was never recorded.
-    assert.equal(reasons.b, 'host-ineligible: native thermal decision unavailable ' +
-      `(UNAVAILABLE: ${state.nodes.b.testCapability.thermalObservation.reason})`);
-    assert.equal(reasons.c, 'host-ineligible: native thermal endpoint not recorded');
-    assert.equal(reasons.d, 'host-ineligible: native thermal endpoint invalid: ' +
-      'invalid native thermal endpoint');
+    // Each exclusion keeps its own typed cause: no sensor source, no fact
+    // recorded, a word the probe does not write. None is admitted by default.
+    assert.equal(reasons.b, 'host-ineligible: thermal_unmeasurable (the thermal gate has no ' +
+      'sensor source there)');
+    assert.equal(reasons.c, 'host-ineligible: thermal_unrecorded (the lab probe recorded no ' +
+      'thermal fact)');
+    assert.equal(reasons.d, 'host-ineligible: thermal_unrecognized ("hot")');
     return error.code === 'refused_insufficient_host_topology';
   });
-  state.nodes.d.testCapability.thermalEndpoint = recordedEndpoint;
-  Object.assign(state.nodes.b.testCapability,
-    recordedThermalFacts('boot-b', 'UNAVAILABLE', PACED_POLICY));
-  Object.assign(state.nodes.c.testCapability, recordedThermalFacts('boot-c', 'HOLD'));
+  state.nodes.c.testCapability.thermal = THERMAL_SOURCE.MEASURED;
+  state.nodes.d.testCapability.thermal = THERMAL_SOURCE.MEASURED;
   const hosts = select();
-  assert.deepEqual(arrayFind(hosts, (host) => host.name === 'b').executionPolicy, PACED_POLICY);
-  assert.deepEqual(arrayFind(hosts, (host) => host.name === 'b').thermalEndpoint,
-    state.nodes.b.testCapability.thermalEndpoint);
+  assert.deepEqual(arrayMap(hosts, ({name, role}) => [name, role]),
+    [['a', 'data'], ['c', 'data'], ['d', 'data'], ['e', 'client']]);
   assert.throws(() => select([]), (error) => /not present in fresh discovery/u.test(error.message));
-  state.nodes.b.testCapability.thermalObservation.config_sha256 = '0'.repeat(64);
-  assert.throws(() => select(), (error) => error.code === 'refused_insufficient_host_topology');
+});
+
+// The lab target over the lab probe's real output. The probe's own capability
+// script runs in a real shell per host (ssh substituted by a local shell; each
+// host's boot id, sensors, docker and disks answered by stubs on its PATH),
+// through probeTestCapability, discoverFleet and recordFleet; the real
+// selector reads the fleet fresh and as recorded. carinas-windows has no
+// sensor source (a WSL2 VM), so the probe says so and it is excluded, typed.
+const PROBED_LAB = Object.freeze({'adam-laptop': true, 'adams-gamla': true,
+  'carinas-windows': false, 'lenovo-laptop': true, 'tv-dator': true});
+const PROBE_CONTROLLER = 'controller';
+
+function stubLabHost(root, name, measured) {
+  const bin = path.join(root, name, 'bin');
+  const repo = path.join(root, name, 'repo');
+  fs.mkdirSync(bin, {recursive: true});
+  fs.mkdirSync(path.join(repo, '.git'), {recursive: true});
+  const stub = (tool, body) => fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\n${body}\n`,
+    {mode: 0o755});
+  const real = (tool) => `PATH="$LAB_STUB_REAL_PATH" exec ${tool} "$@"`;
+  stub('cat', `if [ "$1" = /proc/sys/kernel/random/boot_id ]; then echo boot-${name}; ` +
+    `exit 0; fi\n${real('cat')}`);
+  stub('sensors', measured ? 'echo \'{}\'' : 'exit 1');
+  stub('ls', `case "$1" in /sys/*) exit ${measured ? 0 : 2};; esac\n${real('ls')}`);
+  stub('docker', 'if [ "$2" = --format ]; then echo /var/lib/docker; fi');
+  stub('df', 'printf \'Filesystem 1-blocks Used Available Capacity Mounted\\n' +
+    'stub 1 1 107374182400 1%% /\\n\'');
+  return {bin, repo};
+}
+
+async function probeLab(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-probe-'));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const hosts = Object.fromEntries(arrayMap([...Object.entries(PROBED_LAB),
+    [PROBE_CONTROLLER, true]], ([name, measured]) => [name, stubLabHost(root, name, measured)]));
+  const empty = path.join(root, 'empty');
+  fs.mkdirSync(empty);
+  const shellOf = (name) => ({...process.env, LAB_STUB_REAL_PATH: process.env.PATH,
+    PATH: `${hosts[name].bin}${path.delimiter}${process.env.PATH}`, NVM_DIR: empty,
+    LAB_LOCK_DIR: empty});
+  // ssh <options> <target> '<remote command>': the remote shell's answer.
+  const transport = (command, args, options) => {
+    assert.equal(options.stdin, `${CAPABILITY_SCRIPT}\n`, 'the probe\'s own script');
+    if (command !== 'ssh') return capture(command, args, {...options, env: shellOf(PROBE_CONTROLLER)});
+    const name = stringReplace(args[args.length - 2], /^bench@/u, '');
+    return capture('sh', ['-c', args[args.length - 1]], {...options, env: shellOf(name)});
+  };
+  const state = {version: 1, controller: {}, nodes: Object.fromEntries(arrayMap(
+    Object.keys(PROBED_LAB), (name, index) => [name, {name, ip: `192.168.20.${index + 1}`,
+      ssh: `bench@${name}`, os: 'linux', roles: ['harness'], repoPath: hosts[name].repo}]))};
+  const fleet = await discoverFleet({nodes: Object.values(state.nodes),
+    controllerRepoPath: hosts[PROBE_CONTROLLER].repo, lockGraphSha256: 'a'.repeat(64),
+    nodeMinimum: '22.12.0',
+    probe: (input) => probeTestCapability({...input, captureCommand: transport})});
+  return {state, fleet};
+}
+
+test('the lab target selects from the lab probe\'s real output: a host the thermal gate ' +
+  'can measure is eligible, carinas-windows (no sensors) is excluded typed', {timeout: 120000},
+async (t) => {
+  const {state, fleet} = await probeLab(t);
+  const capabilityOf = (name) => arrayFind(fleet, (entry) => entry.name === name).capability;
+  assert.equal(capabilityOf('carinas-windows').thermal, THERMAL_SOURCE.UNMEASURABLE);
+  assert.equal(capabilityOf('tv-dator').thermal, THERMAL_SOURCE.MEASURED);
+  const select = (input) => selectLabBenchmarkHosts({dataHostCount: 3, nodeMinimum: '22.12.0',
+    loadGeneratorRequirement: REQUIREMENT, ...input});
+  const roles = (hosts) => arrayMap(hosts, ({name, role}) => [name, role]);
+  const fresh = select({state, fleet});
+  assert.deepEqual(roles(fresh), [['adam-laptop', 'data'], ['adams-gamla', 'data'],
+    ['lenovo-laptop', 'data'], ['tv-dator', 'client']]);
+  recordFleet(state, fleet);
+  assert.deepEqual(roles(select({state, fleet: null})), roles(fresh),
+    'the recorded facts select as the fresh ones do');
+  // Four registered hosts, one of them without sensors: refused for its
+  // topology, naming why carinas-windows is excluded; never run on it.
+  const four = {...state, nodes: {...state.nodes}};
+  delete four.nodes['lenovo-laptop'];
+  assert.throws(() => select({state: four, fleet}), (error) =>
+    error.code === 'refused_insufficient_host_topology' &&
+    arraySome(error.diagnostic.excluded, (entry) => entry.name === 'carinas-windows' &&
+      stringStartsWith(entry.reason, 'host-ineligible: thermal_unmeasurable')));
 });
 
 test('the pinned image resolves per host by content identity across image stores; absent ' +
@@ -291,8 +394,8 @@ test('docker disk is a fleet fact: a host below the data-host requirement is not
   const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
     ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
   state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 433 * 1024 * 1024;
-  Object.assign(state.nodes['carinas-windows'].testCapability,
-    recordedThermalFacts('boot-carinas-windows', 'UNAVAILABLE'));
+  // The probe's fact for carinas-windows: no sensor source (a WSL2 VM).
+  state.nodes['carinas-windows'].testCapability.thermal = THERMAL_SOURCE.UNMEASURABLE;
   const hosts = selectLabBenchmarkHosts({state, dataHostCount: 3, nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
   assert.deepEqual(arrayMap(hosts, (host) => [host.name, host.role]), [
     ['adams-gamla', 'data'], ['lenovo-laptop', 'data'], ['tv-dator', 'data'],
@@ -338,8 +441,7 @@ test('the load generator needs room for the harness worktree on its checkout fil
     const state = inventory([['adam-laptop', 'free'], ['adams-gamla', 'free'],
       ['carinas-windows', 'free'], ['lenovo-laptop', 'free'], ['tv-dator', 'free']]);
     state.nodes['adam-laptop'].testCapability.dockerRootFreeBytes = 390 * 1024 * 1024;
-    Object.assign(state.nodes['carinas-windows'].testCapability,
-      recordedThermalFacts('boot-carinas-windows', 'UNAVAILABLE'));
+    state.nodes['carinas-windows'].testCapability.thermal = THERMAL_SOURCE.UNMEASURABLE;
     state.nodes['adam-laptop'].testCapability.repoFreeBytes = REQUIREMENT.requiredBytes;
     const select = () => selectLabBenchmarkHosts({state, dataHostCount: 3,
       nodeMinimum: '22.12.0', loadGeneratorRequirement: REQUIREMENT});
@@ -461,7 +563,8 @@ test('an ineligible explicit load generator is refused with its reason and no su
   const cases = [
     [{roles: ['runner']}, {}, /no harness role/u],
     [{}, {dockerReachable: false}, /docker not reachable/u],
-    [{}, {thermalObservation: null}, /native thermal/u],
+    [{}, {thermal: THERMAL_SOURCE.UNMEASURABLE}, /thermal_unmeasurable/u],
+    [{}, {thermal: null}, /thermal_unrecorded/u],
     [{}, {repoPath: ''}, /no checkout/u],
     [{}, {nodeVersion: 'v18.0.0'}, /below the engines floor/u],
     [{}, {repoFreeBytes: 0}, /disk_low/u],

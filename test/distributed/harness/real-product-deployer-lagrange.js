@@ -48,7 +48,6 @@ import {
 } from './real-product-captured-intrinsics.js';
 import {removeCampaignContainers} from './real-product-campaign-cleanup.js';
 import {
-  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
@@ -60,6 +59,7 @@ import {
   deploymentFailure,
   isDeploymentFailure,
   requireCampaignId,
+  resolveFormationWindow,
   resolveOperationWindow,
   resolveReadinessBudget,
   stripTransientExecutionOptions,
@@ -129,30 +129,23 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // 15 polls a minute for 15 minutes (5.6x the one routable observation); it is
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
-// Cold 3-node formation requires all 6 priority control-plane partitions to
-// spread across 3 distinct nodes before joiners' /readyz opens; matches
-// FORMATION_BOUND_MS = 420_000 (420 polls at 1000 ms) in
-// test/distributed/scenarios/fresh-formation-user-table-routability.js.
-const FORMATION_ATTEMPTS = 420;
-// Cross-VM (--network host) transport ACK and join timeouts, matching
-// cluster-class-lifecycle-base.js (commit 5ff58af0c, CL-007).
-const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
-const JOINING_HTTP_TIMEOUT_MS = 60000;
-const JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000;
 
 function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(stringOf(index + 1), NODE_ID_WIDTH, '0')}`;
 }
 
+// The node's deployment facts only: identity, storage path, advertised
+// address, listener ports and binds (as docs/dockerhub-overview.md deploys a
+// multi-host node), the PG-wire credentials the clients use and, on a joiner,
+// the seed it joins. No tuning: every timeout, budget and policy stays at the
+// product's shipped default (owner decision 2026-11-17), so the arm measures
+// the product as shipped; a formation that needs more is a product finding.
 function nodeEnv({nodeId, host, seedHost, connection}) {
   const env = {
     NODE_ID: nodeId, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
-    LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS: HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS,
-    NODE_JOINING_HTTP_TIMEOUT_MS: JOINING_HTTP_TIMEOUT_MS,
-    NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS: JOINING_LEADERSHIP_WAIT_TIMEOUT_MS,
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
@@ -315,14 +308,6 @@ function resolveFormationClock(inputNow, inputNowFn, opts) {
   return dateNow;
 }
 
-function resolveFormationDeadlineMs(opts) {
-  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
-  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
-    return opts.readiness.formationDeadlineMs;
-  }
-  return DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS;
-}
-
 function isFormationTerminalError(error) {
   return error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED ||
     error?.code === DEPLOYMENT_FAILURE.WATCHDOG_STOPPED;
@@ -385,13 +370,6 @@ function resolveLagrangeImageAndVersion(opts) {
   };
 }
 
-function buildLagrangeFormationBudget(opts) {
-  return Object.freeze({
-    ...resolveReadinessBudget(opts),
-    attempts: opts.readiness?.attempts ?? FORMATION_ATTEMPTS,
-  });
-}
-
 async function attachFormationCleanupAndRolesOnError({
   error,
   formationTracker,
@@ -432,17 +410,10 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
   const connection = {user: REQUEST_CELL_AUTH.USER, password: REQUEST_CELL_AUTH.PASSWORD,
     database: REQUEST_CELL_AUTH.DATABASE};
   const clock = resolveFormationClock(now, nowFn, opts);
-  const abortSignal = signal ?? opts.signal ?? null;
   const cleanOpts = stripTransientExecutionOptions(opts);
-  const formationDeadlineMs = resolveFormationDeadlineMs(opts);
-  const formationWindow = resolveOperationWindow({
-    clock,
-    defaultDeadlineMs: formationDeadlineMs,
-    callerDeadlineAtMs: deadlineAtMs ?? opts.deadlineAtMs,
-    callerDeadlineMs: deadlineMs ?? opts.deadlineMs,
-    callerSignal: abortSignal,
-  });
-  const budget = buildLagrangeFormationBudget(opts);
+  const budget = resolveReadinessBudget(opts);
+  const formationWindow = resolveFormationWindow({clock, budget, opts, signal, deadlineAtMs,
+    deadlineMs});
   const formationTracker = createTrackedSshRun(sshRun, formationWindow.signal);
   const ctx = {
     sshRun: formationTracker.trackedSshRun,
@@ -452,7 +423,6 @@ async function deployLagrangeCluster({hosts, clientIp, sshRun, opts = {}, campai
     sleep,
     now: clock,
     signal: formationWindow.signal,
-    formationDeadlineMs,
     deadlineAtMs: formationWindow.deadlineAtMs,
     deadlineMs: formationWindow.deadlineMs,
     budget,
@@ -699,7 +669,6 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     sleep: ctx.sleep,
     now: ctx.now,
     signal: null,
-    formationDeadlineMs: ctx.formationDeadlineMs,
     deadlineAtMs: null,
     deadlineMs: null,
     budget: ctx.budget,
@@ -760,7 +729,7 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
         deadlineMs: readyDeadlineMs} = {}) => {
         const win = resolveOperationWindow({
           clock: ctx.now,
-          defaultDeadlineMs: ctx.formationDeadlineMs,
+          defaultDeadlineMs: ctx.budget.formationDeadlineMs,
           callerDeadlineAtMs: readyDeadlineAtMs,
           callerDeadlineMs: readyDeadlineMs,
           callerSignal: readySignal,

@@ -13,7 +13,7 @@ import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-
 import {PROOF_CHECKOUT_GENERATORS} from '../checks/proof-checkout-preparation.js';
 import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
 import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
-import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
+import {HEADROOM, THERMAL_REFUSAL_LINE, THERMAL_SOURCE, waitForThermalHeadroom}
   from '../checks/wait-for-thermal-headroom.js';
 import {TEST_FILE_LINE, formatTestFilesSummary, relayedLine} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
@@ -462,9 +462,9 @@ const CAPABILITY_SCRIPT = [
   // Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
   // a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
   // with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
-  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ' +
-    'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
-    '>/dev/null 2>&1; then say thermal measured; else say thermal unmeasurable; fi',
+  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ls /sys/class/' +
+    'thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input >/dev/null 2>&1; then say ' +
+    `thermal ${THERMAL_SOURCE.MEASURED}; else say thermal ${THERMAL_SOURCE.UNMEASURABLE}; fi`,
   'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',

@@ -28,13 +28,13 @@ import {
   stringTrim,
 } from './real-product-captured-intrinsics.js';
 import {
-  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
   DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
   attachRemoteCommandAttribution,
   requireCampaignId,
+  resolveFormationWindow,
   resolveOperationWindow,
   resolveReadinessBudget,
   stripTransientExecutionOptions,
@@ -334,30 +334,14 @@ function resolvePostgresClock(now, nowFn, opts) {
   return dateNow;
 }
 
-function resolvePostgresDefaultDeadlineMs(opts) {
-  if (numberIsFinite(opts?.formationDeadlineMs)) return opts.formationDeadlineMs;
-  if (numberIsFinite(opts?.readiness?.formationDeadlineMs)) {
-    return opts.readiness.formationDeadlineMs;
-  }
-  return DEFAULT_POSTGRES_FORMATION_DEADLINE_MS;
-}
-
-function resolvePostgresFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs) {
-  return resolveOperationWindow({
-    clock,
-    defaultDeadlineMs: resolvePostgresDefaultDeadlineMs(opts),
-    callerDeadlineAtMs: deadlineAtMs ?? opts?.deadlineAtMs,
-    callerDeadlineMs: deadlineMs ?? opts?.deadlineMs,
-    callerSignal: signal ?? opts?.signal ?? null,
-  });
-}
-
 function buildPostgresFormationCtx({sshRun, opts, sleep, clock, signal, deadlineAtMs,
   deadlineMs}) {
-  const window = resolvePostgresFormationWindow(clock, opts, signal, deadlineAtMs, deadlineMs);
+  const budget = resolveReadinessBudget(opts);
+  const window = resolveFormationWindow({clock, budget, opts, signal, deadlineAtMs,
+    deadlineMs});
   const {trackedSshRun, settleInFlight} = createTrackedSshRun(sshRun, window.signal);
   return {sshRun: trackedSshRun, settleInFlight, opts, sleep, now: clock,
-    signal: window.signal, deadlineAtMs: window.deadlineAtMs, budget: resolveReadinessBudget(opts)};
+    signal: window.signal, deadlineAtMs: window.deadlineAtMs, budget};
 }
 
 function describePostgresFailure({targetId, sshRun, clock, ctx, postFailureOpts, formed,
@@ -542,11 +526,9 @@ async function formPostgresCluster({ctx, rawSshRun, targetId, hosts, clientIp, c
       // The arm's readiness contract again (after a product restart).
       awaitReady: async ({signal: readySignal, deadlineAtMs: readyDeadlineAtMs,
         deadlineMs: readyDeadlineMs} = {}) => {
-        const defaultDeadlineMs = opts?.formationDeadlineMs ??
-          opts?.readiness?.formationDeadlineMs ?? DEFAULT_POSTGRES_FORMATION_DEADLINE_MS;
         const window = resolveOperationWindow({
           clock: basePostFormationCtx.now,
-          defaultDeadlineMs,
+          defaultDeadlineMs: basePostFormationCtx.budget.formationDeadlineMs,
           callerDeadlineAtMs: readyDeadlineAtMs,
           callerDeadlineMs: readyDeadlineMs,
           callerSignal: readySignal,

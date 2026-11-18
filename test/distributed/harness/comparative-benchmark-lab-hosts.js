@@ -8,13 +8,19 @@
  * `bench:<campaignId>` in name order, and released failure-safe; the thermal
  * gate (scripts/checks/wait-for-thermal-headroom.js) runs on every held host
  * before deployment. Never hand-typed hosts, never a raw lock.
+ *
+ * Thermal policy: a host is eligible only when the lab probe recorded that the
+ * thermal gate can measure it (the `thermal` fact fleet discovery records per
+ * host, in the gate's THERMAL_SOURCE words), and is deployed on only
+ * when the gate, run on the held host, measures headroom. A host the gate
+ * cannot measure, or whose thermal fact was never recorded, stays excluded with
+ * a typed reason (quest comparative-campaign-explicit-provisioning); a gate
+ * that measures nothing refuses the campaign typed, never as a pass.
  */
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
-import {isDeepStrictEqual} from 'node:util';
-import {HEADROOM, checkedThermalObservation, parseThermalEndpoint, thermalPermits}
-  from '../../../scripts/checks/wait-for-thermal-headroom.js';
+import {HEADROOM, THERMAL_SOURCE} from '../../../scripts/checks/wait-for-thermal-headroom.js';
 
 import {LAB_HOLD, holdLabMachine, labHolderText} from '../../../scripts/lab/probe.js';
 import {selectNodesByRole} from '../../../scripts/lab/state.js';
@@ -101,25 +107,23 @@ function dockerDiskLow(facts) {
   const free = Number(facts.capability.dockerRootFreeBytes);
   return !Number.isFinite(free) || free < DATA_HOST_MIN_DOCKER_FREE_BYTES;
 }
-// Preserve the ten-minute gate allowance and one minute of transport slack.
+// The gate's own bound is twenty polls of 30 s; one minute of slack for ssh.
 const THERMAL_GATE_TIMEOUT_MS = 11 * 60 * 1000;
-const THERMAL_GATE_WAIT_MS = 10 * 60 * 1000;
 const THERMAL_GATE_SOURCE_SHA = createHash('sha256').update(fs.readFileSync(
   new URL('../../../scripts/checks/wait-for-thermal-headroom.js', import.meta.url))).digest('hex');
+// The held host runs the controller's thermal owner from its own checkout,
+// byte-identical (the same policy decides on every host), as a library caller,
+// and answers with the owner's own decision record.
 const REMOTE_THERMAL_GATE = [
   'import fs from \'node:fs\'; import {createHash} from \'node:crypto\';',
   'import {pathToFileURL} from \'node:url\';',
-  'const [file, expected, descriptor, budget] = process.argv.slice(1);',
+  'const [file, expected] = process.argv.slice(1);',
   // The imported owner has a CLI guard; this invocation is a library caller.
   'process.argv = [process.argv[0]];',
   'if (createHash(\'sha256\').update(fs.readFileSync(file)).digest(\'hex\') !== expected) ' +
-    'throw new Error(\'thermal client source differs\');',
+    'throw new Error(\'thermal gate source differs\');',
   'const owner = await import(pathToFileURL(file).href);',
-  'const env = {...process.env, [owner.THERMAL_ENDPOINT_ENV]: descriptor,',
-  '  [owner.THERMAL_DEADLINE_ENV]: String(Date.now() + Number(budget))};',
-  'const result = await owner.waitForThermalHeadroom({env});',
-  'console.log(JSON.stringify(result));',
-  'process.exitCode = owner.thermalPermits(result) ? 0 : owner.THERMAL_REFUSAL_EXIT;',
+  'console.log(JSON.stringify(owner.waitForThermalHeadroom()));',
 ].join('\n');
 const HOST_ROLE = Object.freeze({DATA: 'data', CLIENT: 'client'});
 
@@ -140,7 +144,7 @@ function exclusionOf(node, facts, seenBootIds) {
   if (!node.ssh || !node.ip) return 'no ssh target or ip in the inventory';
   if (facts.error || !facts.capability) return `unreachable: ${facts.error || 'never probed'}`;
   if (facts.capability.dockerReachable !== true) return 'docker not reachable';
-  const thermal = thermalExclusion(thermalOf(facts.capability));
+  const thermal = thermalExclusion(facts.capability.thermal);
   if (thermal) return thermal;
   if (facts.capability.bootId && seenBootIds.has(facts.capability.bootId)) {
     return 'same machine as another inventory node';
@@ -148,36 +152,18 @@ function exclusionOf(node, facts, seenBootIds) {
   return null;
 }
 
-// Why a host's native thermal facts exclude it, or null: each cause keeps its
-// own typed reason (an endpoint never recorded or invalid, or the native
-// decision's outcome and reason), never one generic "unavailable". The only
-// decision that excludes is UNAVAILABLE (checkedThermalObservation yields
-// READY, HOLD, OPERATOR_PACED or UNAVAILABLE), and its producer always sets a
-// non-empty `reason` (wait-for-thermal-headroom.js `unavailable` and the
-// observation contract), so that one field is read.
+// Why the probe's thermal fact excludes a host, or null when the gate can
+// measure it. Each cause keeps its own typed reason: no sensor source, no fact
+// recorded, or a word the probe does not write.
 function thermalExclusion(thermal) {
-  if (thermal.refusal) return `host-ineligible: ${thermal.refusal}`;
-  const {decision} = thermal;
-  if (thermalPermits(decision) || decision.outcome === HEADROOM.HOLD) return null;
-  return `host-ineligible: native thermal decision unavailable (${decision.outcome}: ` +
-    `${decision.reason})`;
-}
-
-const THERMAL_ENDPOINT_NOT_RECORDED = 'native thermal endpoint not recorded';
-
-function thermalOf(capability) {
-  if (capability.thermalEndpoint === undefined || capability.thermalEndpoint === null) {
-    return {endpoint: null, decision: null, refusal: THERMAL_ENDPOINT_NOT_RECORDED};
+  if (thermal === THERMAL_SOURCE.MEASURED) return null;
+  if (thermal === THERMAL_SOURCE.UNMEASURABLE) {
+    return 'host-ineligible: thermal_unmeasurable (the thermal gate has no sensor source there)';
   }
-  let endpoint;
-  try {
-    endpoint = parseThermalEndpoint(JSON.stringify(capability.thermalEndpoint));
-  } catch (error) {
-    return {endpoint: null, decision: null,
-      refusal: `native thermal endpoint invalid: ${errorText(error)}`};
+  if (thermal === null || thermal === undefined) {
+    return 'host-ineligible: thermal_unrecorded (the lab probe recorded no thermal fact)';
   }
-  return {endpoint, refusal: null, decision: checkedThermalObservation(
-    capability.thermalObservation, endpoint, capability.thermalStatus)};
+  return `host-ineligible: thermal_unrecognized (${JSON.stringify(thermal)})`;
 }
 
 function lockOf(facts) {
@@ -254,8 +240,6 @@ function selectLabBenchmarkHosts({state, fleet = null, dataHostCount, nodeMinimu
   return arrayMap(ordered.slice(0, required), ({node, facts, lock}, index) => ({
     name: node.name, ip: node.ip, sshTarget: node.ssh, bootId: facts.capability.bootId ?? null,
     repoPath: facts.capability.repoPath ?? null, nodePath: facts.capability.nodePath ?? null,
-    thermalEndpoint: thermalOf(facts.capability).endpoint,
-    executionPolicy: thermalOf(facts.capability).decision.execution_policy,
     lock, role: index < dataHostCount ? HOST_ROLE.DATA : HOST_ROLE.CLIENT}));
 }
 
@@ -387,34 +371,40 @@ async function readLabHolderRecords({hosts, sshRun, opts}) {
   return records;
 }
 
+// The thermal owner's decision on one held host, from its own checkout; a gate
+// that cannot run there (no checkout, other source bytes, transport) refuses.
+async function runThermalGate(host, sshRun, opts) {
+  if (!host.repoPath || !host.nodePath) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED,
+      `lab host ${host.name} has no recorded checkout to run the thermal gate from`,
+      {host: host.name});
+  }
+  try {
+    const args = arrayMap([THERMAL_GATE, THERMAL_GATE_SOURCE_SHA], shellQuote).join(' ');
+    return JSON.parse(await sshRun(host.ip, opts,
+      `cd ${shellQuote(host.repoPath)} && ${shellQuote(host.nodePath)} --input-type=module ` +
+      `-e ${shellQuote(REMOTE_THERMAL_GATE)} ${args}`, THERMAL_GATE_TIMEOUT_MS));
+  } catch (error) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED,
+      `lab host ${host.name} thermal gate refused: ${errorText(error)}`, {host: host.name});
+  }
+}
+
 /**
- * Run the thermal gate on every held host from its own checkout. Exhausted
- * headroom (the gate's non-zero exit) refuses the campaign before deployment.
+ * Run the thermal gate on every held host. Only measured headroom admits a
+ * host: exhausted headroom refuses the campaign as thermal_exhausted; a gate
+ * that measured nothing (no sensors, or skipped) refuses it as
+ * thermal_unmeasurable, never silently as a pass.
  */
 async function checkLabThermalHeadroom({hosts, sshRun, opts}) {
   const results = {};
   for (const host of hosts) {
-    if (!host.repoPath || !host.nodePath) {
-      throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED,
-        `lab host ${host.name} has no recorded checkout to run the thermal gate from`,
-        {host: host.name});
-    }
-    let result;
-    try {
-      const endpoint = parseThermalEndpoint(JSON.stringify(host.thermalEndpoint));
-      const args = arrayMap([THERMAL_GATE, THERMAL_GATE_SOURCE_SHA, JSON.stringify(endpoint),
-        String(THERMAL_GATE_WAIT_MS)], shellQuote).join(' ');
-      result = JSON.parse(await sshRun(host.ip, opts,
-        `cd ${shellQuote(host.repoPath)} && ${shellQuote(host.nodePath)} --input-type=module ` +
-        `-e ${shellQuote(REMOTE_THERMAL_GATE)} ${args}`, THERMAL_GATE_TIMEOUT_MS));
-      if (!thermalPermits(result) || result.source_sha256 !== endpoint.sourceSha256 ||
-          result.config_sha256 !== endpoint.configSha256 || result.boot_id !== endpoint.bootId ||
-          !isDeepStrictEqual(result.execution_policy, host.executionPolicy)) {
-        throw new Error('native thermal decision or identity refused');
-      }
-    } catch (error) {
-      throw deploymentFailure(DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED,
-        `lab host ${host.name} thermal gate refused: ${errorText(error)}`, {host: host.name});
+    const result = await runThermalGate(host, sshRun, opts);
+    if (result?.outcome !== HEADROOM.OK) {
+      const code = result?.outcome === HEADROOM.EXHAUSTED ?
+        DEPLOYMENT_FAILURE.THERMAL_EXHAUSTED : DEPLOYMENT_FAILURE.THERMAL_UNMEASURABLE;
+      throw deploymentFailure(code, `lab host ${host.name} thermal gate did not measure ` +
+        `headroom: ${result?.outcome} (${result?.reading?.reason})`, {host: host.name, result});
     }
     results[host.name] = result;
   }
