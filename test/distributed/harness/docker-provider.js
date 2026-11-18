@@ -393,15 +393,6 @@ class DockerProvider {
   }
 
   /**
-   * Load an image from a tar archive stream (docker load).
-   * @param {import('node:stream').Readable} tarStream
-   * @returns {Promise<void>}
-   */
-  async loadImage(tarStream) {
-    await this._docker.loadImage(tarStream);
-  }
-
-  /**
    * Export an image as a tarball to a local file path (docker save).
    * @param {string} tag - Image tag to export
    * @param {string} destinationPath - Local file path to write the tarball to

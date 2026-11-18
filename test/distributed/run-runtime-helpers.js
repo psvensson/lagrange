@@ -487,7 +487,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           'Running scenario: ' + scenario.name + '\n',
         );
       }
-      process.stdout.write('SCENARIO_START: ' + scenario.name + '\n');
 
       // The scenario's declared topology capability is compared with the
       // config's host authority BEFORE anything starts: a config that
@@ -712,7 +711,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           );
         }
       } finally {
-        process.stdout.write('SCENARIO_END: ' + scenario.name + '\n');
         let playback = null;
         let playbackWarning = null;
         let trace = null;
