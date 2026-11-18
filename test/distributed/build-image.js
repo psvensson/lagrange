@@ -10,6 +10,10 @@
 import {execGitAsync, isGitOutputTooLarge} from '../../scripts/checks/git-invocation.js';
 import {DockerProvider} from './harness/docker-provider.js';
 import {readBaseImages} from './harness/certification-image-identity.js';
+import {createReadStream} from 'node:fs';
+import {mkdtemp, rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_LINE_EMPTY = '';
@@ -322,16 +326,40 @@ async function buildImage(
       certification: options.certification});
   }
   const results = [];
-  for (const provider of providers) {
-    results.push(await ensureImageOnProvider({
+  let tarPath = null;
+  let tempDir = null;
+
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    if (i > 0 && tarPath) {
+      if (!(await provider.imageExists(config.image))) {
+        await provider.loadImage(createReadStream(tarPath));
+        results.push({image: config.image, gitHash, gitDirty, reused: false});
+        continue;
+      }
+    }
+
+    const result = await ensureImageOnProvider({
       provider,
       config,
       verbose,
       gitHash,
       gitDirty,
       extractBuildProgressLine,
-    }));
+    });
+    results.push(result);
+
+    if (i === 0 && !result.reused && providers.length > 1) {
+      tempDir = await mkdtemp(join(tmpdir(), 'lagrange-image-'));
+      tarPath = join(tempDir, 'image.tar');
+      await provider.saveImage(result.image, tarPath);
+    }
   }
+
+  if (tempDir) {
+    await rm(tempDir, {recursive: true});
+  }
+
   return {
     image: config.image,
     gitHash,
