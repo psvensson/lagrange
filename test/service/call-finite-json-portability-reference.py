@@ -50,6 +50,9 @@ def _parse(text):
             text,
             object_pairs_hook=_pairs_to_record,
             parse_constant=_refuse_constant,
+            # JSON.parse converts integer tokens to binary64, even for very
+            # long digit sequences; Python's default arbitrary-int does not.
+            parse_int=float,
         )
     except (json.JSONDecodeError, RecursionError) as exc:
         raise PortabilityError("malformed_partial_wire") from exc
