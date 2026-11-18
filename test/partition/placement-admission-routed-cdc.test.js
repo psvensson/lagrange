@@ -23,7 +23,11 @@ import {PLACEMENT_RESULT_FIELD} from
   '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementAdmission, routePlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
-import {partitionServiceTableSql} from '../../src/partition/partition-service-table-bootstrap.js';
+import {
+  PARTITION_TABLE_OBSERVATION,
+  partitionServiceTableSql,
+  readPartitionServiceTableSchemaIn,
+} from '../../src/partition/partition-service-table-bootstrap.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
@@ -154,20 +158,25 @@ test('F2: every receiver applies the admitted row with its primary key from the 
   }, {timeSource, systemTableCache: leaderCache});
 });
 
-test('F10: a ledger replica of this version has copy_source_node_id, from the schema or ' +
-  'the node-local ensure, and no replicated ALTER is ever proposed', async () => {
+test('F10: a ledger replica of this version creates copy_source_node_id from ' +
+  'REPLICA_OPERATIONS_SCHEMA, never alters an older table in place, and ' +
+  'proposes no replicated ALTER', async () => {
   const declared = REPLICA_OPERATIONS_SCHEMA.columns.map((column) => column.name);
   assert.equal(declared.at(-1), 'copy_source_node_id');
   await onLedgerLeader(async (leader, proposed) => {
     const columns = leader.db.prepare('PRAGMA table_info(replica_operations)').all()
       .map((column) => column.name);
     assert.ok(columns.includes('copy_source_node_id'));
+    assert.equal(
+      readPartitionServiceTableSchemaIn(leader.db, REPLICA_OPERATIONS_SCHEMA).state,
+      PARTITION_TABLE_OBSERVATION.COMPLETE);
     await admitOnLeader(leader, proposed, 'f10-1',
       placementStatement({partitionId: 'tables-p1', target: NODE.B}));
     assert.ok(proposed.every((entry) =>
       entry.type !== PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE));
   });
-  // A table created without the column gains it in place at start.
+  // Under O16 + A3, a pre-release table without copy_source_node_id is not
+  // altered in place at replica start.
   const {directory, dbPath} = temporaryDbPath();
   try {
     const older = {...REPLICA_OPERATIONS_SCHEMA, columns:
@@ -179,8 +188,10 @@ test('F10: a ledger replica of this version has copy_source_node_id, from the sc
     const replica = await startReplica(REPLICAS[1], {...LEDGER_EXTRA, dbPath},
       LEDGER_PARTITION_ID);
     try {
-      assert.ok(replica.db.prepare('PRAGMA table_info(replica_operations)').all()
-        .some((column) => column.name === 'copy_source_node_id'));
+      const observed = readPartitionServiceTableSchemaIn(
+        replica.db, REPLICA_OPERATIONS_SCHEMA);
+      assert.equal(observed.state, PARTITION_TABLE_OBSERVATION.UNAVAILABLE);
+      assert.deepEqual(observed.missingColumns, ['copy_source_node_id']);
     } finally {
       await shutdownAll(replica);
     }

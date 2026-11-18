@@ -78,7 +78,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'lease_expires_at', type: COLUMN_TYPE.INTEGER},
     {name: 'error_message', type: COLUMN_TYPE.TEXT},
     {name: 'steps_history', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
-    {name: 'copy_source_node_id', type: COLUMN_TYPE.TEXT}, // placement copy source; last
+    {name: 'copy_source_node_id', type: COLUMN_TYPE.TEXT}, // placement copy source
   ],
   indices: [
     {name: 'idx_replica_ops_status', columns: ['status']},
