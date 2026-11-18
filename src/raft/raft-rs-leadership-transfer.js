@@ -146,35 +146,25 @@ function decideLeadershipTransfer(peerId, observation, command) {
     decideMostCaughtUpTransfer(observation, peerId);
 }
 
-// Whether the leader's own progress (read in the same turn) holds a peer:
-// raft-rs's own membership predicate for a proposal, which covers voters,
-// outgoing voters and learners alike.
-function hasProgress(status, raftPeerId) {
-  return (status.progress || []).some((progress) =>
-    String(progress?.id) === String(raftPeerId));
-}
-
 /**
  * Whether the core dropped a proposal because a transfer is running. raft-rs's
- * leader drops a proposal for two causes it tells apart (raft.rs step_leader,
- * MsgPropose): it has no progress for itself - it was removed from its own
- * configuration, a terminal refusal - or a transfer it accepted is in
- * progress. A leader demoted to a learner keeps its progress and keeps
- * leading (post_conf_change), so it is the second cause. The binding sets no
- * uncommitted-size limit and encodes every configuration change it proposes,
- * so no other cause is reachable. The transfer window ends within one
- * election timeout, so its drop is a retryable answer that leaves the group
- * usable, never a terminal refusal.
+ * leader drops a proposal for two causes (raft.rs step_leader, MsgPropose):
+ * it has no progress for itself - it applied its own removal - or a transfer
+ * it accepted is in progress. The first never holds for a leader here: the
+ * binding steps a leader down in the call that applies a configuration in
+ * which it is no voter (fork fix 5), so a leader always holds its own
+ * progress. The binding sets no uncommitted-size limit and encodes every
+ * configuration change it proposes, so no other cause is reachable. The
+ * transfer window ends within one election timeout, so its drop is a
+ * retryable answer that leaves the group usable, never a terminal refusal.
  * @param {Object} refused - The core's refusal.
- * @param {string} peerId - This replica's raft id.
  * @param {Object} observation - {status} read in the same turn.
  * @return {boolean} True when the drop is the transfer's.
  */
-function droppedByLeadershipTransfer(refused, peerId, {status}) {
+function droppedByLeadershipTransfer(refused, {status}) {
   return refused.outcome === CORE_REFUSED &&
     String(refused.reason).endsWith(RAFT_RS_CORE_REFUSAL_TEXT.PROPOSAL_DROPPED) &&
-    roleOf(status) === ROLE_LEADER &&
-    hasProgress(status, peerId);
+    roleOf(status) === ROLE_LEADER;
 }
 
 function leadershipTransferInProgress(phase) {

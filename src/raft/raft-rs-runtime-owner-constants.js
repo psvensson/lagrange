@@ -54,6 +54,7 @@ const CORE_OPERATION = Object.freeze({
   SEED_STORAGE: 'seed_storage',
   SET_CONF_STATE: 'set_conf_state',
   PERSIST_COMMIT_INDEX: 'persist_commit_index',
+  STATUS: 'status',
 });
 const RUNTIME_COMMAND = Object.freeze({
   READ_STATUS: 'read-status',

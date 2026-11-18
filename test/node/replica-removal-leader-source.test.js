@@ -6,14 +6,20 @@
  * source retired at F2's 30 s backstop still a committed voter (n = 2:
  * permanent quorum loss).
  *
- * Now conf changes are leader-only, and the leader proposes its OWN
- * RemoveNode when its row reads REMOVING (the same row-driven owner that
- * retires every other peer). Ranged over n = 2 and n = 3: the production
- * replica handler removes the leader over its real port; the leader's and
- * every follower's row-driven retirement run on the REMOVING row (the
- * followers are answered NOT_LEADER); RemoveNode(leader) commits, the leader
- * leaves consensus on its own applied removal and retires, and the
- * survivors keep quorum (a new leader, a write commits).
+ * Conf changes are leader-only, and a leader never removes itself: raft-rs
+ * would keep a leader that applied its own removal leading while it drops
+ * every proposal. When its row reads REMOVING the leader's row-driven
+ * retirement asks its own port, which refuses REMOVES_LEADER and hands
+ * leadership to the most caught-up voter in the same turn; that voter's own
+ * copy of the row (answered NOT_LEADER while the source led, kept deferred)
+ * is re-driven on its LEADER event and proposes the RemoveNode. Ranged over
+ * n = 2 and n = 3: the production replica handler removes the leader over
+ * its real port; every replica's row-driven retirement runs on the REMOVING
+ * row through a long-lived service with the production re-drive subscribed,
+ * each peer addressed as production addresses it (its committed node's
+ * partition address, the address its services row carries); RemoveNode
+ * (leader) commits, the source leaves consensus on its own applied removal
+ * and retires, and the survivors keep quorum (a leader, a write commits).
  *
  * Oracles: a survivor's durable applied configuration, the leader's durable
  * lifecycle row against its value at setup, a write applied through the
@@ -28,11 +34,6 @@ import {EXECUTOR_OUTCOME_TYPE} from
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
-import {retireRaftPeerFromAuthoritativeServiceChange} from
-  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
-import {CDC_OPERATION} from '../../src/constants/index.js';
-import {PartitionNodeCluster} from
-  '../raft/raft-rs-backend/partition-node-cluster.js';
 import {durableAppliedState} from
   '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {createMockCache} from '../rebalancer/test-helpers.js';
@@ -40,7 +41,9 @@ import {
   createRemovalSourceHandler,
   durableLifecycleState,
   nextTurns,
+  partitionClusterAtRowAddresses,
   partitionServiceRow as serviceRow,
+  rowDrivenRetirements,
 } from './replica-removal-consensus-exit-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
@@ -57,8 +60,7 @@ async function removeLeaderSource(t, voterCount) {
   const members = Array.from({length: voterCount},
     (_, index) => `${partitionId}-r${index + 1}`);
   const [leader, ...survivors] = members;
-  const cluster = new PartitionNodeCluster({partitionId,
-    replicaIds: members});
+  const cluster = partitionClusterAtRowAddresses(partitionId, members);
   cluster.tickers = [leader];
   const elected = cluster.settle(() => cluster.leaderReplicaId() === leader &&
     members.every((replicaId) => durableAppliedState(
@@ -87,12 +89,8 @@ async function removeLeaderSource(t, voterCount) {
   t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
     'the leader source marked itself retiring');
   // The REMOVING row reaches every replica's row-driven retirement.
-  for (const replicaId of members) {
-    retireRaftPeerFromAuthoritativeServiceChange({
-      raft: cluster.node(replicaId), replicaId, partitionId,
-      replicaIds: [...members], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
-  }
+  rowDrivenRetirements({cluster, partitionId, replicaIds: members,
+    logger: QUIET_LOGGER})(retiringRow);
   const survivorVoters = () => durableAppliedState(
     cluster.replica(survivors[0]).dbFile, partitionId).voters;
   let exited = false;

@@ -20,14 +20,16 @@
 //   - R13: the per-sender record of refused inbound steps is bounded: past
 //     INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT senders, the sender refused
 //     longest ago is evicted first, and a sender refused again is renewed;
-//   - CA9: a leader demoted to learner by the canonical request keeps
-//     leading; its transfer's dropped proposal is the transfer's.
+//   - CA9: the canonical request that would demote the sitting leader is
+//     refused (REMOVES_LEADER) with a hand-off; a proposal it drops while
+//     that hand-off runs is the transfer's.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
@@ -232,27 +234,28 @@ test('per-index timing: a transfer the core cannot complete holds ' +
   }
 });
 
-// Reachable through the canonical request (ADD_LEARNER naming the sitting
-// leader): raft-rs keeps a demoted leader leading, and it drops proposals
-// only on "no progress for self" or a transfer, so this drop is the
-// transfer's (raft.rs step_leader MsgPropose).
-test('CA9: a leader demoted to learner answers its transfer\'s dropped ' +
-  'proposal as the transfer\'s retryable window', async () => {
+// The canonical request that would demote the sitting leader (ADD_LEARNER
+// naming it) never reaches the core: the leader's port refuses it
+// (REMOVES_LEADER) and hands leadership to the most caught-up voter in the
+// same turn. While that hand-off runs the core drops the leader's proposals
+// (raft.rs step_leader MsgPropose, lead_transferee), and that drop is the
+// transfer's retryable window.
+test('CA9: a leader whose own demotion was refused answers the proposal ' +
+  'dropped during the hand-off as the transfer\'s retryable window',
+async () => {
   const run = await formed('anchor-ca9');
   try {
     const {driver} = run;
-    assert.equal((await run.act(() => turnChainValue(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: A, nodeId: 'node-test',
-    })))).outcome, CORE_OK);
-    await run.deliver();
-    await run.round();
+    const refused = await run.act(() => turnChainValue(driver.port(A)
+      .proposeConfChange({type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER,
+        replicaIdentity: A, nodeId: 'node-test'})));
+    assert.equal(refused.reason, RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LEADER,
+      JSON.stringify(refused));
     const status = driver.status(A);
-    assert.equal(run.leads(A), true, 'precondition: A still leads');
-    assert.ok(status.confState.learners.includes(status.peerId),
-      'precondition: A is a learner of its own configuration');
-    assert.equal((await run.act(() =>
-      turnChainValue(driver.port(A).transferLeadership(namedSuccessor(C))))).reason,
-    RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED);
+    assert.equal(run.leads(A), true,
+      'precondition: A leads while its hand-off runs');
+    assert.equal(status.confState.learners.includes(status.peerId), false,
+      'A was not demoted');
     const dropped = await run.act(() =>
       turnChainValue(driver.port(A).propose({during: 'transfer'})));
     assert.equal(dropped.reason,

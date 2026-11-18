@@ -30,7 +30,11 @@ import {
   craft,
   proposalEntry,
 } from './transfer-leadership-drain-oracle-harness.js';
-import {mostCaughtUp, namedSuccessor} from './transfer-leadership-driver.js';
+import {
+  mostCaughtUp,
+  namedSuccessor,
+  returnLeadershipBeforeOwnRemoval,
+} from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const A = 'oracle-a';
@@ -146,11 +150,14 @@ async function removalOfCAtA(run) {
   await run.deliverOnly([B]);
 }
 
-// B's and C's acknowledgements commit A's own removal.
+// C's acknowledgement commits A's own removal. A's port refuses its own
+// removal, so B proposed it after A handed B leadership, and leadership
+// returned to A before it committed (RACE_RETURN); B is cut off.
 async function selfRemovalAtA(run) {
-  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
-  await run.deliverOnly([B, C]);
+  await returnLeadershipBeforeOwnRemoval({driver: run.driver,
+    act: (operation) => run.act(operation),
+    deliverOnly: (replicaIds) => run.deliverOnly(replicaIds)},
+  {leader: A, successor: B, witness: C});
 }
 
 // A removes C; the commit that includes it reaches C, which is still a
@@ -176,12 +183,13 @@ async function leaderInTransfer(run) {
     turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
 }
 
-// A's own removal is committed and applied; raft-rs keeps it leading.
-async function leaderSelfRemoved(run) {
-  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
-  await run.deliver();
-  assert.equal(run.leads(A), true, 'setup: the removed leader leads');
+// A's own removal is committed and applied while A led, and A stepped down
+// in the call that applied it (binding fork fix 5): a follower that knows no
+// leader and never campaigns.
+async function formerLeaderSelfRemoved(run) {
+  await selfRemovalAtA(run);
+  await run.deliverOnly([A]);
+  assert.equal(run.leads(A), false, 'setup: the removed leader stepped down');
 }
 
 // B stands for election and every vote request is lost.
@@ -254,11 +262,12 @@ const CATALOGUE = Object.freeze({
         await leaderInTransfer(run);
         await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
       }},
-    {predicate: 'leader removed from its configuration', requester: A,
-      decisions: ['D3'], refusedFrom: B,
+    {predicate: 'former leader that applied its own removal', requester: A,
+      decisions: ['D3'], refusedFrom: C,
       build: async (run) => {
-        await leaderSelfRemoved(run);
-        await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
+        await formerLeaderSelfRemoved(run);
+        craft(run, {to: A, from: C, msgType: 2,
+          term: 0, entries: [proposalEntry({forwardedBy: C})]});
       }},
     {predicate: 'candidate', requester: B, decisions: ['D3'],
       refusedFrom: C, timeoutDriven: true,

@@ -22,7 +22,7 @@ use console_error_panic_hook::set_once as set_panic_hook;
 use protobuf::Message as PbMessage;
 use raft::prelude::*;
 use raft::storage::MemStorage;
-use raft::{Config, GetEntriesContext, RawNode};
+use raft::{Config, GetEntriesContext, RawNode, StateRole, INVALID_ID};
 use raft_proto::ConfChangeI;
 
 use slog::o;
@@ -50,6 +50,10 @@ struct NodeCtx {
     rn: RawNode<MemStorage>,
     // keep the last Ready around until advance() is called
     pending_ready: Option<Ready>,
+    // FORK: what a leader that applied its own removal queued while a Ready
+    // was outstanding (see step_down_removed_leader); handed out with that
+    // Ready's LightReady by advance_append.
+    removed_leader_messages: Vec<Message>,
     logger: Logger,
 }
 
@@ -482,6 +486,7 @@ pub fn create_node(opts: JsValue) -> Result<u32, JsValue> {
                 _id: id,
                 rn,
                 pending_ready: None,
+                removed_leader_messages: Vec::new(),
                 logger,
             },
         );
@@ -636,9 +641,14 @@ pub fn advance_append(handle: u32) -> Result<JsValue, JsValue> {
             .map(entry_to_json)
             .collect::<Result<Vec<JsEntryOut>, JsValue>>()?;
 
+        // FORK: a leader that applied its own removal while this Ready was
+        // outstanding queued its messages here (step_down_removed_leader);
+        // they leave with this LightReady.
+        let removed_leader_messages = std::mem::take(&mut n.removed_leader_messages);
         let messages = lr
             .messages()
             .iter()
+            .chain(removed_leader_messages.iter())
             .map(message_to_json)
             .collect::<Result<Vec<JsMessageOut>, JsValue>>()?;
 
@@ -746,8 +756,66 @@ pub fn apply_conf_change(handle: u32, cc: JsValue) -> Result<JsValue, JsValue> {
             .rn
             .apply_conf_change(&v2)
             .map_err(|e| jserr(&format!("apply_conf_change: {e}")))?;
+        step_down_removed_leader(n, &cs);
         swb::to_value(&conf_state_to_json(&cs)).map_err(|e| jserr(&format!("serde: {e}")))
     })
+}
+
+// FORK: the step-down raft-rs leaves undone. A leader that applies a
+// configuration in which it is no voter (removed, or demoted to a learner,
+// in a simple change or on leaving a joint one) stays leader in raft-rs 0.7
+// (raft.rs post_conf_change: "This node is leader and was removed or
+// demoted ... TODO(tbg): step down (for sanity) and ask follower with largest
+// Match to TimeoutNow (to avoid interruption)"). A removed one then has no
+// Progress for itself: step_leader drops every proposal, its heartbeats keep
+// the remaining voters inside their check-quorum lease so none campaigns,
+// and maybe_commit / on_persist_entries unwrap the Progress it lacks. This
+// does what the TODO names, in the same call that applied the change:
+//   - the remaining voter with the highest matched index (the lowest id on a
+//     tie) is sent MsgTimeoutNow when it holds the leader's whole log - the
+//     message raft-rs's own transfer sends (handle_transfer_leader) - so it
+//     campaigns at once;
+//   - the leader becomes a follower at its current term with no leader
+//     (become_follower(term, INVALID_ID), the transition raft-rs's own
+//     check-quorum makes), so the remaining voters elect within their own
+//     election timeout even when no voter was caught up.
+// A not-promotable follower never campaigns (tick_election), so it cannot
+// take leadership back. The messages leave through the host's ordinary
+// drain: with no Ready outstanding they are the next Ready's; with one
+// outstanding they are handed out with its LightReady (advance_append),
+// because raft-rs's advance_append refuses messages queued by a node that no
+// longer leads ("not leader but has new msg after advance").
+fn step_down_removed_leader(n: &mut NodeCtx, cs: &ConfState) {
+    let raft = &mut n.rn.raft;
+    if raft.state != StateRole::Leader || raft.promotable() {
+        return;
+    }
+    let last_index = raft.raft_log.last_index();
+    let mut successor: Option<(u64, u64)> = None;
+    for &id in cs.get_voters().iter().chain(cs.get_voters_outgoing().iter()) {
+        if let Some(pr) = raft.prs().get(id) {
+            let better = match successor {
+                None => true,
+                Some((best_id, best_matched)) => {
+                    pr.matched > best_matched || (pr.matched == best_matched && id < best_id)
+                }
+            };
+            if better {
+                successor = Some((id, pr.matched));
+            }
+        }
+    }
+    if let Some((id, matched)) = successor {
+        if matched == last_index {
+            raft.send_timeout_now(id);
+        }
+    }
+    let term = raft.term;
+    raft.become_follower(term, INVALID_ID);
+    if n.pending_ready.is_some() {
+        let queued = std::mem::take(&mut n.rn.raft.msgs);
+        n.removed_leader_messages.extend(queued);
+    }
 }
 
 // Identify and decode a committed configuration entry. A v1 EntryConfChange
