@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.523Z",
-  "rawViolationCount": 86,
+  "generatedAt": "2026-11-18T05:30:45.414Z",
+  "rawViolationCount": 83,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
@@ -284,7 +284,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 33,
+      "line": 34,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 36,
+      "line": 37,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -302,7 +302,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 39,
+      "line": 40,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -311,16 +311,7 @@
     },
     {
       "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 42,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 45,
+      "line": 43,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
@@ -427,15 +418,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-participant-transaction-store.js",
-      "line": 38,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-read-statement-owner.js",
       "line": 1,
       "column": 6,
@@ -474,15 +456,6 @@
     {
       "filePath": "src/partition/partition-service-row-owner.js",
       "line": 62,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-statement-admission-rowid-rules.js",
-      "line": 46,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",
