@@ -11,11 +11,15 @@
  * row is durable - then the row-driven owner is the one proposer.
  *
  * Production sequence, a two-voter group whose LEADER is removed (its own
- * row-driven retirement proposes its RemoveNode, round 2 F-1): the first
- * REMOVE's REMOVING write fails retryable -> deferred, nothing retired, the
- * source still a committed voter; the re-dispatched REMOVE's write lands ->
- * the REMOVING row reaches the replicas' row-driven retirement, RemoveNode
- * commits, the source leaves on its own applied removal and retires.
+ * row-driven retirement asks its port, which refuses REMOVES_LEADER and hands
+ * leadership to the peer, whose deferred copy of the row proposes the
+ * RemoveNode on its LEADER): the first REMOVE's REMOVING write fails
+ * retryable -> deferred, nothing retired, the source still a committed voter;
+ * the re-dispatched REMOVE's write lands -> the REMOVING row reaches the
+ * replicas' row-driven retirement, RemoveNode commits, the source leaves on
+ * its own applied removal and retires. The peers are addressed as production
+ * addresses them, and every row-driven retirement runs through a long-lived
+ * service with the production re-drive subscribed.
  * Oracles: a survivor's durable applied configuration, the source's durable
  * lifecycle row against its value at setup.
  */
@@ -23,7 +27,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CDC_OPERATION} from '../../src/constants/index.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -31,16 +34,14 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
-import {retireRaftPeerFromAuthoritativeServiceChange} from
-  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
-import {PartitionNodeCluster} from
-  '../raft/raft-rs-backend/partition-node-cluster.js';
 import {durableAppliedState} from
   '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {createMockCache} from '../rebalancer/test-helpers.js';
 import {
   createRemovalSourceHandler,
   durableLifecycleState,
+  partitionClusterAtRowAddresses,
+  rowDrivenRetirements,
 } from './replica-removal-consensus-exit-fixture.js';
 
 const PARTITION_ID = 'users-p8';
@@ -71,8 +72,8 @@ async (t) => {
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
-  const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
-    replicaIds: [SOURCE, PEER]});
+  const cluster = partitionClusterAtRowAddresses(PARTITION_ID,
+    [SOURCE, PEER]);
   cluster.tickers = [SOURCE];
   t.ok(cluster.settle(() => cluster.leaderReplicaId() === SOURCE &&
     durableAppliedState(cluster.replica(PEER).dbFile, PARTITION_ID)
@@ -137,12 +138,8 @@ async (t) => {
   const retiringRow = cache.get('services', SOURCE);
   t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
     'the re-dispatched REMOVE made the REMOVING row durable');
-  for (const replicaId of [SOURCE, PEER]) {
-    retireRaftPeerFromAuthoritativeServiceChange({
-      raft: cluster.node(replicaId), replicaId, partitionId: PARTITION_ID,
-      replicaIds: [SOURCE, PEER], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
-  }
+  rowDrivenRetirements({cluster, partitionId: PARTITION_ID,
+    replicaIds: [SOURCE, PEER], logger: QUIET_LOGGER})(retiringRow);
   for (let round = 0; round < 40 && source.exits.length === 0; round += 1) {
     cluster.settle(() => false, {rounds: 10});
     await nextTurns();

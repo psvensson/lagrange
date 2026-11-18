@@ -316,7 +316,8 @@ function proposeMembershipTransition(context) {
   const immediate = staleTransitionFence(context.group, context.command) ??
     admittedTransitionOutcome(admitted) ?? admitted.refusal ??
     admitted.roleOutcome ?? admitted.nativeRefusal;
-  return immediate ? settledTurn(immediate) :
+  return immediate ? context.answerConfChangeRefusal(context.group,
+    context.expectedGeneration, immediate) :
     anchoredProposal(context, admitted);
 }
 

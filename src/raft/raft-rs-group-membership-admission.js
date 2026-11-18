@@ -69,13 +69,24 @@ function reserveGroupPeerIdentity({groupId, localReplicaIdentity},
   });
 }
 
+function deferredByPort(answered) {
+  if (answered.outcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    return answered.reason === RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LEADER;
+  }
+  return answered.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+    answered.retryable === true && answered.recoveryRequired === false;
+}
+
 /**
  * What the port's answer to a membership proposal means for the admission:
  * CORE_OK is PROPOSED; a retryable host failure that left the group usable
- * (recoveryRequired false) is DEFERRED; the port's typed NOT_LEADER (conf
- * changes are taken only at the leader's port) is NOT_LEADER, with the
- * leader it named; every other answer is REFUSED. The port's own outcome and
- * reason ride along.
+ * (recoveryRequired false) is DEFERRED, and so is the port's typed
+ * REMOVES_LEADER (the leader handed its leadership on in the same turn: the
+ * change is re-driven when this replica gains leadership or a configuration
+ * change settles, and is the next leader's to make); the port's typed
+ * NOT_LEADER (conf changes are taken only at the leader's port) is
+ * NOT_LEADER, with the leader it named; every other answer is REFUSED. The
+ * port's own outcome and reason ride along.
  * @param {Object} answered - The port's settled answer.
  * @return {Object} {outcome, portOutcome, reason, leaderReplicaId?}.
  */
@@ -84,8 +95,7 @@ function admissionOfPortAnswer(answered) {
   let outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED;
   if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_OK) {
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED;
-  } else if (portOutcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-      answered.retryable === true && answered.recoveryRequired === false) {
+  } else if (portOutcome !== undefined && deferredByPort(answered)) {
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED;
   } else if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED &&
       answered.reason === RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER) {

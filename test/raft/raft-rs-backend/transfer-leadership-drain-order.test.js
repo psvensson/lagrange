@@ -47,6 +47,7 @@ import {
   assertTransferInProgress,
   mostCaughtUp,
   namedSuccessor,
+  returnLeadershipBeforeOwnRemoval,
 } from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -55,6 +56,7 @@ const A = 'order-replica-a';
 const B = 'order-replica-b';
 const C = 'order-replica-c';
 const D = 'order-replica-d';
+const LEADER_ROLE = 'leader';
 const REPLICAS = Object.freeze([A, B, C]);
 // The core entries the order is read from (the binding's own operations).
 const CORE = Object.freeze({
@@ -269,20 +271,22 @@ test('drain order: a configuration change dropped in a transfer window is ' +
 });
 
 // Semantic leg for the drop classification's configuration input: the
-// acknowledgements commit the leader's own removal in the proposal's turn,
-// and the core then drops the proposal for that cause, not for a transfer.
-test('drain order: acknowledgements pending at a proposal commit the ' +
+// acknowledgement commits the leader's own removal in the proposal's turn -
+// reachable only when leadership returned to it after another leader
+// proposed the removal (its own port refuses it) - so the leader steps down
+// in the call that applies it, and the core then drops the proposal as a
+// follower that knows no leader, not for a transfer.
+test('drain order: an acknowledgement pending at a proposal commits the ' +
   'leader\'s own removal first, and the drop stays non-retryable', async () => {
   const driver = formedGroup('order-self-removal');
   try {
     const selfId = driver.raftIdAt(A, A);
-    assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).result.outcome, CORE_OK);
-    // Read before the hand-over: a status read drains delivered messages.
-    assert.equal(driver.status(A).confState.voters.includes(selfId), true,
-      'precondition: the removal is not yet committed at A');
-    driver.deliverOnly([B, C]);
+    // The helper's last status read precedes the hand-over: a status read
+    // drains delivered messages.
+    await returnLeadershipBeforeOwnRemoval({driver,
+      act: (operation) => operation(),
+      deliverOnly: (replicaIds) => driver.deliverOnly(replicaIds)},
+    {leader: A, successor: B, witness: C});
     const delivered = driver.stepUndrained(A);
     assert.ok(delivered > 0, 'precondition: acknowledgements are pending');
     const {answer, entries} = await turn(driver, () =>
@@ -292,7 +296,9 @@ test('drain order: acknowledgements pending at a proposal commit the ' +
       'no transfer runs: the drop is the removal\'s');
     assert.equal(answer.retryable, false);
     assert.equal(driver.status(A).confState.voters.includes(selfId), false,
-      'the pending acknowledgements committed the removal in that turn');
+      'the pending acknowledgement committed the removal in that turn');
+    assert.notEqual(driver.status(A).role, LEADER_ROLE,
+      'A stepped down when it applied its own removal');
     assertDecidedAfterDrain(entries, delivered,
       {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE});
   } finally {

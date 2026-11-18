@@ -11,9 +11,10 @@ consensus backend loaded by `src/raft/raft-rs-binding-owner.js`.
 
 Its immediate history is the fork initially created during the quest
 `raft-backend-evaluation` (tag `raft-backend-evaluation/round-3-rejected-tree`
-for the three-fix intermediate build) and then extended with the fourth fork fix
-(tagged recoverable binding refusals `{kind: "raft-rs-refusal", message}`).
-`pkg/raft_wasm_bg.wasm` and `pkg/raft_wasm.js` here are the checked-in fourth
+for the three-fix intermediate build), then extended with the fourth fork fix
+(tagged recoverable binding refusals `{kind: "raft-rs-refusal", message}`) and
+the fifth (a leader that applies its own removal steps down).
+`pkg/raft_wasm_bg.wasm` and `pkg/raft_wasm.js` here are the checked-in fifth
 build attempt recorded in `artifact-digest.json`, and a test re-computes their
 digests and verifies agreement with `reproducibility.checkedInArtifactIsAttempt`.
 
@@ -99,6 +100,17 @@ Whether the recipe reproduces byte for byte is a separate, measured question,
 recorded in `artifact-digest.json` under `reproducibility`. It is reported as
 found and is not required to be identical.
 
+What was found for the fifth fork fix (attempts 5 and 6, the recorded command
+run from this directory twice with `cargo clean` between): the JavaScript glue
+is byte-identical; the two `.wasm` files have the same size and their
+WebAssembly text (`wasm-tools print`) differs only in the order of four
+wasm-bindgen cast imports (`__wbindgen_cast_*`) and the indices that follow
+from it. The `.wasm` also embeds the absolute path of the cargo target
+directory (raft-proto's generated `eraftpb.rs`), so a build in another
+checkout differs in that string as well. Attempt 5 is the one checked in; it
+was built into a scratch `--out-dir`, compared, and then copied into `pkg/`
+with `artifact-digest.json` updated, and `cargo clean` removed `target/`.
+
 ## What this binding exposes, and what it deliberately does not
 
 Added over upstream, all raw raft-rs operations:
@@ -141,3 +153,26 @@ Each was found by driving the binding and is measured before and after:
    The runtime owner can therefore distinguish a returned raft-rs refusal
    from a WASM trap at the invocation boundary without classifying a generic
    JavaScript exception by type or message.
+5. **A leader that applies its own removal steps down in the same
+   `apply_conf_change` call.** raft-rs 0.7 keeps a leader that applied a
+   configuration in which it is no voter (removed, or demoted to a learner)
+   leading, and says so itself (`raft.rs` `post_conf_change`: "This node is
+   leader and was removed or demoted ... TODO(tbg): step down (for sanity)
+   and ask follower with largest Match to TimeoutNow (to avoid
+   interruption)"). A removed leader has no `Progress` for itself, so
+   `step_leader` drops every proposal, its heartbeats keep the remaining
+   voters inside their check-quorum lease so none of them campaigns, and
+   `maybe_commit` and `on_persist_entries` unwrap the `Progress` it lacks.
+   A host cannot end that leadership through `RawNode`, and no producer
+   check can prevent it: leadership can return to the removed replica after
+   another leader proposed its removal and before the entry commits. The
+   binding now does what the TODO names: it sends `MsgTimeoutNow` (the
+   message raft-rs's own transfer sends) to the remaining voter with the
+   highest matched index, the lowest id on a tie, when that voter holds the
+   whole log, and calls the crate's public `become_follower(term,
+   INVALID_ID)`, the transition raft-rs's own check-quorum makes. The
+   messages leave through the host's ordinary drain; when a Ready is
+   outstanding they are handed out with its `LightReady`, because
+   `advance_append` refuses messages queued by a node that no longer leads.
+   No export is added and no other state is touched: a voter, a follower and
+   a leader that stays a voter are unaffected.
