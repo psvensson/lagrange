@@ -235,7 +235,10 @@ async function removeGuardsRefuse(cachedOperations) {
   }
 }
 
+// A committed row: the owner's schema requires its source node and its
+// creation/update times (a live REPLACE written just now).
 function cachedReplaceRow(workflowStep) {
+  const writtenAtMs = Date.now();
   return {
     operation_id: `a14b-replace-${workflowStep}`,
     type: OperationType.REPLACE,
@@ -243,7 +246,10 @@ function cachedReplaceRow(workflowStep) {
     entity_id: PRIORITY_PARTITION_ID,
     partition_id: PRIORITY_PARTITION_ID,
     replica_id: `${PRIORITY_PARTITION_ID}-r4`,
+    source_node_id: 'node-1',
     target_node_id: 'node-4',
+    created_at: writtenAtMs,
+    updated_at: writtenAtMs,
     status: WORKFLOW_STEP_TO_STATUS[workflowStep],
     workflow_step: workflowStep,
     stepsHistory: [{step: workflowStep,

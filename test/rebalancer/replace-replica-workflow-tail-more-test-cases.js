@@ -1814,7 +1814,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           status: 'failed',
           workflow_step: WORKFLOW_STEP.FAILED,
         },
-      ];
+      ].map((row) => ({...row, created_at: Date.now(), updated_at: Date.now()}));
       const parsedSql = [];
       const sqlQueryEngine = {
         async executeQuery(sql, params) {
