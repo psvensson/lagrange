@@ -42,10 +42,11 @@ import {
 import {
   NodeRegistrationOwner,
 } from '../../src/bootstrap/shared/node-registration-owner.js';
-import {
-  STORAGE_INCARNATION_FIELD,
-  STORAGE_INCARNATION_METADATA_KEY,
-} from '../../src/bootstrap/shared/node-registration-owner-constants.js';
+import {STALE_NODE_INCARNATION_CODE} from
+  '../../src/control-plane/control-plane-error-classification.js';
+import {PARTITION_REPLICA_STORAGE_STATE} from
+  '../../src/storage/data-directory-manager.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
 } from '../../src/bootstrap/system-partition-classification.js';
@@ -688,7 +689,6 @@ function insertNodeEndpointRow(
   nodeId,
   nowMs,
   bootIncarnation = TEST_BOOT_INCARNATION,
-  storageIncarnation = bootIncarnation,
 ) {
   insertStoredRow(cache, TABLES.NODE_ENDPOINTS, {
     [COLUMN.ENDPOINT_ID]: `ep-${nodeId}-ws`,
@@ -696,9 +696,7 @@ function insertNodeEndpointRow(
     [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
     [COLUMN.ADDRESS]: nodeAddressOf(nodeId),
     [COLUMN.PRIORITY]: 0,
-    [COLUMN.METADATA]: JSON.stringify({
-      [STORAGE_INCARNATION_METADATA_KEY]: storageIncarnation,
-    }),
+    [COLUMN.METADATA]: JSON.stringify({}),
     [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
     [COLUMN.CREATED_AT]: nowMs,
     [COLUMN.UPDATED_AT]: nowMs,
@@ -719,15 +717,8 @@ function seedSystemRows(cache, nowMs) {
       [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
       [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nowMs,
     }, nowMs),
-    [STORAGE_INCARNATION_FIELD]: TEST_BOOT_INCARNATION,
   });
-  insertNodeEndpointRow(
-    cache,
-    SEED_NODE_ID,
-    nowMs,
-    TEST_BOOT_INCARNATION,
-    TEST_BOOT_INCARNATION,
-  );
+  insertNodeEndpointRow(cache, SEED_NODE_ID, nowMs, TEST_BOOT_INCARNATION);
   insert(TABLES.MESSAGE_GROUPS, seedMessageGroupRow(SEED_NODE_ID, nowMs));
   INITIAL_MESSAGE_GROUP_REPLICA_IDS.forEach((replicaId) => {
     insert(TABLES.SERVICES, MessageGroupServiceRowOwner.buildServiceRow({
@@ -772,17 +763,12 @@ function stopNodeHosts(existingHosts) {
   existingHosts.stopIntervals();
 }
 
-function wipeStoppedNodeData(
-  nodeId,
-  {replicaRuntime, bootIncarnationByNodeId, cache, externalServicesCleanup},
-) {
+// A wiped data directory: the node's local replicas are gone and so is its
+// boot incarnation owner's reservation (the next lifecycle reserves from 1).
+// Cluster SERVICES and REPLICA_OPERATIONS rows are never touched.
+function wipeStoppedNodeData(nodeId, {replicaRuntime, bootIncarnationByNodeId}) {
   replicaRuntime.wipeNode(nodeId);
   bootIncarnationByNodeId.delete(nodeId);
-  if (!externalServicesCleanup) return;
-  for (const row of cache.filter(TABLES.SERVICES, (candidate) =>
-    candidate[COLUMN.NODE_ID] === nodeId)) {
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, row);
-  }
 }
 
 function expireStoppedNodeLease(nodeId, {cache, time, clock}) {
@@ -956,8 +942,90 @@ function createFormationWorld({
   const seed = startNode(SEED_NODE_ID, SEED_FENCE);
   const seedRebalancers = mountPlacementDeciders({seedHosts: seed, clock, cache});
 
+  // One boot lifecycle of a joiner: its own hosts at a newly reserved
+  // incarnation, registered through the real registration owner.
+  async function registerJoinerLifecycle(nodeId, durableStateDetected) {
+    const registrationNow = time.now();
+    nextBootIncarnation(nodeId);
+    const clusterIncarnationFence = buildClusterIncarnationFence(
+      durableStateDetected ? {
+        durableStateDetected: true,
+        localIdentityMatched: true,
+        peerProofRequired: true,
+        peerAddresses: [nodeAddressOf(SEED_NODE_ID)],
+      } : {
+        durableStateDetected: false,
+      });
+    const hosts = startNode(nodeId, clusterIncarnationFence);
+    // The node's replica lifecycle owner, as replica handler setup builds it.
+    const replicaStateMachine = new ReplicaStateMachine({
+      nodeId,
+      ownerIncarnation: hosts.bootIncarnation,
+      cdcIntegrationService: hosts.cdcIntegrationService,
+      controlPlaneSystemTableGateway: hosts.controlPlaneSystemTableGateway,
+      systemTableCache: cache,
+      now: time.now,
+    });
+    const registrationOwner = new NodeRegistrationOwner({
+      hostId: simulatedHostIdOf(nodeId),
+      nodeId,
+      nodeAddress: nodeAddressOf(nodeId),
+      membershipPublicationRuntimeOwner:
+        hosts.membershipPublicationService.membershipPublicationRuntimeOwner,
+      delegates: {
+        getLogger: () => hosts.controlPlaneReadinessService.logger,
+        getNow: () => () => registrationNow,
+        getBootIncarnation: () => hosts.bootIncarnation,
+        getNodeCapabilities: () => [],
+        getClusterIncarnationFence: async () => clusterIncarnationFence,
+        getJoinLifecycleIntentType: () =>
+          durableStateDetected ?
+            MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY :
+            MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
+        getSystemTableCache: () => cache,
+        getCdcIntegrationService: () => hosts.cdcIntegrationService,
+        getMessageRouter: () => hosts.messageRouter,
+        getSeedNodeId: () => SEED_NODE_ID,
+        getReplicaStateMachine: () => replicaStateMachine,
+        // A fresh-storage lifecycle's data directory holds no replica.
+        readLocalReplicaStorageState: () =>
+          PARTITION_REPLICA_STORAGE_STATE.ABSENT,
+        getNodeStorageBudgetService: () => ({
+          resolveBudgetRow: (nodeRow) => ({
+            budgetRow: {
+              ...nodeRow,
+              [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
+              [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
+              [COLUMN.STORAGE_BUDGET_UPDATED_AT]: registrationNow,
+            },
+            resolution: {
+              isValid: true,
+              budgetBytes: STORAGE_BUDGET_BYTES,
+              source: STORAGE_BUDGET_SOURCE,
+              diskBytes: STORAGE_BUDGET_BYTES,
+            },
+          }),
+        }),
+      },
+    });
+    registrationOwner.authoritativeControlPlaneView = {
+      canRead: () => true,
+      syncOwnerDependencies: () => {},
+      readRows: (tableName, sql, params) =>
+        hosts.controlPlaneSystemTableGateway.readAuthoritativeRows(
+          tableName,
+          sql,
+          params,
+        ),
+    };
+    await registrationOwner.registerNodeInCluster();
+    return hosts;
+  }
+
   const world = {
     cache,
+    // Joiner boot lifecycles a row of an earlier life superseded.
+    supersededLifecycles: [],
     clock,
     time,
     hostsById,
@@ -1021,34 +1089,21 @@ function createFormationWorld({
         });
       }
     },
-    // Stop a node's controllers. Cluster REPLICA_OPERATIONS rows are NEVER
-    // deleted. When wipeDataDir is true:
-    // - replicaRuntime.wipeNode(nodeId) clears the node's local replica state;
-    // - when externalServicesCleanup is false (default local-disk-only wipe),
-    //   cluster SERVICES and REPLICA_OPERATIONS rows remain untouched in the
-    //   shared store so NodeRegistrationOwner.registerNodeInCluster() discovers
-    //   the lost local storage on fresh-storage registration and transitions
-    //   the node's partition SERVICES rows to FAILED/LEARNER;
-    // - when externalServicesCleanup is true, the wiped node's SERVICES rows
-    //   are deleted while REPLICA_OPERATIONS history remains intact to test
-    //   storageIncarnation supersession on absent SERVICES rows.
+    // Stop a node's controllers. Cluster SERVICES and REPLICA_OPERATIONS
+    // rows are never deleted. A wiped data directory (wipeDataDir) loses the
+    // node's local replicas and its boot incarnation reservation; its
+    // restart registers as a fresh-storage lifecycle.
     stopNode(
       nodeId,
       {
         expireLease = false,
         wipeDataDir = false,
-        externalServicesCleanup = false,
       } = {},
     ) {
       stopNodeHosts(hostsById.get(nodeId));
       upNodeIds.delete(nodeId);
       if (wipeDataDir) {
-        wipeStoppedNodeData(nodeId, {
-          replicaRuntime,
-          bootIncarnationByNodeId,
-          cache,
-          externalServicesCleanup,
-        });
+        wipeStoppedNodeData(nodeId, {replicaRuntime, bootIncarnationByNodeId});
       }
       this.reassignStoppedNodeLeadership(nodeId);
       if (expireLease) {
@@ -1067,8 +1122,6 @@ function createFormationWorld({
         clock.advance(1);
       }
       const bootIncarnation = nextBootIncarnation(SEED_NODE_ID);
-      const storageIncarnation =
-        existingSeed?.[STORAGE_INCARNATION_FIELD] ?? TEST_BOOT_INCARNATION;
       const nextSeed = startNode(SEED_NODE_ID, buildClusterIncarnationFence({
         durableStateDetected: true,
         localIdentityMatched: true,
@@ -1085,112 +1138,50 @@ function createFormationWorld({
           [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
           [COLUMN.STORAGE_BUDGET_UPDATED_AT]: nextHb,
         }, nextHb),
-        [STORAGE_INCARNATION_FIELD]: storageIncarnation,
       });
-      insertNodeEndpointRow(
-        cache,
-        SEED_NODE_ID,
-        nextHb,
-        bootIncarnation,
-        storageIncarnation,
-      );
+      insertNodeEndpointRow(cache, SEED_NODE_ID, nextHb, bootIncarnation);
       world.seed = nextSeed;
       world.seedRebalancers =
         mountPlacementDeciders({seedHosts: nextSeed, clock, cache});
       return nextSeed;
     },
     /**
-     * A joiner's process starts and registers through the real
+     * A joiner's boot lifecycle starts and registers through the real
      * NodeRegistrationOwner:
      * - On durable rejoin (durableStateDetected: true), existing membership is
-     *   reused (created_at and storageIncarnation preserved, boot_incarnation
-     *   advanced) and SERVICES rows remain untouched.
-     * - On initial join or wiped-data-dir restart (durableStateDetected: false),
-     *   NodeRegistrationOwner refuses to reuse any prior boot's membership row,
-     *   mints a fresh storageIncarnation = bootIncarnation, and transitions any
-     *   partition SERVICES rows still assigned to this node to FAILED/LEARNER.
+     *   reused and its boot_incarnation advanced; SERVICES rows are untouched.
+     * - On a fresh-storage lifecycle (durableStateDetected: false: an initial
+     *   join, or a restart over a wiped data directory) the lifecycle reserves
+     *   from its own (possibly reset) boot incarnation owner. A row at that
+     *   number written by an earlier life of the node id supersedes it: as the
+     *   join entrypoint does (resolveFailedJoinReattempt), this lifecycle
+     *   stops, the superseding incarnation becomes the owner's floor and one
+     *   new lifecycle registers above it. A fresh-storage registration then
+     *   fails the node's partition replicas whose storage is gone.
      * @param {string} nodeId
      * @param {object} [options]
-     * @return {Promise<object>} the joiner's hosts
+     * @return {Promise<object>} the registered lifecycle's hosts
      */
-    async registerJoiner(
-      nodeId,
-      {durableStateDetected = false, registrationNowMs = null} = {},
-    ) {
+    async registerJoiner(nodeId, {durableStateDetected = false} = {}) {
       const existingNode = cache.get(TABLES.NODES, nodeId);
       const minNow = Number(existingNode?.[COLUMN.LAST_HEARTBEAT] || 0) + 1;
       while (time.now() < minNow) {
         clock.advance(1);
       }
-      const registrationNow = Number.isFinite(registrationNowMs) ?
-        Math.floor(registrationNowMs) :
-        time.now();
-      nextBootIncarnation(nodeId);
-      const clusterIncarnationFence = buildClusterIncarnationFence(
-        durableStateDetected ? {
-          durableStateDetected: true,
-          localIdentityMatched: true,
-          peerProofRequired: true,
-          peerAddresses: [nodeAddressOf(SEED_NODE_ID)],
-        } : {
-          durableStateDetected: false,
-        });
-      const hosts = startNode(nodeId, clusterIncarnationFence);
-      const registrationOwner = new NodeRegistrationOwner({
-        hostId: simulatedHostIdOf(nodeId),
-        nodeId,
-        nodeAddress: nodeAddressOf(nodeId),
-        membershipPublicationRuntimeOwner:
-          hosts.membershipPublicationService.membershipPublicationRuntimeOwner,
-        delegates: {
-          getLogger: () => hosts.controlPlaneReadinessService.logger,
-          getNow: () => () => registrationNow,
-          getBootIncarnation: () => hosts.bootIncarnation,
-          raiseBootIncarnationFloor: async (knownIncarnation) => {
-            const updated = await hosts.syncBootIncarnation(knownIncarnation);
-            bootIncarnationByNodeId.set(nodeId, updated);
-            return updated;
-          },
-          getNodeCapabilities: () => [],
-          getClusterIncarnationFence: async () => clusterIncarnationFence,
-          getJoinLifecycleIntentType: () =>
-            durableStateDetected ?
-              MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY :
-              MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
-          getSystemTableCache: () => cache,
-          getCdcIntegrationService: () => hosts.cdcIntegrationService,
-          getMessageRouter: () => hosts.messageRouter,
-          getSeedNodeId: () => SEED_NODE_ID,
-          getNodeStorageBudgetService: () => ({
-            resolveBudgetRow: (nodeRow) => ({
-              budgetRow: {
-                ...nodeRow,
-                [COLUMN.STORAGE_BUDGET_BYTES]: STORAGE_BUDGET_BYTES,
-                [COLUMN.STORAGE_BUDGET_SOURCE]: STORAGE_BUDGET_SOURCE,
-                [COLUMN.STORAGE_BUDGET_UPDATED_AT]: registrationNow,
-              },
-              resolution: {
-                isValid: true,
-                budgetBytes: STORAGE_BUDGET_BYTES,
-                source: STORAGE_BUDGET_SOURCE,
-                diskBytes: STORAGE_BUDGET_BYTES,
-              },
-            }),
-          }),
-        },
-      });
-      registrationOwner.authoritativeControlPlaneView = {
-        canRead: () => true,
-        syncOwnerDependencies: () => {},
-        readRows: (tableName, sql, params) =>
-          hosts.controlPlaneSystemTableGateway.readAuthoritativeRows(
-            tableName,
-            sql,
-            params,
-          ),
-      };
-      await registrationOwner.registerNodeInCluster();
-      return hosts;
+      try {
+        return await registerJoinerLifecycle(nodeId, durableStateDetected);
+      } catch (error) {
+        if (error?.code !== STALE_NODE_INCARNATION_CODE) throw error;
+        // The superseded lifecycle ends; the next one reserves above the
+        // incarnation that superseded it.
+        stopNodeHosts(hostsById.get(nodeId));
+        upNodeIds.delete(nodeId);
+        world.supersededLifecycles.push({nodeId,
+          bootIncarnation: bootIncarnationByNodeId.get(nodeId),
+          knownIncarnation: error.knownIncarnation});
+        bootIncarnationByNodeId.set(nodeId, error.knownIncarnation);
+        return registerJoinerLifecycle(nodeId, durableStateDetected);
+      }
     },
   };
   return world;

@@ -266,4 +266,38 @@ function getMessageGroupDbPath(dataDir, groupId, replicaId) {
   );
 }
 
-export {DataDirectoryManager, getMessageGroupDbPath, getPartitionDbPath};
+const FILE_NOT_FOUND_ERROR = 'ENOENT';
+const PARTITION_REPLICA_STORAGE_STATE = Object.freeze({
+  ABSENT: 'absent',
+  PRESENT: 'present',
+});
+
+/**
+ * Whether this data directory holds the database of one partition replica.
+ * Only a missing file is ABSENT (the positive proof that the replica's
+ * durable record is not here); any other failure to inspect the path is
+ * thrown, never collapsed to absent.
+ * @param {string} dataDir - Base data directory.
+ * @param {string} partitionId - Partition ID.
+ * @param {string} replicaId - Replica ID.
+ * @return {string} PARTITION_REPLICA_STORAGE_STATE.ABSENT or PRESENT.
+ */
+function readPartitionReplicaStorageState(dataDir, partitionId, replicaId) {
+  try {
+    fs.lstatSync(getPartitionDbPath(dataDir, partitionId, replicaId));
+    return PARTITION_REPLICA_STORAGE_STATE.PRESENT;
+  } catch (error) {
+    if (error?.code === FILE_NOT_FOUND_ERROR) {
+      return PARTITION_REPLICA_STORAGE_STATE.ABSENT;
+    }
+    throw error;
+  }
+}
+
+export {
+  DataDirectoryManager,
+  PARTITION_REPLICA_STORAGE_STATE,
+  getMessageGroupDbPath,
+  getPartitionDbPath,
+  readPartitionReplicaStorageState,
+};

@@ -14,6 +14,7 @@ import {NodeReadyLeaseAuthority} from
 import {COLUMN, SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
@@ -246,6 +247,7 @@ async (t) => {
     last_heartbeat: NOW, boot_incarnation: 4};
   const registration = await writeNodeRegistrationAtIncarnation({
     row: g2Row, bootIncarnation: 4,
+    issueRecord: createNodeRegistrationIssueRecord(),
     observe: async () => ({available: true, row: durable.current()}),
     insert: async () => ({success: false}),
     advance: (whereClause, row) => durable.gateway.updateSystemTableRow(

@@ -1,6 +1,8 @@
 import path from 'path';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {STORAGE_CONFIG_KEY} from '../storage/storage-constants.js';
+import {readPartitionReplicaStorageState} from
+  '../storage/data-directory-manager.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
@@ -95,7 +97,6 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       options,
       'dataDir',
     );
-    this.explicitDataDirProvided = explicitDataDirProvided;
     this.rolloutControls = assertRequiredControlPlaneRollout({
       owner: NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE,
       controls: options.rolloutControls,
@@ -446,7 +447,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getRandom: () => this.random,
         getHttpPostImpl: () => this.httpPostImpl,
         getBootstrapResponse: () => this.bootstrapResponse,
-        setBootstrapResponse: (v) => this.applyBootstrapResponse(v),
+        setBootstrapResponse: (v) => {
+          this.bootstrapResponse = v;
+        },
         getLastRetryableSeedContactEvidence: () =>
           this.lastRetryableSeedContactEvidence,
         setLastRetryableSeedContactEvidence: (v) => {
@@ -573,8 +576,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getMessageGroupServices: () => this.messageGroupServices,
         getNodeStorageBudgetService: () => this.getNodeStorageBudgetService(),
         getBootIncarnation: () => this.bootIncarnation,
-        raiseBootIncarnationFloor: (knownIncarnation) =>
-          this.syncBootIncarnation(knownIncarnation),
+        getReplicaStateMachine: () => this.replicaStateMachine,
+        readLocalReplicaStorageState: ({partitionId, replicaId}) =>
+          readPartitionReplicaStorageState(this.dataDir, partitionId,
+            replicaId),
         getSystemTableCache: () =>
           NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () => this.ensureLatencyTopologyOwners(),

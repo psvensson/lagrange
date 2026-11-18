@@ -25,6 +25,7 @@ import {TABLES} from '../../src/constants/index.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {MembershipPublicationRuntimeOwner} from
   '../../src/control-plane/owners/membership-publication-runtime-owner.js';
@@ -473,9 +474,11 @@ async () => {
     const owner = new MembershipPublicationRuntimeOwner({nodeId: NODE_ID,
       controlPlaneSystemTableGateway: gateway,
       controlPlaneWriteRetryTimeoutMs: 0});
+    // The first attempt and its re-drive are one boot lifecycle.
+    const issueRecord = createNodeRegistrationIssueRecord();
     const register = () => withMutedConsoleError(() =>
       owner.registerJoinNodeAtIncarnation(nodeRow(), BOOT_INCARNATION,
-        {...JOIN_WRITE_OPTIONS}));
+        issueRecord, {...JOIN_WRITE_OPTIONS}));
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: register});
     assert.equal(first.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED,

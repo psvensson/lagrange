@@ -37,6 +37,8 @@ import {test} from 'node:test';
 
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   LOSING_ORDER,
@@ -325,143 +327,76 @@ test('join-core-coupling: rolling-restart-seed-during-formation converges ' +
 test('join-core-coupling: joiner-restart-wiped-data-dir re-replicates and ' +
   'converges to TRAFFIC_READY without deleting REPLICA_OPERATIONS history',
 async () => {
-  // 1. Default local-disk-only wipe witness: neither SERVICES nor
-  // REPLICA_OPERATIONS rows are deleted by stopNode. When j1 re-registers
-  // through the real NodeRegistrationOwner with durableStateDetected: false,
-  // NodeRegistrationOwner refuses to reuse j1's prior ACTIVE/CONNECTED row,
-  // advances storageIncarnation (1 -> 2), and transitions j1's untouched
-  // partition SERVICES rows to FAILED/LEARNER
-  // (trigger_reason: 'node_storage_lost_on_fresh_registration'), after which
-  // MovePlanner and RebalanceCoordinator drive REMOVE + ADD recovery.
-  let localWipeServicesBefore = 0;
-  let localWipeServicesAfterStop = 0;
-  let localWipeFailedServicesAfterRegister = 0;
-  let localWipeOpsBefore = 0;
-  let localWipeOpsAfter = 0;
-  let j1BootIncarnationBefore = 0;
-  let j1BootIncarnationAfter = 0;
-  let j1StorageIncarnationBefore = 0;
-  let j1StorageIncarnationAfter = 0;
-  const localWipeReport = await runArrivalOrder(LOSING_ORDER, {
+  // j1's data directory is wiped: its local replicas and its boot
+  // incarnation reservation are gone, while neither SERVICES nor
+  // REPLICA_OPERATIONS rows are deleted. Its restart reserves the number its
+  // first life already registered; the D-7 registration owner refuses that
+  // lifecycle (a row at its own number it never wrote), the superseding
+  // incarnation becomes the floor and one new lifecycle registers above it
+  // by one CAS. That fresh-storage registration fails j1's partition replicas
+  // whose storage is gone, through their lifecycle owner, and placement
+  // re-replicates them.
+  let servicesBefore = 0;
+  let servicesAfterStop = 0;
+  let failedAfterRegister = 0;
+  let opsBefore = 0;
+  let opsAfter = 0;
+  let bootIncarnationBefore = 0;
+  let bootIncarnationAfter = 0;
+  let superseded = [];
+  const isJ1PartitionRow = (row) => row[COLUMN.NODE_ID] === J1 &&
+    row[COLUMN.SERVICE_TYPE] === 'partition';
+  const report = await runArrivalOrder(LOSING_ORDER, {
     rounds: {
       7: async (driver, world) => {
-        localWipeServicesBefore = world.cache.filter(
-          TABLES.SERVICES,
-          (row) =>
-            row[COLUMN.NODE_ID] === J1 &&
-            row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-        ).length;
-        localWipeOpsBefore = world.cache.filter(
-          TABLES.REPLICA_OPERATIONS,
-          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
-        ).length;
-        j1BootIncarnationBefore =
+        servicesBefore = world.cache.filter(TABLES.SERVICES, (row) =>
+          isJ1PartitionRow(row) &&
+          row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE).length;
+        opsBefore = world.cache.filter(TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1).length;
+        bootIncarnationBefore =
           world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
-        j1StorageIncarnationBefore = JSON.parse(
-          world.cache.get(TABLES.NODE_ENDPOINTS, `ep-${J1}-ws`)?.[
-            COLUMN.METADATA
-          ] || '{}',
-        ).storageIncarnation || 0;
-        world.stopNode(J1, {
-          expireLease: true,
-          wipeDataDir: true,
-          externalServicesCleanup: false,
-        });
-        localWipeServicesAfterStop = world.cache.filter(
-          TABLES.SERVICES,
-          (row) =>
-            row[COLUMN.NODE_ID] === J1 &&
-            row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-        ).length;
-        await driver.restartJoiner(J1, {
-          wipeDataDir: true,
-          externalServicesCleanup: false,
-        });
-        localWipeFailedServicesAfterRegister = world.cache.filter(
-          TABLES.SERVICES,
-          (row) =>
-            row[COLUMN.NODE_ID] === J1 &&
-            row[COLUMN.STATUS] === ReplicaStatus.FAILED &&
-            row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEARNER &&
-            row[COLUMN.TRIGGER_REASON] ===
-              'node_storage_lost_on_fresh_registration',
-        ).length;
-        localWipeOpsAfter = world.cache.filter(
-          TABLES.REPLICA_OPERATIONS,
-          (row) => row[COLUMN.TARGET_NODE_ID] === J1,
-        ).length;
-        j1BootIncarnationAfter =
+        world.stopNode(J1, {expireLease: true, wipeDataDir: true});
+        servicesAfterStop = world.cache.filter(TABLES.SERVICES, (row) =>
+          isJ1PartitionRow(row) &&
+          row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE).length;
+        await driver.restartJoiner(J1, {wipeDataDir: true});
+        superseded = world.supersededLifecycles.filter(
+          (lifecycle) => lifecycle.nodeId === J1);
+        failedAfterRegister = world.cache.filter(TABLES.SERVICES, (row) =>
+          isJ1PartitionRow(row) &&
+          row[COLUMN.STATUS] === ReplicaStatus.FAILED &&
+          row.trigger_reason ===
+            COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING).length;
+        opsAfter = world.cache.filter(TABLES.REPLICA_OPERATIONS,
+          (row) => row[COLUMN.TARGET_NODE_ID] === J1).length;
+        bootIncarnationAfter =
           world.cache.get(TABLES.NODES, J1)?.[COLUMN.BOOT_INCARNATION] || 0;
-        j1StorageIncarnationAfter = JSON.parse(
-          world.cache.get(TABLES.NODE_ENDPOINTS, `ep-${J1}-ws`)?.[
-            COLUMN.METADATA
-          ] || '{}',
-        ).storageIncarnation || 0;
       },
     },
   });
-  assert.ok(localWipeServicesBefore >= 2,
-    'j1 held ACTIVE priority SERVICES rows before local-disk-only wipe');
-  assert.equal(localWipeServicesAfterStop, localWipeServicesBefore,
-    'stopNode leaves SERVICES rows untouched in the cluster store on local disk wipe');
-  assert.equal(localWipeFailedServicesAfterRegister, localWipeServicesBefore,
-    'NodeRegistrationOwner transitions untouched SERVICES rows on wiped node to FAILED/LEARNER');
-  assert.ok(localWipeOpsBefore >= 2,
+  assert.ok(servicesBefore >= 2,
+    'j1 held ACTIVE priority partition SERVICES rows before the wipe');
+  assert.equal(servicesAfterStop, servicesBefore,
+    'stopping the wiped node leaves its SERVICES rows untouched');
+  assert.deepEqual(superseded, [{nodeId: J1,
+    bootIncarnation: bootIncarnationBefore,
+    knownIncarnation: bootIncarnationBefore}],
+  'the wiped node\'s first lifecycle reserved its earlier life\'s number ' +
+    'and was superseded, carrying that number as the floor');
+  assert.equal(bootIncarnationAfter, bootIncarnationBefore + 1,
+    'the next lifecycle registers strictly above the earlier life');
+  assert.equal(failedAfterRegister, servicesBefore,
+    'every lost partition replica is FAILED with the open-time refusal\'s ' +
+    'reason');
+  assert.ok(opsBefore >= 2,
     'j1 had committed REPLICA_OPERATIONS history before the wipe');
-  assert.equal(localWipeOpsAfter, localWipeOpsBefore,
-    'REPLICA_OPERATIONS rows remain untouched in cluster store');
-  assert.ok(j1BootIncarnationAfter > j1BootIncarnationBefore,
-    'restarted joiner registers a strictly newer boot_incarnation');
-  assert.ok(j1StorageIncarnationAfter > j1StorageIncarnationBefore,
-    'wiped-disk registration advances storageIncarnation in NODE_ENDPOINTS metadata');
-  assertEveryAdmittedJoinerReady(
-    localWipeReport, 'joiner-restart-local-disk-only-wipe');
-  assertSafety(localWipeReport, 'joiner-restart-local-disk-only-wipe');
-  assertSpreadComplete(
-    localWipeReport, 'joiner-restart-local-disk-only-wipe');
-  assert.equal(lowestFloor(localWipeReport), VOTER_READY_FLOOR);
-
-  // 2. Absent SERVICES rows + cleared tombstones + rolled-back registration
-  // clock witness: even when SERVICES rows were already removed, cache
-  // tombstones have expired/cleared, and the registering node's clock is
-  // skewed behind operation.completed_at, storageIncarnation supersession
-  // prevents terminal ADD/REPLACE rows from projecting ghost replicas.
-  let externalCleanupCreatedAt = 0;
-  let externalCleanupMaxCompletedAt = 0;
-  const externalCleanupReport = await runArrivalOrder(LOSING_ORDER, {
-    rounds: {
-      7: async (driver, world) => {
-        for (const row of world.cache.filter(
-          TABLES.REPLICA_OPERATIONS,
-          (candidate) => candidate[COLUMN.TARGET_NODE_ID] === J1,
-        )) {
-          externalCleanupMaxCompletedAt = Math.max(
-            externalCleanupMaxCompletedAt,
-            Number(row[COLUMN.COMPLETED_AT] || row[COLUMN.UPDATED_AT] || 0),
-          );
-        }
-        await driver.restartJoiner(J1, {
-          wipeDataDir: true,
-          externalServicesCleanup: true,
-          registrationNowMs: 1000,
-        });
-        externalCleanupCreatedAt = Number(
-          world.cache.get(TABLES.NODES, J1)?.[COLUMN.CREATED_AT] || 0,
-        );
-      },
-    },
-  });
-  assert.equal(externalCleanupCreatedAt, 1000,
-    'wiped-disk registration used rolled-back clock timestamp');
-  assert.ok(externalCleanupCreatedAt < externalCleanupMaxCompletedAt,
-    'registration created_at is strictly earlier than prior operation completed_at');
-  assertEveryAdmittedJoinerReady(
-    externalCleanupReport, 'joiner-restart-wiped-data-dir-clock-rollback');
-  assertSafety(
-    externalCleanupReport, 'joiner-restart-wiped-data-dir-clock-rollback');
-  assertSpreadComplete(
-    externalCleanupReport, 'joiner-restart-wiped-data-dir-clock-rollback');
-  assert.equal(lowestFloor(externalCleanupReport), VOTER_READY_FLOOR);
+  assert.equal(opsAfter, opsBefore,
+    'REPLICA_OPERATIONS rows remain untouched in the cluster store');
+  assertEveryAdmittedJoinerReady(report, 'joiner-restart-wiped-data-dir');
+  assertSafety(report, 'joiner-restart-wiped-data-dir');
+  assertSpreadComplete(report, 'joiner-restart-wiped-data-dir');
+  assert.equal(lowestFloor(report), VOTER_READY_FLOOR);
 });
 
 test('join-core-coupling: single-node-operation and ' +

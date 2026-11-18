@@ -1,124 +1,16 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {raiseBootIncarnationFloor} from './boot-incarnation-owner.js';
-import {
-  CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE,
-} from './cluster-incarnation-fence.js';
-import {
-  resolveHighestObservedNodeIncarnation,
-} from './shared/node-registration-owner-row-builder.js';
 
 const {
-  COLUMN,
   JOINING_ERROR_MSG,
   JOIN_DELEGATE_BUNDLE,
   NodeLifecycleStateMachine,
   NodeService,
   NodeState,
   NodeStatePublicationOwner,
-  STARTUP_JOIN_MODE,
-  STORAGE_DEFAULT,
   TABLES,
   assertCritical,
   resolveMembershipJoinIntentType,
 } = NODE_JOINING_SERVICE_SHARED;
-
-async function syncNodeJoiningBootIncarnation(service, nextIncarnation) {
-  const normalized = Number(nextIncarnation);
-  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
-    return service.bootIncarnation;
-  }
-  if (
-    !Number.isSafeInteger(service.bootIncarnation) ||
-    normalized > service.bootIncarnation
-  ) {
-    service.bootIncarnation = normalized;
-  }
-  const current = service.bootIncarnation;
-  if (service.nodeStatePublicationOwner) {
-    service.nodeStatePublicationOwner.bootIncarnation = current;
-  }
-  if (service.heartbeatService) {
-    service.heartbeatService.bootIncarnation = current;
-  }
-  if (service.messageRouter) {
-    service.messageRouter.syncBootIncarnation?.(current);
-    service.messageRouter.bootIncarnation = current;
-  }
-  service.replicaLifecycleOwner?.syncOwnerIncarnation?.(current);
-  if (service.replicaHandler?.replicaCreateAdmissionOwner) {
-    service.replicaHandler.replicaCreateAdmissionOwner.ownerIncarnation =
-      current;
-  }
-  if (service.messageGroupServiceHandler?.replicaCreateAdmissionOwner) {
-    service.messageGroupServiceHandler.replicaCreateAdmissionOwner
-      .ownerIncarnation = current;
-  }
-  if (service.replicaCreateAdmissionOwner) {
-    service.replicaCreateAdmissionOwner.ownerIncarnation = current;
-  }
-  if (service.rebalanceCoordinator?.repository) {
-    service.rebalanceCoordinator.repository.membershipOwnerBootIncarnation =
-      current;
-  }
-  const shouldPersistFloor =
-    typeof service.dataDir === 'string' &&
-    service.dataDir.length > 0 &&
-    (service.explicitDataDirProvided === true ||
-      service.dataDir !== STORAGE_DEFAULT.DATA_DIR);
-  if (shouldPersistFloor) {
-    await raiseBootIncarnationFloor(service.dataDir, current);
-  }
-  return current;
-}
-
-function hasNodeJoiningDurableContinuity(service) {
-  const fence = service.clusterIncarnationFence;
-  if (fence && typeof fence === 'object') {
-    return (
-      fence.durableStateDetected !== false &&
-      fence.allowed === true &&
-      fence.durableMembershipState ===
-        CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE.PRESENT
-    );
-  }
-  return service.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN;
-}
-
-async function applyBootstrapResponseAndSyncIncarnation(service, response) {
-  service.bootstrapResponse = response;
-  if (!response || typeof response !== 'object') {
-    return response;
-  }
-  if (hasNodeJoiningDurableContinuity(service)) {
-    return response;
-  }
-  const snapshots = response.systemTableSnapshots;
-  if (!snapshots || typeof snapshots !== 'object') {
-    return response;
-  }
-  const nodeRows = Array.isArray(snapshots[TABLES.NODES]) ?
-    snapshots[TABLES.NODES] :
-    [];
-  const endpointRows = Array.isArray(snapshots[TABLES.NODE_ENDPOINTS]) ?
-    snapshots[TABLES.NODE_ENDPOINTS] :
-    [];
-  const nodeRow =
-    nodeRows.find((row) => row?.[COLUMN.NODE_ID] === service.nodeId) || null;
-  const expectedEndpointId = `ep-${service.nodeId}-ws`;
-  const matchingEndpoints = endpointRows.filter(
-    (row) =>
-      row?.[COLUMN.NODE_ID] === service.nodeId ||
-      row?.[COLUMN.ENDPOINT_ID] === expectedEndpointId,
-  );
-  const highestObserved = resolveHighestObservedNodeIncarnation(
-    {row: nodeRow},
-    {rows: matchingEndpoints, row: matchingEndpoints[0] || null},
-  );
-  if (highestObserved >= service.bootIncarnation) {
-    await service.syncBootIncarnation(highestObserved + 1);
-  }
-  return response;
-}
 
 function createNodeJoiningRuntimeDependencyOwner({service, runtimeWiring}) {
   return {
@@ -377,7 +269,9 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         getPartitionServices: () => self.partitionServices,
         getJoinMessageGroupReplicas: () => self.joinMessageGroupReplicas,
         getBootstrapResponse: () => self.bootstrapResponse,
-        setBootstrapResponse: (v) => self.applyBootstrapResponse(v),
+        setBootstrapResponse: (v) => {
+          self.bootstrapResponse = v;
+        },
         getSeedNodeAddress: () => self.seedNodeAddress,
         getSeedNodeAddresses: () => self.seedNodeAddresses,
         setSeedNodeAddress: (v) => {
@@ -606,12 +500,6 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
       );
       this.outerReattemptMembershipRestorePending = true;
     },
-    syncBootIncarnation(nextIncarnation) {
-      return syncNodeJoiningBootIncarnation(this, nextIncarnation);
-    },
-    applyBootstrapResponse(response) {
-      return applyBootstrapResponseAndSyncIncarnation(this, response);
-    },
   });
 }
 
@@ -635,5 +523,4 @@ export {
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
   normalizeSeedNodeAddresses,
-  syncNodeJoiningBootIncarnation,
 };

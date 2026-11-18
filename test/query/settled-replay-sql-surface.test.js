@@ -36,6 +36,7 @@ import {CONTROL_PLANE_MUTATION_OUTCOME} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import * as outcomeConstants from
@@ -247,6 +248,7 @@ async function registerThrough(write) {
   const outcome = await writeNodeRegistrationAtIncarnation({
     row: {node_id: NODES_ROW_ID},
     bootIncarnation: BOOT_INCARNATION,
+    issueRecord: createNodeRegistrationIssueRecord(),
     // The joiner's authoritative read is unavailable, as in the lab run.
     observe: async () => {
       observations.count += 1;

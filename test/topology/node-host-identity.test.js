@@ -162,11 +162,10 @@ test('a restart re-declares: the re-entry row carries this boot\'s host, ' +
   const resolution = (authoritativeNodeRow, hostId) => ({
     durable: buildDurableRejoinMembershipResolution({authoritativeNodeRow,
       authoritativeEndpointRow: null, metaEndpointRows: [], now: 20,
-      currentIncarnation: 4, storageIncarnation: null, hostId}),
+      currentIncarnation: 4, hostId}),
     progress: buildExistingJoinAdmissionProgressResolution({authoritativeNodeRow,
       authoritativeEndpointRow: null, metaEndpointRows: [], now: 20,
-      currentIncarnation: 4, storageIncarnation: null, sameBootRetry: false,
-      hostId}),
+      currentIncarnation: 4, hostId}),
   });
   const olderVersionRow = {[COLUMN.NODE_ID]: NODE_ID, [COLUMN.BOOT_INCARNATION]: 3};
   const declaredRow = {...olderVersionRow, [COLUMN.HOST_ID]: HOST_A};
