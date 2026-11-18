@@ -1,6 +1,6 @@
 {
   "name": "raft_wasm",
-  "description": "Lagrange test-side FORK of the raft-logic WASM wrapper around tikv/raft-rs, extended with the raft-rs configuration-change primitives. Evaluation only; never published.",
+  "description": "Lagrange production vendored FORK of the raft-logic WASM wrapper around tikv/raft-rs, extended with configuration-change, persistence, and typed refusal primitives. Vendored in lagrange-server; never published separately to crates.io.",
   "version": "0.1.0",
   "license": "MIT OR Apache-2.0",
   "repository": {

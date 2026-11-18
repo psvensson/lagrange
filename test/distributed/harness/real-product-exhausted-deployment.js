@@ -22,7 +22,9 @@ import {
   inspectProducts,
   runClassOf,
 } from './real-product-identity.js';
-import {errorText} from './real-product-remote-shell.js';
+import {errorText, shellWord} from './real-product-remote-shell.js';
+import {writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
 
 async function readVersionsOrRecord(products, readVersions) {
   try {
@@ -37,6 +39,21 @@ async function readVersionsOrRecord(products, readVersions) {
 }
 
 /**
+ * Enhanced: Collects diagnostic logs before describing failure
+ */
+async function collectObservabilityLogs(roles, sshRun, opts) {
+  const artifactDir = `/home/peter/.gemini/antigravity-cli/brain/98c960bd-8910-4597-aef4-02f116c69dd5/artifacts/diagnostics`;
+  for (const role of roles) {
+    try {
+      const logs = await sshRun(role.host, opts, `docker logs ${shellWord(role.containerId)} 2>&1`);
+      await writeFile(join(artifactDir, `${role.name}.log`), logs);
+    } catch (error) {
+      console.error(`[Observability] Failed to collect logs for ${role.name}: ${errorText(error)}`);
+    }
+  }
+}
+
+/**
  * @param {{targetId: string, topology: Object, sshRun: Function, opts: Object,
  *   roles: Array<Object>, endpoint: Object|null, dataDir: string,
  *   readVersions: Function, failure: Error}} input roles: the product
@@ -45,6 +62,9 @@ async function readVersionsOrRecord(products, readVersions) {
  */
 async function describeExhaustedDeployment({targetId, topology, sshRun, opts, roles, endpoint,
   dataDir, readVersions, failure}) {
+  // Observability enhancement: pull logs immediately on failure detection
+  await collectObservabilityLogs(roles, sshRun, opts);
+
   const products = await readVersionsOrRecord(await inspectProducts({sshRun, opts, roles}),
     readVersions);
   const storage = arrayMap(products, (product) => classifyStorage(product, dataDir));

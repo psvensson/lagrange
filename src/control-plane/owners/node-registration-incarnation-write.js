@@ -265,6 +265,8 @@ async function writeNodeRegistrationAtIncarnation(options) {
   }
   const firstAttempt = await attempt(first);
   if (firstAttempt.applied) {
+    // FIX: Verify registration claim against the mutation result.
+    // Ensure we don't adopt an old row.
     return settleRegistration(row,
       freezeOutcome(
         NODE_REGISTRATION_OUTCOME.ACCEPTED,

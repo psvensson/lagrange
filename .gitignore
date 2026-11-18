@@ -57,6 +57,9 @@ tools/alloy-*/
 opencode.json
 .opencode/
 
+# Vendored raft-rs-wasm build artifacts
+vendor/raft-rs-wasm/target/
+
 # V8/Node compile caches (local run artifacts, machine-specific)
 node-compile-cache/
 v8-compile-cache-*/
