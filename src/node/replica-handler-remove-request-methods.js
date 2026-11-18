@@ -21,7 +21,12 @@ import {REPLICA_CLEANUP_AUTHORITY_KIND} from
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
 } from './replica-handler-leader-handoff-methods.js';
-import {removalAuthorityDeferred} from './replica-removal-debt-errors.js';
+import {isRetryableControlPlaneError} from
+  '../control-plane/control-plane-error-classification.js';
+import {
+  buildRemovalErrorResponseFields,
+  removalAuthorityDeferred,
+} from './replica-removal-debt-errors.js';
 import {closeRemovalCreateAdmission} from
   './replica-removal-create-admission-close.js';
 
@@ -33,6 +38,11 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const FAILED_CREATE_CLEANUP_ADMISSION = Object.freeze({
   ADMITTED: 'admitted',
   REFUSED: 'refused',
+  DEFERRED: 'deferred',
+});
+const FAILED_CREATE_CLEANUP_TRANSITION = Object.freeze({
+  APPLIED: 'applied',
+  NOT_APPLIED: 'not_applied',
   DEFERRED: 'deferred',
 });
 const FAILED_CREATE_CLEANUP_RECEIPT = Object.freeze({
@@ -116,6 +126,10 @@ function cleanupAdmissionVerdict(kind, deferral = null) {
   return Object.freeze({kind, deferral});
 }
 
+function cleanupTransitionVerdict(kind, deferral = null) {
+  return Object.freeze({kind, deferral});
+}
+
 async function applyFailedCreateCleanupTransition(
   handler,
   precondition,
@@ -123,7 +137,7 @@ async function applyFailedCreateCleanupTransition(
   {replicaId, partitionId, cleanupToken, closedCreateGeneration},
 ) {
   try {
-    return await handler.replicaStateMachine
+    const applied = await handler.replicaStateMachine
       .transitionAuthoritativeReplicaGeneration(
         precondition,
         ReplicaStatus.REMOVING,
@@ -135,9 +149,18 @@ async function applyFailedCreateCleanupTransition(
           cleanupToken,
           closedCreateGeneration,
         },
-      ) === true;
-  } catch (_error) {
-    return false;
+      );
+    return cleanupTransitionVerdict(applied === true ?
+      FAILED_CREATE_CLEANUP_TRANSITION.APPLIED :
+      FAILED_CREATE_CLEANUP_TRANSITION.NOT_APPLIED);
+  } catch (error) {
+    if (error?.deferRetry === true || isRetryableControlPlaneError(error)) {
+      return cleanupTransitionVerdict(
+        FAILED_CREATE_CLEANUP_TRANSITION.DEFERRED,
+        removalAuthorityDeferred(replicaId, error),
+      );
+    }
+    throw error;
   }
 }
 
@@ -251,10 +274,15 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         return cleanupAdmissionVerdict(
           FAILED_CREATE_CLEANUP_ADMISSION.DEFERRED, closure.deferral);
       }
-      if (await applyFailedCreateCleanupTransition(this, precondition, request,
-        {replicaId, partitionId, cleanupToken,
-          closedCreateGeneration: closure.generation})) {
+      const transition = await applyFailedCreateCleanupTransition(
+        this, precondition, request, {replicaId, partitionId, cleanupToken,
+          closedCreateGeneration: closure.generation});
+      if (transition.kind === FAILED_CREATE_CLEANUP_TRANSITION.APPLIED) {
         return cleanupAdmissionVerdict(FAILED_CREATE_CLEANUP_ADMISSION.ADMITTED);
+      }
+      if (transition.kind === FAILED_CREATE_CLEANUP_TRANSITION.DEFERRED) {
+        return cleanupAdmissionVerdict(
+          FAILED_CREATE_CLEANUP_ADMISSION.DEFERRED, transition.deferral);
       }
       const observation = await this.replicaStateMachine
         .observeAuthoritativeReplicaLifecycle(replicaId);
@@ -356,14 +384,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       );
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
-        {
-          error: deferral.message,
-          errorCode: deferral.errorCode,
-          deferRetry: deferral.deferRetry,
+        buildRemovalErrorResponseFields(deferral, {
           operationId,
           replicaId,
           nodeId: this.nodeId,
-        },
+        }),
       );
     }
     async answerCompletedFailedCreateCleanupReceipt(
@@ -562,11 +587,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           });
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
-            {
-              error: error.message,
+            buildRemovalErrorResponseFields(error, {
+              operationId,
               replicaId,
               nodeId: this.nodeId,
-            },
+            }),
           );
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
@@ -742,12 +767,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         });
         return this.buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.ERROR,
-          {
-            error: error.message,
+          buildRemovalErrorResponseFields(error, {
             operationId,
             replicaId,
             nodeId: this.nodeId,
-          },
+          }),
         );
       }
     }

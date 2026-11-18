@@ -173,11 +173,33 @@ function isRetryableControlPlaneOperationTarget(operation) {
     partitionId: operation.partitionId,
   }).systemTable;
 }
+function isRemovalDispatchOperation(owner, operation) {
+  return (
+    operation.type === OperationType.REMOVE ||
+    owner.repository.isReplaceRemoveDispatchPhase(operation)
+  );
+}
+function isExplicitlyDeferredParticipantError(errorLike) {
+  if (!errorLike || typeof errorLike !== 'object') {
+    return false;
+  }
+  if (errorLike.deferRetry === true) {
+    return true;
+  }
+  const cause = errorLike.cause;
+  return Boolean(
+    cause && typeof cause === 'object' && cause.deferRetry === true,
+  );
+}
 function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return isRetryableControlPlaneOperationTarget(operation);
+  return (
+    isRetryableControlPlaneOperationTarget(operation) ||
+    isRemovalDispatchOperation(owner, operation) ||
+    isExplicitlyDeferredParticipantError(errorLike)
+  );
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {

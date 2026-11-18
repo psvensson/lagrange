@@ -884,4 +884,156 @@ test('CLAIM_FAILED_CREATE_CLEANUP normalizes an unclaimed FAILED row only ' +
     ReplicaOperationResponseStatus.INITIATED,
     'the normalized precondition authorizes failed-create removal',
   );
+  await handler.shutdown();
+});
+
+test('a transient FAILED -> REMOVING mutation failure defers failed-create ' +
+  'cleanup instead of refusing a still-matching precondition', async (t) => {
+  initializeEnvironment();
+  const failed = serviceRow(
+    'replica-failed-create-cleanup-mutation-blip',
+    ReplicaState.FAILED,
+    200,
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  t.teardown(async () => {
+    await handler.shutdown();
+  });
+  handler.localReplicas.set(failed.service_id, {
+    replicaId: failed.service_id,
+    partitionId: failed.partition_id,
+    status: ReplicaStatus.FAILED,
+    service: null,
+  });
+  let asyncStarts = 0;
+  handler.startRemoveReplicaAsync = () => {
+    asyncStarts += 1;
+  };
+  const request = {
+    operationId: 'cleanup-mutation-blip-same-operation',
+    partitionId: failed.partition_id,
+    replicaId: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      failed,
+  };
+
+  store.setNextMutationBehavior({unavailable: true});
+  const unavailableAttempt = await handler.handleRemoveReplica(request);
+  t.equal(unavailableAttempt.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(unavailableAttempt.deferRetry, true,
+    'transient mutation failure is answered as retryable deferral');
+  t.equal(unavailableAttempt.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED',
+    'the deferral carries REPLICA_REMOVAL_AUTHORITY_DEFERRED, never refusal');
+  t.equal(asyncStarts, 0, 'nothing destructive starts before REMOVING applies');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    ReplicaState.FAILED, 'the exact FAILED row remains intact');
+
+  store.setNextMutationBehavior({zeroRow: true});
+  const zeroRowAttempt = await handler.handleRemoveReplica(request);
+  t.equal(zeroRowAttempt.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(zeroRowAttempt.deferRetry, true,
+    'unapplied CAS with unchanged FAILED row defers rather than refusing');
+  t.equal(zeroRowAttempt.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED');
+
+  const admitted = await handler.handleRemoveReplica(request);
+  t.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED,
+    'redelivery admits cleanup once FAILED -> REMOVING commits');
+  t.equal(store.durable[SERVICES].get(failed.service_id)?.status,
+    ReplicaState.REMOVING);
+  t.equal(asyncStarts, 1);
+});
+
+test('updateReplicaStatus rejects a wrong-generation REMOVING write even ' +
+  'when a newer generation is already REMOVING', async (t) => {
+  initializeEnvironment();
+  const replicaId = 'users-p1-r1';
+  const partitionId = 'users-p1';
+  const newerRemoving = {
+    ...serviceRow(replicaId, ReplicaState.REMOVING, 250, partitionId, {
+      cleanupToken: 'failed-create-remove:op-2',
+      createAttemptToken: 'create-attempt:users-p1-r1:2',
+    }),
+    created_at: 200,
+    state_entered_at: 250,
+  };
+  const store = createLifecycleRowStore({
+    services: [newerRemoving],
+    partitions: [partitionRow(partitionId)],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 300});
+  registerRow(stateMachine, newerRemoving);
+  const handler = createHandler(store, stateMachine);
+  t.teardown(async () => {
+    await handler.shutdown();
+  });
+
+  await t.rejects(
+    handler.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
+      partitionId,
+      closedCreateGeneration: {
+        replicaId,
+        createdAt: 100,
+        createAttemptToken: 'create-attempt:users-p1-r1:1',
+      },
+    }),
+    /Replica state transition rejected/u,
+    'wrong closedCreateGeneration cannot ride on a newer REMOVING generation',
+  );
+  t.equal(stateMachine.getState(replicaId)?.createdAt, 200,
+    'the newer tracked REMOVING generation remains untouched');
+
+  await handler.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
+    partitionId,
+    closedCreateGeneration: {
+      replicaId,
+      createdAt: 200,
+      createAttemptToken: 'create-attempt:users-p1-r1:2',
+    },
+  });
+  t.equal(stateMachine.getState(replicaId)?.createdAt, 200,
+    'the matching closedCreateGeneration remains idempotently accepted');
+});
+
+test('CLAIM_FAILED_CREATE_CLEANUP preserves retryable deferral metadata ' +
+  'when operation authority read is unavailable', async (t) => {
+  initializeEnvironment();
+  const operationId = 'replace-unclaimed-read-blip';
+  const failed = serviceRow(
+    'replica-failed-create-claim-read-blip',
+    ReplicaState.FAILED,
+    350,
+    'partition-1',
+    {cleanupToken: null},
+  );
+  const store = createLifecycleRowStore({
+    services: [failed],
+    partitions: [partitionRow()],
+  });
+  const stateMachine = createStateMachine(store, {now: () => 400});
+  registerRow(stateMachine, failed);
+  const handler = createHandler(store, stateMachine);
+  t.teardown(async () => {
+    await handler.shutdown();
+  });
+  store.setAuthoritativeReadAvailable(false);
+
+  const response = await handler.handleClaimFailedCreateCleanup({
+    [ReplicaOperationField.TYPE]:
+      ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP,
+    [ReplicaOperationField.OPERATION_ID]: operationId,
+    [ReplicaOperationField.OPERATION_TYPE]: OperationType.REPLACE,
+    [ReplicaOperationField.PARTITION_ID]: failed.partition_id,
+    [ReplicaOperationField.REPLICA_ID]: failed.service_id,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: failed,
+  });
+  t.equal(response.status, ReplicaOperationResponseStatus.ERROR);
+  t.equal(response.deferRetry, true,
+    'claim deferral preserves deferRetry for retryable operation read');
+  t.equal(response.errorCode, 'REPLICA_CREATE_ADMISSION_DEFERRED');
 });

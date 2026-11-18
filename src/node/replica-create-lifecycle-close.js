@@ -74,6 +74,22 @@ async function closeAdmissionRow(owner, row, createdAt, attemptToken) {
   return rowRetainsClosedIdentity(current, row, createdAt);
 }
 
+async function closeAdmissionRowInLane(
+  owner,
+  row,
+  createdAt,
+  attemptToken,
+  generation,
+) {
+  return owner.runExclusive(row.operation_id, async () => {
+    if (owner.activePhysicalWorkerOperationIds.has(row.operation_id) ||
+        hasReplicaCreatePhysicalWorkerForGeneration(owner, generation)) {
+      return false;
+    }
+    return closeAdmissionRow(owner, row, createdAt, attemptToken);
+  });
+}
+
 async function closeReplicaCreateAdmissionForLifecycle(owner, lifecycle) {
   const replicaId = lifecycleReplicaId(lifecycle);
   const replicaCreatedAt = nullableSafeInteger(lifecycle?.createdAt);
@@ -94,8 +110,8 @@ async function closeReplicaCreateAdmissionForLifecycle(owner, lifecycle) {
   if (matching.some((row) =>
     owner.activePhysicalWorkerOperationIds.has(row.operation_id))) return false;
   for (const row of matching) {
-    if (!await closeAdmissionRow(
-      owner, row, replicaCreatedAt, attemptToken)) return false;
+    if (!await closeAdmissionRowInLane(
+      owner, row, replicaCreatedAt, attemptToken, generation)) return false;
   }
   return true;
 }

@@ -63,8 +63,9 @@ function rowMatchesSnapshotInstallAuthority(row, authority) {
     create_admission_workflow_updated_at: authority.workflowUpdatedAt,
     create_admission_replica_created_at: authority.replicaCreatedAt,
   };
-  return Object.entries(expected).every(([field, value]) =>
-    row?.[field] === value);
+  return row?.create_admission_state !== CLOSED_ADMISSION_STATE &&
+    Object.entries(expected).every(([field, value]) =>
+      row?.[field] === value);
 }
 
 const physicalWorkerClaims = new WeakSet();
@@ -117,8 +118,17 @@ function claimReplicaCreatePhysicalWorker(owner, evidence) {
   return claim;
 }
 
+function rowMatchesActivePhysicalWorker(row, evidence) {
+  return rowMatchesPhysicalWorkerEvidence(row, evidence) &&
+    row?.create_admission_attempt_token === evidence.attemptToken &&
+    nullableSafeInteger(row?.create_admission_attempt_seq) ===
+      evidence.attemptSeq &&
+    row?.create_admission_state !== CLOSED_ADMISSION_STATE;
+}
+
 async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
-  if (!isReplicaCreateAdmissionEvidence(evidence)) return false;
+  if (!isReplicaCreateAdmissionEvidence(evidence) ||
+      evidence.admissionState === CLOSED_ADMISSION_STATE) return false;
   const claim = claimReplicaCreatePhysicalWorker(owner, evidence);
   if (!claim) return false;
   try {
@@ -126,11 +136,7 @@ async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
     const row = await owner.readOperation(evidence.operationId);
     await owner.requireCurrentBootIncarnation();
     const currentEvidence = replicaCreatePhysicalWorkerEvidence(claim);
-    if (!rowMatchesPhysicalWorkerEvidence(row, evidence) ||
-        row?.create_admission_attempt_token !== evidence.attemptToken ||
-        nullableSafeInteger(row?.create_admission_attempt_seq) !==
-          evidence.attemptSeq ||
-        row?.create_admission_state === CLOSED_ADMISSION_STATE ||
+    if (!rowMatchesActivePhysicalWorker(row, evidence) ||
         currentEvidence !== evidence) {
       releaseReplicaCreatePhysicalWorker(owner, claim);
       return false;
@@ -142,11 +148,12 @@ async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
   }
 }
 
-async function revalidateReplicaCreatePhysicalWorker(owner, claim,
+async function validatePhysicalWorkerClaimInMemory(owner, claim,
   expectedEvidence = null) {
   const evidence = replicaCreatePhysicalWorkerEvidence(claim);
   if (!isPhysicalWorkerClaim(claim) ||
       expectedEvidence && evidence !== expectedEvidence ||
+      evidence?.admissionState === CLOSED_ADMISSION_STATE ||
       !matchesPhysicalWorkerOwner(owner, evidence) ||
       owner.activePhysicalWorkerOperationIds.get(evidence.operationId) !==
         claim) {
@@ -155,6 +162,24 @@ async function revalidateReplicaCreatePhysicalWorker(owner, claim,
   await owner.requireCurrentBootIncarnation();
   return owner.activePhysicalWorkerOperationIds.get(evidence.operationId) ===
     claim && replicaCreatePhysicalWorkerEvidence(claim) === evidence;
+}
+
+async function revalidateReplicaCreatePhysicalWorker(owner, claim,
+  expectedEvidence = null) {
+  const evidence = replicaCreatePhysicalWorkerEvidence(claim);
+  if (!await validatePhysicalWorkerClaimInMemory(
+    owner, claim, expectedEvidence)) return false;
+  const row = await owner.readOperation(evidence.operationId);
+  if (!rowMatchesActivePhysicalWorker(row, evidence) ||
+      owner.activePhysicalWorkerOperationIds.get(evidence.operationId) !==
+        claim ||
+      replicaCreatePhysicalWorkerEvidence(claim) !== evidence) {
+    if (row?.create_admission_state === CLOSED_ADMISSION_STATE) {
+      releaseReplicaCreatePhysicalWorker(owner, claim);
+    }
+    return false;
+  }
+  return true;
 }
 
 function releaseReplicaCreatePhysicalWorker(owner, claim) {
@@ -189,7 +214,7 @@ function snapshotReplicaCreateInstallAuthority(owner, claim,
 
 async function commitReplicaCreateSnapshotInstall(owner, claim, mutation,
   admissionBasis = NO_ADMISSION_BASIS) {
-  if (!await revalidateReplicaCreatePhysicalWorker(owner, claim) ||
+  if (!await validatePhysicalWorkerClaimInMemory(owner, claim) ||
       typeof mutation !== 'function' ||
       mutation.constructor.name === ASYNC_FUNCTION_NAME) return false;
   const evidence = replicaCreatePhysicalWorkerEvidence(claim);

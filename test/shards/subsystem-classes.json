@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 281,
+    "placement-rebalance": 282,
     "query-sql": 195,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-0af21cc5",
+  "censusSize": 2666,
+  "digest": "fnv1a32-3eb8be83",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-90a021eb",
+  "observationDigest": "fnv1a32-eb369d8b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2089,6 +2089,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-cure-policy.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-policy.property.test.js": "placement-rebalance",
+    "test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js": "placement-rebalance",
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "placement-rebalance",
     "test/rebalancer/replica-status-completeness.property.test.js": "placement-rebalance",
     "test/rebalancer/required-entity-operation-observation.test.js": "placement-rebalance",
@@ -18176,6 +18177,15 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": {

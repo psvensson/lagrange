@@ -251,4 +251,22 @@ async (t) => {
   const newerGeneration = await source.removeRequest('op-ledger-remove');
   t.not(newerGeneration.status, ReplicaOperationResponseStatus.COMPLETED,
     'a tracked newer generation is never answered from the old record');
+  t.equal(newerGeneration.errorCode, 'REPLICA_REMOVAL_COMPLETION_DEFERRED',
+    'reconcile error response preserves the typed removal deferral code');
+  t.equal(newerGeneration.deferRetry, true,
+    'reconcile error response preserves deferRetry for coordinator retry');
+
+  // R3: transitioning the local replica entry away from REMOVED clears the
+  // stale completedRemovalOperationId so later generations never inherit it.
+  source.handler.setLocalReplica(SOURCE, {
+    replicaId: SOURCE,
+    partitionId: PARTITION_ID,
+    status: 'creating',
+    service: null,
+  });
+  t.equal(
+    source.handler.localReplicas.get(SOURCE)?.completedRemovalOperationId,
+    undefined,
+    'setLocalReplica clears completedRemovalOperationId on non-REMOVED status',
+  );
 });

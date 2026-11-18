@@ -154,7 +154,8 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-14 (formation-ready-lease-independent-of-spread): tightened 1698 -> 1695 on the checker hint.
 // 2026-11-17 (complexity-ratchet-closure): tightened 1695 -> 1692 on the checker hint.
 // 2026-11-17 (test-guard-alignment): tightened 1692 -> 1691 on the checker hint.
-const BASELINE_COUNT = 1691;
+// 2026-11-18 (fix-removal-cleanup): tightened 1691 -> 1690 on the checker hint.
+const BASELINE_COUNT = 1690;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

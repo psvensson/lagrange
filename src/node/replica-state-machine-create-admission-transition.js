@@ -64,6 +64,10 @@ function holdsClosedCreateGeneration(replicaState, generation) {
     (replicaState.createAttemptToken ?? null) === generation.createAttemptToken;
 }
 
+function matchesRequiredClosedCreateGeneration(replicaState, generation) {
+  return !generation || holdsClosedCreateGeneration(replicaState, generation);
+}
+
 function isCreateAdmissionTransitionAllowed(
   stateMachine,
   replicaId,
@@ -76,7 +80,7 @@ function isCreateAdmissionTransitionAllowed(
         context.createAdmissionEvidence.replicaId !== replicaId ||
         context.createAdmissionEvidence.attemptToken !==
           context.createAttemptToken)) return false;
-  if (context.closedCreateGeneration && !holdsClosedCreateGeneration(
+  if (!matchesRequiredClosedCreateGeneration(
     stateMachine.replicas.get(replicaId), context.closedCreateGeneration)) {
     return false;
   }
@@ -89,5 +93,7 @@ function isCreateAdmissionTransitionAllowed(
 
 export {
   buildCreateAdmissionLifecycleIdentity,
+  holdsClosedCreateGeneration,
   isCreateAdmissionTransitionAllowed,
+  matchesRequiredClosedCreateGeneration,
 };

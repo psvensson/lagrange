@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.608Z",
-  "rawViolationCount": 375,
+  "generatedAt": "2026-11-18T08:29:44.854Z",
+  "rawViolationCount": 374,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -302,7 +302,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-readiness-owner.js",
-      "line": 146,
+      "line": 149,
       "column": 6,
       "functionName": "applyOriginalSeedAdmission",
       "kind": "catch_returns_default",
@@ -1409,18 +1409,9 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 565,
+      "line": 569,
       "column": 8,
       "functionName": "publishReplicaRetiringRow",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-remove-request-methods.js",
-      "line": 119,
-      "column": 4,
-      "functionName": "applyFailedCreateCleanupTransition",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1805,7 +1796,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-write-constraint-helpers.js",
-      "line": 142,
+      "line": 151,
       "column": 6,
       "functionName": "resolveCoordinatorTableSchema",
       "kind": "catch_returns_default",
@@ -1958,7 +1949,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-request-dispatch.js",
-      "line": 245,
+      "line": 247,
       "column": 6,
       "functionName": "checkPlanRequestStatement",
       "kind": "catch_returns_default",
@@ -2462,7 +2453,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 295,
+      "line": 297,
       "column": 6,
       "functionName": "getCriticalPartitionRowForSafety",
       "kind": "catch_returns_default",
@@ -2498,7 +2489,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 309,
+      "line": 304,
       "column": 6,
       "functionName": "resolveProvisioningLedgerInterlockDeferral",
       "kind": "catch_returns_default",
@@ -2651,7 +2642,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
-      "line": 331,
+      "line": 339,
       "column": 8,
       "functionName": "touchOperationOwnerLease",
       "kind": "catch_returns_default",
@@ -2732,7 +2723,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 557,
+      "line": 558,
       "column": 6,
       "functionName": "getReplicaOperationStepsHistory",
       "kind": "catch_returns_default",
@@ -2894,7 +2885,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 432,
+      "line": 434,
       "column": 6,
       "functionName": "_completeAuthentication",
       "kind": "catch_returns_default",

@@ -19,6 +19,25 @@
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REMOVAL_AUTHORITY_KIND} from './replica-state-machine-recovery.js';
 
+const STATUS_FIELD = 'status';
+const COMPLETED_REMOVAL_OPERATION_ID_FIELD = 'completedRemovalOperationId';
+
+/**
+ * Clear stale completed-removal stamps whenever a local replica entry is not
+ * REMOVED or transitions to REMOVED outside recordReplicaRemovalCompletion.
+ * @param {Object} merged - Merged local replica record.
+ * @param {Object} updates - Updates passed to setLocalReplica.
+ * @return {Object} Normalized local replica record.
+ */
+function normalizeReplicaRemovalCompletionRecord(merged, updates) {
+  if (merged.status !== ReplicaStatus.REMOVED ||
+      (Object.hasOwn(updates, STATUS_FIELD) &&
+        !Object.hasOwn(updates, COMPLETED_REMOVAL_OPERATION_ID_FIELD))) {
+    delete merged.completedRemovalOperationId;
+  }
+  return merged;
+}
+
 /**
  * Record one completed removal on the handler's local replica entry.
  * @param {Object} handler - The ReplicaHandler.
@@ -54,4 +73,8 @@ function isRecordedReplicaRemovalCompletion(handler, {replicaId, operationId,
     handler.replicaStateMachine?.getState?.(replicaId) === null;
 }
 
-export {isRecordedReplicaRemovalCompletion, recordReplicaRemovalCompletion};
+export {
+  isRecordedReplicaRemovalCompletion,
+  normalizeReplicaRemovalCompletionRecord,
+  recordReplicaRemovalCompletion,
+};

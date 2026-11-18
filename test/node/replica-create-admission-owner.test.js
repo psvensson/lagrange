@@ -922,4 +922,102 @@ describe('ReplicaCreateAdmissionOwner', () => {
       {code: CREATE_ADMISSION_ERROR_CODE.STALE},
     );
   });
+
+  it('serializes closeForLifecycle with concurrent runExclusive ' +
+    'claimPhysicalWorker and revokes CLOSED worker revalidation', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({
+      gateway: f.gateway,
+      nodeId: 'node-1',
+      ownerIncarnation: 101,
+      now: () => 20,
+    });
+    const admitted = await owner.claim(f.request);
+    const materialized = await owner.markMaterialized(admitted);
+
+    let concurrentWorkerPromise = null;
+    f.beforeNextUpdate((row) => {
+      if (row.operation_id === f.request.operationId) {
+        concurrentWorkerPromise = owner.runExclusive(
+          f.request.operationId,
+          () => owner.claimPhysicalWorker(materialized),
+        );
+      }
+    });
+
+    const closed = await owner.closeForLifecycle({
+      replicaId: materialized.replicaId,
+      createdAt: materialized.replicaCreatedAt,
+      createAttemptToken: materialized.attemptToken,
+    });
+    const claim = await concurrentWorkerPromise;
+
+    assert.equal(closed, true, 'closeForLifecycle closes the admission row');
+    assert.equal(f.row.create_admission_state, CREATE_ADMISSION_STATE.CLOSED);
+    assert.equal(claim, false,
+      'queued physical worker claim observes CLOSED and is refused');
+    assert.equal(
+      owner.activePhysicalWorkerOperationIds.has(f.request.operationId),
+      false,
+      'no active physical worker survives lifecycle close',
+    );
+  });
+
+  it('defers closeForLifecycle when claimPhysicalWorker wins the ' +
+    'per-operation lane first, and revokes any held claim once CLOSED',
+  async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({
+      gateway: f.gateway,
+      nodeId: 'node-1',
+      ownerIncarnation: 101,
+      now: () => 20,
+    });
+    const admitted = await owner.claim(f.request);
+    const materialized = await owner.markMaterialized(admitted);
+
+    let releaseLane;
+    const laneEntered = new Promise((resolve) => {
+      releaseLane = resolve;
+    });
+    let resumeLane;
+    const laneBarrier = new Promise((resolve) => {
+      resumeLane = resolve;
+    });
+    const claimInLane = owner.runExclusive(f.request.operationId, async () => {
+      releaseLane();
+      await laneBarrier;
+      return owner.claimPhysicalWorker(materialized);
+    });
+    await laneEntered;
+
+    const closePromise = owner.closeForLifecycle({
+      replicaId: materialized.replicaId,
+      createdAt: materialized.replicaCreatedAt,
+      createAttemptToken: materialized.attemptToken,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    resumeLane();
+
+    const claim = await claimInLane;
+    assert.ok(claim, 'the lane winner claims physical worker execution');
+    assert.equal(await closePromise, false,
+      'closeForLifecycle rechecks active worker inside the lane and defers');
+    assert.equal(
+      f.row.create_admission_state,
+      CREATE_ADMISSION_STATE.MATERIALIZED,
+    );
+
+    f.row.create_admission_state = CREATE_ADMISSION_STATE.CLOSED;
+    assert.equal(
+      await owner.revalidatePhysicalWorker(claim, materialized),
+      false,
+      'revalidatePhysicalWorker rejects a durably CLOSED admission row',
+    );
+    assert.equal(
+      owner.activePhysicalWorkerOperationIds.has(f.request.operationId),
+      false,
+      'revalidatePhysicalWorker releases the stale physical worker claim',
+    );
+  });
 });

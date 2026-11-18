@@ -13,6 +13,9 @@
  * row to be absent, so it always failed with "REMOVING row deletion deferred"
  * after its receipt was already durable, and the REMOVE stayed in STOPPING.)
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -61,12 +64,21 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
       createAttemptToken: failed.create_attempt_token, createdAt: failed.created_at,
       durableVersionColumn: 'state_entered_at', durableVersion: failed.state_entered_at,
       durableUpdatedAt: failed.updated_at, authoritativeSnapshot: true});
+    const dataDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'lagrange-fresh-create-claimed-cleanup-'),
+    );
     const handler = new ReplicaHandler({nodeId: NODE_ID,
-      dataDir: '/tmp/fresh-create-claimed-cleanup-never-admitted',
+      dataDir,
       systemTableCache: store.cache, cdcIntegrationService: {},
       controlPlaneSystemTableGateway: store.gateway, replicaStateMachine: stateMachine,
       createPartitionService: async () => ({}),
       executorOutcomeEmitter: {emitOutcome: (type) => outcomes.push(type)}});
+    t.teardown(async () => {
+      await handler.shutdown();
+      fs.rmSync(dataDir, {recursive: true, force: true});
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    });
     // The fenced runtime of the failed create: no service, no consensus port.
     handler.localReplicas.set(REPLICA_ID, {replicaId: REPLICA_ID,
       partitionId: failed.partition_id, status: ReplicaStatus.FAILED, service: null});
