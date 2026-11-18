@@ -155,7 +155,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-17 (complexity-ratchet-closure): tightened 1695 -> 1692 on the checker hint.
 // 2026-11-17 (test-guard-alignment): tightened 1692 -> 1691 on the checker hint.
 // 2026-11-17 (fix-j small follow-ups): tightened 1691 -> 1689 on the checker hint.
-const BASELINE_COUNT = 1689;
+// 2026-11-18 (integration-20261118): tightened 1689 -> 1688 on the checker hint
+// (the merged tree of fixes H, J, M, B2 and WP-K, WP-D, WP-B, WP0, WP1).
+const BASELINE_COUNT = 1688;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
