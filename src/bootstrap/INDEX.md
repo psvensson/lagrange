@@ -107,7 +107,7 @@ documentClass: generated
 - [system-table-core-schema-definitions.js](system-table-core-schema-definitions.js) - Core system table schema definitions. (importers: many)
 - [system-table-runtime-schema-definitions.js](system-table-runtime-schema-definitions.js) - Runtime and service system table schema definitions. (importers: many)
 - [system-table-schema-shared-constants.js](system-table-schema-shared-constants.js) - Shared system table schema constants. (importers: hub)
-- [system-table-schema-sql.js](system-table-schema-sql.js) - Generate SQL CREATE TABLE statement from schema. (importers: hub)
+- [system-table-schema-sql.js](system-table-schema-sql.js) - Generate SQL CREATE TABLE statement from schema. (importers: many)
 - [system-table-schemas-constants.js](system-table-schemas-constants.js) - System Table Schemas - Hard-coded schemas for bootstrap. (importers: hub)
 - [system-table-service-instance-schema.js](system-table-service-instance-schema.js) - R2 service-instance selection and fixed resource inventory. (importers: one)
 - [system-table-workflow-schema-definitions.js](system-table-workflow-schema-definitions.js) - Workflow, migration, debug, and storage system table schema definitions. (importers: many)

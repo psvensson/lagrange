@@ -453,6 +453,7 @@ test('canonical visibility treats omitted nullable membership fields as SQL ' +
       sourceNodeId: 'ordinary-source-node',
       replicaId: 'ordinary-p1-r1',
       deferDispatchUntilBootstrapTopology: true,
+      emitOperationCreated: false,
     });
     const authoritativeOrdinary =
       await coordinator.repository.queryAuthoritativeOperationById(

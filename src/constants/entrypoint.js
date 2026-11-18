@@ -34,7 +34,6 @@ const ENTRYPOINT_ENV = Object.freeze({
   ADMIN_WEBSOCKET_PORT: LISTENER_PORT_ENV.ADMIN_WEBSOCKET,
   NODE_WS_PORT: LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET,
   NODE_ADVERTISED_WS_ADDRESS: 'NODE_ADVERTISED_WS_ADDRESS',
-  NODE_HOST_ID: 'NODE_HOST_ID',
   SEED_NODE_ADDRESS: 'SEED_NODE_ADDRESS',
   JOINING_HTTP_TIMEOUT_MS: 'NODE_JOINING_HTTP_TIMEOUT_MS',
   JOINING_LEADERSHIP_WAIT_TIMEOUT_MS: 'NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS',
@@ -113,7 +112,6 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   DYNAMIC_CONFIG_WIRING_FAILED: 'Failed to initialize runtime dynamic config wiring',
   DYNAMIC_CONFIG_WIRING_SHUTDOWN_FAILED: 'Failed to shutdown dynamic config wiring',
   STARTING_SEED: 'Starting as seed node',
-  HOST_IDENTITY_DECLARED: 'Node host identity declared',
   BOOTSTRAP_FAILED: 'Bootstrap failed',
   BOOTSTRAP_COMPLETED: 'Bootstrap completed',
   STARTUP_RUNTIME_HANDOFF: 'Startup runtime handoff completed',
@@ -164,8 +162,6 @@ const ENTRYPOINT_TEXT = Object.freeze({
   ],
   ENVIRONMENT_LINES: [
     '  NODE_ID          Override auto-generated node ID',
-    '  NODE_HOST_ID     Required: name of the machine this node runs on',
-    '                   (Kubernetes node name, lab host name, VM name)',
     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
     `  ${LISTENER_PORT_ENV.REST_API}    REST API port ` +
       `(default: ${LISTENER_PORT_DEFAULT.REST_API})`,

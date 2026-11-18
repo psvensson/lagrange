@@ -12,7 +12,6 @@ const CONFIG_SCHEMA = {
         id: {type: 'string', minLength: 1},
         address: {type: 'string'},
         advertisedWsAddress: {type: 'string'},
-        hostId: {type: 'string'},
         heartbeatIntervalMs: {type: 'number', minimum: 100},
         heartbeatTimeoutMs: {type: 'number', minimum: 500},
         statsCollectionIntervalMs: {type: 'number', minimum: 1000},

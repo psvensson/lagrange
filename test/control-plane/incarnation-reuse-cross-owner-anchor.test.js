@@ -9,7 +9,6 @@
  * G2, durable lifecycle G2, its running Raft runtime and the only current
  * address route.
  */
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
@@ -120,7 +119,6 @@ function wireRuntimeEndpoints(durable, incarnation) {
 
 function g1Teardown(durable, g1Port) {
   const registration = new NodeRegistrationOwner({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: NODE_ID,
     nodeAddress: 'g1-host:8080',
     delegates: {

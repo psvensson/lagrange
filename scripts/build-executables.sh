@@ -97,9 +97,7 @@ echo "Step 7: Smoke-testing executables..."
 echo "  ✓ lagrange-cli --help"
 "$DIST_DIR/lagrange" --help > /dev/null
 echo "  ✓ lagrange --help"
-# The dry run validates a complete node configuration, including the
-# required host identity (this machine).
-NODE_HOST_ID="$(hostname)" "$DIST_DIR/lagrange" --dry-run > /dev/null
+"$DIST_DIR/lagrange" --dry-run > /dev/null
 echo "  ✓ lagrange --dry-run"
 
 echo ""

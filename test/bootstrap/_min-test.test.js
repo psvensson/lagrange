@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -17,7 +16,6 @@ test('constructor works', async (t) => {
   NodeService.resetInstance();
 
   const svc = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'x',
     nodeAddress: 'ws://127.0.0.1:19092',

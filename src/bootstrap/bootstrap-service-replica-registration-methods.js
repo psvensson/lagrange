@@ -153,8 +153,8 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         }
 
         const partition = new PartitionService({
-          ...options,
           concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+          ...options,
           dbPath,
           transport: this.transport,
           messageGroupService: messageGroupService,

@@ -35,8 +35,6 @@ node:
   maxOldSpaceSizeMb: 1536
   # Extra environment variables for every node (e.g. RAFT_* tuning; see
   # src/config/config-constants.js ENV_MAPPINGS for the supported set).
-  # NODE_HOST_ID is reserved: every pod declares its required host identity
-  # as the Kubernetes node it runs on (downward API spec.nodeName).
   extraEnv: []
 
 persistence:

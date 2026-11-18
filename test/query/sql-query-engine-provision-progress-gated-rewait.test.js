@@ -33,7 +33,6 @@ config.initialize();
 import {
   createMockMessageRouter,
   createProvisioningReadyService,
-  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 const QUORUM_CONCENTRATED_REJECTION = Object.freeze({
@@ -78,7 +77,7 @@ function createCohortCoordinator({
   createdTargetNodeIds,
   localNodeId,
 }) {
-  return withBootstrapHoldRelease({
+  return {
     async checkProvisioningAdmission(move) {
       return admittedNodeIds.has(move.nodeId) ?
         ADMIT :
@@ -108,7 +107,7 @@ function createCohortCoordinator({
       });
       return {success: true};
     },
-  });
+  };
 }
 
 function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock}) {

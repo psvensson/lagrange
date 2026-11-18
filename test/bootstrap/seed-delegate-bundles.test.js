@@ -10,7 +10,6 @@
  * Design: D2.2, D2.3
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -41,7 +40,6 @@ function initializeTestEnvironment() {
 
 function createService() {
   return new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

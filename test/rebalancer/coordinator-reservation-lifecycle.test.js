@@ -258,6 +258,16 @@ function createCoordinatorWithStorage(options = {}) {
       options.storageAdmissionService || createMockAdmissionService(),
   });
   coordinator.initialize();
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
   return {coordinator, sqlEngine, accounting};
 }
 

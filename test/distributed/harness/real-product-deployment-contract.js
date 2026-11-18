@@ -78,29 +78,26 @@ const POSTGRES_IMAGE_DEFAULT = 'postgres:17-alpine';
 // listener-ownership probe needs: the image the PostgreSQL arm already pulls.
 const SQL_CLIENT_IMAGE = POSTGRES_IMAGE_DEFAULT;
 
-// The one readiness bound of every arm (owner decision 2026-11-17: each
-// product runs as shipped). Every arm forms under the same per-stage attempt
-// budget and the same shared wall-clock formation deadline; no product gets an
-// allowance of its own. A product that cannot form within it at its shipped
-// defaults records readiness_exhausted, a product finding the run carries,
-// never something the harness absorbs. Each arm's readiness PREDICATE is its
-// own documented contract; only the bound is shared.
 const DEFAULT_READINESS = Object.freeze({
   attempts: 120,
   // Consecutive ready verdicts the cluster predicate must hold (quiet window).
   stablePolls: 3,
   intervalMs: 1000,
-  // Wall-clock deadline shared by all sequential readiness stages of a
-  // formation, and by the arm's readiness again after a product restart.
-  formationDeadlineMs: 240_000,
   timeoutMs: TIDB_REFERENCE_DEFAULTS.readinessTimeoutMs,
   pollIntervalMs: TIDB_REFERENCE_DEFAULTS.readinessPollIntervalMs,
 });
 
+// Shared wall-clock deadline across all sequential readiness stages of cold
+// 3-node Lagrange formation (420 seconds = 7 minutes, matching
+// FORMATION_BOUND_MS = 420_000 in
+// test/distributed/scenarios/fresh-formation-user-table-routability.js).
+const DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS = 420_000;
 const DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS = 900_000;
 const DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS = 15_000;
+const DEFAULT_TIDB_FORMATION_DEADLINE_MS = 240_000;
 const DEFAULT_TIDB_PLACEMENT_DEADLINE_MS = 120_000;
 const DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS = 30_000;
+const DEFAULT_POSTGRES_FORMATION_DEADLINE_MS = 240_000;
 const DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS = 30_000;
 const DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS = 30_000;
 const DEFAULT_INSPECT_TIMEOUT_MS = 10_000;
@@ -135,26 +132,6 @@ function resolveOperationWindow(input = {}) {
   const deadlineAtMs = intersectDeadlineAtMs(input.callerDeadlineAtMs, ownDeadlineAtMs);
   const deadlineMs = deadlineAtMs !== null ? Math.max(0, deadlineAtMs - startedAtMs) : null;
   return {signal, startedAtMs, deadlineAtMs, deadlineMs};
-}
-
-/**
- * The formation window of every arm: the shared readiness bound
- * (DEFAULT_READINESS.formationDeadlineMs, through the run's readiness budget)
- * unless the caller gives its own budget (deadlineMs), never later than a
- * caller's deadline (deadlineAtMs), cancelled by the caller's signal.
- * @param {{clock: Function, budget: Object, opts?: Object, signal?: AbortSignal|null,
- *   deadlineAtMs?: number|null, deadlineMs?: number|null}} input
- * @return {{signal: AbortSignal|null, startedAtMs: number, deadlineAtMs: number|null,
- *   deadlineMs: number|null}}
- */
-function resolveFormationWindow({clock, budget, opts, signal, deadlineAtMs, deadlineMs}) {
-  return resolveOperationWindow({
-    clock,
-    defaultDeadlineMs: budget.formationDeadlineMs,
-    callerDeadlineAtMs: deadlineAtMs ?? opts?.deadlineAtMs,
-    callerDeadlineMs: deadlineMs ?? opts?.deadlineMs,
-    callerSignal: signal ?? opts?.signal ?? null,
-  });
 }
 
 class DeploymentFailure extends Error {
@@ -295,11 +272,14 @@ export {
   resolveNumericExitCode,
   CLAIM_STATUS,
   DEFAULT_INSPECT_TIMEOUT_MS,
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
   DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
   DEFAULT_READINESS,
+  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
   DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   DEPLOYMENT_FAILURE,
@@ -315,7 +295,6 @@ export {
   TIKV_IMAGE_DEFAULT,
   deploymentFailure,
   requireCampaignId,
-  resolveFormationWindow,
   resolveOperationWindow,
   resolveReadinessBudget,
   stripTransientExecutionOptions,

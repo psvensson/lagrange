@@ -29,7 +29,6 @@ import {
   LOCKING_READ_AST_TYPE, LOCKING_READ_CLAUSE, LOCKING_READ_STRENGTH,
   LOCKING_READ_TX_OWNERSHIP, LOCKING_READ_UNKNOWN_PARTITION,
 } from './sql-locking-read-constants.js';
-import {EXPR_TYPE} from './parser-constants.js';
 import {QUERY_AST_NODE, QUERY_ERROR_CODE} from './query-constants.js';
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
 
@@ -681,10 +680,7 @@ function buildMatchingPkSelectAst(target, statement) {
   const ast = statement.ast;
   return {
     type: LOCKING_READ_AST_TYPE.SELECT,
-    // Parser-shaped select-list nodes: the one renderer and the merge read
-    // a column's expression and alias, never a bare expression.
-    columns: pkColumns.map((col) => ({type: EXPR_TYPE.COLUMN, alias: null,
-      expression: {type: QUERY_AST_NODE.COLUMN_REF, table: null, column: col}})),
+    columns: pkColumns.map((col) => ({type: QUERY_AST_NODE.COLUMN_REF, column: col})),
     from: {type: QUERY_AST_NODE.TABLE, name: tableName},
     where: extractWriteWhereClause(statement),
     ...(ast?.orderBy ? {orderBy: ast.orderBy} : {}),

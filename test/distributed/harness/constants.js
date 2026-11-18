@@ -11,7 +11,7 @@ import {
   CONSISTENCY_MISMATCH_KIND,
 } from '../../../src/admin/admin-constants.js';
 import {META_SERVICE_ID} from '../../../src/constants/wasm-meta.js';
-import {ENTRYPOINT_DEFAULT, ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
+import {ENTRYPOINT_DEFAULT} from '../../../src/constants/entrypoint.js';
 import {WASM_SERVICE_PROTOCOL} from '../../../src/wasm-service/wasm-service-constants.js';
 
 // --- Port Constants ---
@@ -176,8 +176,6 @@ const ENV_DATA_DIR = 'DATA_DIR';
 
 const CONTAINER_ENV_KEYS = Object.freeze({
   NODE_ID: ENV_NODE_ID,
-  // The node's required host identity (src/topology/node-host-identity.js).
-  NODE_HOST_ID: ENTRYPOINT_ENV.NODE_HOST_ID,
   NODE_ADDRESS: ENV_NODE_ADDRESS,
   SEED_NODE_ADDRESS: ENV_SEED_NODE_ADDRESS,
   DATA_DIR: ENV_DATA_DIR,

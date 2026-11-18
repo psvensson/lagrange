@@ -10,7 +10,6 @@ import {
   buildGcpDataDiskMountCommand,
   normalizeGcpDataDiskPolicy,
 } from '../../test/distributed/harness/gcp-data-disk-owner.js';
-import {fixedLocaleCommand} from '../../test/distributed/harness/real-product-remote-shell.js';
 
 const objectFreeze = Object.freeze;
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -201,8 +200,6 @@ async function assertLifecycle() {
   for (const args of sshCreates) {
     assert.ok(arrayIncludes(args, FLAG_TUNNEL_THROUGH_IAP));
     assert.match(args.at(-1), /lagrange-benchmark-data/u);
-    assert.equal(args.at(-1), fixedLocaleCommand(
-      buildGcpDataDiskMountCommand(TEST_DEVICE_NAME, TEST_MOUNT_PATH)));
   }
 
   await owner.destroy();
@@ -214,13 +211,10 @@ async function assertLifecycle() {
     commands(commandDouble.calls, CMD_COMPUTE_DISKS_DELETE).length,
     EXPECTED_OPERATION_COUNT,
   );
-  const sshCalls = commands(commandDouble.calls, CMD_COMPUTE_SSH_ARRAY);
-  assert.equal(sshCalls.length, EXPECTED_TOTAL_SSH_COUNT);
-  // gcloud's ssh forwards the operator's locale: every remote command,
-  // unmount included, runs in the harness's fixed locale.
-  for (const args of sshCalls) {
-    assert.ok(stringStartsWith(args.at(-1), fixedLocaleCommand(EMPTY_STRING)));
-  }
+  assert.equal(
+    commands(commandDouble.calls, CMD_COMPUTE_SSH_ARRAY).length,
+    EXPECTED_TOTAL_SSH_COUNT,
+  );
 }
 
 async function main() {

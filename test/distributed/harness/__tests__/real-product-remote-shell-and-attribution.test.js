@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
-import {createServer} from 'node:http';
 import process from 'node:process';
 import {describe, it} from 'node:test';
 
-import {managedTimeout} from '../../../../src/test-helpers/managed-timers.js';
 import {readinessDenialOf} from '../benchmark-readiness-denial.js';
 import {
   COMPARATIVE_SMOKE_PROFILE,
@@ -20,23 +18,20 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
-  stringEndsWith,
   stringIncludes,
-  stringReplace,
-  stringSlice,
 } from '../real-product-captured-intrinsics.js';
 import {
+  DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS,
   DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS,
+  DEFAULT_POSTGRES_FORMATION_DEADLINE_MS,
   DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS,
   DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS,
-  DEFAULT_READINESS,
+  DEFAULT_TIDB_FORMATION_DEADLINE_MS,
   DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS,
   DEFAULT_TIDB_PLACEMENT_DEADLINE_MS,
   isDeploymentFailure,
-  resolveFormationWindow,
   resolveOperationWindow,
-  resolveReadinessBudget,
   stripTransientExecutionOptions,
   withExplicitSignalOption,
 } from '../real-product-deployment-contract.js';
@@ -44,7 +39,6 @@ import {
   inspectProducts,
   observeProductsAfterWindow,
 } from '../real-product-identity.js';
-import {nodeReady} from '../real-product-lagrange-observations.js';
 import {pollReadiness, typedReadiness} from '../real-product-readiness.js';
 import {
   classifyRemoteCommandError,
@@ -53,7 +47,6 @@ import {
   createSshCommandRunner,
   createTrackedSshRun,
   errorText,
-  fixedLocaleCommand,
   httpFromHost,
   settleConcurrentBatch,
   sshOptions,
@@ -63,20 +56,8 @@ import {
   createPsqlQueryReader,
 } from '../real-product-sql-clients.js';
 
-const FIXED_LOCALE_FORM = fixedLocaleCommand('');
-
-// The caller's command, from the ssh argv of the runner: a stand-in host gets
-// it only after the check that the runner sent it in the fixed locale.
-function callerCommandOf(args) {
-  const transported = args[args.length - 1];
-  const command = stringSlice(transported, FIXED_LOCALE_FORM.length);
-  assert.equal(transported, fixedLocaleCommand(command),
-    'the ssh runner sends every command in the fixed locale');
-  return command;
-}
-
 function nodeScriptExecFile(_file, args, options, callback) {
-  const script = callerCommandOf(args);
+  const script = args[args.length - 1];
   return execFile(process.execPath, ['-e', script], options, callback);
 }
 
@@ -584,13 +565,13 @@ describe('pollReadiness & typedReadiness attribution matrix', () => {
 describe('deployment contract window & option helpers', () => {
   it('exports canonical deadlines and resolves operation windows & tri-state signal options',
     () => {
-      // One formation bound and one attempt budget for every arm.
-      assert.equal(DEFAULT_READINESS.formationDeadlineMs, 240_000);
-      assert.equal(DEFAULT_READINESS.attempts, 120);
+      assert.equal(DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS, 420_000);
       assert.equal(DEFAULT_LAGRANGE_ROUTABLE_DEADLINE_MS, 900_000);
       assert.equal(DEFAULT_LAGRANGE_OBSERVE_ROLES_DEADLINE_MS, 15_000);
+      assert.equal(DEFAULT_TIDB_FORMATION_DEADLINE_MS, 240_000);
       assert.equal(DEFAULT_TIDB_PLACEMENT_DEADLINE_MS, 120_000);
       assert.equal(DEFAULT_TIDB_OBSERVE_ROLES_DEADLINE_MS, 30_000);
+      assert.equal(DEFAULT_POSTGRES_FORMATION_DEADLINE_MS, 240_000);
       assert.equal(DEFAULT_POSTGRES_OBSERVATION_DEADLINE_MS, 30_000);
       assert.equal(DEFAULT_POST_FAILURE_DIAGNOSTIC_DEADLINE_MS, 30_000);
 
@@ -623,18 +604,6 @@ describe('deployment contract window & option helpers', () => {
         deadlineAtMs: 600_000,
         deadlineMs: 100_000,
       });
-
-      // Every arm's formation window: the one bound from the run's readiness
-      // budget, narrowed by a tighter caller deadline, never widened by it.
-      const budget = resolveReadinessBudget({});
-      assert.equal(resolveFormationWindow({clock: () => 0, budget}).deadlineMs, 240_000);
-      assert.equal(resolveFormationWindow({clock: () => 0, budget,
-        deadlineAtMs: 1000}).deadlineAtMs, 1000);
-      assert.equal(resolveFormationWindow({clock: () => 0, budget,
-        deadlineAtMs: 900_000}).deadlineAtMs, 240_000);
-      assert.equal(resolveFormationWindow({clock: () => 0,
-        budget: resolveReadinessBudget({readiness: {formationDeadlineMs: 5000}})}).deadlineMs,
-      5000);
     });
 });
 
@@ -721,7 +690,7 @@ function buildHealthyImageInspectJson() {
 function createNativeChildRouterExecFile(resolveScriptForCommand) {
   return (_file, args, options, callback) => {
     const target = args[args.length - 2];
-    const command = callerCommandOf(args);
+    const command = args[args.length - 1];
     const childJs = resolveScriptForCommand({target, command, options});
     return execFile(process.execPath, ['-e', childJs], options, callback);
   };
@@ -1157,216 +1126,4 @@ describe('End-to-end native child-process -> SSH wrapper -> adapter -> campaign 
     assert.equal(isDeploymentFailure({name: 'AbortError', code: 'ABORT_ERR'}), false);
     assert.equal(isDeploymentFailure({code: 'workload_failed'}), true);
   });
-});
-
-const NATIVE_HTTP_OPERATION_BUDGET_MS = 1500;
-const NATIVE_HTTP_CALLER_ABORT_MS = 500;
-const NATIVE_HTTP_PROBE_URL = 'http://fixture-node:8080/readyz';
-// The login shell sshd runs a command with on the campaign hosts.
-const NATIVE_HOST_LOGIN_SHELL = '/bin/bash';
-// The operator locale of this workstation and of adam-laptop and adams-gamla,
-// which ssh forwards (ssh_config `SendEnv LANG LC_*`): a decimal comma.
-const DECIMAL_COMMA_OPERATOR_LOCALE = Object.freeze({
-  LC_ALL: 'sv_SE.UTF-8',
-  LC_NUMERIC: 'sv_SE.UTF-8',
-});
-
-function curlTimeoutMsOf(command) {
-  const match = command.match(/--max-time ([0-9.]+)/u);
-  assert.ok(match, 'HTTP owner emitted a curl timeout');
-  return Number(match[1]) * 1000;
-}
-
-async function createNativeHttpProbe(t, {operatorLocale = {}} = {}) {
-  let ready = true;
-  let requestCount = 0;
-  const calls = [];
-  const fixtureErrors = [];
-  const children = [];
-  const server = createServer((_request, response) => {
-    requestCount += 1;
-    if (ready) {
-      response.writeHead(200, {'content-type': 'application/json'});
-      response.end(JSON.stringify({ready: true}));
-    }
-  });
-  t.after(async () => {
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await Promise.all(children);
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  const port = server.address().port;
-  const sshRun = createSshCommandRunner({
-    execFileImpl(_file, args, options, callback) {
-      const command = args[args.length - 1];
-      const call = {command, subprocessTimeoutMs: options.timeout, callbackReceived: false};
-      calls.push(call);
-      try {
-        assert.ok(stringEndsWith(command, ` '${NATIVE_HTTP_PROBE_URL}'`));
-        call.curlTimeoutMs = curlTimeoutMsOf(command);
-        const hostCommand = stringReplace(
-          command, `'${NATIVE_HTTP_PROBE_URL}'`, `'http://127.0.0.1:${port}/readyz'`);
-        // Substitute only the SSH hop: the hosts' login shell runs the exact
-        // command the runner sent, fixed locale included, in the environment
-        // ssh forwards from the operator. bash execs the command's last simple
-        // command, so curl is the native child receiving cancellation.
-        const child = execFile(NATIVE_HOST_LOGIN_SHELL, ['-c', hostCommand],
-          {...options, env: {...process.env, ...operatorLocale}},
-          (error, stdout, stderr) => {
-            Object.assign(call, {callbackReceived: true, nativeErrorCode: error?.code ?? null,
-              nativeErrorName: error?.name ?? null, stdout, stderr});
-            callback(error, stdout, stderr);
-          });
-        children.push(new Promise((resolve) => {
-          child.once('close', (exitCode, signal) => {
-            Object.assign(call, {exitCode, signal});
-            resolve();
-          });
-        }));
-        return child;
-      } catch (error) {
-        fixtureErrors.push({message: error.message, command});
-        t.diagnostic(`native HTTP fixture error: ${error.stack}`);
-        throw error;
-      }
-    },
-  });
-  return {
-    async observe(responseReady, signal = null) {
-      ready = responseReady;
-      const beforeRequests = requestCount;
-      const beforeCalls = calls.length;
-      const window = resolveOperationWindow({clock: Date.now,
-        defaultDeadlineMs: NATIVE_HTTP_OPERATION_BUDGET_MS, callerSignal: signal});
-      let result = null;
-      let failure = null;
-      try {
-        result = await nodeReady({sshRun, opts: {}, clientIp: 'fixture-client',
-          budget: {attempts: 1, intervalMs: 0}, sleep: async () => {}, now: Date.now,
-          signal: window.signal, deadlineAtMs: window.deadlineAtMs,
-          deadlineMs: window.deadlineMs}, 'fixture-node');
-      } catch (error) {
-        failure = error;
-      }
-      await Promise.all(children);
-      const elapsedMs = Date.now() - window.startedAtMs;
-      assert.deepEqual(fixtureErrors, [], 'fixture errors are not product observations');
-      assert.equal(calls.length - beforeCalls, 1, 'one native child is engaged');
-      const call = calls[beforeCalls];
-      assert.equal(call.callbackReceived, true, 'native callback is retained');
-      assert.notEqual(call.nativeErrorCode, 'ENOENT', 'native shell is available');
-      assert.notEqual(call.exitCode, 127, 'native curl is available');
-      assert.equal(requestCount - beforeRequests, 1, 'native curl engaged the HTTP server');
-      t.diagnostic(JSON.stringify({responseReady, elapsedMs,
-        budgetMs: window.deadlineMs, exitCode: call.exitCode, signal: call.signal,
-        subprocessTimeoutMs: call.subprocessTimeoutMs, curlTimeoutMs: call.curlTimeoutMs,
-        failureCode: failure?.code ?? null, aborted: failure?.aborted ?? false}));
-      return {result, failure, elapsedMs, call};
-    },
-  };
-}
-
-describe('HTTP probe total deadline and native timeout attribution', () => {
-  it('fits fractional curl and transport allowances inside the finite caller cap', async () => {
-    const budgets = [
-      {timeoutMs: undefined, sshMs: 12000, curlMs: 10000},
-      {timeoutMs: 20000, sshMs: 12000, curlMs: 10000},
-      {timeoutMs: 10000, sshMs: 10000, curlMs: 8333},
-      {timeoutMs: 1500, sshMs: 1500, curlMs: 1250},
-      {timeoutMs: 500, sshMs: 500, curlMs: 416},
-      {timeoutMs: 2, sshMs: 2, curlMs: 1},
-    ];
-    for (const budget of budgets) {
-      const calls = [];
-      const answer = await httpFromHost({from: 'fixture-client', url: NATIVE_HTTP_PROBE_URL,
-        timeoutMs: budget.timeoutMs, sshRun: async (_host, opts, command, timeoutMs) => {
-          calls.push({opts, command, timeoutMs});
-          return '{"ready":true}\nhttp_status=200';
-        }});
-      assert.equal(answer.json.ready, true);
-      assert.equal(calls.length, 1);
-      assert.equal(calls[0].timeoutMs, budget.sshMs);
-      assert.equal(calls[0].opts.timeoutMs, budget.sshMs);
-      assert.equal(curlTimeoutMsOf(calls[0].command), budget.curlMs);
-      assert.ok(budget.curlMs > 0 && budget.curlMs < budget.sshMs);
-    }
-  });
-
-  it('refuses expired or unallocatable tiny budgets without an unbounded curl process',
-    async () => {
-      for (const timeoutMs of [-1, 0, 0.5, 1, 1.9]) {
-        let spawned = false;
-        const answer = await httpFromHost({from: 'fixture-client', url: NATIVE_HTTP_PROBE_URL,
-          timeoutMs, sshRun: async () => {
-            spawned = true;
-          }});
-        assert.equal(spawned, false);
-        assert.equal(answer.status, null);
-        assert.equal(answer.deadlineExpired, true);
-        assert.equal(answer.aborted, false);
-        assert.equal(answer.observerInfrastructure, false);
-      }
-    });
-
-  it('admits healthy readiness and observes native curl timeout before the operation deadline',
-    async (t) => {
-      const probe = await createNativeHttpProbe(t);
-      const healthy = await probe.observe(true);
-      assert.equal(healthy.result.state, 'ready');
-      assert.equal(healthy.failure, null);
-      assert.equal(healthy.call.exitCode, 0);
-      const stalled = await probe.observe(false);
-      assert.equal(stalled.failure.code, 'readiness_exhausted');
-      assert.equal(stalled.failure.deadlineExpired, false);
-      assert.equal(stalled.failure.aborted, false);
-      assert.equal(stalled.failure.observerInfrastructure, false);
-      assert.equal(stalled.failure.lastProbeError.httpTimedOut, true);
-      assert.equal(stalled.failure.lastProbeError.timedOut, false);
-      assert.equal(stalled.call.exitCode, 28);
-      assert.equal(stalled.call.signal, null);
-      assert.ok(stalled.call.curlTimeoutMs < stalled.call.subprocessTimeoutMs);
-      assert.ok(stalled.call.subprocessTimeoutMs <= NATIVE_HTTP_OPERATION_BUDGET_MS);
-      assert.ok(stalled.elapsedMs < NATIVE_HTTP_OPERATION_BUDGET_MS,
-        `native HTTP probe exceeded its owner budget: ${stalled.elapsedMs}ms`);
-    });
-
-  it('settles the native child on independent caller cancellation with abort attribution',
-    async (t) => {
-      const probe = await createNativeHttpProbe(t);
-      const controller = new AbortController();
-      managedTimeout({teardown: (cleanup) => t.after(cleanup)},
-        () => controller.abort(), NATIVE_HTTP_CALLER_ABORT_MS);
-      const cancelled = await probe.observe(false, controller.signal);
-      assert.equal(cancelled.failure.code, 'readiness_exhausted');
-      assert.equal(cancelled.failure.aborted, true);
-      assert.equal(cancelled.failure.observerInfrastructure, false);
-      assert.equal(cancelled.failure.lastProbeError.httpTimedOut, false);
-      assert.equal(cancelled.call.nativeErrorName, 'AbortError');
-      assert.equal(cancelled.call.nativeErrorCode, 'ABORT_ERR');
-      assert.equal(cancelled.call.signal, 'SIGTERM');
-      assert.ok(cancelled.elapsedMs < NATIVE_HTTP_OPERATION_BUDGET_MS);
-      // The signal reached curl itself: a shell above it would have died alone
-      // and left curl holding the pipes until its own timeout.
-      assert.ok(cancelled.elapsedMs < cancelled.call.curlTimeoutMs,
-        `cancellation settled only at curl's own timeout: ${cancelled.elapsedMs}ms`);
-    });
-
-  it('admits readiness from a host shell in the decimal-comma locale ssh forwards',
-    async (t) => {
-      // PR #224's fractional `--max-time 1.25`: curl 7.81 under LC_NUMERIC=sv_SE
-      // refused it (exit 2) before any request, on this workstation and on
-      // adam-laptop; the runner's fixed locale is what makes it parse.
-      const probe = await createNativeHttpProbe(t,
-        {operatorLocale: DECIMAL_COMMA_OPERATOR_LOCALE});
-      const healthy = await probe.observe(true);
-      assert.notEqual(healthy.call.curlTimeoutMs % 1000, 0, 'a fractional --max-time');
-      callerCommandOf([healthy.call.command]);
-      assert.equal(healthy.call.exitCode, 0);
-      assert.equal(healthy.failure, null);
-      assert.equal(healthy.result.state, 'ready');
-    });
 });

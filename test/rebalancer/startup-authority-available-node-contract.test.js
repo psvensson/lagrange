@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -199,7 +198,6 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
   };
   const registrationRow = buildNodeRegistrationRow({
     nodeId: 'node-2',
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeAddress: 'node-2:8080',
     nodeCapabilities: [],
     bootIncarnation: 1,
@@ -213,7 +211,6 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
   const disconnectedJoiner = {
     ...buildNodeRegistrationRow({
       nodeId: 'node-3',
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeAddress: 'node-3:8080',
       nodeCapabilities: [],
       bootIncarnation: 1,

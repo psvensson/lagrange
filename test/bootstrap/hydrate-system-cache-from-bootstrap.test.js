@@ -3,7 +3,6 @@
  * Tests the system cache hydration from bootstrap response snapshots.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import tap from 'tap';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -22,7 +21,6 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'http://localhost:3001',
@@ -87,7 +85,6 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     });
 
     const joiningService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-2',
       nodeAddress: 'http://localhost:3002',
@@ -118,7 +115,6 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-3',
       nodeAddress: 'http://localhost:3003',
@@ -164,7 +160,6 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-4',
       nodeAddress: 'http://localhost:3004',
@@ -215,7 +210,6 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
       systemTableCache.clear();
 
       const joiningService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: 'test-node-epoch',
         nodeAddress: 'http://localhost:3010',

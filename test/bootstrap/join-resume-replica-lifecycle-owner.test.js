@@ -21,7 +21,6 @@
  * and terminal cleanup leaves no orphaned timer.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'events';
@@ -137,7 +136,6 @@ test('F3: a preserved join resume keeps exactly one replica lifecycle owner ' +
   });
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: BOOT_INCARNATION,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -396,7 +394,6 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
     }
   };
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -680,7 +677,6 @@ async (t) => {
   const runtime = installNodeRuntime(t);
   const nodeService = NodeService.getInstance();
   const service = new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: BOOT_INCARNATION,
     nodeId: 'seed-node',
     nodeAddress: 'ws://localhost:9001',
@@ -848,13 +844,11 @@ async (t) => {
     const label = `incarnation ${String(bootIncarnation)}`;
     assertRefusedAtBoundary(t, observeConstruction(runtime,
       () => new BootstrapService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001',
         nodeService, bootIncarnation,
       })), 'BootstrapService', label);
     assertRefusedAtBoundary(t, observeConstruction(runtime,
       () => new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
         seedNodeAddress: SEED_ADDRESS, dataDir, bootIncarnation,
       })), 'NodeJoiningService', label);

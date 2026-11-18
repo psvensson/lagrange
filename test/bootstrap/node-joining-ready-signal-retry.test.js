@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -55,7 +54,6 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-ready-retry',
       nodeAddress: 'ws://localhost:19090',
@@ -136,7 +134,6 @@ test('NodeJoiningService waits for local query transport readiness before sendin
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-ready-transport-gate',
       nodeAddress: 'ws://localhost:19091',
@@ -202,7 +199,6 @@ test('NodeJoiningService opens the ready heartbeat for control-ready metadata pu
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-ready-traffic-gate',
       nodeAddress: 'ws://localhost:19093',
@@ -273,7 +269,6 @@ test('NodeJoiningService opens the ready heartbeat during the lifecycle stable w
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-ready-stable-window-gate',
       nodeAddress: 'ws://localhost:19094',
@@ -344,7 +339,6 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-ready-init-diagnostics-lag',
       nodeAddress: 'ws://localhost:19095',

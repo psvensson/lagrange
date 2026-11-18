@@ -370,10 +370,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
-        // The SYNCING step is durable before its reconcile: the STOPPING
-        // transition compare-and-swaps on it.
-        await coordinator.repository.persistOperationUpdate(operation,
-          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
 
         // The universal remove-safety floor (audit finding 1, lenient
         // REPLACE) evaluates the REPLACE source-removal against the
@@ -809,10 +805,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
-        // The SYNCING step is durable before its reconcile: the STOPPING
-        // transition compare-and-swaps on it.
-        await coordinator.repository.persistOperationUpdate(operation,
-          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
 
         // The universal remove-safety floor (audit finding 1, lenient
         // REPLACE) evaluates the REPLACE source-removal against the

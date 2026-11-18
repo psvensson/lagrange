@@ -3,7 +3,6 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -69,7 +68,6 @@ test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the 
 
     const nowMs = 2000;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-maintenance',
       nodeAddress: 'ws://localhost:9095531',
@@ -154,7 +152,6 @@ test('NodeJoiningService - prefers live local control-plane ingress over a stale
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-local-ingress',
       nodeAddress: 'ws://localhost:90956',
@@ -218,7 +215,6 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-local-routing-gap',
     nodeAddress: 'ws://localhost:909561',
@@ -298,7 +294,6 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-local-leader-gap',
     nodeAddress: 'ws://localhost:909562',
@@ -382,7 +377,6 @@ test('NodeJoiningService - READY heartbeats retry a local ingress fallback ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-local-leader-gap-fallback',
     nodeAddress: 'ws://localhost:9095621',
@@ -477,7 +471,6 @@ test('NodeJoiningService - READY heartbeats evaluate local target routing on ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-local-repair-gap',
     nodeAddress: 'ws://localhost:909563',
@@ -576,7 +569,6 @@ test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport fai
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-no-retry',
       nodeAddress: 'ws://localhost:9096',
@@ -630,7 +622,6 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-3',
       nodeAddress: 'ws://localhost:9092',
@@ -703,7 +694,6 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-4',
       nodeAddress: 'ws://localhost:9093',
@@ -786,7 +776,6 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-4b',
       nodeAddress: 'ws://localhost:9098',
@@ -850,7 +839,6 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-5',
       nodeAddress: 'ws://localhost:9094',
@@ -941,7 +929,6 @@ test('NodeJoiningService - canonical endpoint CDC triggers one coalesced mesh re
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-cdc-mesh',
       nodeAddress: 'ws://localhost:9101',
@@ -1010,7 +997,6 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-6',
       nodeAddress: 'ws://localhost:9095',
@@ -1080,7 +1066,6 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-7',
       nodeAddress: 'ws://localhost:9096',
@@ -1156,7 +1141,6 @@ test('NodeJoiningService - shouldReconnectClusterMesh ignores peers already conn
 
     for (const peerConnectionState of ['connecting', 'reconnecting']) {
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: `joining-node-${peerConnectionState}`,
         nodeAddress: 'ws://localhost:9097',
@@ -1216,7 +1200,6 @@ test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -1240,7 +1223,6 @@ test('NodeJoiningService - submits join and durable rejoin intent through member
     ]) {
       const intents = [];
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: `test-node-${startupMode}`,
         nodeAddress: 'ws://localhost:9090',

@@ -22,12 +22,12 @@ import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 describe('translateBooleanLiteral', () => {
   it('translates TRUE to integer 1', () => {
     const result = translateBooleanLiteral({value: true});
-    assert.deepStrictEqual(result, {type: EXPR_TYPE.LITERAL, value: 1, sqlType: 'INTEGER'});
+    assert.deepStrictEqual(result, {type: EXPR_TYPE.LITERAL, value: 1});
   });
 
   it('translates FALSE to integer 0', () => {
     const result = translateBooleanLiteral({value: false});
-    assert.deepStrictEqual(result, {type: EXPR_TYPE.LITERAL, value: 0, sqlType: 'INTEGER'});
+    assert.deepStrictEqual(result, {type: EXPR_TYPE.LITERAL, value: 0});
   });
 });
 
@@ -64,7 +64,6 @@ describe('translateTypeCast', () => {
     assert.deepStrictEqual(result, {
       type: PG_EXPR_TYPE.CAST,
       expression: {type: EXPR_TYPE.COLUMN_REF, table: null, column: 'age'},
-      targetType: 'INTEGER',
       affinity: 'INTEGER',
     });
   });

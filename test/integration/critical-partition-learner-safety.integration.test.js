@@ -6,7 +6,6 @@
  * - 6.1 / 6.3: readiness gating for critical system partition transitions
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -188,7 +187,6 @@ test('Critical partition learner safety', {
       seedApi.setSqlQueryEngine(seedQueryEngine);
 
       joiningService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,

@@ -21,11 +21,8 @@ import {
   RUNTIME_ERROR_MSG as ERR,
 } from '../../src/query/runtime-constants.js';
 import {
-  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
+  QB_FIELD,
 } from '../../src/wasm-service/query-budget-constants.js';
-import {
-  PRIMITIVE_ERROR_MSG,
-} from '../../src/query/distributed/distributed-context-constants.js';
 
 describe('runtime.run', () => {
   describe('argument validation', () => {
@@ -103,10 +100,7 @@ describe('runtime.run', () => {
       await assert.rejects(
         () => run(async () => {}, {budgets: 'bad'}),
         (err) => {
-          assert.equal(
-            err.message,
-            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT,
-          );
+          assert.equal(err.message, ERR.INVALID_BUDGETS);
           return true;
         },
       );
@@ -116,40 +110,7 @@ describe('runtime.run', () => {
       await assert.rejects(
         () => run(async () => {}, {budgets: null}),
         (err) => {
-          assert.equal(
-            err.message,
-            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT,
-          );
-          return true;
-        },
-      );
-    });
-
-    it('should refuse an unknown budget field instead of defaulting it',
-      async () => {
-        let ran = false;
-        await assert.rejects(
-          () => run(async () => {
-            ran = true;
-          }, {budgets: {cpuTimeLimitMs: 42}}),
-          (err) => {
-            assert.ok(err.message.startsWith(
-              QUERY_BUDGET_NORMALIZATION_ERROR_MSG.UNKNOWN_BUDGET_FIELD,
-            ));
-            assert.match(err.message, /cpuTimeLimitMs/);
-            return true;
-          },
-        );
-        assert.equal(ran, false);
-      });
-
-    it('should refuse a non-integer budget limit', async () => {
-      await assert.rejects(
-        () => run(async () => {}, {budgets: {CPU_TIME_LIMIT_MS: '42'}}),
-        (err) => {
-          assert.ok(err.message.startsWith(
-            QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_LIMIT,
-          ));
+          assert.equal(err.message, ERR.INVALID_BUDGETS);
           return true;
         },
       );
@@ -228,21 +189,12 @@ describe('runtime.run', () => {
       let captured;
       await run(async (ctx) => {
         captured = ctx;
-      }, {budgets: {CPU_TIME_LIMIT_MS: 42}});
+      }, {budgets: {[QB_FIELD.CPU_TIME_LIMIT_MS]: 42}});
       const enforcer = captured.getBudgetEnforcer();
       // Record 41ms — should not throw
       enforcer.recordCpuTime(41);
       // Record 2 more — should exceed 42
       assert.throws(() => enforcer.recordCpuTime(2));
-    });
-
-    it('should apply the same budget to the context primitives', async () => {
-      await assert.rejects(
-        () => run(async (ctx) => {
-          await ctx.broadcast('ref-1', {version: 1, data: 'x'.repeat(64)});
-        }, {budgets: {BROADCAST_MAX_PAYLOAD_BYTES: 16}}),
-        {message: PRIMITIVE_ERROR_MSG.BROADCAST_MAX_PAYLOAD_EXCEEDED},
-      );
     });
 
     it('should inject CancellationToken', async () => {

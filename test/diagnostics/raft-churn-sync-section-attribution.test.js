@@ -17,8 +17,6 @@ import {
   RAFT_CHURN_SYNC_SECTION,
 } from '../../src/diagnostics/raft-churn-sync-sections.js';
 
-const RECONCILE_NOW_MS = 1_700_000_000_000;
-
 function siteSnapshot(site) {
   return getSharedSyncSectionRegistry().snapshot().sites[site];
 }
@@ -215,19 +213,12 @@ async (t) => {
         {success: true, rows: [{reservation_id: 'res-1', operation_id: 'op-1'}]},
         {success: true, rows: []},
       ];
-      this.readParams = [];
       this.controlPlaneSystemTableGateway = {
-        readAuthoritativeRows: async (tableName, sql, params) => {
-          this.readParams.push(params);
-          return reads.shift();
-        },
+        readAuthoritativeRows: async () => reads.shift(),
       };
       this.stats = {reservationsReconciled: 0};
       this.events = [];
       this.transitions = [];
-      // The coordinator's own clock (the projection of its TimeSource): the
-      // sweep reads and stamps every reservation from it, never ambient time.
-      this.nowFn = () => RECONCILE_NOW_MS;
     }
     emit(eventName, payload) {
       this.events.push([eventName, payload]);
@@ -242,12 +233,10 @@ async (t) => {
   applyRebalanceCoordinatorReservationLifecycleMethods(TestCoordinator);
   const coordinator = new TestCoordinator();
   coordinator.transitionActiveReservationById =
-    async (reservationId, status, nowMs) => {
+    async (reservationId, status) => {
       coordinator.transitions.push([reservationId, status]);
-      coordinator.transitionTimes.push(nowMs);
       return {success: true, changed: true};
     };
-  coordinator.transitionTimes = [];
 
   const site = RAFT_CHURN_SYNC_SECTION.STORAGE_RESERVATION_RECONCILE;
   const before = siteSnapshot(site)?.count || 0;
@@ -264,15 +253,6 @@ async (t) => {
     coordinator.transitions,
     [['res-1', 'expired']],
     'the stale reservation transitioned exactly as before',
-  );
-  t.same(
-    coordinator.transitionTimes,
-    [RECONCILE_NOW_MS],
-    'the expiry transition is stamped from the coordinator clock',
-  );
-  t.ok(
-    coordinator.readParams[0].includes(RECONCILE_NOW_MS),
-    'the expired-active read is bounded by the coordinator clock',
   );
   t.equal(
     coordinator.stats.reservationsReconciled,

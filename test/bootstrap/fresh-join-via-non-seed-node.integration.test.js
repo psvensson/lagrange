@@ -8,7 +8,6 @@
  * off the dead first candidate onto the live non-seed candidate.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -157,7 +156,6 @@ test('fresh join completes through a non-seed node when the first candidate is d
     const nodeBWsPort = getUniquePort();
     const nodeBAddress = `ws://localhost:${nodeBWsPort}`;
     const nodeBService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_B_ID,
       nodeAddress: nodeBAddress,
@@ -202,7 +200,6 @@ test('fresh join completes through a non-seed node when the first candidate is d
 
     const nodeCWsPort = getUniquePort();
     const nodeCService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_C_ID,
       nodeAddress: `ws://localhost:${nodeCWsPort}`,

@@ -257,6 +257,12 @@ function createCoordinatorWithStorage(options = {}) {
   coordinator.restoreOperationAuthority = () => {
     unavailableReads = 0;
   };
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) =>
+    baseCreateOperation(Object.hasOwn(move, 'emitOperationCreated') ? move : {
+      ...move,
+      emitOperationCreated: false,
+    });
   return {coordinator, sqlEngine, accounting};
 }
 
@@ -286,6 +292,7 @@ function createRuntimeServiceDeferralFixture(options = {}) {
       nodeId: TEST_TARGET_NODE_ID,
       entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       entityId: 'sys-postgres-wire',
+      emitOperationCreated: true,
     },
     sqlEngine,
     timers,

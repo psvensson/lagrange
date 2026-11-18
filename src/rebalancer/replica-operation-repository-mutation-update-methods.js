@@ -30,8 +30,6 @@ const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL =
       AND create_admission_state IS NULL`;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const EXPECTED_STEPS_HISTORY_REQUIRES_STEP_CAS =
-  'expectedStepsHistory refines a non-terminal expected-step CAS';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
 function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
@@ -55,26 +53,6 @@ function adoptWinningTerminalOperationOutcome(operation, winningTerminal) {
   if (Number.isFinite(winningTerminal.updatedAt)) {
     operation.updatedAt = winningTerminal.updatedAt;
   }
-}
-
-// The observed-history CAS operand, serialized exactly as the row's
-// steps_history is written. It only refines a non-terminal expected-step CAS.
-function serializeExpectedStepsHistory(
-  options,
-  expectedWorkflowStep,
-  terminalTransition,
-) {
-  if (options.expectedStepsHistory === undefined) {
-    return null;
-  }
-  if (
-    !Array.isArray(options.expectedStepsHistory) ||
-    !expectedWorkflowStep ||
-    terminalTransition
-  ) {
-    throw new Error(EXPECTED_STEPS_HISTORY_REQUIRES_STEP_CAS);
-  }
-  return JSON.stringify(options.expectedStepsHistory);
 }
 
 function hasWinningTerminalOperation(repository, terminalTransition,
@@ -125,15 +103,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           );
         }
       }
-      // A confirmation may observe the row already advanced past this write
-      // (even terminal); the observation records what was confirmed, never
-      // the superseded write.
-      this.syncIncompleteOperationObservation(
-        visibility?.confirmationState ===
-          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED ?
-          visibility.operation :
-          operation,
-      );
+      this.syncIncompleteOperationObservation(operation);
       return visibility;
     }
 
@@ -147,11 +117,6 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       // completed_at IS NULL so that write changes zero rows instead of
       // clobbering the winner (audit finding 6).
       const terminalTransition = options.terminalTransition === true;
-      const expectedStepsHistory = serializeExpectedStepsHistory(
-        options,
-        expectedWorkflowStep,
-        terminalTransition,
-      );
       if (terminalTransition) {
         const conflictingTerminal =
           await this.queryConflictingTerminalAuthorityOperation(operation);
@@ -196,7 +161,6 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
               terminalTransition,
               requireCreateAdmissionAbsent:
                 options.requireCreateAdmissionAbsent === true,
-              expectedStepsHistory,
             },
           ),
           data: this.buildReplicaOperationUpdateData(operation),
@@ -222,12 +186,10 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             expectedWorkflowStep,
             terminalTransition,
             options.requireCreateAdmissionAbsent === true,
-            expectedStepsHistory,
           ),
           params: this.buildReplicaOperationUpdateParams(
             operation,
             expectedWorkflowStep,
-            expectedStepsHistory,
           ),
         },
       );
@@ -274,15 +236,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       return this.confirmPersistedOperationUpdate(operation, options);
     }
 
-    // An expected-step CAS write pins the step in the WHERE clause (and the
-    // observed steps history, when the writer read it); a terminal write
-    // guards on completed_at IS NULL; a terminal write that is also a step
-    // CAS carries both; the plain update carries neither.
+    // An expected-step CAS write pins the step in the WHERE clause; a
+    // terminal write guards on completed_at IS NULL; a terminal write that
+    // is also a step CAS carries both; the plain update carries neither.
     resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition,
-      requireCreateAdmissionAbsent = false, expectedStepsHistory = null) {
-      if (typeof expectedStepsHistory === 'string') {
-        return SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY;
-      }
+      requireCreateAdmissionAbsent = false) {
       if (expectedWorkflowStep) {
         if (terminalTransition && requireCreateAdmissionAbsent) {
           return UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL;

@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createBootstrapCacheHydrationApplier,
@@ -150,7 +149,6 @@ function createDelegates() {
 
 function createFailedJoinWithdrawalOwner(nodeMutationResult) {
   const owner = new NodeRegistrationOwner({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     delegates: createDelegates(),
@@ -202,7 +200,6 @@ test(
       },
     };
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -303,7 +300,6 @@ test(
       },
     };
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -390,7 +386,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -454,7 +449,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -510,7 +504,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -559,7 +552,6 @@ test(
   async (t) => {
     const updateCalls = [];
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -636,7 +628,6 @@ test(
   async (t) => {
     const updateCalls = [];
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -985,7 +976,6 @@ test(
   'outcome (unavailable on failure or unreadable source)',
   async (t) => {
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -1057,7 +1047,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1117,7 +1106,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1165,7 +1153,6 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1288,7 +1275,6 @@ test(
   async (t) => {
     const publicationCalls = [];
     const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner:

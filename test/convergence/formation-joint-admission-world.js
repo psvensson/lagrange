@@ -172,14 +172,6 @@ function nodeAddressOf(nodeId) {
   return `${NODE_ADDRESS_PREFIX}${nodeId}${NODE_ADDRESS_SUFFIX}`;
 }
 
-// The world's declared topology: each simulated node runs on its own machine,
-// the one its address names (the formation of 3 hosts, 1 node each). That
-// machine's name is the host identity the node declares at registration.
-const SIMULATED_MACHINE_SUFFIX = '-machine';
-function simulatedHostIdOf(nodeId) {
-  return `${nodeId}${SIMULATED_MACHINE_SUFFIX}`;
-}
-
 // World time. The clock moves only by the evaluation instants the driver
 // takes (one millisecond each), so it never reaches a delay any owner armed:
 // advance(0) runs only what is due at the current instant (deferred
@@ -197,10 +189,7 @@ function simulatedHostIdOf(nodeId) {
 // evaluation instant by it (the removed handoff publication did), and a
 // clock that stands still inside an instant would refuse the second write.
 // It therefore keeps running; no decision of the claim reads a duration
-// from it against a world-clock stamp. A scenario whose claim does (an owner
-// that reads the platform clock against a world-clock lease, as the
-// background placement path's transport readiness does) pins the platform
-// clock to the world clock instead: one clock, as in production.
+// from it against a world-clock stamp.
 function armingSourceFrames() {
   return String(new Error().stack).split(STACK_LINE_SEPARATOR)
     .filter((line) => line.includes(SOURCE_FRAME_MARKER))
@@ -210,7 +199,7 @@ function armingSourceFrames() {
       .replace(/\)$/u, ''));
 }
 
-function createWorldClock({platformClockIsWorldClock = false} = {}) {
+function createWorldClock() {
   const clock = new VirtualTimeSource({startMs: WORLD_START_MS});
   const armed = new Map();
   const dueNow = new Set();
@@ -261,11 +250,7 @@ function createWorldClock({platformClockIsWorldClock = false} = {}) {
     setInterval: globalThis.setInterval,
     clearTimeout: globalThis.clearTimeout,
     clearInterval: globalThis.clearInterval,
-    dateNow: Date.now,
   };
-  if (platformClockIsWorldClock) {
-    Date.now = () => clock.now();
-  }
   const ownerHandles = new WeakSet();
   const armedByOwner = () =>
     String(new Error().stack).includes(SOURCE_FRAME_MARKER);
@@ -300,7 +285,6 @@ function createWorldClock({platformClockIsWorldClock = false} = {}) {
       globalThis.setInterval = platform.setInterval;
       globalThis.clearTimeout = platform.clearTimeout;
       globalThis.clearInterval = platform.clearInterval;
-      Date.now = platform.dateNow;
     },
     // The timers that are armed now: none of them has run unless a cadence
     // step ran it.
@@ -800,32 +784,14 @@ function expireStoppedNodeLease(nodeId, {cache, time, clock}) {
   });
 }
 
-// The placement deciders this world mounts on a starting seed: the planner of
-// every priority partition, each polled by the round driver. A scenario that
-// measures placement as production composes it hands in its own mount.
-function mountPriorityPartitionPlanners({seedHosts}) {
-  return new Map(PRIORITY_TABLE_IDS.map((tableId) =>
-    [INITIAL_PARTITION_IDS[tableId],
-      createPriorityPartitionRebalancer(seedHosts, tableId)]));
-}
-
 /**
  * Build the world: the seed formed alone (its rows as the registration
  * producers write them), no joiner yet.
- * @param {object} [options]
- * @param {Function} [options.mountPlacementDeciders] builds the placement
- *   deciders of a starting seed ({seedHosts, clock, cache}) as a Map keyed
- *   by entity id
- * @param {boolean} [options.platformClockIsWorldClock] pin Date.now to the
- *   world clock for the world's lifetime
  * @return {object} the world
  */
-function createFormationWorld({
-  mountPlacementDeciders = mountPriorityPartitionPlanners,
-  platformClockIsWorldClock = false,
-} = {}) {
+function createFormationWorld() {
   initializeTestEnvironment();
-  const time = createWorldClock({platformClockIsWorldClock});
+  const time = createWorldClock();
   const {clock} = time;
   const cache = new SystemTableCache({
     timeSource: clock,
@@ -954,7 +920,9 @@ function createFormationWorld({
 
   seedSystemRows(cache, time.now());
   const seed = startNode(SEED_NODE_ID, SEED_FENCE);
-  const seedRebalancers = mountPlacementDeciders({seedHosts: seed, clock, cache});
+  const seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
+    [INITIAL_PARTITION_IDS[tableId],
+      createPriorityPartitionRebalancer(seed, tableId)]));
 
   const world = {
     cache,
@@ -1095,8 +1063,9 @@ function createFormationWorld({
         storageIncarnation,
       );
       world.seed = nextSeed;
-      world.seedRebalancers =
-        mountPlacementDeciders({seedHosts: nextSeed, clock, cache});
+      world.seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
+        [INITIAL_PARTITION_IDS[tableId],
+          createPriorityPartitionRebalancer(nextSeed, tableId)]));
       return nextSeed;
     },
     /**
@@ -1137,7 +1106,6 @@ function createFormationWorld({
         });
       const hosts = startNode(nodeId, clusterIncarnationFence);
       const registrationOwner = new NodeRegistrationOwner({
-        hostId: simulatedHostIdOf(nodeId),
         nodeId,
         nodeAddress: nodeAddressOf(nodeId),
         membershipPublicationRuntimeOwner:
@@ -1202,5 +1170,4 @@ export {
   WORLD_START_MS,
   createFormationWorld,
   nodeAddressOf,
-  simulatedHostIdOf,
 };

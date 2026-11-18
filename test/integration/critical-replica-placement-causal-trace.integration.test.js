@@ -20,7 +20,6 @@
  * its own tests mutated, 2026-09-12).
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -366,7 +365,6 @@ test('critical placement causal trace',
         leadershipWaitTimeoutMs: 12000,
       };
       node2JoinService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: NODE2_ID,
         nodeAddress: `ws://localhost:${node2WsPort}`,
@@ -377,7 +375,6 @@ test('critical placement causal trace',
         httpPost,
       });
       node3JoinService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: NODE3_ID,
         nodeAddress: `ws://localhost:${node3WsPort}`,

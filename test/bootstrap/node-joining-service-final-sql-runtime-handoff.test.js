@@ -2,7 +2,6 @@
  * Durable-rejoin coverage for the final SQL runtime recovery handoff.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -65,7 +64,6 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
 
   const cache = new SystemTableCache();
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: DURABLE_REJOIN_FINAL_HANDOFF_TEST.nodeId,
     nodeAddress: DURABLE_REJOIN_FINAL_HANDOFF_TEST.nodeAddress,

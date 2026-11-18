@@ -84,16 +84,6 @@ case shows oversized input is refused. Original row/output-byte witnesses remain
 valid. The budget claim concerns conflict admission and effective limit selection,
 not an observed resource overrun or a bypass of PG's earlier raw validation.
 
-**Superseded 2026-11-17.** The two-spelling alias contract above (camelCase and
-uppercase keys, equal aliases accepted, conflicting aliases refused) was
-superseded by commit `9905a06e2` (`9905a06e22551db6c714a4543b175327bb4591ba`): a query budget now has one
-UPPER_SNAKE shape built only by `normalizeQueryBudget`, which refuses any
-unknown field (including every former camelCase alias) and any limit that is
-not a non-negative safe integer; readers refuse a budget that is not its
-frozen output. The acceptance list and the evidence below are kept as the
-record of what this repair proved at the time; they no longer describe the
-current contract (`architecture/query-runtime.md`).
-
 ## Original immutable evidence
 
 - Candidate native job 4896: three scalar mismatches with valid controls;
@@ -204,59 +194,3 @@ on the managed lab under root coordination. Local work is source inspection,
 edits and Git inspection only. Source and proof changes require independent
 content-bound review before landing. Component acceptance remains separate from
 the physical pre-gate and GCP comparison campaign.
-
-## Final component proof: native job 4918
-
-Managed [job 4918](https://github.com/psvensson/lagrange-lab/issues/4918)
-ran source `232725ae1a34b68583295f395efd616c9ea1184b` on
-`local-workstation`, Node 22.23.2 and SQLite 3.49.2. Its tree
-`327aaca1ca3910034c84628f1836bd0a6065e4a4` matches the final local query
-candidate. The complete 10,732-byte worker log has SHA256
-`8e6c4450b6adb1e1e2fe19eee96ad73061fade71b71caa045fddb6ef521fcaae`;
-the embedded 46,660-byte native log has SHA256
-`75bca17c88aa981b94591bb83c857be3691155c8c2dc10005b3f2baaa30c9acb`.
-Collection used [4920](https://github.com/psvensson/lagrange-lab/issues/4920)
-and [4921](https://github.com/psvensson/lagrange-lab/issues/4921), with chunk,
-complete-worker and decompressed-log hashes verified. Earlier collection
-request 4919 used a malformed mailbox envelope and was not admitted; it was
-closed without execution. No product result derives from that request.
-
-All ten classified suites passed, reporting 1,299 assertions: scalar helper
-95, global merge 304, SqlRequest 239, normalization 26, public execute-request
-170, cross-partition JOIN 218, BudgetEnforcer 64, ResultStream 55,
-ExecutionContext 75 and PG adapter 53.
-
-All seven frozen diagnostics engaged at their documented locations. The three
-original scalar targets matched native SQLite, all five producer-bound targets
-matched with `measuredMismatches: []`, and the direct signed64 case returned
-`ab` in both engines. Explicit contradictory aliases refused in
-`createSqlRequest` before any delivery or handler call, while the valid
-camel-only control produced eight bytes. Previous JOIN, root-HAVING and
-array-HAVING parameter targets returned their expected rows. The row-limit
-witness rejected the second output after one admitted input; uppercase and
-camelCase byte-limit witnesses each rejected a 17-byte first write against a
-one-byte limit, while the generous control accepted 34 bytes. Exit codes alone
-were not used to interpret these diagnostic results.
-
-ESLint, changed-file size, literals, decision boundaries and silent-catch checks
-passed. The latter three scanned all five affected production JavaScript
-files. The new scalar helper also passed strict cyclomatic complexity 12 and
-cognitive complexity 20. Exact tracked-source/index checks passed and all
-managed execution, container and thermal scopes closed.
-
-Independent verifier `subagent:core_args_control` approved the scalar/budget
-source and proof design, bound to helper SHA256
-`8cc0eee085c1bb0af1e1f8fce2eb4f342cdf12174b2b49a57247acbc502ea36d`
-and scalar-test SHA256
-`377fbd62fa9f5f507b74f5d4b8e19384d7fd4f37b764e39f847dea6e3f73e173`,
-conditional on this native run. Root inspected the complete native evidence;
-author `core_args_data` separately checked all 40 diagnostic records as evidence
-analysis, not independent approval of that author's scalar source. The native
-condition is satisfied for these bounded repairs. Combined-candidate gates and
-physical/GCP acceptance remain pending.
-
-The independent review also identified an unmeasured, preexisting extreme
-two-argument SUBSTR parity edge: omitted length with signed64-minimum start.
-Its behavior on the pinned SQLite version has not been established. It is
-retained as a separate query-owner observation, not a demonstrated regression
-or an assertion of complete SQLite-domain parity.

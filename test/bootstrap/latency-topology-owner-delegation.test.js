@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -27,7 +26,7 @@ function teardownEnvironment() {
 test('BootstrapService partition CDC propagation requires topology owner',
   async (t) => {
     setupEnvironment();
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     await assert.rejects(
       service.seedCacheHydrationPhase
@@ -50,7 +49,7 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
   async (t) => {
     setupEnvironment();
     const calls = [];
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     service.latencyTopology = {
       cdcGroupPropagationService: {
         async propagateCDCEvent(payload) {
@@ -89,7 +88,6 @@ test('NodeJoiningService partition CDC propagation requires topology owner',
   async (t) => {
     setupEnvironment();
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
@@ -116,7 +114,6 @@ test('NodeJoiningService delegates partition CDC propagation to topology owner',
     setupEnvironment();
     const calls = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',

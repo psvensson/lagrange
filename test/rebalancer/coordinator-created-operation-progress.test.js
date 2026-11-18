@@ -380,6 +380,7 @@ async (t) => {
       nodeId: 'node-bootstrap-target',
       replicaId: 'partition-bootstrap-hold-test-r1',
       deferDispatchUntilBootstrapTopology: true,
+      emitOperationCreated: false,
     });
     const heldStoredRow = operationRows.get(heldOperation.operationId);
     const heldStepsHistory = JSON.parse(heldStoredRow?.steps_history || '[]');

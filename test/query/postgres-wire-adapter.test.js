@@ -21,10 +21,6 @@ import {
   PGWIRE_ANONYMOUS_PRINCIPAL,
   PGWIRE_DEFAULT_TENANT_ID,
 } from '../../src/runtime/pgwire-auth-constants.js';
-import {
-  DEFAULT_QUERY_BUDGET,
-  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
-} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Create a minimal mock SqlCore that records executeRequest calls.
@@ -267,8 +263,7 @@ test('PostgresWireAdapter - propagates sqlCore errors', async (t) => {
 });
 
 test('PostgresWireAdapter - uses canonical PGWIRE_ANONYMOUS_PRINCIPAL ' +
-  'and PGWIRE_DEFAULT_TENANT_ID constants and derives the statement ' +
-  'timeout from WALL_TIME_LIMIT_MS',
+  'and PGWIRE_DEFAULT_TENANT_ID constants and normalizes wallTimeLimitMs',
 async (t) => {
   t.equal(PGWIRE_DEFAULT_TENANT_ID, 'default');
   t.equal(PGWIRE_ANONYMOUS_PRINCIPAL, 'anonymous');
@@ -279,63 +274,12 @@ async (t) => {
     tenantId: PGWIRE_DEFAULT_TENANT_ID,
   });
   await adapter.execute('sess-anon', 'SELECT 1', [], {
-    budgets: {WALL_TIME_LIMIT_MS: 4321},
+    budgets: {wallTimeLimitMs: 4321},
   });
-  await adapter.execute('sess-anon', 'SELECT 1');
 
-  t.equal(mock.calls.length, 2);
+  t.equal(mock.calls.length, 1);
   t.equal(mock.calls[0].tenantId, 'default');
   t.equal(mock.calls[0].securityContext.principal, 'anonymous');
   t.equal(mock.calls[0].timeoutBudget.configuredBudgetMs, 4321);
-  t.equal(mock.calls[0].budgets.WALL_TIME_LIMIT_MS, 4321);
-  t.equal(
-    mock.calls[1].timeoutBudget.configuredBudgetMs,
-    DEFAULT_QUERY_BUDGET.WALL_TIME_LIMIT_MS,
-  );
-  t.end();
-});
-
-test('PostgresWireAdapter - WALL_TIME_LIMIT_MS 0 is a zero wall-time ' +
-  'budget (spent at once), never the default', async (t) => {
-  const mock = createMockSqlCore();
-  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
-  await adapter.authenticate('sess-zero', {
-    tenantId: PGWIRE_DEFAULT_TENANT_ID,
-  });
-  await adapter.execute('sess-zero', 'SELECT 1', [], {
-    budgets: {WALL_TIME_LIMIT_MS: 0},
-  });
-  t.equal(mock.calls.length, 1);
-  t.equal(mock.calls[0].budgets.WALL_TIME_LIMIT_MS, 0);
-  t.equal(mock.calls[0].timeoutBudget.configuredBudgetMs, 0,
-    'the normalizer\'s 0 is read as 0 ms');
-  t.equal(mock.calls[0].timeoutBudget.deadlineMs,
-    mock.calls[0].timeoutBudget.startedAtMs,
-    'the statement\'s deadline is its start: no wall time to spend');
-  t.end();
-});
-
-test('PostgresWireAdapter - refuses a misspelled or invalid budget ' +
-  'instead of running with the default', async (t) => {
-  const mock = createMockSqlCore();
-  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
-  await adapter.authenticate('sess-budget', {
-    tenantId: PGWIRE_DEFAULT_TENANT_ID,
-  });
-  await t.rejects(
-    adapter.execute('sess-budget', 'SELECT 1', [], {
-      budgets: {wallTimeLimitMs: 4321},
-    }),
-    new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.UNKNOWN_BUDGET_FIELD),
-  );
-  for (const limit of [-1, '4321', 1.5]) {
-    await t.rejects(
-      adapter.execute('sess-budget', 'SELECT 1', [], {
-        budgets: {WALL_TIME_LIMIT_MS: limit},
-      }),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_LIMIT),
-    );
-  }
-  t.equal(mock.calls.length, 0, 'no refused statement reached SqlCore');
   t.end();
 });

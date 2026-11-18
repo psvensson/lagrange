@@ -13,7 +13,6 @@
  * schema_operations partition produced client-side silence.
  */
 import {test} from '../../src/test-helpers/tap.js';
-import {withBootstrapHoldRelease} from './sql-query-engine-test-support.js';
 import {
   SchemaProvisioningJobOwner,
   isTransientProvisioningError,
@@ -33,10 +32,6 @@ import {
 import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
-import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
-import {
-  COMMITTED_MEMBERSHIP_STAMP_KIND,
-} from '../../src/raft/raft-committed-membership-constants.js';
 
 class OperationCreationHost {}
 applyRebalanceCoordinatorOperationCreationAdmissionMethods(
@@ -133,8 +128,9 @@ test('the schema-job prologue honors the request deadline', async (t) => {
   t.end();
 });
 
-test('in-flight SENDING/CREATING child operations are not re-stamped or ' +
+test('in-flight SENDING/CREATING child operations are not re-persisted or ' +
   're-dispatched on a schema provisioning retry', async (t) => {
+  const persistedIds = [];
   const executedIds = [];
   const waitedReplicaIds = [];
   const operationsByNode = new Map([
@@ -195,14 +191,17 @@ test('in-flight SENDING/CREATING child operations are not re-stamped or ' +
     },
     waitForRoutablePartitionServiceCount: async () => ['node-a', 'node-b'],
     waitForPartitionLeaderService: async () => ({node_id: 'node-a'}),
-    rebalanceCoordinator: withBootstrapHoldRelease({
+    rebalanceCoordinator: {
       createOperation: async (move) => operationsByNode.get(move.nodeId),
       dispatchOperation: async () => ({success: true}),
+      persistOperationUpdate: async (operation) => {
+        persistedIds.push(operation.operationId);
+      },
       executeOperation: async (operation) => {
         executedIds.push(operation.operationId);
         return {success: true};
       },
-    }),
+    },
   });
 
   await engine.provisionInitialTablePartition({
@@ -214,11 +213,9 @@ test('in-flight SENDING/CREATING child operations are not re-stamped or ' +
   });
 
   t.same(
-    engine.rebalanceCoordinator.bootstrapHoldReleases
-      .filter((release) => release.released)
-      .map((release) => release.operationId),
+    persistedIds,
     ['job-1:operation:node-b'],
-    'the coordinator releases (stamps) only the still-held PENDING operation',
+    'only the still-PENDING operation is stamped and persisted',
   );
   t.equal(
     operationsByNode.get('node-a').updatedAt,
@@ -246,29 +243,18 @@ test('bootstrap partition ADD operations defer retryable control-plane ' +
       deferRetry: true,
     },
   );
-  // The founding create carries the provisioner's GENESIS stamp; an
-  // ordinary partition ADD carries the creation owner's COMMITTED stamp
-  // (rebalance-coordinator-operation-creation.js buildOperationBootstrapTopology),
-  // so the stamp kind, not its presence, names the founding create.
   const bootstrapOp = {
     operationId: 'job-1:operation:node-a',
     type: 'ADD',
     entityType: 'partition',
     partitionId: 'tbl-orders-p1',
-    bootstrapMembership: genesisStamp(
-      ['job-1:replica:node-a', 'job-1:replica:node-b'],
-      {
-        'job-1:replica:node-a': 'node-a',
-        'job-1:replica:node-b': 'node-b',
-      },
-    ),
+    bootstrapMembership: {epoch: 1},
   };
   const ordinaryUserOp = {
     operationId: 'rebalance-op-1',
     type: 'ADD',
     entityType: 'partition',
     partitionId: 'tbl-orders-p1',
-    bootstrapMembership: {kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED},
   };
 
   t.equal(
@@ -287,6 +273,6 @@ test('bootstrap partition ADD operations defer retryable control-plane ' +
       deferredError,
     ),
     false,
-    'an ordinary committed-stamped partition ADD retains existing behavior',
+    'ordinary non-bootstrap user partition move retains existing behavior',
   );
 });

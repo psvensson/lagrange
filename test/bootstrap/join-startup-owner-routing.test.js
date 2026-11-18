@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -31,7 +30,6 @@ test('NodeJoiningService initializeJoiningLifecycleOwners uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',
@@ -57,7 +55,6 @@ test('NodeJoiningService triggerJoinReconciler uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',
@@ -83,7 +80,6 @@ test('NodeJoiningService notifyLocalAdminRuntimeReady uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',

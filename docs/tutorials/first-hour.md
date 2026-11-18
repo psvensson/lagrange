@@ -61,8 +61,6 @@ export REST_API_PORT=8080
 export ADMIN_WS_PORT=8081
 export TRANSPORT_WS_PORT=8082
 export DATA_DIR=/tmp/lagrange-first-hour
-# Required: the machine the node runs on (replica placement spreads across hosts).
-export NODE_HOST_ID="$(hostname)"
 ```
 
 Create the disposable data directory and start the persistent node:

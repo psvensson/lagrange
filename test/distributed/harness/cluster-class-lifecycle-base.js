@@ -21,7 +21,6 @@ import {
   NODE_LOG_DIR_CONTAINER,
 } from './full-node-log-capture.js';
 import {createReadStream, mkdirSync} from 'node:fs';
-import {resolveProviderHostName} from './scenario-host-topology.js';
 import {appendFile} from 'node:fs/promises';
 import {createGunzip} from 'node:zlib';
 import {createInterface} from 'node:readline';
@@ -510,10 +509,11 @@ class ClusterLifecycleBase {
 
   _buildNodeEnv(nodeId, containerName, seedIp, nodeIndex = 0) {
     const env = {};
-    const partitionConfig = this._config?.partition;
+    const partitionConfig =
+      this._config?.partition && typeof this._config.partition === 'object' ?
+        this._config.partition :
+        null;
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
-    env[CONTAINER_ENV_KEYS.NODE_HOST_ID] =
-      resolveProviderHostName(this._config, this._resolveProviderIndexForNodeIndex(nodeIndex));
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
     if (this._hostNetworkMode) {
       this._assertHostNetworkPortOffsets();

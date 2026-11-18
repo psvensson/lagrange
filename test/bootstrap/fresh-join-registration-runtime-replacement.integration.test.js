@@ -14,7 +14,6 @@
  * production services); only the trap is the test's.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -145,7 +144,6 @@ test('W7: a fresh join whose registration INSERT is cut by a runtime ' +
 
     const nodeBWsPort = getUniquePort();
     const nodeBService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_B_ID,
       nodeAddress: `ws://localhost:${nodeBWsPort}`,

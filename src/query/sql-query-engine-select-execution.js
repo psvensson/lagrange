@@ -40,69 +40,6 @@ const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_STAR = 'star';
-const LOCAL_STR_FUNCTION_CALL = 'function_call';
-
-// Functions of the evaluating connection's state: no coordinator read path
-// answers them, because the connection that would evaluate them (a
-// partition's, or the coordinator's) is not the client's (design §2.2, D11).
-const CONNECTION_STATE_FUNCTIONS = new Set(['changes', 'last_insert_rowid',
-  'total_changes']);
-// Clauses of a FROM-less SELECT the partition-0 evaluation does not carry
-// (it renders the result columns only). Refused until the merge session
-// evaluates the whole statement (interim I2, removed by WP3).
-const FROMLESS_REFUSED_CLAUSES = Object.freeze(['where', 'groupBy', 'having', 'orderBy',
-  'limit', 'setOperation']);
-const COORDINATOR_REFUSAL_MSG = Object.freeze({
-  CONNECTION_STATE_PREFIX:
-    'A connection-state function is not supported on a coordinator read path: ',
-  FROMLESS_CLAUSE:
-    'WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, DISTINCT, WITH and compound ' +
-    'operators on a SELECT without FROM are not supported yet (interim I2, until WP3)',
-});
-
-function findConnectionStateCall(node) {
-  if (!node || typeof node !== LOCAL_STR_OBJECT) return null;
-  if (Array.isArray(node)) {
-    for (const entry of node) {
-      const found = findConnectionStateCall(entry);
-      if (found) return found;
-    }
-    return null;
-  }
-  if (node.type === LOCAL_STR_FUNCTION_CALL &&
-      CONNECTION_STATE_FUNCTIONS.has(String(node.name).toLowerCase())) {
-    return String(node.name);
-  }
-  for (const value of Object.values(node)) {
-    const found = findConnectionStateCall(value);
-    if (found) return found;
-  }
-  return null;
-}
-
-function unsupportedSelectResult(error) {
-  return {success: false, error, errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE};
-}
-
-/**
- * The typed refusal of a SELECT the coordinator read path cannot answer as
- * SQLite would: a connection-state function anywhere in it, or a FROM-less
- * SELECT with a clause beyond its result columns.
- * @param {Object} ast - SELECT AST.
- * @return {?Object} The refusal result, or null.
- */
-function coordinatorSelectRefusal(ast) {
-  const connectionStateCall = findConnectionStateCall(ast);
-  if (connectionStateCall !== null) {
-    return unsupportedSelectResult(
-      COORDINATOR_REFUSAL_MSG.CONNECTION_STATE_PREFIX + connectionStateCall);
-  }
-  const fromlessClause = !ast.from && (ast.distinct === true ||
-    (Array.isArray(ast.ctes) && ast.ctes.length > 0) ||
-    FROMLESS_REFUSED_CLAUSES.some((clause) => ast[clause]));
-  return fromlessClause ? unsupportedSelectResult(COORDINATOR_REFUSAL_MSG.FROMLESS_CLAUSE) :
-    null;
-}
 
 const {
   AuthoritativeControlPlaneView,
@@ -393,10 +330,6 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
   async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
     transactionRead = null) {
-    const refusal = coordinatorSelectRefusal(ast);
-    if (refusal) {
-      return refusal;
-    }
     if (!ast.from) {
       return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
         transactionRead);

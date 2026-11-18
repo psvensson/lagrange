@@ -228,27 +228,6 @@ function buildLeaseVerdictServiceRows(
 }
 
 /**
- * The partition's other voters for a count-neutral REPLACE: with the source
- * they are the policy minimum (three voter-ready replicas on READY-lease
- * nodes), so the source's removal keeps the remove-safety voter-ready floor.
- * @return {Array<Object>}
- */
-function buildLeaseVerdictPeerVoterRows() {
-  return [
-    buildServiceRow(
-      `${LEASE_VERDICT_PARTITION_ID}-r2`,
-      LEASE_VERDICT_NODE.SEED,
-      ReplicaStatus.ACTIVE,
-    ),
-    buildServiceRow(
-      `${LEASE_VERDICT_PARTITION_ID}-r3`,
-      LEASE_VERDICT_NODE.OTHER,
-      ReplicaStatus.ACTIVE,
-    ),
-  ];
-}
-
-/**
  * The readiness service whose answers ARE the routing heuristic's input.
  * @param {boolean} ownerRoutingReady
  * @param {string} ownerNodeId
@@ -378,7 +357,6 @@ export {
   LEASE_VERDICT_REPLICA,
   LEASE_VERDICT_SOURCE_UNAVAILABLE,
   buildLeaseVerdictOperationRow,
-  buildLeaseVerdictPeerVoterRows,
   buildLeaseVerdictReadinessService,
   buildLeaseVerdictServiceRows,
   createLeaseVerdictRemoteCoordinator,

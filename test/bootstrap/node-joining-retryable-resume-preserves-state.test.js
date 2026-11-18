@@ -10,7 +10,6 @@
  * for the production witness (stat-gate-20260610T155735Z).
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {EventEmitter} from 'events';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -73,7 +72,6 @@ function initializeTestEnvironment() {
  */
 function buildResumableJoinHarness(options = {}) {
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

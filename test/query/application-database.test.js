@@ -726,44 +726,6 @@ async (t) => {
     'a COMMIT that threw is outcome-unknown');
 });
 
-test('an autocommit query whose write outcome is unknown rejects ' +
-  'TRANSACTION_OUTCOME_UNKNOWN; inside transaction(callback) it is a plain ' +
-  'failure the ROLLBACK discards', async (t) => {
-  const unknownWrite = {success: false, errorCode:
-    'DISTRIBUTED_PARTICIPANT_FAILURE', error: 'participant failed',
-  participantFailures: [{partitionId: 'p1', errorCode: null,
-    failureCode: 'partition_write_outcome_unknown'}]};
-  const core = createCore(async (sql) => sql === 'UPDATE t SET n = 1' ?
-    unknownWrite : {success: true});
-  const db = createBoundApplicationDatabaseRuntime(core)
-    .openApplicationDatabase({applicationId: 'images'});
-  const autocommit = await captureRejection(db.query('UPDATE t SET n = 1'));
-  t.equal(autocommit instanceof ApplicationDatabaseError, true);
-  t.equal(autocommit.code, 'TRANSACTION_OUTCOME_UNKNOWN');
-  t.equal(autocommit.message, 'the transaction\'s outcome is unknown; some ' +
-    'changes may have been committed');
-  t.equal(autocommit.operation, 'query');
-  t.equal(autocommit.cause.code, 'DISTRIBUTED_PARTICIPANT_FAILURE');
-  t.equal(autocommit.deferred, false, 'never offered as retryable');
-
-  core.calls.length = 0;
-  const inTransaction = await captureRejection(db.transaction(
-    async (tx) => tx.query('UPDATE t SET n = 1')));
-  t.equal(inTransaction.code, 'DISTRIBUTED_PARTICIPANT_FAILURE');
-  t.same(core.calls.map(({sql}) => sql),
-    ['BEGIN', 'UPDATE t SET n = 1', 'ROLLBACK']);
-
-  const definite = createCore(async () => ({success: false,
-    errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', error: 'participant failed',
-    participantFailures: [{partitionId: 'p1',
-      failureCode: 'partition_write_not_leader'}]}));
-  const definiteError = await captureRejection(
-    createBoundApplicationDatabaseRuntime(definite)
-      .openApplicationDatabase({applicationId: 'images'})
-      .query('UPDATE t SET n = 1'));
-  t.equal(definiteError.code, 'DISTRIBUTED_PARTICIPANT_FAILURE');
-});
-
 test('rollback failure preserves primary typed metadata', async (t) => {
   const core = createCore(async (sql) => {
     if (sql === 'SELECT broken') {

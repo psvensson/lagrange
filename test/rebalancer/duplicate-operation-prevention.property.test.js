@@ -214,9 +214,16 @@ function createCoordinatorUnderTest(sqlEngine, overrides = {}) {
     ...overrides,
   }));
   coordinator.initialize();
-  // The planner's dedupe is under test, not dispatch: a created operation
-  // rests at its durable PENDING step (the owner's create arm is inert).
-  coordinator.armCoordinatorCreatedOperationProgress = async () => false;
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
   return coordinator;
 }
 

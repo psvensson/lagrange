@@ -94,9 +94,7 @@ const NESTED_MAX_BYTES = NUM.BYTES_PER_MIB * NUM.EIGHT;
 const MAX_INFLIGHT = NUM.TEN;
 
 /**
- * The one query budget: every limit, keyed by its uppercase field name.
- * `normalizeQueryBudget` is the only producer of a budget; every reader
- * consumes its output.
+ * Frozen default query budget object combining all limits.
  * @type {Readonly<Object>}
  */
 const DEFAULT_QUERY_BUDGET = Object.freeze({
@@ -110,13 +108,36 @@ const DEFAULT_QUERY_BUDGET = Object.freeze({
   RESULT_MAX_ROWS,
   RESULT_MAX_BYTES,
   OUT_MAX_BYTES,
+});
+
+const DEFAULT_EFFECTIVE_QUERY_BUDGET = Object.freeze({
+  ...DEFAULT_QUERY_BUDGET,
   NESTED_MAX_CALLS,
   NESTED_MAX_KEYS,
   NESTED_MAX_BYTES,
   MAX_INFLIGHT,
 });
 
-const QUERY_BUDGET_FIELD_COUNT = Object.keys(DEFAULT_QUERY_BUDGET).length;
+/**
+ * Field name constants for QueryBudget objects (camelCase).
+ * @enum {string}
+ */
+const QB_FIELD = Object.freeze({
+  LOOKUP_MAX_KEYS: 'lookupMaxKeys',
+  LOOKUP_MAX_BYTES: 'lookupMaxBytes',
+  EMIT_MAX_BYTES: 'emitMaxBytes',
+  BROADCAST_MAX_PAYLOAD_BYTES: 'broadcastMaxPayloadBytes',
+  CPU_TIME_LIMIT_MS: 'cpuTimeLimitMs',
+  MEMORY_LIMIT_BYTES: 'memoryLimitBytes',
+  WALL_TIME_LIMIT_MS: 'wallTimeLimitMs',
+  RESULT_MAX_ROWS: 'resultMaxRows',
+  RESULT_MAX_BYTES: 'resultMaxBytes',
+  OUT_MAX_BYTES: 'outMaxBytes',
+  NESTED_MAX_CALLS: 'nestedMaxCalls',
+  NESTED_MAX_KEYS: 'nestedMaxKeys',
+  NESTED_MAX_BYTES: 'nestedMaxBytes',
+  MAX_INFLIGHT: 'maxInflight',
+});
 
 /**
  * Error messages for query budget violations.
@@ -148,89 +169,71 @@ const QUERY_BUDGET_ERROR_MSG = Object.freeze({
 const QUERY_BUDGET_NORMALIZATION_ERROR_MSG = Object.freeze({
   INVALID_BUDGET_OBJECT:
     'Query budget overrides must be a plain object',
-  UNKNOWN_BUDGET_FIELD:
-    'Unknown query budget field',
-  INVALID_BUDGET_LIMIT:
-    'Query budget limit must be a non-negative safe integer',
-  BUDGET_NOT_NORMALIZED:
-    'Query budget must be the frozen output of normalizeQueryBudget',
+  CONFLICTING_BUDGET_LIMITS:
+    'Conflicting query budget values supplied for the same limit',
 });
 
-const EMPTY_OVERRIDES = Object.freeze({});
+const EMPTY_BUDGET = Object.freeze({});
+const QB_FIELD_ENTRIES = Object.freeze(Object.entries(QB_FIELD));
 
-function isPlainObject(value) {
-  if (value === null || typeof value !== 'object') return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function isQueryBudgetEntry(field, value) {
-  return Object.hasOwn(DEFAULT_QUERY_BUDGET, field) &&
-    Number.isSafeInteger(value) && value >= 0;
-}
-
-function assertQueryBudgetEntry(field, value) {
-  if (!Object.hasOwn(DEFAULT_QUERY_BUDGET, field)) {
+function resolveDimensionBudgetValue(
+  source,
+  upperKey,
+  camelKey,
+  defaultValue,
+) {
+  const hasUpper =
+    Object.hasOwn(source, upperKey) && source[upperKey] !== undefined;
+  const hasCamel =
+    Object.hasOwn(source, camelKey) && source[camelKey] !== undefined;
+  if (hasUpper && hasCamel) {
+    const upperValue = source[upperKey];
+    const camelValue = source[camelKey];
+    if (Object.is(upperValue, camelValue)) {
+      return upperValue;
+    }
     throw new Error(
-      `${QUERY_BUDGET_NORMALIZATION_ERROR_MSG.UNKNOWN_BUDGET_FIELD}: ${field}`,
+      `${QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS}: ` +
+        `${upperKey}=${String(upperValue)} vs ${camelKey}=${String(camelValue)}`,
     );
   }
-  if (!isQueryBudgetEntry(field, value)) {
-    throw new Error(
-      `${QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_LIMIT}: ` +
-        `${field}=${String(value)} (${typeof value})`,
-    );
+  if (hasUpper) {
+    return source[upperKey];
   }
+  if (hasCamel) {
+    return source[camelKey];
+  }
+  return defaultValue;
 }
 
 /**
- * Build the query budget from caller overrides. This is the only place a
- * budget default is applied. Overrides name limits by their uppercase field
- * (the keys of DEFAULT_QUERY_BUDGET); an unknown field or a value that is
- * not a non-negative safe integer is refused, never defaulted.
+ * Normalize query budget overrides into one canonical frozen budget shape
+ * containing both uppercase SqlRequest fields and camelCase QB_FIELD keys.
+ * Rejects conflicting values when a caller supplies two different values
+ * for the same limit dimension. Defaults are applied only after resolving the
+ * caller's fields, never inferred from a supplied value equaling a default.
  *
- * @param {Object} [overrides] - Plain object of limit overrides.
- * @return {Readonly<Object>} Frozen budget holding every limit.
- * @throws {Error} When the overrides are not a plain object, name an unknown
- *   field, or carry an invalid limit.
+ * @param {Object} [budgets] - Raw or partially-populated query budget object.
+ * @return {Readonly<Object>} Frozen normalized query budget.
  */
-function normalizeQueryBudget(overrides = EMPTY_OVERRIDES) {
-  if (!isPlainObject(overrides)) {
+function normalizeQueryBudget(budgets = EMPTY_BUDGET) {
+  const source =
+    budgets === undefined || budgets === null ? EMPTY_BUDGET : budgets;
+  if (typeof source !== 'object' || Array.isArray(source)) {
     throw new Error(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT);
   }
-  for (const [field, value] of Object.entries(overrides)) {
-    assertQueryBudgetEntry(field, value);
+  const normalized = {...source};
+  for (const [upperKey, camelKey] of QB_FIELD_ENTRIES) {
+    const resolvedValue = resolveDimensionBudgetValue(
+      source,
+      upperKey,
+      camelKey,
+      DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey],
+    );
+    normalized[upperKey] = resolvedValue;
+    normalized[camelKey] = resolvedValue;
   }
-  return Object.freeze({...DEFAULT_QUERY_BUDGET, ...overrides});
-}
-
-/**
- * Whether a value is a budget produced by normalizeQueryBudget: a frozen
- * plain object holding exactly every limit, each a valid value.
- *
- * @param {*} budget - Candidate budget.
- * @return {boolean} True for a normalized budget.
- */
-function isNormalizedQueryBudget(budget) {
-  return isPlainObject(budget) && Object.isFrozen(budget) &&
-    Object.keys(budget).length === QUERY_BUDGET_FIELD_COUNT &&
-    Object.entries(budget).every(([field, value]) =>
-      isQueryBudgetEntry(field, value));
-}
-
-/**
- * Refuse anything but a normalized budget. Readers call this instead of
- * defaulting a missing or misspelled limit.
- *
- * @param {*} budget - Budget a reader received.
- * @return {Readonly<Object>} The same budget.
- * @throws {Error} When the budget is not normalized.
- */
-function requireNormalizedQueryBudget(budget) {
-  if (!isNormalizedQueryBudget(budget)) {
-    throw new Error(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED);
-  }
-  return budget;
+  return Object.freeze(normalized);
 }
 
 export {
@@ -249,9 +252,9 @@ export {
   NESTED_MAX_BYTES,
   MAX_INFLIGHT,
   DEFAULT_QUERY_BUDGET,
+  DEFAULT_EFFECTIVE_QUERY_BUDGET,
+  QB_FIELD,
   QUERY_BUDGET_ERROR_MSG,
   QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
   normalizeQueryBudget,
-  isNormalizedQueryBudget,
-  requireNormalizedQueryBudget,
 };

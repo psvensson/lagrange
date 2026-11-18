@@ -12,27 +12,27 @@ import {
   GUARDRAIL_ERROR_MSG as ERR,
 } from '../../src/query/guardrail-constants.js';
 import {
+  QB_FIELD,
   NESTED_MAX_CALLS,
   NESTED_MAX_KEYS,
   NESTED_MAX_BYTES,
   MAX_INFLIGHT,
-  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 import {buildStageContext} from '../../src/query/call-stage.js';
 
 describe('BudgetEnforcer — nested call budgets', () => {
   describe('recordNestedCall', () => {
     it('should increment nested call count', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedCall();
       enforcer.recordNestedCall();
       assert.equal(enforcer.getUsage().nestedCalls, 2);
     });
 
     it('should throw when nested call limit exceeded', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_CALLS: 2,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_CALLS]: 2,
+      });
       enforcer.recordNestedCall();
       enforcer.recordNestedCall();
       try {
@@ -52,7 +52,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should use default NESTED_MAX_CALLS constant', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       for (let i = 0; i < NESTED_MAX_CALLS; i++) {
         enforcer.recordNestedCall();
       }
@@ -65,16 +65,16 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
   describe('recordNestedKeys', () => {
     it('should accumulate nested key count', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedKeys(5);
       enforcer.recordNestedKeys(3);
       assert.equal(enforcer.getUsage().nestedKeys, 8);
     });
 
     it('should throw when nested key limit exceeded', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_KEYS: 10,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_KEYS]: 10,
+      });
       enforcer.recordNestedKeys(8);
       try {
         enforcer.recordNestedKeys(3);
@@ -93,7 +93,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should use default NESTED_MAX_KEYS constant', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedKeys(NESTED_MAX_KEYS - 1);
       assert.equal(enforcer.isExceeded(), false);
     });
@@ -101,16 +101,16 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
   describe('recordNestedBytes', () => {
     it('should accumulate nested byte count', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedBytes(1024);
       enforcer.recordNestedBytes(2048);
       assert.equal(enforcer.getUsage().nestedBytes, 3072);
     });
 
     it('should throw when nested byte limit exceeded', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_BYTES: 100,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_BYTES]: 100,
+      });
       try {
         enforcer.recordNestedBytes(101);
         assert.fail('Expected BudgetLimitError');
@@ -128,9 +128,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should throw on accumulated exceed', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_BYTES: 200,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_BYTES]: 200,
+      });
       enforcer.recordNestedBytes(150);
       assert.throws(
         () => enforcer.recordNestedBytes(51),
@@ -139,7 +139,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should use default NESTED_MAX_BYTES constant', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedBytes(NESTED_MAX_BYTES - 1);
       assert.equal(enforcer.isExceeded(), false);
     });
@@ -147,7 +147,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
   describe('inflight tracking', () => {
     it('should increment and decrement inflight', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.incrementInflight();
       enforcer.incrementInflight();
       assert.equal(enforcer.getUsage().inflight, 2);
@@ -158,15 +158,15 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should not go below zero on decrement', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.decrementInflight();
       assert.equal(enforcer.getUsage().inflight, 0);
     });
 
     it('should throw when max inflight exceeded', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        MAX_INFLIGHT: 2,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.MAX_INFLIGHT]: 2,
+      });
       enforcer.incrementInflight();
       enforcer.incrementInflight();
       try {
@@ -184,7 +184,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should use default MAX_INFLIGHT constant', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       for (let i = 0; i < MAX_INFLIGHT; i++) {
         enforcer.incrementInflight();
       }
@@ -194,9 +194,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
   describe('custom budget limits via constructor', () => {
     it('should accept custom nested call limit', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_CALLS: 5,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_CALLS]: 5,
+      });
       for (let i = 0; i < 5; i++) {
         enforcer.recordNestedCall();
       }
@@ -208,9 +208,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should accept custom nested keys limit', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_KEYS: 50,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_KEYS]: 50,
+      });
       enforcer.recordNestedKeys(50);
       assert.equal(enforcer.isExceeded(), false);
       assert.throws(
@@ -220,9 +220,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should accept custom nested bytes limit', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_BYTES: 512,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_BYTES]: 512,
+      });
       enforcer.recordNestedBytes(512);
       assert.equal(enforcer.isExceeded(), false);
       assert.throws(
@@ -232,9 +232,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should accept custom inflight limit', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        MAX_INFLIGHT: 3,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.MAX_INFLIGHT]: 3,
+      });
       enforcer.incrementInflight();
       enforcer.incrementInflight();
       enforcer.incrementInflight();
@@ -249,9 +249,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
   describe('terminated enforcer rejects nested recording',
     () => {
       it('should reject all nested methods', () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_CALLS: 1,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_CALLS]: 1,
+        });
         enforcer.recordNestedCall();
         assert.throws(() => enforcer.recordNestedCall());
         assert.equal(enforcer.isTerminated(), true);
@@ -277,33 +277,33 @@ describe('BudgetEnforcer — nested call budgets', () => {
   describe('isExceeded detects nested budget violations',
     () => {
       it('should detect nested calls exceeded', () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_CALLS: 5,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_CALLS]: 5,
+        });
         enforcer._usage.nestedCalls = 6;
         assert.equal(enforcer.isExceeded(), true);
       });
 
       it('should detect nested keys exceeded', () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_KEYS: 10,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_KEYS]: 10,
+        });
         enforcer._usage.nestedKeys = 11;
         assert.equal(enforcer.isExceeded(), true);
       });
 
       it('should detect nested bytes exceeded', () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_BYTES: 100,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_BYTES]: 100,
+        });
         enforcer._usage.nestedBytes = 101;
         assert.equal(enforcer.isExceeded(), true);
       });
 
       it('should detect inflight exceeded', () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          MAX_INFLIGHT: 2,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.MAX_INFLIGHT]: 2,
+        });
         enforcer._usage.inflight = 3;
         assert.equal(enforcer.isExceeded(), true);
       });
@@ -311,7 +311,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
   describe('getUsage includes nested fields', () => {
     it('should include all nested fields in usage', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       enforcer.recordNestedCall();
       enforcer.recordNestedKeys(5);
       enforcer.recordNestedBytes(256);
@@ -324,7 +324,7 @@ describe('BudgetEnforcer — nested call budgets', () => {
     });
 
     it('should return zero for nested fields initially', () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget());
+      const enforcer = new BudgetEnforcer();
       const usage = enforcer.getUsage();
       assert.equal(usage.nestedCalls, 0);
       assert.equal(usage.nestedKeys, 0);
@@ -356,10 +356,10 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
     it('should record nested call and inflight on call',
       async () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_CALLS: 10,
-          MAX_INFLIGHT: 5,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_CALLS]: 10,
+          [QB_FIELD.MAX_INFLIGHT]: 5,
+        });
         const execCtx = makeMockExecCtx(enforcer);
         const stageCtx = buildStageContext(execCtx, null);
 
@@ -373,10 +373,10 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
     it('should decrement inflight even on call failure',
       async () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_CALLS: 10,
-          MAX_INFLIGHT: 5,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_CALLS]: 10,
+          [QB_FIELD.MAX_INFLIGHT]: 5,
+        });
         const failCtx = {
           emit: () => {},
           out: () => {},
@@ -406,10 +406,10 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
     it('holds the inflight slot until a plan or stage call settles and ' +
       'releases it at once for an iterator call', async () => {
-      const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-        NESTED_MAX_CALLS: 10,
-        MAX_INFLIGHT: 5,
-      }));
+      const enforcer = new BudgetEnforcer({
+        [QB_FIELD.NESTED_MAX_CALLS]: 10,
+        [QB_FIELD.MAX_INFLIGHT]: 5,
+      });
       const BOUNDED_SQL = 'SELECT * FROM users WHERE id = 1 LIMIT 1';
       const settle = Promise.withResolvers();
       const iterator = {[Symbol.asyncIterator]() {
@@ -434,9 +434,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
 
     it('should throw when nested call budget exceeded',
       async () => {
-        const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-          NESTED_MAX_CALLS: 1,
-        }));
+        const enforcer = new BudgetEnforcer({
+          [QB_FIELD.NESTED_MAX_CALLS]: 1,
+        });
         const execCtx = makeMockExecCtx(enforcer);
         const stageCtx = buildStageContext(execCtx, null);
 
@@ -466,9 +466,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
           (limit, usage) => {
             if (limit === 0) return true;
             const safeUsage = usage % limit;
-            const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-              NESTED_MAX_CALLS: limit,
-            }));
+            const enforcer = new BudgetEnforcer({
+              [QB_FIELD.NESTED_MAX_CALLS]: limit,
+            });
             for (let i = 0; i < safeUsage; i++) {
               enforcer.recordNestedCall();
             }
@@ -487,9 +487,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
           (limit, usage) => {
             if (limit === 0) return true;
             const safeUsage = usage % limit;
-            const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-              NESTED_MAX_KEYS: limit,
-            }));
+            const enforcer = new BudgetEnforcer({
+              [QB_FIELD.NESTED_MAX_KEYS]: limit,
+            });
             enforcer.recordNestedKeys(safeUsage);
             return !enforcer.isTerminated();
           },
@@ -505,9 +505,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
           fc.nat({max: 999}),
           (limit, extra) => {
             const usage = limit + extra + 1;
-            const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-              NESTED_MAX_BYTES: limit,
-            }));
+            const enforcer = new BudgetEnforcer({
+              [QB_FIELD.NESTED_MAX_BYTES]: limit,
+            });
             try {
               enforcer.recordNestedBytes(usage);
               return false;
@@ -532,9 +532,9 @@ describe('BudgetEnforcer — nested call budgets', () => {
           fc.nat({max: 49}),
           (limit, usage) => {
             const safeUsage = usage % limit;
-            const enforcer = new BudgetEnforcer(normalizeQueryBudget({
-              MAX_INFLIGHT: limit,
-            }));
+            const enforcer = new BudgetEnforcer({
+              [QB_FIELD.MAX_INFLIGHT]: limit,
+            });
             for (let i = 0; i < safeUsage; i++) {
               enforcer.incrementInflight();
             }

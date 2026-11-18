@@ -1,11 +1,9 @@
 // docs/benchmarks/cloud/provision-gcp.sh, EXECUTED by bash. Only `gcloud` (a
 // stand-in keeping instances and firewall rules as files, recording each
-// call, the startup script and each VM's lifetime arguments) and, for --place,
-// the runner `node` starts (recording its arguments) are replaced; the create
-// step's lifetime rendering runs on the real node. Every value is named or a
-// printed documented default; no probe adapts the script; no failed step is
-// tolerated (census in the quest log, class repair CP-1..CP-6). Evidence
-// ceiling: no real gcloud.
+// call and the startup script) and, for --place, `node` (recording its
+// arguments) are replaced. Every value is named or a printed documented
+// default; no probe adapts the script; no failed step is tolerated (census in
+// the quest log, class repair CP-1..CP-6). Evidence ceiling: no real gcloud.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -25,26 +23,11 @@ import {
   stringSplit,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
-import {gcpVmLifetimeGcloudArgs} from '../gcp-vm-lifetime.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const SCRIPT = path.join(ROOT, 'docs/benchmarks/cloud/provision-gcp.sh');
 const BASH = stringTrim(spawnSync('sh', ['-c', 'command -v bash'], {encoding: 'utf8'}).stdout);
 const NODES = arrayMap([1, 2, 3, 4, 5, 6], (n) => `lagrange-bench-${n}`);
-const RUNNER = path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs');
-// The provider contract every created VM carries (Compute Engine maxRunDuration,
-// DELETE on expiry, boot disk deleted with the VM); seven hours by default here.
-const LIFETIME_SECONDS = '25200';
-const LIFETIME_ARGS = ['--max-run-duration=25200s', '--instance-termination-action=DELETE',
-  '--boot-disk-auto-delete'];
-const MALFORMED_LIFETIMES = [
-  '0', '-60', '1.5', '060', '1e3', '0x10', ' 60', '60 ', '60\n', '60s', '7h', '1d2h3m4s',
-  'tomorrow', '2026-11-17T20:00:00Z', '99999999999999999999',
-  '60 --instance-termination-action=STOP',
-];
-const LIFETIME_NOT_SET = 'Error: VM_MAX_RUN_DURATION_SECONDS is not set';
-const LIFETIME_MALFORMED = 'Error: VM_MAX_RUN_DURATION_SECONDS must be a positive whole ' +
-  'number of seconds';
 
 const GCLOUD = `#!/bin/sh
 S="$GCLOUD_STATE"
@@ -59,19 +42,11 @@ case "$1 $2 $3" in
     echo "lagrange-distributed-harness-v1"; exit 0 ;;
   "compute instances create")
     shift 3
-    printf '%s\\0' "$@" > "$S/create-argv"
-    lifetime=""
-    for a in "$@"; do
-      case "$a" in
-        --max-run-duration=*|--termination-time=*|--instance-termination-action=*|--*boot-disk-auto-delete)
-          lifetime="$lifetime $a" ;;
-      esac
-    done
     for a in "$@"; do
       case "$a" in
         --metadata-from-file=startup-script=*) cp "\${a#--metadata-from-file=startup-script=}" "$S/startup-script" ;;
         --*) ;;
-        *) printf '%s' "$lifetime" > "$S/instances/$a" ;;
+        *) touch "$S/instances/$a" ;;
       esac
     done
     exit 0 ;;
@@ -126,20 +101,9 @@ function seedStandInState(dir, state, {instances, firewall, flags}) {
   }
 }
 
-// Records the runner call --place makes; anything else (the create step's
-// lifetime rendering) runs on the real node.
-function nodeStandIn(nodeArgv) {
-  return `#!${process.execPath}\nconst args = process.argv.slice(2);\n` +
-    `if (args[0] === ${JSON.stringify(RUNNER)}) {\n` +
-    `  require('fs').writeFileSync(${JSON.stringify(nodeArgv)}, JSON.stringify(args));\n` +
-    '} else {\n  process.exitCode = require(\'child_process\').spawnSync(process.execPath, ' +
-    'args, {stdio: \'inherit\'}).status;\n}\n';
-}
-
 /**
  * Run the script once. `state` sets up the stand-in's cloud before the run:
- * instances present, firewall rules (name -> rule text) and flag files. Each
- * instance file holds the lifetime arguments its creation call carried.
+ * instances present, firewall rules (name -> rule text) and flag files.
  */
 function runScript({args = [], env = {}, instances = [], firewall = {}, flags = []} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'provision-gcp-'));
@@ -148,7 +112,9 @@ function runScript({args = [], env = {}, instances = [], firewall = {}, flags = 
   fs.mkdirSync(bin, {recursive: true});
   fs.writeFileSync(path.join(bin, 'gcloud'), GCLOUD, {mode: 0o755});
   const nodeArgv = path.join(dir, 'node-argv.json');
-  fs.writeFileSync(path.join(bin, 'node'), nodeStandIn(nodeArgv), {mode: 0o755});
+  fs.writeFileSync(path.join(bin, 'node'), `#!${process.execPath}\n` +
+    `require('fs').writeFileSync(${JSON.stringify(nodeArgv)}, ` +
+    'JSON.stringify(process.argv.slice(2)));\n', {mode: 0o755});
   seedStandInState(dir, state, {instances, firewall, flags});
   const key = path.join(dir, 'bench.pub');
   fs.writeFileSync(key, 'ssh-ed25519 AAAAC3Nza bench@controller\n');
@@ -156,17 +122,12 @@ function runScript({args = [], env = {}, instances = [], firewall = {}, flags = 
   const result = spawnSync(BASH, ['-c', `"$0" "$@" >> ${JSON.stringify(path.join(state, 'log'))} ` +
     `2>> ${JSON.stringify(out)}`, SCRIPT, ...args], {encoding: 'utf8',
     env: {PATH: `${bin}:${process.env.PATH}`, HOME: dir, GCLOUD_STATE: state, USER: 'probed-user',
-      PROJECT_ID: 'bench-project', SSH_USER: 'bench', SSH_PUBLIC_KEY_FILE: key,
-      VM_MAX_RUN_DURATION_SECONDS: LIFETIME_SECONDS, ...env}});
+      PROJECT_ID: 'bench-project', SSH_USER: 'bench', SSH_PUBLIC_KEY_FILE: key, ...env}});
   const read = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
-  const present = fs.readdirSync(path.join(state, 'instances')).sort();
   const lines = arrayFilter(stringSplit(read(path.join(state, 'log')), '\n'), Boolean);
   return {status: result.status, lines, stderr: read(out),
     calls: arrayFilter(lines, (line) => /^gcloud /u.test(line)),
-    createArgv: arrayFilter(stringSplit(read(path.join(state, 'create-argv')), '\0'), Boolean),
-    instances: present,
-    lifetimes: arrayMap(present, (name) =>
-      arrayFilter(stringSplit(read(path.join(state, 'instances', name)), ' '), Boolean)),
+    instances: fs.readdirSync(path.join(state, 'instances')).sort(),
     firewall: fs.readdirSync(path.join(state, 'firewall')),
     startup: read(path.join(state, 'startup-script')),
     nodeArgv: fs.existsSync(nodeArgv) ? JSON.parse(read(nodeArgv)) : null, key};
@@ -181,7 +142,6 @@ function refusedBeforeGcloud(run, message) {
   assert.ok(stringIncludes(run.stderr, message), run.stderr);
   assert.deepEqual(run.calls, [], 'refused before any gcloud call');
   assert.deepEqual(run.instances, []);
-  assert.deepEqual(run.firewall, [], 'refused before creating a firewall rule');
 }
 
 function created(run) {
@@ -200,8 +160,7 @@ test('create: the gcloud account and every value in use, documented defaults inc
     '[gcp] project bench-project, zone us-central1-a, machine type e2-standard-4, prefix ' +
       'lagrange-bench, network default',
     '[gcp] VM image: family ubuntu-2404-lts-amd64 in project ubuntu-os-cloud',
-    '[gcp] boot disk 50GB pd-ssd, firewall allows tcp:1-65535,udp:1-65535,icmp',
-    `[gcp] VM lifetime: every VM is created with ${arrayJoin(LIFETIME_ARGS, ' ')}`]) {
+    '[gcp] boot disk 50GB pd-ssd, firewall allows tcp:1-65535,udp:1-65535,icmp']) {
     const at = arrayFindIndex(run.lines, (line) => line === printed);
     assert.ok(at >= 0 && at < firstCreate, `${printed}\n${arrayJoin(run.lines, '\n')}`);
   }
@@ -227,38 +186,6 @@ test('create: the gcloud account and every value in use, documented defaults inc
   assert.equal(noAccount.status, 1);
   assert.ok(stringIncludes(noAccount.stderr, 'no active gcloud account'), noAccount.stderr);
   assert.deepEqual(called(noAccount, / create /u), []);
-});
-
-test('create: every VM is created with the provider-enforced lifetime bound, rendered from ' +
-  'its one definition: maxRunDuration, DELETE on expiry, boot disk deleted with the VM', () => {
-  for (const [seconds, args] of [[LIFETIME_SECONDS, LIFETIME_ARGS],
-    ['1', ['--max-run-duration=1s', '--instance-termination-action=DELETE',
-      '--boot-disk-auto-delete']]]) {
-    const run = runScript({env: {VM_MAX_RUN_DURATION_SECONDS: seconds}});
-    assert.equal(run.status, 0, run.stderr);
-    created(run);
-    assert.deepEqual(arrayFilter(run.createArgv, (arg) => !/^--/u.test(arg)), NODES);
-    assert.deepEqual(run.instances, NODES);
-    assert.deepEqual(run.lifetimes, arrayMap(NODES, () => args), 'every created VM carries it');
-    assert.deepEqual(gcpVmLifetimeGcloudArgs(Number(seconds), 'bound'), args,
-      'the script forwards exactly what the shared definition renders');
-  }
-});
-
-test('create: an absent or empty lifetime bound is refused before any gcloud call or ' +
-  'resource mutation; no VM is ever created unbounded', () => {
-  for (const env of [{VM_MAX_RUN_DURATION_SECONDS: undefined},
-    {VM_MAX_RUN_DURATION_SECONDS: ''}]) {
-    refusedBeforeGcloud(runScript({env}), LIFETIME_NOT_SET);
-  }
-});
-
-test('create: a malformed lifetime bound is refused before any gcloud call or resource ' +
-  'mutation', () => {
-  for (const seconds of MALFORMED_LIFETIMES) {
-    refusedBeforeGcloud(runScript({env: {VM_MAX_RUN_DURATION_SECONDS: seconds}}),
-      LIFETIME_MALFORMED);
-  }
 });
 
 // The stand-in answers a pre-baked family as present: a probe would find it.
@@ -341,9 +268,7 @@ test('create: the startup script installs docker.io and git unconditionally; a V
 test('teardown: reports deleted, already absent and failed; any failure exits non-zero naming ' +
   'what may still be billed; complete only after asking that none remains', () => {
   const rule = {'lagrange-bench-internal': 'created by an earlier run'};
-  // A creation-only setting cannot prevent cleanup of already-created resources.
-  const all = runScript({args: ['--teardown'], instances: NODES, firewall: rule,
-    env: {VM_MAX_RUN_DURATION_SECONDS: MALFORMED_LIFETIMES[0]}});
+  const all = runScript({args: ['--teardown'], instances: NODES, firewall: rule});
   assert.equal(all.status, 0, all.stderr);
   const firstDelete = arrayFindIndex(all.lines, (l) => / delete /u.test(l));
   const accountAt = arrayFindIndex(all.lines, (l) =>
@@ -354,7 +279,7 @@ test('teardown: reports deleted, already absent and failed; any failure exits no
   assert.deepEqual(all.instances, []);
   assert.ok(arraySome(all.lines, (l) => l === '[gcp] Teardown complete: no VM of lagrange-bench ' +
     'remains in bench-project/us-central1-a.'));
-  const none = runScript({args: ['--teardown'], env: {VM_MAX_RUN_DURATION_SECONDS: undefined}});
+  const none = runScript({args: ['--teardown']});
   assert.equal(none.status, 0, none.stderr);
   assert.ok(arraySome(none.lines, (l) => l === '[gcp] VM lagrange-bench-1 already absent'));
   assert.ok(arraySome(none.lines,
@@ -411,10 +336,10 @@ test('--place: every value the create step printed is required (usage, exit 2, n
       'step printed'), run.stderr);
     assert.equal(run.nodeArgv, null, `${missing}: nothing ran`);
   }
-  const run = place({...printed, VM_MAX_RUN_DURATION_SECONDS: MALFORMED_LIFETIMES[0]});
+  const run = place(printed);
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(run.nodeArgv, [
-    RUNNER,
+    path.join(ROOT, 'docs/benchmarks/cloud/run-comparative-benchmarks.mjs'),
     '--execution-target', 'gcp', '--provision', '--hosts', printed.HOSTS,
     '--ssh-hosts', '1.2.3.4', '--ssh-user', 'bench', '--vm-image-family', 'ubuntu-2404-lts-amd64',
     '--vm-image-project', 'ubuntu-os-cloud', '--vm-boot-disk-size', '50GB',

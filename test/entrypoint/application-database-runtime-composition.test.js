@@ -1,5 +1,5 @@
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
-import {hostname, tmpdir} from 'node:os';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {createEmbeddedLagrangeHandle} from '../../src/embedded-lagrange.js';
@@ -341,7 +341,7 @@ test('real dry-run startup awaits CLI configuration overrides', async (t) => {
         node: {id: 'embedded-startup-test'},
         storage: {dataDir: configuredDataDir},
       },
-      environment: {NODE_ID: 'embedded-startup-test', NODE_HOST_ID: hostname()},
+      environment: {NODE_ID: 'embedded-startup-test'},
     });
     t.equal(runtime.dryRun, true);
     t.equal(ConfigurationManager.getInstance().get('storage.dataDir'),

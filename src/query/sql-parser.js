@@ -33,12 +33,6 @@ import {sqlParserSchemaMutationMethods} from
   './sql-parser-schema-mutation-methods.js';
 import {sqlParserSelectMethods} from './sql-parser-select-methods.js';
 import {
-  nodeSqlParserText,
-  orderedExternalSelects,
-  sourceSelectListSpans,
-  sqliteAcceptsGrammar,
-} from './sql-parser-source-text.js';
-import {
   stripAndValidateLockingClause,
   validateSelectAstLocking,
 } from './sql-locking-read-grammar.js';
@@ -62,11 +56,7 @@ const PARSER_ERROR_MSG = Object.freeze({
   UNSUPPORTED_CREATE_TYPE_PREFIX: 'Unsupported CREATE type: ',
   UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
-  RESERVED_PARAMETER_NAME: 'The parameter name is reserved by the SQL front end',
-  RESULT_COLUMN_SPANS_UNREADABLE:
-    'The result column names of this statement cannot be read from its text',
 });
-const EXTERNAL_SELECT_TYPE = 'select';
 
 const PARSER_CONFIG = Object.freeze({
   DATABASE: 'sqlite',
@@ -398,58 +388,18 @@ function parseDropIndexAst(sql) {
  * @param {string} sql - Original SQL.
  * @param {Object} logger - Subsystem logger.
  */
-function handleParseError(error, sql, logger, grammarText) {
+function handleParseError(error, sql, logger) {
   const errorMsg = PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX + error.message;
   logger.error(errorMsg, {sql});
   if (error.code === QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED ||
       error.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE) {
-    throw typedUnsupportedError(error);
-  }
-  // A statement the front end could not read that SQLite's own grammar
-  // accepts is valid SQL this front end does not carry: the typed refusal,
-  // not a syntax error (sql-parser-source-text.js).
-  if (error.code === undefined && typeof grammarText === 'string' &&
-      sqliteAcceptsGrammar(grammarText)) {
-    throw createTypedParseError(QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, errorMsg);
+    throw error;
   }
   const parseError = new Error(errorMsg);
   if (error.code === QUERY_ERROR_CODE.EMPTY_STATEMENT) {
     parseError.code = error.code;
   }
   throw parseError;
-}
-
-function typedUnsupportedError(error) {
-  if (error.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE && !error.sqlState) {
-    error.sqlState = PG_ERROR_CODE.FEATURE_NOT_SUPPORTED;
-    error.details = Object.freeze({sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED});
-  }
-  return error;
-}
-
-/**
- * The source span of every unaliased result column, keyed by its
- * node-sql-parser column node, for a SELECT statement in SQLite mode. The
- * SELECT nodes and the SELECT keywords of the text pair up in source order;
- * when they do not, the statement is refused rather than misnamed.
- * @param {Object} statement - node-sql-parser statement.
- * @param {string} text - The text it was parsed from (before respelling).
- * @return {Map<Object, string>}
- */
-function resultColumnSpans(statement, text) {
-  const spans = new Map();
-  if (statement?.type !== EXTERNAL_SELECT_TYPE) return spans;
-  const selects = orderedExternalSelects(statement);
-  const scopes = sourceSelectListSpans(text);
-  if (selects.length !== scopes.length ||
-      selects.some((select, index) => select.columns.length !== scopes[index].length)) {
-    throw createTypedParseError(QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
-      PARSER_ERROR_MSG.RESULT_COLUMN_SPANS_UNREADABLE);
-  }
-  selects.forEach((select, index) => select.columns.forEach((column, position) => {
-    if (!column.as) spans.set(column, scopes[index][position]);
-  }));
-  return spans;
 }
 
 class SQLParser {
@@ -462,7 +412,6 @@ class SQLParser {
     this.logger = this.initLogger();
     this.positionalParams = [];
     this.parameterCounter = 0;
-    this.columnSpans = new Map();
   }
 
   initLogger() {
@@ -493,25 +442,17 @@ class SQLParser {
     const {sql: parseSql, hasLocking} =
       stripAndValidateLockingClause(this.sql);
 
-    let grammarText = null;
     try {
-      const sqliteMode = this.dialect !== PARSER_DIALECT.POSTGRESQL;
-      const dbMode = sqliteMode ? PARSER_CONFIG.DATABASE : PARSER_CONFIG.DATABASE_PG;
+      const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
+        PARSER_CONFIG.DATABASE_PG :
+        PARSER_CONFIG.DATABASE;
       const normalizedSql = normalizeDollarQuotedStrings(parseSql);
       const createTableInput = extractCreateTableStorageOptions(normalizedSql);
-      grammarText = sqliteMode ? createTableInput.sql : null;
-      const parseText = sqliteMode ? nodeSqlParserText(createTableInput.sql) :
-        {text: createTableInput.sql, usesReservedName: false};
-      if (parseText.usesReservedName) {
-        throw createTypedParseError(QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
-          PARSER_ERROR_MSG.RESERVED_PARAMETER_NAME);
-      }
-      const externalAst = this.parser.astify(parseText.text, {database: dbMode});
-      const statement = Array.isArray(externalAst) ?
-        requireSingleStatement(externalAst) : externalAst;
-      this.columnSpans = sqliteMode ?
-        resultColumnSpans(statement, createTableInput.sql) : new Map();
-      const ast = this.convertAst(statement);
+      const externalAst = this.parser.astify(
+        createTableInput.sql,
+        {database: dbMode},
+      );
+      const ast = this.convertAst(externalAst);
       if (createTableInput.options && ast.type === AST_TYPE.CREATE_TABLE) {
         ast.options = createTableInput.options;
       }
@@ -523,7 +464,7 @@ class SQLParser {
       validateSelectAstLocking(ast, hasLocking);
       return ast;
     } catch (error) {
-      handleParseError(error, this.sql, this.logger, grammarText);
+      handleParseError(error, this.sql, this.logger);
     }
   }
 

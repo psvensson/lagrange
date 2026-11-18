@@ -28,10 +28,10 @@ import {
   BUDGET_CATEGORY,
 } from '../../src/query/budget-limit-error.js';
 import {
+  QB_FIELD,
   DEFAULT_QUERY_BUDGET,
   QUERY_BUDGET_ERROR_MSG,
   QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
-  normalizeQueryBudget,
 } from '../../src/wasm-service/query-budget-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createRuntimeStartupWiring} from
@@ -249,7 +249,7 @@ test('executeRequest - throws for unknown execution mode', async (t) => {
     statement: 'SELECT 1',
     parameters: [],
     executionMode: 'unknown_mode',
-    budgets: normalizeQueryBudget(),
+    budgets: Object.freeze({}),
     hints: null,
   });
 
@@ -387,23 +387,25 @@ async (t) => {
   t.same(rowLimited.inputs, [{id: 1, v: 'ab'}], 'input fits the real read budget');
   t.same(rowLimited.outputs, [{id: 1, v: 'ab'}], 'only the first output was accepted');
 
-  // 3) Custom result-byte limit on default stream
+  // 3) Custom result-byte limit on default stream (both uppercase & camelCase)
   // Each row {"id":1,"v":"ab"} is 17 bytes; limit 20 allows 1st and rejects 2nd
-  const byteLimited = {inputs: [], outputs: []};
-  const byteLimitReq = createExpandingStageRequest({RESULT_MAX_BYTES: 20}, byteLimited);
-  try {
-    await engine.executeRequest(byteLimitReq);
-    t.fail('should have rejected on result byte budget');
-  } catch (err) {
-    t.ok(err instanceof BudgetLimitError);
-    t.equal(err.message, QUERY_BUDGET_ERROR_MSG.RESULT_MAX_BYTES_EXCEEDED);
-    t.equal(err.limit, 20);
+  for (const byteBudget of [{RESULT_MAX_BYTES: 20}, {resultMaxBytes: 20}]) {
+    const byteLimited = {inputs: [], outputs: []};
+    const byteLimitReq = createExpandingStageRequest(byteBudget, byteLimited);
+    try {
+      await engine.executeRequest(byteLimitReq);
+      t.fail('should have rejected on result byte budget');
+    } catch (err) {
+      t.ok(err instanceof BudgetLimitError);
+      t.equal(err.message, QUERY_BUDGET_ERROR_MSG.RESULT_MAX_BYTES_EXCEEDED);
+      t.equal(err.limit, 20);
+    }
+    t.same(byteLimited.inputs, [{id: 1, v: 'ab'}]);
+    t.same(byteLimited.outputs, [{id: 1, v: 'ab'}]);
   }
-  t.same(byteLimited.inputs, [{id: 1, v: 'ab'}]);
-  t.same(byteLimited.outputs, [{id: 1, v: 'ab'}]);
 
   // 4) Explicitly injected budgeted stream -> preserved and enforced
-  const injectedStream = new ResultStream(normalizeQueryBudget({RESULT_MAX_ROWS: 1}));
+  const injectedStream = new ResultStream({RESULT_MAX_ROWS: 1});
   const injected = {inputs: [], outputs: []};
   const injectedReq = createExpandingStageRequest(
     {RESULT_MAX_ROWS: 10}, injected, injectedStream,
@@ -440,102 +442,99 @@ test('executeRequest STAGE - bounded input collection refuses before the handler
   'input was refused for the named row bound');
 });
 
-test('executeRequest STAGE - enforces OUT_MAX_BYTES, refuses budgets that ' +
-  'are not normalized, and carries every dimension to its reader',
+test('executeRequest STAGE - normalizes OUT_MAX_BYTES and outMaxBytes ' +
+  'and rejects conflicting budget limits across all dimensions',
 async (t) => {
   const {engine, close} = createSqliteBackedEngine();
   t.teardown(close);
 
-  // 5a) OUT_MAX_BYTES: 1 rejects the 17-byte write {"id":1,"v":"ab"}
-  const tightOutReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {OUT_MAX_BYTES: 1},
-    }),
-    handler: async (batch, stageCtx) => {
-      await stageCtx.out(batch[0]);
-    },
-  });
-  try {
-    await engine.executeRequest(tightOutReq);
-    t.fail('should have rejected on out byte budget');
-  } catch (err) {
-    t.ok(err instanceof BudgetLimitError);
-    t.equal(err.category, BUDGET_CATEGORY.OUT_BYTES);
-    t.equal(err.limit, 1);
-    t.equal(err.usage, 17);
+  // 5a) OUT_MAX_BYTES: 1 (uppercase) AND outMaxBytes: 1 (camelCase)
+  // both reject 17-byte write {"id":1,"v":"ab"} with BudgetLimitError
+  for (const outBudget of [{OUT_MAX_BYTES: 1}, {[QB_FIELD.OUT_MAX_BYTES]: 1}]) {
+    const tightOutReq = Object.freeze({
+      ...createSqlRequest({
+        statement: 'SELECT id, v FROM users ORDER BY id',
+        executionMode: EXECUTION_MODE.STAGE,
+        budgets: outBudget,
+      }),
+      handler: async (batch, stageCtx) => {
+        await stageCtx.out(batch[0]);
+      },
+    });
+    try {
+      await engine.executeRequest(tightOutReq);
+      t.fail('should have rejected on out byte budget');
+    } catch (err) {
+      t.ok(err instanceof BudgetLimitError);
+      t.equal(err.category, BUDGET_CATEGORY.OUT_BYTES);
+      t.equal(err.limit, 1);
+      t.equal(err.usage, 17);
+    }
   }
 
-  // 5b) OUT_MAX_BYTES: 128 -> succeeds
-  const okReq = Object.freeze({
-    ...createSqlRequest({
-      statement: 'SELECT id, v FROM users ORDER BY id',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {OUT_MAX_BYTES: 128},
-    }),
-    handler: async (batch, stageCtx) => {
-      for (const row of batch) {
-        await stageCtx.out(row);
-      }
-      return batch.length;
-    },
-  });
-  const okRes = await engine.executeRequest(okReq);
-  t.equal(okRes.success, true);
-  t.same(okRes.results, [2]);
-
-  // A field that is not a canonical limit name is refused, never defaulted:
-  // at request construction, and at direct admission of a request whose
-  // budget was replaced after construction (before the handler runs).
-  for (const budgets of [
-    {outMaxBytes: 1},
-    {OUT_MAX_BYTES: 1, outMaxBytes: 1},
-    {OUT_MAX_BYTE: 1},
+  // 5b) OUT_MAX_BYTES: 128 and outMaxBytes: 128 -> both succeed
+  for (const generousBudget of [
+    {OUT_MAX_BYTES: 128},
+    {[QB_FIELD.OUT_MAX_BYTES]: 128},
   ]) {
-    t.throws(
-      () => createSqlRequest({statement: 'SELECT 1', budgets}),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.UNKNOWN_BUDGET_FIELD),
+    const okReq = Object.freeze({
+      ...createSqlRequest({
+        statement: 'SELECT id, v FROM users ORDER BY id',
+        executionMode: EXECUTION_MODE.STAGE,
+        budgets: generousBudget,
+      }),
+      handler: async (batch, stageCtx) => {
+        for (const row of batch) {
+          await stageCtx.out(row);
+        }
+        return batch.length;
+      },
+    });
+    const okRes = await engine.executeRequest(okReq);
+    t.equal(okRes.success, true);
+    t.same(okRes.results, [2]);
+  }
+
+  // Both canonical construction and direct request admission reject conflicts.
+  for (const upperLimit of [128, DEFAULT_QUERY_BUDGET.OUT_MAX_BYTES]) {
+    const budgets = {OUT_MAX_BYTES: upperLimit, outMaxBytes: upperLimit + 1};
+    const conflictPattern = new RegExp(
+      QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS,
     );
-    const rawBudgetReq = Object.freeze({
+    t.throws(() => createSqlRequest({statement: 'SELECT 1', budgets}), conflictPattern);
+    const conflictReq = Object.freeze({
       ...createSqlRequest({
         statement: 'SELECT id, v FROM users ORDER BY id',
         executionMode: EXECUTION_MODE.STAGE,
       }),
       budgets,
-      handler: async () => t.fail('a raw budget must refuse before the handler'),
+      handler: async () => t.fail('conflicting budgets must refuse before the handler'),
     });
-    await t.rejects(
-      engine.executeRequest(rawBudgetReq),
-      {message: ADAPTER_ERROR_MSG.INVALID_SQL_REQUEST},
-    );
-  }
-  for (const limit of ['7', -1, 1.5, Number.NaN, null]) {
-    t.throws(
-      () => createSqlRequest({statement: 'SELECT 1', budgets: {OUT_MAX_BYTES: limit}}),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_LIMIT),
-    );
+    await t.rejects(engine.executeRequest(conflictReq), conflictPattern);
   }
 
   // 6) Audit all 14 budget dimensions between SqlRequest and BudgetEnforcer / ResultStream
-  for (const field of Object.keys(DEFAULT_QUERY_BUDGET)) {
-    const request = createSqlRequest({
-      statement: 'SELECT id, v FROM users',
-      executionMode: EXECUTION_MODE.STAGE,
-      budgets: {[field]: 77},
-    });
-    const ctx = engine.createRequestExecutionContext(request);
-    t.equal(ctx._budgets, request.budgets, `${field}: the context reads the request budget`);
-    t.equal(ctx._budgets[field], 77);
-    const enforcedLimits = [
-      ...Object.values(ctx.getBudgetEnforcer()._limits),
-      ctx._resultStream.maxRows,
-      ctx._resultStream.maxBytes,
-    ];
-    t.equal(
-      enforcedLimits.filter((limit) => limit === 77).length,
-      1,
-      `${field} reaches exactly one enforced limit`,
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    const ctxUpper = engine.createRequestExecutionContext(
+      createSqlRequest({
+        statement: 'SELECT id, v FROM users',
+        executionMode: EXECUTION_MODE.STAGE,
+        budgets: {[upperKey]: 77},
+      }),
     );
+    const ctxCamel = engine.createRequestExecutionContext(
+      createSqlRequest({
+        statement: 'SELECT id, v FROM users',
+        executionMode: EXECUTION_MODE.STAGE,
+        budgets: {[camelKey]: 77},
+      }),
+    );
+    t.equal(ctxUpper._budgets[upperKey], 77);
+    t.equal(ctxUpper._budgets[camelKey], 77);
+    t.equal(ctxCamel._budgets[upperKey], 77);
+    t.equal(ctxCamel._budgets[camelKey], 77);
+    t.same(ctxUpper.getBudgetEnforcer()._limits, ctxCamel.getBudgetEnforcer()._limits);
+    t.equal(ctxUpper._resultStream.maxRows, ctxCamel._resultStream.maxRows);
+    t.equal(ctxUpper._resultStream.maxBytes, ctxCamel._resultStream.maxBytes);
   }
 });

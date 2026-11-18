@@ -5,7 +5,6 @@
  * Requirements: 1.2, 7.2, 7.3, 7.4
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -617,7 +616,6 @@ test('BootstrapAPI - bootstrap join readiness reuses the seed runtime owner read
       recordProbeResult() {},
     };
     const bootstrapService = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node-1',
       nodeAddress: '127.0.0.1:9999',

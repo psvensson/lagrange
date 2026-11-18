@@ -37,12 +37,15 @@ const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
   ' operation visibility is deferred for safe removal';
 
 // Scopes for the single authoritative post-removal quorum predicate. Each names a
-// distinct floor (see projectQuorumAfterRemoval).
+// distinct floor that the remove-safety evaluation enforces at a different call site —
+// they are NOT three copies of one floor (see projectQuorumAfterRemoval).
 const QUORUM_PROJECTION_SCOPE = Object.freeze({
-  // Voter-ready ROW count (the partition's voter rows on READY-lease nodes) vs
-  // minReplicaCount. Every partition removal, REMOVE and REPLACE source
-  // removal alike, on every path: no cluster-node union ever raises it.
+  // Voter-ready ROW count vs minReplicaCount, on the non-completion-safe path.
   SIMPLE_FLOOR: 'simple-floor',
+  // Voter-ready count vs minReplicaCount on the completion-safe (R1) path, where the
+  // OPTIMISTIC recovery-projection node-union may raise the count (the documented
+  // over-removal seam — recoveryProjectionNodeIds can include catch-up learners).
+  COMPLETION_SAFE_FLOOR: 'completion-safe-floor',
   // Distinct-NODE spread vs the published requiredDistinctNodeCount.
   PUBLISHED_SPREAD: 'published-spread',
 });
@@ -51,9 +54,16 @@ const QUORUM_PROJECTION_SCOPE = Object.freeze({
  * Project the distinct-node spread floor for one serialized removal.
  * @param {Object} input
  * @param {Object[]} projectedVoterReadyRows
+ * @param {number} projectedVoterReadyCount
+ * @param {number} effectiveProjectedVoterReadyCount
  * @returns {Object}
  */
-function projectPublishedSpreadAfterRemoval(input, projectedVoterReadyRows) {
+function projectPublishedSpreadAfterRemoval(
+  input,
+  projectedVoterReadyRows,
+  projectedVoterReadyCount,
+  effectiveProjectedVoterReadyCount,
+) {
   const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
   const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
     projectedVoterReadyRows,
@@ -94,22 +104,30 @@ function projectPublishedSpreadAfterRemoval(input, projectedVoterReadyRows) {
       need: requiredPostRemovalDistinctNodeCount,
     };
   return Object.freeze({
-    projectedVoterReadyCount: projectedVoterReadyRows.length,
+    projectedVoterReadyCount,
+    effectiveProjectedVoterReadyCount,
     projectedDistinctNodeCount,
     currentDistinctNodeCount,
     requiredDistinctNodeCount,
     requiredPostRemovalDistinctNodeCount,
+    completionSafe: input.completionSafe === true,
     floorSatisfied,
     reason,
   });
 }
 
 /**
- * One authoritative projection of the post-removal quorum, shared by the floor
- * sites in this module and the universal tier. Pure and synchronous. The
- * `scope` names which floor is projected: the voter-ready row count against
- * minReplicaCount, or the distinct-node spread against the published
- * requirement.
+ * One authoritative projection of the post-removal quorum, shared by the three floor
+ * sites in this module. Pure and synchronous — the caller resolves the async planning
+ * snapshot (see resolvePriorityRecoveryQuorumProjection) and passes its
+ * recoveryProjectionNodeIds in. It does NOT collapse the three floors into one uniform
+ * rule: the `scope` parameter is the explicit encoding of today's asymmetry (the
+ * completion-safe path counts the optimistic node-union; the others do not), so the
+ * asymmetry lives in one function instead of three drifting call sites. The structured
+ * result exposes BOTH the strict `projectedVoterReadyCount` and the optimistic
+ * `effectiveProjectedVoterReadyCount`, so a future over-removal fix has a single place to
+ * branch on `completionSafe && effectiveProjectedVoterReadyCount > projectedVoterReadyCount`.
+ * This is a behavior-PRESERVING consolidation; it changes no accept/defer decision.
  * @param {Object} input
  * @returns {Object}
  */
@@ -117,18 +135,104 @@ function projectQuorumAfterRemoval(input) {
   const projectedVoterReadyRows = Array.isArray(input.projectedVoterReadyRows) ?
     input.projectedVoterReadyRows :
     [];
-  if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
-    return projectPublishedSpreadAfterRemoval(input, projectedVoterReadyRows);
-  }
   const projectedVoterReadyCount = projectedVoterReadyRows.length;
-  const floorSatisfied = projectedVoterReadyCount >= input.minReplicaCount;
+  const recoveryProjectionNodeIds = Array.isArray(input.recoveryProjectionNodeIds) ?
+    input.recoveryProjectionNodeIds :
+    null;
+  const effectiveProjectedVoterReadyCount =
+    input.completionSafe === true && recoveryProjectionNodeIds ?
+      Math.max(projectedVoterReadyCount, recoveryProjectionNodeIds.length) :
+      projectedVoterReadyCount;
+
+  if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
+    return projectPublishedSpreadAfterRemoval(
+      input,
+      projectedVoterReadyRows,
+      projectedVoterReadyCount,
+      effectiveProjectedVoterReadyCount,
+    );
+  }
+
+  let floorSatisfied = true;
+  let reason = null;
+  if (input.scope === QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR) {
+    floorSatisfied = projectedVoterReadyCount >= input.minReplicaCount;
+    if (!floorSatisfied) {
+      reason = {kind: 'below-min', got: projectedVoterReadyCount, need: input.minReplicaCount};
+    }
+  } else if (input.scope === QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR) {
+    floorSatisfied = effectiveProjectedVoterReadyCount >= input.minReplicaCount;
+    if (!floorSatisfied) {
+      reason = {kind: 'below-min', got: effectiveProjectedVoterReadyCount, need: input.minReplicaCount};
+    }
+  }
+
   return Object.freeze({
     projectedVoterReadyCount,
+    effectiveProjectedVoterReadyCount,
     minReplicaCount: input.minReplicaCount,
+    completionSafe: input.completionSafe === true,
     floorSatisfied,
-    reason: floorSatisfied ?
-      null :
-      {kind: 'below-min', got: projectedVoterReadyCount, need: input.minReplicaCount},
+    reason,
+  });
+}
+
+/**
+ * Async wrapper for the completion-safe floor: resolves the priority-recovery planning
+ * snapshot, derives the optimistic recovery-projection node-union, and runs the pure
+ * predicate. Equivalent to the former resolvePriorityRecoveryProjectedVoterReadyCount
+ * (no snapshot => effective count is just the row count), now returning the structured
+ * projection instead of a bare number.
+ * @param {Object} context - Segment/Class context instance.
+ * @param {Object} operation
+ * @param {Object[]} projectedVoterReadyRows
+ * @param {number} minReplicaCount
+ * @param {boolean} completionSafe
+ * @returns {Promise<Object>}
+ */
+async function resolvePriorityRecoveryQuorumProjection(
+  context,
+  operation,
+  projectedVoterReadyRows,
+  minReplicaCount,
+  completionSafe,
+  readPlanningSnapshot,
+  removeSafetyReadiness = null,
+) {
+  const planningSnapshot = await resolveRemoveSafetyPlanningSnapshotReader(
+    context, operation, readPlanningSnapshot)();
+  let recoveryProjectionNodeIds = null;
+  if (planningSnapshot && typeof planningSnapshot === 'object') {
+    const priorityRecoveryContext =
+      context.buildPriorityRecoveryAssessmentContextForOperation(
+        operation,
+        planningSnapshot,
+      );
+    const activeVoterNodeIdSet = new Set(
+      normalizeReplicaRowNodeIds(
+        projectedVoterReadyRows.filter(
+          (row) =>
+            operation?.type !== OperationType.REMOVE ||
+            row?.status === ReplicaStatus.ACTIVE,
+        ),
+      ),
+    );
+    recoveryProjectionNodeIds = context.resolvePriorityRemoveSafetyMembershipSnapshot(
+      planningSnapshot,
+      priorityRecoveryContext,
+      projectedVoterReadyRows,
+      {
+        committedNodeFloor: removeSafetyReadiness?.committedNodeFloor || null,
+        activeVoterNodeIdSet,
+      },
+    ).recoveryProjectionNodeIds;
+  }
+  return projectQuorumAfterRemoval({
+    projectedVoterReadyRows,
+    minReplicaCount,
+    recoveryProjectionNodeIds,
+    completionSafe,
+    scope: QUORUM_PROJECTION_SCOPE.COMPLETION_SAFE_FLOOR,
   });
 }
 
@@ -584,24 +688,20 @@ async function evaluateRemoveSafety(context, operation) {
         replicaId: operationReplicaId,
       }),
   );
-  // One voter-ready floor for every removal: the partition's voter-ready
-  // rows on READY-lease nodes after the removal, against minReplicaCount.
-  // A completion-safe priority recovery may still answer its source-leader
-  // handoff first (below); the removal itself always waits for this floor.
+  const projectedVoterReadyCount = projectedVoterReadyRows.length;
   const simpleFloor = projectQuorumAfterRemoval({
     projectedVoterReadyRows,
     minReplicaCount,
+    completionSafe: priorityRecoveryCompletionSafe,
     scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
-  const deferBelowVoterReadyFloor = () =>
-    context.buildDeferredRemoveSafetyEvaluationForOperation(
+  if (!priorityRecoveryCompletionSafe && !simpleFloor.floorSatisfied) {
+    return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Critical partition ${operation.partitionId}` +
         OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-        ` (${simpleFloor.projectedVoterReadyCount}/${minReplicaCount})`,
+        ` (${projectedVoterReadyCount}/${minReplicaCount})`,
     );
-  if (!priorityRecoveryCompletionSafe && !simpleFloor.floorSatisfied) {
-    return deferBelowVoterReadyFloor();
   }
 
   if (!priorityRecoveryCompletionSafe) {
@@ -638,8 +738,30 @@ async function evaluateRemoveSafety(context, operation) {
   ) {
     return priorityPublicationLeaderRemoveSafetyEvaluation;
   }
-  if (!simpleFloor.floorSatisfied) {
-    return deferBelowVoterReadyFloor();
+  if (
+    priorityRecoveryCompletionSafe &&
+    classifySystemPartition({
+      partitionId: operation?.partitionId,
+    }).priorityControlPlane
+  ) {
+    const completionSafeFloor =
+      await resolvePriorityRecoveryQuorumProjection(
+        context,
+        operation,
+        projectedVoterReadyRows,
+        minReplicaCount,
+        priorityRecoveryCompletionSafe,
+        readRemoveSafetyPlanningSnapshot,
+        removeSafetyReadiness,
+      );
+    if (!completionSafeFloor.floorSatisfied) {
+      return context.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation,
+        `Critical partition ${operation.partitionId}` +
+          OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
+          ` (${completionSafeFloor.effectiveProjectedVoterReadyCount}/${minReplicaCount})`,
+      );
+    }
   }
 
   const peerPingGuard = await evaluateProjectedPeersContactable(

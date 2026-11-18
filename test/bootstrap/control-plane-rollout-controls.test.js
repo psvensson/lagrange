@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -109,7 +108,6 @@ test('BootstrapAPI - enforces lifecycle probe rollout control', async (t) => {
 test('BootstrapService - enforces work class scheduler rollout control', async (t) => {
   t.throws(() => {
     new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node-1',
       nodeAddress: 'localhost:8080',
@@ -126,7 +124,6 @@ test('NodeJoiningService - enforces durable join sessions rollout control', asyn
 
   t.throws(() => {
     new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node-1',
       nodeAddress: 'ws://localhost:9090',

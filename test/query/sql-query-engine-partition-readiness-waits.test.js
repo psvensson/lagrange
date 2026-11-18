@@ -46,7 +46,6 @@ config.initialize();
 import {
   createMockMessageRouter,
   createProvisioningReadyService,
-  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' +
@@ -119,7 +118,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
     },
   };
 
-  const rebalanceCoordinator = withBootstrapHoldRelease({
+  const rebalanceCoordinator = {
     async createOperation(move) {
       return {
         operationId: `op-${move.nodeId}`,
@@ -140,7 +139,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
       }
       return {success: true};
     },
-  });
+  };
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -253,7 +252,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
     },
   };
 
-  const rebalanceCoordinator = withBootstrapHoldRelease({
+  const rebalanceCoordinator = {
     async createOperation(move) {
       return {
         operationId: `op-${move.nodeId}`,
@@ -273,7 +272,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
       });
       return {success: true};
     },
-  });
+  };
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,

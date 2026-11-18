@@ -19,10 +19,6 @@ import {
   BROADCAST_FIELD,
   PRIMITIVE_ERROR_MSG,
 } from '../../src/query/distributed/distributed-context-constants.js';
-import {
-  QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
-  normalizeQueryBudget,
-} from '../../src/wasm-service/query-budget-constants.js';
 
 // --- validateBroadcastArgs ---
 
@@ -30,7 +26,6 @@ test('validateBroadcastArgs - valid args', (t) => {
   const result = validateBroadcastArgs(
     'ref-1',
     {version: 1, rows: [{id: 1}]},
-    normalizeQueryBudget(),
   );
   t.ok(result.valid);
   t.equal(result.error, null);
@@ -41,7 +36,6 @@ test('validateBroadcastArgs - missing ref', (t) => {
   const result = validateBroadcastArgs(
     null,
     {version: 1},
-    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(result.error, PRIMITIVE_ERROR_MSG.BROADCAST_REF_REQUIRED);
@@ -52,7 +46,6 @@ test('validateBroadcastArgs - ref not string', (t) => {
   const result = validateBroadcastArgs(
     123,
     {version: 1},
-    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(
@@ -63,7 +56,7 @@ test('validateBroadcastArgs - ref not string', (t) => {
 });
 
 test('validateBroadcastArgs - missing dataset', (t) => {
-  const result = validateBroadcastArgs('ref-1', null, normalizeQueryBudget());
+  const result = validateBroadcastArgs('ref-1', null);
   t.notOk(result.valid);
   t.equal(
     result.error,
@@ -76,7 +69,6 @@ test('validateBroadcastArgs - missing version', (t) => {
   const result = validateBroadcastArgs(
     'ref-1',
     {rows: [{id: 1}]},
-    normalizeQueryBudget(),
   );
   t.notOk(result.valid);
   t.equal(
@@ -94,7 +86,7 @@ test('validateBroadcastArgs - exceeds size cap', (t) => {
   const result = validateBroadcastArgs(
     'ref-1',
     bigPayload,
-    normalizeQueryBudget({BROADCAST_MAX_PAYLOAD_BYTES: 100}),
+    {BROADCAST_MAX_PAYLOAD_BYTES: 100},
   );
   t.notOk(result.valid);
   t.equal(
@@ -144,27 +136,8 @@ test('estimateBroadcastBytes - null returns zero', (t) => {
 
 // --- BroadcastStore ---
 
-test('BroadcastStore - refuses a budget that is not normalized', (t) => {
-  for (const options of [
-    undefined,
-    {},
-    {maxPayloadBytes: 50},
-    {budgets: {BROADCAST_MAX_PAYLOAD_BYTES: 50}},
-  ]) {
-    t.throws(
-      () => new BroadcastStore(options),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED),
-    );
-  }
-  t.throws(
-    () => validateBroadcastArgs('ref-1', {version: 1}, {}),
-    new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.BUDGET_NOT_NORMALIZED),
-  );
-  t.end();
-});
-
 test('BroadcastStore - broadcast and useBroadcast', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
   const dataset = {version: 1, rows: [{id: 1}]};
 
   const desc = store.broadcast('ref-1', dataset);
@@ -181,9 +154,7 @@ test('BroadcastStore - broadcast and useBroadcast', (t) => {
 });
 
 test('BroadcastStore - rejects oversized payload', (t) => {
-  const store = new BroadcastStore({
-    budgets: normalizeQueryBudget({BROADCAST_MAX_PAYLOAD_BYTES: 50}),
-  });
+  const store = new BroadcastStore({maxPayloadBytes: 50});
   const bigDataset = {version: 1, data: 'x'.repeat(200)};
 
   t.throws(
@@ -194,7 +165,7 @@ test('BroadcastStore - rejects oversized payload', (t) => {
 });
 
 test('BroadcastStore - rejects missing version', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
 
   t.throws(
     () => store.broadcast('ref-1', {rows: []}),
@@ -204,7 +175,7 @@ test('BroadcastStore - rejects missing version', (t) => {
 });
 
 test('BroadcastStore - useBroadcast ref not found', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
 
   t.throws(
     () => store.useBroadcast('missing-ref'),
@@ -214,7 +185,7 @@ test('BroadcastStore - useBroadcast ref not found', (t) => {
 });
 
 test('BroadcastStore - useBroadcast validates ref', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
 
   t.throws(
     () => store.useBroadcast(null),
@@ -224,7 +195,7 @@ test('BroadcastStore - useBroadcast validates ref', (t) => {
 });
 
 test('BroadcastStore - overwrites same ref', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
   store.broadcast('ref-1', {version: 1, data: 'old'});
   store.broadcast('ref-1', {version: 2, data: 'new'});
 
@@ -236,7 +207,7 @@ test('BroadcastStore - overwrites same ref', (t) => {
 });
 
 test('BroadcastStore - has/delete/clear', (t) => {
-  const store = new BroadcastStore({budgets: normalizeQueryBudget()});
+  const store = new BroadcastStore();
   store.broadcast('ref-1', {version: 1, data: 'a'});
   store.broadcast('ref-2', {version: 1, data: 'b'});
 
@@ -255,7 +226,6 @@ test('BroadcastStore - has/delete/clear', (t) => {
 test('BroadcastStore - calls telemetry on broadcast', (t) => {
   let telemetryData = null;
   const store = new BroadcastStore({
-    budgets: normalizeQueryBudget(),
     onTelemetry: (data) => {
       telemetryData = data;
     },
@@ -275,7 +245,6 @@ test('BroadcastStore - calls telemetry on broadcast', (t) => {
 test('BroadcastStore - calls telemetry on useBroadcast', (t) => {
   const calls = [];
   const store = new BroadcastStore({
-    budgets: normalizeQueryBudget(),
     onTelemetry: (data) => {
       calls.push(data);
     },

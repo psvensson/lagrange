@@ -6,7 +6,6 @@
 // Registered as the contract's single witness by formation-contracts-registration
 // only once every invariant the contract claims has its test in this file.
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -198,7 +197,6 @@ function createSeedRegistrationHost(options = {}) {
     Object.create(createBootstrapServiceControlPlaneRuntimeMethods()), {
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
-      hostId: LOCAL_MACHINE_HOST_ID,
       messageRouter,
       cdcIntegrationService: hosts.cdcIntegrationService,
       heartbeatService,

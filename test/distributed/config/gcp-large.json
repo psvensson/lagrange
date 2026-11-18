@@ -23,7 +23,6 @@
     "zone": "us-central1-a",
     "machineType": "e2-standard-8",
     "vmCount": 6,
-    "preemptible": false,
-    "maxRunDurationSeconds": 7200
+    "preemptible": false
   }
 }

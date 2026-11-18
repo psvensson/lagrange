@@ -15,13 +15,9 @@ import {
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {holdsCoordinatorOpaqueNode} from './distributed/distributed-select-fanout-plan.js';
-import {renderSelect} from './sql-statement-renderer.js';
-import {EXPR_TYPE} from './parser-constants.js';
 
 const {
   QUERY_AST_NODE,
-  QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
@@ -30,52 +26,6 @@ const {
   QUERY_OPERATOR,
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
-
-// Interim I1b (removed by WP3, design §5.1): the coordinator evaluates a
-// cross-partition join's ON conditions, residual WHERE and merge clauses in
-// JavaScript, which cannot evaluate an explicit COLLATE or an ESCAPE; and it
-// applies the LIMIT, which must not re-implement SQLite's integer conversion
-// of a bound parameter.
-const JOIN_INTERIM_REFUSAL_MSG = Object.freeze({
-  OPAQUE: 'COLLATE and LIKE ... ESCAPE in a cross-partition JOIN statement are not ' +
-    'supported yet: the coordinator evaluates the join (interim I1b, until WP3)',
-  LIMIT_PARAMETER: 'LIMIT or OFFSET bound to a parameter in a cross-partition JOIN ' +
-    'statement is not supported yet (interim, until WP3)',
-});
-
-function joinInterimRefusal(ast, partitionIds) {
-  const parameterLimit = ast.limit && (typeof ast.limit.count !== 'number' ||
-    (ast.limit.offset !== null && ast.limit.offset !== undefined &&
-      typeof ast.limit.offset !== 'number'));
-  if (!holdsCoordinatorOpaqueNode(ast) && !parameterLimit) {
-    return null;
-  }
-  return {
-    success: false,
-    errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
-    error: parameterLimit && !holdsCoordinatorOpaqueNode(ast) ?
-      JOIN_INTERIM_REFUSAL_MSG.LIMIT_PARAMETER : JOIN_INTERIM_REFUSAL_MSG.OPAQUE,
-    partitions: partitionIds,
-  };
-}
-
-// The SELECT one join-side fetch runs: rendered by the one renderer.
-function tableFetchAst(columns, from, where, distinct) {
-  return {
-    type: QUERY_AST_TYPE.SELECT,
-    distinct,
-    columns,
-    from,
-    joins: [],
-    where: where || null,
-    groupBy: null,
-    having: null,
-    orderBy: null,
-    limit: null,
-    ctes: null,
-    setOperation: null,
-  };
-}
 
 /** Canonical outcomes for one join-table fetch decision. */
 const JOIN_TABLE_FETCH_KIND = Object.freeze({
@@ -138,10 +88,6 @@ const queryExecutorJoinExecutionMethods = {
     options,
     queryTimestamp,
   ) {
-    const refusal = joinInterimRefusal(ast, mainPartitionIds);
-    if (refusal) {
-      return refusal;
-    }
     const {joinPartitions} = options;
     const fanoutMetrics = [];
     const pushdownPlan = buildJoinPushdownPlan(ast, params);
@@ -400,15 +346,19 @@ const queryExecutorJoinExecutionMethods = {
    * @private
    */
   buildJoinTableFetchSql(edgePlan, whereAst) {
-    const columns = edgePlan.projection ?
-      edgePlan.projection.map((column) => ({
-        type: EXPR_TYPE.COLUMN,
-        expression: {type: EXPR_TYPE.COLUMN_REF, table: null, column},
-        alias: null,
-      })) :
-      [{type: EXPR_TYPE.STAR, table: null}];
-    return renderSelect(tableFetchAst(columns,
-      {name: edgePlan.tableName, alias: edgePlan.alias || null}, whereAst, false));
+    const projectionSql = edgePlan.projection ?
+      edgePlan.projection.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14) :
+      QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
+    let sql =
+      `${QUERY_EXECUTOR_LITERAL.STRING_SELECT}${projectionSql}` +
+      ` FROM ${edgePlan.tableName}`;
+    if (edgePlan.alias) {
+      sql += ` AS ${edgePlan.alias}`;
+    }
+    if (whereAst) {
+      sql += ` WHERE ${this.buildExpressionSQL(whereAst)}`;
+    }
+    return sql;
   },
 
   /**
@@ -736,8 +686,26 @@ const queryExecutorJoinExecutionMethods = {
    * @private
    */
   buildSelectSQLWithoutJoins(ast, mainWhere) {
-    return renderSelect(tableFetchAst([{type: EXPR_TYPE.STAR, table: null}], ast.from,
-      mainWhere, ast.distinct === true));
+    let sql = QUERY_EXECUTOR_LITERAL.STRING_SELECT;
+    if (ast.distinct) {
+      sql += QUERY_EXECUTOR_LITERAL.STRING_DISTINCT;
+    }
+
+    sql += QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
+
+    if (ast.from.subquery) {
+      sql += ` FROM (${this.buildSelectSQL(ast.from.subquery)})`;
+    } else {
+      sql += ` FROM ${ast.from.name}`;
+    }
+    if (ast.from.alias) {
+      sql += ` AS ${ast.from.alias}`;
+    }
+
+    if (mainWhere) {
+      sql += ` WHERE ${this.buildExpressionSQL(mainWhere)}`;
+    }
+    return sql;
   },
 };
 

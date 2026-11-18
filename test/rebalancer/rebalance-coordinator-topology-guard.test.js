@@ -252,6 +252,7 @@ test('RebalanceCoordinator blocks same-node duplicate topology creation', async 
     type: 'ADD',
     partitionId: TEST_PARTITION_ID,
     nodeId: TEST_EXISTING_NODE_ID,
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
 
@@ -294,6 +295,7 @@ test('RebalanceCoordinator topology guard invokes the injected inventory owner',
       type: TEST_ADD_OPERATION_TYPE,
       partitionId: TEST_PARTITION_ID,
       nodeId: TEST_TARGET_NODE_ID,
+      emitOperationCreated: false,
       enforceConcurrentOperationBudget: true,
     }));
 
@@ -325,6 +327,7 @@ test('RebalanceCoordinator fails topology increase closed when service owner row
         type: TEST_ADD_OPERATION_TYPE,
         partitionId: TEST_PARTITION_ID,
         nodeId: TEST_TARGET_NODE_ID,
+        emitOperationCreated: false,
         enforceConcurrentOperationBudget: true,
       }),
     );
@@ -601,6 +604,7 @@ test('RebalanceCoordinator blocks stale ADD when authoritative topology already 
     type: 'ADD',
     partitionId: TEST_PARTITION_ID,
     nodeId: TEST_TARGET_NODE_ID,
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
 
@@ -649,6 +653,7 @@ test('RebalanceCoordinator blocks REPLACE when target node already has partition
     nodeId: TEST_TARGET_NODE_ID,
     replicaId: TEST_SOURCE_REPLICA_ID,
     sourceNodeId: TEST_NODE_ID,
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
 
@@ -694,6 +699,7 @@ test('RebalanceCoordinator applies topology occupancy guard to message-group cre
     entityType: SERVICE_TYPE.MESSAGE_GROUP,
     entityId: TEST_MESSAGE_GROUP_ID,
     nodeId: TEST_EXISTING_NODE_ID,
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
 
@@ -754,6 +760,7 @@ test('count-keyed lane HOLDS a REPLACE churn create while the critical partition
     nodeId: 'node-5',
     replicaId: CRIT_PARTITION_ID + '-r1',
     sourceNodeId: 'node-1',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'over-target REPLACE churn is rejected by the count-keyed lane hold');
@@ -786,6 +793,7 @@ test('count-keyed lane consumes canonical identity deduplication', async (t) => 
     nodeId: 'node-5',
     replicaId: CRIT_PARTITION_ID + '-r1',
     sourceNodeId: 'node-1',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   });
 
@@ -818,6 +826,7 @@ async (t) => {
     nodeId: 'node-5',
     replicaId: CRIT_PARTITION_ID + '-r4',
     sourceNodeId: 'node-4',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   });
   t.equal(
@@ -851,6 +860,7 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
     nodeId: 'node-5',
     replicaId: CRIT_PARTITION_ID + '-r1',
     sourceNodeId: 'node-1',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'a draining (removing) source keeps the partition over target -> churn create is held');
@@ -887,6 +897,7 @@ test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on aliv
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-3',
     moveReason: 'spread_replicas',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   });
   t.equal(
@@ -915,6 +926,7 @@ test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' 
     type: TEST_ADD_OPERATION_TYPE,
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-3',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'an untyped over-target ADD stays held');
@@ -943,6 +955,7 @@ async (t) => {
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-5',
     moveReason: 'spread_replicas',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'a spread-typed ADD with coverage at target stays held');
@@ -969,6 +982,7 @@ test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target n
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-2',
     moveReason: 'spread_replicas',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'a spread-typed ADD to an already-hosting node stays held');
@@ -1006,6 +1020,7 @@ test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-4',
     replicaId: CRIT_PARTITION_ID + '-r5',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   });
   t.equal(
@@ -1035,6 +1050,7 @@ test('s14 orphan census: a CATCHING-UP learner (status=creating) still counts, '
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-4',
     replicaId: CRIT_PARTITION_ID + '-r5',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'catching-up learner counts (3 nodes == target) -> redundant ADD held');
@@ -1060,6 +1076,7 @@ test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED â
     partitionId: CRIT_PARTITION_ID,
     nodeId: 'node-3',
     replicaId: CRIT_PARTITION_ID + '-r6',
+    emitOperationCreated: false,
     enforceConcurrentOperationBudget: true,
   }));
   t.ok(error, 'target node already occupied (full-occupancy check intact) -> blocked');
@@ -1084,7 +1101,7 @@ test('ADD and REPLACE refuse unavailable policy before persistence ' +
       const move = {type, partitionId: TEST_PARTITION_ID, nodeId: TEST_TARGET_NODE_ID,
         replicaId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_SOURCE_REPLICA_ID : null,
         sourceNodeId: type === TEST_REPLACE_OPERATION_TYPE ? TEST_NODE_ID : null,
-        enforceConcurrentOperationBudget: true};
+        emitOperationCreated: false, enforceConcurrentOperationBudget: true};
       const error = await captureOperationCreateError(() => coordinator.createOperation(move));
       t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
       t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');

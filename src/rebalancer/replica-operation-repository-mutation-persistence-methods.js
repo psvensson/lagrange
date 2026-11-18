@@ -138,32 +138,6 @@ function isReplicaOperationIdentitySatisfied(expected, observed) {
     observed[field] === expected[field]);
 }
 
-function isReplicaOperationStepAndStatusExact(expected, observed) {
-  return (expected.workflowStep === null ||
-    expected.workflowStep === undefined ||
-    observed.workflowStep === expected.workflowStep) &&
-    (expected.status === null ||
-      expected.status === undefined ||
-      observed.status === expected.status);
-}
-
-function isReplicaOperationDurableContentSatisfied(expected, observed) {
-  if (
-    Number.isFinite(expected.updatedAt) &&
-    Number(observed.updatedAt) < expected.updatedAt
-  ) {
-    return false;
-  }
-  if (
-    Number.isFinite(expected.completedAt) &&
-    Number(observed.completedAt) < expected.completedAt
-  ) {
-    return false;
-  }
-  return createAdmissionVisibilitySatisfied(expected, observed) &&
-    membershipVisibilitySatisfied(expected, observed);
-}
-
 function isReplicaOperationUniqueConstraintFailure(result) {
   const code = String(result?.code || result?.errorCode || '');
   const message = String(result?.error || result?.message || '');
@@ -577,7 +551,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             },
           );
         if (
-          this.isAppliedReplicaOperationWriteVisible(
+          this.isReplicaOperationVisibilitySatisfied(
             operation,
             localObservation.operation,
           )
@@ -610,7 +584,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             },
           );
         if (
-          this.isAppliedReplicaOperationWriteVisible(
+          this.isReplicaOperationVisibilitySatisfied(
             operation,
             authorityObservation.operation,
           )
@@ -657,32 +631,55 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       }
     }
 
-    // The durable row IS this write. Asked wherever the write did not apply
-    // or is not known to have applied: a zero-change CAS or insert, a
-    // retryable failure's recovery, the pre-write refusals. A row that has
-    // moved past the write is someone else's state, never this write.
-    isReplicaOperationVisibilitySatisfied(expectedOperation, observedOperation) {
-      return isReplicaOperationIdentitySatisfied(
-        expectedOperation, observedOperation) &&
-        isReplicaOperationStepAndStatusExact(
-          expectedOperation, observedOperation) &&
-        isReplicaOperationDurableContentSatisfied(
-          expectedOperation, observedOperation);
-    }
-
-    // A write the authority APPLIED is visible once the durable row equals
-    // it or has progressed monotonically past it (a remote owner advanced
-    // the operation before this confirmation read). Only the confirmation of
-    // an applied write and its owner-persisted witness ask this question.
-    isAppliedReplicaOperationWriteVisible(expectedOperation, observedOperation) {
-      return isReplicaOperationIdentitySatisfied(
-        expectedOperation, observedOperation) &&
-        (isReplicaOperationStepAndStatusExact(
-          expectedOperation, observedOperation) ||
-          isMonotonicReplicaOperationStepProgression(
-            expectedOperation, observedOperation)) &&
-        isReplicaOperationDurableContentSatisfied(
-          expectedOperation, observedOperation);
+    isReplicaOperationVisibilitySatisfied(
+      expectedOperation,
+      observedOperation,
+    ) {
+      if (!isReplicaOperationIdentitySatisfied(
+        expectedOperation,
+        observedOperation,
+      )) {
+        return false;
+      }
+      const exactStepAndStatusMatch =
+        (expectedOperation.workflowStep === null ||
+          expectedOperation.workflowStep === undefined ||
+          observedOperation.workflowStep === expectedOperation.workflowStep) &&
+        (expectedOperation.status === null ||
+          expectedOperation.status === undefined ||
+          observedOperation.status === expectedOperation.status);
+      if (
+        !exactStepAndStatusMatch &&
+        !isMonotonicReplicaOperationStepProgression(
+          expectedOperation,
+          observedOperation,
+        )
+      ) {
+        return false;
+      }
+      if (
+        Number.isFinite(expectedOperation.updatedAt) &&
+        Number(observedOperation.updatedAt) < expectedOperation.updatedAt
+      ) {
+        return false;
+      }
+      if (
+        Number.isFinite(expectedOperation.completedAt) &&
+        Number(observedOperation.completedAt) < expectedOperation.completedAt
+      ) {
+        return false;
+      }
+      if (!createAdmissionVisibilitySatisfied(
+        expectedOperation,
+        observedOperation,
+      )) {
+        return false;
+      }
+      if (!membershipVisibilitySatisfied(expectedOperation,
+        observedOperation)) {
+        return false;
+      }
+      return true;
     }
 
     // The confirmation deadline above is read from this repository's

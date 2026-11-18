@@ -22,6 +22,8 @@ import {
   admitExpectedTransaction,
   admitParsedStatement,
 } from './sql-query-engine-statement-admission.js';
+import {normalizeQueryBudget} from
+  '../wasm-service/query-budget-constants.js';
 
 const STATEMENT_LOG_LIMIT = 100;
 const LOCAL_STR_FUNCTION = 'function';
@@ -115,6 +117,7 @@ function buildClientRequestQueryOptions(sqlRequest, executionOptions = {}) {
   );
   const securityContext =
     sqlRequest?.securityContext || executionOptions?.securityContext || null;
+  const normalizedBudgets = normalizeQueryBudget(sqlRequest.budgets);
   return {
     // Every SqlRequest statement is client SQL: its origin is set
     // here, by the engine's client entry, never by the caller.
@@ -125,8 +128,7 @@ function buildClientRequestQueryOptions(sqlRequest, executionOptions = {}) {
     timeoutMs: sqlRequest.timeoutMs,
     timeoutBudget: sqlRequest.timeoutBudget,
     cancellationToken: sqlRequest.cancellationToken || null,
-    // isSqlRequest admitted only a normalized budget.
-    budgets: sqlRequest.budgets,
+    budgets: normalizedBudgets,
     ...(sqlRequest.abortSignal ? {abortSignal: sqlRequest.abortSignal} : {}),
     ...expectedTransactionOption(sqlRequest),
     ...(issuingServiceId ? {issuingServiceId} : {}),

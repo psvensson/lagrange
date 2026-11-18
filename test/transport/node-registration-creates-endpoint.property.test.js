@@ -10,7 +10,6 @@
  * Property 11: Node Registration Creates Endpoint
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -83,7 +82,6 @@ function createWiredService({nodeId, nodeAddress, executedQueries}) {
   const mockCDCService = createMockCDCService(mockQueryEngine);
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress,
@@ -189,7 +187,6 @@ test('Property 11: Node Registration Creates Endpoint',
                 createMockCDCService(mockQueryEngine);
 
               const service = new NodeJoiningService({
-                hostId: LOCAL_MACHINE_HOST_ID,
                 bootIncarnation: 1,
                 nodeId,
                 nodeAddress,

@@ -4,7 +4,6 @@
  * rather than dropping CDC when that owner is temporarily unavailable.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -35,7 +34,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     // Track propagated events
     const propagatedEvents = [];
@@ -133,7 +132,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     let capturedCdcSubscriber = null;
 
     const mockPartition = {
@@ -211,7 +210,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const propagatedEvents = [];
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
@@ -302,7 +301,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const propagatedEvents = [];
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
@@ -398,7 +397,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     let mgSubscribeCalls = 0;
     let partitionSubscriberRegistrations = 0;

@@ -151,13 +151,15 @@ class HeartbeatServicePublicationMethods {
       booleanTypeValue: HEARTBEAT_SERVICE_LITERAL.BOOLEAN,
     });
     const nodeWriteDecision = this.resolveNodeHeartbeatWriteDecision(updateRow, now);
-    this.lastHeartbeatPublicationDecision = nodeWriteDecision;
     const requireDurableVisibility = options.requireDurableVisibility === true;
     // A caller waiting on the publication boundary owns a fresh write and its
     // visibility proof.  Reusing an earlier coalesced heartbeat here would
     // turn "durable" back into a timing-dependent cache observation.
     let shouldWriteNodeHeartbeat =
       requireDurableVisibility || nodeWriteDecision.shouldWrite;
+    if (shouldWriteNodeHeartbeat) {
+      this.lastHeartbeatPublicationDecision = nodeWriteDecision;
+    }
     if (quietModeActive && shouldWriteNodeHeartbeat && !requireDurableVisibility) {
       if (nodeWriteDecision.reason === HEARTBEAT_SERVICE_LITERAL.NO_PREVIOUS_WRITE) {
         incrementHistogramEntry(

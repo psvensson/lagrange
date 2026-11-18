@@ -4,7 +4,6 @@
  * Requirements: 6.2, 6.3
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -41,7 +40,6 @@ const createMinimalHydratedCache = () => {
 
 test('BootstrapService.verifyCacheHydration fails hard on missing required tables', async (t) => {
   const service = new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -59,7 +57,6 @@ test('BootstrapService.verifyCacheHydration fails hard on missing required table
 test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydration fails',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,

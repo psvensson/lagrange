@@ -4,6 +4,8 @@ import {
 import {createSqlRequest} from '../query/sql-request.js';
 
 const BYTE_ENCODING = 'utf8';
+const QUERY_BUDGET_RESULT_MAX_BYTES = 'RESULT_MAX_BYTES';
+const QUERY_BUDGET_RESULT_MAX_ROWS = 'RESULT_MAX_ROWS';
 const CONTEXT_QUERY_ROW_LIMIT_OFFSET = 1;
 const CONTEXT_ROW_BYTES_FIELD = '__request_cell_row_bytes';
 const REQUEST_CELL_BUDGET_ERROR_CODE = 'request_cell_budget_exhausted';
@@ -79,8 +81,8 @@ function buildContextReadRequest({
   const quotedTable = '"' + tableName.replaceAll('"', '""') + '"';
   return createSqlRequest({
     budgets: {
-      RESULT_MAX_BYTES: remainingBytes,
-      RESULT_MAX_ROWS: remainingBytes,
+      [QUERY_BUDGET_RESULT_MAX_BYTES]: remainingBytes,
+      [QUERY_BUDGET_RESULT_MAX_ROWS]: remainingBytes,
     },
     parameters: [
       remainingBytes,

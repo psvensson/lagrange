@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -38,7 +37,6 @@ test('BootstrapService waits for local query transport readiness before publishi
     const sleepDelays = [];
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-ready-transport-gate',
       nodeAddress: 'ws://localhost:19092',
@@ -135,7 +133,6 @@ test('BootstrapService keeps seed JOINING during control-plane registration and 
     };
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-ready-contract-node',
       nodeAddress: 'ws://localhost:19093',
@@ -353,7 +350,6 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
     let recoveryStarts = 0;
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-background-writer-gate',
       nodeAddress: 'ws://localhost:19094',
@@ -425,7 +421,6 @@ test('BootstrapService final SQL attachment engages transaction recovery when ba
     recoveryError.decisionDimension = 'commit_mode';
     let recoveryStarts = 0;
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-active-writer-recovery-gate',
       nodeAddress,
@@ -495,7 +490,6 @@ test('BootstrapService does not start deferred steady-state writers after shutdo
     let recoveryStarts = 0;
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-background-writer-shutdown-race',
       nodeAddress: 'ws://localhost:19095',
@@ -558,7 +552,6 @@ test('BootstrapService cancels deferred latency topology startup when shutdown b
     initializeTestEnvironment();
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-latency-topology-shutdown-race',
       nodeAddress: 'ws://localhost:19096',
@@ -586,7 +579,6 @@ test('BootstrapService shutdown gates already-queued deferred latency topology s
     initializeTestEnvironment();
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-latency-topology-immediate-shutdown-race',
       nodeAddress: 'ws://localhost:19098',
@@ -618,7 +610,6 @@ test('BootstrapService shutdown tears down runtime service handler before infras
     initializeTestEnvironment();
 
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-runtime-handler-shutdown',
       nodeAddress: 'ws://localhost:19097',

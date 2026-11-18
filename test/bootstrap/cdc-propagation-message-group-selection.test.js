@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -34,7 +33,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     service.messageGroupServices = new Map([
       ['mg-1-r1', {
         initialized: true,
@@ -61,7 +60,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const preferredMessageGroup = {id: 'preferred'};
     const leaderMessageGroup = {
       id: 'leader',
@@ -95,7 +94,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const preferredMessageGroup = {
       id: 'preferred',
       initialized: true,
@@ -143,7 +142,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const preferredMessageGroup = {
       id: 'preferred',
       initialized: true,
@@ -186,7 +185,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation: 1, nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const bootstrapMessageGroupService = {id: 'bootstrap'};
     const syncSelection = {service: {id: 'leader'}};
     const asyncSelection = {service: {id: 'leader-async'}};
@@ -242,7 +241,6 @@ test(
     setupEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
@@ -280,7 +278,6 @@ test(
     setupEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
@@ -332,7 +329,6 @@ test(
     setupEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
@@ -380,7 +376,6 @@ test(
     setupEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',

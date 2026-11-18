@@ -1,4 +1,4 @@
-import {mkdir, mkdtemp, realpath, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {test} from '../../../../src/test-helpers/tap.js';
@@ -257,9 +257,8 @@ test('preregistration rejects hostile records and cumulative bootstrap work',
 
 test('artifact path integrity rejects a symlink in any parent component',
   async (t) => {
-    const temporaryParent = await realpath(tmpdir());
-    const root = await mkdtemp(join(temporaryParent, 'capacity-path-'));
-    const outside = await mkdtemp(join(temporaryParent, 'capacity-outside-'));
+    const root = await mkdtemp(join(tmpdir(), 'capacity-path-'));
+    const outside = await mkdtemp(join(tmpdir(), 'capacity-outside-'));
     const realParent = join(root, 'real');
     const symlinkParent = join(root, 'linked');
     await mkdir(realParent);

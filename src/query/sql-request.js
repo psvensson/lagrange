@@ -6,10 +6,7 @@
  * before delegation to SqlCore (SQLQueryEngine).
  */
 
-import {
-  isNormalizedQueryBudget,
-  normalizeQueryBudget,
-} from '../wasm-service/query-budget-constants.js';
+import {normalizeQueryBudget} from '../wasm-service/query-budget-constants.js';
 import {
   EXECUTION_MODE,
   DEFAULT_TENANT_ID,
@@ -96,18 +93,11 @@ function hasValidSqlRequestDialect(request) {
     typeof request.dialect === 'string';
 }
 
-// createSqlRequest is the request's budget boundary: an admitted request
-// carries only the budget normalizeQueryBudget produced.
-function hasNormalizedSqlRequestBudget(request) {
-  return isNormalizedQueryBudget(request.budgets);
-}
-
 const SQL_REQUEST_VALIDATORS = Object.freeze([
   hasRequiredSqlRequestFields,
   hasValidSqlRequestRuntimeKind,
   hasValidSqlRequestDialect,
   hasValidSqlRequestSecurityFields,
-  hasNormalizedSqlRequestBudget,
 ]);
 
 /**
@@ -119,9 +109,7 @@ const SQL_REQUEST_VALIDATORS = Object.freeze([
  * @param {string} [fields.tenantId] - Tenant identifier.
  * @param {string} [fields.sessionId] - Session identifier.
  * @param {string} [fields.executionMode] - EXECUTION_MODE value.
- * @param {Object} [fields.budgets] - Query budget overrides keyed by the
- *   uppercase limit names of DEFAULT_QUERY_BUDGET; normalized by
- *   normalizeQueryBudget, which refuses unknown fields and invalid limits.
+ * @param {Object} [fields.budgets] - QueryBudget overrides.
  * @param {Object} [fields.hints] - PlannerHints overrides.
  * @param {string|null} [fields.dialect] - Parser dialect hint.
  * @param {Object} [fields.securityContext] - Server-derived protocol context.

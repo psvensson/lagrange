@@ -18,13 +18,8 @@ import {
   extractReferencedTables,
   isComplexQuery as baseIsComplexQuery,
 } from './live-query-sql-renderer.js';
-import {holdsCoordinatorOpaqueNode} from
-  '../query/distributed/distributed-select-fanout-plan.js';
-import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
-const LIVE_QUERY_FALLBACK_REFUSAL_MSG = 'COLLATE and LIKE ... ESCAPE are not supported by ' +
-  'the live-query fallback renderer yet (interim I1e, until WP7)';
 const WILDCARD_COLUMN = '*';
 
 /**
@@ -206,22 +201,7 @@ function resolveExecutionSQL(sql, sqlQueryEngine, parsedQuery) {
   if (sqlQueryEngine?.executor?.buildSelectSQL) {
     return sqlQueryEngine.executor.buildSelectSQL(parsedQuery);
   }
-  refuseOpaqueFallbackRendering(parsedQuery);
   return buildSelectSQL(parsedQuery);
-}
-
-/**
- * Interim I1e (removed by WP7, design §5.1): the live-query fallback renderer
- * drops an explicit COLLATE and an ESCAPE, so a statement holding one is
- * refused rather than rendered as a different statement.
- * @param {Object} parsedQuery - SELECT AST.
- */
-function refuseOpaqueFallbackRendering(parsedQuery) {
-  if (holdsCoordinatorOpaqueNode(parsedQuery)) {
-    const error = new Error(LIVE_QUERY_FALLBACK_REFUSAL_MSG);
-    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
-    throw error;
-  }
 }
 
 /**
@@ -411,7 +391,6 @@ async function subscribeNewPartitions(group, relevantPartitions, subscribeToPart
 }
 
 export {
-  refuseOpaqueFallbackRendering,
   buildDeleteEvent,
   buildInsertEvent,
   buildResetNotification,

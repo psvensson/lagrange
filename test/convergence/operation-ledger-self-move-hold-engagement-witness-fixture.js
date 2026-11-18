@@ -362,6 +362,7 @@ function buildMove({
     nodeId: targetNodeId,
     moveReason: moveReason || MOVE_REASON_SPREAD,
     enforceConcurrentOperationBudget: true,
+    emitOperationCreated: true,
     membershipPublicationEpoch: publicationEpoch,
   };
   if (type !== OperationType.ADD) {
@@ -581,7 +582,6 @@ function buildCoordinator({timeSource, nodeId, trackedOperations}) {
     timeSource,
     nodeId,
     trackedOperations,
-    armCreatedOperations: true,
     pendingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.PENDING_TIMEOUT_MS,
     creatingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS,
     syncingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.SYNCING_TIMEOUT_MS,

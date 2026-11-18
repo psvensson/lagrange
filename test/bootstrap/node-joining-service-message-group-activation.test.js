@@ -3,7 +3,6 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -87,7 +86,6 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
       });
 
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: 'joining-node-backfill-critical',
         nodeAddress: 'ws://localhost:9090',
@@ -196,7 +194,6 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
       });
 
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: 'joining-node-backfill-pressure',
         nodeAddress: 'ws://localhost:9090',
@@ -295,7 +292,6 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
       });
 
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         nodeId: 'join-cache-seed-node',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -408,7 +404,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
 
       try {
         const service = new NodeJoiningService({
-          hostId: LOCAL_MACHINE_HOST_ID,
           bootIncarnation: 1,
           nodeId: 'join-activation-node',
           nodeAddress: 'ws://localhost:9191',
@@ -532,7 +527,6 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     // Create joining service with wsPort for WebSocket server
     // Use short leadership timeout since mock peers can't respond
     service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440011',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
@@ -612,7 +606,6 @@ test('NodeJoiningService - hasOperationalMessageGroup', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -627,7 +620,6 @@ test('NodeJoiningService - cleanup on failure', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -683,7 +675,6 @@ test('NodeJoiningService - emits events', async (t) => {
     await seedApi.initialize(0, {listen: false});
 
     service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440012',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
@@ -789,7 +780,6 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-join-factory',
       nodeAddress: 'ws://localhost:9090',
@@ -876,7 +866,6 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-join-cache-sync',
       nodeAddress: 'ws://localhost:9090',
@@ -1005,7 +994,6 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-join-cdc-propagation-fallback',
       nodeAddress: 'ws://localhost:9090',
@@ -1147,7 +1135,6 @@ test('NodeJoiningService - partial message-group service row activation retains 
       });
       const nodeId = 'joining-node-partial-mg-deferred';
       const service = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId,
         nodeAddress: 'ws://localhost:9090',

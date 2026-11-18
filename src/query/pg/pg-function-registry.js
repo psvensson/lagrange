@@ -5,7 +5,7 @@
  * Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3
  */
 
-import {EXPR_TYPE, SQL_STORAGE_CLASS} from '../parser-constants.js';
+import {EXPR_TYPE} from '../parser-constants.js';
 import {
   PG_EXPR_TYPE,
   PG_EXTRACT_FORMAT,
@@ -45,7 +45,7 @@ const CONCAT_OPERATOR = '||';
  * @returns {Object} Internal_AST literal node.
  */
 function makeLiteral(value) {
-  return {type: EXPR_TYPE.LITERAL, value, sqlType: SQL_STORAGE_CLASS.TEXT};
+  return {type: EXPR_TYPE.LITERAL, value};
 }
 
 /**
@@ -129,7 +129,6 @@ function translateExtract(args, convertExprFn) {
   return {
     type: PG_EXPR_TYPE.CAST,
     expression: strftimeCall,
-    targetType: SQLITE_AFFINITY_INTEGER,
     affinity: SQLITE_AFFINITY_INTEGER,
   };
 }

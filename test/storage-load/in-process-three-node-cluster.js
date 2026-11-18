@@ -5,7 +5,6 @@
  * (test/integration/user-table-metadata-fanout.integration.test.js); this
  * module only lifts it into a start/stop handle for a long run.
  */
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {join} from 'node:path';
 import {mkdirSync} from 'node:fs';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -161,7 +160,6 @@ async function joinNode(seed, runDir, nodeId, index) {
   mkdirSync(dataDir, {recursive: true});
   const wsPort = getUniquePort();
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress: LOCALHOST_WS + wsPort,

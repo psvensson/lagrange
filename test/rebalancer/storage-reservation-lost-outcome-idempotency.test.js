@@ -371,9 +371,6 @@ test('lost reservation INSERT answer adopts one exact durable capacity hold',
     initializeConfig();
     const sqlEngine = createLostOutcomeSqlEngine();
     const coordinator = createCoordinator(sqlEngine);
-    // Reservation adoption is under test, not dispatch: the created
-    // operation rests at its durable PENDING step (the create arm is inert).
-    coordinator.armCoordinatorCreatedOperationProgress = async () => false;
     let creationEvents = 0;
     coordinator.on(REBALANCE_COORDINATOR_EVENT.RESERVATION_CREATED, () => {
       creationEvents++;
@@ -386,6 +383,7 @@ test('lost reservation INSERT answer adopts one exact durable capacity hold',
         nodeId: 'reservation-target-node',
         entityType: SERVICE_TYPE.PARTITION,
         entityId: 'partition-lost-reservation-answer',
+        emitOperationCreated: false,
       });
 
       t.equal(operation.workflowStep, WORKFLOW_STEP.PENDING,

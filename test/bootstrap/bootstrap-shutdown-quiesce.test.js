@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -15,7 +14,6 @@ function createSilentLogger() {
 test('BootstrapService cleanup quiesces rebalancers before service shutdown', async (t) => {
   const callOrder = [];
   const service = new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node',
     nodeAddress: 'localhost:8080',
@@ -89,7 +87,6 @@ test('BootstrapService cleanup quiesces rebalancers before service shutdown', as
 test('BootstrapService shutdown retries rejected cleanup and joins each in-flight attempt',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'shutdown-retry-node',
       nodeAddress: 'localhost:8080',
@@ -134,7 +131,6 @@ test('BootstrapService shutdown retries rejected cleanup and joins each in-fligh
 test('Bootstrap cleanup retains a replacement installed while an exact old close settles',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'cleanup-identity-node',
       nodeAddress: 'localhost:8080',
@@ -172,7 +168,6 @@ test('Bootstrap cleanup retains a replacement installed while an exact old close
 test('Bootstrap SQL cleanup retains all exact engine references on rejection and retries',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'sql-cleanup-retry-node',
       nodeAddress: 'localhost:8080',
@@ -210,7 +205,6 @@ test('Bootstrap SQL cleanup retains all exact engine references on rejection and
 test('Bootstrap SQL cleanup cannot clear a replacement engine after an old shutdown',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'sql-cleanup-identity-node',
       nodeAddress: 'localhost:8080',

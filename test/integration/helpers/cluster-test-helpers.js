@@ -34,9 +34,6 @@ import {URL} from 'url';
 import {accessSync, constants as fsConstants, mkdirSync, mkdtempSync, rmSync} from 'fs';
 import {tmpdir} from 'os';
 import {join, resolve} from 'path';
-// Every in-process node of these fixtures runs on this machine and declares
-// its name, unless a test declares a synthetic topology (options.hostId).
-import {LOCAL_MACHINE_HOST_ID} from '../../test-helpers/declared-node-host.js';
 
 const SHM_TMP_DIR = '/dev/shm';
 let cachedTestTmpDir = null;
@@ -384,7 +381,6 @@ async function createSeedBootstrapServiceFixture(options, admit) {
   try {
     bootstrap = new BootstrapService({
       ...options,
-      hostId: options.hostId ?? LOCAL_MACHINE_HOST_ID,
       bootIncarnation: options.bootIncarnation ?? 1,
       nodeId,
       nodeAddress,
@@ -1013,7 +1009,6 @@ export function createJoiningNodeFixtureOwner() {
         issuedIncarnationByNode.get(options.nodeId) ?? 0));
       const service = new NodeJoiningService({
         ...options,
-        hostId: options.hostId ?? LOCAL_MACHINE_HOST_ID,
         bootIncarnation,
         dataDir,
       });

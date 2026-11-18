@@ -72,7 +72,6 @@ class QuerySystemStatePhase {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.nodeAddress = options.nodeAddress;
-    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.opportunisticBackfillPromise = null;
@@ -80,7 +79,6 @@ class QuerySystemStatePhase {
     this.nodeRegistrationOwner = new NodeRegistrationOwner({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
-      hostId: this.hostId,
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       delegates: {
         getLogger: () => this.delegates.getLogger(),

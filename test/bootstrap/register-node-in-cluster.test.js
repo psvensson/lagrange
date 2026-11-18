@@ -4,7 +4,6 @@
  * Tests task 13.1: Update node registration to write endpoint.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BOOT_INCARNATION_REQUIRED} from
   '../../src/bootstrap/boot-incarnation-contract.js';
@@ -52,7 +51,6 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
 
     // Create NodeJoiningService instance
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-123',
       nodeAddress: 'ws://localhost:9000',
       seedNodeAddress: 'ws://seed:8000',
@@ -122,7 +120,6 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
 test('registerNodeInCluster() - a joiner without a startup-minted ' +
   'incarnation is refused at construction, so no row can be born', (t) => {
   t.throws(() => new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'test-node-no-incarnation',
     nodeAddress: 'ws://localhost:9001',
     seedNodeAddress: 'ws://seed:8000',
@@ -145,7 +142,6 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
   };
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'test-node-canonical-endpoint',
     nodeAddress: 'joiner-host:8080',
     seedNodeAddress: 'ws://seed:8000',
@@ -183,7 +179,6 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
   };
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'test-node-explicit-endpoint',
     nodeAddress: 'joiner-host:8080',
     advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
@@ -221,7 +216,6 @@ test('registerNodeInCluster() - should throw error if query fails', async (t) =>
 
   // Create NodeJoiningService instance
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'test-node-456',
     nodeAddress: 'ws://localhost:9001',
     seedNodeAddress: 'ws://seed:8000',
@@ -249,7 +243,6 @@ test('registerNodeInCluster() - should throw error if query fails', async (t) =>
 test('registerNodeInCluster() - should throw error if CDC service not available', async (t) => {
   // Create NodeJoiningService instance without CDC service
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'test-node-789',
     nodeAddress: 'ws://localhost:9002',
     seedNodeAddress: 'ws://seed:8000',
@@ -282,7 +275,6 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
     };
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-join-cache-wait',
       nodeAddress: 'ws://localhost:9003',
       seedNodeAddress: 'ws://seed:8000',
@@ -346,7 +338,6 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
     };
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-join-cache-wait-active',
       nodeAddress: 'ws://localhost:9004',
       seedNodeAddress: 'ws://seed:8000',
@@ -401,7 +392,6 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
   async (t) => {
     const queryCalls = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-join-sql-fallback',
       nodeAddress: 'ws://localhost:9014',
       seedNodeAddress: 'ws://seed:8000',
@@ -463,7 +453,6 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
   async (t) => {
     const upsertCalls = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-owner-path',
       nodeAddress: 'ws://localhost:9010',
       seedNodeAddress: 'ws://seed:8000',
@@ -515,7 +504,6 @@ test('registerNodeInCluster() - should retry transient participant failures duri
     participantFailure.retryAfterMs = 250;
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-admission-retry',
       nodeAddress: 'ws://localhost:9012',
       seedNodeAddress: 'ws://seed:8000',
@@ -584,7 +572,6 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
     participantFailure.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-phase-admission-retry',
       nodeAddress: 'ws://localhost:9013',
       seedNodeAddress: 'ws://seed:8000',
@@ -657,7 +644,6 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
     participantFailure.retryAfterMs = 250;
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'test-node-seed-restart-failure',
       nodeAddress: 'ws://localhost:9011',
       seedNodeAddress: 'ws://seed:8000',
@@ -765,7 +751,6 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
@@ -944,7 +929,6 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
@@ -1017,7 +1001,6 @@ test('registerNodeInCluster() - should fall back to fresh admission writes when 
     NodeService.getInstance().setSystemCacheProxy(cache);
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId,
       nodeAddress: 'new-host:8080',
       seedNodeAddress: 'ws://seed:8000',

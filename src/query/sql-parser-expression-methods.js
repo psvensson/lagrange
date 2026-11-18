@@ -1,4 +1,4 @@
-import {EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
+import {EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {QUERY_ERROR_CODE} from './query-constants.js';
 import {
@@ -8,8 +8,6 @@ import {
   translateIlike,
 } from './pg/pg-translate.js';
 import {translateFunctionCall} from './pg/pg-function-registry.js';
-import {LIMIT_PARAMETER_NAME} from './sql-parser-source-text.js';
-import {sqliteDeclaredTypeAffinity} from './sql-table-definition.js';
 
 const LOCAL_STR_BANG_EQUALS = '!=';
 const LOCAL_STR_LT_GT = '<>';
@@ -19,13 +17,6 @@ const PARSER_ERROR_MSG = Object.freeze({
   IS_NON_NULL_OPERAND:
     'IS/IS NOT supports only a NULL right operand; ' +
     'use = or <> for value comparison',
-  BIG_INTEGER_LITERAL:
-    'Integer literals beyond the safe JavaScript integer range are not supported',
-  UNREAD_SYNTAX_PREFIX: 'Unsupported SQL syntax: the front end cannot carry ',
-  UNREAD_SYNTAX_SUFFIX: ' of a ',
-  QUALIFIED_FUNCTION: 'Schema-qualified function names are not supported',
-  CAST_TARGET: 'CAST supports exactly one target type',
-  KEYWORD_ORIGIN_PREFIX: 'Unsupported SQL keyword in an expression: ',
 });
 
 const PG_NODE_TYPE = Object.freeze({
@@ -44,12 +35,16 @@ const PG_CASE_ARG_TYPE = Object.freeze({
 });
 
 const PG_EXISTS_NAME = 'EXISTS';
+const SHARED_STRUCTURED_NODE_TYPES = new Set([
+  PG_NODE_TYPE.CAST,
+  PG_NODE_TYPE.CASE,
+  PG_NODE_TYPE.FUNCTION,
+]);
 
 const SQL_OPERATOR = Object.freeze({
   IN: 'IN',
   NOT_IN: 'NOT IN',
   BETWEEN: 'BETWEEN',
-  NOT_BETWEEN: 'NOT BETWEEN',
   LIKE: 'LIKE',
   NOT_LIKE: 'NOT LIKE',
   IS: 'IS',
@@ -58,7 +53,6 @@ const SQL_OPERATOR = Object.freeze({
   IS_NOT_NULL: 'IS NOT NULL',
   ILIKE: 'ILIKE',
   NOT_ILIKE: 'NOT ILIKE',
-  NOT: 'NOT',
 });
 
 const EXT_EXPR_TYPE = Object.freeze({
@@ -72,192 +66,44 @@ const EXT_EXPR_TYPE = Object.freeze({
   BOOL: 'bool',
   NULL: 'null',
   ORIGIN: 'origin',
-  PARAM: 'param',
   AGGR_FUNC: 'aggr_func',
   STAR: 'star',
   EXPR_LIST: 'expr_list',
-  CAST: 'cast',
-  CASE: 'case',
-  FUNCTION: 'function',
-  SUBQUERY: 'subquery',
 });
-
-// node-sql-parser keys that carry no SQL semantics, on any node.
-const INERT_KEYS = Object.freeze(['type', 'parentheses', 'loc']);
-
-// The keys each node-sql-parser node type may carry with a value: every one
-// is read by this converter. Any other key with a value is syntax the front
-// end would drop (an OVER clause, an aggregate ORDER BY, a FILTER ...), so the
-// statement is refused instead (design §2.5: refused, never dropped).
-const READ_KEYS = Object.freeze({
-  [EXT_EXPR_TYPE.BINARY_EXPR]: ['operator', 'left', 'right'],
-  [EXT_EXPR_TYPE.UNARY_EXPR]: ['operator', 'expr'],
-  [EXT_EXPR_TYPE.COLUMN_REF]: ['table', 'column', 'collate'],
-  [EXT_EXPR_TYPE.NUMBER]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.SINGLE_QUOTE_STRING]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.STRING]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.BOOL]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.NULL]: ['value', 'suffix'],
-  [EXT_EXPR_TYPE.ORIGIN]: ['value'],
-  [EXT_EXPR_TYPE.PARAM]: ['value'],
-  [EXT_EXPR_TYPE.AGGR_FUNC]: ['name', 'args'],
-  [EXT_EXPR_TYPE.STAR]: ['value'],
-  [EXT_EXPR_TYPE.EXPR_LIST]: ['value'],
-  [EXT_EXPR_TYPE.CAST]: ['keyword', 'expr', 'symbol', 'target'],
-  [EXT_EXPR_TYPE.CASE]: ['expr', 'args'],
-  [EXT_EXPR_TYPE.FUNCTION]: ['name', 'args', 'suffix'],
-  [EXT_EXPR_TYPE.SUBQUERY]: ['ast', 'tableList', 'columnList'],
-  [PG_NODE_TYPE.VAR]: ['name', 'prefix', 'members'],
-  [PG_NODE_TYPE.EXTRACT]: ['args'],
-});
-const READ_AGGREGATE_ARG_KEYS = Object.freeze(['expr', 'distinct']);
-const READ_FUNCTION_ARG_KEYS = Object.freeze(['type', 'value']);
-const READ_SUFFIX_KEYS = Object.freeze(['collate']);
-const READ_CAST_TARGET_KEYS = Object.freeze(['dataType', 'length', 'scale', 'parentheses',
-  'suffix']);
-const ESCAPE_KEY = 'escape';
 
 const STAR_VALUE = '*';
 const ORIGIN_PARAM = '?';
 const SINGLE_QUOTE_CHAR = '\'';
-const KEYWORD_FUNCTION_NAME_TYPE = 'origin';
-const CAST_TYPE_ARGUMENT_SEPARATOR = ', ';
-
-function unsupportedFeature(message) {
-  const error = new Error(message);
-  error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
-  return error;
-}
-
-// Whether a node-sql-parser field carries syntax: a placeholder object whose
-// own fields are all empty (PostgreSQL mode's `into: {position: null}`)
-// carries none.
-function carriesValue(value) {
-  if (value === null || value === undefined || value === false || value === '') {
-    return false;
-  }
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-  return typeof value !== 'object' || Object.values(value).some(carriesValue);
-}
-
-/**
- * Refuse a node-sql-parser node that carries a key this converter does not
- * read.
- * @param {Object} node - External node.
- * @param {string[]} readKeys - Keys the converter reads for its type.
- * @param {string} [label] - Node label for the message.
- */
-function refuseUnreadKeys(node, readKeys, label = node?.type) {
-  for (const [key, value] of Object.entries(node)) {
-    if (!INERT_KEYS.includes(key) && !readKeys.includes(key) && carriesValue(value)) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.UNREAD_SYNTAX_PREFIX + key +
-        PARSER_ERROR_MSG.UNREAD_SYNTAX_SUFFIX + String(label));
-    }
-  }
-}
-
-function refuseUnreadExpressionKeys(expr) {
-  const isSubquery = Boolean(expr.ast);
-  const readKeys = READ_KEYS[isSubquery ? EXT_EXPR_TYPE.SUBQUERY : expr.type];
-  if (!readKeys) {
-    throw unsupportedFeature(PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type);
-  }
-  refuseUnreadKeys(expr, readKeys, isSubquery ? EXT_EXPR_TYPE.SUBQUERY : expr.type);
-  if (carriesValue(expr.suffix)) refuseUnreadKeys(expr.suffix, READ_SUFFIX_KEYS, 'suffix');
-}
-
-// The collation an external node carries: a column reference's `collate`, or
-// a literal's / call's `suffix.collate`.
-function externalCollation(expr) {
-  const clause = expr.collate || expr.suffix?.collate;
-  return clause ? String(clause.collate?.name ?? clause.name).toUpperCase() : null;
-}
-
-/**
- * The literal node of a node-sql-parser literal, carrying its SQLite storage
- * class (`sqlType`). The JS-visible `value` is what it has always been: an
- * integer as a number, a decimal as its lexeme text, a string unescaped,
- * TRUE/FALSE as the boolean in SQLite mode.
- * @param {Object} expr - External literal node.
- * @return {Object} LITERAL node.
- */
-function convertExternalLiteral(expr) {
-  switch (expr.type) {
-  case EXT_EXPR_TYPE.NUMBER:
-    if (typeof expr.value === 'string') {
-      return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.REAL};
-    }
-    // node-sql-parser reads a negative integer beyond 2^53 through
-    // parseFloat: the value is already rounded, so it is refused (interim I3,
-    // bound WP3), never carried.
-    if (!Number.isSafeInteger(expr.value)) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.BIG_INTEGER_LITERAL);
-    }
-    return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.INTEGER};
-  case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
-    return {type: EXPR_TYPE.LITERAL, value: String(expr.value).replace(/''/g, SINGLE_QUOTE_CHAR),
-      sqlType: SQL_STORAGE_CLASS.TEXT};
-  case EXT_EXPR_TYPE.STRING:
-    return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.TEXT};
-  case EXT_EXPR_TYPE.BOOL:
-    return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.INTEGER};
-  case EXT_EXPR_TYPE.NULL:
-    return {type: EXPR_TYPE.LITERAL, value: null, sqlType: SQL_STORAGE_CLASS.NULL};
-  default:
-    throw unsupportedFeature(PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type);
-  }
-}
-
-const LITERAL_TYPES = new Set([EXT_EXPR_TYPE.NUMBER, EXT_EXPR_TYPE.SINGLE_QUOTE_STRING,
-  EXT_EXPR_TYPE.STRING, EXT_EXPR_TYPE.BOOL, EXT_EXPR_TYPE.NULL]);
-
-// The declared type text of a CAST target as written (VARCHAR(10),
-// DECIMAL(10, 2)): SQLite derives the conversion from it.
-function castTargetTypeText(target) {
-  refuseUnreadKeys(target, READ_CAST_TARGET_KEYS, 'CAST target');
-  if (target.length === undefined || target.length === null) return String(target.dataType);
-  const scale = target.scale === undefined || target.scale === null ? '' :
-    CAST_TYPE_ARGUMENT_SEPARATOR + target.scale;
-  return `${target.dataType}(${target.length}${scale})`;
-}
 
 const sqlParserExpressionMethods = {
-  /**
-   * Convert one node-sql-parser expression: refused when it carries syntax
-   * this AST cannot hold; wrapped in a `collate` node when it carries an
-   * explicit COLLATE.
-   * @param {Object} expr - External expression node.
-   * @return {Object|Array|null} Internal expression node.
-   */
   convertExpression(expr) {
     if (!expr) {
       return null;
     }
-    if (Array.isArray(expr)) {
-      return expr.map((entry) => this.convertExpression(entry));
-    }
-    refuseUnreadExpressionKeys(expr);
-    const node = this.convertExpressionNode(expr);
-    const collation = externalCollation(expr);
-    return collation === null ? node :
-      {type: EXPR_TYPE.COLLATE, expression: node, collation};
-  },
 
-  convertExpressionNode(expr) {
+    // node-sql-parser emits the same structured nodes for CASE, CAST, and
+    // function calls in SQLite and PostgreSQL modes. Convert those before the
+    // dialect-specific parameter and boolean handling below.
+    if (SHARED_STRUCTURED_NODE_TYPES.has(expr.type)) {
+      return this.convertPgExpression(expr);
+    }
+
+    // PostgreSQL-only node types.
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
+      const pgResult = this.convertPgExpression(expr);
+      if (pgResult) {
+        return pgResult;
+      }
+    }
+
     // Scalar subquery: node has .ast property (SELECT wrapped in parens)
-    if (expr.ast) {
+    if (expr.ast && expr.parentheses) {
       return {
         type: PG_EXPR_TYPE.SUBQUERY,
         query: this.convertSelect(expr.ast),
       };
     }
-    if (LITERAL_TYPES.has(expr.type)) {
-      return this.dialect === PARSER_DIALECT.POSTGRESQL && expr.type === EXT_EXPR_TYPE.BOOL ?
-        translateBooleanLiteral(expr) : convertExternalLiteral(expr);
-    }
+
     switch (expr.type) {
     case EXT_EXPR_TYPE.BINARY_EXPR:
       return this.convertBinaryExpr(expr);
@@ -265,97 +111,95 @@ const sqlParserExpressionMethods = {
       return this.convertUnaryExpr(expr);
     case EXT_EXPR_TYPE.COLUMN_REF:
       return this.convertColumnRef(expr);
-    // A double-quoted token is an identifier: this SQLite build is compiled
-    // without the double-quoted-string misfeature (SQLITE_DQS=0), as
-    // PostgreSQL reads it too.
+    case EXT_EXPR_TYPE.NUMBER:
+      return {type: EXPR_TYPE.LITERAL, value: expr.value};
+    case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+      return {
+        type: EXPR_TYPE.LITERAL,
+        value: typeof expr.value === 'string' ?
+          expr.value.replace(/''/g, SINGLE_QUOTE_CHAR) :
+          expr.value,
+      };
     case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
-      return {type: EXPR_TYPE.COLUMN_REF, table: null, column: expr.value};
+    case EXT_EXPR_TYPE.STRING:
+      return {type: EXPR_TYPE.LITERAL, value: expr.value};
+    case EXT_EXPR_TYPE.BOOL:
+      return {type: EXPR_TYPE.LITERAL, value: expr.value};
+    case EXT_EXPR_TYPE.NULL:
+      return {type: EXPR_TYPE.LITERAL, value: null};
     case EXT_EXPR_TYPE.ORIGIN:
       if (expr.value === ORIGIN_PARAM) {
         return this.createParameterNode();
       }
-      throw unsupportedFeature(PARSER_ERROR_MSG.KEYWORD_ORIGIN_PREFIX + String(expr.value));
-    case EXT_EXPR_TYPE.PARAM:
-      return this.convertNamedParameter(expr);
+      return {type: EXPR_TYPE.LITERAL, value: expr.value};
     case EXT_EXPR_TYPE.AGGR_FUNC:
       return this.convertAggregate(expr);
     case EXT_EXPR_TYPE.STAR:
       return {type: EXPR_TYPE.STAR, value: STAR_VALUE};
     case EXT_EXPR_TYPE.EXPR_LIST:
       return expr.value.map((v) => this.convertExpression(v));
-    case EXT_EXPR_TYPE.CAST:
-      return this.convertCast(expr);
-    case EXT_EXPR_TYPE.CASE:
-      return this.convertCase(expr);
-    case EXT_EXPR_TYPE.FUNCTION:
-      return this.convertFunction(expr);
-    default:
-      return this.convertPgExpression(expr);
+    default: {
+      const error = new Error(
+        PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type,
+      );
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
+    }
     }
   },
 
   /**
-   * A named parameter: only the reserved name a `LIMIT ?` / `OFFSET ?`
-   * placeholder is respelled as (sql-parser-source-text.js) is one; any other
-   * named parameter is refused.
-   * @param {Object} expr - External param node.
-   * @return {Object} PARAMETER node.
-   */
-  convertNamedParameter(expr) {
-    if (expr.value !== LIMIT_PARAMETER_NAME) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type);
-    }
-    return this.createParameterNode();
-  },
-
-  /**
-   * PostgreSQL-only node types ($n parameters, EXTRACT).
+   * Handles structured and PostgreSQL-specific AST nodes produced by
+   * node-sql-parser. Returns null if the node should fall through to the
+   * standard switch.
    * @param {Object} expr - External parser AST expression node.
-   * @returns {Object} Converted Internal_AST node.
+   * @returns {Object|null} Converted Internal_AST node, or null.
    */
   convertPgExpression(expr) {
-    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
-      if (expr.type === PG_NODE_TYPE.VAR && expr.prefix === PG_PARAM_PREFIX) {
-        translatePositionalParam({value: expr.name}, this.positionalParams);
+    const convertExprFn = this.convertExpression.bind(this);
+
+    switch (expr.type) {
+    case PG_NODE_TYPE.VAR:
+      if (expr.prefix === PG_PARAM_PREFIX) {
+        translatePositionalParam(
+          {value: expr.name}, this.positionalParams,
+        );
         return this.createParameterNode();
       }
-      if (expr.type === PG_NODE_TYPE.EXTRACT) {
-        return this.convertPgExtract(expr);
-      }
+      return null;
+
+    case PG_NODE_TYPE.CAST:
+      return translateTypeCast(
+        {
+          expr: expr.expr,
+          target: {dataType: expr.target[0]?.dataType},
+        },
+        convertExprFn,
+      );
+
+    case PG_NODE_TYPE.CASE:
+      return this.convertPgCase(expr);
+
+    case PG_NODE_TYPE.FUNCTION:
+      return this.convertPgFunction(expr);
+
+    case PG_NODE_TYPE.EXTRACT:
+      return this.convertPgExtract(expr);
+
+    case EXT_EXPR_TYPE.BOOL:
+      return translateBooleanLiteral(expr);
+
+    default:
+      return null;
     }
-    throw unsupportedFeature(PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type);
   },
 
   /**
-   * CAST. In SQLite mode the target type is kept as written and SQLite
-   * derives the conversion from it; `affinity` is SQLite's affinity of that
-   * type (sql-table-definition.js). PostgreSQL mode translates the type.
-   * @param {Object} expr - External cast node.
-   * @return {Object} CAST node.
-   */
-  convertCast(expr) {
-    if (!Array.isArray(expr.target) || expr.target.length !== 1) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.CAST_TARGET);
-    }
-    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
-      return translateTypeCast({expr: expr.expr, target: {dataType: expr.target[0]?.dataType}},
-        this.convertExpression.bind(this));
-    }
-    const targetType = castTargetTypeText(expr.target[0]);
-    return {
-      type: PG_EXPR_TYPE.CAST,
-      expression: this.convertExpression(expr.expr),
-      targetType,
-      affinity: sqliteDeclaredTypeAffinity(targetType),
-    };
-  },
-
-  /**
-   * CASE (searched and simple).
-   * @param {Object} expr - External case node.
+   * Converts a PG CASE expression to an Internal_AST CASE node.
+   * @param {Object} expr - PG case AST node.
    * @returns {Object} Internal_AST case node.
    */
-  convertCase(expr) {
+  convertPgCase(expr) {
     const operand = expr.expr ? this.convertExpression(expr.expr) : null;
     const conditions = [];
     let elseExpr = null;
@@ -380,19 +224,16 @@ const sqlParserExpressionMethods = {
   },
 
   /**
-   * A function call or EXISTS. In SQLite mode the call is kept as written
-   * (name and arguments): SQLite evaluates it. PostgreSQL mode translates
-   * PostgreSQL functions. A window (OVER) is refused by the key check.
-   * @param {Object} expr - External function node.
+   * Converts a PG function call or EXISTS expression.
+   * EXISTS is parsed as a function node by node-sql-parser PG mode.
+   * @param {Object} expr - PG function AST node.
    * @returns {Object} Internal_AST node.
    */
-  convertFunction(expr) {
+  convertPgFunction(expr) {
     const nameParts = expr.name?.name || [];
-    if (nameParts.length !== 1 && this.dialect !== PARSER_DIALECT.POSTGRESQL) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.QUALIFIED_FUNCTION);
-    }
-    const funcName = String(nameParts[0]?.value ?? '');
-    if (expr.args) refuseUnreadKeys(expr.args, READ_FUNCTION_ARG_KEYS, 'function arguments');
+    const funcName = nameParts.length > 0 ?
+      nameParts[0].value :
+      '';
     const argValues = expr.args?.value || [];
 
     // EXISTS is parsed as a function with a subquery argument
@@ -405,20 +246,8 @@ const sqlParserExpressionMethods = {
       };
     }
 
-    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
-      return translateFunctionCall(funcName, argValues, this.convertExpression.bind(this));
-    }
-    // CURRENT_TIME, CURRENT_DATE, CURRENT_TIMESTAMP: keywords without an
-    // argument list.
-    if (nameParts[0].type === KEYWORD_FUNCTION_NAME_TYPE && !expr.args) {
-      return {type: PG_EXPR_TYPE.FUNCTION_CALL, name: funcName.toUpperCase(), args: [],
-        keyword: true};
-    }
-    return {
-      type: PG_EXPR_TYPE.FUNCTION_CALL,
-      name: funcName,
-      args: argValues.map((arg) => this.convertExpression(arg)),
-    };
+    const convertExprFn = this.convertExpression.bind(this);
+    return translateFunctionCall(funcName, argValues, convertExprFn);
   },
 
   /**
@@ -436,84 +265,6 @@ const sqlParserExpressionMethods = {
     );
   },
 
-  /**
-   * LIKE / NOT LIKE, with its ESCAPE clause (carried by node-sql-parser on the
-   * pattern node).
-   * @param {Object} expr - External binary LIKE node.
-   * @param {string} operator - Upper-case operator.
-   * @return {Object} LIKE node.
-   */
-  convertLike(expr, operator) {
-    const {[ESCAPE_KEY]: escape, ...pattern} = expr.right;
-    return {
-      type: EXPR_TYPE.LIKE,
-      expression: this.convertExpression(expr.left),
-      pattern: this.convertExpression(pattern),
-      negated: operator === SQL_OPERATOR.NOT_LIKE,
-      escape: escape ? this.convertExpression(escape.value) : null,
-    };
-  },
-
-  convertIn(expr, operator) {
-    const expression = this.convertExpression(expr.left);
-    // IN subquery: right is expr_list with a single element having .ast
-    if (Array.isArray(expr.right.value) &&
-        expr.right.value.length === 1 &&
-        expr.right.value[0]?.ast) {
-      return {
-        type: EXPR_TYPE.IN,
-        expression,
-        subquery: {
-          type: PG_EXPR_TYPE.SUBQUERY,
-          query: this.convertSelect(expr.right.value[0].ast),
-        },
-        negated: operator === SQL_OPERATOR.NOT_IN,
-      };
-    }
-    // IN-list members go through the full expression converter.
-    const values = Array.isArray(expr.right.value) ?
-      expr.right.value.map((v) => this.convertExpression(v)) :
-      [this.convertExpression(expr.right)];
-    return {
-      type: EXPR_TYPE.IN,
-      expression,
-      values,
-      negated: operator === SQL_OPERATOR.NOT_IN,
-    };
-  },
-
-  // x NOT BETWEEN a AND b is SQLite's NOT (x BETWEEN a AND b).
-  convertBetween(expr, operator) {
-    const between = {
-      type: EXPR_TYPE.BETWEEN,
-      expression: this.convertExpression(expr.left),
-      low: this.convertExpression(expr.right.value[0]),
-      high: this.convertExpression(expr.right.value[1]),
-    };
-    return operator === SQL_OPERATOR.NOT_BETWEEN ?
-      {type: EXPR_TYPE.UNARY, operator: SQL_OPERATOR.NOT, operand: between} : between;
-  },
-
-  convertIsNull(expr, operator) {
-    // Only IS [NOT] NULL is carried; `IS <value>` is refused (typed), never
-    // collapsed to IS NULL.
-    const leftOperand = this.convertExpression(expr.left);
-    const rightOperand = this.convertExpression(expr.right);
-    if (rightOperand !== null &&
-      !(rightOperand.type === EXPR_TYPE.LITERAL &&
-        rightOperand.value === null)) {
-      throw unsupportedFeature(PARSER_ERROR_MSG.IS_NON_NULL_OPERAND);
-    }
-    return {
-      type: EXPR_TYPE.BINARY,
-      operator: operator === SQL_OPERATOR.IS ?
-        SQL_OPERATOR.IS_NULL :
-        SQL_OPERATOR.IS_NOT_NULL,
-      left: leftOperand,
-      right: {type: EXPR_TYPE.LITERAL, value: null, sqlType: SQL_STORAGE_CLASS.NULL},
-    };
-  },
-
   convertBinaryExpr(expr) {
     const operator = expr.operator.toUpperCase();
 
@@ -523,18 +274,77 @@ const sqlParserExpressionMethods = {
           operator === SQL_OPERATOR.NOT_ILIKE)) {
       return translateIlike(expr, this.convertExpression.bind(this));
     }
+
     if (operator === SQL_OPERATOR.IN || operator === SQL_OPERATOR.NOT_IN) {
-      return this.convertIn(expr, operator);
+      const expression = this.convertExpression(expr.left);
+      // IN subquery: right is expr_list with a single element having .ast
+      if (Array.isArray(expr.right.value) &&
+          expr.right.value.length === 1 &&
+          expr.right.value[0]?.ast) {
+        return {
+          type: EXPR_TYPE.IN,
+          expression,
+          subquery: {
+            type: PG_EXPR_TYPE.SUBQUERY,
+            query: this.convertSelect(expr.right.value[0].ast),
+          },
+          negated: operator === SQL_OPERATOR.NOT_IN,
+        };
+      }
+      // IN-list members go through the full expression converter:
+      // convertValue turns non-literals (column refs, arithmetic) into
+      // NULL literals, silently changing the predicate's meaning.
+      const values = Array.isArray(expr.right.value) ?
+        expr.right.value.map((v) => this.convertExpression(v)) :
+        [this.convertExpression(expr.right)];
+      return {
+        type: EXPR_TYPE.IN,
+        expression,
+        values,
+        negated: operator === SQL_OPERATOR.NOT_IN,
+      };
     }
-    if (operator === SQL_OPERATOR.BETWEEN || operator === SQL_OPERATOR.NOT_BETWEEN) {
-      return this.convertBetween(expr, operator);
+
+    if (operator === SQL_OPERATOR.BETWEEN) {
+      return {
+        type: EXPR_TYPE.BETWEEN,
+        expression: this.convertExpression(expr.left),
+        low: this.convertExpression(expr.right.value[0]),
+        high: this.convertExpression(expr.right.value[1]),
+      };
     }
-    if (operator === SQL_OPERATOR.LIKE || operator === SQL_OPERATOR.NOT_LIKE) {
-      return this.convertLike(expr, operator);
+
+    if (operator === SQL_OPERATOR.LIKE ||
+        operator === SQL_OPERATOR.NOT_LIKE) {
+      return {
+        type: EXPR_TYPE.LIKE,
+        expression: this.convertExpression(expr.left),
+        pattern: this.convertExpression(expr.right),
+        negated: operator === SQL_OPERATOR.NOT_LIKE,
+      };
     }
+
     if (operator === SQL_OPERATOR.IS || operator === SQL_OPERATOR.IS_NOT) {
-      return this.convertIsNull(expr, operator);
+      // Only IS [NOT] NULL is supported downstream; collapsing
+      // `IS <value>` to IS NULL silently drops the operand, so a
+      // non-NULL right side must fail closed at parse time.
+      const leftOperand = this.convertExpression(expr.left);
+      const rightOperand = this.convertExpression(expr.right);
+      if (rightOperand !== null &&
+        !(rightOperand.type === EXPR_TYPE.LITERAL &&
+          rightOperand.value === null)) {
+        throw new Error(PARSER_ERROR_MSG.IS_NON_NULL_OPERAND);
+      }
+      return {
+        type: EXPR_TYPE.BINARY,
+        operator: operator === SQL_OPERATOR.IS ?
+          SQL_OPERATOR.IS_NULL :
+          SQL_OPERATOR.IS_NOT_NULL,
+        left: leftOperand,
+        right: {type: EXPR_TYPE.LITERAL, value: null},
+      };
     }
+
     return {
       type: EXPR_TYPE.BINARY,
       operator: this.normalizeOperator(operator),
@@ -570,7 +380,6 @@ const sqlParserExpressionMethods = {
   },
 
   convertAggregate(expr) {
-    if (expr.args) refuseUnreadKeys(expr.args, READ_AGGREGATE_ARG_KEYS, 'aggregate arguments');
     let argument;
     if (expr.args?.expr?.type === EXT_EXPR_TYPE.STAR) {
       argument = {type: EXPR_TYPE.STAR, value: STAR_VALUE};
@@ -587,28 +396,54 @@ const sqlParserExpressionMethods = {
     };
   },
 
-  /**
-   * A literal or parameter operand (column DEFAULT): the one literal
-   * conversion, or a parameter placeholder.
-   * @param {Object|null} val - External node.
-   * @return {Object} LITERAL or PARAMETER node.
-   */
   convertValue(val) {
     if (!val) {
-      return {type: EXPR_TYPE.LITERAL, value: null, sqlType: SQL_STORAGE_CLASS.NULL};
+      return {type: EXPR_TYPE.LITERAL, value: null};
     }
-    if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
-        val.type === PG_NODE_TYPE.VAR && val.prefix === PG_PARAM_PREFIX) {
-      translatePositionalParam({value: val.name}, this.positionalParams);
-      return this.createParameterNode();
+
+    // PG-specific value types
+    if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
+      if (val.type === PG_NODE_TYPE.VAR && val.prefix === PG_PARAM_PREFIX) {
+        translatePositionalParam(
+          {value: val.name}, this.positionalParams,
+        );
+        return this.createParameterNode();
+      }
+      if (val.type === EXT_EXPR_TYPE.BOOL) {
+        return translateBooleanLiteral(val);
+      }
     }
-    if (val.type === EXT_EXPR_TYPE.ORIGIN && val.value === ORIGIN_PARAM) {
-      return this.createParameterNode();
+
+    switch (val.type) {
+    case EXT_EXPR_TYPE.NUMBER:
+      return {type: EXPR_TYPE.LITERAL, value: val.value};
+    case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+      return {
+        type: EXPR_TYPE.LITERAL,
+        value: typeof val.value === 'string' ?
+          val.value.replace(/''/g, SINGLE_QUOTE_CHAR) :
+          val.value,
+      };
+    case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
+    case EXT_EXPR_TYPE.STRING:
+      return {type: EXPR_TYPE.LITERAL, value: val.value};
+    case EXT_EXPR_TYPE.BOOL:
+      return {type: EXPR_TYPE.LITERAL, value: val.value};
+    case EXT_EXPR_TYPE.NULL:
+      return {type: EXPR_TYPE.LITERAL, value: null};
+    case EXT_EXPR_TYPE.ORIGIN:
+      if (val.value === ORIGIN_PARAM) {
+        return this.createParameterNode();
+      }
+      return {type: EXPR_TYPE.LITERAL, value: val.value};
+    default: {
+      const error = new Error(
+        PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + val.type,
+      );
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
     }
-    if (this.dialect === PARSER_DIALECT.POSTGRESQL && val.type === EXT_EXPR_TYPE.BOOL) {
-      return translateBooleanLiteral(val);
     }
-    return convertExternalLiteral(val);
   },
 };
 

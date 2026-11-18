@@ -3,7 +3,6 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -23,8 +22,10 @@ import {
 import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
-import '../../src/control-plane/control-plane-kernel-ingress.js';
-import '../../src/bootstrap/join-session-store.js';
+import {
+} from '../../src/control-plane/control-plane-kernel-ingress.js';
+import {
+} from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
@@ -37,11 +38,16 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
-import '../../src/control-plane/membership-lifecycle-controller.js';
-import '../../src/control-plane/control-plane-readiness-constants.js';
-import '../../src/control-plane/owner-contract-outcome.js';
-import '../../src/control-plane/control-plane-constants.js';
-import '../../src/query/query-constants.js';
+import {
+} from '../../src/control-plane/membership-lifecycle-controller.js';
+import {
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+} from '../../src/control-plane/owner-contract-outcome.js';
+import {
+} from '../../src/control-plane/control-plane-constants.js';
+import {
+} from '../../src/query/query-constants.js';
 import {
   JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
@@ -149,7 +155,7 @@ test('NodeJoiningService - initialization', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -174,7 +180,7 @@ test('NodeJoiningService - websocket phase receives configured retry policy',
     const TEST_LEADERSHIP_WAIT_BACKOFF_MULTIPLIER = 2;
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: TEST_JOINING_NODE_ID,
       nodeAddress: TEST_JOINING_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_NODE_ADDRESS,
@@ -232,7 +238,7 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
     const TEST_ENDPOINT_PRIORITY = 0;
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: TEST_JOINING_NODE_ID,
       nodeAddress: TEST_JOINING_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_NODE_ADDRESS,
@@ -424,7 +430,7 @@ test('NodeJoiningService - runtime owner exposes control-plane readiness service
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'test-node-runtime-owner-readiness',
       nodeAddress: 'ws://localhost:9099',
       seedNodeAddress: 'http://localhost:8080',
@@ -481,7 +487,7 @@ test('NodeJoiningService - runtime owner exposes system table cache for bootstra
     NodeService.getInstance().setSystemCacheProxy(runtimeOwnerCache);
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'test-node-runtime-owner-cache',
       nodeAddress: 'ws://localhost:9098',
       seedNodeAddress: 'http://localhost:8080',
@@ -510,7 +516,7 @@ test('NodeJoiningService - initializeJoinInfrastructure opens external transport
 
     const calls = [];
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'joining-node-open-admission',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -575,7 +581,7 @@ test('NodeJoiningService - ready signal metadata gate uses seed-contact authorit
       timestamp: Date.now(),
     };
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'joining-node-ready-signal-authority',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -637,7 +643,7 @@ test('NodeJoiningService - runJoinInfrastructurePhases notifies local admin runt
       });
 
       const service = new NodeJoiningService({
-        bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+        bootIncarnation: 1,
         nodeId: 'joining-node-local-admin',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -691,7 +697,7 @@ test('NodeJoiningService - getStatus', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -710,7 +716,7 @@ test('NodeJoiningService - getStatus surfaces promotion and snapshot revision me
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'test-node-status-metadata',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -761,7 +767,7 @@ test('NodeJoiningService - classifies transient control-plane publication failur
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'joining-node-classifier',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -802,7 +808,7 @@ test('NodeJoiningService - executePhase routes work through class A scheduler', 
   };
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'test-node-scheduler',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -831,7 +837,7 @@ test('NodeJoiningService - initializeMessageGroupServiceHandler uses NodeService
       });
 
       const service = new NodeJoiningService({
-        bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+        bootIncarnation: 1,
         nodeId: 'joining-node-message-group-handler',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -873,7 +879,7 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'durable-join-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -971,7 +977,7 @@ test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1031,7 +1037,7 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1193,7 +1199,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1376,7 +1382,7 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: 'durable-join-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1464,7 +1470,7 @@ test('NodeJoiningService - durable rejoin restore skips ambiguous over-target ' 
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1584,7 +1590,7 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
 
     let attempts = 0;
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440099',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1652,7 +1658,7 @@ test('NodeJoiningService - sends contact-seed attempt deadline to seed',
 
     let capturedBootstrapRequest = null;
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440098',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1691,7 +1697,7 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
 
     let attempts = 0;
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440100',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1731,7 +1737,7 @@ test('NodeJoiningService - retries register-service request after timeout',
     let attempts = 0;
     const retryDelays = [];
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440104',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1776,7 +1782,7 @@ test('NodeJoiningService - retries register-service on cache visibility timeout 
     const retryDelays = [];
     const warnEvents = [];
     const service = new NodeJoiningService({
-      bootIncarnation: 1, hostId: LOCAL_MACHINE_HOST_ID,
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440106',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

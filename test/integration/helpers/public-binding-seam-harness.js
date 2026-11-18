@@ -24,7 +24,6 @@
 import {createHash} from 'node:crypto';
 import {readFile, writeFile} from 'node:fs/promises';
 import net from 'node:net';
-import {hostname} from 'node:os';
 import path from 'node:path';
 
 import {RUNTIME_KIND} from '../../../src/constants/runtime.js';
@@ -55,7 +54,6 @@ import {ServiceLocalOciLayoutBuilder} from
 const SEAM_ENV_KEY = Object.freeze({
   ADMIN_WS_PORT: 'ADMIN_WS_PORT',
   DATA_DIR: 'DATA_DIR',
-  NODE_HOST_ID: 'NODE_HOST_ID',
   NODE_ID: 'NODE_ID',
   PGWIRE_AUTH_DATABASE: 'PGWIRE_AUTH_DATABASE',
   PGWIRE_AUTH_PASSWORD: 'PGWIRE_AUTH_PASSWORD',
@@ -140,8 +138,6 @@ async function startSeamRuntime(options) {
   const assignments = {
     [SEAM_ENV_KEY.ADMIN_WS_PORT]: String(options.restPort + ADMIN_PORT_OFFSET),
     [SEAM_ENV_KEY.DATA_DIR]: options.dataDir,
-    // The runtime runs on this machine (required host identity).
-    [SEAM_ENV_KEY.NODE_HOST_ID]: hostname(),
     [SEAM_ENV_KEY.NODE_ID]: options.nodeId,
     [SEAM_ENV_KEY.PGWIRE_AUTH_DATABASE]: options.credentials.database,
     [SEAM_ENV_KEY.PGWIRE_AUTH_PASSWORD]: options.credentials.password,

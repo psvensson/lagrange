@@ -39,17 +39,6 @@ import {
 } from './real-product-captured-intrinsics.js';
 
 const SAFE_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/u;
-// Every command a host runs for the harness runs in the C locale, set by the
-// command itself, so neither the transport nor the host decides it. ssh and
-// `gcloud compute ssh` forward the operator's LANG and LC_* (ssh_config
-// `SendEnv LANG LC_*`), and adam-laptop and adams-gamla run a decimal-comma
-// LC_NUMERIC (sv_SE): curl then refuses `--max-time 1.249` (exit 2, no
-// request), gawk prints MemTotal as `15,5`, and a translated message would
-// escape the error classifiers. LC_ALL overrides LANG and every LC_* category.
-// It is set in the remote shell itself rather than through `env LC_ALL=C sh -c
-// '...'`: no second quoting layer, the same interpreter, the command's own exit
-// status, and the same process exec'd or forked for the command as without it.
-const FIXED_LOCALE_PREFIX = 'export LC_ALL=C; ';
 const SINGLE_QUOTE = '\'';
 const ESCAPED_SINGLE_QUOTE = '\'\\\'\'';
 const HTTP_STATUS_MARKER = 'http_status=';
@@ -66,6 +55,7 @@ const DEFAULT_EXEC_TIMEOUT_MS = 10000;
 const DEFAULT_SSH_TIMEOUT_MS = 120000;
 const DEFAULT_SSH_MAX_BUFFER = 64 * 1024 * 1024;
 const MS_PER_SECOND = 1000;
+const MIN_CURL_TIMEOUT_SECONDS = 1;
 const DIAGNOSTIC_LOG_TAIL = 80;
 const CURL_EXIT_CODE_COULDNT_CONNECT = 7;
 const CURL_EXIT_CODE_OPERATION_TIMEDOUT = 28;
@@ -92,17 +82,6 @@ function shellQuote(value) {
 function shellWord(value) {
   const text = String(value);
   return SAFE_WORD.test(text) ? text : shellQuote(text);
-}
-
-/**
- * `command` as a remote shell receives it from any harness transport (the
- * ssh runner here, `gcloud compute ssh --command` in the GCP owners): run in
- * the C locale (FIXED_LOCALE_PREFIX).
- * @param {string} command a POSIX shell command line
- * @return {string}
- */
-function fixedLocaleCommand(command) {
-  return `${FIXED_LOCALE_PREFIX}${command}`;
 }
 
 // Output followed by `MARKER<value>` on its own last line.
@@ -271,17 +250,6 @@ function boundedSshTimeoutMs(requestedTimeoutMs, defaultTimeoutMs) {
   return {hasFinite, effectiveTimeoutMs, sshTimeoutMs};
 }
 
-function httpCallBudgets(timeoutMs) {
-  const defaultHttpTimeoutMs = HTTP_TIMEOUT_SECONDS * MS_PER_SECOND;
-  const defaultTotalTimeoutMs = defaultHttpTimeoutMs + SSH_TRANSPORT_GRACE_MS;
-  const {sshTimeoutMs} = boundedSshTimeoutMs(timeoutMs, defaultHttpTimeoutMs);
-  // Keep curl's completion before the SSH deadline without extending the
-  // caller's total budget. Short calls retain the existing HTTP/transport ratio.
-  const httpTimeoutMs = Math.floor(
-    sshTimeoutMs * defaultHttpTimeoutMs / defaultTotalTimeoutMs);
-  return {httpTimeoutMs, sshTimeoutMs};
-}
-
 function resolveEffectiveSignal(opts, signal) {
   if (signal !== undefined) return signal;
   if (opts && objectHasOwn(opts, 'signal')) return opts.signal;
@@ -303,8 +271,9 @@ function mergeCallOpts(opts, {signal = undefined, timeoutMs = undefined} = {}) {
  * load-generator host) with curl. Never throws: a transport failure is a
  * `{status: null, error}` answer the caller decides on.
  */
-function buildCurlHttpCommand({url, method, body, basicAuth, httpTimeoutMs}) {
-  const curlTimeoutSeconds = httpTimeoutMs / MS_PER_SECOND;
+function buildCurlHttpCommand({url, method, body, basicAuth, effectiveTimeoutMs}) {
+  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
+    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
   const words = ['curl', '-sS', '--max-time', String(curlTimeoutSeconds),
     '--max-filesize', String(HTTP_MAX_FILESIZE_BYTES)];
   if (method !== 'GET') words.push('-X', method);
@@ -371,11 +340,12 @@ async function httpFromHost({sshRun, opts, from, url, method = 'GET', body = und
   const effectiveSignal = resolveEffectiveSignal(opts, signal);
   const early = precheckHttpFromHost(effectiveSignal, timeoutMs);
   if (early !== null) return early;
-  const {httpTimeoutMs, sshTimeoutMs} = httpCallBudgets(timeoutMs);
-  // curl --max-time 0 is unbounded; an unallocatable tiny budget must not spawn.
-  const exhausted = precheckHttpFromHost(effectiveSignal, httpTimeoutMs);
-  if (exhausted !== null) return exhausted;
-  const command = buildCurlHttpCommand({url, method, body, basicAuth, httpTimeoutMs});
+  const {effectiveTimeoutMs} = boundedSshTimeoutMs(
+    timeoutMs, HTTP_TIMEOUT_SECONDS * MS_PER_SECOND);
+  const curlTimeoutSeconds = Math.max(MIN_CURL_TIMEOUT_SECONDS,
+    Math.ceil(effectiveTimeoutMs / MS_PER_SECOND));
+  const sshTimeoutMs = (curlTimeoutSeconds * MS_PER_SECOND) + SSH_TRANSPORT_GRACE_MS;
+  const command = buildCurlHttpCommand({url, method, body, basicAuth, effectiveTimeoutMs});
   const callOpts = mergeCallOpts(opts, {signal: effectiveSignal, timeoutMs: sshTimeoutMs});
   try {
     const raw = await sshRun(from, callOpts, command, sshTimeoutMs);
@@ -704,7 +674,7 @@ function executeSshCommand({execFileImpl, target, command, sshOpts, signal,
         timedOutByWrapper = true;
         if (child && typeof child.kill === 'function') child.kill('SIGTERM');
       }, boundedTimeoutMs) : null;
-    const execArgs = [...sshOptions(sshOpts), target, fixedLocaleCommand(command)];
+    const execArgs = [...sshOptions(sshOpts), target, command];
     const execOptions = {timeout: boundedTimeoutMs, maxBuffer, ...(signal ? {signal} : {})};
     child = execFileImpl('ssh', execArgs, execOptions, (error, stdout = '', stderr = '') => {
       if (settled) return;
@@ -817,7 +787,6 @@ export {
   dockerRunOnceCommand,
   errorText,
   execWithStatus,
-  fixedLocaleCommand,
   httpFromHost,
   inspectContainerCommand,
   inspectContainerStateCommand,

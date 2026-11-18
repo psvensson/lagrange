@@ -6,7 +6,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {createSqlRequest, isSqlRequest} from '../../src/query/sql-request.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 import {
+  DEFAULT_EFFECTIVE_QUERY_BUDGET,
   DEFAULT_QUERY_BUDGET,
+  QB_FIELD,
   QUERY_BUDGET_NORMALIZATION_ERROR_MSG,
 } from '../../src/wasm-service/query-budget-constants.js';
 
@@ -126,77 +128,45 @@ test('createSqlRequest - merges budget overrides', (t) => {
   t.end();
 });
 
-test('createSqlRequest - carries every limit by its canonical name', (t) => {
+test('createSqlRequest - normalizes caller budget fields before applying defaults', (t) => {
   const override = 42;
-  for (const field of Object.keys(DEFAULT_QUERY_BUDGET)) {
-    const request = createSqlRequest({
-      statement: 'SELECT 1',
-      budgets: {[field]: override},
-    });
-    t.equal(request.budgets[field], override, `${field} preserves the override`);
-    t.same(
-      Object.keys(request.budgets),
-      Object.keys(DEFAULT_QUERY_BUDGET),
-      `${field}: the request budget holds exactly the canonical limits`,
-    );
-    t.ok(Object.isFrozen(request.budgets));
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    for (const budgets of [
+      {[upperKey]: override},
+      {[camelKey]: override},
+      {[upperKey]: override, [camelKey]: override},
+    ]) {
+      const request = createSqlRequest({statement: 'SELECT 1', budgets});
+      t.equal(request.budgets[upperKey], override, `${upperKey} preserves the override`);
+      t.equal(request.budgets[camelKey], override, `${camelKey} names the same limit`);
+      t.ok(Object.isFrozen(request.budgets));
+    }
   }
-  t.end();
-});
-
-test('createSqlRequest - refuses unknown, misspelled or non-canonical budget fields', (t) => {
-  for (const budgets of [
-    {resultMaxRows: 5},
-    {resultMaxRow: 5},
-    {RESULT_MAX_ROW: 5},
-    {RESULT_MAX_ROWS: 5, resultMaxRows: 5},
-  ]) {
-    t.throws(
-      () => createSqlRequest({statement: 'SELECT 1', budgets}),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.UNKNOWN_BUDGET_FIELD),
-      `${Object.keys(budgets).join(',')} is refused, not defaulted`,
-    );
-  }
-  t.end();
-});
-
-test('createSqlRequest - refuses limits that are not non-negative safe integers', (t) => {
-  for (const limit of ['7', -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY,
-    Number.MAX_SAFE_INTEGER + 1, null, undefined, true]) {
-    t.throws(
-      () => createSqlRequest({statement: 'SELECT 1', budgets: {RESULT_MAX_ROWS: limit}}),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_LIMIT),
-      `RESULT_MAX_ROWS=${String(limit)} is refused`,
-    );
-  }
-  t.equal(
-    createSqlRequest({statement: 'SELECT 1', budgets: {RESULT_MAX_ROWS: 0}})
-      .budgets.RESULT_MAX_ROWS,
-    0,
+  const camelBudgets = Object.fromEntries(
+    Object.values(QB_FIELD).map((key) => [key, override]),
   );
-  for (const budgets of [null, [], 'RESULT_MAX_ROWS=5', new Map()]) {
-    t.throws(
-      () => createSqlRequest({statement: 'SELECT 1', budgets}),
-      new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.INVALID_BUDGET_OBJECT),
-    );
+  const request = createSqlRequest({statement: 'SELECT 1', budgets: camelBudgets});
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    t.equal(request.budgets[upperKey], override);
+    t.equal(request.budgets[camelKey], override);
   }
   t.end();
 });
 
-test('isSqlRequest - refuses a request whose budget is not normalized', (t) => {
-  const request = createSqlRequest({statement: 'SELECT 1'});
-  t.ok(isSqlRequest(request));
-  t.notOk(isSqlRequest({...request, budgets: undefined}));
-  t.notOk(isSqlRequest({...request, budgets: Object.freeze({})}));
-  t.notOk(isSqlRequest({...request, budgets: {...request.budgets}}), 'unfrozen');
-  t.notOk(isSqlRequest({
-    ...request,
-    budgets: Object.freeze({...request.budgets, resultMaxRows: 1}),
-  }));
-  t.notOk(isSqlRequest({
-    ...request,
-    budgets: Object.freeze({...request.budgets, RESULT_MAX_ROWS: '1'}),
-  }));
+test('createSqlRequest - rejects explicit budget conflicts even at default values', (t) => {
+  for (const [upperKey, camelKey] of Object.entries(QB_FIELD)) {
+    const defaultValue = DEFAULT_EFFECTIVE_QUERY_BUDGET[upperKey];
+    for (const budgets of [
+      {[upperKey]: defaultValue, [camelKey]: defaultValue + 1},
+      {[upperKey]: defaultValue + 1, [camelKey]: defaultValue},
+    ]) {
+      t.throws(
+        () => createSqlRequest({statement: 'SELECT 1', budgets}),
+        new RegExp(QUERY_BUDGET_NORMALIZATION_ERROR_MSG.CONFLICTING_BUDGET_LIMITS),
+        `${upperKey} rejects contradictory caller values`,
+      );
+    }
+  }
   t.end();
 });
 

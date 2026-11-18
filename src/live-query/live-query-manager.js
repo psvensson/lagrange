@@ -29,7 +29,6 @@ import {
   buildSelectSQL as renderSelectSQL,
   extractReferencedTables,
 } from './live-query-sql-renderer.js';
-import {refuseOpaqueFallbackRendering} from './live-query-group-helpers.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const CANONICAL_SEPARATOR = ',';
@@ -107,7 +106,6 @@ function resolveSnapshotExecutionSql(manager, group) {
   if (manager.sqlQueryEngine?.executor?.buildSelectSQL) {
     return manager.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery);
   }
-  refuseOpaqueFallbackRendering(group.parsedQuery);
   return manager.buildSelectSQL(group.parsedQuery);
 }
 

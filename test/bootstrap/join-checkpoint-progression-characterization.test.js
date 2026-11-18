@@ -10,7 +10,6 @@
  * Design: D4.2, D10, D11.1
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {READINESS_CONVERGENCE_PHASE} from
@@ -191,7 +190,6 @@ function stubJoinServiceForCheckpointTests(service) {
 // The joiner under test; production startup mints its boot incarnation.
 function createCheckpointJoinService() {
   return new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

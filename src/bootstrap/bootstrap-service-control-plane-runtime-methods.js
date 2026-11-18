@@ -31,7 +31,6 @@ import {DEFAULT_NODE_CAPABILITIES} from
   '../control-plane/control-plane-constants.js';
 import {STALE_NODE_INCARNATION_CODE} from
   '../control-plane/control-plane-error-classification.js';
-import {requireDeclaredNodeHostId} from '../topology/node-host-identity.js';
 
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
 const bootstrapError = BOOTSTRAP_ERROR;
@@ -59,7 +58,6 @@ function buildSeedNodeRegistrationRow(service, stats, now) {
   return {
     [COLUMN.NODE_ID]: service.nodeId,
     [COLUMN.NODE_ADDRESS]: service.nodeAddress,
-    [COLUMN.HOST_ID]: requireDeclaredNodeHostId(service.hostId),
     [COLUMN.CPU_CORES]: finiteNumberOrFallback(stats?.cpu?.count, 0),
     [COLUMN.MEMORY_MB]: totalMemoryMb,
     [COLUMN.DISK_GB]: finiteNumberOrFallback(stats?.diskGb, NUM.HUNDRED),
@@ -328,9 +326,6 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
       }
 
       try {
-        // Refused before any registration wait or effect: no NODES row is
-        // written without the node's declared host.
-        requireDeclaredNodeHostId(this.hostId);
         await this.seedCacheHydrationPhase
           .waitForSystemServiceLeadersInCache();
         await this.awaitLocalQueryTransportReadinessForReadySignal();

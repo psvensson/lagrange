@@ -3,7 +3,6 @@
  * Requirements: 4.1, 4.2, 4.3 - CDC subscriptions keep cache updated.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -34,7 +33,6 @@ test('subscribeToCDCEvents - subscribes to all CDC event types', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -68,7 +66,6 @@ test('subscribeToCDCEvents - handles CDC events correctly', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -111,7 +108,6 @@ test('subscribeToCDCEvents - throws error if CDC service not available', async (
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -139,7 +135,6 @@ test('subscribeToCDCEvents - retries on subscription failure', async (t) => {
 
   let callCount = 0;
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -174,7 +169,6 @@ test('subscribeToCDCEvents - verifies subscriptions are active', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
@@ -218,7 +212,6 @@ test('subscribeToCDCEvents - exhausts retries when listeners never register', as
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',

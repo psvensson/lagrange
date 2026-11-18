@@ -8,7 +8,6 @@
 // bracketed public-port probes from outside the runtime.
 import http from 'node:http';
 import net from 'node:net';
-import {hostname} from 'node:os';
 import WebSocket from 'ws';
 import {performance} from 'node:perf_hooks';
 import {startLagrangeRuntime} from '../../src/lagrange-runtime-startup.js';
@@ -259,7 +258,7 @@ try {
       logging: {level: 'error'},
       storage: {dataDir: directory},
     },
-    environment: {NODE_ID: nodeId, NODE_HOST_ID: hostname(),
+    environment: {NODE_ID: nodeId,
       REST_API_PORT: String(ports.restApiPort),
       ADMIN_WS_PORT: String(ports.adminWebSocketPort),
       TRANSPORT_WS_PORT: String(ports.transportWebSocketPort)},

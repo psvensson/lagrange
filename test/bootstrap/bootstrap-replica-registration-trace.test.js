@@ -2,7 +2,6 @@
  * Regression tests for bootstrap replica registration tracing behavior.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -32,7 +31,6 @@ function initializeTestEnvironment() {
 
 function createBootstrapService(config = {}) {
   return new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: `ws://127.0.0.1:${TEST_WS_PORT}`,

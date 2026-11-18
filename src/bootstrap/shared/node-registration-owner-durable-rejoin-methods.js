@@ -144,7 +144,6 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       now,
       currentIncarnation,
       storageIncarnation,
-      hostId: this.hostId,
     });
   }
 
@@ -228,7 +227,6 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       currentIncarnation,
       storageIncarnation,
       sameBootRetry,
-      hostId: this.hostId,
     });
   }
 

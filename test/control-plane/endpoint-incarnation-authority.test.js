@@ -3,7 +3,6 @@
  * round 4, D1; invariant I9): work for incarnation G1 can never withdraw,
  * replace, delete or masquerade as the endpoint state of its replacement G2.
  */
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -82,7 +81,6 @@ function initEnv() {
 
 function g1RegistrationOwner(gateway) {
   const owner = new NodeRegistrationOwner({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: NODE_ID,
     nodeAddress: 'g1-host:8080',
     delegates: {

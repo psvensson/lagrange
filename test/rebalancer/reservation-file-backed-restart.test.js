@@ -149,6 +149,7 @@ function runtimeMove() {
     nodeId: TEST_TARGET_NODE_ID,
     entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     entityId: RUNTIME_SERVICE_ID,
+    emitOperationCreated: true,
   };
 }
 

@@ -20,10 +20,7 @@ import {
 // is refused before it was proposed (no leader, backpressure) does not settle
 // it. When the budget is spent unresolved, the write's answer is the typed
 // unknown outcome carrying its entryId and one report of the wait it spent:
-// never a text alone, and never the last refusal's failureCode or errorCode
-// (a lost answer's router code, the spent deadline's TIMEOUT): an errorCode
-// names a definite failure (PG-wire maps TIMEOUT to 25P04, a definite
-// rollback), which an unresolved write is not. Re-deliveries of an
+// never a text alone, and never the last refusal's code. Re-deliveries of an
 // unresolved write back off exponentially from the executor's retry delay up
 // to UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS, so an outage costs a few
 // deliveries per write, not one per retry delay; the budget is the caller's
@@ -218,7 +215,6 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
         ...failureResult,
         error: state.unknownAnswers > 0 ?
           ERRORS.WRITE_OUTCOME_UNKNOWN : failureResult?.error,
-        errorCode: null,
         failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
         entryId: spentWait.entryId,
         spentWait,

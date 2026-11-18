@@ -32,7 +32,6 @@ import {
 import {
   ExchangeManager,
 } from '../../src/query/distributed/exchange-manager.js';
-import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Helper: create a minimal ExecutionContext for testing.
@@ -45,8 +44,7 @@ function createTestContext(opts = {}) {
   return new ExecutionContext({
     session: 'test-session',
     snapshot: {mode: 'readCommitted'},
-    budgets: normalizeQueryBudget(),
-    budgetEnforcer: new BudgetEnforcer(normalizeQueryBudget()),
+    budgetEnforcer: new BudgetEnforcer(),
     cancellationToken: token,
     lineageTracker: new LineageTracker('test-q'),
     queryExecutor: executor,

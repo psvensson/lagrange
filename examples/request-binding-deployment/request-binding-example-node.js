@@ -1,4 +1,3 @@
-import {hostname} from 'node:os';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {BootstrapReadinessState} from
@@ -296,8 +295,6 @@ async function bootExampleNode(dataDir, options = {}) {
     },
     dataDirectoryManager,
     dataDirectoryProcessOwner,
-    // The example node runs on this machine (required host identity).
-    hostId: hostname(),
     membershipOwnerOutcome: startupDecision.membershipOwnerOutcome,
     nodeAddress,
     nodeId: EXAMPLE_NODE.NODE_ID,

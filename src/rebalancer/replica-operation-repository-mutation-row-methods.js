@@ -127,11 +127,6 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       ) {
         whereClause.workflow_step = expectedWorkflowStep;
       }
-      // Observed-history refinement of the step CAS: the serialized steps
-      // history the writer read must still be the durable one.
-      if (typeof options?.expectedStepsHistory === 'string') {
-        whereClause.steps_history = options.expectedStepsHistory;
-      }
       // Terminal-transition guard (audit finding 6): a terminal write must
       // overwrite any lagging NON-terminal step (deliberately no
       // expected-step CAS) but must never clobber a DIFFERENT durable
@@ -147,11 +142,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       return whereClause;
     }
 
-    buildReplicaOperationUpdateParams(
-      operation,
-      expectedWorkflowStep = null,
-      expectedStepsHistory = null,
-    ) {
+    buildReplicaOperationUpdateParams(operation, expectedWorkflowStep = null) {
       const params = [
         operation.status,
         operation.workflowStep,
@@ -167,9 +158,6 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         expectedWorkflowStep.length > 0
       ) {
         params.push(expectedWorkflowStep);
-      }
-      if (typeof expectedStepsHistory === 'string') {
-        params.push(expectedStepsHistory);
       }
       return params;
     }

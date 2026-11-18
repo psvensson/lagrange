@@ -1,5 +1,4 @@
 import {QUERY_DEFAULTS} from '../../../src/query/query-constants.js';
-import {PG_ERROR_CODE} from '../../../src/runtime/pgwire-protocol-constants.js';
 
 // Owner of OLTP client-error classification shared by the retry owner, the
 // adapter sessions (COMMIT-failure mapping) and the benchmark outcome owner:
@@ -10,13 +9,7 @@ const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/u;
 // uppercase letters too; they are socket outcomes, never a SQLSTATE.
 const SYSTEM_ERROR_CODE_PATTERN = /^E[A-Z]+$/u;
 const CONNECTION_EXCEPTION_SQLSTATE_CLASS = '08';
-// The product's one typed unknown outcome on the wire: 08007
-// transaction_resolution_unknown answers a COMMIT that may have passed its
-// commit point and an autocommit write whose outcome the product could not
-// settle (pgwire-transaction-outcome). A client reads it from the SQLSTATE
-// alone; no other field names it.
-const TRANSACTION_RESOLUTION_UNKNOWN_SQLSTATE =
-  PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN;
+const OUTCOME_UNKNOWN_CODE = 'OUTCOME_UNKNOWN';
 const TRANSPORT_ERROR_CODES = Object.freeze(new Set([
   'PROTOCOL_CONNECTION_LOST',
   'PROTOCOL_SEQUENCE_TIMEOUT',
@@ -98,21 +91,20 @@ function isOltpTransportError(error) {
   return TRANSPORT_ERROR_MESSAGE_PATTERN.test(String(error.message || ''));
 }
 
-// Whether the product answered the attempt with its typed unknown outcome
-// (SQLSTATE 08007), or the harness already recorded the attempt's COMMIT as
-// unresolved (commitOutcomeUnknown, set by the adapter session from
-// resolveOltpCommitFailureOutcome).
 function isOltpOutcomeUnknownError(error) {
   return error?.commitOutcomeUnknown === true ||
-    resolveSqlState(error) === TRANSACTION_RESOLUTION_UNKNOWN_SQLSTATE;
+    error?.outcome === OUTCOME_UNKNOWN_CODE ||
+    error?.code === OUTCOME_UNKNOWN_CODE ||
+    error?.errorCode === OUTCOME_UNKNOWN_CODE;
 }
 
 // Owner of the COMMIT-failure mapping used by every OLTP adapter session:
 // 25P04 and every other product-answered SQLSTATE is a definite rollback;
-// a lost answer (transport / 08xxx) or the typed unknown outcome (08007)
+// a lost answer (transport / 08xxx such as 08007) or a typed unknown outcome
 // leaves the commit unresolved.
 function resolveOltpCommitFailureOutcome(error) {
-  if (isOltpOutcomeUnknownError(error) || isOltpTransportError(error)) {
+  if (error?.outcome === OUTCOME_UNKNOWN_CODE || error?.code === OUTCOME_UNKNOWN_CODE ||
+      error?.errorCode === OUTCOME_UNKNOWN_CODE || isOltpTransportError(error)) {
     return COMMIT_FAILURE_OUTCOME.UNKNOWN;
   }
   return COMMIT_FAILURE_OUTCOME.ABORTED;

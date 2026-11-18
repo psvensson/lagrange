@@ -5,7 +5,6 @@ import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   ReplicaOperationField,
   ReplicaOperationVisibilityClass,
-  isGenesisFoundingCreateOperation,
 } from './replica-operation-constants.js';
 import {
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
@@ -159,13 +158,24 @@ function isOperationDeferredRetryActive(owner, operationId) {
     )
   );
 }
+function isBootstrapPartitionCreateOperation(operation) {
+  return Boolean(
+    operation &&
+    operation.type === OperationType.ADD &&
+    (
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] ||
+      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ||
+      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA]
+    ),
+  );
+}
 function isRetryableControlPlaneOperationTarget(operation) {
   if (!operation) {
     return false;
   }
   if (
     operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
-    isGenesisFoundingCreateOperation(operation)
+    isBootstrapPartitionCreateOperation(operation)
   ) {
     return true;
   }

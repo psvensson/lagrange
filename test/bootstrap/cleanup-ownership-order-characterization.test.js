@@ -12,7 +12,6 @@
  * Validates: Requirements 2.2, 2.4, 2.5, 9.2
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -52,7 +51,6 @@ const silentLogger = {
  */
 function createSeedService(overrides = {}) {
   const service = new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: SEED_NODE_ID,
     nodeAddress: SEED_NODE_ADDRESS,
@@ -70,7 +68,6 @@ function createSeedService(overrides = {}) {
  */
 function createJoinService(overrides = {}) {
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: JOIN_NODE_ID,
     nodeAddress: JOIN_NODE_ADDRESS,

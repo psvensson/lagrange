@@ -1,7 +1,6 @@
 // Actual admin -> NodesOwner -> gateway -> CDC DELETE over SQLite. Only the
 // routed SQL engine/owner-RPC transport is substituted. Cache mutations model
 // committed CDC observations; this does not prove cross-host propagation.
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminOwnerOperations} from '../../src/admin/admin-owner-operations.js';
@@ -45,7 +44,7 @@ function createFixture(t, beforeDelete = () => {}, afterDelete = () => {}) {
   }
   function registrationRow(bootIncarnation) {
     return buildNodeRegistrationRow({nodeId: NODE_ID, bootIncarnation,
-      hostId: LOCAL_MACHINE_HOST_ID, nodeAddress: '127.0.0.1:9999', now: bootIncarnation});
+      nodeAddress: '127.0.0.1:9999', now: bootIncarnation});
   }
   const original = {...registrationRow(1), status: NODE_STATE.STOPPED};
   db.prepare(`INSERT INTO nodes (${Object.keys(original).join(', ')}) VALUES (` +

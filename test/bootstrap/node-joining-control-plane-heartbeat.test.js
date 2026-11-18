@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -41,7 +40,6 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
 
     const deliveries = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-2:8080',
@@ -118,7 +116,6 @@ test('NodeJoiningService keeps steady-state control-plane reporter enabled durin
     let clearedReporter = false;
     let heartbeatStarted = false;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-6:8080',
@@ -159,7 +156,6 @@ test('NodeJoiningService disables steady-state control-plane reporter outside du
     let clearedReporter = false;
     let heartbeatStarted = false;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-7:8080',
@@ -199,7 +195,6 @@ test('NodeJoiningService clears join-time reporter at READY cutover when heartbe
     let clearedReporter = false;
     let heartbeatStartCount = 0;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-8:8080',
@@ -247,7 +242,6 @@ test('NodeJoiningService fails closed before writers when READY transition is in
   (t) => {
     initializeTestEnvironment();
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-8:8080',
@@ -272,7 +266,6 @@ test('NodeJoiningService treats unacknowledged control-plane heartbeats as failu
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-3:8080',
@@ -302,7 +295,6 @@ test('NodeJoiningService does not block READY heartbeats on cluster mesh reconci
     const deliveries = [];
     let connectAttempts = 0;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-4:8080',
@@ -351,7 +343,6 @@ test('NodeJoiningService does not block CONNECTED publication on cluster mesh re
     const deliveries = [];
     let connectAttempts = 0;
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-node',
       nodeAddress: 'ddb-test-reuse-3-5:8080',

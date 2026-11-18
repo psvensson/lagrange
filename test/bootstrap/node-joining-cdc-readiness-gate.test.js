@@ -8,7 +8,6 @@
  * Requirements: 2.4, 2.6
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -248,7 +247,6 @@ const createBootstrapResponseFromCache = (systemTableCache, options = {}) => {
 test('phaseQuerySystemState succeeds when CDC pipeline is ready',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -275,7 +273,6 @@ test('phaseQuerySystemState succeeds when CDC pipeline is ready',
 test('phaseQuerySystemState restores durable local partition services ' +
   'before node admission writes', async (t) => {
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -316,7 +313,6 @@ test('phaseQuerySystemState restores durable local partition services ' +
 test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot covers discovery-critical tables',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -382,7 +378,6 @@ test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot cove
 test('phaseQuerySystemState backfills only missing discovery-critical tables when bootstrap snapshot is incomplete',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -441,7 +436,6 @@ test('phaseQuerySystemState backfills only missing discovery-critical tables whe
 test('phaseQuerySystemState fails on blocking discovery backfill failure',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -496,7 +490,6 @@ test('phaseQuerySystemState fails on blocking discovery backfill failure',
 test('phaseQuerySystemState tolerates opportunistic backfill failures after join readiness',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -559,7 +552,6 @@ test('phaseQuerySystemState tolerates opportunistic backfill failures after join
 test('phaseQuerySystemState fails on CDC readiness gate timeout',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -595,7 +587,6 @@ test('phaseQuerySystemState fails on CDC readiness gate timeout',
 test('phaseQuerySystemState timeout error lists unmet conditions',
   async (t) => {
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,

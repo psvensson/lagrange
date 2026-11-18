@@ -10,29 +10,6 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-### Changed
-- **One query budget shape; the budget classes are no longer exported (`query-budget-constants.js`, `src/query/index.js`, `src/public-api.js`):**
-  a query budget has exactly one shape, the UPPER_SNAKE limit names of `DEFAULT_QUERY_BUDGET`
-  (for example `RESULT_MAX_ROWS`, `WALL_TIME_LIMIT_MS`). `normalizeQueryBudget` is its only
-  producer and the only place a default is applied; `runtime.run` and `createSqlRequest` (and
-  through it the internal and PostgreSQL wire adapters) are the boundaries that call it. An
-  unknown field and any limit that is not a non-negative safe integer are refused, never
-  defaulted. The camelCase aliases (`lookupMaxKeys`, `wallTimeLimitMs`, `resultMaxRows`, ...)
-  are removed and are now refused as unknown fields, and `RUNTIME_ERROR_MSG.INVALID_BUDGETS` is
-  removed. A limit of 0 means zero (a `WALL_TIME_LIMIT_MS` of 0 is a statement deadline already
-  spent), never "use the default". `BudgetEnforcer` and `ExecutionContext` are no longer exported
-  from the package: they now require a normalized budget, no caller outside `src/` constructs
-  them, and `runtime.run` and `createSqlRequest` build them.
-- **An autocommit write whose outcome is unknown answers SQLSTATE 08007 (`pgwire-transaction-outcome.js`, `application-database.js`, `query-execution-budget.js`):**
-  a statement sent outside a transaction block whose write may have been applied (the write
-  kernel's typed unknown outcome, `failureCode` `partition_write_outcome_unknown`, on the
-  statement or one of its participants, for example after a lost answer) now answers
-  `08007` transaction_resolution_unknown with "some changes may have been committed", as a
-  COMMIT past its commit point already did, instead of `XX000`. The embedded application
-  database rejects such a `db.query` with `TRANSACTION_OUTCOME_UNKNOWN` instead of
-  `DISTRIBUTED_PARTICIPANT_FAILURE`. Inside a transaction block the statement still only fails
-  the block: nothing it staged commits, and the ROLLBACK that ends the block discards it.
-
 ### Fixed
 - **Owner-interaction closure across control-snapshot observation, SQL metadata refresh, serving eligibility, participant release cutover, WASI derivation cancellation, and proof authority (`admin-control-snapshot-local-build-base.js`, `cdc-propagation-delivery-profile.js`, `sql-query-engine-metadata-authority-refresh.js`, `serve-eligibility-owner.js`, `participant-release-authorization-owner.js`, `wasi-component-cell-runtime.js`, `proof-authority.js`, `publish-head.js`):**
   restores `buildLocalControlSnapshot` to a non-mutating observation path over `SystemTableCache` while routing `control_plane_publications`, `replica_operations`, and `tables` CDC propagation on the `CRITICAL_VISIBILITY` lane; replans the complete `distributedPlan` and `active_partition_version` on cold-metadata `SELECT`/join/write paths with typed `FOUND`/`ABSENT`/`UNAVAILABLE` outcomes; prevents `ServeEligibilityOwner` from spinning on expired leases or adopting regressed `publication_epoch`/`NO_RECORD` reads and removes rebalancer `systemTableCache` node and 7-dimension readiness fallbacks; authorizes origin-group (`hasWriteOrigin: true`) `FRESH_CREATE` participant release from the committed `replica_operations` row and breaks the `replica_operations-p1` self-release read cycle via local committed leader read; releases WASI derivation holders and aborts in-flight `waitForReady` workers on `stop(serviceId)` before serialized `_stop`; and fails closed in `proof-authority` and `publish-head` on unreadable subject corpus or rejected proof receipts while enforcing symmetric PID namespace lock custody.

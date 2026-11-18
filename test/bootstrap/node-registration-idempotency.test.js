@@ -10,7 +10,6 @@
  * paths are idempotent.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -43,7 +42,6 @@ function createWiredService({
   };
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId,
     nodeAddress,
     seedNodeAddress: 'ws://seed:8000',

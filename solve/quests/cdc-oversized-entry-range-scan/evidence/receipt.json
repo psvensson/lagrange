@@ -8,7 +8,7 @@
       "id": "oversized-entry-scaling-witness",
       "measured": true,
       "passed": true,
-      "detail": "Measured on adams-gamla via labrun.py job 58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d (docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/): test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R1, R4, and R5 prove that across M = 512, 1024, and 4096 owed events in a single oversized Raft entry (> 262,144 B total, 1,024 B per event), SELECT_OWED_ENTRY_BYTES executes exactly 1 time across the entire end-to-end drain (totalEntryBytesQueries = 1), every wave executes at most 4 SQLite range-read queries (maxWaveQueries = 4), completed entries and unverified keys are evicted on commit via commitOwedEntryByteTallies, rolled-back transactions immediately evict uncommitted tallies via rollbackOwedEntryByteTallies, and full-drain metrics with delayed acknowledgements across page boundaries scale linearly: M=512 (waves=387, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=18.904, maxDriveSpanMs=564.867, fullDrainMs=1017.812), M=1024 (waves=899, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=50.329, maxDriveSpanMs=564.891, fullDrainMs=1916.612), M=4096 (waves=3971, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=58.702, maxDriveSpanMs=554.435, fullDrainMs=7704.896)."
+      "detail": "Measured on adams-gamla via labrun.py job 58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d (solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/): test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js R1, R4, and R5 prove that across M = 512, 1024, and 4096 owed events in a single oversized Raft entry (> 262,144 B total, 1,024 B per event), SELECT_OWED_ENTRY_BYTES executes exactly 1 time across the entire end-to-end drain (totalEntryBytesQueries = 1), every wave executes at most 4 SQLite range-read queries (maxWaveQueries = 4), completed entries and unverified keys are evicted on commit via commitOwedEntryByteTallies, rolled-back transactions immediately evict uncommitted tallies via rollbackOwedEntryByteTallies, and full-drain metrics with delayed acknowledgements across page boundaries scale linearly: M=512 (waves=387, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=18.904, maxDriveSpanMs=564.867, fullDrainMs=1017.812), M=1024 (waves=899, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=50.329, maxDriveSpanMs=564.891, fullDrainMs=1916.612), M=4096 (waves=3971, totalEntryBytesQueries=1, maxWaveQueries=4, tailWaveRows=128, maxComposeSpanMs=58.702, maxDriveSpanMs=554.435, fullDrainMs=7704.896)."
     },
     {
       "id": "oversized-to-whole-transition-and-unit-rule",
@@ -34,12 +34,12 @@
     "labJobId": "58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d"
   },
   "evidence": {
-    "artifactDirectory": "docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d",
+    "artifactDirectory": "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d",
     "files": [
-      "docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/job.json",
-      "docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/summary.json",
-      "docs/evidence/cdc-oversized-entry-range-scan-2026-11/lab-jobs/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/tap.txt",
-      "docs/evidence/cdc-oversized-entry-range-scan-2026-11/post-closure-applicability-2026-11-15.md"
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/job.json",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/summary.json",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/lab-job-58cbbc58-c927-4b1a-8ed9-3d3453ab1f1d/tap.txt",
+      "solve/quests/cdc-oversized-entry-range-scan/evidence/post-closure-applicability-2026-11-15.md"
     ],
     "priorJobIds": [
       "9f6d4ede-a952-418b-a775-0dc425c40785",

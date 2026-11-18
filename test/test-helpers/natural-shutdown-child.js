@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {hostname} from 'node:os';
 import {startLagrangeRuntime} from '../../src/lagrange-runtime-startup.js';
 import {LogsTableService} from '../../src/logging/logs-table-service.js';
 import {readIssuedBootIncarnation, reserveBootIncarnation} from '../../src/bootstrap/boot-incarnation-owner.js';
@@ -31,7 +30,6 @@ if (mode === 'successful-start') {
     },
     environment: {
       NODE_ID: nodeId,
-      NODE_HOST_ID: hostname(),
       DATA_DIR: directory,
       LAGRANGE_FORCE_NEW_CLUSTER: '1',
     },
@@ -65,7 +63,6 @@ if (mode === 'successful-start') {
       },
       environment: {
         NODE_ID: nodeId,
-        NODE_HOST_ID: hostname(),
         DATA_DIR: directory,
         SEED_NODE_ADDRESS: 'http://127.0.0.1:59998',
         LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS: '1',
@@ -88,7 +85,6 @@ if (mode === 'successful-start') {
     },
     environment: {
       NODE_ID: nodeId,
-      NODE_HOST_ID: hostname(),
       DATA_DIR: directory,
     },
   });
@@ -107,7 +103,6 @@ if (mode === 'successful-start') {
     },
     environment: {
       NODE_ID: nodeId,
-      NODE_HOST_ID: hostname(),
       DATA_DIR: directory,
     },
   });

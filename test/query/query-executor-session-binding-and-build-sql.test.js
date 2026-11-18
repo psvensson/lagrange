@@ -970,14 +970,14 @@ test('QueryExecutor - buildSelectSQL emits derived table in FROM',
     });
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'star', value: '*'}],
+      columns: [{type: 'column_ref', table: null, column: '*'}],
       from: {
         type: 'table',
         name: null,
         alias: 't',
         subquery: {
           type: 'SELECT',
-          columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
+          columns: [{type: 'column_ref', table: null, column: 'id'}],
           from: {type: 'table', name: 'users', alias: null},
           joins: [],
           where: null,
@@ -1008,7 +1008,7 @@ test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
     });
     const ast = {
       type: 'SELECT',
-      columns: [{type: 'star', value: '*'}],
+      columns: [{type: 'column_ref', table: null, column: '*'}],
       from: {type: 'table', name: 'orders', alias: null},
       joins: [{
         joinType: 'INNER',
@@ -1018,7 +1018,7 @@ test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
           alias: 'u',
           subquery: {
             type: 'SELECT',
-            columns: [{type: 'column', expression: {type: 'column_ref', table: null, column: 'id'}, alias: null}],
+            columns: [{type: 'column_ref', table: null, column: 'id'}],
             from: {type: 'table', name: 'users', alias: null},
             joins: [],
             where: null,
@@ -1029,7 +1029,7 @@ test('QueryExecutor - buildSelectSQL emits derived table in JOIN',
           },
         },
         condition: {
-          type: 'binary',
+          type: 'binary_expr',
           operator: '=',
           left: {type: 'column_ref', table: 'orders', column: 'user_id'},
           right: {type: 'column_ref', table: 'u', column: 'id'},
@@ -1073,7 +1073,6 @@ test('QueryExecutor - buildExpressionSQL emits CAST with affinity',
     const expr = {
       type: 'cast',
       expression: {type: 'column_ref', table: null, column: 'age'},
-      targetType: 'TEXT',
       affinity: 'TEXT',
     };
     const sql = executor.buildExpressionSQL(expr);
@@ -1090,8 +1089,7 @@ test('QueryExecutor - buildExpressionSQL emits CAST with nested expression',
     });
     const expr = {
       type: 'cast',
-      expression: {type: 'literal', value: 42, sqlType: 'INTEGER'},
-      targetType: 'REAL',
+      expression: {type: 'literal', value: 42},
       affinity: 'REAL',
     };
     const sql = executor.buildExpressionSQL(expr);

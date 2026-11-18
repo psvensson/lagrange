@@ -26,8 +26,7 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {SEED_NODE_ID, nodeAddressOf, simulatedHostIdOf} from
-  './formation-joint-admission-world.js';
+import {SEED_NODE_ID, nodeAddressOf} from './formation-joint-admission-world.js';
 
 const EVALUATION_STEP_MS = 1;
 const FAR_FUTURE_MS = Number.MAX_SAFE_INTEGER;
@@ -129,7 +128,6 @@ function mountJoinReadySignal(world, nodeId) {
   const sleeps = [];
   const barrierLog = [];
   const service = new NodeJoiningService({
-    hostId: simulatedHostIdOf(nodeId),
     bootIncarnation,
     nodeId,
     nodeAddress: nodeAddressOf(nodeId),
@@ -227,13 +225,9 @@ function mountJoinReadySignal(world, nodeId) {
 /**
  * The world's driver: owner evaluations only.
  * @param {object} world the formation world
- * @param {object} [options]
- * @param {boolean} [options.plannerPolling=true] whether a round asks every
- *   mounted placement decider for a planning check; without it a decider
- *   plans only when its own production triggers fire
  * @return {object} the driver
  */
-function createRoundDriver(world, {plannerPolling = true} = {}) {
+function createRoundDriver(world) {
   NodeService.getInstance().setSystemCacheProxy(world.cache);
   NodeService.getInstance().getNodeStats = async () => HEARTBEAT_STATS;
   const joiners = new Map();
@@ -364,7 +358,7 @@ function createRoundDriver(world, {plannerPolling = true} = {}) {
         rebalancer.setLeader(true);
       }
       await driver.membershipDerivation();
-      if (plannerPolling) await driver.planPriorityPartitions();
+      await driver.planPriorityPartitions();
       await driver.readSeedAuthority();
     },
     async joinerArrives(nodeId) {
@@ -553,7 +547,7 @@ function createRoundDriver(world, {plannerPolling = true} = {}) {
       roundCounter.number += 1;
       await driver.membershipDerivation();
       await driver.readSeedAuthority();
-      if (plannerPolling) await driver.planPriorityPartitions();
+      await driver.planPriorityPartitions();
       await driver.evaluateCoordinators();
       await driver.stepReplicaRuntime();
       await driver.stepRetryCadences();

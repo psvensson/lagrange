@@ -194,10 +194,6 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/query/sql-query-engine-initial-partition-provisioning.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
-    // Carrier: the bootstrap-hold releaser writes the provisioner's GENESIS
-    // stamp onto the held row's creation step in one compare-and-set; it
-    // never produces or re-derives a stamp.
-    'src/rebalancer/rebalance-coordinator-operation-creation-support.js',
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
     'src/bootstrap/phases/seed-partitions-phase.js',
     // The replacement options builder (snapshot install, release reopen).

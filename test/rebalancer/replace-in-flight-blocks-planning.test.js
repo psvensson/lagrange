@@ -508,10 +508,6 @@ async function driveToStopping(t, world) {
   const syncing = await persisted(world);
   syncing.workflowStep = WORKFLOW_STEP.SYNCING;
   syncing.status = ReplicaStatus.SYNCING;
-  // The SYNCING step is durable before its reconcile: the reconcile's
-  // transition compare-and-swaps on it.
-  await world.coordinator.repository.persistOperationUpdate(syncing,
-    {expectedWorkflowStep: WORKFLOW_STEP.CREATING});
   await world.coordinator.reconcileSyncingOperation(syncing);
   t.ok(classifications.length > 0 && classifications.every((classification) =>
     classification === REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE),
@@ -637,10 +633,6 @@ test('W1: the R1 state blocks a second operation on its partition only',
       const syncing = await persisted(world);
       syncing.workflowStep = WORKFLOW_STEP.SYNCING;
       syncing.status = ReplicaStatus.SYNCING;
-      // The SYNCING step is durable before its reconcile: the reconcile's
-      // transition compare-and-swaps on it.
-      await coordinator.repository.persistOperationUpdate(syncing,
-        {expectedWorkflowStep: WORKFLOW_STEP.CREATING});
       await coordinator.reconcileSyncingOperation(syncing);
       coordinator.systemTableCache.upsert('services', replicaRow(
         operation.replicaId, NODE_B, ROLE_LEARNER));

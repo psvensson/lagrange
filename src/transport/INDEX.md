@@ -18,7 +18,7 @@ documentClass: generated
 - [message-router-connection-authority.js](message-router-connection-authority.js) - Normalize one boot-incarnation candidate: a positive safe integer is KNOWN, anything else (0, absent, non-numeric -... (importers: one)
 - [message-router-connection-close-reconnect.js](message-router-connection-close-reconnect.js) - The reconnect loop spent its attempt budget: one wait_bound_spent ERROR with the attempts and the connection's last... (importers: one)
 - [message-router-connection-lifecycle-methods.js](message-router-connection-lifecycle-methods.js) - An outbound connect spent its bound before OPEN: one wait_bound_spent ERROR per node with the socket's ready state... (importers: one)
-- [message-router-delivery-behaviors.js](message-router-delivery-behaviors.js) - Snapshot the local router's view of its connection to a peer, for diagnostics on why a coordinator handoff to that... (importers: few)
+- [message-router-delivery-behaviors.js](message-router-delivery-behaviors.js) - Snapshot the local router's view of its connection to a peer, for diagnostics on why a coordinator handoff to that... (importers: one)
 - [message-router-delivery-delegation.js](message-router-delivery-delegation.js) - Delivery and reconnect delegation surface for the message router: thin instance-method wrappers that forward to the... (importers: one)
 - [message-router-delivery-encoding.js](message-router-delivery-encoding.js) - The transport owns the final JSON/UTF-8 handoff, including one caller-named transient duration field. (importers: few)
 - [message-router-delivery-lifetime.js](message-router-delivery-lifetime.js) - Private local delivery lifetime. (importers: many)

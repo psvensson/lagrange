@@ -20,7 +20,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-status.js';
 import {
   REBALANCE_COORDINATOR_LOG_MSG,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -204,33 +203,23 @@ test('CL-008: reused-operation rearm guard', async (t) => {
   );
 
   await t.test(
-    'PENDING reuse whose durable row still holds bootstrap-topology ' +
-      'dispatch is handed to the owner lane, which enforces the hold',
+    'PENDING reuse with shouldEmitOperationCreated=false skips rearm ' +
+      'so caller-managed bootstrap topology dispatch stays atomic',
     async (t) => {
-      // The hold is durable owner state written at creation and cleared by
-      // the provisioner that stamps the cohort. The owner's claim refuses a
-      // held row (coordinator-created-operation-admission.test.js: "operations
-      // with bootstrapTopologyDispatchDeferred are not claimed or executed"),
-      // so the coordinator decides the rearm from the row and the owner's
-      // retry state alone and keeps no second copy of the hold check; the
-      // re-creating caller's request flags are no input.
       const coordinator = createTestCoordinator();
       const calls = installSpies(coordinator, {});
 
       const result = await coordinator.maybeRearmReusedPendingOperation(
-        buildPendingOperation({
-          stepsHistory: [{
-            [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]: true,
-          }],
-        }),
+        buildPendingOperation(),
+        {shouldEmitOperationCreated: false},
       );
 
       t.equal(result.operationId, TEST_OPERATION_ID, 'returns the operation');
-      t.equal(calls.armed, 1, 'hands the row to the owner lane once');
+      t.equal(calls.armed, 0, 'does not rearm dispatch prematurely');
       t.equal(
         calls.reuseLogs[0].rearmAction,
-        'rearm_dispatch',
-        'witness log records the owner-lane rearm',
+        'skip_caller_managed_dispatch',
+        'witness log records caller-managed dispatch skip',
       );
     },
   );

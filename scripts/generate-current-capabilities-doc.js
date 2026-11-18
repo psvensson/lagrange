@@ -214,14 +214,12 @@ failures, rollback before commit, and expired callback handles. Application
 identifiers isolate transaction session identity; they are not table, tenant,
 schema, or authorization boundaries. Transaction-control SQL is reserved for
 the callback API. The current lifecycle permits one runtime start per process
-lifetime. A start requires the node's host identity (\`NODE_HOST_ID\` or
-configuration \`node.hostId\`, the machine it runs on) and is refused without it.
+lifetime.
 
 Code that constructs \`BootstrapService\` or \`NodeJoiningService\` directly
 must first reserve the node's boot incarnation with the exported
 \`reserveBootIncarnation(dataDir)\` and pass it as \`bootIncarnation\`; both
-constructors refuse its absence. They also pass the declared \`hostId\`, without
-which the node's registration is refused.
+constructors refuse its absence.
 
 ## Replication and recovery
 

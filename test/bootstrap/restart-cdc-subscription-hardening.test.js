@@ -10,7 +10,6 @@
  * time progression for timeout tests.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from
   '../../src/bootstrap/node-joining-service.js';
@@ -118,7 +117,6 @@ function createFailThenSucceedCDC(failCount) {
 function createServiceWithCapturingLogger(overrides = {}) {
   const logs = [];
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,

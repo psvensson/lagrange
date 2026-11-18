@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapReadinessOwner} from
@@ -42,7 +41,6 @@ test('NodeJoiningService projects the ordered ready-signal gate witness',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'restart-progress-witness',
       nodeAddress: 'ws://localhost:19090',
@@ -100,7 +98,6 @@ test('join checkpoint steps publish their live checkpoint targets',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'restart-checkpoint-witness',
       nodeAddress: 'ws://localhost:19092',
@@ -207,7 +204,6 @@ test('join progress rejects unsafe attempts and poisoned intrinsics', (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'restart-hostile-attempt-witness',
     nodeAddress: 'ws://localhost:19093',
@@ -264,7 +260,6 @@ test('join failure codes require own data properties', (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'restart-hostile-failure-witness',
     nodeAddress: 'ws://localhost:19094',
@@ -298,7 +293,6 @@ test('NodeJoiningService retains the current ready-signal retry failure',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'restart-progress-retry',
       nodeAddress: 'ws://localhost:19091',

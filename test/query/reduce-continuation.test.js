@@ -32,7 +32,6 @@ import {
   DEFAULT_MAX_RECORDS_PER_GROUP,
   DEFAULT_MAX_GROUPS_PER_BATCH,
 } from '../../src/query/runtime-constants.js';
-import {normalizeQueryBudget} from '../../src/wasm-service/query-budget-constants.js';
 
 /**
  * Helper: create a minimal ExecutionContext for testing.
@@ -48,8 +47,7 @@ function createTestContext(opts = {}) {
   return new ExecutionContext({
     session: 'test-session',
     snapshot: {mode: 'readCommitted'},
-    budgets: normalizeQueryBudget(),
-    budgetEnforcer: new BudgetEnforcer(normalizeQueryBudget()),
+    budgetEnforcer: new BudgetEnforcer(),
     cancellationToken: token,
     lineageTracker: new LineageTracker('test-q'),
     queryExecutor: async () => ({rows: []}),

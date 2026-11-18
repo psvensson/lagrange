@@ -13,7 +13,6 @@
  * red until the owner publishes the typed outcome.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {StartupRuntimeHandoffOwner} from
   '../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
@@ -338,7 +337,6 @@ test(
   async (t) => {
     const localRoute = 'ddb-test-reuse-7-1:8080';
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'restarted-seed',
       nodeAddress: localRoute,

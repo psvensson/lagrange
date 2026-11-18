@@ -9,7 +9,6 @@
  * line (or none), and reports no wait_bound_spent.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../../test-helpers/declared-node-host.js';
 import {test} from '../../../src/test-helpers/tap.js';
 import {
   SeedContactFailureOwner,
@@ -108,7 +107,6 @@ test('join node registration retries exhausted throw the retryable error ' +
   'and report no wait_bound_spent', async (t) => {
   const capture = captureLogger();
   const phase = new QuerySystemStatePhase({
-    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: 'joiner-registration',
     nodeAddress: 'ws://joiner-registration:9090',
     delegates: {
@@ -178,7 +176,6 @@ test('message-group registration window spent logs the base ERROR line ' +
   initializeTestEnvironment();
   const capture = captureLogger();
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joiner-mg-registration',
     nodeAddress: 'ws://localhost:9090',

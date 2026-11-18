@@ -4,16 +4,16 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 347,
+    "bootstrap-membership": 346,
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
-    "convergence-topology": 86,
+    "convergence-topology": 83,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 282,
-    "query-sql": 197,
+    "placement-rebalance": 281,
+    "query-sql": 194,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2672,
-  "digest": "fnv1a32-b96b550a",
+  "censusSize": 2664,
+  "digest": "fnv1a32-3e475f12",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f131dcea",
+  "observationDigest": "fnv1a32-78b5a99e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -224,7 +224,6 @@
     "test/bootstrap/move-replica-assignment-token.test.js": "bootstrap-membership",
     "test/bootstrap/no-eslint-disable.test.js": "bootstrap-membership",
     "test/bootstrap/node-bootstrap-consistency.property.test.js": "bootstrap-membership",
-    "test/bootstrap/node-host-identity-registration.integration.test.js": "bootstrap-membership",
     "test/bootstrap/node-incarnation.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-cdc-catchup-wiring.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js": "bootstrap-membership",
@@ -767,7 +766,6 @@
     "test/convergence/dt-placement-affinity-real-kernel.test.js": "convergence-topology",
     "test/convergence/dt-placement-affinity-sim.test.js": "convergence-topology",
     "test/convergence/dt-placement-affinity-tier1b-kernel.test.js": "convergence-topology",
-    "test/convergence/dt-placement-owner-formation-drain.test.js": "convergence-topology",
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": "convergence-topology",
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": "convergence-topology",
     "test/convergence/dt5-pct-search.test.js": "convergence-topology",
@@ -1709,10 +1707,7 @@
     "test/query/sql-query-engine.test.js": "query-sql",
     "test/query/sql-query-pbt.test.js": "query-sql",
     "test/query/sql-request.test.js": "query-sql",
-    "test/query/sql-scalar-functions.test.js": "query-sql",
-    "test/query/sql-semantics-differential-oracle.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
-    "test/query/sql-value-codec.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
     "test/query/streaming-aggregation.property.test.js": "query-sql",
@@ -1997,7 +1992,6 @@
     "test/rebalancer/partition-policy-remove-retry.test.js": "placement-rebalance",
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
-    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "placement-rebalance",
@@ -2539,8 +2533,6 @@
     "test/topology/latency-measurement-service.test.js": "convergence-topology",
     "test/topology/latency-topology-constants.test.js": "convergence-topology",
     "test/topology/latency-tree-service.test.js": "convergence-topology",
-    "test/topology/node-host-identity-start-site-census.test.js": "convergence-topology",
-    "test/topology/node-host-identity.test.js": "convergence-topology",
     "test/topology/topology-anti-entropy-reconciler.test.js": "convergence-topology",
     "test/transaction/cross-partition-rejection.property.test.js": "transactions",
     "test/transaction/queryable-core-j4-locking-read-journey.test.js": "transactions",
@@ -3438,16 +3430,6 @@
         "src/node/participant-release-authorization-owner.js",
         "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
-      ]
-    },
-    "test/bootstrap/node-host-identity-registration.integration.test.js": {
-      "files": [
-        "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/projection-readiness-constants.js",
-        "src/storage/data-directory-process-owner.js",
-        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/bootstrap/node-incarnation.test.js": {
@@ -5765,7 +5747,6 @@
         "src/rebalancer/operation-workflow-observed-progress-retention.js",
         "src/rebalancer/replica-operation-repository-visibility-methods.js",
         "src/storage/data-directory-process-owner.js",
-        "test/convergence/formation-joint-admission-world.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ],
       "directories": [
@@ -5811,37 +5792,6 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
-      ]
-    },
-    "test/convergence/dt-placement-owner-formation-drain.test.js": {
-      "files": [
-        "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js",
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/active-node-publication-snapshots.js",
-        "src/control-plane/control-plane-gateway-registry.js",
-        "src/control-plane/control-plane-publications-leadership.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/membership-publication-coordinator.js",
-        "src/control-plane/owners/membership-publication-runtime-owner.js",
-        "src/control-plane/replica-dispatch-retry-scheduling.js",
-        "src/diagnostics/formation-turn-attribution.js",
-        "src/partition/partition-service-rebalancer-methods.js",
-        "src/rebalancer/background-priority-spread-release-tracker.js",
-        "src/rebalancer/continuation-wake-coordinator.js",
-        "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-        "src/rebalancer/operation-workflow-observed-progress-retention.js",
-        "src/rebalancer/rebalancer-local-mutation-readiness-wake.js",
-        "src/rebalancer/rebalancer-planning-gate-methods.js",
-        "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-        "src/rebalancer/replica-operation-repository-visibility-methods.js",
-        "src/storage/data-directory-process-owner.js",
-        "test/convergence/formation-joint-admission-world.js",
-        "test/simulation/formation-sim-infrastructure-composition.js"
-      ],
-      "directories": [
-        "src"
       ]
     },
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": {
@@ -6416,7 +6366,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -6537,7 +6486,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -6576,7 +6524,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6616,7 +6563,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6642,7 +6588,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6668,7 +6613,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6694,7 +6638,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6720,7 +6663,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6782,7 +6724,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6810,7 +6751,6 @@
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6836,7 +6776,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6862,7 +6801,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6888,7 +6826,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6927,7 +6864,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6953,7 +6889,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -6979,7 +6914,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7005,7 +6939,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7031,7 +6964,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7057,7 +6989,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7083,7 +7014,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7109,7 +7039,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7135,7 +7064,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7161,7 +7089,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7187,7 +7114,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7214,7 +7140,6 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
         "src/index.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7240,7 +7165,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7266,7 +7190,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -7388,7 +7311,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7434,7 +7356,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7467,7 +7388,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7490,7 +7410,6 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -7582,19 +7501,18 @@
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
-        "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/test-machine-factor.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/scripts/native-thermal-fixture.js"
       ],
       "directories": [
         "src"
@@ -7602,7 +7520,6 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
-        "PATH",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -7610,7 +7527,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -7667,7 +7583,6 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js",
@@ -7817,7 +7732,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -7865,7 +7779,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -7887,7 +7800,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7919,12 +7831,6 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json"
-      ],
-      "directories": [
-        "test/distributed/config"
-      ],
-      "env": [
-        "PATH"
       ]
     },
     "test/distributed/harness/__tests__/in-cluster-chaos-injection-scenario.test.js": {
@@ -7984,7 +7890,6 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
         "src/logging/logs-table-service.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8019,7 +7924,6 @@
         "src/control-plane/owners/log-diagnostic-marker-contract.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8069,7 +7973,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8305,7 +8208,6 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/owners/postgres-wire-scale-contract.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8327,7 +8229,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8383,7 +8284,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8400,7 +8300,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8410,7 +8309,6 @@
         "docs/benchmarks/cloud-reproduction-guide.md",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
@@ -8426,7 +8324,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8434,7 +8331,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8442,7 +8338,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8460,7 +8355,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8468,7 +8362,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8477,7 +8370,6 @@
         "Dockerfile",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/benchmark-oltp-attempt-capture.js",
@@ -8511,7 +8403,6 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "test/distributed/config/local.json"
       ]
     },
@@ -8623,7 +8514,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8643,7 +8533,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8665,7 +8554,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8689,7 +8577,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8740,7 +8627,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8777,7 +8663,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8839,7 +8724,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -8891,7 +8775,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -8916,7 +8799,6 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/owners/postgres-wire-scale-contract.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -8950,7 +8832,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -9207,7 +9088,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -9231,7 +9111,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -9793,7 +9672,6 @@
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
         "src/service/service-local-oci-layout-builder.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
@@ -13187,7 +13065,6 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-store.js",
-        "src/partition/partition-service-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -14289,11 +14166,6 @@
         "test/test-helpers/transaction-coordinator-unit-fixture.js"
       ]
     },
-    "test/query/distributed-transaction-wait-bound-spent.test.js": {
-      "files": [
-        "src/query/distributed/distributed-transaction-coordinator.js"
-      ]
-    },
     "test/query/distributed-write-coordinator-participant-failure-log.test.js": {
       "files": [
         "src/query/distributed/distributed-write-coordinator.js"
@@ -14307,7 +14179,6 @@
     "test/query/durable-provisioning-job-owner-directed.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/cache/system-cache-key-descriptor.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/owner-contract-outcome.js",
@@ -14352,11 +14223,6 @@
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
-    "test/query/lineage-integration.test.js": {
-      "files": [
-        "src/wasm-service/query-budget-constants.js"
-      ]
-    },
     "test/query/locking-read-canonical-ast.test.js": {
       "files": [
         "architecture/postgres-locking-reads.md",
@@ -14397,7 +14263,6 @@
         "src/control-plane/publication-recovery-evidence.js",
         "src/partition/partition-service-remote-query-methods.js",
         "src/query/query-executor-partition-request-builders.js",
-        "src/topology/node-host-identity.js",
         "src/transport/transport-semantic-outcome.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -14644,7 +14509,6 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-write-kernel.js",
-        "src/query/distributed/distributed-write-coordinator.js",
         "src/transport/transport-error-codes.js"
       ]
     },
@@ -14722,15 +14586,6 @@
         "src/query/table-creation-service.js",
         "src/runtime/pgwire-protocol-constants.js",
         "src/runtime/pgwire-protocol-handler.js"
-      ]
-    },
-    "test/query/schema-provisioning-transient-collision.test.js": {
-      "files": [
-        "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/projection-readiness-constants.js",
-        "src/partition/partition-participant-transaction-constants.js",
-        "test/test-helpers/participant-protocol-double.js"
       ]
     },
     "test/query/select-no-from.test.js": {
@@ -15029,25 +14884,6 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
-      ]
-    },
-    "test/query/sql-semantics-differential-oracle.test.js": {
-      "files": [
-        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/projection-readiness-constants.js",
-        "src/partition/partition-participant-transaction-constants.js",
-        "src/partition/partition-service-table-bootstrap.js",
-        "src/transport/message-router-delivery-encoding.js",
-        "test/control-plane/serve-eligibility-test-support.js",
-        "test/query/sql-semantics-oracle/cluster.js",
-        "test/query/sql-semantics-oracle/corpus-generator.js",
-        "test/query/sql-semantics-oracle/golden-divergences.json",
-        "test/query/sql-semantics-oracle/grammar.js",
-        "test/query/sql-semantics-oracle/receipt-groups.js",
-        "test/test-helpers/participant-protocol-double.js",
-        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/query/sql-statement-refusals.test.js": {
@@ -15592,7 +15428,6 @@
         "src/rebalancer/operation-workflow-replace-owner-wake.js",
         "src/rebalancer/operation-workflow-replace-surviving-membership.js",
         "src/rebalancer/operation-workflow-replace-witness.js",
-        "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
@@ -17648,22 +17483,6 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
-    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": {
-      "files": [
-        "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js",
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/active-node-publication-snapshots.js",
-        "src/control-plane/control-plane-gateway-registry.js",
-        "src/control-plane/control-plane-publications-leadership.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/membership-publication-coordinator.js",
-        "src/control-plane/owners/membership-publication-runtime-owner.js",
-        "src/diagnostics/formation-turn-attribution.js",
-        "src/storage/data-directory-process-owner.js",
-        "test/simulation/formation-sim-infrastructure-composition.js"
-      ]
-    },
     "test/rebalancer/planner-single-path-enforcement.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway-constants.js"
@@ -17784,11 +17603,9 @@
     },
     "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js": {
       "files": [
-        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/replica-status.js"
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-facade-compatibility.test.js": {
@@ -18964,7 +18781,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -19430,7 +19246,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20151,7 +19966,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20239,7 +20053,6 @@
         "src/partition/partition-service-remote-query-methods.js",
         "src/public-api.js",
         "src/query/sql-query-engine-participant-wire.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20380,7 +20193,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20445,7 +20257,6 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/index.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -20664,7 +20475,6 @@
         "src/node/participant-release-diagnostic-observation.js",
         "src/node/replica-handler-release-recovery.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
@@ -20930,7 +20740,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
@@ -21777,7 +21586,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -21829,7 +21637,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local-three-node.json",
@@ -21871,7 +21678,6 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local-three-node.json",
@@ -21993,7 +21799,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -22684,7 +22489,6 @@
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/index.js",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -22795,7 +22599,6 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "src/topology/node-host-identity.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
@@ -22929,75 +22732,6 @@
         "scripts",
         "src",
         "test"
-      ]
-    },
-    "test/topology/node-host-identity-start-site-census.test.js": {
-      "files": [
-        "Dockerfile",
-        "examples/lab-cluster-smoke/cluster-config.js",
-        "package-lock.json",
-        "package.json",
-        "scripts/build-executables.sh",
-        "scripts/checks/wait-for-thermal-headroom.js",
-        "scripts/generate-global-owner-debt-inventory.js",
-        "scripts/release-npm-package.js",
-        "scripts/run-classified-test-files.js",
-        "scripts/select-change-tests.js",
-        "scripts/test-machine-factor.js",
-        "src/admin/admin-authoritative-repair-policy.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "src/bootstrap/owners/bootstrap-join-admission-owner.js",
-        "src/cli/cli-constants.js",
-        "src/constants/columns.js",
-        "src/constants/fields.js",
-        "src/control-plane/control-plane-constants.js",
-        "src/embedded-lagrange.js",
-        "src/index.js",
-        "src/lagrange-runtime-startup.js",
-        "src/topology/node-host-identity.js",
-        "src/utils/canonical-json-data.js",
-        "test/distributed/config/local-three-node.json",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/__tests__/chaos.test.js",
-        "test/distributed/harness/__tests__/cluster-control-plane-quiescence-lifecycle-test-cases.js",
-        "test/distributed/harness/__tests__/docker-provider.test.js",
-        "test/distributed/harness/__tests__/real-product-deployer-scripted-ssh-fixture.js",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/cluster-startup-gate-layer.js",
-        "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/gcp-provisioner.js",
-        "test/distributed/harness/scenario-host-topology.js",
-        "test/distributed/run.js",
-        "test/integration/helpers/embedded-cluster-harness.js",
-        "test/integration/helpers/embedded-node-worker.js",
-        "test/release/public-api-side-effect-boundary.test.js",
-        "test/release/public-consumer-contract-ratchet.test.js"
-      ],
-      "directories": [
-        "docs/benchmarks",
-        "examples",
-        "scripts",
-        "solve/epics/raft-rs-full-cutover",
-        "src",
-        "test",
-        "test/distributed/config",
-        "test/distributed/scenarios"
-      ],
-      "env": [
-        "APPDATA",
-        "LAGRANGE_LAB_HOME",
-        "XDG_CONFIG_HOME"
-      ]
-    },
-    "test/topology/node-host-identity.test.js": {
-      "files": [
-        "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-        "src/bootstrap/shared/node-registration-owner.js",
-        "src/lagrange-runtime-process-claim.js",
-        "src/partition/partition-service-entry-apply-base.js",
-        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/topology/topology-anti-entropy-reconciler.test.js": {

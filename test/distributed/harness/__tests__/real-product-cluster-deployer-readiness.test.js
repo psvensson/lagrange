@@ -6,14 +6,10 @@ import {test} from 'node:test';
 
 import * as deployers from '../real-product-cluster-deployers.js';
 import {createScriptedSsh} from './real-product-deployer-scripted-ssh-fixture.js';
-import {contentIdentityOf} from '../real-product-identity.js';
 import {evaluateLagrangeClusterReadiness} from '../real-product-lagrange-readiness-evaluation.js';
 import {
   LAGRANGE_IMAGE,
-  LAGRANGE_IMAGE_ID,
   createContainerLedger,
-  dataHostName,
-  dataHostNameRules,
   dockerRules,
   http,
   lagrangeHealthyRules,
@@ -30,10 +26,8 @@ import {
   arrayMap,
   arraySome,
   stringIncludes,
-  stringIndexOf,
   stringReplace,
   stringSplit,
-  stringStartsWith,
   stringTrim,
 } from '../real-product-captured-intrinsics.js';
 
@@ -54,7 +48,6 @@ test('D05/J7: Lagrange readiness never reached throws readiness_exhausted with t
   const ledger = createContainerLedger();
   const notReady = http(503, {ready: false, phase: 'init', reasons: ['seed-contact']});
   const {sshRun, calls} = createScriptedSsh([
-    ...dataHostNameRules(),
     ...dockerRules(ledger),
     [/curl/u, notReady],
   ]);
@@ -312,152 +305,23 @@ test('predicate step 5: time-to-routable is recorded per canonical table', {time
     assert.ok(arrayEvery(Object.values(perTable), (ms) => Number.isFinite(ms) && ms >= 0));
   });
 
-// Owner decision 2026-11-17: the Lagrange arm runs at the product's shipped
-// defaults, so the measurement is the product as shipped. Every environment
-// variable a node is started with is a deployment fact named here, never a
-// tuning override (the transport, join and leadership timeouts once set here
-// were tuning: 30 s, 60 s and 240 s against the shipped 5 s, 10 s and 30 s).
-const LAGRANGE_DEPLOYMENT_FACT_ENV = Object.freeze({
-  NODE_ID: 'node identity',
-  NODE_HOST_ID: 'host identity: the name of the machine the node runs on, as it answers there',
-  DATA_DIR: 'storage path: the directory the image hands its runtime user',
-  NODE_ADDRESS: 'the address the node advertises to its peers',
-  REST_API_PORT: 'listener port',
-  ADMIN_WS_PORT: 'listener port',
-  TRANSPORT_WS_PORT: 'listener port',
-  TRANSPORT_WS_HOST: 'listener bind: peers on other hosts reach the transport',
-  ADMIN_WS_HOST: 'listener bind: the harness reads admin facts from another host',
-  ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'the opt-in an external admin bind requires',
-  PGWIRE_AUTH_USER: 'client credential',
-  PGWIRE_AUTH_PASSWORD: 'client credential',
-  PGWIRE_AUTH_DATABASE: 'client credential',
-  SEED_NODE_ADDRESS: 'the seed a joiner joins',
-});
-
-// The words of a command the remote shell receives (shellWord / shellQuote).
-function shellWords(command) {
-  const words = [];
-  let word = null;
-  let quoted = false;
-  let escaped = false;
-  for (const char of command) {
-    if (escaped) {
-      word = `${word ?? ''}${char}`;
-      escaped = false;
-    } else if (quoted) {
-      if (char === '\'') quoted = false;
-      else word = `${word}${char}`;
-    } else if (char === '\'') {
-      quoted = true;
-      word = word ?? '';
-    } else if (char === '\\') {
-      escaped = true;
-    } else if (char === ' ') {
-      if (word !== null) words.push(word);
-      word = null;
-    } else {
-      word = `${word ?? ''}${char}`;
-    }
-  }
-  if (word !== null) words.push(word);
-  return words;
-}
-
-// One `docker run -d` of a Lagrange node, read word by word: the campaign's
-// container plumbing, the storage volume, the environment, and the image as
-// the last word (it runs its own CMD). Any other flag fails the census.
-function lagrangeRunCensus(command) {
-  const words = shellWords(command);
-  assert.deepEqual(words.slice(0, 3), ['docker', 'run', '-d'], command);
-  const census = {env: {}, volumes: [], image: null};
-  const takesValue = new Set(['--name', '--label', '--network', '-v', '-e']);
-  for (let index = 3; index < words.length; index += 1) {
-    const word = words[index];
-    if (word === '--pull=never') continue;
-    if (takesValue.has(word)) {
-      const value = words[index + 1];
-      index += 1;
-      if (word === '--network') assert.equal(value, 'host', command);
-      if (word === '-v') census.volumes.push(value);
-      if (word === '-e') {
-        const at = stringIndexOf(value, '=');
-        census.env[value.slice(0, at)] = value.slice(at + 1);
-      }
-      continue;
-    }
-    assert.equal(stringStartsWith(word, '-'), false, `unexpected docker flag ${word}`);
-    assert.equal(index, words.length - 1,
-      `the image runs its own CMD; found arguments after ${word}`);
-    census.image = word;
-  }
-  return census;
-}
-
-test('Lagrange runs at its shipped defaults: every node environment variable is a ' +
-  'deployment fact, no docker flag tunes it and the image runs its own CMD',
-{timeout: 300000}, async () => {
-  const content = contentIdentityOf([`sha256:${LAGRANGE_IMAGE_ID.slice(-64)}`]);
-  for (const opts of [FAST, {...FAST, storageRoot: '/srv/bench', lagrangeImageContent: content}]) {
+test('CL-007: Lagrange cross-host deployment sets 30s transport message timeout and join timeouts',
+  {timeout: 300000}, async () => {
     const ledger = createContainerLedger();
     const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
-    await deployers.deployLagrangeCluster({...baseInput(sshRun), opts});
+    await deployers.deployLagrangeCluster(baseInput(sshRun));
     const runs = arrayFilter(calls, (call) => /^docker run -d /u.test(call.command));
     assert.equal(runs.length, HOSTS.length);
-    const censuses = arrayMap(runs, (run) => lagrangeRunCensus(run.command));
-    for (const [index, census] of censuses.entries()) {
-      const keys = Object.keys(census.env).sort();
-      const undeclared = arrayFilter(keys,
-        (key) => !Object.hasOwn(LAGRANGE_DEPLOYMENT_FACT_ENV, key));
-      assert.deepEqual(undeclared, [], 'a node is started with a setting that is not a ' +
-        `deployment fact: ${undeclared.join(', ')}`);
-      // Every fact is present (the seed alone joins nobody).
-      const expected = arrayFilter(Object.keys(LAGRANGE_DEPLOYMENT_FACT_ENV),
-        (key) => index > 0 || key !== 'SEED_NODE_ADDRESS').sort();
-      assert.deepEqual(keys, expected);
-      assert.equal(census.env.NODE_HOST_ID, dataHostName(HOSTS[index]));
-      assert.equal(census.env.NODE_ADDRESS, `${HOSTS[index]}:8080`);
-      if (index > 0) assert.equal(census.env.SEED_NODE_ADDRESS, `${HOSTS[0]}:8080`);
-      assert.deepEqual([census.env.REST_API_PORT, census.env.ADMIN_WS_PORT,
-        census.env.TRANSPORT_WS_PORT], ['8080', '8081', '8082'],
-      'the product\'s own port model: REST, REST + 1, REST + 2');
-      assert.deepEqual(census.volumes, opts.storageRoot ?
-        [`/srv/bench/${CAMPAIGN}/lagrange-${index + 1}:${census.env.DATA_DIR}`] : []);
-      assert.ok(census.image);
+    for (const run of runs) {
+      assert.match(run.command, /LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS=30000/u);
+      assert.match(run.command, /NODE_JOINING_HTTP_TIMEOUT_MS=60000/u);
+      assert.match(run.command, /NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS=240000/u);
     }
-  }
-});
-
-// One readiness bound for every arm, from one definition: the same per-stage
-// attempt budget and the same shared formation deadline. With the clock held
-// still the deadline cannot pass, so a never-ready first stage stops on the
-// attempt budget, and both bounds are recorded on the typed exhaustion.
-test('every arm forms under the one readiness bound: the same attempt budget and the same ' +
-  'formation deadline', {timeout: 300000}, async () => {
-  const bound = deployers.DEFAULT_READINESS;
-  assert.equal(bound.attempts, 120);
-  assert.equal(bound.formationDeadlineMs, 240_000);
-  const neverReady = {
-    'lagrange': [...dataHostNameRules(),
-      [/curl/u, http(503, {ready: false, phase: 'init', reasons: ['seed-contact']})]],
-    'tidb-tikv': [[/curl/u, http(503, {health: false})]],
-    'pg-single-primary': [[/pg_isready/u, new Error('127.0.0.1:5432 - no response (exit 2)')]],
-  };
-  for (const [targetId, rules] of Object.entries(neverReady)) {
-    const ledger = createContainerLedger();
-    const {sshRun} = createScriptedSsh([...dockerRules(ledger), ...rules]);
-    await assert.rejects(deployers.deployComparativeTarget(targetId, {...baseInput(sshRun),
-      nowFn: () => 1_000_000,
-      opts: {lagrangeImage: LAGRANGE_IMAGE, readiness: {stablePolls: 1, intervalMs: 0}}}),
-    (error) => {
-      assert.equal(error.code, 'readiness_exhausted', targetId);
-      assert.equal(error.diagnostic.maxAttempts, bound.attempts, targetId);
-      assert.equal(error.diagnostic.attempt, bound.attempts, targetId);
-      assert.equal(error.diagnostic.deadlineMs, bound.formationDeadlineMs, targetId);
-      assert.equal(error.diagnostic.deadlineExpired, false, targetId);
-      return true;
-    });
-  }
-});
+    assert.equal(/SEED_NODE_ADDRESS=/u.test(runs[0].command), false);
+    for (const joinerRun of runs.slice(1)) {
+      assert.match(joinerRun.command, /SEED_NODE_ADDRESS=/u);
+    }
+  });
 
 function cleanupDockerRules(ledger) {
   return [
@@ -485,10 +349,9 @@ function cleanupDockerRules(ledger) {
 }
 
 test('shared formation wall-clock deadline: slow probes across sequential readiness stages share ' +
-  'the one 240,000 ms formation deadline and fail closed before the attempt budget with ' +
-  'lastObservation and cohort cleanup',
+  'one 420,000 ms deadline and fail closed before attempt 420 with lastObservation and cohort cleanup',
 {timeout: 300000}, async () => {
-  assert.equal(deployers.DEFAULT_READINESS.formationDeadlineMs, 240_000);
+  assert.equal(deployers.DEFAULT_LAGRANGE_FORMATION_DEADLINE_MS, 420_000);
   const ledger = createContainerLedger();
   let clockMs = 1_000_000;
   let joiner2Polls = 0;
@@ -496,15 +359,15 @@ test('shared formation wall-clock deadline: slow probes across sequential readin
   const {sshRun} = createScriptedSsh([
     ...cleanupDockerRules(ledger),
     [(command) => stringIncludes(command, 'http://10.0.0.1:8080/readyz'), () => {
-      // Seed readiness probe consumes 100s of the shared 240s formation deadline.
-      clockMs += 100_000;
+      // Seed readiness probe consumes 180s of the shared 420s formation deadline.
+      clockMs += 180_000;
       return http(200, {ready: true});
     }],
     [(command) => stringIncludes(command, 'http://10.0.0.2:8080/readyz'), () => {
       joiner2Polls += 1;
-      // Each joiner-2 probe consumes 70s; two probes (100s + 70s + 1s + 70s = 241s)
-      // cross the shared 240,000 ms deadline on attempt 2 of the 120-attempt budget.
-      clockMs += 70_000;
+      // Each joiner-2 probe consumes 130s; two probes (180s + 130s + 1s + 130s = 441s)
+      // cross the shared 420,000 ms deadline on attempt 2 of 420.
+      clockMs += 130_000;
       return http(503, {ready: false, phase: 'joining',
         reasons: [`priority-partition-spread-poll-${joiner2Polls}`]});
     }],
@@ -524,18 +387,16 @@ test('shared formation wall-clock deadline: slow probes across sequential readin
       opts: {
         lagrangeImage: LAGRANGE_IMAGE,
         cleanupOnFailure: true,
-        readiness: {stablePolls: 1, intervalMs: 1000},
+        readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
       },
     }),
     (error) => {
       assert.equal(error.code, 'readiness_exhausted');
       assert.equal(error.diagnostic.component, 'lagrange-node@10.0.0.2');
       assert.equal(error.diagnostic.deadlineExpired, true);
-      assert.equal(error.diagnostic.deadlineMs, 240_000);
-      assert.equal(error.diagnostic.maxAttempts, 120);
+      assert.equal(error.diagnostic.deadlineMs, 420_000);
       assert.equal(error.diagnostic.attempt, 2,
-        'must fail closed on attempt 2 when the shared 240s wall-clock deadline expires, ' +
-        'not run the whole attempt budget');
+        'must fail closed on attempt 2 when shared 420s wall-clock deadline expires, not run 420 attempts');
       assert.equal(joiner2Polls, 2);
       assert.deepEqual(sleeps, [1000]);
       assert.match(JSON.stringify(error.diagnostic.lastObservation),
@@ -614,8 +475,8 @@ test('late successful probe past deadlineAtMs: a probeWriteReadback that starts 
   const {sshRun} = createScriptedSsh([
     ...cleanupDockerRules(ledger),
     [/CREATE TABLE IF NOT EXISTS bench_readiness_probe/u, (_command, _host, _calls, opts, timeoutMs) => {
-      // Advance to 15s before the 240,000 ms formation deadline (1,240,000).
-      clockMs = 1_225_000;
+      // Advance to 15s before the 420,000 ms formation deadline (1,420,000).
+      clockMs = 1_405_000;
       assert.ok(opts?.signal, 'SQL probe statement must receive AbortSignal');
       assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0);
       return 'CREATE TABLE';
@@ -623,15 +484,15 @@ test('late successful probe past deadlineAtMs: a probeWriteReadback that starts 
     [/INSERT INTO bench_readiness_probe/u, (_command, _host, _calls, _opts, timeoutMs) => {
       assert.equal(timeoutMs, 15_000,
         'INSERT step must bound its timeoutMs by the remaining 15,000 ms before deadlineAtMs');
-      clockMs = 1_235_000;
+      clockMs = 1_415_000;
       return 'INSERT 0 1';
     }],
     [/SELECT token FROM bench_readiness_probe/u, (command, _host, _calls, _opts, timeoutMs) => {
       selectCalls += 1;
       assert.equal(timeoutMs, 5_000,
         'SELECT step must bound its timeoutMs by the remaining 5,000 ms before deadlineAtMs');
-      // Complete 1,000 ms AFTER deadlineAtMs (1,240,000) while returning a valid 1-row readback.
-      clockMs = 1_241_000;
+      // Complete 1,000 ms AFTER deadlineAtMs (1,420,000) while returning a valid 1-row readback.
+      clockMs = 1_421_000;
       const campaign = (/lagrange\.bench\.campaign=(\S+)/u.exec(command) || [])[1];
       const id = (/WHERE id = (\d+)/u.exec(command) || [])[1];
       return `token\n${campaign}-${id}`;
@@ -1154,7 +1015,7 @@ test('awaitReady preserves bounded formation deadline when deadlineAtMs is omitt
     [/FROM nodes'/u, () => {
       if (stallAwaitReady) {
         stalledPolls += 1;
-        clockMs += 100_000;
+        clockMs += 150_000;
         return new Error('connection refused');
       }
       return arrayJoin([
@@ -1180,6 +1041,7 @@ test('awaitReady preserves bounded formation deadline when deadlineAtMs is omitt
     },
     opts: {
       lagrangeImage: LAGRANGE_IMAGE,
+      formationDeadlineMs: 420_000,
       readiness: {stablePolls: 1, attempts: 420, intervalMs: 1000},
     },
   });
@@ -1190,8 +1052,7 @@ test('awaitReady preserves bounded formation deadline when deadlineAtMs is omitt
     (error) => {
       assert.equal(error.code, 'readiness_exhausted');
       assert.equal(error.diagnostic.deadlineExpired, true);
-      // The one formation bound of every arm (DEFAULT_READINESS.formationDeadlineMs).
-      assert.equal(error.diagnostic.deadlineMs, 240_000);
+      assert.equal(error.diagnostic.deadlineMs, 420_000);
       assert.equal(error.diagnostic.attempt, 3);
       return true;
     },

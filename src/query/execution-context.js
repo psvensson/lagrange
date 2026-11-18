@@ -32,7 +32,7 @@ import {
   STREAM_STATE,
   estimateRowBytes,
 } from './result-stream.js';
-import {requireNormalizedQueryBudget} from
+import {normalizeQueryBudget} from
   '../wasm-service/query-budget-constants.js';
 import {BudgetLimitError} from './budget-limit-error.js';
 import {ExchangeManager} from './distributed/exchange-manager.js';
@@ -72,8 +72,6 @@ class ExecutionContext {
    * @param {Object} deps.snapshot - Snapshot configuration.
    * @param {string} deps.snapshot.mode - Snapshot mode.
    * @param {number} [deps.snapshot.ts] - Snapshot timestamp.
-   * @param {Readonly<Object>} deps.budgets - The query's budget, as
-   *   produced by normalizeQueryBudget.
    * @param {import('./budget-enforcer.js').BudgetEnforcer} deps.budgetEnforcer
    *   Budget enforcer instance.
    * @param {import('./cancellation-token.js').CancellationToken} deps.cancellationToken
@@ -101,7 +99,7 @@ class ExecutionContext {
     this.snapshot = Object.freeze({...deps.snapshot});
 
     /** @private */
-    this._budgets = requireNormalizedQueryBudget(deps.budgets);
+    this._budgets = normalizeQueryBudget(deps.budgets);
 
     /** @private */
     this._budgetEnforcer = deps.budgetEnforcer;
@@ -157,7 +155,7 @@ class ExecutionContext {
     /** @private */
     this._broadcastStore = deps.broadcastStore ||
       new BroadcastStore({
-        budgets: this._budgets,
+        maxPayloadBytes: this._budgets.BROADCAST_MAX_PAYLOAD_BYTES,
         lineageTracker: this._lineageTracker,
         stageIndex: LOOKUP_STAGE_INDEX_DEFAULT,
       });

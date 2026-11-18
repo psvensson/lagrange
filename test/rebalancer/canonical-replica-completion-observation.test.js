@@ -260,9 +260,6 @@ test('exact-generation-completion', async () => {
     },
   };
 
-  // The operation under reconciliation is a committed ledger row: written
-  // by the coordinator that owns it (its source node), before its
-  // completion is observed.
   const operation = {
     operationId: 'op-exact-gen-1',
     type: OperationType.ADD,
@@ -272,14 +269,11 @@ test('exact-generation-completion', async () => {
     status: ReplicaStatus.SYNCING,
     replicaId: TEST_REPLICA_ID,
     partitionId: TEST_PARTITION_ID,
-    sourceNodeId: coordinator.nodeId,
     targetNodeId: TEST_NODE_ID,
     createdAt: 1000,
-    updatedAt: 1000,
     stepsHistory: [],
     lifecyclePrecondition: precondition,
   };
-  await coordinator.repository.persistNewOperation(operation);
 
   // If observation has an older state_entered_at than expected precondition,
   // completion must be refused

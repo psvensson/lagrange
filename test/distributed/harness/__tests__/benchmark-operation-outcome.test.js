@@ -27,13 +27,6 @@ const CASES = Object.freeze([
     OUTCOME.TERMINAL_FAILURE, CLASS.PRODUCT_ERROR],
   ['typed unknown commit', error('unknown', {code: '08007', commitOutcomeUnknown: true}), {},
     OUTCOME.UNRESOLVED, CLASS.AMBIGUOUS_COMMIT],
-  // An autocommit write the product answered with its typed unknown outcome
-  // (08007) is unresolved from the SQLSTATE alone, never a transport failure.
-  ['typed unknown autocommit write', error('unknown', {code: '08007'}), {},
-    OUTCOME.UNRESOLVED, CLASS.AMBIGUOUS_COMMIT],
-  ['a product field named OUTCOME_UNKNOWN is not the typed answer',
-    error('x', {code: '42P01', outcome: 'OUTCOME_UNKNOWN', errorCode: 'OUTCOME_UNKNOWN'}),
-    {}, OUTCOME.TERMINAL_FAILURE, CLASS.PRODUCT_ERROR],
   ['socket EPIPE', error('pipe', {code: 'EPIPE', syscall: 'write'}), {},
     OUTCOME.TERMINAL_FAILURE, CLASS.TRANSPORT_FAILURE],
   ['socket ETIME', error('time', {code: 'ETIME'}), {},

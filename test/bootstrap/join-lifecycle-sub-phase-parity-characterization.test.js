@@ -11,7 +11,6 @@
  * Design: D5.1, D5.2, D11.1
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {
@@ -288,7 +287,6 @@ test('Join executePhase should update lifecycle sub-phases during phase executio
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -350,7 +348,6 @@ test('Join terminal sub-phase QUERYING_STATE should preserve READY transition',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -393,7 +390,6 @@ test('Join completeSuccessfulJoin keeps same-state READY idempotent through life
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,

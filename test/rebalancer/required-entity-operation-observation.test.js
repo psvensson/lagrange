@@ -35,8 +35,7 @@ function fixture(t, retained = false) {
     entity_type: ENTITY.entityType, entity_id: ENTITY.entityId,
     partition_id: ENTITY.entityId, replica_id: `${ENTITY.entityId}-r4`,
     source_node_id: 'node-1', target_node_id: 'node-2', status: 'creating',
-    workflow_step: 'CREATING', created_at: Date.now(), updated_at: Date.now(),
-    steps_history: '[]'}] : [];
+    workflow_step: 'CREATING', created_at: Date.now(), updated_at: Date.now()}] : [];
   const cache = createMockCache(nodes, [], [{partition_id: ENTITY.entityId,
     table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, replica_count: 3}], [], rows,
   nodes.map((node) => createNodeEndpoint(node.node_id)));

@@ -23,7 +23,7 @@ import {
   readFileSync,
   rmSync,
 } from 'node:fs';
-import {hostname, tmpdir} from 'node:os';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import pg from 'pg';
@@ -205,7 +205,6 @@ function buildNodeEnvironment(node, role, seedRestPort, credentials, env) {
     DATA_DIR: node.dataDir,
     LOG_LEVEL: EMBEDDED_CLUSTER_VALUE.LOG_LEVEL,
     NODE_ADDRESS: `${EMBEDDED_CLUSTER_VALUE.LOCALHOST}:${node.restPort}`,
-    NODE_HOST_ID: node.hostId,
     NODE_ID: node.nodeId,
     PGWIRE_AUTH_DATABASE: credentials.database,
     PGWIRE_AUTH_PASSWORD: credentials.password,
@@ -392,9 +391,6 @@ function createEmbeddedCluster(t, options = {}) {
     const node = {
       adminPort: listenerPorts.adminWebSocketPort,
       dataDir: nodeOptions.dataDir ?? join(rootDir, `node-${nodes.length}`),
-      // The required host identity: every process runs on this machine,
-      // unless a test declares a synthetic topology.
-      hostId: nodeOptions.hostId ?? hostname(),
       logPath: join(rootDir, `node-${nodes.length}${EMBEDDED_CLUSTER_VALUE.LOG_SUFFIX}`),
       nodeId,
       restPort: listenerPorts.restApiPort,

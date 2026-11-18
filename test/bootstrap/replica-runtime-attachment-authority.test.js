@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from
@@ -19,7 +18,6 @@ test('join runtime attachment publishes neither local ACTIVE nor an ' +
   'unversioned lifecycle snapshot', (t) => {
   initializeTestEnvironment();
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-a',
     nodeAddress: 'ws://localhost:19101',
@@ -58,7 +56,6 @@ test('seed handler attachment asserts the exact installed ACTIVE generation ' +
   'without publishing a second snapshot', async (t) => {
   initializeTestEnvironment();
   const service = new BootstrapService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'seed-node-a',
     nodeAddress: 'ws://localhost:19102',

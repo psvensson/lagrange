@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readFileSync} from 'node:fs';
 
@@ -235,7 +234,6 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     now: () => Date.now(),
   });
   const exhaustedService = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -295,7 +293,6 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   );
 
   const unknownOwnerService = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
@@ -306,7 +303,6 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   unknownOwnerService.getLifecycleStateMachine().transition('stopped');
   t.throws(
     () => new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -328,7 +324,6 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   // The outer reattempt is a new boot lifecycle: it reserves a strictly
   // larger incarnation than the exhausted attempt (boot-incarnation-owner).
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 2,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,

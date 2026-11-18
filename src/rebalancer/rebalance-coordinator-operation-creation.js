@@ -174,12 +174,10 @@ class RebalanceCoordinatorOperationCreation {
    * @param {string} [move.entityId] - Entity ID for canonical operations.
    * @param {string} move.nodeId - Target node ID.
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
+   * @param {boolean} [move.emitOperationCreated] - Emit the local
+   *   coordinator-created dispatch trigger after persistence.
    * @param {boolean} [move.deferDispatchUntilBootstrapTopology] - Persist the
-   *   operation with the durable bootstrap-topology dispatch hold. The hold,
-   *   not any request flag, is the dispatch authority: every created row is
-   *   announced and armed, and the owner's claim refuses a held row until
-   *   the hold's releaser stamps the cohort
-   *   (releaseBootstrapTopologyDispatchHold).
+   *   operation as non-dispatchable until its bootstrap cohort is complete.
    * @param {Object} [move.operationCreationAdmission] - Immutable admission
    *   observation previously issued by this coordinator owner.
    * @return {Promise<Object>} Created or existing operation record.
@@ -200,6 +198,7 @@ class RebalanceCoordinatorOperationCreation {
       entityId,
       normalizedMoveType,
     );
+    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
     const criticalAddLikeIntentKey = this.buildCriticalAddLikeIntentKey(
       move,
@@ -234,7 +233,9 @@ class RebalanceCoordinatorOperationCreation {
 
     const recentOperation = await this.getRecentOperationIntent(dedupeKey);
     if (recentOperation) {
-      return this.maybeRearmReusedPendingOperation(recentOperation);
+      return this.maybeRearmReusedPendingOperation(recentOperation, {
+        shouldEmitOperationCreated,
+      });
     }
     if (criticalAddLikeIntentKey && criticalAddLikeIntentKey !== dedupeKey) {
       const recentCriticalOperation = await this.getRecentOperationIntent(
@@ -245,7 +246,9 @@ class RebalanceCoordinatorOperationCreation {
           [dedupeKey, criticalAddLikeIntentKey],
           recentCriticalOperation,
         );
-        return this.maybeRearmReusedPendingOperation(recentCriticalOperation);
+        return this.maybeRearmReusedPendingOperation(recentCriticalOperation, {
+          shouldEmitOperationCreated,
+        });
       }
     }
 
@@ -425,6 +428,7 @@ class RebalanceCoordinatorOperationCreation {
     this.assertGroupNotRetiring(move);
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
+    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(move);
     const partitionId = move.partitionId;
@@ -480,7 +484,9 @@ class RebalanceCoordinatorOperationCreation {
         entityType: entityType,
         entityId: entityId,
       });
-      return this.maybeRearmReusedPendingOperation(existing);
+      return this.maybeRearmReusedPendingOperation(existing, {
+        shouldEmitOperationCreated,
+      });
     }
 
     if (criticalAddLikeIntentKey) {
@@ -492,7 +498,9 @@ class RebalanceCoordinatorOperationCreation {
           [dedupeKey, criticalAddLikeIntentKey],
           recentCriticalOperation,
         );
-        return this.maybeRearmReusedPendingOperation(recentCriticalOperation);
+        return this.maybeRearmReusedPendingOperation(recentCriticalOperation, {
+          shouldEmitOperationCreated,
+        });
       }
     }
 
@@ -514,6 +522,7 @@ class RebalanceCoordinatorOperationCreation {
       move,
       normalizedMove,
       normalizedMoveType,
+      shouldEmitOperationCreated,
       entityType,
       entityId,
       partitionId,
@@ -552,6 +561,7 @@ class RebalanceCoordinatorOperationCreation {
       move,
       normalizedMove,
       normalizedMoveType,
+      shouldEmitOperationCreated,
       entityType,
       entityId,
       partitionId,
@@ -859,11 +869,13 @@ class RebalanceCoordinatorOperationCreation {
       throw reservationError;
     }
 
-    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
-    await this.armCoordinatorCreatedOperationProgress(
-      operation,
-      context.createdOperationArmContext,
-    );
+    if (shouldEmitOperationCreated) {
+      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
+      await this.armCoordinatorCreatedOperationProgress(
+        operation,
+        context.createdOperationArmContext,
+      );
+    }
 
     return operation;
   }

@@ -39,14 +39,15 @@ import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
-  LOSING_ORDER,
   OUTCOME,
   STEPPED_CADENCE_NAMES,
-  SWEEP,
   VOTER_READY_FLOOR,
-  WINNING_ORDER,
+  arrive,
+  derive,
   describeOrder,
   formatStuckReport,
+  readAuthority,
+  revoke,
   runArrivalOrder,
 } from './formation-joint-admission-scenario.js';
 
@@ -55,6 +56,43 @@ const J2 = 'j2';
 const J3 = 'j3';
 const J4 = 'j4';
 const TABLE_PAD = 9;
+
+// The measured losing order (lab job 0bc41a40, run repeat-551bf264/run-1):
+// one joiner arrives, the seed's authority is read, that joiner's connection
+// is re-identified, and one membership derivation then admits both joiners.
+const LOSING_ORDER = Object.freeze([
+  arrive(J1), readAuthority(), revoke(J1), arrive(J2), derive(),
+]);
+// The order that wins today: one joiner per derivation, the authority read
+// between them.
+const WINNING_ORDER = Object.freeze([
+  arrive(J1), readAuthority(), revoke(J1), derive(), readAuthority(),
+  arrive(J2), derive(),
+]);
+const SWEEP = Object.freeze([
+  {name: 'two/same-derivation/after-revoke', order: LOSING_ORDER},
+  {name: 'two/successive-derivations/after-revoke', order: WINNING_ORDER},
+  {name: 'two/same-derivation/never-captured',
+    order: [arrive(J1), arrive(J2), derive()]},
+  {name: 'two/same-derivation/captured-not-revoked',
+    order: [arrive(J1), readAuthority(), arrive(J2), derive()]},
+  {name: 'two/same-derivation/read-between-revoke-and-derivation',
+    order: [arrive(J1), readAuthority(), revoke(J1), arrive(J2),
+      readAuthority(), derive()]},
+  {name: 'two/successive-derivations/no-read-between',
+    order: [arrive(J1), readAuthority(), revoke(J1), derive(), arrive(J2),
+      derive()]},
+  {name: 'four/same-derivation/after-revoke',
+    order: [arrive(J1), readAuthority(), revoke(J1), arrive(J2), arrive(J3),
+      arrive(J4), derive()]},
+  {name: 'four/successive-derivations/after-revoke',
+    order: [arrive(J1), readAuthority(), revoke(J1), derive(), readAuthority(),
+      arrive(J2), derive(), readAuthority(), arrive(J3), derive(),
+      readAuthority(), arrive(J4), derive()]},
+  {name: 'four/same-derivation/captured-not-revoked',
+    order: [arrive(J1), readAuthority(), arrive(J2), arrive(J3), arrive(J4),
+      derive()]},
+]);
 
 function assertEveryAdmittedJoinerReady(report, label) {
   assert.equal(report.fixpoint, true,

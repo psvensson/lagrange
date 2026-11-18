@@ -5,16 +5,8 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {SQL_DEFAULT_COLLATION} from './parser-constants.js';
-import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
-import {renderLiteral} from './sql-statement-renderer.js';
+import {QUERY_ERROR_MSG} from './query-constants.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
-
-// A column declared without a type has BLOB affinity; it is recorded as BLOB,
-// the declared type with the same affinity (sqlite.org/datatype3.html §3.1).
-const UNTYPED_COLUMN_TYPE = 'BLOB';
-const NON_BINARY_KEY_COLLATION_MSG =
-  'A partition-key (PRIMARY KEY) column must use the BINARY collation';
 
 
 /**
@@ -40,8 +32,10 @@ function derivePartitionKey(primaryKey) {
  * @private
  */
 function normalizeDataType(dataType) {
-  const rawName = typeof dataType === 'string' ? dataType : dataType?.name;
-  if (!rawName) return UNTYPED_COLUMN_TYPE;
+  if (!dataType) return TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE;
+  const rawName = typeof dataType === 'string' ?
+    dataType :
+    (dataType.name || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE);
   const typeName = rawName.toUpperCase();
 
   // Map common SQL types to SQLite types
@@ -74,14 +68,18 @@ function normalizeDataType(dataType) {
 // stored value verbatim into CREATE TABLE, so a bare string default like {}
 // must round-trip as '{}' or replica creation fails with a SQLite parse
 // error (the 2026-07-18 live schema-admission wedge).
-// The literal is rendered in the storage class it carries (the one
-// renderer): DEFAULT 2.0 stays a REAL, never the text '2.0'.
 function deriveDefaultSqlLiteral(defaultValue) {
   const value = defaultValue?.value;
   if (value === undefined || value === null) {
     return undefined;
   }
-  return renderLiteral(defaultValue);
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? '1' : '0';
+  }
+  return `'${String(value).replaceAll('\'', '\'\'')}'`;
 }
 
 function resolveDerivationColumns(columnsOrAst) {
@@ -120,32 +118,15 @@ function unpackSchemaDerivationArgs(columnsOrAst, tableConstraints, primaryKey) 
 function formatDerivedColumn(service, col) {
   return {
     name: col.name,
-    type: service.normalizeDataType(col.dataType ?? col.type ?? null),
-    collation: typeof col.collation === 'string' ?
-      col.collation.toUpperCase() : SQL_DEFAULT_COLLATION,
+    type: service.normalizeDataType(
+      col.dataType || {name: col.type || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE},
+    ),
     primaryKey: Boolean(col.primaryKey),
     notNull: col.notNull === true || col.nullable === false,
     unique: Boolean(col.unique),
     checkSql: col.checkSql || null,
     defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
   };
-}
-
-/**
- * Refuse a partition-key column whose collation is not BINARY: partition
- * routing orders keys by BINARY comparison, so another collation would route
- * equal keys to different partitions (design §2.7).
- * @param {Object[]} columns - Derived columns.
- * @param {string[]} primaryKey - Partition-key column names.
- */
-function requireBinaryKeyColumns(columns, primaryKey) {
-  const keyNames = new Set(primaryKey.map((name) => String(name).toLowerCase()));
-  if (columns.some((col) => keyNames.has(String(col.name).toLowerCase()) &&
-      col.collation !== SQL_DEFAULT_COLLATION)) {
-    const error = new Error(NON_BINARY_KEY_COLLATION_MSG);
-    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
-    throw error;
-  }
 }
 
 const SCHEMA_DERIVATION_METHODS = Object.freeze({
@@ -168,10 +149,8 @@ const SCHEMA_DERIVATION_METHODS = Object.freeze({
     const derivedPk = Array.isArray(pk) && pk.length > 0 ?
       pk :
       columns.filter((col) => col.primaryKey).map((col) => col.name);
-    const derivedColumns = columns.map((col) => formatDerivedColumn(this, col));
-    requireBinaryKeyColumns(derivedColumns, derivedPk);
     return {
-      columns: derivedColumns,
+      columns: columns.map((col) => formatDerivedColumn(this, col)),
       primaryKey: derivedPk.length > 0 ? derivedPk : (pk || null),
       tableConstraints: Array.isArray(constraints) ? constraints : [],
     };

@@ -603,6 +603,7 @@ async (t) => {
       nodeId: COHORT_TARGET_NODE_ID,
       entityType: SERVICE_TYPE.PARTITION,
       entityId: COHORT_PARTITION_ID,
+      emitOperationCreated: true,
     });
 
     t.equal(

@@ -35,7 +35,6 @@ config.initialize();
 import {
   createMockMessageRouter,
   createProvisioningReadyService,
-  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 const LEDGER_HOLD_REJECTION = Object.freeze({
@@ -83,7 +82,7 @@ function createHoldingRebalanceCoordinator({
   localNodeId,
   rejection = LEDGER_HOLD_REJECTION,
 }) {
-  return withBootstrapHoldRelease({
+  return {
     async checkProvisioningAdmission() {
       if (isHoldEngaged()) {
         return rejection;
@@ -114,7 +113,7 @@ function createHoldingRebalanceCoordinator({
       });
       return {success: true};
     },
-  });
+  };
 }
 
 function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {

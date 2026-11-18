@@ -10,6 +10,11 @@ import {
 import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
+  isTerminalSuccessfulCreateOperation,
+  readOperationRecordWorkflowStep,
+} from '../rebalancer/replica-operation-progress.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
+import {
   buildProvisioningCompletionSummary,
 } from './provisioning-completion-summary.js';
 import {shouldRetainDurableSchemaPlanningOperations} from
@@ -27,6 +32,7 @@ const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
+  OPERATION_METADATA_KEY,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   OperationType,
@@ -38,6 +44,18 @@ const {
   SERVICE_TYPE,
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function isInFlightOrTerminalCreateOperation(operation) {
+  if (isTerminalSuccessfulCreateOperation(operation)) {
+    return true;
+  }
+  const workflowStep = readOperationRecordWorkflowStep(operation);
+  return (
+    typeof workflowStep === LOCAL_STR_STRING &&
+    workflowStep.length > 0 &&
+    workflowStep !== WORKFLOW_STEP.PENDING
+  );
+}
 
 class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
@@ -483,55 +501,87 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }),
     });
 
-    // The provisioner stamps and executes only the rows whose bootstrap
-    // dispatch hold it releases itself. The release is the coordinator's
-    // compare-and-set on the DURABLE held row (PENDING, hold present), never
-    // a write of this attempt's in-memory copy: a deterministic-intent retry
-    // can hand back a row a dispatch lane already claimed or a prior attempt
-    // already released, and writing that copy back would rewind the claim.
-    // A row whose release is refused belongs to another owner: it stays in
-    // the plan for counting and its outcome is awaited through its
-    // routability like any other create, but it is never stamped or
-    // executed here.
-    const bootstrapStamp = Object.freeze({
-      [ReplicaOperationField.REPLICA_IDS]: bootstrapTopology.replicaIds,
-      [ReplicaOperationField.PEER_ADDRESSES]: bootstrapTopology.peerAddresses,
-      [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: bootstrapMembership,
-      [ReplicaOperationField.BOOTSTRAP_TABLE_METADATA]: bootstrapTableMetadata,
-      [ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA]:
-        bootstrapPartitionMetadata,
-    });
-    const releasedOperationsById = new Map();
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      const release =
-        await this.rebalanceCoordinator.releaseBootstrapTopologyDispatchHold(
-          operation.operationId,
-          bootstrapStamp,
-        );
-      if (release.released === true) {
-        releasedOperationsById.set(operation.operationId, release.operation);
+      if (isInFlightOrTerminalCreateOperation(operation)) {
+        continue;
+      }
+      operation[ReplicaOperationField.REPLICA_IDS] =
+        bootstrapTopology.replicaIds;
+      operation[ReplicaOperationField.PEER_ADDRESSES] =
+        bootstrapTopology.peerAddresses;
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+        bootstrapMembership;
+      const initialStepEntry =
+        Array.isArray(operation.stepsHistory) &&
+        operation.stepsHistory.length > 0 &&
+        operation.stepsHistory[0] &&
+        typeof operation.stepsHistory[0] === 'object' ?
+          operation.stepsHistory[0] :
+          null;
+      if (initialStepEntry) {
+        initialStepEntry[OPERATION_METADATA_KEY.REPLICA_IDS] =
+          bootstrapTopology.replicaIds;
+        initialStepEntry[OPERATION_METADATA_KEY.PEER_ADDRESSES] =
+          bootstrapTopology.peerAddresses;
+        initialStepEntry[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+          bootstrapMembership;
+        if (bootstrapTableMetadata) {
+          initialStepEntry[OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA] =
+            bootstrapTableMetadata;
+        }
+        if (bootstrapPartitionMetadata) {
+          initialStepEntry[
+            OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA
+          ] = bootstrapPartitionMetadata;
+        }
+        delete initialStepEntry[
+          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+        ];
+      }
+      if (bootstrapTableMetadata) {
+        operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+          bootstrapTableMetadata;
+      }
+      if (bootstrapPartitionMetadata) {
+        operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+          bootstrapPartitionMetadata;
+      }
+      operation.updatedAt = this.nowFn();
+      if (
+        typeof this.rebalanceCoordinator.dispatchOperation === LOCAL_STR_FUNCTION &&
+        typeof this.rebalanceCoordinator.persistOperationUpdate === LOCAL_STR_FUNCTION
+      ) {
+        await this.rebalanceCoordinator.persistOperationUpdate(operation);
       }
     }
 
     const metadataWaitReplicaIds = [];
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
-      const releasedOperation =
-        releasedOperationsById.get(operation.operationId);
-      if (!releasedOperation) {
+      // A deterministic-intent retry can hand back the prior attempt's
+      // in-flight (SENDING/CREATING/SYNCING) or durably terminal-successful
+      // operation. Re-stamping and re-executing it rewinds workflowStep and
+      // invalidates the target node's create-admission CAS. Keep it in the
+      // plan for counting, wait on its routability like any other create,
+      // but never re-dispatch it.
+      if (isInFlightOrTerminalCreateOperation(operation)) {
+        const existingReplicaId =
+          operation?.replicaId || operation?.replica_id || null;
         if (
-          typeof operation.replicaId === LOCAL_STR_STRING &&
-          operation.replicaId.length > 0
+          typeof existingReplicaId === LOCAL_STR_STRING &&
+          existingReplicaId.length > 0
         ) {
-          metadataWaitReplicaIds.push(operation.replicaId);
+          metadataWaitReplicaIds.push(existingReplicaId);
         }
         continue;
       }
       const executionResult =
-        await this.rebalanceCoordinator.executeOperation(releasedOperation, {
-          ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
-        });
+        typeof this.rebalanceCoordinator.executeOperation === 'function' ?
+          await this.rebalanceCoordinator.executeOperation(operation, {
+            ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
+          }) :
+          await this.rebalanceCoordinator.dispatchOperation(operation);
       throwIfCancellationRequested(cancellationToken);
 
       if (
@@ -548,11 +598,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         continue;
       }
 
-      if (
-        typeof releasedOperation.replicaId === LOCAL_STR_STRING &&
-        releasedOperation.replicaId.length > 0
-      ) {
-        metadataWaitReplicaIds.push(releasedOperation.replicaId);
+      const replicaId = operation?.replicaId || operation?.replica_id || null;
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
+        metadataWaitReplicaIds.push(replicaId);
       }
     }
 

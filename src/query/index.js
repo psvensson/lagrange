@@ -47,6 +47,7 @@ export {
   resetSqlCoreGuard,
   rejectFallbackExecution,
 } from './sql-execution-guard.js';
+export {BudgetEnforcer} from './budget-enforcer.js';
 export {
   BudgetLimitError,
   BUDGET_CATEGORY,
@@ -69,11 +70,10 @@ export {
  * v0 Runtime API surface.
  *
  * - `runtime.run(userFn, opts?)` — top-level execution
- *   entrypoint that injects an ExecutionContext (`call`, `emit`, `out`,
- *   `lookup`, `broadcast`, `useBroadcast`). The context and its
- *   BudgetEnforcer are built by `runtime.run` and `createSqlRequest` from
- *   the one normalized budget; neither class is constructed by callers.
+ *   entrypoint that injects an ExecutionContext.
  * - `run` — standalone alias for `runtime.run`.
+ * - `ExecutionContext` — distributed context with `call`,
+ *   `emit`, `out`, `lookup`, `broadcast`, `useBroadcast`.
  * - Constants: snapshot modes, default session, error
  *   messages, and subsystem identifier.
  *
@@ -83,6 +83,7 @@ export {
  * @see module:query/runtime-constants
  */
 export {runtime, run} from './runtime-runner.js';
+export {ExecutionContext} from './execution-context.js';
 export {
   SNAPSHOT_MODE,
   DEFAULT_SNAPSHOT_MODE,

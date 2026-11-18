@@ -113,9 +113,6 @@ function createOperationRow({
   type,
   rowState,
 }) {
-  // A committed row of the owner's schema: written by the coordinator node,
-  // a terminal row long ago (completed at 1), a live row just now.
-  const writtenAtMs = rowState ? 1 : Date.now();
   return {
     operation_id: operationId,
     type,
@@ -123,12 +120,9 @@ function createOperationRow({
     entity_type: EntityType.PARTITION,
     entity_id: partitionId,
     replica_id: replicaId,
-    source_node_id: TEST_NODE_ID_A,
     target_node_id: targetNodeId,
     status: rowState?.status || ReplicaStatus.PENDING,
     workflow_step: rowState?.workflow_step || 'PENDING',
-    created_at: writtenAtMs,
-    updated_at: writtenAtMs,
     completed_at: rowState ? 1 : null,
   };
 }
@@ -355,6 +349,7 @@ test('guard: the conservative-union escape admits a spread-typed ADD for ' +
         partitionId: TEST_PARTITION_ID,
         nodeId: TEST_NODE_ID_C,
         reason: 'spread_replicas',
+        emitOperationCreated: false,
         enforceConcurrentOperationBudget: true,
       });
     } catch (error) {

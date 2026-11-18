@@ -8,22 +8,55 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 /**
- * Build recovery projection node IDs: the planning snapshot's cluster-node
- * union. It answers which nodes the published membership is projected to
- * hold; it is never a voter count (the remove-safety floor counts only the
- * partition's voter-ready rows on READY-lease nodes).
+ * Check whether a node is ready in the committed node floor when provided.
+ * @param {Object|null} committedNodeFloor
+ * @param {string} nodeId
+ * @returns {boolean}
+ */
+function isNodeReadyInCommittedFloor(committedNodeFloor, nodeId) {
+  if (!committedNodeFloor || typeof committedNodeFloor !== 'object') {
+    return true;
+  }
+  const semanticsMap =
+    committedNodeFloor.nodeSemanticsById instanceof Map ?
+      committedNodeFloor.nodeSemanticsById :
+      committedNodeFloor.readyByNodeId instanceof Map ?
+        committedNodeFloor.readyByNodeId :
+        null;
+  if (!semanticsMap) {
+    return true;
+  }
+  return semanticsMap.get(nodeId)?.readyNow !== false;
+}
+
+/**
+ * Build recovery projection node IDs.
  * @param {Object|null} planningSnapshot
+ * @param {Object} [options]
  * @returns {string[]}
  */
-function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot) {
+function buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+  planningSnapshot,
+  options = {},
+) {
   if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return [];
   }
-  return normalizeNodeIdList([
+  const candidateNodeIds = normalizeNodeIdList([
     ...normalizeNodeIdList(planningSnapshot.recoveryActiveNodeIds),
     ...normalizeNodeIdList(planningSnapshot.projectedServingNodeIds),
     ...normalizeNodeIdList(planningSnapshot.locallyEligibleNodeIds),
   ]);
+  const committedNodeFloor = options?.committedNodeFloor || null;
+  const activeVoterNodeIdSet =
+    options?.activeVoterNodeIdSet instanceof Set ?
+      options.activeVoterNodeIdSet :
+      null;
+  return candidateNodeIds.filter(
+    (nodeId) =>
+      isNodeReadyInCommittedFloor(committedNodeFloor, nodeId) &&
+      (!activeVoterNodeIdSet || activeVoterNodeIdSet.has(nodeId)),
+  );
 }
 
 /**
@@ -61,18 +94,23 @@ function shouldUseRecoveryProjectionMembership(
  * @param {Object|null} planningSnapshot
  * @param {Object|null} priorityRecoveryContext
  * @param {Object[]} projectedVoterReadyRows
+ * @param {Object} [options]
  * @returns {Object}
  */
 function resolvePriorityRemoveSafetyMembershipSnapshot(
   planningSnapshot,
   priorityRecoveryContext,
   projectedVoterReadyRows,
+  options = {},
 ) {
   const publishedActiveNodeIds = normalizeNodeIdList(
     planningSnapshot?.publishedActiveNodeIds,
   );
   const recoveryProjectionNodeIds =
-    buildPriorityRemoveSafetyRecoveryProjectionNodeIds(planningSnapshot);
+    buildPriorityRemoveSafetyRecoveryProjectionNodeIds(
+      planningSnapshot,
+      options,
+    );
   const projectedVoterReadyNodeIds = normalizeReplicaRowNodeIds(
     projectedVoterReadyRows,
   );

@@ -1,6 +1,5 @@
 import {DISTRIBUTED_PREDICATE_SHAPE as PREDICATE_SHAPE} from
   './distributed/distributed-query-plan-constants.js';
-import {EXPR_TYPE} from './parser-constants.js';
 import {QUERY_OPERATOR} from './query-constants.js';
 import {
   decodePartitionBoundaryValue,
@@ -164,22 +163,6 @@ function validateAndCoerceKeyConditionValue(val, keyType) {
 }
 
 /**
- * The pruning rule for an explicit COLLATE (design coordinator-sqlite-merge
- * §2.2, rev 3/4 G6): partition key ranges are ordered by BINARY comparison,
- * so a key predicate compared under any explicit collation (BINARY included:
- * the rule is syntactic) must not prune. It applies to `=`, ranges, IN and
- * BETWEEN, with the COLLATE on either side: on the value side the operand is
- * not a value (extractConditionValue answers undefined, so the conjunct
- * constrains nothing); on the key side the operand is a `collate` node, never
- * the key column itself (PartitionResolver#isKeyColumn).
- * @param {Object} node - Operand AST node.
- * @return {boolean}
- */
-function carriesExplicitCollation(node) {
-  return node?.type === EXPR_TYPE.COLLATE;
-}
-
-/**
  * Extract and validate a key condition value from an AST expression node.
  * Fails closed on unbound parameters or unrepresentable key values.
  *
@@ -189,7 +172,7 @@ function carriesExplicitCollation(node) {
  * @return {*} Extracted value or undefined if node cannot provide a value.
  */
 function extractConditionValue(node, resolutionContext, keyType = null) {
-  if (!node || carriesExplicitCollation(node)) return undefined;
+  if (!node) return undefined;
 
   let val;
   if (node.type === LOCAL_AST_NODE_TYPE.PARAMETER) {
@@ -495,7 +478,6 @@ function isStartAfterHigh(pStart, compHigh, highInclusive, compareValues) {
 
 export {
   KEY_CONDITION_TYPE,
-  carriesExplicitCollation,
   createInitialKeyConditions,
   resolvePredicateShape,
   applyBinaryKeyCondition,

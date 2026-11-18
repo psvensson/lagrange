@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -60,11 +60,10 @@ function makeRow(overrides = {}) {
   };
 }
 
-function createRepository(readAuthoritativeRows,
-  executeQuery = async () => ({success: true, changes: 1})) {
+function createRepository(readAuthoritativeRows) {
   const gateway = {
     readAuthoritativeRows,
-    executeQuery,
+    executeQuery: async () => ({success: true, changes: 1}),
   };
   return new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
@@ -661,171 +660,3 @@ test(
     }
   },
 );
-
-test(
-  'an applied insert confirmed against a progressed row records the confirmed ' +
-    'row in the incomplete-operation observation, never the superseded PENDING write',
-  async (t) => {
-    const progressedSteps = [
-      [WORKFLOW_STEP.CREATING, ReplicaStatus.CREATING, false],
-      [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true],
-      [WORKFLOW_STEP.FAILED, ReplicaStatus.FAILED, true],
-    ];
-    for (const [observedStep, observedStatus, terminal] of progressedSteps) {
-      const progressedRow = makeRow({
-        type: OperationType.ADD,
-        status: observedStatus,
-        workflow_step: observedStep,
-        created_at: TEST_CREATED_AT_MS,
-        updated_at: TEST_CREATED_AT_MS + 120,
-        completed_at: terminal ? TEST_CREATED_AT_MS + 120 : null,
-      });
-      const repository = createRepository(async () => ({
-        success: true,
-        rows: [progressedRow],
-      }));
-      const pendingInsertOperation = repository.rowToOperation(makeRow({
-        type: OperationType.ADD,
-        status: ReplicaStatus.PENDING,
-        workflow_step: WORKFLOW_STEP.PENDING,
-        created_at: TEST_CREATED_AT_MS,
-        updated_at: TEST_CREATED_AT_MS,
-        completed_at: null,
-      }));
-      t.equal(
-        await repository.persistNewOperation(pendingInsertOperation),
-        true,
-        `the applied insert confirms against PENDING -> ${observedStep}`,
-      );
-      const observed = repository.lastIncompleteOperationObservation
-        .filter((entry) => entry.operationId === TEST_OPERATION_ID)
-        .map((entry) => entry.workflowStep);
-      t.same(
-        observed,
-        terminal ? [] : [observedStep],
-        `PENDING -> ${observedStep}: the observation holds the confirmed row`,
-      );
-    }
-  },
-);
-
-// Exact CAS (isReplicaOperationVisibilitySatisfied): wherever a write did
-// not apply, or is not known to have applied, the durable row confirms it
-// only when it IS that write. A row that has progressed past the write is
-// someone else's state; only an applied write's confirmation
-// (isAppliedReplicaOperationWriteVisible) accepts monotonic progression. Each
-// zero-change / recovery site refuses the progressed row and accepts the
-// exact one, so making the CAS monotonic fails these tests.
-const CAS_OPERATION_ID = 'op-exact-cas';
-const CAS_WRITE_AT_MS = TEST_CREATED_AT_MS + 10;
-const CAS_PROGRESSED_AT_MS = TEST_CREATED_AT_MS + 120;
-
-// The writer's write: an ADD advancing PENDING -> SENDING.
-function casWriteRow() {
-  return makeRow({
-    operation_id: CAS_OPERATION_ID,
-    status: ReplicaStatus.PENDING,
-    workflow_step: WORKFLOW_STEP.SENDING,
-    updated_at: CAS_WRITE_AT_MS,
-    completed_at: null,
-  });
-}
-
-// The durable row a remote owner moved past the write (monotonically).
-function casProgressedRow(workflowStep, status, terminal) {
-  return makeRow({
-    operation_id: CAS_OPERATION_ID,
-    status,
-    workflow_step: workflowStep,
-    updated_at: CAS_PROGRESSED_AT_MS,
-    completed_at: terminal ? CAS_PROGRESSED_AT_MS : null,
-  });
-}
-
-function rowsRepository(row, executeQuery) {
-  return createRepository(async () => ({success: true, rows: [row]}),
-    executeQuery);
-}
-
-test('exact CAS: a zero-change expected-step update against a row that ' +
-  'progressed past it is REFUSED, never an idempotent replay ' +
-  '(resolveZeroChangeOperationUpdate)', async (t) => {
-  const zeroChange = async () => ({success: true, changes: 0});
-  const progressed = rowsRepository(
-    casProgressedRow(WORKFLOW_STEP.CREATING, ReplicaStatus.CREATING, false),
-    zeroChange);
-  const refused = await progressed.persistOperationUpdate(
-    progressed.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
-  t.equal(refused.persisted, false);
-  t.equal(refused.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-    'SENDING written, CREATING durable: the CAS lost');
-
-  const exact = rowsRepository(casWriteRow(), zeroChange);
-  const replay = await exact.persistOperationUpdate(
-    exact.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
-  t.equal(replay.persisted, true);
-  t.equal(replay.disposition,
-    REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
-    'control: the durable row IS the write');
-});
-
-test('exact CAS: an expected-step write is refused before it is sent when ' +
-  'the durable row progressed past it to a terminal state ' +
-  '(shouldRejectExpectedWorkflowStepMutation)', async (t) => {
-  const progressed = rowsRepository(
-    casProgressedRow(WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true));
-  t.equal(await progressed.shouldRejectExpectedWorkflowStepMutation(
-    progressed.rowToOperation(casWriteRow()), WORKFLOW_STEP.PENDING), true,
-  'SENDING written, ACTIVE (terminal) durable: refused');
-
-  const exact = rowsRepository(casWriteRow());
-  t.equal(await exact.shouldRejectExpectedWorkflowStepMutation(
-    exact.rowToOperation(casWriteRow()), WORKFLOW_STEP.PENDING), false,
-  'control: the durable row IS the write');
-});
-
-test('exact CAS: a durable terminal row that progressed past a write is a ' +
-  'conflicting terminal, never the write itself ' +
-  '(queryConflictingTerminalAuthorityOperation)', async (t) => {
-  // Production terminal writers carry a terminal row, which the monotonic
-  // predicate never treats as progressed; this pins the guard's own CAS for
-  // any write it is asked about.
-  const progressed = rowsRepository(
-    casProgressedRow(WORKFLOW_STEP.FAILED, ReplicaStatus.FAILED, true));
-  const conflict = await progressed.queryConflictingTerminalAuthorityOperation(
-    progressed.rowToOperation(casWriteRow()));
-  t.equal(conflict?.workflowStep, WORKFLOW_STEP.FAILED,
-    'SENDING written, FAILED (terminal) durable: the terminal won');
-
-  const exactTerminalRow = casProgressedRow(WORKFLOW_STEP.FAILED,
-    ReplicaStatus.FAILED, true);
-  const exact = rowsRepository(exactTerminalRow);
-  t.equal(await exact.queryConflictingTerminalAuthorityOperation(
-    exact.rowToOperation(exactTerminalRow)), null,
-  'control: the durable terminal IS the write');
-});
-
-test('exact CAS: a retryable failed mutation is not recovered by a durable ' +
-  'row that progressed past the write (recoverPersistedReplicaOperationMutation)',
-async (t) => {
-  const retryableFailure = {
-    success: false,
-    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-    deferRetry: true,
-  };
-  for (const [step, status, terminal] of [
-    [WORKFLOW_STEP.CREATING, ReplicaStatus.CREATING, false],
-    [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true],
-  ]) {
-    const progressed = rowsRepository(casProgressedRow(step, status, terminal));
-    t.equal(await progressed.recoverPersistedReplicaOperationMutation(
-      progressed.rowToOperation(casWriteRow()), retryableFailure), false,
-    `SENDING written, ${step} durable: the failed write is not recovered`);
-  }
-  const exact = rowsRepository(casWriteRow());
-  t.equal(await exact.recoverPersistedReplicaOperationMutation(
-    exact.rowToOperation(casWriteRow()), retryableFailure), true,
-  'control: the durable row IS the write, so it landed');
-});

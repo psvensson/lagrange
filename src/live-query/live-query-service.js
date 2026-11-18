@@ -10,9 +10,6 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-representation.js';
 import {TABLES} from '../constants/index.js';
 import {extractReferencedTables} from './live-query-sql-renderer.js';
-import {holdsCoordinatorOpaqueNode} from
-  '../query/distributed/distributed-select-fanout-plan.js';
-import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_CONFIG_KEY,
@@ -30,10 +27,6 @@ import {
 } from './live-query-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LIVE_QUERY_INTERIM_REFUSAL = Object.freeze({
-  PREDICATE: 'COLLATE and LIKE ... ESCAPE in a live-query predicate are not supported ' +
-    'yet (interim I1d, until WP7)',
-});
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const OP_IS = 'IS';
 const OP_IS_NOT = 'IS NOT';
@@ -55,14 +48,6 @@ const BINARY_COMPARATORS = Object.freeze({
  * @return {Function} Predicate function that takes a row and returns boolean.
  */
 function compilePredicate(whereClause, params = []) {
-  // Interim I1d (removed by WP7, design §5.1): this evaluator cannot apply an
-  // explicit COLLATE or an ESCAPE; such a predicate is refused, never
-  // evaluated as something else.
-  if (holdsCoordinatorOpaqueNode(whereClause)) {
-    const error = new Error(LIVE_QUERY_INTERIM_REFUSAL.PREDICATE);
-    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
-    throw error;
-  }
   if (!whereClause) {
     // No WHERE clause - match all rows
     return () => true;

@@ -125,14 +125,12 @@ GCP is used only when asked for, with hosts you provisioned; the runner creates 
 export PROJECT_ID="your-gcp-project-id"
 export SSH_USER="bench"
 export SSH_PUBLIC_KEY_FILE="$HOME/.ssh/id_ed25519.pub"
-export VM_MAX_RUN_DURATION_SECONDS=25200   # the agreed allocation lifetime, here seven hours
 ./docs/benchmarks/cloud/provision-gcp.sh
 ```
 Every value is named by you or is a documented default, and the script prints the values in use
-before it creates anything. `PROJECT_ID`, `SSH_USER`, `SSH_PUBLIC_KEY_FILE` and
-`VM_MAX_RUN_DURATION_SECONDS` are required (the key is installed for `SSH_USER` on every VM; a
-missing or unreadable key file is refused before any `gcloud` call, and the script never searches
-for a key). Defaults: `ZONE=us-central1-a`,
+before it creates anything. `PROJECT_ID`, `SSH_USER` and `SSH_PUBLIC_KEY_FILE` are required (the
+key is installed for `SSH_USER` on every VM; a missing or unreadable key file is refused before any
+`gcloud` call, and the script never searches for a key). Defaults: `ZONE=us-central1-a`,
 `MACHINE_TYPE=e2-standard-4`, `CLUSTER_PREFIX=lagrange-bench`, `NETWORK=default`,
 `BOOT_DISK_SIZE=50GB`, `BOOT_DISK_TYPE=pd-ssd` (the disk type bears on results),
 `FIREWALL_ALLOW=tcp:1-65535,udp:1-65535,icmp` (between the VMs only), and the image
@@ -150,29 +148,6 @@ example with `gcloud compute ssh` once per VM) before the run. Put Node at the r
 engines floor on the client VM. Export the `HOSTS`, `SSH_HOSTS`, `SSH_USER`, `IMAGE_FAMILY`,
 `IMAGE_PROJECT`, `BOOT_DISK_SIZE`, `BOOT_DISK_TYPE` and `FIREWALL_ALLOW` lines the script prints;
 step 2 refuses without any of them and records them for every host.
-
-Every VM is created with a provider-enforced lifetime bound; there is no unbounded creation.
-`VM_MAX_RUN_DURATION_SECONDS` is the whole number of seconds each VM may run: the six-VM creation
-call passes `--max-run-duration=<seconds>s`, `--instance-termination-action=DELETE` and
-`--boot-disk-auto-delete`, so Compute Engine deletes every VM, boot disk included, when the
-duration has elapsed since the VM last started, whether or not `--teardown` ran. An absent or
-malformed value (anything but a positive whole number of seconds) is refused before any `gcloud`
-call, and the script prints the lifetime arguments it requests before creating anything. The bound
-has one definition, `test/distributed/harness/gcp-vm-lifetime.js`, which also bounds every VM the
-distributed harness's Pulumi provisioner creates (its configs name `gcp.maxRunDurationSeconds`); the
-script renders it with Node (`docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs`). `--place` and
-`--teardown` ignore this creation-only input, so a malformed setting cannot block cleanup.
-
-Choose the duration to cover creation, placement, the authorized campaign attempts and teardown;
-the script never extends it, and a campaign that outlives it loses its VMs. Google owns the
-[admissible range](https://docs.cloud.google.com/compute/docs/instances/limit-vm-runtime) and
-refuses a value outside it at creation; local validation proves only that the value is a positive
-whole number. After creation, verify every named VM's `scheduling.maxRunDuration`,
-`scheduling.instanceTerminationAction`, effective `resourceStatus.scheduling.terminationTimestamp`,
-and boot disk `disks[].autoDelete` before placing a campaign, and retain that provider response
-with the launch evidence. Printed arguments or a successful local test do not verify the live
-schedule. The bound is a backstop: `--teardown` still owns cleanup after success, partial creation
-or failure.
 
 ### Step 2 - Place what the campaign needs
 ```sh
@@ -217,12 +192,6 @@ A live GCP run also needs the `--client-checkout` and `--client-node` you placed
 Teardown reports each VM and the firewall rule as deleted, already absent or failed, then asks
 again: it prints `Teardown complete` only when no VM of the prefix remains, and otherwise exits
 non-zero naming what may still be billed.
-Run this cleanup after success, partial creation or failure even when a deletion time was
-requested. A stopped or suspended VM has no active termination timestamp until restarted;
-automatic deletion is therefore a backstop, not proof of closure. Independently confirm that
-the six VMs, their boot disks and the campaign firewall rule are gone. The script's completion
-message does not include a disk inventory, and a campaign watchdog does not bound allocation
-lifetime.
 
 AWS and Azure provisioning scripts exist in [`cloud/`](cloud/) but are not execution targets of
 this runner. Both open SSH (port 22) only to the network you name: `--ssh-cidr <cidr>` is required,

@@ -59,10 +59,8 @@ function collectCurrentOperationsForTargetSlotAdmission(coordinator) {
       appendCandidate(operation, true);
     }
   }
-  // The retained owner-read result is an array. The visibility-observation
-  // envelope is returned by a separate repository API.
   const observedOperations =
-    coordinator.repository?.lastIncompleteOperationObservation;
+    coordinator.repository?.lastIncompleteOperationObservation?.operations;
   for (const operation of Array.isArray(observedOperations) ? observedOperations : []) {
     appendCandidate(operation, false);
   }

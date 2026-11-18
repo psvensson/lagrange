@@ -7,7 +7,6 @@
  * 3. The system settles within a fixed window.
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import tap, {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -524,7 +523,6 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
       );
 
       joiningService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
@@ -784,7 +782,6 @@ test('Node join convergence SLO real-network readiness path',
       );
 
       joiningService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
@@ -1137,7 +1134,6 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
         'strict readiness should expose unavailable state while transient blockers are active');
 
       joiningService = new NodeJoiningService({
-        hostId: LOCAL_MACHINE_HOST_ID,
         bootIncarnation: 1,
         nodeId: '550e8400-e29b-41d4-a716-446655440232',
         nodeAddress: `ws://localhost:${getUniquePort()}`,

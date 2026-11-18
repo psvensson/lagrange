@@ -174,7 +174,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     'checkTimeouts reuses empty cache observation boundary before routed SQL',
     async (t) => {
       let sqlQueryCalls = 0;
-      const otherSql = [];
       const coordinator = createCoordinator({
         nodeId: 'node-1',
         transactionCoordinator: buildTransactionCoordinator(),
@@ -203,11 +202,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           },
         },
         sqlQueryEngine: {
-          async executeQuery(sql) {
-            if (!sql.includes('replica_operations')) {
-              otherSql.push(sql);
-              return {success: true, rows: []};
-            }
+          async executeQuery() {
             sqlQueryCalls += 1;
             throw new Error('timeout scans should not route replica_operations SQL');
           },
@@ -222,16 +217,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           sqlQueryCalls,
           0,
           'timeout scans should stay on the empty cache observation boundary',
-        );
-        // The periodic storage-reservation sweep (Req 4.4) runs on its own
-        // cadence, independent of the incomplete-operation scan: an idle
-        // tick reads storage_reservations, never replica_operations.
-        t.ok(otherSql.length > 0,
-          'the reservation sweep still runs while no operation is incomplete');
-        t.equal(
-          otherSql.every((sql) => sql.includes('storage_reservations')),
-          true,
-          'the only SQL an idle timeout tick routes is the reservation sweep',
         );
       } finally {
         await coordinator.shutdown();

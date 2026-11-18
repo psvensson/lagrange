@@ -12,6 +12,7 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {createSqlRequest} from '../sql-request.js';
 import {createTimeoutBudget} from '../../control-plane/timeout-budget.js';
 import {
+  QUERY_WALL_TIME_LIMIT_MS,
   normalizeQueryBudget,
 } from '../../wasm-service/query-budget-constants.js';
 import {
@@ -44,6 +45,13 @@ import {
 
 const CLOSED_SESSION_ROLLBACK_STATEMENT = 'ROLLBACK';
 const NO_TRANSACTION_ERROR_CODE = 'NO_TRANSACTION';
+
+function resolvePgWireWallTimeLimitMs(options = {}) {
+  const normalizedBudgets = normalizeQueryBudget(options?.budgets);
+  const requested = Number(normalizedBudgets.WALL_TIME_LIMIT_MS);
+  return Number.isFinite(requested) && requested > 0 ?
+    requested : QUERY_WALL_TIME_LIMIT_MS;
+}
 
 function resolveStatementAuthorizationAction(statement) {
   const classification = classifyServiceLifecycleSql(statement);
@@ -226,19 +234,18 @@ class PostgresWireAdapter {
       );
     }
 
-    // The statement's wall-time budget is the request budget's own limit.
-    const budgets = normalizeQueryBudget(options.budgets);
+    const wallTimeLimitMs = resolvePgWireWallTimeLimitMs(options);
     const request = createSqlRequest({
       statement: sql,
       parameters: params,
       tenantId: session.tenantId,
       sessionId,
       executionMode: EXECUTION_MODE.SQL_STATEMENT,
-      budgets,
+      budgets: options.budgets,
       hints: options.hints,
       dialect: PARSER_DIALECT.POSTGRESQL,
       timeoutBudget: createTimeoutBudget({
-        configuredBudgetMs: budgets.WALL_TIME_LIMIT_MS,
+        configuredBudgetMs: wallTimeLimitMs,
       }),
       securityContext: session.securityContext,
       expectedTransactionId: options.expectedTransactionId ?? null,

@@ -166,7 +166,7 @@ test('INSERT ... SELECT and RETURNING expressions are refused, typed',
       'DELETE FROM t WHERE id = 1 RETURNING id + 1', PG).parse(),
     {code: 'UNSUPPORTED_SQL_FEATURE', message: 'RETURNING is not supported'});
     t.same(new SQLParser('INSERT INTO t (id) VALUES (1)', PG).parse().values,
-      [[{type: 'literal', value: 1, sqlType: 'INTEGER'}]], 'VALUES inserts still parse');
+      [[{type: 'literal', value: 1}]], 'VALUES inserts still parse');
   });
 
 function createRecordingEngine() {

@@ -3,7 +3,6 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -122,7 +121,6 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
 
     // Create joining service with wsPort for WebSocket server
     service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440010',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
@@ -260,7 +258,6 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440013',
     nodeAddress: 'ws://localhost:19100',
@@ -353,7 +350,6 @@ test('NodeJoiningService disables the join-time reporter during steady-state hea
     const reporterAssignments = [];
     const heartbeatStartOptions = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joiner-heartbeat-owner-cutover',
       nodeAddress: 'ws://localhost:19101',
@@ -400,7 +396,6 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
     const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: REPORTER_FORWARD_NODE_ID,
       nodeAddress: REPORTER_FORWARD_NODE_ADDRESS,
@@ -501,7 +496,6 @@ async (t) => {
 
   const cache = new SystemTableCache();
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-recovery-gate',
     nodeAddress: 'ws://localhost:19102',
@@ -564,7 +558,6 @@ test('NodeJoiningService - activates message-group rows after membership write',
 
     const order = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-activate-1',
       nodeAddress: 'ws://localhost:9098',
@@ -665,7 +658,6 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   const phaseCalls = [];
   let queryAttempts = 0;
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-resume-1',
     nodeAddress: 'ws://localhost:9097',
@@ -817,7 +809,6 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
     let queryAttempts = 0;
     const phaseCalls = [];
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-auto-resume-1',
       nodeAddress: 'ws://localhost:9098',
@@ -973,7 +964,6 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     sharedLifecycleOwners: [],
   };
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-readiness-resume-1',
     nodeAddress: 'ws://localhost:9198',
@@ -1104,7 +1094,6 @@ test('NodeJoiningService - resets STOPPED lifecycle before retryable resume atte
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-lifecycle-reset-1',
       nodeAddress: 'ws://localhost:9001',
@@ -1145,7 +1134,6 @@ test('NodeJoiningService - retryable auto-resume budget covers one full ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-auto-resume-budget-1',
     nodeAddress: 'ws://localhost:9099',
@@ -1192,7 +1180,6 @@ test('NodeJoiningService - retryable auto-resume budget covers late membership p
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: LATE_PHASE_RESUME_NODE_ID,
       nodeAddress: LATE_PHASE_RESUME_NODE_ADDRESS,
@@ -1241,7 +1228,6 @@ test(
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-1',
       nodeAddress: 'ws://localhost:9090',
@@ -1354,7 +1340,6 @@ test('NodeJoiningService - canonical join readiness reason classification is det
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-2',
       nodeAddress: 'ws://localhost:9090',
@@ -1381,7 +1366,6 @@ test('NodeJoiningService - canonical join readiness exposes promotable state onc
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-promotion-ready',
       nodeAddress: 'ws://localhost:9090',
@@ -1414,7 +1398,6 @@ test('NodeJoiningService - durable rejoin readiness remains restoring until loca
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-promotion-rejoin',
       nodeAddress: 'ws://localhost:9090',
@@ -1455,7 +1438,6 @@ test('NodeJoiningService - canonical join readiness stays catching_up while sche
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-catching-up',
       nodeAddress: 'ws://localhost:9090',

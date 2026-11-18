@@ -8,7 +8,6 @@
  * Requirements: 2.4, 2.5
  */
 
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {CDCPipelineReadinessGate} from
@@ -138,7 +137,6 @@ const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
 test('phaseCacheHydration succeeds when CDC pipeline is ready',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -171,7 +169,6 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
 test('phaseCacheHydration fails on CDC readiness gate timeout',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
@@ -218,7 +215,6 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
 test('phaseCacheHydration timeout error lists unmet conditions',
   async (t) => {
     const service = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,

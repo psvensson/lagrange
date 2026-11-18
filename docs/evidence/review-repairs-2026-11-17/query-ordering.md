@@ -135,28 +135,3 @@ Manual source/diff review and Git whitespace validation found no additional
 scope changes. Files remain under their source/test size limits. No local
 project, checker, or test execution was performed. Independent approval and
 managed native proof remain pending with the root integration owner.
-
-## Final native proof and independent review
-
-Managed [job 4918](https://github.com/psvensson/lagrange-lab/issues/4918)
-ran exact query candidate `232725ae1a34b68583295f395efd616c9ea1184b`.
-The comparator and global-merge test retained the two hashes above. The
-global suite passed all 304 reported assertions, including the original
-one/two-partition scalar ordering cases and the added raw/partial,
-ASC/DESC, complete/windowed UTF-8 BINARY matrix. The full ten-suite query
-interaction passed 1,299 assertions. The original native log SHA256 is
-`75bca17c88aa981b94591bb83c857be3691155c8c2dc10005b3f2baaa30c9acb`;
-the [query record](query.md) retains complete worker and collection identities.
-
-Independent verifier `subagent:core_args_data` traced both actual merge paths
-through this comparator before global LIMIT, reviewed the exact comparator
-and test hashes, and found no material blocker. This reviewer did not author
-the ordering repair. Root inspected the native results and confirmed exact
-source and scope closure, satisfying that review's native condition.
-
-The scalar helper and its unit tests changed separately after the source
-handoff above; their final hashes and independent approval are retained in
-`query.md`. Their historical earlier hashes are not asserted as current.
-This accepts only represented UTF-8 text under the existing default BINARY
-ordering contract. It does not add custom collations, change NULL or
-mixed-storage-class ordering, or establish physical/GCP readiness.

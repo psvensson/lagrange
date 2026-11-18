@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import fs, {readFileSync} from 'node:fs';
@@ -194,7 +193,6 @@ describe('seed and joining startup integration', () => {
 
   it('seed startup service initializes runtime ownership wiring', () => {
     const bootstrapService = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: `127.0.0.1:${seedRestPort}`,
@@ -212,7 +210,6 @@ describe('seed and joining startup integration', () => {
   it('joining startup service initializes runtime ownership wiring', () => {
     const joiningRestPort = seedRestPort + 1;
     const joiningService = new NodeJoiningService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: `127.0.0.1:${joiningRestPort}`,
@@ -230,7 +227,6 @@ describe('seed and joining startup integration', () => {
 
   it('seed runtime owner exposes control-plane readiness through rebalance coordinator ownership', () => {
     const bootstrapService = new BootstrapService({
-      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: `127.0.0.1:${seedRestPort}`,

@@ -28,6 +28,7 @@ const LOCAL_STR_FUNCTION = 'function';
 const REUSED_OPERATION_REARM_ACTION = Object.freeze({
   SKIP_NOT_PENDING: 'skip_not_pending',
   SKIP_LIVE_DEFERRED_RETRY: 'skip_live_deferred_retry',
+  SKIP_CALLER_MANAGED_DISPATCH: 'skip_caller_managed_dispatch',
   REARM_DISPATCH: 'rearm_dispatch',
 });
 const LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN = 'Failed to refresh recent operation intent from cache-visible state';
@@ -242,7 +243,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         )
       ) {
         this.rememberOperationIntent(dedupeKey, operationForMissReuse);
-        return structuredClone(operationForMissReuse);
+        return operationForMissReuse;
       }
       this.recentOperationIntents.delete(dedupeKey);
       return null;
@@ -335,11 +336,7 @@ class RebalanceCoordinatorOperationIntentMethods {
   }
 
   /**
-   * Remember a recently created/reused operation intent. The cache keeps its
-   * own snapshot: the caller's operation object (a create's return value, a
-   * provisioning plan entry) is never shared by reference with the cache, so
-   * a caller's in-memory edits can neither alter the cached intent nor ride
-   * it back out to the next re-creating caller.
+   * Remember a recently created/reused operation intent.
    * @param {string} dedupeKey - Intent key.
    * @param {Object} operation - Operation payload.
    * @private
@@ -350,7 +347,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       return;
     }
     this.recentOperationIntents.set(dedupeKey, {
-      operation: structuredClone(operation),
+      operation,
       expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
   }
@@ -403,17 +400,13 @@ class RebalanceCoordinatorOperationIntentMethods {
    * deferred or missed. Re-arm those rows through the canonical owner path so
    * later planning retries do not keep returning one limbo operation forever.
    *
-   * Whether the row may be dispatched is the owner's decision, made from the
-   * durable row: a row whose bootstrap-topology dispatch is still held
-   * (BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED, written at creation and cleared by
-   * the provisioner that stamps the cohort) is refused by the owner's claim.
-   * The re-creating caller's request flags are no dispatch authority.
-   *
    * @param {Object|null} operation
+   * @param {Object} [options={}]
+   * @param {boolean} [options.shouldEmitOperationCreated]
    * @return {Promise<Object|null>}
    * @private
    */
-  async maybeRearmReusedPendingOperation(operation) {
+  async maybeRearmReusedPendingOperation(operation, options = {}) {
     if (!operation) {
       return operation;
     }
@@ -421,6 +414,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const rearmAction = this.resolveReusedOperationRearmAction(
       operation,
       workflowStep,
+      options,
     );
     this.logger.info(
       REBALANCE_COORDINATOR_LOG_MSG.REUSED_IN_FLIGHT_OPERATION,
@@ -452,15 +446,19 @@ class RebalanceCoordinatorOperationIntentMethods {
    * reserved for the missed-handoff state: PENDING with no live timer.
    * @param {Object} operation
    * @param {string} workflowStep
+   * @param {Object} [options={}]
    * @return {string} One REUSED_OPERATION_REARM_ACTION value.
    * @private
    */
-  resolveReusedOperationRearmAction(operation, workflowStep) {
+  resolveReusedOperationRearmAction(operation, workflowStep, options = {}) {
     if (
       this.isOperationTerminal(operation) ||
       workflowStep !== WORKFLOW_STEP.PENDING
     ) {
       return REUSED_OPERATION_REARM_ACTION.SKIP_NOT_PENDING;
+    }
+    if (options?.shouldEmitOperationCreated === false) {
+      return REUSED_OPERATION_REARM_ACTION.SKIP_CALLER_MANAGED_DISPATCH;
     }
     if (this.hasLiveDeferredDispatchRetry(operation)) {
       return REUSED_OPERATION_REARM_ACTION.SKIP_LIVE_DEFERRED_RETRY;

@@ -7,7 +7,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import * as queryModule from '../../src/query/index.js';
-import * as publicApi from '../../src/public-api.js';
 
 /**
  * Expected v0 runtime API symbol names exported from the
@@ -17,6 +16,7 @@ import * as publicApi from '../../src/public-api.js';
 const V0_RUNTIME_SYMBOLS = [
   'runtime',
   'run',
+  'ExecutionContext',
   'SNAPSHOT_MODE',
   'DEFAULT_SNAPSHOT_MODE',
   'DEFAULT_RUNTIME_SESSION',
@@ -50,15 +50,11 @@ describe('v0 runtime API exports', () => {
     assert.equal(typeof queryModule.run, 'function');
   });
 
-  // The context and its budget enforcer are built by runtime.run and
-  // createSqlRequest from the one normalized budget; no caller constructs
-  // them, so they are not part of the public surface (CHANGELOG, Unreleased).
-  for (const internal of ['ExecutionContext', 'BudgetEnforcer']) {
-    it(`does not export the internal "${internal}"`, () => {
-      assert.equal(internal in queryModule, false);
-      assert.equal(internal in publicApi, false);
-    });
-  }
+  it('ExecutionContext should be a constructor', () => {
+    assert.equal(
+      typeof queryModule.ExecutionContext, 'function',
+    );
+  });
 
   it('SNAPSHOT_MODE should contain expected modes', () => {
     const modes = queryModule.SNAPSHOT_MODE;

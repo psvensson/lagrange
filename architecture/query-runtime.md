@@ -146,21 +146,6 @@ User hints can override the default, validated against guardrails. Strategy
 decisions are exposed in EXPLAIN and query telemetry.
 
 ### Resource Guardrails
-
-A query budget has one shape: the uppercase limit names of
-`DEFAULT_QUERY_BUDGET` (`src/wasm-service/query-budget-constants.js`), for
-example `RESULT_MAX_ROWS` and `WALL_TIME_LIMIT_MS`. `normalizeQueryBudget` is
-its only producer and the only place a default is applied. The public budget
-boundaries call it once: `createSqlRequest` (and through it the internal and
-PostgreSQL wire adapters) and `runtime.run`. It refuses an unknown field, such
-as a misspelling or a camelCase name, and any limit that is not a
-non-negative safe integer; it never substitutes a default for a refused value.
-
-Every reader (`BudgetEnforcer`, `ResultStream`, `ExecutionContext`, the lookup
-and broadcast primitives, the PostgreSQL wire statement timeout, and request
-admission through `isSqlRequest`) takes the normalized budget and refuses
-anything else, rather than defaulting a missing or misspelled limit.
-
 Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 
 - CPU time, memory, wall time limits
@@ -169,18 +154,3 @@ Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 - Broadcast max payload bytes
 
 Budget violations terminate the operation with a descriptive `BudgetLimitError`.
-
-### Coordinator Scalar Semantics
-
-The SELECT partial-aggregate combiner and the HAVING evaluator share
-`src/query/sql-scalar-functions.js` for ROUND, LENGTH and SUBSTR/SUBSTRING.
-Native SQLite supplies the expected values in scalar and complete query
-regressions, including both consumers and one- and two-partition delivery.
-Changes to these semantics must preserve the parser's actual value
-representations and run those consumer regressions, rather than testing only
-the helper with hand-built values.
-
-Coordinator JavaScript numbers do not preserve SQLite INTEGER/REAL storage-class
-metadata. This shared helper does not reconstruct that metadata or establish
-complete numeric-to-text affinity equivalence. Any extension requiring those
-distinctions must address the row representation and planner boundary explicitly.

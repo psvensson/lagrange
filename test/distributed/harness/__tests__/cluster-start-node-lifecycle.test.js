@@ -11,7 +11,6 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {promises as fs} from 'node:fs';
 import {resolve as resolvePath} from 'node:path';
-import {hostname} from 'node:os';
 import {validate as uuidValidate} from 'uuid';
 import {
   CONTAINER_ENV_KEYS,
@@ -77,10 +76,9 @@ function buildReuseLabels() {
  * **Validates: Requirements 2.3**
  */
 test('Unit: host-network mode allocates per-node ports and host IPs', async () => {
-  // The shape the GCP provisioner writes: each VM's name is its hostName.
   const hostInfo = [
-    {externalIp: '34.1.1.1', internalIp: '10.128.0.1', hostName: 'ddb-test-vm-0-a1'},
-    {externalIp: '34.2.2.2', internalIp: '10.128.0.2', hostName: 'ddb-test-vm-1-b2'},
+    {externalIp: '34.1.1.1', internalIp: '10.128.0.1'},
+    {externalIp: '34.2.2.2', internalIp: '10.128.0.2'},
   ];
   const cluster = createCluster({
     size: 2,
@@ -119,30 +117,6 @@ test('Unit: host-network mode allocates per-node ports and host IPs', async () =
     env1[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS],
     '10.128.0.1:' + PORTS.REST,
   );
-
-  // Each node declares the machine it runs on: its provider's hostName.
-  assert.strictEqual(env0[CONTAINER_ENV_KEYS.NODE_HOST_ID], 'ddb-test-vm-0-a1');
-  assert.strictEqual(env1[CONTAINER_ENV_KEYS.NODE_HOST_ID], 'ddb-test-vm-1-b2');
-});
-
-test('Unit: a remote provider without a declared hostName never starts a node', async () => {
-  const cluster = createCluster({
-    size: 2,
-    nodesPerHost: 1,
-    image: 'distributed-db:test',
-    docker: {
-      hosts: ['tcp://34.1.1.1:2376', 'tcp://34.2.2.2:2376'],
-      hostInfo: [
-        {externalIp: '34.1.1.1', internalIp: '10.128.0.1', hostName: 'vm-0'},
-        {externalIp: '34.2.2.2', internalIp: '10.128.0.2'},
-      ],
-    },
-  });
-  assert.strictEqual(cluster._buildNodeEnv('n0', 'c0', null, 0)[
-    CONTAINER_ENV_KEYS.NODE_HOST_ID], 'vm-0');
-  assert.throws(() => cluster._buildNodeEnv('n1', 'c1', '10.128.0.1', 1),
-    /host_name_undeclared: Docker provider 1/u,
-    'an address is never the host identity');
 });
 
 test('Unit: single-host keeps bridge mode (no host-network env)', async () => {
@@ -161,8 +135,6 @@ test('Unit: single-host keeps bridge mode (no host-network env)', async () => {
   );
   assert.strictEqual(env.REST_API_PORT, undefined);
   assert.strictEqual(env.ADMIN_WS_PORT, undefined);
-  // The local Docker socket runs every container on this machine.
-  assert.strictEqual(env[CONTAINER_ENV_KEYS.NODE_HOST_ID], hostname());
 });
 
 test('Unit: _startNode sets joiner timeout env overrides', async () => {

@@ -1,4 +1,3 @@
-import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -35,7 +34,6 @@ function createLeaderMetadataIncompleteError() {
 
 function createService(attemptBudgetMode) {
   return new NodeJoiningService({
-    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: `joining-node-${attemptBudgetMode}`,
     nodeAddress: TEST_NODE_ADDRESS,
