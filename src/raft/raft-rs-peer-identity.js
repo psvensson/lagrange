@@ -37,6 +37,7 @@
 
 import {createHash} from 'node:crypto';
 
+import {sqliteConnectionStatements} from '../storage/sqlite-connection-statements.js';
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
   RAFT_RS_NODE_ID_COLUMN,
@@ -58,6 +59,14 @@ const ABSENT_ORIGIN_EVIDENCE = Object.freeze({
   coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.ABSENT, encoded: null});
 const UNVOUCHED_ORIGIN_EVIDENCE = Object.freeze({
   coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.UNVOUCHED, encoded: null});
+// The committed fact the runtime's per-message and per-status observations
+// read (peer id -> replica, replica -> committed node): the reservation rows
+// of one connection, held on the connection and forgotten by every registry
+// write (a reservation, a committed node, a learner origin; a committed
+// membership change applies them), so a change is observed by the next lookup.
+const PEER_IDENTITY_VIEW_FACT = 'raft-rs-peer-identity-view';
+// One view per connection: all of its reservation rows.
+const PEER_IDENTITY_VIEW_SUBJECT = 'reservations';
 
 function validatedRaftRsPeerIdentityReservations(reservations) {
   if (!Array.isArray(reservations)) {
@@ -107,13 +116,25 @@ function validatedReservation(reservation, identities, peerIds) {
 }
 
 function readRaftRsPeerIdentityReservations(db) {
-  return validatedRaftRsPeerIdentityReservations(
-    db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
+  return validatedRaftRsPeerIdentityReservations(sqliteConnectionStatements(db)
+    .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
       replicaIdentity: row.replica_identity,
       peerId: row.raft_peer_id,
       nodeId: row.node_id,
       learnerAdmission: row.learner_admission,
     })));
+}
+
+function derivePeerIdentityView(db) {
+  const byReplicaIdentity = new Map();
+  const byPeerId = new Map();
+  for (const row of sqliteConnectionStatements(db)
+    .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all()) {
+    const reservation = Object.freeze(row);
+    byReplicaIdentity.set(reservation.replica_identity, reservation);
+    byPeerId.set(reservation.raft_peer_id, reservation);
+  }
+  return Object.freeze({byReplicaIdentity, byPeerId});
 }
 
 /**
@@ -144,15 +165,18 @@ class RaftRsPeerIdentityRegistry {
   constructor(db) {
     this.db = db;
     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
-    const columns = this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
+    const columns = sqliteConnectionStatements(this.db)
+      .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
     if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
       // No evidence is fabricated for an older reservation. Null stays unknown.
       this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
+      this.forgetView();
     }
     if (!columns.some(({name}) => name === RAFT_RS_NODE_ID_COLUMN)) {
       // A reservation recorded before node identities were committed has
       // none: it stays null (unknown), never filled from a row.
       this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_NODE_ID);
+      this.forgetView();
     }
   }
 
@@ -162,8 +186,8 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationFor(replicaIdentity) {
-    return this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY)
-      .get(replicaIdentity);
+    return sqliteConnectionStatements(this.db)
+      .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY).get(replicaIdentity);
   }
 
   /**
@@ -172,8 +196,28 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationOfPeerId(raftPeerId) {
-    return this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_PEER_ID)
-      .get(raftPeerId);
+    return sqliteConnectionStatements(this.db)
+      .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_PEER_ID).get(raftPeerId);
+  }
+
+  /**
+   * The connection's committed reservations, as the per-message and
+   * per-status observations read them: {byReplicaIdentity, byPeerId}.
+   * @return {Object} The frozen view.
+   * @private
+   */
+  view() {
+    return sqliteConnectionStatements(this.db).committedFact(PEER_IDENTITY_VIEW_FACT,
+      PEER_IDENTITY_VIEW_SUBJECT, () => derivePeerIdentityView(this.db));
+  }
+
+  /**
+   * Forget the view: every write to the reservation rows calls it.
+   * @private
+   */
+  forgetView() {
+    sqliteConnectionStatements(this.db).forgetFact(PEER_IDENTITY_VIEW_FACT,
+      PEER_IDENTITY_VIEW_SUBJECT);
   }
 
   /**
@@ -217,8 +261,10 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.collision(
         replicaIdentity, holder.replica_identity, raftPeerId));
     }
-    this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
+    sqliteConnectionStatements(this.db)
+      .statement(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
       .run(replicaIdentity, raftPeerId);
+    this.forgetView();
     return raftPeerId;
   }
 
@@ -237,7 +283,7 @@ class RaftRsPeerIdentityRegistry {
    * @return {string|null} The replica, or null.
    */
   replicaIdentityOf(raftPeerId) {
-    const reservation = this.reservationOfPeerId(raftPeerId);
+    const reservation = this.view().byPeerId.get(raftPeerId);
     return reservation === undefined ? null : reservation.replica_identity;
   }
 
@@ -255,8 +301,10 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
     }
     if (row.learner_admission === null) {
-      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
+      sqliteConnectionStatements(this.db)
+        .statement(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
         .run(encoded, replicaIdentity);
+      this.forgetView();
     }
   }
 
@@ -275,8 +323,9 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.NODE_ID_CONFLICT);
     }
     if (row.node_id === null) {
-      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
+      sqliteConnectionStatements(this.db).statement(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
         .run(nodeId, replicaIdentity);
+      this.forgetView();
     }
   }
 
@@ -303,7 +352,7 @@ class RaftRsPeerIdentityRegistry {
    *   when this registry holds no committed node for it.
    */
   committedNodeIdOf(replicaIdentity) {
-    return this.reservationFor(replicaIdentity)?.node_id ?? null;
+    return this.view().byReplicaIdentity.get(replicaIdentity)?.node_id ?? null;
   }
 
   /** Raw stored evidence, decoded only by the native committed-context owner. */
@@ -343,7 +392,7 @@ class RaftRsPeerIdentityRegistry {
    *   replica, or UNRESERVED with replicaIdentity null.
    */
   resolveReplicaIdentity(raftPeerId) {
-    const reservation = this.reservationOfPeerId(raftPeerId);
+    const reservation = this.view().byPeerId.get(raftPeerId);
     return Object.freeze(reservation === undefined ? {
       status: RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED,
       replicaIdentity: null,

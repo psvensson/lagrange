@@ -3,6 +3,7 @@
 // witness inside `_raft_rs_snapshot.data` (canonical base64 JSON) and removes
 // compacted `_raft_rs_log` rows in a single SYNCED SQLite transaction.
 
+import {sqliteConnectionStatements} from '../storage/sqlite-connection-statements.js';
 import {RAFT_COMPACTION_OUTCOME} from './compaction-policy.js';
 import {
   RAFT_RS_COMMIT_DURABILITY,
@@ -20,6 +21,10 @@ const HLC_SEPARATOR = '-';
 const HLC_MIN_PARTS = 3;
 const HLC_NODE_ID_START = 2;
 const HLC_RADIX = 10;
+// The committed fact `_raft_rs_snapshot.snapshot_index` per group, held on the
+// connection. putSnapshot, the one writer of that row (compaction, an
+// installed or staged snapshot, a Ready's snapshot), forgets it.
+const SNAPSHOT_INDEX_FACT = 'raft-rs-snapshot-index';
 
 function refusal(outcome) {
   return Object.freeze({outcome, changed: false});
@@ -84,17 +89,30 @@ function readCompactedMaxHlcIn(db, groupId) {
   if (!db || !db.open) {
     return null;
   }
-  const {present} = db.prepare(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
+  const statements = sqliteConnectionStatements(db);
+  const {present} = statements.statement(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
   if (present === 0) {
     return null;
   }
-  const row = db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT_DATA).get(groupId);
+  const row = statements.statement(RAFT_RS_SQL.SELECT_SNAPSHOT_DATA).get(groupId);
   return decodeSnapshotWitnessMaxHlc(row?.data);
 }
 
+function deriveSnapshotIndex(db, groupId) {
+  const statements = sqliteConnectionStatements(db);
+  const {present} = statements.statement(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
+  if (present === 0) {
+    return 0n;
+  }
+  const row = statements.exactStatement(RAFT_RS_SQL.SELECT_SNAPSHOT_INDEX)
+    .get(groupId);
+  return row ? BigInt(row.snapshot_index) : 0n;
+}
+
 /**
- * Read the durable `_raft_rs_snapshot.snapshot_index` for `groupId` without
- * running DDL.
+ * The durable `_raft_rs_snapshot.snapshot_index` for `groupId`, read without
+ * running DDL. Read from storage once per connection and after each snapshot
+ * write, from memory otherwise: the per-turn compaction check reads it.
  * @param {Object} db - Open better-sqlite3 database.
  * @param {string} groupId - Raft group identifier.
  * @return {bigint} Snapshot index (`0n` when absent).
@@ -103,14 +121,18 @@ function readSnapshotIndexIn(db, groupId) {
   if (!db || !db.open) {
     return 0n;
   }
-  const {present} = db.prepare(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
-  if (present === 0) {
-    return 0n;
-  }
-  const row = db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT_INDEX)
-    .safeIntegers(true)
-    .get(groupId);
-  return row ? BigInt(row.snapshot_index) : 0n;
+  return sqliteConnectionStatements(db).committedFact(SNAPSHOT_INDEX_FACT, groupId,
+    () => deriveSnapshotIndex(db, groupId));
+}
+
+/**
+ * Forget the held snapshot index of `groupId`: called by the writer of its
+ * `_raft_rs_snapshot` row at each write.
+ * @param {Object} db - The connection the row was written on.
+ * @param {string} groupId - Raft group identifier.
+ */
+function forgetSnapshotIndexIn(db, groupId) {
+  sqliteConnectionStatements(db).forgetFact(SNAPSHOT_INDEX_FACT, groupId);
 }
 
 function parseCandidateHlc(candidate) {
@@ -176,8 +198,8 @@ function extractLogRowHlc(row) {
 function foldCompactedPrefixMaxHlc(db, groupId, exactToIndex, seedMaxHlc) {
   let max = foldCandidateHlc(null, readCompactedMaxHlcIn(db, groupId));
   max = foldCandidateHlc(max, seedMaxHlc);
-  const rows = db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES_UP_TO)
-    .safeIntegers(true)
+  const rows = sqliteConnectionStatements(db)
+    .exactStatement(RAFT_RS_SQL.SELECT_LOG_ENTRIES_UP_TO)
     .all(groupId, exactToIndex);
   for (const row of rows) {
     max = foldCandidateHlc(max, extractLogRowHlc(row));
@@ -262,8 +284,8 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
         membershipGenerationIndex,
       },
     });
-    const deleted = store.db.prepare(RAFT_RS_SQL.DELETE_LOG_UP_TO)
-      .run(groupId, exactToIndex);
+    const deleted = sqliteConnectionStatements(store.db)
+      .statement(RAFT_RS_SQL.DELETE_LOG_UP_TO).run(groupId, exactToIndex);
     return Object.freeze({
       outcome: RAFT_COMPACTION_OUTCOME.COMPACTED,
       changed: true,
@@ -280,6 +302,7 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
 export {
   compactRaftRsCommittedPrefix,
   encodeSnapshotWitnessData,
+  forgetSnapshotIndexIn,
   readCompactedMaxHlcIn,
   readSnapshotIndexIn,
 };

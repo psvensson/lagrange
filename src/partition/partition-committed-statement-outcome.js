@@ -45,6 +45,7 @@
 // replica; a consumer (the query owner) reads null as "no inserted-row
 // identity", never as a row id. committedStatementResult applies it.
 
+import {sqliteConnectionStatements} from '../storage/sqlite-connection-statements.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
@@ -151,8 +152,8 @@ const UNSETTLED_RECORD = Object.freeze({
  *   no result.
  */
 function readCommittedStatementOutcome(service, entryKey) {
-  const row = service.db
-    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY)
+  const row = sqliteConnectionStatements(service.db)
+    .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY)
     .get(entryKey);
   if (row === undefined) {
     return UNSETTLED_RECORD;
@@ -180,7 +181,9 @@ function readCommittedStatementOutcome(service, entryKey) {
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   term, error = null, result = null, ownerResultText = null}) {
-  service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
+  const insert = sqliteConnectionStatements(service.db)
+    .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
+  insert.run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),

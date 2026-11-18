@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2311,
+    "unit": 2313,
     "integration": 124,
     "bootstrap": 223,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-9663c159",
+  "censusSize": 2667,
+  "digest": "fnv1a32-ce052ce2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1742,6 +1742,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "unit",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "unit",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "unit",
+    "test/raft/raft-rs-backend/connection-held-raft-facts.test.js": "unit",
     "test/raft/raft-rs-backend/durable-commit-power-loss.test.js": "unit",
     "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js": "unit",
     "test/raft/raft-rs-backend/durable-commit-sync.test.js": "unit",
@@ -2492,6 +2493,7 @@
     "test/storage/data-directory-manager.test.js": "unit",
     "test/storage/data-directory-validation.property.test.js": "unit",
     "test/storage/persistent-storage-paths.property.test.js": "unit",
+    "test/storage/sqlite-connection-statements.test.js": "unit",
     "test/storage/sqlite-store.property.test.js": "unit",
     "test/storage/sqlite-store.test.js": "unit",
     "test/test-helpers/managed-timers.test.js": "unit",
