@@ -226,6 +226,11 @@ const OWN_CACHE_CHANGE_WAITS = Object.freeze({
     'timer; no production code constructs the tracker',
   'bootstrap/shared/startup-convergence-gate.js': 'startup convergence ' +
     'wake source; waits on readiness conditions, not a write position',
+  'rebalancer/operation-creation-admission-clearance.js': 'the admission ' +
+    're-entry wait after a TRANSIENT_REENTER denial; woken by changes of ' +
+    'the replica_operations route-source tables and by planning ' +
+    'publications, the clearances the admission owner names; waits on no ' +
+    'write position and is bounded by the caller budget',
 });
 
 test('no wait over onCacheChange exists outside the named modules',

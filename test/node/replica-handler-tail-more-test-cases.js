@@ -1,3 +1,6 @@
+import {EventEmitter} from 'node:events';
+import {withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import {deepFreeze} from '../../src/raft/raft-operation-port.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
@@ -395,14 +398,14 @@ export async function registerReplicaHandlerTailMoreTests({
       nodeId: 'test-node',
       cdcIntegrationService: mockCDC,
       systemTableCache: cache,
-      replicaStateMachine: {
+      replicaStateMachine: Object.assign(new EventEmitter(), {
         getState() {
           return {state: ReplicaStatus.SYNCING};
         },
         transition() {
           return true;
         },
-      },
+      }),
       createPartitionService: createMockPartitionServiceFactory(),
       dataDir: tempDir,
     });
@@ -477,14 +480,14 @@ export async function registerReplicaHandlerTailMoreTests({
         nodeId: 'test-node',
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
-        replicaStateMachine: {
+        replicaStateMachine: Object.assign(new EventEmitter(), {
           getState() {
             return null;
           },
           transition() {
             return false;
           },
-        },
+        }),
         createPartitionService: createMockPartitionServiceFactory(),
         dataDir: tempDir,
       });
@@ -560,9 +563,9 @@ export async function registerReplicaHandlerTailMoreTests({
       replicaId: 'replica-1',
       partitionId: 'partition-1',
       status: ReplicaStatus.ACTIVE,
-      service: {
+      service: withRemovalServingSurface({
         async shutdown() {},
-      },
+      }),
     });
 
     const request = {
@@ -659,11 +662,11 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       );
       let shutdownCalls = 0;
-      const trackedService = {
+      const trackedService = withRemovalServingSurface({
         async shutdown() {
           shutdownCalls += 1;
         },
-      };
+      });
       handler.localReplicas.set(TEST_FAILED_REMOVE_REPLICA_ID, {
         replicaId: TEST_FAILED_REMOVE_REPLICA_ID,
         partitionId: TEST_FAILED_REMOVE_PARTITION_ID,
@@ -823,11 +826,11 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       );
       let shutdownCalls = 0;
-      const trackedService = {
+      const trackedService = withRemovalServingSurface({
         async shutdown() {
           shutdownCalls += 1;
         },
-      };
+      });
       handler.localReplicas.set(TEST_LATE_FAILED_REMOVE_REPLICA_ID, {
         replicaId: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
         partitionId: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
@@ -965,9 +968,9 @@ export async function registerReplicaHandlerTailMoreTests({
         replicaId: TEST_PRESSURED_REMOVE_REPLICA_ID,
         partitionId: TEST_PRESSURED_REMOVE_PARTITION_ID,
         status: ReplicaStatus.ACTIVE,
-        service: {
+        service: withRemovalServingSurface({
           async shutdown() {},
-        },
+        }),
       });
 
       const events = [];

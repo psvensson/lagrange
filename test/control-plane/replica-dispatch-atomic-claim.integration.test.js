@@ -3,6 +3,7 @@
  * Task 18: expected to fail until atomic PENDING->SENDING claim is enforced.
  */
 
+import {settleReplicaDispatchQueues} from '../helpers/reconcile-queue-turns.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {ReplicaDispatchService} from
@@ -178,9 +179,7 @@ test(
       await service.handleReplicaOperationDispatch({
         [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
       });
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await settleReplicaDispatchQueues(service);
 
       t.equal(
         executeCount,
@@ -407,9 +406,7 @@ test(
       coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {
         operation,
       });
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await settleReplicaDispatchQueues(service);
 
       t.equal(
         executeCount,
@@ -671,9 +668,7 @@ test(
         tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         data: operationRow,
       });
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await settleReplicaDispatchQueues(service);
 
       t.equal(
         executeCount,
@@ -846,9 +841,7 @@ test(
           now + 31000,
         ),
       );
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await settleReplicaDispatchQueues(service);
 
       t.equal(
         executeCount,
@@ -1180,9 +1173,7 @@ test(
         tableName: SYSTEM_TABLE_NAME.NODES,
         data: readyNodeRow,
       });
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await settleReplicaDispatchQueues(service);
 
       t.equal(
         executeCount,

@@ -5,6 +5,7 @@
  * join-phase scheduling suppression / convergence release.
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
  */
+import {requireSourcePositions} from './message-group-cdc-source-range.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   COLUMN,
@@ -256,6 +257,9 @@ function assignRaftLifecycle(serviceClass) {
         throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
       }
       this.cdcHandler.initialize();
+      // CDC Stage 3: this node's cache lists every propagated source it holds
+      // no position of, without waiting for the source's next range.
+      requireSourcePositions(this);
       this.initialized = true;
       this.maybeInitializeRebalancer();
       this.logger.info(

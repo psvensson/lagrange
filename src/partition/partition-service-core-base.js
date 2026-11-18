@@ -177,6 +177,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     // admitted requests and participant custody to drain before teardown.
     this.removalServingAdmissionFenced = false;
     this.activeServingRequestCount = 0;
+    this.removalDrainWakes = new Set(); // partition-service-removal-drain-wake
     this.preparedStateHoldTimeoutMs =
       Number.isFinite(options.preparedStateHoldTimeoutMs) &&
       options.preparedStateHoldTimeoutMs > 0 ?

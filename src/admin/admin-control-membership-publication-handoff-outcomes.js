@@ -30,8 +30,6 @@ const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR =
   'owner_reconcile_error';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_ENQUEUED =
   'owner_reconcile_enqueued';
-const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED =
-  'owner_recovery_wait_enqueued';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE =
   'owner_recovery_wait_service_unavailable';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE =
@@ -105,12 +103,6 @@ function buildMembershipPublicationHandoffOutcome(state, options = {}) {
   });
 }
 
-function resolveOwnerRecoveryWaitHandoffReasonCode(enqueueOutcome) {
-  return enqueueOutcome.accepted === true ?
-    MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED :
-    MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE;
-}
-
 function isMembershipPublicationHandoffControlPlaneConvergence(value) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
     value.convergenceClass === CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL &&
@@ -148,7 +140,6 @@ function buildMembershipPublicationHandoffEnqueueOutcome({
 export {
   MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_COMMAND_ERROR,
   MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_ENQUEUED,
-  MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_ENQUEUED,
   MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_OWNER_RECOVERY_WAIT_SERVICE_UNAVAILABLE,
   MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_REASON_SERVICE_UNAVAILABLE,
   MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_STATE,
@@ -156,5 +147,4 @@ export {
   buildMembershipPublicationHandoffEnqueueOutcome,
   buildMembershipPublicationHandoffOutcome,
   isMembershipPublicationHandoffControlPlaneConvergence,
-  resolveOwnerRecoveryWaitHandoffReasonCode,
 };

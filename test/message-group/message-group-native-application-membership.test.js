@@ -10,10 +10,22 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from '../../src/message-group/constants.js';
 import {replacePrototypeProperty, withHostileIntrinsics} from '../helpers/hostile-intrinsics.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} from
+  './message-group-native-custody-fixture.js';
+import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 
 const KEY = 'membership-durable';
 const ORDINARY_KEY = 'membership-ordinary';
+
+
+// CDC Stage 3: every recipient node starts from a known position of the
+// synthetic source (a list of it at its start), and every durable vector
+// travels with its source range.
+async function recipientFixture(...args) {
+  const f = await nativeRecipientFixture(...args);
+  positionRecipients(f.services, 'membership-config');
+  return f;
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -93,7 +105,7 @@ for (const attacked of [false, true]) {
       let failure;
       let returned = false;
       let stateAtReturn;
-      const operation = service.applyCDCBatch(input).then((value) => {
+      const operation = service.applyCDCBatch(input, withSourceRange(input)).then((value) => {
         answer = value;
         returned = true;
         stateAtReturn = {record: RaftRsDurableStore.readDurableRecordIn(service.db, GROUP_ID),

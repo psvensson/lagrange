@@ -80,6 +80,13 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
           partitionId,
           replicaCount,
           error: error.message,
+          // A typed refusal keeps why, when to retry and against which
+          // membership epoch; the message alone names none of them.
+          errorCode: error.errorCode ?? error.code ?? null,
+          reasons: Array.isArray(error.reasons) ? error.reasons : null,
+          retryAfterMs: Number.isFinite(error.retryAfterMs) ?
+            error.retryAfterMs : null,
+          epoch: error.epoch ?? null,
         });
       }
       if (!error.code) {

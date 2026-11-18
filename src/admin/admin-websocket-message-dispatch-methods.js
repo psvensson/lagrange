@@ -1,6 +1,7 @@
 import {createAdminQueryResultMessageEnvelope} from './admin-query-result-message-envelope.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPISegment2} from './admin-websocket-load-lane-admission.js';
+import {ADMIN_WEBSOCKET_LIVE_QUERY_METHODS} from './admin-websocket-live-query-methods.js';
 import {
   runAdminActivity,
 } from '../diagnostics/formation-owner-attribution.js';
@@ -66,11 +67,9 @@ const {
   ADMIN_STREAM_LANE_SNAPSHOT,
   ErrorCode,
   MessageType,
-  SQLParser,
   adaptAdminMessageToServiceMessage,
   appendStructuredQueryMetadata,
   isAdminMessageDispatchable,
-  parseLiveSelect,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
@@ -158,119 +157,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
     });
   },
 
-  async handleLiveQuerySubscribe(clientInfo, message) {
-    const subscriptionId = message.subscriptionId;
-    const sql = message.sql;
-
-    if (!subscriptionId) {
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
-        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
-      );
-      return;
-    }
-    if (!sql || typeof sql !== 'string') {
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SQL,
-        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SQL,
-      );
-      return;
-    }
-    if (!this.liveQueryManager) {
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.INTERNAL_ERROR,
-        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MANAGER_UNAVAILABLE,
-      );
-      return;
-    }
-
-    try {
-      const parsed = parseLiveSelect(sql);
-      const selectSql = parsed.isLive ? parsed.sql : sql;
-      const parser = new SQLParser(selectSql);
-      const ast = parser.parse();
-
-      const registrationResult = {partitions: []};
-      const liveClient = {
-        id: clientInfo.id,
-        send: (data) => {
-          const payload =
-            typeof data === 'string' ? JSON.parse(data) : data;
-          const innerType = payload.type;
-          this.sendToClient(clientInfo, {
-            type: MessageType.LIVE_QUERY_EVENT,
-            subscriptionId,
-            eventType: innerType,
-            data: payload.row || payload.new || payload.rows || null,
-            oldData: payload.old || null,
-            queryId: payload.queryId || null,
-            partitions: registrationResult.partitions || [],
-          });
-        },
-      };
-
-      const result = await this.liveQueryManager.registerLiveQuery(
-        ast,
-        liveClient,
-      );
-      registrationResult.partitions = result.partitions || [];
-
-      clientInfo.liveQueryMap.set(subscriptionId, result.queryId);
-
-      this.sendToClient(clientInfo, {
-        type: MessageType.LIVE_QUERY_EVENT,
-        subscriptionId,
-        queryId: result.queryId,
-        partitions: result.partitions,
-        expiresAt: result.expiresAt,
-      });
-
-      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBED, {
-        clientId: clientInfo.id,
-        subscriptionId,
-        queryId: result.queryId,
-      });
-    } catch (error) {
-      this.logger.error(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBE_FAILED, {
-        clientId: clientInfo.id,
-        subscriptionId,
-        error: error.message,
-      });
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.INTERNAL_ERROR,
-        `${ADMIN_ERROR_MESSAGE.LIVE_QUERY_PARSE_FAILED}: ${error.message}`,
-      );
-    }
-  },
-
-  handleLiveQueryUnsubscribe(clientInfo, message) {
-    const subscriptionId = message.subscriptionId;
-    if (!subscriptionId) {
-      return;
-    }
-
-    const queryId = clientInfo.liveQueryMap.get(subscriptionId);
-    if (queryId && this.liveQueryManager) {
-      this.liveQueryManager.unregisterLiveQuery(queryId, clientInfo.id);
-      clientInfo.liveQueryMap.delete(subscriptionId);
-
-      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_UNSUBSCRIBED, {
-        clientId: clientInfo.id,
-        subscriptionId,
-        queryId,
-      });
-    }
-  },
+  ...ADMIN_WEBSOCKET_LIVE_QUERY_METHODS,
 
   async handleDispatchableAdminMessage(clientInfo, message) {
     if (!isAdminMessageDispatchable(message.type)) {

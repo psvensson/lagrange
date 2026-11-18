@@ -36,7 +36,7 @@ const SELECT_STATEMENT = new RegExp(
   'iu',
 );
 const COUNT_PROJECTION = /^\s*count\s*\(\s*\*\s*\)\s+as\s+([a-z_]+)\s*$/iu;
-// The CDC owner writes publications with INSERT OR REPLACE (cdc-emitter) and
+// The CDC owner writes publications with INSERT OR REPLACE and
 // idempotent reservations/endpoints with INSERT OR IGNORE.
 const INSERT_STATEMENT = new RegExp(
   '^\\s*insert\\s+(?:(or\\s+replace|or\\s+ignore)\\s+)?' +

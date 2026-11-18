@@ -4,7 +4,10 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {CDCEventHandler} from '../../src/cdc/cdc-event-handler.js';
+import {
+  CDCEventHandler,
+  CONSTRUCTOR_ERROR_ADDRESS_PORT,
+} from '../../src/cdc/cdc-event-handler.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -18,10 +21,10 @@ import {
 } from '../../src/cdc/cdc-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
-import {
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
-} from '../../src/transport/node-address-resolution.js';
+import {NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE} from
+  '../../src/transport/node-address-resolution.js';
+import {createCdcEventHandlerContext} from
+  './cdc-event-handler-context-fixture.js';
 
 const NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE = Object.freeze({
   MOCK: 'mock',
@@ -45,42 +48,11 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-/**
- * Create a mock event context for testing.
- * @param {Object} overrides - Optional overrides for the context.
- * @return {Object} Mock event context.
- */
-function createMockEventContext(overrides = {}) {
-  const events = [];
-  return {
-    epochManager: overrides.epochManager || null,
-    rebalancer: overrides.rebalancer || null,
-    messageRouter: overrides.messageRouter || null,
-    resolveNodeWebSocketAddress:
-      overrides.resolveNodeWebSocketAddress ||
-      (() => buildUnavailableNodeWebSocketAddressResolution()),
-    events,
-    emit(eventName, data) {
-      events.push({eventName, data});
-    },
-    incrementEpochChanges: overrides.incrementEpochChanges || (() => {}),
-    incrementNodeStateChanges: overrides.incrementNodeStateChanges || (() => {}),
-  };
-}
-
 function buildResolvedNodeWebSocketAddressResolution(address) {
   return Object.freeze({
     state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
     address,
     source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.MOCK,
-  });
-}
-
-function buildUnavailableNodeWebSocketAddressResolution() {
-  return Object.freeze({
-    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
-    reason:
-      NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.CANONICAL_METADATA_MISSING,
   });
 }
 
@@ -175,8 +147,17 @@ test('CDCEventHandler - constructor requires eventContext', async (t) => {
   t.end();
 });
 
+test('CDCEventHandler - constructor refuses a context without the address ' +
+  'port (typed)', async (t) => {
+  const context = createCdcEventHandlerContext();
+  delete context.resolveNodeWebSocketAddress;
+  t.throws(() => new CDCEventHandler({nodeId: 'test-node', eventContext: context}),
+    {code: CONSTRUCTOR_ERROR_ADDRESS_PORT.code});
+  t.end();
+});
+
 test('CDCEventHandler - constructor succeeds with valid options', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -197,7 +178,7 @@ test('handleEpochChangeCDC - applies valid epoch event (Req 3.1)', async (t) => 
   epochManager.initialize();
 
   let epochChangesCount = 0;
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     epochManager,
     incrementEpochChanges: () => epochChangesCount++,
   });
@@ -238,7 +219,7 @@ test('handleEpochChangeCDC - handles config_value as object', async (t) => {
   const epochManager = new AssignmentEpochManager({nodeId: 'test-node'});
   epochManager.initialize();
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -270,7 +251,7 @@ test('handleEpochChangeCDC - returns error for invalid JSON (Req 3.2)', async (t
   const epochManager = new AssignmentEpochManager({nodeId: 'test-node'});
   epochManager.initialize();
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -297,7 +278,7 @@ test('handleEpochChangeCDC - returns error for non-epoch config key (Req 3.3)', 
   const epochManager = new AssignmentEpochManager({nodeId: 'test-node'});
   epochManager.initialize();
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -320,7 +301,7 @@ test('handleEpochChangeCDC - returns error for non-epoch config key (Req 3.3)', 
 });
 
 test('handleEpochChangeCDC - returns error without epoch manager (Req 3.9)', async (t) => {
-  const context = createMockEventContext({epochManager: null});
+  const context = createCdcEventHandlerContext({epochManager: null});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -352,7 +333,7 @@ test('handleEpochChangeCDC - returns error for null event', async (t) => {
   const epochManager = new AssignmentEpochManager({nodeId: 'test-node'});
   epochManager.initialize();
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -369,7 +350,7 @@ test('handleEpochChangeCDC - returns error for invalid epoch data', async (t) =>
   const epochManager = new AssignmentEpochManager({nodeId: 'test-node'});
   epochManager.initialize();
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -406,7 +387,7 @@ test('handleEpochChangeCDC - rejects stale epoch', async (t) => {
   });
   epochManager.initialize(initialEpoch);
 
-  const context = createMockEventContext({epochManager});
+  const context = createCdcEventHandlerContext({epochManager});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -444,7 +425,7 @@ test('handleEpochChangeCDC - rejects stale epoch', async (t) => {
 test('handleNodeStateCDC - processes valid state change (Req 3.4)', async (t) => {
   const rebalancer = createMockRebalancer();
   let stateChangesCount = 0;
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     rebalancer,
     incrementNodeStateChanges: () => stateChangesCount++,
   });
@@ -478,7 +459,7 @@ test('handleNodeStateCDC - processes valid state change (Req 3.4)', async (t) =>
 });
 
 test('handleNodeStateCDC - tracks state transitions', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -516,7 +497,7 @@ test('handleNodeStateCDC - tracks state transitions', async (t) => {
 test('handleNodeStateCDC - ignores stale state events by updated_at ordering', async (t) => {
   const rebalancer = createMockRebalancer();
   let stateChangesCount = 0;
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     rebalancer,
     incrementNodeStateChanges: () => stateChangesCount++,
   });
@@ -560,7 +541,7 @@ test('handleNodeStateCDC - ignores stale state events by updated_at ordering', a
 test('handleNodeStateCDC - uses last_heartbeat ordering when updated_at missing', async (t) => {
   const rebalancer = createMockRebalancer();
   let stateChangesCount = 0;
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     rebalancer,
     incrementNodeStateChanges: () => stateChangesCount++,
   });
@@ -611,7 +592,7 @@ test('handleNodeStateCDC - uses last_heartbeat ordering when updated_at missing'
 
 
 test('handleNodeStateCDC - skips unchanged state (Req 3.5)', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -646,7 +627,7 @@ test('handleNodeStateCDC - skips unchanged state (Req 3.5)', async (t) => {
 });
 
 test('handleNodeStateCDC - works without rebalancer', async (t) => {
-  const context = createMockEventContext({rebalancer: null});
+  const context = createCdcEventHandlerContext({rebalancer: null});
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -669,7 +650,7 @@ test('handleNodeStateCDC - works without rebalancer', async (t) => {
 });
 
 test('handleNodeStateCDC - rejects non-nodes table', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -693,7 +674,7 @@ test('handleNodeStateCDC - rejects non-nodes table', async (t) => {
 
 
 test('handleNodeStateCDC - rejects null event', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -707,7 +688,7 @@ test('handleNodeStateCDC - rejects null event', async (t) => {
 });
 
 test('handleNodeStateCDC - rejects missing node_id', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -729,7 +710,7 @@ test('handleNodeStateCDC - rejects missing node_id', async (t) => {
 });
 
 test('handleNodeStateCDC - rejects missing status', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -756,7 +737,7 @@ test('handleNodeStateCDC - rejects missing status', async (t) => {
 
 test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     messageRouter,
     resolveNodeWebSocketAddress: () =>
       buildResolvedNodeWebSocketAddressResolution('ws://new-node:8082'),
@@ -794,7 +775,7 @@ test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
 
 test('handleNodeJoinedCDC - skips self node (Req 3.7)', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -824,7 +805,7 @@ test('handleNodeJoinedCDC - skips self node (Req 3.7)', async (t) => {
 
 test('handleNodeJoinedCDC - skips already connected node', async (t) => {
   const messageRouter = createMockMessageRouter({connectedNodes: ['existing-node']});
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -853,7 +834,7 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
   const messageRouter = createMockMessageRouter({
     connectionStates: {'existing-node': 'disconnected'},
   });
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     messageRouter,
     resolveNodeWebSocketAddress: () =>
       buildResolvedNodeWebSocketAddressResolution('ws://existing-node:8082'),
@@ -886,7 +867,7 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
 });
 
 test('handleNodeJoinedCDC - returns error without message router (Req 3.10)', async (t) => {
-  const context = createMockEventContext({messageRouter: null});
+  const context = createCdcEventHandlerContext({messageRouter: null});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -915,7 +896,7 @@ test('handleNodeJoinedCDC - returns error without message router (Req 3.10)', as
 
 test('handleNodeJoinedCDC - rejects non-INSERT operation', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -943,7 +924,7 @@ test('handleNodeJoinedCDC - rejects non-INSERT operation', async (t) => {
 
 test('handleNodeJoinedCDC - rejects non-nodes table', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -968,7 +949,7 @@ test('handleNodeJoinedCDC - rejects non-nodes table', async (t) => {
 
 test('handleNodeJoinedCDC - rejects null event', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -984,7 +965,7 @@ test('handleNodeJoinedCDC - rejects null event', async (t) => {
 
 test('handleNodeJoinedCDC - rejects missing node_id', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -1009,7 +990,7 @@ test('handleNodeJoinedCDC - rejects missing node_id', async (t) => {
 
 test('handleNodeJoinedCDC - rejects missing canonical websocket endpoint', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createCdcEventHandlerContext({messageRouter});
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -1039,7 +1020,7 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
     shouldFail: true,
     failureMessage: 'Connection refused',
   });
-  const context = createMockEventContext({
+  const context = createCdcEventHandlerContext({
     messageRouter,
     resolveNodeWebSocketAddress: () =>
       buildResolvedNodeWebSocketAddressResolution('ws://new-node:8082'),
@@ -1080,7 +1061,7 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
 // =============================================================================
 
 test('deriveWsAddressFromNodeAddress - derives correct WebSocket URL (Req 3.8)', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1094,7 +1075,7 @@ test('deriveWsAddressFromNodeAddress - derives correct WebSocket URL (Req 3.8)',
 });
 
 test('deriveWsAddressFromNodeAddress - handles different ports', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1116,7 +1097,7 @@ test('deriveWsAddressFromNodeAddress - handles different ports', async (t) => {
 
 
 test('deriveWsAddressFromNodeAddress - returns null for invalid input', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1143,7 +1124,7 @@ test('deriveWsAddressFromNodeAddress - returns null for invalid input', async (t
 });
 
 test('deriveWsAddressFromNodeAddress - handles IPv6 addresses', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1162,7 +1143,7 @@ test('deriveWsAddressFromNodeAddress - handles IPv6 addresses', async (t) => {
 // =============================================================================
 
 test('getNodeStates - returns tracked states', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1190,7 +1171,7 @@ test('getNodeStates - returns tracked states', async (t) => {
 });
 
 test('setNodeState - sets node state for initialization', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,
@@ -1206,7 +1187,7 @@ test('setNodeState - sets node state for initialization', async (t) => {
 });
 
 test('setNodeState - affects subsequent state change detection', async (t) => {
-  const context = createMockEventContext();
+  const context = createCdcEventHandlerContext();
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
     eventContext: context,

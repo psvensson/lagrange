@@ -55,6 +55,8 @@ test('Property 5: Batch Concurrency Bound', async (t) => {
             entityId: 'partition-1',
             nodeId: 'node-0',
           });
+          // Moves execute only under the rebalancer's own leadership.
+          rebalancer.setLeader(true);
           rebalancer.moveBatchSize = batchSize;
           rebalancer.interBatchDelayMs = 0;
           rebalancer.isNodeReady = async () => true;
@@ -78,8 +80,10 @@ test('Property 5: Batch Concurrency Bound', async (t) => {
           await rebalancer.executeRebalancingMoves(moves);
           rebalancer.shutdown();
 
-          return Array.from(maxInFlightByNode.values())
-            .every((max) => max <= batchSize);
+          return maxInFlightByNode.size ===
+              new Set(moves.map((move) => move.nodeId)).size &&
+            Array.from(maxInFlightByNode.values())
+              .every((max) => max <= batchSize);
         },
       ),
       {numRuns: 10},

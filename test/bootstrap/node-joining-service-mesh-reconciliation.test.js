@@ -405,7 +405,7 @@ test('NodeJoiningService - READY heartbeats retry a local ingress fallback ' +
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r3`
       ) {
         return buildDeliveryEnvelope(
-          {acknowledged: false, error:
+          {acknowledged: false, noHandler: true, error:
             `No handler registered for address ${targetAddress}`});
       }
       return buildDeliveryEnvelope({acknowledged: true});

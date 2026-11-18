@@ -178,7 +178,10 @@ function isServiceLifecycleRegressionOnEqualTimestamp(existing, incoming) {
   return isLifecycleTimestampRegressing(existingTs, incomingTs);
 }
 
-function isStaleForExistingRecord(tableName, existing, incoming) {
+// `sameEntryOrder` orders two versions of one source entry (equal origin HLC)
+// by source ordinal (system-table-cache-source-order.js): nonzero, it decides.
+function isStaleForExistingRecord(tableName, existing, incoming, sameEntryOrder = 0) {
+  if (sameEntryOrder !== 0) return sameEntryOrder < 0;
   // Prefer the origin HLC when both rows carry one: it is a total causal order, so
   // equal-`updated_at` ties resolve deterministically and identically on every replica.
   const existingHlc = getRecordHlc(existing);
@@ -238,7 +241,9 @@ function recordSatisfiesDeletePredicate(record, predicate) {
  * @param {Object} deletePredicate
  * @return {boolean}
  */
-function isDeleteSupersededByExistingRecord(tableName, existing, deletePredicate) {
+function isDeleteSupersededByExistingRecord(tableName, existing, deletePredicate,
+  sameEntryOrder = 0) {
+  if (sameEntryOrder !== 0) return sameEntryOrder < 0;
   const hlcOrdered = Boolean(getRecordHlc(existing) &&
     getRecordHlc(deletePredicate));
   if (!hlcOrdered &&
@@ -360,7 +365,7 @@ function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
   };
 }
 
-function handlePublicationStaleBackfill(table, key, existing, incoming) {
+function handlePublicationStaleBackfill(existing, incoming) {
   const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
   if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
     return {
@@ -369,7 +374,6 @@ function handlePublicationStaleBackfill(table, key, existing, incoming) {
       backfilledFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
     };
   }
-  table.set(key, mergedRecord);
   return {
     applied: true,
     record: mergedRecord,
@@ -401,15 +405,10 @@ function isConflictingStaleIncarnation(existingId, incomingId) {
   );
 }
 
-function applyStaleRowBackfill(
-  tableName,
-  table,
-  key,
-  existing,
-  incoming,
-) {
+// The stale-row rule, pure: what a stale incoming version leaves of a row.
+function foldStaleRowBackfill(tableName, existing, incoming) {
   if (shouldUsePublicationMerge(existing, incoming)) {
-    return handlePublicationStaleBackfill(table, key, existing, incoming);
+    return handlePublicationStaleBackfill(existing, incoming);
   }
 
   const existingId = extractRowReplicaIncarnation(existing);
@@ -454,12 +453,17 @@ function applyStaleRowBackfill(
     };
   }
 
-  table.set(key, merged);
   return {
     applied: true,
     record: merged,
     backfilledFields,
   };
+}
+
+function applyStaleRowBackfill(tableName, table, key, existing, incoming) {
+  const folded = foldStaleRowBackfill(tableName, existing, incoming);
+  if (folded.applied) table.set(key, folded.record);
+  return folded;
 }
 
 function hasMatchingTokens(existing, incoming) {
@@ -558,6 +562,7 @@ export {
   buildDeletedRowTombstoneSource,
   cloneFieldValue,
   compareSchemaVersions,
+  foldStaleRowBackfill,
   getRecordHlc,
   getRecordTimestamp,
   isDeleteSupersededByExistingRecord,

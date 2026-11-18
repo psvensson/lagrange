@@ -244,6 +244,14 @@ function normalizeControlPlanePublicationRow(row) {
       row?.transition_history,
       row?.transitionHistory,
     ),
+    // The durable row's revision (the publication_revision column), or null
+    // for a row that carries none (a candidate not yet admitted). Named
+    // rowRevision: `publicationRevision` already names the publication EPOCH
+    // in the readiness and handoff evidence shapes.
+    rowRevision: readInteger(
+      row?.publication_revision,
+      row?.rowRevision,
+    ),
   };
 }
 
@@ -255,6 +263,11 @@ function serializeControlPlanePublicationRow(row) {
   const originHlc = readText(row?.updated_at_hlc, row?.updatedAtHlc);
   return {
     ...(originHlc ? {updated_at_hlc: originHlc} : {}),
+    // The row revision travels with a durable row and is absent from a
+    // candidate row: it is stamped only by the publications owner's writes.
+    ...(normalizedRow.rowRevision !== null ?
+      {publication_revision: normalizedRow.rowRevision} :
+      {}),
     publication_id: readText(
       normalizedRow.publicationId,
       row?.publication_id,

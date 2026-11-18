@@ -77,6 +77,8 @@ import {
 } from './replica-state-machine-lifecycle-observation.js';
 import {activateRegisteredReplica} from
   './replica-state-machine-registered-activation.js';
+import {cancelDurableRemovalWithAuthority} from
+  './replica-state-machine-removal-cancellation.js';
 import {
   captureReplicaAdmission,
   getReplicaRevision,
@@ -762,6 +764,11 @@ class ReplicaStateMachine extends EventEmitter {
 
   bindAuthoritativeRemovalAuthority(replicaId, context = {}) {
     return bindAuthoritativeRemovalAuthority(this, replicaId, context);
+  }
+
+  cancelDurableRemovalWithAuthority(replicaId, authority, context = {}) {
+    return cancelDurableRemovalWithAuthority(this, replicaId, authority,
+      context);
   }
 
   observeAuthoritativeReplicaLifecycle(replicaId) {

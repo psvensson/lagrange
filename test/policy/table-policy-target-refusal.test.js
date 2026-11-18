@@ -4,6 +4,7 @@ import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {POLICY_ERROR_CODE, POLICY_EVENT} from '../../src/policy/policy-constants.js';
 import {AdminOwnerOperations, ADMIN_OWNER_OPERATION_OUTCOME} from '../../src/admin/admin-owner-operations.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
+import {createTableThroughDurableJob} from '../query/table-creation-durable-job-fixture.js';
 
 const TABLE_ID = 'policy-target-test';
 const UNSUPPORTED = POLICY_ERROR_CODE.TARGET_UPDATE_UNSUPPORTED;
@@ -72,9 +73,9 @@ test('CREATE target requests refuse before schema intent, metadata or existing-t
     controlPlaneSystemTableGateway: {submitMutation: async () => {
       writes.push('metadata');
     }}});
-  service.findExistingTableRecord = async () => {
+  service.lookupTableRecord = async () => {
     writes.push('existing table lookup');
-    return {table_id: TABLE_ID};
+    return {outcome: 'FOUND', row: {table_id: TABLE_ID}, reason: null};
   };
   try {
     for (const policy of TARGET_REQUESTS) {
@@ -83,7 +84,7 @@ test('CREATE target requests refuse before schema intent, metadata or existing-t
           columns: [{name: 'id', dataType: {name: 'TEXT'}, primaryKey: true}],
           ifNotExists, options: {tablePolicy: policy}};
         await assert.rejects(service.createTable(ast), {code: UNSUPPORTED});
-        await assert.rejects(service.executeCreateTableProvisioning(ast), {code: UNSUPPORTED});
+        await assert.rejects(createTableThroughDurableJob(service, ast), {code: UNSUPPORTED});
       }
     }
     assert.deepEqual(writes, []);

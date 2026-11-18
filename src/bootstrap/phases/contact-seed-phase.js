@@ -7,6 +7,7 @@
  */
 
 import {assertCritical} from '../../utils/assert.js';
+import {acceptJoinResponseClusterIdentity} from '../join-cluster-identity.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
   JOINING_PHASE,
@@ -129,9 +130,9 @@ class ContactSeedPhase {
 
     while (this.hasSeedContactBudget(context)) {
       const attempt = this.beginSeedContactAttempt(context);
+      let response;
       try {
-        await this.executeSeedContactAttempt(context, attempt);
-        return;
+        response = await this.executeSeedContactAttempt(context, attempt);
       } catch (error) {
         const failure = this.recordSeedContactFailure(
           context,
@@ -144,6 +145,10 @@ class ContactSeedPhase {
         }
         this.failureOwner.throwFailure(context, attempt, failure);
       }
+      // Outside the retry classifier: a response for another cluster is a
+      // typed terminal refusal, never retried and never adopted.
+      this.adoptSeedContactResponse(context, attempt, response);
+      return;
     }
 
     this.failureOwner.throwBudgetExhaustion(context);
@@ -272,6 +277,12 @@ class ContactSeedPhase {
       bootstrapError.bootstrapResponse = response;
       throw bootstrapError;
     }
+    return response;
+  }
+
+  adoptSeedContactResponse(context, attempt, response) {
+    acceptJoinResponseClusterIdentity(
+      this.delegates.getExpectedClusterId?.() ?? null, response);
     this.delegates.setBootstrapResponse(response);
     this.delegates.setSeedNodeAddress?.(attempt.currentCandidate);
     this.delegates.setSeedNodeId(response.seedNodeId || null);

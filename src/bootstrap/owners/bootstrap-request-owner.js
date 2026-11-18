@@ -198,8 +198,8 @@ class BootstrapRequestOwner {
     return this.delegates.getSeedNodeId?.() || null;
   }
 
-  getClusterId() {
-    return this.delegates.getClusterId?.() || null;
+  readClusterIdentity() {
+    return this.delegates.readClusterIdentity();
   }
 
   getSeedNodeAddress() {

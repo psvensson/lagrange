@@ -338,11 +338,11 @@ test('two repository owners converge on one durable message-group lane and ' +
     const restartedRepository = createRepository(database, {
       nodeId: 'owner-after-restart',
     });
-    const restartedOwner =
+    const restartedOwner = (
       await restartedRepository
-        .queryAuthoritativeOperationByMessageGroupMembershipLane(
+        .observeAuthoritativeOperationByMessageGroupMembershipLane(
           MEMBERSHIP_LANE_KEY,
-        );
+        )).operation;
     assert.equal(restartedOwner.operationId, owner.operationId,
       'a fresh repository reconstructs the terminal retained obligation');
     assert.equal(restartedOwner.sourceReplicaId, 'mg-foundation-r1',

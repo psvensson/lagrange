@@ -13,7 +13,8 @@
 //   - the retryable leadership-transfer-in-progress answer is given for a
 //     proposal the core dropped because a transfer runs, and for no other
 //     drop: a leader the committed configuration removed drops every proposal
-//     for good, and that stays the core's non-retryable refusal.
+//     for good, and that stays the core's non-retryable refusal
+//     (removed-leader-step-down.test.js).
 //
 // Real rs-raft ports through the provider seam, time moved only by explicit
 // ticks (TransferLeadershipDriver). Expected values are raft-rs 0.7's own
@@ -145,31 +146,10 @@ test('most-caught-up never names a learner, even one further ahead than ' +
   }
 });
 
-test('a leader the committed configuration removed answers its dropped ' +
-  'proposal as the core\'s refusal, never as a transfer in progress',
-async () => {
-  const driver = formedGroup('inputs-removed-leader');
-  try {
-    const selfId = driver.raftIdAt(A, A);
-    assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).result.outcome, CORE_OK);
-    driver.deliver();
-    const status = driver.status(A);
-    assert.equal(status.confState.voters.includes(selfId), false,
-      'precondition: the removal of the leader is committed');
-    assert.equal(status.role, RAFT_ROLE.LEADER,
-      'precondition: raft-rs keeps the removed leader leading');
-    const answer = turnChainValue(driver.propose(A, {on: 'removed-leader'}));
-    assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
-    assert.notEqual(answer.reason, IN_PROGRESS_REASON,
-      'no transfer runs: the drop is the removal\'s');
-    assert.equal(answer.retryable, false,
-      'the removal\'s drop does not end within an election timeout');
-  } finally {
-    driver.dispose();
-  }
-});
+// The removed leader's drop (non-retryable, never the transfer window) is
+// pinned in removed-leader-step-down.test.js: the leader's own port now
+// refuses its own removal (REMOVES_LEADER), so a removed leader is built
+// there by the race that can still produce one.
 
 // Round 3: the drop causes on a replica that does not lead. raft-rs drops a
 // proposal on a candidate (step_candidate) and on a follower that knows no

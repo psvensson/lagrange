@@ -1,3 +1,4 @@
+import {CDC_ADMISSION_INTENT_FIELD} from '../partition/partition-cdc-admission-class.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
@@ -78,10 +79,10 @@ class CDCIntegrationServiceMutationOperations {
    * owner path (CL-014: closes the bootstrap-snapshot ->
    * fan-out-targetability window in which remote CDC events are silently
    * lost to this node). See cdc-integration-service-authoritative-catchup.js.
-   * @param {Object} [options]
+   * @param {Object} options - Carries the required CDC_CATCHUP_TRIGGER.
    * @return {Promise<Object>} Hydration summary.
    */
-  hydrateCdcPropagatedTablesFromAuthority(options = {}) {
+  hydrateCdcPropagatedTablesFromAuthority(options) {
     return hydrateCdcPropagatedTablesFromAuthority(this, options);
   }
 
@@ -253,6 +254,8 @@ class CDCIntegrationServiceMutationOperations {
           deliveryPriority: options?.deliveryPriority,
           deliverySource: options?.deliverySource,
           replacePendingKey: options?.replacePendingKey,
+          // The lifecycle owner's intent, never dropped here (one pick-list).
+          [CDC_ADMISSION_INTENT_FIELD]: options?.[CDC_ADMISSION_INTENT_FIELD],
           sessionId: options?.sessionId,
           disableSystemWriteSession: options?.disableSystemWriteSession,
           coalescingKey: options?.coalescingKey,
@@ -426,6 +429,8 @@ class CDCIntegrationServiceMutationOperations {
             deliveryPriority: options?.deliveryPriority,
             deliverySource: options?.deliverySource,
             replacePendingKey: options?.replacePendingKey,
+            // The lifecycle owner's intent, never dropped here (one pick-list).
+            [CDC_ADMISSION_INTENT_FIELD]: options?.[CDC_ADMISSION_INTENT_FIELD],
           },
         );
         const sqlDurationMs = this.timeSource.now() - sqlStartMs;

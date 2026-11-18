@@ -1,5 +1,6 @@
 import {
   BOOTSTRAP_DEFAULT,
+  BOOTSTRAP_ERROR,
   SEED_DELEGATE_BUNDLE,
 } from './bootstrap-constants.js';
 import {
@@ -12,6 +13,7 @@ import {
   readNodeRuntimeSuppliedTimeSource,
 } from '../node/node-runtime-local-authorities.js';
 import {getMessageGroupDbPath} from '../storage/data-directory-manager.js';
+import {propagatePartitionCdcVector} from './shared/partition-cdc-propagation-subscriber.js';
 
 function createBootstrapServiceSeedDelegateMethods() {
   return {
@@ -76,6 +78,7 @@ function buildPhaseExecutionDelegates(service) {
     admitOriginalSeedReplica: (options) => self.admitOriginalSeedReplica(options),
     assertOriginalSeedContinuation: (replicaId) => self.assertOriginalSeedContinuation(replicaId),
     getOriginalSeedPreparation: () => self.originalAllocationPreparation,
+    getFormationTargetDeclaration: () => self.formationTargetDeclaration,
     getOriginalSeedFoundationTimestamp: () =>
       self.originalAllocationPreparation.foundationTimestamp(),
     getNodeId: () => self.nodeId,
@@ -318,9 +321,9 @@ function buildPhaseExecutionDelegates(service) {
       self.nodeReadyRebalanceOwner.handleNodeReadyRebalanceTrigger(
         cdcEvent, prevRow,
       ),
-    propagatePartitionCDCEvent: (mgs, cdcEvent, deliveryContext) =>
-      self.seedRuntimeBridgeOwner
-        .propagatePartitionCDCEvent(mgs, cdcEvent, deliveryContext),
+    propagatePartitionCDCEvent: (mgs, events, deliveryContext) =>
+      propagatePartitionCdcVector(self.latencyTopology,
+        BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, mgs, events, deliveryContext),
     resolveCdcPropagationMessageGroup: (preferred) =>
       self.seedCacheHydrationPhase
         .resolveCdcPropagationMessageGroup(preferred),

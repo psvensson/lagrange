@@ -12,6 +12,7 @@ import {STRING} from '../constants/index.js';
 import {CONFIG_KEY} from './config-key-constants.js';
 import {LATENCY_PROPAGATION_MODE} from './config-latency-constants.js';
 import {LISTENER_PORT_DEFAULT} from './listener-port-model.js';
+import {TRANSPORT_DEFAULT} from '../constants/transport.js';
 
 const CONFIG_VALUE_TYPE = Object.freeze({
   STRING: 'string',
@@ -101,11 +102,12 @@ const DEFAULT_CONFIG = {
     wsHost: null,
     messageTimeoutMs: 5000,
     ackTimeoutQuarantineThreshold: 2,
-    ackTimeoutQuarantineLivenessWindowMs: 30000,
+    ackTimeoutQuarantineLivenessWindowMs:
+      TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS,
     pingTimeoutMs: 1000,
     reconnectIntervalMs: 1000,
     reconnectMaxAttempts: 10,
-    pingIntervalMs: 30000,
+    pingIntervalMs: TRANSPORT_DEFAULT.PING_INTERVAL_MS,
     reconnectBackoffMultiplier: 1.5,
     outboundQueueMaxConcurrent: 32,
     connectionPoolTtlMs: 300000, // 5 minutes

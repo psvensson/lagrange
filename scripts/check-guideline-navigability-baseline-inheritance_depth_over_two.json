@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.106Z",
+  "generatedAt": "2026-11-11T10:41:43.172Z",
   "rawViolationCount": 58,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 406,
+      "line": 402,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -212,7 +212,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 111,
+      "line": 163,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -230,7 +230,7 @@
     },
     {
       "filePath": "src/query/query-executor-cancellation-routing-install.js",
-      "line": 20,
+      "line": 21,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -248,7 +248,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 25,
+      "line": 24,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -266,7 +266,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 49,
+      "line": 51,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -293,7 +293,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 98,
+      "line": 130,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -338,7 +338,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
-      "line": 35,
+      "line": 39,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -356,7 +356,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 110,
+      "line": 108,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -383,7 +383,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 119,
+      "line": 122,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -401,7 +401,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-handoff.js",
-      "line": 46,
+      "line": 57,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 49,
+      "line": 48,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -500,7 +500,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-rebalance-loop.js",
-      "line": 56,
+      "line": 65,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

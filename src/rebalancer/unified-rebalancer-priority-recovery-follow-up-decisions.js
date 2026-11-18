@@ -51,8 +51,6 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       decisionSnapshot?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE
       ],
-      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.VISIBILITY_STATE],
-      observation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.VISIBILITY_STATE],
     ]);
     const workflowCandidates = Object.freeze([
       decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.WORKFLOW_STATE],

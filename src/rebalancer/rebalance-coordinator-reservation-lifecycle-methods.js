@@ -20,6 +20,8 @@ import {
 } from './rebalance-coordinator-reservation-adoption.js';
 import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
   './storage-reservation-authority.js';
+import {OPERATION_VISIBILITY_STATE, readOperationVisibilityState} from
+  './replica-operation-repository-operation-visibility.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -521,45 +523,32 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @private
    */
   async getReservationOperationVisibilityObservation(operationId) {
-    if (
-      typeof this.repository?.getOperationByIdVisibilityObservation ===
-      LOCAL_STR_FUNCTION
-    ) {
-      const preferredObservation =
-        await this.repository.getOperationByIdVisibilityObservation(
-          operationId,
-          {
-            allowPriorityRecoveryDeferredVisibility: true,
-          },
-        );
-      if (
-        preferredObservation?.operation ||
-        preferredObservation?.deferredOutcome
-      ) {
-        return preferredObservation;
-      }
-      // A silent absent from the preferred read may be a transient lagging
-      // local view. Releasing an active reservation requires the absence to
-      // be disproven or confirmed by the owner-RPC-required authority read;
-      // an escalated read that cannot confirm defers the decision.
-      return this.repository.getOperationByIdVisibilityObservation(
+    const preferredObservation =
+      await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           allowPriorityRecoveryDeferredVisibility: true,
-          requireAbsenceConfirmation: true,
         },
       );
+    if (
+      readOperationVisibilityState(preferredObservation) !==
+      OPERATION_VISIBILITY_STATE.ABSENT
+    ) {
+      return preferredObservation;
     }
-    const operation = operationId ?
-      await this.queryOperationById(operationId) :
-      null;
-    return Object.freeze({
-      operation,
-      deferredOutcome: null,
-    });
+    // An ABSENT answer from the preferred read may be a lagging local
+    // view. Releasing an active reservation requires the absence to be
+    // confirmed by the owner-RPC-required read; an UNAVAILABLE answer
+    // (from either read) carries its deferred outcome and keeps it.
+    return this.repository.getOperationByIdVisibilityObservation(
+      operationId,
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        allowPriorityRecoveryDeferredVisibility: true,
+      },
+    );
   }
 
   /**
@@ -604,18 +593,31 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * silently reopen its admitted capacity. RELEASE_ACTIVE only when the
    * operation is visible-and-terminal or confirmed-absent.
    * @param {string|null} operationId
-   * @return {Promise<Object>} {action} — RELEASE_ACTIVE or KEEP_ACTIVE.
+   * @param {Map<string, Object>} [snapshotByOperationId] - One sweep's
+   *   snapshots: each operation is read once per sweep and both arms decide
+   *   on that one snapshot.
+   * @return {Promise<Object>} Frozen {action, state}; action is
+   *   RELEASE_ACTIVE or KEEP_ACTIVE.
    * @private
    */
-  async buildReservationExpirySnapshot(operationId) {
+  async buildReservationExpirySnapshot(
+    operationId,
+    snapshotByOperationId = new Map(),
+  ) {
+    const sweepSnapshot = snapshotByOperationId.get(operationId);
+    if (sweepSnapshot) {
+      return sweepSnapshot;
+    }
     const visibilityObservation =
       await this.getReservationOperationVisibilityObservation(operationId);
     const reconcileSnapshot =
       this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
-    return Object.freeze({
+    const expirySnapshot = Object.freeze({
       action: reconcileSnapshot.action,
       state: reconcileSnapshot.state,
     });
+    snapshotByOperationId.set(operationId, expirySnapshot);
+    return expirySnapshot;
   }
 
   /**
@@ -646,6 +648,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const now = Date.now();
     let expired = 0;
     let orphansReleased = 0;
+    const snapshotByOperationId = new Map();
 
     const staleResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
@@ -664,19 +667,13 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         // and terminal — so only a truly finished operation's reservation
         // expires.
         const expirySnapshot = await this.buildReservationExpirySnapshot(
-          row.operation_id,
-        );
-        if (
-          expirySnapshot.action !==
-          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
-        ) {
+          row.operation_id, snapshotByOperationId);
+        if (expirySnapshot.action !==
+            RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
           continue;
         }
         const transition = await this.transitionActiveReservationById(
-          row.reservation_id,
-          RESERVATION_STATUS.EXPIRED,
-          now,
-        );
+          row.reservation_id, RESERVATION_STATUS.EXPIRED, now);
         if (!transition.success) {
           this.logger.warn(
             REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
@@ -695,11 +692,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     } else if (!staleResult.success) {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-        {
-          operationId: null,
-          reservationId: null,
-          error: staleResult.error,
-        },
+        {operationId: null, reservationId: null, error: staleResult.error},
       );
     }
 
@@ -720,16 +713,10 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
     if (activeResult.success && activeResult.rows) {
       for (const row of activeResult.rows) {
-        const visibilityObservation =
-          await this.getReservationOperationVisibilityObservation(
-            row.operation_id,
-          );
-        const reconcileSnapshot =
-          this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
-        if (
-          reconcileSnapshot.action !==
-          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
-        ) {
+        const reconcileSnapshot = await this.buildReservationExpirySnapshot(
+          row.operation_id, snapshotByOperationId);
+        if (reconcileSnapshot.action !==
+            RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
           continue;
         }
         const transition = await this.transitionActiveReservationById(

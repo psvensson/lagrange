@@ -9,6 +9,8 @@
 // created with the partition, outside any command, identically on every
 // replica, by the open hook the lifecycle owner runs on each connection.
 
+import fs from 'node:fs';
+import Database from 'better-sqlite3';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
@@ -29,6 +31,9 @@ import {
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
+  PARTICIPANT_TRANSACTION_STORE_ERROR_CODE as STORE_ERROR_CODE,
+  PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
+  PARTICIPANT_TRANSACTION_CUSTODY as CUSTODY,
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
@@ -37,7 +42,24 @@ const ONE_ROW = 1;
 // request path).
 const READ_STATEMENTS = new WeakMap();
 
+/**
+ * Whether the participant store can be read on a partition's connection:
+ * CLOSED when the lifecycle owner released it (the service's db is null) or
+ * closed it; OPEN otherwise.
+ * @param {Object|null} db - The partition's connection.
+ * @return {string} A PARTICIPANT_STORE_CONNECTION_STATE.
+ */
+function participantStoreConnectionStateOf(db) {
+  return db === null || db === undefined || db.open === false ?
+    CONNECTION_STATE.CLOSED : CONNECTION_STATE.OPEN;
+}
+
 function readStatementOf(db, sql) {
+  if (participantStoreConnectionStateOf(db) === CONNECTION_STATE.CLOSED) {
+    // Typed, never a null dereference: the caller's owner names the answer.
+    throw Object.assign(new Error(STORE_ERROR.CONNECTION_CLOSED),
+      {code: STORE_ERROR_CODE.CONNECTION_CLOSED});
+  }
   let statements = READ_STATEMENTS.get(db);
   if (statements === undefined) {
     statements = new Map();
@@ -275,6 +297,36 @@ function isPartitionReserved(db) {
 }
 
 /**
+ * The durable participant custody of a partition database file, read on an
+ * independent read-only connection (the removal owner's read once the
+ * partition's own connection is released): ACTIVE while a PREPARED row
+ * reserves it, IDLE when none does (no file, or no participant table:
+ * nothing was ever PREPARED there), UNAVAILABLE when the file cannot be
+ * read - never IDLE on a read that failed.
+ * @param {string} dbPath - The partition database file.
+ * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
+ */
+function readDurableParticipantCustodyAt(dbPath) {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return CUSTODY.IDLE;
+    }
+    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    try {
+      if (db.prepare(SQL.SELECT_TABLE_PRESENT).get() === undefined) {
+        return CUSTODY.IDLE;
+      }
+      return db.prepare(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
+        undefined ? CUSTODY.ACTIVE : CUSTODY.IDLE;
+    } finally {
+      db.close();
+    }
+  } catch (_error) {
+    return CUSTODY.UNAVAILABLE;
+  }
+}
+
+/**
  * Whether a PREPARED row carries this routing sessionId (the current routing
  * collision predicate refuses a sessionId-only request naming it).
  * @param {Object} db - The partition's connection.
@@ -426,6 +478,8 @@ export {
   isPartitionReserved,
   openParticipantTransactionStore,
   participantOutcomeOf,
+  participantStoreConnectionStateOf,
+  readDurableParticipantCustodyAt,
   readParticipantTransactionRow,
   readPreparedParticipantIds,
   readPartitionWriteGeneration,

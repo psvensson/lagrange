@@ -30,17 +30,16 @@ import {
   createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {buildUnavailableOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_DEFERRED_RESERVATION_ID = 'res-deferred';
 const TEST_DEFERRED_OPERATION_ID = 'op-deferred';
 const TEST_DEFERRED_PARTITION_ID = 'p-deferred';
 const TEST_DEFERRED_TARGET_NODE_ID = 'node-deferred';
 const TEST_DEFERRED_CONFIRMATION_STATE = 'deferred';
-const TEST_DEFERRED_OPERATION_VISIBILITY = Object.freeze({
-  operation: null,
-  deferredOutcome: Object.freeze({
-    confirmationState: TEST_DEFERRED_CONFIRMATION_STATE,
-  }),
+const TEST_DEFERRED_OPERATION_VISIBILITY = buildUnavailableOperationVisibility({
+  confirmationState: TEST_DEFERRED_CONFIRMATION_STATE,
 });
 
 function initializeConfig(overrides = {}) {
@@ -777,7 +776,7 @@ test('reconcileReservations - skips orphan release while operation visibility ' 
   const {coordinator} = createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
-  coordinator.repository.queryOperationById = async () => null;
+  coordinator.repository.queryOperationProjectionById = async () => null;
   coordinator.repository.getOperationByIdVisibilityObservation = async () =>
     TEST_DEFERRED_OPERATION_VISIBILITY;
 
@@ -838,14 +837,19 @@ test('reconcileReservations - emits reconciled event', async (t) => {
   t.end();
 });
 
-// --- Recovery integration (Req 4.4, 12.3) ---
+// --- Restart-path integration (Req 4.4, 12.3) ---
+// The production restart path is the coordinator timer; its step-budget sweep
+// (checkTimeouts) is the periodic reservation reconcile once it observes
+// incomplete work. An orphan hold of a terminal operation is released there,
+// and the hold of a live operation is never released.
 
-test('handleRecovery - reconciles reservations after operations',
+test('checkTimeouts - releases an orphan hold and keeps a live one',
   async (t) => {
     initializeConfig();
     const sqlEngine = createTrackingSqlEngine();
+    const now = Date.now();
 
-    // Insert orphan reservation with terminal operation
+    // Orphan reservation of a terminal operation.
     sqlEngine.reservations.set('res-recovery', {
       reservation_id: 'res-recovery',
       operation_id: 'op-failed',
@@ -857,13 +861,11 @@ test('handleRecovery - reconciles reservations after operations',
       amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
       reason_code: RESERVATION_REASON.ADD_REPLICA,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-      expires_at: Date.now() + NUM.THIRTY_THOUSAND,
+      created_at: now,
+      updated_at: now,
+      expires_at: now + NUM.THIRTY_THOUSAND,
       released_at: null,
     });
-
-    // Terminal operation
     sqlEngine.operations.set('op-failed', {
       operation_id: 'op-failed',
       type: OperationType.ADD,
@@ -874,15 +876,70 @@ test('handleRecovery - reconciles reservations after operations',
       workflow_step: WORKFLOW_STEP.FAILED,
     });
 
+    // A live, incomplete operation with its own hold: the sweep observes
+    // incomplete work (so it reaches the reservation reconcile) and must not
+    // release this hold.
+    sqlEngine.reservations.set('res-op-live', {
+      reservation_id: 'res-op-live',
+      operation_id: 'op-live',
+      entity_type: SERVICE_TYPE.PARTITION,
+      entity_id: 'p-2',
+      partition_id: 'p-2',
+      target_node_id: 'node-1',
+      estimated_bytes: NUM.HUNDRED,
+      amplification_factor: 1,
+      status: RESERVATION_STATUS.ACTIVE,
+      reason_code: RESERVATION_REASON.ADD_REPLICA,
+      created_at: now,
+      updated_at: now,
+      expires_at: now + NUM.THIRTY_THOUSAND,
+      released_at: null,
+    });
+    sqlEngine.operations.set('op-live', {
+      operation_id: 'op-live',
+      type: OperationType.ADD,
+      partition_id: 'p-2',
+      entity_type: 'partition',
+      entity_id: 'p-2',
+      target_node_id: 'node-1',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: now}]),
+    });
+
     const {coordinator} = createCoordinatorWithStorage({
       sqlQueryEngine: sqlEngine,
     });
+    // No empty-cache deferral: this tick reads the incomplete operations.
+    coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
+    let reconciled = null;
+    coordinator.on(
+      REBALANCE_COORDINATOR_EVENT.RESERVATION_RECONCILED,
+      (data) => {
+        reconciled = data;
+      },
+    );
 
-    const result = await coordinator.handleRecovery();
+    try {
+      await coordinator.checkTimeouts();
 
-    t.equal(result.reservationsOrphansReleased, 1);
-    const res = sqlEngine.reservations.get('res-recovery');
-    t.equal(res.status, RESERVATION_STATUS.RELEASED);
+      t.equal(reconciled?.orphansReleased, 1,
+        'the timer sweep releases exactly the orphan hold');
+      t.equal(sqlEngine.reservations.get('res-recovery').status,
+        RESERVATION_STATUS.RELEASED);
+      t.equal(sqlEngine.reservations.get('res-op-live').status,
+        RESERVATION_STATUS.ACTIVE,
+        'the hold of a live operation is not released');
+      t.not(sqlEngine.operations.get('op-live').workflow_step,
+        WORKFLOW_STEP.FAILED,
+        'the sweep does not fail a fresh incomplete operation');
+    } finally {
+      await coordinator.shutdown();
+    }
     t.end();
   });
 

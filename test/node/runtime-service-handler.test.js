@@ -145,7 +145,6 @@ function createHandler(overrides = {}) {
     },
     serviceLifecycleManager: lifecycle,
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
-    legacyRemovalAuthority: overrides.legacyRemovalAuthority,
   });
   handler.initialize();
   return {handler, cache, cdc, lifecycle};
@@ -575,9 +574,9 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     );
   });
 
-  it('reconstructs a persisted legacy target after handler restart before ' +
+  it('reconstructs a persisted canonical target after handler restart before ' +
     'removal', async () => {
-    const legacyReplicaId = 'replace-replica-persisted-runtime';
+    const replicaId = 'sys-postgres-wire-r2';
     const cache = createMockCache({
       service_definitions: [
         {
@@ -589,26 +588,19 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       ],
       services: [
         {
-          service_id: legacyReplicaId,
+          service_id: replicaId,
           service_type: 'runtime_service',
           node_id: 'test-node',
           status: ReplicaStatus.ACTIVE,
         },
       ],
     });
-    const {handler, lifecycle} = createHandler({cache,
-      legacyRemovalAuthority: async ({operationId, entityId, replicaId, nodeId}) =>
-        ({outcome: operationId === 'legacy-runtime-target-cleanup-op' &&
-          entityId === 'sys-postgres-wire' &&
-          replicaId === legacyReplicaId && nodeId === 'test-node' ?
-          'ADMITTED' : 'CONTENT_CONFLICT'}),
-    });
+    const {handler, lifecycle} = createHandler({cache});
 
     const response = await handler.handleRemoveReplica({
-      [ReplicaOperationField.OPERATION_ID]:
-          'legacy-runtime-target-cleanup-op',
+      [ReplicaOperationField.OPERATION_ID]: 'runtime-target-cleanup-op',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
-      [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+      [ReplicaOperationField.REPLICA_ID]: replicaId,
     });
     assert.equal(
       response.status,
@@ -620,16 +612,60 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
 
     assert.equal(lifecycle.calls.length, 1);
     assert.equal(lifecycle.calls[0].method, 'stopReplica');
-    assert.equal(lifecycle.calls[0].handle.serviceId, legacyReplicaId);
+    assert.equal(lifecycle.calls[0].handle.serviceId, replicaId);
     assert.equal(
-      handler.getLocalReplica(legacyReplicaId).status,
+      handler.getLocalReplica(replicaId).status,
       ReplicaStatus.REMOVED,
     );
   });
 
-  it('refuses an opaque legacy cleanup under the wrong entity despite a matching local services id',
+  // Upgrade from a pre-canonical cluster is unsupported: no current producer
+  // persists a runtime replica id outside `${entityId}-rN` (or the bare
+  // entity id) without a creation token. A REMOVE naming such an id is a
+  // malformed identity, refused permanently, and stops nothing.
+  it('refuses a non-canonical REMOVE as CONTENT_CONFLICT and stops nothing, ' +
+    'while a canonical REMOVE still proceeds', async () => {
+    const opaqueReplicaId = 'replace-replica-historical-opaque';
+    const canonicalReplicaId = 'sys-postgres-wire-r1';
+    const cache = createMockCache({services: [
+      {service_id: opaqueReplicaId, service_type: 'runtime_service',
+        node_id: 'test-node', status: ReplicaStatus.ACTIVE},
+      {service_id: canonicalReplicaId, service_type: 'runtime_service',
+        node_id: 'test-node', status: ReplicaStatus.ACTIVE},
+    ]});
+    const {handler, lifecycle} = createHandler({cache});
+    const refused = await handler.handleRemoveReplica({
+      [ReplicaOperationField.OPERATION_ID]: 'opaque-remove',
+      [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+      [ReplicaOperationField.REPLICA_ID]: opaqueReplicaId,
+    });
+    await flushImmediate();
+    await flushImmediate();
+    assert.deepEqual(
+      [refused.status, refused.errorCode, refused.deferRetry],
+      [ReplicaOperationResponseStatus.ERROR, 'CONTENT_CONFLICT', false],
+      'NON_CANONICAL_REMOVE_WAS_NOT_A_PERMANENT_IDENTITY_REFUSAL');
+    assert.deepEqual(lifecycle.calls, [], 'NON_CANONICAL_REMOVE_STOPPED_A_RESOURCE');
+    assert.equal(handler.inProgressOperations.size, 0,
+      'REFUSED_REMOVE_LEFT_AN_ADMITTED_EXECUTION');
+    assert.equal(handler.getLocalReplica(opaqueReplicaId), undefined,
+      'REFUSED_REMOVE_INSTALLED_A_LOCAL_MEMO');
+    const admitted = await handler.handleRemoveReplica({
+      [ReplicaOperationField.OPERATION_ID]: 'canonical-remove',
+      [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+      [ReplicaOperationField.REPLICA_ID]: canonicalReplicaId,
+    });
+    assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
+    await flushImmediate();
+    await flushImmediate();
+    assert.deepEqual(lifecycle.calls.map((call) =>
+      [call.method, call.handle.serviceId]), [['stopReplica', canonicalReplicaId]],
+    'CANONICAL_REMOVE_AFTER_A_REFUSAL_LOST_OR_DOUBLED_STOP');
+  });
+
+  it('refuses a canonical cleanup under the wrong entity despite a matching local services id',
     async () => {
-      const legacyReplicaId = 'replace-replica-old-opaque-target';
+      const replicaId = 'sys-postgres-wire-r3';
       const cache = createMockCache({
         service_definitions: [
           {service_id: 'sys-postgres-wire', service_type: 'runtime_service',
@@ -637,36 +673,30 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
           {service_id: 'unrelated-runtime', service_type: 'runtime_service',
             runtime_kind: 'native_js', runtime_ref: 'other-runtime'},
         ],
-        services: [{service_id: legacyReplicaId, service_type: 'runtime_service',
+        services: [{service_id: replicaId, service_type: 'runtime_service',
           node_id: 'test-node', status: ReplicaStatus.ACTIVE}],
-        replica_operations: [{operation_id: 'historical-replace',
-          entity_id: 'sys-postgres-wire', entity_type: 'runtime_service',
-          replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
       });
-      const {handler, lifecycle} = createHandler({cache,
-        legacyRemovalAuthority: async ({operationId, entityId}) =>
-          ({outcome: operationId === 'original-legacy-cleanup' &&
-            entityId === 'sys-postgres-wire' ? 'ADMITTED' : 'CONTENT_CONFLICT'}),
-      });
+      const {handler, lifecycle} = createHandler({cache});
       const answer = await handler.handleRemoveReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
+        [ReplicaOperationField.OPERATION_ID]: 'forged-cleanup',
         [ReplicaOperationField.ENTITY_ID]: 'unrelated-runtime',
-        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
       });
       await flushImmediate();
       await flushImmediate();
-      assert.equal(answer.status, ReplicaOperationResponseStatus.ERROR,
-        'OPAQUE_ID_WITH_UNRELATED_ENTITY_ADMITTED_DESTRUCTIVE_CLEANUP');
+      assert.deepEqual([answer.status, answer.errorCode, answer.deferRetry],
+        [ReplicaOperationResponseStatus.ERROR, 'CONTENT_CONFLICT', false],
+        'UNRELATED_ENTITY_ADMITTED_DESTRUCTIVE_CLEANUP');
       assert.equal(lifecycle.calls.length, 0,
-        'UNRELATED_ENTITY_CLAIM_STOPPED_A_LEGACY_RESOURCE');
+        'UNRELATED_ENTITY_CLAIM_STOPPED_A_RESOURCE');
       assert.equal(handler.inProgressOperations.size, 0,
-        'REFUSED_LEGACY_CLEANUP_LEFT_AN_ADMITTED_EXECUTION');
-      assert.equal(handler.getLocalReplica(legacyReplicaId), undefined,
+        'REFUSED_CLEANUP_LEFT_AN_ADMITTED_EXECUTION');
+      assert.equal(handler.getLocalReplica(replicaId), undefined,
         'REFUSED_REQUEST_POISONED_THE_CACHED_ENTITY_ID');
       const valid = await handler.handleRemoveReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-cleanup',
+        [ReplicaOperationField.OPERATION_ID]: 'original-cleanup',
         [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
-        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
       });
       assert.equal(valid.status, ReplicaOperationResponseStatus.INITIATED,
         'ORIGINAL_OWNER_CLEANUP_WAS_BLOCKED_BY_PRIOR_WRONG_ENTITY');
@@ -677,84 +707,14 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       'ORIGINAL_ENTITY_CLEANUP_LOST_OR_DOUBLED_STOP');
     });
 
-  it('defers opaque legacy REMOVE without authority, then retries the exact original',
+  it('does not STOP a successor installed after admitted REMOVE but before queued STOP',
     async () => {
-      const replicaId = 'replace-replica-owner-temporarily-unavailable';
+      const replicaId = 'sys-postgres-wire-r4';
       const cache = createMockCache({services: [{service_id: replicaId,
         service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
-      let ownerAnswer = 'UNAVAILABLE';
-      const {handler, lifecycle} = createHandler({cache,
-        legacyRemovalAuthority: async ({operationId, entityId, replicaId: id, nodeId}) => ({
-          outcome: operationId === 'original-owner-remove' &&
-            entityId === 'sys-postgres-wire' && id === replicaId && nodeId === 'test-node' ?
-            ownerAnswer : 'CONTENT_CONFLICT',
-        }),
-      });
-      const request = {
-        [ReplicaOperationField.OPERATION_ID]: 'original-owner-remove',
-        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
-        [ReplicaOperationField.REPLICA_ID]: replicaId,
-      };
-      const deferred = await handler.handleRemoveReplica(request);
-      assert.deepEqual([deferred.status, deferred.deferRetry],
-        [ReplicaOperationResponseStatus.ERROR, true],
-        'UNAVAILABLE_OWNER_WAS_MISTAKEN_FOR_PERMISSION_OR_PERMANENT_ABSENCE');
-      assert.equal(handler.getLocalReplica(replicaId), undefined);
-      assert.deepEqual(lifecycle.calls, []);
-      ownerAnswer = 'ADMITTED';
-      const admitted = await handler.handleRemoveReplica(request);
-      assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
-      await flushImmediate();
-      await flushImmediate();
-      assert.equal(lifecycle.calls.filter((entry) =>
-        entry.method === 'stopReplica').length, 1,
-      'RETURNING_OWNER_DID_NOT_ALLOW_EXACT_ORIGINAL_CLEANUP');
-    });
-
-  it('does not stop a successor when legacy owner read returns after replacement',
-    async () => {
-      const replicaId = 'replace-replica-late-owner-answer';
-      const cache = createMockCache({services: [{service_id: replicaId,
-        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
-      const entered = Promise.withResolvers();
-      const released = Promise.withResolvers();
-      const {handler, lifecycle} = createHandler({cache,
-        legacyRemovalAuthority: async () => {
-          entered.resolve();
-          await released.promise;
-          return {outcome: 'ADMITTED'};
-        },
-      });
-      const pending = handler.handleRemoveReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'old-retirement',
-        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
-        [ReplicaOperationField.REPLICA_ID]: replicaId,
-      });
-      await entered.promise;
-      const successor = {replicaId, entityId: 'sys-postgres-wire',
-        status: ReplicaStatus.ACTIVE, operationId: 'successor-creation'};
-      handler.localReplicas.set(replicaId, successor);
-      released.resolve();
-      const refused = await pending;
-      assert.deepEqual([refused.status, refused.deferRetry],
-        [ReplicaOperationResponseStatus.ERROR, true],
-        'LATE_OLD_OWNER_ANSWER_RETIRED_SUCCESSOR');
-      assert.strictEqual(handler.getLocalReplica(replicaId), successor);
-      assert.deepEqual(lifecycle.calls, [], 'STALE_POST_AWAIT_OWNER_STOPPED_SUCCESSOR');
-    });
-
-  // WITNESS ONLY: this is the handler's post-admission/pre-STOP queue cut.
-  // A direct local replacement is a labelled race seam, not proof that a
-  // production REPLACE currently exercises this exact scheduling interleave.
-  it('does not STOP a successor installed after admitted legacy REMOVE but before queued STOP',
-    async () => {
-      const replicaId = 'replace-replica-old-before-stop';
-      const cache = createMockCache({services: [{service_id: replicaId,
-        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
-      const {handler, lifecycle} = createHandler({cache,
-        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const {handler, lifecycle} = createHandler({cache});
       const removed = await handler.handleRemoveReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-remove',
+        [ReplicaOperationField.OPERATION_ID]: 'original-remove',
         [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
         [ReplicaOperationField.REPLICA_ID]: replicaId,
       });
@@ -778,7 +738,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
   // the handler must never publish old completion over the new holder.
   it('does not publish stale generic REMOVE after STOP settles behind a successor',
     async () => {
-      const replicaId = 'replace-replica-late-stop-completion';
+      const replicaId = 'sys-postgres-wire-r5';
       const cache = createMockCache({services: [{service_id: replicaId,
         service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
       const started = Promise.withResolvers();
@@ -792,8 +752,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         return stop(...args);
       };
       const {handler} = createHandler({cache, lifecycle,
-        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
-        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)}});
       const answer = await handler.handleRemoveReplica({
         [ReplicaOperationField.OPERATION_ID]: 'old-remove-before-successor',
         [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
@@ -819,14 +778,13 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
 
   it('admits successor cleanup after a superseded queued REMOVE releases its gate',
     async () => {
-      const replicaId = 'replace-replica-successor-cleanup';
+      const replicaId = 'sys-postgres-wire-r6';
       const entityId = 'sys-postgres-wire';
       const emitted = [];
       const cache = createMockCache({services: [{service_id: replicaId,
         service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
       const {handler, lifecycle} = createHandler({cache,
-        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
-        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)}});
       const request = (operationId) => ({
         [ReplicaOperationField.OPERATION_ID]: operationId,
         [ReplicaOperationField.ENTITY_ID]: entityId,
@@ -855,7 +813,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       assert.equal(handler.inProgressOperations.size, 0);
     });
 
-  it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
+  it('refuses a non-canonical REMOVE when its memo falsely names a bound creation',
     async () => {
       const replicaId = 'replace-replica-mismatched-bound-identity';
       const {handler, lifecycle} = createHandler();

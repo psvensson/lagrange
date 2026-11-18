@@ -29,11 +29,21 @@ import {answerSettledStatement} from
 import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
   '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {TRANSPORT_ERROR_MSG} from '../../src/constants/transport.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
+import {TRANSPORT_ACKNOWLEDGEMENT} from
+  '../../src/transport/transport-acknowledgement.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
 const PROMPT_MS = 1000;
 const PENDING = Symbol('pending');
-const LOST_ANSWER = 'Message timeout';
+// The router's refusal when the lifetime is spent after the target accepted
+// the delivery (an answer timeout): it carries its typed code.
+const lostAnswer = () => Object.assign(
+  new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT),
+  {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+    acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED});
 const hlc = (logical) =>
   new HLCTimestamp(1793615397288, logical, 'node-1').toString();
 const SECURITY_CONTEXT = Object.freeze({principal: 'alice',
@@ -82,7 +92,7 @@ function composeLostAnswer() {
       commits.attempts += 1;
       if (commits.loseFirst && commits.attempts === 1) {
         commit(params);
-        throw new Error(LOST_ANSWER);
+        throw lostAnswer();
       }
       if (commits.loseFirst && commits.attempts === 2) {
         commits.loseFirst = false;

@@ -1,3 +1,4 @@
+import {REPLICA_ABSENT_NOT_BY_OPERATION} from './replica-removal-debt-errors.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -146,6 +147,18 @@ function isSameReplicaRemoval(operation, replicaId, partitionId) {
 
 function allowsLocalRemovalShortcut(precondition, removalAlreadyInProgress) {
   return precondition === undefined || removalAlreadyInProgress;
+}
+
+// An ERROR answer keeps the error's typing: a retryable removal debt is
+// answered retryable (the coordinator defers), never as untyped text.
+function typedRemoveErrorFields(error) {
+  return {
+    error: error.message,
+    errorCode: error.errorCode ?? error.code ?? null,
+    deferRetry: error.deferRetry === true,
+    retryAfterMs: Number.isFinite(error.retryAfterMs) ?
+      error.retryAfterMs : null,
+  };
 }
 
 function canReconcileRemovedReplica(replica, partitionId, shortcutAllowed) {
@@ -435,8 +448,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check idempotency - already removing
       if (replica.status === ReplicaStatus.REMOVING &&
           mayUseLocalRemovalShortcut) {
-        this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
+        // The removal in progress raised the fence before it was tracked and
+        // owns the teardown: a duplicate answers its state and never touches
+        // the service. Only a removal resumed here raises the fence again.
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
+          this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
           this.startRemoveReplicaAsync(request, groupRetirement);
         }
@@ -455,25 +471,30 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         mayUseLocalRemovalShortcut,
       )) {
         try {
-          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
+          await this.reconcileRemovedReplicaCleanup(
+            replicaId, partitionId, operationId);
         } catch (error) {
           if (request?.[ReplicaOperationField.GROUP_RETIREMENT]) {
             return this.answerRemovedGroupMember(request, error);
           }
-          this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-            operationId,
-            replicaId,
-            partitionId,
-            error: error.message,
-            stack: error.stack,
-          });
+          // A replica another operation (or none) already removed is a
+          // typed, final answer for the asker, not a failure of this node.
+          if (error?.code === REPLICA_ABSENT_NOT_BY_OPERATION) {
+            this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
+              operationId, replicaId, partitionId, nodeId: this.nodeId,
+              errorCode: error.code});
+          } else {
+            this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
+              operationId,
+              replicaId,
+              partitionId,
+              error: error.message,
+              stack: error.stack,
+            });
+          }
           return this.buildReplicaOperationResponse(
             ReplicaOperationResponseStatus.ERROR,
-            {
-              error: error.message,
-              replicaId,
-              nodeId: this.nodeId,
-            },
+            {...typedRemoveErrorFields(error), replicaId, nodeId: this.nodeId},
           );
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {

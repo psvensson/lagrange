@@ -20,6 +20,12 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {
+  createReplicaOperationsCasStore,
+} from './durable-step-authority-fixture.js';
+import {
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const TEST_NODE_ID = 'reservation-gate-node';
 const TEST_PARTITION_ID = 'p-gate';
@@ -105,18 +111,15 @@ function updateReservationRows(reservations, sql, params) {
   return {success: true, changes};
 }
 
-function updateOperationRow(operations, params) {
-  const [status, step, updated, completed, err,
-    history, repId, opId] = params;
-  const existing = operations.get(opId);
-  if (existing) {
-    operations.set(opId, {
-      ...existing, status, workflow_step: step,
-      updated_at: updated, completed_at: completed,
-      error_message: err, steps_history: history, replica_id: repId,
-    });
-  }
-  return {success: true};
+// A status/step UPDATE honours its CAS guards (shared store); any other
+// replica_operations UPDATE is accepted without effect.
+function updateOperationRow(operations, sql, params) {
+  const casStore = createReplicaOperationsCasStore({
+    readRow: (operationId) => operations.get(operationId) || null,
+  });
+  return casStore.isStepUpdate(sql) ?
+    casStore.apply(sql, params) :
+    {success: true};
 }
 
 function selectReservationRows(reservations, sql, params) {
@@ -167,7 +170,7 @@ function createTrackingSqlEngine(options = {}) {
         return updateReservationRows(reservations, sql, params);
       }
       if (sql.includes('UPDATE replica_operations')) {
-        return updateOperationRow(operations, params);
+        return updateOperationRow(operations, sql, params);
       }
       if (sql.includes('SELECT * FROM storage_reservations')) {
         return selectReservationRows(reservations, sql, params);
@@ -242,15 +245,12 @@ function createCoordinatorWithStorage(options = {}) {
     async (...args) => {
       if (sqlEngine.reservations.size > 0 && unavailableReads > 0) {
         unavailableReads--;
-        return {
-          operation: null,
-          deferredOutcome: {
-            error: 'injected owner RPC authority unavailable',
-            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
-            deferRetry: true,
-            retryAfterMs: NUM.FIVE,
-          },
-        };
+        return buildUnavailableOperationVisibility({
+          error: 'injected owner RPC authority unavailable',
+          errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+          deferRetry: true,
+          retryAfterMs: NUM.FIVE,
+        });
       }
       return queryAuthority(...args);
     };
@@ -321,6 +321,23 @@ function createDeterministicTimerQueue() {
   };
 }
 
+// The production restart path is the coordinator timer
+// (rebalance-coordinator-lifecycle.js startTimeoutChecking): the step-budget
+// timeout sweep, then the level-triggered orphan sweep. A test that restarts
+// an owner drives exactly that sequence; there is no separate restart routine.
+async function runRestartTimerTick(coordinator) {
+  await coordinator.checkTimeouts();
+  await coordinator.reconcileOrphanedOperations();
+}
+
+function countProgressOwners(owner, operationId) {
+  return Number(owner.transitionRetryTimerByOperationId.has(operationId)) +
+    Number(owner.dispatchRetryTimerByOperationId.has(operationId)) +
+    Number(owner.createdOperationHandoffRetryTimerByOperationId.has(
+      operationId,
+    ));
+}
+
 function seedActiveReservation(sqlEngine, operationId) {
   const now = Date.now();
   sqlEngine.reservations.set(`res-${operationId}`, {
@@ -386,11 +403,13 @@ export {
   TEST_RESERVATION_ID,
   TEST_TARGET_NODE_ID,
   buildStorageIncreasingOperation,
+  countProgressOwners,
   createCoordinatorWithStorage,
   createRuntimeServiceDeferralFixture,
   createDeterministicTimerQueue,
   createTrackingSqlEngine,
   initializeConfig,
+  runRestartTimerTick,
   seedActiveReservation,
   seedAuthoritativeOperation,
 };

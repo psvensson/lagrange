@@ -663,10 +663,9 @@ export function isOwnerRecoveryWaitHandoffContract(handoffContract, progress = n
     textOrUnknown(handoffContract?.nextAction) !== UNKNOWN_VALUE ?
       handoffContract.nextAction :
       textOrUnknown(progress?.publicationActiveGateHandoffNextAction);
+  // The named action: a wait for the cluster recovery gate lists no node.
   return nextAction ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-    resolveOwnerRecoveryPendingWriteCount(handoffContract, progress) >
-      SOURCE_ORDER_BASE;
+    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY;
 }
 
 export function resolveOwnerRecoveryPendingNodeIds(handoffContract, progress = null) {

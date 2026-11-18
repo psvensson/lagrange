@@ -49,6 +49,8 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../../src/config/formation-target-node-count.js';
 import {
   DEMO_PGWIRE_AUTH,
   MOVIELENS_CALL_SERVICE_ID,
@@ -258,9 +260,14 @@ async function startNode(index, dataRoot) {
     PGWIRE_AUTH_USER: DEMO_PGWIRE_AUTH.USER,
   };
   const args = ['src/index.js', '--data-dir', dataDir];
+  delete env[FORMATION_TARGET_NODE_COUNT_ENV];
   if (index > 0) {
     env.SEED_NODE_ADDRESS = `localhost:${BASE_REST_PORT}`;
     args.push(DEMO_CONSTANTS.SEED_FLAG, `localhost:${BASE_REST_PORT}`);
+  } else {
+    // The seed declares the demo's intended total node count; the demo
+    // starts the seed alone and expands it to NODE_COUNT.
+    env[FORMATION_TARGET_NODE_COUNT_ENV] = String(NODE_COUNT);
   }
   // Only the seed is measured: a joiner with the flag would hook every
   // async resource and log snapshots, perturbing the load the seed is under.

@@ -127,8 +127,6 @@ import {
   AUTHORITATIVE_READ_SOURCE,
   CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
-  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
-  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
   CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
   CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
@@ -402,25 +400,17 @@ function isSystemTableOwnerHandoffFailure(errorLike, fallbackTableName = null) {
   if (!tableName) {
     return false;
   }
-  const errorCode = getControlPlaneErrorCode(errorLike);
-  // A partition write answer the caller holds is routed again by its code;
-  // one that reached it only as text, by the fragments below.
-  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED ||
-      isReroutableWriteFailureCode(errorLike?.failureCode)) {
+  // A handoff is the owner's own answer that the write must be routed again
+  // (the partition write kernel's code, or its routing texts below). A
+  // transport failure is never a handoff: the control plane's one code table
+  // (CONTROL_PLANE_ERROR_CODE_DECISION) decides it, and the routed loop
+  // re-sends it under the write's one key (R14).
+  if (isReroutableWriteFailureCode(errorLike?.failureCode)) {
     return true;
   }
   const errorMessage = getControlPlaneErrorMessage(errorLike);
-  if (
-    CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS.some((fragment) =>
-      errorMessage.includes(fragment),
-    )
-  ) {
-    return true;
-  }
-  return (
-    errorMessage.includes(CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT) &&
-    errorMessage.includes(CDC_OWNER_HANDOFF_CLOSED_FRAGMENT)
-  );
+  return CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS.some((fragment) =>
+    errorMessage.includes(fragment));
 }
 function hasSystemTableOwnerHandoffFailureSignature(
   value = null,
@@ -657,8 +647,6 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   CDC_LOG_MSG,
   CDC_OPERATION,
   CDC_OPERATION_LABEL,
-  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
-  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
   CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
   CDC_PRIMARY_KEY,
   CDC_RETRY,

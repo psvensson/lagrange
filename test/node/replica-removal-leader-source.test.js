@@ -6,14 +6,19 @@
  * source retired at F2's 30 s backstop still a committed voter (n = 2:
  * permanent quorum loss).
  *
- * Now conf changes are leader-only, and the leader proposes its OWN
- * RemoveNode when its row reads REMOVING (the same row-driven owner that
- * retires every other peer). Ranged over n = 2 and n = 3: the production
- * replica handler removes the leader over its real port; the leader's and
- * every follower's row-driven retirement run on the REMOVING row (the
- * followers are answered NOT_LEADER); RemoveNode(leader) commits, the leader
- * leaves consensus on its own applied removal and retires, and the
- * survivors keep quorum (a new leader, a write commits).
+ * Conf changes are leader-only. Superseded 2026-11-11 (B2): the leader
+ * no longer proposes its OWN RemoveNode - raft-rs keeps a leader that
+ * applied its own removal leading while it refuses every proposal. On its
+ * REMOVING row the leader hands leadership to a survivor
+ * (partition-service-removal-subject-handoff.js) and the survivor that then
+ * leads proposes RemoveNode(source) from the row it holds (its deferred
+ * row-driven retirement, re-driven on LEADER). Ranged over n = 2 and n = 3:
+ * the production replica handler removes the leader over its real port; the
+ * leader's and every follower's row-driven retirement run on the REMOVING
+ * row (the followers are answered NOT_LEADER); the leader never proposes its
+ * own removal; RemoveNode(leader) commits at a survivor, the source leaves
+ * consensus on its own applied removal and retires, and the survivors keep
+ * quorum (a new leader, a write commits).
  *
  * Oracles: a survivor's durable applied configuration, the leader's durable
  * lifecycle row against its value at setup, a write applied through the
@@ -40,6 +45,8 @@ import {
   createRemovalSourceHandler,
   durableLifecycleState,
   nextTurns,
+  retireThroughSurvivorLeader,
+  wireRowDrivenPartition,
   partitionServiceRow as serviceRow,
 } from './replica-removal-consensus-exit-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
@@ -86,12 +93,14 @@ async function removeLeaderSource(t, voterCount) {
   const retiringRow = cache.get('services', leader);
   t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
     'the leader source marked itself retiring');
-  // The REMOVING row reaches every replica's row-driven retirement.
-  for (const replicaId of members) {
-    retireRaftPeerFromAuthoritativeServiceChange({
-      raft: cluster.node(replicaId), replicaId, partitionId,
-      replicaIds: [...members], peerAddresses: [], logger: QUIET_LOGGER,
-    }, CDC_OPERATION.UPDATE, retiringRow);
+  // The REMOVING row reaches every replica's row-driven retirement; each
+  // replica's partition is wired to its port's events as production wires
+  // it (the deferred-retirement re-drive and the subject's hand-off).
+  const partitions = members.map((replicaId) => wireRowDrivenPartition(
+    cluster, replicaId, {partitionId, members, logger: QUIET_LOGGER}));
+  for (const partition of partitions) {
+    retireRaftPeerFromAuthoritativeServiceChange(partition,
+      CDC_OPERATION.UPDATE, retiringRow);
   }
   const survivorVoters = () => durableAppliedState(
     cluster.replica(survivors[0]).dbFile, partitionId).voters;
@@ -99,9 +108,12 @@ async function removeLeaderSource(t, voterCount) {
   for (let round = 0; round < EXIT_ROUNDS && !exited; round += 1) {
     cluster.tickers = [leader, ...survivors];
     cluster.settle(() => false, {rounds: 10});
+    await retireThroughSurvivorLeader(partitions, leader);
     await nextTurns();
     exited = source.exits.length > 0;
   }
+  t.same(partitions[0].selfRemovals, [],
+    'the leader never proposed its own removal');
   t.notOk(survivorVoters().includes(peerIdOf[leader]),
     'RemoveNode(leader) committed: the survivors no longer name it');
   t.same(source.exits.map((exit) => exit.reason),

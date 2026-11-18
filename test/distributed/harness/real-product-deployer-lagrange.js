@@ -27,6 +27,8 @@
  * (`version`, `bootedSrcFingerprint`).
  */
 import {REQUEST_CELL_AUTH} from './constants.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../../../src/config/formation-target-node-count.js';
 import {
   arrayEvery,
   arrayFilter,
@@ -114,7 +116,7 @@ function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(String(index + 1), NODE_ID_WIDTH, '0')}`;
 }
 
-function nodeEnv({nodeId, host, seedHost, connection}) {
+function nodeEnv({nodeId, host, seedHost, connection, nodeCount}) {
   const env = {
     NODE_ID: nodeId, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
@@ -123,7 +125,10 @@ function nodeEnv({nodeId, host, seedHost, connection}) {
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
+  // Joiners name the seed; the seed declares the formation size (one node
+  // per host in this deployment; no default exists).
   if (seedHost !== host) env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+  else env[FORMATION_TARGET_NODE_COUNT_ENV] = nodeCount;
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
 }
 
@@ -533,7 +538,7 @@ async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeRe
     const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
       ordinal: index + 1, image: imageForHost(opts, host, image),
       dockerArgs: [...storageArgs(opts, campaignId, index),
-        ...nodeEnv({nodeId, host, seedHost, connection})]});
+        ...nodeEnv({nodeId, host, seedHost, connection, nodeCount: hosts.length})]});
     roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
     if (index === 0) nodeReadiness.push(await nodeReady(ctx, host));
   }

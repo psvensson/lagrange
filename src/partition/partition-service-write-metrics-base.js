@@ -32,8 +32,10 @@ import {deliveryTransportOf, forwardedDeliveryAnswer, isDeliveredTransportDelive
   '../transport/transport-semantic-outcome.js';
 import {transactionSchemaWriteRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
-import {refuseRoutedClientSystemTableWrite} from
+import {STATEMENT_INGRESS, refuseRoutedClientSystemTableWrite, resolveStatementIngress} from
   '../query/sql-statement-ingress.js';
+import {CDC_ADMISSION_CLASS_FIELD, cdcAdmissionClassFieldsOf,
+  partitionCdcAdmissionClassRefusal} from './partition-cdc-admission-class.js';
 
 
 const {
@@ -70,6 +72,9 @@ function buildQueryOperation(sql, params, options) {
     operationId: options.operationId || null,
     idempotencyKey: options.idempotencyKey || null,
     splitMirrorOrigin: options.splitMirrorOrigin || null,
+    // Only a RECIPIENT_RETIREMENT write carries its class into the committed
+    // entry; an ordinary one carries none (its definition is absence).
+    ...cdcAdmissionClassFieldsOf(options[CDC_ADMISSION_CLASS_FIELD]),
   };
 }
 
@@ -82,6 +87,11 @@ function resolveNonReadQueryRefusal(service, sql, options) {
     options, service.tableName);
   if (ingressRefusal !== null) {
     return {...ingressRefusal, partitionId: service.partitionId};
+  }
+  const classRefusal = partitionCdcAdmissionClassRefusal(options,
+    resolveStatementIngress(options) === STATEMENT_INGRESS.CLIENT);
+  if (classRefusal !== null) {
+    return {...classRefusal, partitionId: service.partitionId};
   }
   const schemaRefusal = transactionSchemaWriteRefusal(
     service.db, service.tableName, readPartitionWriteOrigin(service.db) !== null);

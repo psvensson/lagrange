@@ -163,11 +163,8 @@ class MessageGroupServiceForwardingRuntimeMethods {
     );
   }
 
-  isForwardTargetBackpressured(deliveryResult, errorMessage) {
-    return this.forwardingOwner.isForwardTargetBackpressured(
-      deliveryResult,
-      errorMessage,
-    );
+  isForwardTargetBackpressured(deliveryResult) {
+    return this.forwardingOwner.isForwardTargetBackpressured(deliveryResult);
   }
 
   async forwardCDCEventToLeader(tableName, operation, data, options = {}) {

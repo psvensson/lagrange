@@ -88,11 +88,12 @@ records remain intact; successor work records the correction explicitly.
 
 ## Current summary
 
-- Reviewed implementation source: `947fbe658ebb2efe993900b672ded51d5610dbcb`.
+- Reviewed implementation source: `103f132c13268321445369d3b4c1183ca2c39c66`.
   Published v0.4.0 remains the earlier release baseline, not acceptance of this
   candidate.
 - Steering basis: rule-set revision 5; rules/router reviewed 2026-10-30.
-- Last checked: 2026-11-10, source/planning review only; no new product run.
+- Last checked: 2026-11-10 evening, source and retained-evidence review. This
+  review did not launch a comparison measurement.
 - Published release: GitHub v0.4.0, 2026-10-31 at 14:16:56 UTC.
 - Delivered source: canonical artifact ingestion/identity-only deployment,
   required payload storage, stable binding revisions and JSON-object body repair;
@@ -100,17 +101,29 @@ records remain intact; successor work records the correction explicitly.
 - Evidence limit: the retained J1/J2 composition test builds a component but
   executes imported JavaScript under Node and simulates restart with shared
   in-process storage. Its summary does not establish a real WASM/remote journey.
-- Current comparison blockers: Lagrange reformation between semantic cases and
-  before measurement conflicts with the correctly retained deployment binding;
-  a supported cohort-preserving dataset reset is missing. TiDB executes only
-  four canonical cases and records the rest as not-executed. Full public
-  runtime/remote fault and original physical comparison evidence also remains
-  unproved.
-- Next action: P4 admits the unsealed C1/C2 Quests below. Design the supported
-  product reset before removing reformation, complete the native TiDB case
-  set and prove actual journey-to-claim admission. Preserve P1/P2 implementation
-  and acquire missing J1/J2 evidence with the Hono successor. P5 consumes the
-  applicable frozen formation proof; no campaign or reviewer is queued here.
+- Delivered C1/C2 implementation: `c0069be23` adds the Lagrange TRUNCATE/reset
+  path and `07ca418f8` extends the TiDB canonical cases. Both Quest logs record
+  solved and passing receipts. Their native-execution claims are not accepted:
+  the reset receipt's `actual-product-reset-and-state-evidence` test uses
+  `fakeClient` and an in-memory Map; the TiDB receipt's native cases use
+  `createTiDbMockStore` and scripted SSH/container answers. These tests exercise
+  harness wiring; they do not establish product execution or durability.
+- Current comparison blockers: obtain original real-product evidence for reset,
+  all TiDB semantic cases, required restarts and the complete same-cohort
+  journey-to-claim admission. Full public runtime/remote fault evidence remains
+  open. The retained three-host formation run at the reviewed source still
+  fails user-table routability, so it does not admit P5 comparisons.
+- Binding user constraint (2026-11-10): no mocked, fake or emulated information
+  may be used, created or generated during comparative measurements. The
+  [acceptance owner](../../test/guidelines/release-gate.md#verification-trust-and-claim-admission)
+  applies this to setup proofs, product state, durability and metrics alike.
+  Missing evidence stays unavailable; no comparison claim is accepted from
+  the C1/C2 test receipts described above.
+- Next action: retain the implemented repairs, correct the evidence claims
+  through append-only findings, and obtain the missing native evidence through
+  the canonical campaign and proof owners after applicable formation acceptance.
+  Preserve P1/P2 implementation and acquire missing J1/J2 evidence with the Hono
+  successor. The implementation integration owner also owns these proof gaps.
 - Continuation owner: the agent assigned this epic's integration role.
 - The existing acceptance Quest/receipt remains evidence of its recorded scope;
   this amendment neither rewrites its seal nor certifies stronger acceptance.
@@ -124,8 +137,10 @@ records remain intact; successor work records the correction explicitly.
 
 The [requirements](../specs/developer-journey-and-measured-comparisons/requirements.md#registered-p4-quests)
 map these to P4 and the existing receipt families. Shared semantic-gate changes
-have one writer. Both records remain unsealed with absent receipts, so their
-probes are unmeasured, never passed. Existing comparison acceptance is unchanged.
+have one writer. Both records now have solved logs and pass receipts; the current
+summary identifies why those receipts do not discharge native-product acceptance.
+Retain the original records and correct claims through append-only evidence.
+Existing comparison acceptance is unchanged.
 The [formation epic](operation-integrity-and-reliable-formation.md) owns the
 current catalog/CDC/incarnation/ingress repairs and the frozen service gate;
 source changes after its proof require renewed evidence applicability. Successful

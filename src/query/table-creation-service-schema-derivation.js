@@ -32,10 +32,12 @@ function derivePartitionKey(primaryKey) {
  * @private
  */
 function normalizeDataType(dataType) {
-  if (!dataType) return TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE;
-  const rawName = typeof dataType === 'string' ?
-    dataType :
-    (dataType.name || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE);
+  // A column without a declared type is refused: the SQL parser admits no
+  // typeless column, and no default storage type is defined for one.
+  const rawName = typeof dataType === 'string' ? dataType : dataType?.name;
+  if (typeof rawName !== 'string' || rawName.length === 0) {
+    throw new Error(QUERY_ERROR_MSG.COLUMN_DATA_TYPE_REQUIRED);
+  }
   const typeName = rawName.toUpperCase();
 
   // Map common SQL types to SQLite types
@@ -119,7 +121,7 @@ function formatDerivedColumn(service, col) {
   return {
     name: col.name,
     type: service.normalizeDataType(
-      col.dataType || {name: col.type || TABLE_CREATION_SERVICE_LITERAL.DEFAULT_TYPE},
+      col.dataType || {name: col.type},
     ),
     primaryKey: Boolean(col.primaryKey),
     notNull: col.notNull === true || col.nullable === false,

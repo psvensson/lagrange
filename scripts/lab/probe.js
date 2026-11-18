@@ -11,7 +11,14 @@ import {GIT_OUTPUT_BOUND, isGitOutputTooLarge, spawnGit} from '../checks/git-inv
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
 import {PROOF_CHECKOUT_GENERATORS} from '../checks/proof-checkout-preparation.js';
-import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
+import {
+  LANE_JOBS_CAP_ENV,
+  PLACED_ORDINARY_LANE_JOBS_ENV,
+  RESOURCE_CLASS_ORDINARY,
+  THERMAL_SOURCE_MEASURED,
+  placedOrdinaryLaneJobs,
+  placedOrdinaryLaneJobsShell,
+} from '../checks/test-resource-classification-constants.js';
 import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
 import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
   from '../checks/wait-for-thermal-headroom.js';
@@ -443,6 +450,19 @@ const sha256Of = (file) =>
   ` ( sha256sum < "${file}" || shasum -a 256 < "${file}" ) 2>/dev/null ` +
   '| awk \'{print $1}\'';
 
+// A host's own facts, read the same way by discovery (the planner's inputs)
+// and by the placement shell (the runner's), so a split prices each host
+// with the workers it will actually run.
+const HOST_CORES_COMMAND = 'getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null';
+const HOST_MEM_KIB_COMMAND = 'awk \'/^MemTotal:/{print $2}\' /proc/meminfo 2>/dev/null';
+// Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
+// a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
+// with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
+const HOST_THERMAL_ASSIGNMENT = 'if { command -v sensors >/dev/null 2>&1 && ' +
+  'sensors -j >/dev/null 2>&1; } || ' +
+  'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
+  `>/dev/null 2>&1; then thermal=${THERMAL_SOURCE_MEASURED}; else thermal=unmeasurable; fi`;
+
 const CAPABILITY_SCRIPT = [
   'set +e',
   'repo="$1"',
@@ -462,14 +482,10 @@ const CAPABILITY_SCRIPT = [
   // one (found 2026-09-18) - while no two running machines share a boot id.
   'say boot_id "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || ' +
     '{ hostname; sysctl -n kern.boottime; } 2>/dev/null | tr -d \'\\n\')"',
-  'say cores "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
-  'say mem_kib "$(awk \'/^MemTotal:/{print $2}\' /proc/meminfo 2>/dev/null)"',
-  // Whether the thermal gate (scripts/checks/wait-for-thermal-headroom.js) has
-  // a source here: lm-sensors, a sysfs thermal zone or an hwmon input. A host
-  // with none (a WSL2 VM) is `unmeasurable`, a fact placement can decide on.
-  'if { command -v sensors >/dev/null 2>&1 && sensors -j >/dev/null 2>&1; } || ' +
-    'ls /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp*_input ' +
-    '>/dev/null 2>&1; then say thermal measured; else say thermal unmeasurable; fi',
+  `say cores "$(${HOST_CORES_COMMAND})"`,
+  `say mem_kib "$(${HOST_MEM_KIB_COMMAND})"`,
+  HOST_THERMAL_ASSIGNMENT,
+  'say thermal "$thermal"',
   'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
   '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
@@ -1398,10 +1414,16 @@ function assignByCost(costs, machines, setupMs) {
 }
 
 // The workers a file's lane gets on a machine: the lane's own on the
-// controller, and on a lab machine at most its cores less one.
+// controller; on a lab machine at most its cores less one, and the ordinary
+// lane the count that host's placement shell computes by the same rule
+// (placedOrdinaryLaneJobs) from the same facts.
 function jobsOn(machine, cost) {
-  return machine.controller || !(machine.cores > 1) ? cost.jobs :
-    Math.min(cost.jobs, machine.cores - 1);
+  if (machine.controller || !(machine.cores > 1)) return cost.jobs;
+  if (cost.lane === RESOURCE_CLASS_ORDINARY) {
+    return placedOrdinaryLaneJobs({cores: machine.cores, memKiB: machine.memKiB,
+      thermal: machine.thermal});
+  }
+  return Math.min(cost.jobs, machine.cores - 1);
 }
 
 // Whether a file may go to a machine: the controller takes anything; a lab
@@ -1451,6 +1473,7 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
       // The measured capacity a hand run's decision is printed with.
       cores: cap.cores,
       memKiB: cap.memKiB,
+      thermal: cap.thermal,
       factor: Math.max(1, Math.ceil(speed * controllerFactor * PLACEMENT_FACTOR_STEPS) /
         PLACEMENT_FACTOR_STEPS),
       sshTarget: node.ssh,
@@ -1595,7 +1618,7 @@ function nextHostFor(files, {machines, tried, costs}) {
     .find((one) => priced.every((cost) => fits(one, cost)));
   if (!machine) return null;
   return {machine, files, loadMs: PLACEMENT_REMOTE_SETUP_MS +
-    priced.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0) * machine.speed};
+    priced.reduce((sum, cost) => sum + cost.ms / jobsOn(machine, cost), 0) * machine.speed};
 }
 
 // Whether a lab host refused its shard, as a typed placement outcome: held
@@ -1979,12 +2002,17 @@ const PLACEMENT_SCRIPT_TAIL = [
   // Every lane capped at this host's own processors less one, counted here at
   // run time: never a per-host constant, never a host's name.
   `unset ${LANE_JOBS_CAP_ENV}`,
-  'cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
+  `cores="$(${HOST_CORES_COMMAND})"`,
   `case "$cores" in ""|*[!0-9]*) ;; 0|1) export ${LANE_JOBS_CAP_ENV}=1;; ` +
     `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
+  // The ordinary lane's workers from the same facts, by the planner's rule.
+  `mem_kib="$(${HOST_MEM_KIB_COMMAND})"`,
+  HOST_THERMAL_ASSIGNMENT,
+  ...placedOrdinaryLaneJobsShell(),
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
     `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
-    `lanecap:\${${LANE_JOBS_CAP_ENV}:-} base:\${${PLACEMENT_FORWARDED_ENV.CHECK_BASE}:-}"`,
+    `lanecap:\${${LANE_JOBS_CAP_ENV}:-} ordinary:\${${PLACED_ORDINARY_LANE_JOBS_ENV}:-} ` +
+    `base:\${${PLACEMENT_FORWARDED_ENV.CHECK_BASE}:-}"`,
   // Both locks (fds 8 and 9) stay with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
   'setsid node scripts/run-classified-test-files.js --stdin < "$list" 8>&- 9>&- &',
@@ -2761,7 +2789,7 @@ export function planLabSplit(plan, machines, {controller = CONTROLLER_MACHINE, c
 // lock wait - its estimate, capped as every lab lock wait is - so the share
 // would refuse busy rather than run.
 function lateQueuedShares(assignments, costs) {
-  const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+  const costOf = new Map(costs.map((cost) => [cost.file, cost]));
   return assignments.filter(({machine, lanes}) => machine.waitMs !== undefined &&
     machine.waitMs > Math.min(LAB_LOCK_WAIT_MAX_MS,
       labShareEstimateMs(machine, lanes.flatMap((lane) => lane.files), costOf)));
@@ -2789,10 +2817,13 @@ export function formatLabController({assignments, controller}) {
 }
 
 // A lab machine's estimate for a share, as its shard announces it and waits
-// for the lock: its setup, then its files' cost scaled by its speed.
+// for the lock: its setup, then its files' cost over the workers it runs
+// them with there, scaled by its speed.
 function labShareEstimateMs(machine, files, costOf) {
-  return PLACEMENT_REMOTE_SETUP_MS +
-    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+  return PLACEMENT_REMOTE_SETUP_MS + files.reduce((sum, file) => {
+    const cost = costOf.get(file);
+    return cost ? sum + cost.ms / jobsOn(machine, cost) : sum;
+  }, 0) * machine.speed;
 }
 
 // The plan's files spread by cost, each machine's share as its own lanes.
@@ -2977,7 +3008,7 @@ export async function runLabTest({plan, costs = [], commit, checkBase, on = null
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }
-    const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+    const costOf = new Map(costs.map((cost) => [cost.file, cost]));
     const context = {commit, deps, forward: forwardedPolicy(env, checkBase), results, costOf,
       write};
     shares = assignments.map((assignment) => startLabShare(assignment, context));

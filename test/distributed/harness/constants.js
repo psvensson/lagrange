@@ -861,6 +861,9 @@ const ARG_CERTIFY = '--certify';
 // The certification run directory the lab harness created (with its
 // started.json) before holding any node: certification-evidence-archive.js.
 const ARG_CERTIFY_RUN_DIR = '--certify-run-dir';
+// Opt-in CPU profile of one node (`seed` or a node index):
+// test/distributed/harness/run-health/node-cpu-profile.js.
+const ARG_PROFILE_NODE = '--profile-node';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -879,6 +882,7 @@ const CLI = Object.freeze({
   CAPTURE_LOGS_ENV_VAR,
   ARG_CERTIFY,
   ARG_CERTIFY_RUN_DIR,
+  ARG_PROFILE_NODE,
 });
 
 // --- Exit Codes ---

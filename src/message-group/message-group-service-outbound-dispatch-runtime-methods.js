@@ -4,6 +4,17 @@ import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
 import {buildDeliveryEnvelope, classifyThrownDeliveryError, deliveryTransportOf,
   isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
+import {classifyTransportDeliveryFailure, mayResendAfterTransportFailure} from
+  '../transport/transport-delivery-failure.js';
+
+// The direct loop re-sends one message under one messageId, and no receiver
+// dedupes a message by it: only a failure that executed nothing (no frame
+// left, no handler there) is re-sent. An ambiguous or rejected one ends the
+// loop with its typed outcome; the persisted path owns any later delivery.
+function isDirectDeliveryResendable(failure) {
+  return mayResendAfterTransportFailure(
+    classifyTransportDeliveryFailure(failure), {identityKeyed: false});
+}
 
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -239,9 +250,11 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           lastDelivery = delivery;
           lastError = buildDirectDeliveryError(delivery,
             MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED);
+          if (!isDirectDeliveryResendable(delivery)) return delivery;
         } catch (error) {
           lastError = error;
           lastDelivery = buildDeliveryEnvelope(classifyThrownDeliveryError(error));
+          if (!isDirectDeliveryResendable(error)) return lastDelivery;
           this.logger.debug(
             MESSAGE_GROUP_SERVICE_LITERAL.DELIVERY_ATTEMPT_FAILED,
             {

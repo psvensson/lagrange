@@ -311,6 +311,9 @@ const BOOTSTRAP_API_PROBE_REASON = Object.freeze({
     'CLIENT_ATTEMPT_DEADLINE_EXHAUSTED',
   BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED:
     'BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED',
+  // This server cannot read its own cluster identity from the durable owner
+  // yet (join-cluster-identity.js): typed retryable, never an admit.
+  CLUSTER_IDENTITY_UNAVAILABLE: 'CLUSTER_IDENTITY_UNAVAILABLE',
 });
 
 /**

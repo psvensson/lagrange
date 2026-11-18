@@ -7,6 +7,7 @@ import {RaftRsOriginalAllocationPreparation} from
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   originalAllocationError} from '../raft/raft-rs-original-allocation-constants.js';
 import {isFreshSeedMembershipOutcome} from './rejoin-hints-constants.js';
+import {requireDeclaredFormationTarget} from '../config/formation-target-node-count.js';
 import {createSeedOriginalAllocation, originalSeedAnchor} from
   './seed-original-allocation-declaration.js';
 import {readOriginalSeedRetainedEffects} from './seed-retained-effects.js';
@@ -83,6 +84,11 @@ function assertOriginalSeedAttempt(service) {
 }
 
 async function initializeOriginalSeedAttempt(service) {
+  // A node founding a cluster must declare its formation size before any
+  // founder is born; the refusal is typed and leaves no cluster state.
+  if (isFreshSeedMembershipOutcome(service.membershipOwnerOutcome)) {
+    requireDeclaredFormationTarget(service.formationTargetDeclaration);
+  }
   // Build measurement acquires no original member. After this await, all
   // allocation inspection/issuance is synchronous in the preparation owner.
   const build = await runtimeBuildProvenance();

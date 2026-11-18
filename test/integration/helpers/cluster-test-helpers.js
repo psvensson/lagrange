@@ -298,6 +298,7 @@ function bindVirginSeedStartupCustody(bootstrap, custody) {
 
 // The startup authorities each fixture-built seed consumed, for read-back.
 const seedStartupAuthorities = new WeakMap();
+const SEED_FIXTURE_FORMATION_TARGET_NODE_COUNT = 1;
 
 /**
  * The production seed startup authorities for a data directory, read in
@@ -380,6 +381,11 @@ async function createSeedBootstrapServiceFixture(options, admit) {
   let bootstrap;
   try {
     bootstrap = new BootstrapService({
+      // The declared formation size has no default in production; this
+      // shared seed fixture declares a single-node formation explicitly. A
+      // test forming a larger cluster, or proving the undeclared refusal,
+      // passes its own formationTargetNodeCount.
+      formationTargetNodeCount: SEED_FIXTURE_FORMATION_TARGET_NODE_COUNT,
       ...options,
       bootIncarnation: options.bootIncarnation ?? 1,
       nodeId,

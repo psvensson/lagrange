@@ -34,6 +34,7 @@ import {
   createMockMessageRouter,
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
+import {createTableThroughDurableJob} from './table-creation-durable-job-fixture.js';
 
 const QUORUM_CONCENTRATED_REJECTION = Object.freeze({
   allowed: false,
@@ -77,7 +78,14 @@ function createCohortCoordinator({
   createdTargetNodeIds,
   localNodeId,
 }) {
+  const createdOperations = [];
   return {
+    // The durable schema job reads its own founding operations before it
+    // plans a cohort (a retry pins to the founders it already named).
+    async getAuthoritativeOperationsByEntity(_entityType, partitionId) {
+      return createdOperations.filter((operation) =>
+        operation.partitionId === partitionId);
+    },
     async checkProvisioningAdmission(move) {
       return admittedNodeIds.has(move.nodeId) ?
         ADMIT :
@@ -85,11 +93,13 @@ function createCohortCoordinator({
     },
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
-      return {
+      const operation = {
         operationId: `op-${move.nodeId}`,
         replicaId: `${move.partitionId}-${move.nodeId}`,
         ...move,
       };
+      createdOperations.push(operation);
+      return operation;
     },
     async executeOperation(operation) {
       const targetNodeId = operation.targetNodeId || operation.nodeId;
@@ -127,12 +137,15 @@ function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock}) 
     async readRows() {
       return {success: true, rows: []};
     },
+    async submitMutation() {
+      return {success: true, committed: true};
+    },
   });
-  engine.tableCreationService.createTable = (ast, createOptions) =>
-    engine.tableCreationService.executeCreateTableProvisioning(
-      ast,
-      createOptions,
-    );
+  // CREATE TABLE runs the durable schema job's executor directly: the job
+  // owner's retry pacing has its own coverage, and this suite asserts that
+  // provisioning under the job itself performs no internal wait.
+  engine.tableCreationService.createTable = (ast) =>
+    createTableThroughDurableJob(engine.tableCreationService, ast);
   engine.waitForPartitionServiceMetadata = async () => {};
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
@@ -303,4 +316,61 @@ test('F10/C6: CREATE TABLE fails fast below quorum and caller retry succeeds ' +
   );
   t.equal(getSleepCalls(), 0);
   t.equal(clock.nowMs, 0);
+});
+
+test('a failed committed serve-eligibility read refuses provisioning as ' +
+  'PROVISIONING_UNAVAILABLE naming the read failure and its cause', async (t) => {
+  const localNodeId = 'node-a';
+  const createdTargetNodeIds = [];
+  const clock = {nowMs: 0};
+  const {services, cache} = createClusterFixture({
+    nodeIds: ['node-a', 'node-b', 'node-c'],
+  });
+  const rebalanceCoordinator = createCohortCoordinator({
+    admittedNodeIds: new Set(['node-a', 'node-b', 'node-c']),
+    services,
+    createdTargetNodeIds,
+    localNodeId,
+  });
+  const {engine} = createEngineFixture({
+    rebalanceCoordinator,
+    cache,
+    localNodeId,
+    clock,
+  });
+  const readiness = engine.controlPlaneReadinessService;
+  const readFailure = new Error('committed read transport closed');
+  readiness.answerServeCohort = () => ({
+    state: 'unavailable',
+    reason: 'committed_read_pending',
+    epoch: null,
+    answers: {},
+    eligibleNodeIds: [],
+  });
+  readiness.readServeEligibility = async () => {
+    throw readFailure;
+  };
+
+  let refusal = null;
+  try {
+    await engine.provisionInitialTablePartition({
+      partitionId: 'tbl-serve-read-failed-p1',
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+    });
+  } catch (error) {
+    refusal = error;
+  }
+  t.same({
+    code: refusal?.code,
+    reasons: refusal?.reasons,
+    cause: refusal?.cause,
+  }, {
+    code: QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+    reasons: ['committed_read_failed'],
+    cause: readFailure,
+  }, 'the refusal names the failed committed read, never a quieter re-read');
+  t.same(createdTargetNodeIds, [],
+    'no replica operation is created on an unavailable serve read');
 });

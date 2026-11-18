@@ -13,7 +13,6 @@ import {
 } from './operation-workflow-observed-state.js';
 import {
   replayReplaceActiveSourceRemovalFromAuthoritative,
-  replayReplaceActiveSourceRemovalFromObservedTarget,
 } from './operation-workflow-replace-replay.js';
 import {
   buildPriorityRecoverySupersededTargetError,
@@ -36,7 +35,6 @@ const {
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
   WORKFLOW_STEP,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryOperationAssessment,
@@ -339,13 +337,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     if (operation.type === OperationType.REPLACE && replaceRemovePhase) {
       return REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED;
     }
-    if (
-      operation.type !== OperationType.REMOVE ||
-      !(await this.isCriticalRemoveOverReplicated(operation))
-    ) {
-      return null;
-    }
-    return REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+    return this.resolveCriticalRemoveDeferReason(operation);
   }
 
   /**
@@ -371,18 +363,6 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       errorMessage,
       deferReason,
       options,
-    );
-  }
-
-  /**
-   * @param {string|null} partitionId
-   * @return {boolean}
-   * @private
-   */
-  isReplaceSourceLeaderHandoffRequiredPartition(partitionId) {
-    return (
-      typeof partitionId === 'string' &&
-      REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS.has(partitionId)
     );
   }
 
@@ -464,18 +444,6 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   }
 
   /**
-   * Replay REPLACE source-removal from observed target ACTIVE evidence when
-   * the durable ACTIVE transition is retryably backpressured.
-   *
-   * @param {Object} operation
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async replayReplaceActiveSourceRemovalFromObservedTarget(operation) {
-    return replayReplaceActiveSourceRemovalFromObservedTarget(this, operation);
-  }
-
-  /**
    * @param {Object} operation
    * @return {number}
    * @private
@@ -546,20 +514,12 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       }
     }
 
-    let activeTransitionCommitted = false;
-    try {
-      activeTransitionCommitted = await this.updateStep(
-        operation,
-        WORKFLOW_STEP.ACTIVE,
-      );
-    } catch (error) {
-      if (
-        await this.replayReplaceActiveSourceRemovalFromObservedTarget(operation)
-      ) {
-        return true;
-      }
-      throw error;
-    }
+    // The remove phase runs only from a committed ACTIVE row: a failed
+    // ACTIVE write propagates and its transition stays deferred.
+    const activeTransitionCommitted = await this.updateStep(
+      operation,
+      WORKFLOW_STEP.ACTIVE,
+    );
     if (activeTransitionCommitted) {
       const replaceResumeResult =
         await this.executeOperationFromReconcilePath(operation);

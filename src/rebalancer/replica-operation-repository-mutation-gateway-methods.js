@@ -3,6 +3,7 @@ import {
 } from '../query/query-execution-budget.js';
 
 import {isReroutableWriteError} from '../constants/errors.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
 import {
@@ -56,15 +57,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
     RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES,
-    ROUTER_ERROR_MSG,
     SYSTEM_TABLE_NAME,
-    TRANSPORT_ERROR_MSG,
     cloneControlPlaneFailureParticipants,
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
     hasControlPlaneMutationRoutingGapFailureSignature,
+    isControlPlaneWriterShutDown,
     isRetryableControlPlaneError,
     isRetryableWorkflowParticipantLookupErrorMessage,
+    isTerminalTypedDistributedFailure,
     uuidv4,
   } = options;
 
@@ -380,6 +381,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     isRetryableOperationPersistError(errorResult) {
+      if (
+        isControlPlaneWriterShutDown?.(errorResult) ||
+        isTerminalTypedDistributedFailure?.(errorResult)
+      ) {
+        return false;
+      }
       // A partition write answer is classified by the control plane's one
       // classifier: by its code when the result carries it, by its text when
       // only the text reached the repository.
@@ -415,26 +422,33 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       errorResult,
       fallbackMessage = REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
     ) {
-      const retryablePersistError =
+      const terminalFailure = Boolean(
+        isControlPlaneWriterShutDown?.(errorResult) ||
+        isTerminalTypedDistributedFailure?.(errorResult),
+      );
+      const retryablePersistError = !terminalFailure &&
         this.isRetryableOperationPersistError(errorResult);
       const derivedRetryAfterMs = retryablePersistError ?
         this.resolveOperationMutationRetryDelayMs(errorResult) :
         0;
-      const retryAfterMs = getControlPlaneRetryAfterMs(errorResult);
+      const retryAfterMs = !terminalFailure ?
+        getControlPlaneRetryAfterMs(errorResult) :
+        0;
       const nextRetryAfterMs =
         retryAfterMs > 0 ?
           retryAfterMs :
           derivedRetryAfterMs > 0 ?
             derivedRetryAfterMs :
             0;
-      const deferRetry =
+      const deferRetry = !terminalFailure && (
         errorResult?.deferRetry === true ||
         errorResult?.firstFailedParticipant?.deferRetry === true ||
         (Array.isArray(errorResult?.participantFailures) &&
           errorResult.participantFailures.some(
             (entry) => entry?.deferRetry === true,
           )) ||
-        retryablePersistError;
+        retryablePersistError
+      );
       const error = new Error(
         this.getOperationPersistErrorMessage(errorResult) || fallbackMessage,
       );
@@ -448,6 +462,21 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       if (deferRetry) {
         error.deferRetry = true;
+      }
+      if (
+        typeof errorResult?.failureCode === 'string' &&
+        errorResult.failureCode.length > 0
+      ) {
+        error.failureCode = errorResult.failureCode;
+      }
+      if (typeof errorResult?.committed === 'boolean') {
+        error.committed = errorResult.committed;
+      }
+      if (
+        typeof errorResult?.disposition === 'string' &&
+        errorResult.disposition.length > 0
+      ) {
+        error.disposition = errorResult.disposition;
       }
       if (
         typeof errorResult?.reasonCode === 'string' &&
@@ -530,6 +559,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     hasOperationMutationRouteRepairSignature(errorResult) {
+      // A spent delivery lifetime is read by its transport code, never its
+      // text. ACK and answer timeouts mean the same here: the route is not
+      // confirmed, and the retry re-delivers under the same write identity.
+      if (getControlPlaneErrorCode(errorResult) === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
+        return true;
+      }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       if (
         typeof errorMessage !== 'string' ||
@@ -544,8 +579,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
           errorMessage.includes(fragment),
         ) ||
-        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
-        errorMessage.includes(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT) ||
         isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
         this.hasOperationMutationParticipantFailureEvidence(
           errorResult,

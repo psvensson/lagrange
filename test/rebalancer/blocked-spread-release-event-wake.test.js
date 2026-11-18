@@ -30,6 +30,9 @@ import {
 } from '../../src/workflow/reconcile-queue-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  statePrioritySpreadReleaseReadiness,
+} from './priority-spread-release-condition-fixture.js';
 
 const TEST_NODE_ID = 'node-1';
 const TEST_LOG_LEVEL = 'error';
@@ -95,6 +98,9 @@ function createFenceTestRebalancer({entityId, readinessOwner, nowFn}) {
     },
     rebalanceCoordinator: {
       getMoveSafetyError: () => null,
+      // The operation ledger owner's census answers an empty ledger: the
+      // fence's CLEAR rests on it, not on the empty cache projection.
+      repository: {queryClusterWideIncompleteOperations: async () => []},
     },
     sqlQueryEngine: {
       async executeQuery() {
@@ -104,6 +110,14 @@ function createFenceTestRebalancer({entityId, readinessOwner, nowFn}) {
     controlPlaneReadinessService: readinessOwner,
     nowFn,
   });
+}
+
+// Ask the fence once at the clear (the census is requested; the
+// observation is UNAVAILABLE, which neither starts nor rearms the dwell) and
+// let the owner answer, so the next evaluation is the first HELD one.
+async function answerOwnerCensus(rebalancer) {
+  rebalancer.resolvePrioritySpreadPlanningGateDecision();
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 function buildPrioritySpreadBlocker() {
@@ -128,6 +142,7 @@ async (t) => {
   let nowMs = 100_000;
   const nowFn = () => nowMs;
   const readinessOwner = {};
+  statePrioritySpreadReleaseReadiness(readinessOwner);
   const parked = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
     readinessOwner,
@@ -227,6 +242,7 @@ async (t) => {
 
     sharedBlocker = null;
     nowMs += BLOCKED_TO_CLEAR_DELAY_MS;
+    await answerOwnerCensus(priorityResolver);
     t.equal(
       priorityResolver.resolvePrioritySpreadPlanningGateDecision(),
       null,
@@ -288,6 +304,7 @@ async (t) => {
   let nowMs = 200_000;
   const nowFn = () => nowMs;
   const readinessOwner = {};
+  statePrioritySpreadReleaseReadiness(readinessOwner);
   const parked = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
     readinessOwner,
@@ -338,6 +355,7 @@ async (t) => {
 
     sharedBlocker = null;
     nowMs += BLOCKED_TO_CLEAR_DELAY_MS;
+    await answerOwnerCensus(stabilizer);
     const stabilizingDecision =
       stabilizer.resolvePrioritySpreadPlanningGateDecision();
     t.equal(
@@ -461,7 +479,9 @@ test('(m\') a local-mutation-readiness deferral is ended by the readiness ' +
   const cache = createListenableSystemTableCache();
   const rebalancer = createFenceTestRebalancer({
     entityId: PARKED_BACKGROUND_ENTITY_ID,
-    readinessOwner: {},
+    // The planning publication stream the wake also listens on (no
+    // publication in this witness).
+    readinessOwner: {subscribeReadinessPlanningSnapshots: () => () => {}},
     nowFn: () => 1_000,
   });
   rebalancer.systemTableCache = cache;
@@ -521,6 +541,8 @@ test('(l2) local mutation readiness wake also fires on readiness planning snapsh
     readinessOwner,
     nowFn: () => 1_000,
   });
+  // The cache-change seam the wake listens on beside the planning stream.
+  rebalancer.systemTableCache = createListenableSystemTableCache();
   rebalancer.isLeader = true;
   let blocker = {
     failedDimensions: ['controlPlaneWritable', 'metadataPublicationHealthy'],
@@ -537,8 +559,16 @@ test('(l2) local mutation readiness wake also fires on readiness planning snapsh
     t.equal(decision?.gate, REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS);
     t.equal(planningListeners.size, 1, 'planning snapshot listener is armed');
     blocker = null;
+    // The owner's event shape: {ownerKey, snapshot, capturedToken}. Another
+    // node's publication cannot end a LOCAL deferral and wakes nothing.
     for (const listener of [...planningListeners]) {
-      listener({nodeId: rebalancer.nodeId});
+      listener({ownerKey: 'node-other', snapshot: {}, capturedToken: null});
+    }
+    await Promise.resolve();
+    t.same(wakeReasons, [], 'another node\'s publication does not wake');
+    for (const listener of [...planningListeners]) {
+      listener({ownerKey: rebalancer.nodeId, snapshot: {},
+        capturedToken: null});
     }
     await Promise.resolve();
     t.same(wakeReasons, [RECONCILE_REASON.LOCAL_MUTATION_READINESS_WAKE]);

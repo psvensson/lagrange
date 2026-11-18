@@ -276,6 +276,41 @@ function evaluateOperationLedgerQuorumConcentration(
 }
 
 /**
+ * Diagnostic (no policy): the admission hold was evaluated and did NOT
+ * engage. Logs the inputs it was evaluated from - the placement-eligible
+ * node ids and every operation-ledger voter row - once, and again only when
+ * they change.
+ * @param {Object} logger
+ * @param {string} message - The log message constant.
+ * @param {Object|null} systemTableCache
+ * @param {string|null|undefined} lastEvidenceKey - The key last logged.
+ * @return {string} The key of the evidence now logged.
+ */
+function logOperationLedgerQuorumSpreadHoldNotEngaged(
+  logger, message, systemTableCache, lastEvidenceKey) {
+  const evaluation = evaluateOperationLedgerQuorumConcentration(
+    systemTableCache);
+  const evidence = {
+    readyNodeIds: readPlacementEligibleNodeIds(systemTableCache).sort(),
+    ledgerVoterRows: readCacheRows(systemTableCache, TABLES.SERVICES, (row) =>
+      row?.service_type === SERVICE_TYPE.PARTITION &&
+      isOperationLedgerPartitionTable({partitionId: row?.partition_id}) &&
+      isQuorumVoterRow(row),
+    ).map((row) => [
+      normalizedField(row, 'partition_id'),
+      normalizedField(row, 'replica_id') || normalizedField(row, 'service_id'),
+      normalizedField(row, 'node_id'),
+    ].join('@')).sort(),
+    concentratedPartitions: evaluation.concentratedPartitions,
+  };
+  const evidenceKey = JSON.stringify(evidence);
+  if (evidenceKey !== lastEvidenceKey) {
+    logger.info(message, evidence);
+  }
+  return evidenceKey;
+}
+
+/**
  * Evaluate one identity-scoped placement row set returned by the authoritative
  * services-table owner. Unlike the cache observation above, this accepts its
  * target explicitly because the row set is deliberately scoped to services.
@@ -420,6 +455,7 @@ function getConcentratedOperationLedgerPartition(evaluation, partitionId) {
 }
 
 export {
+  logOperationLedgerQuorumSpreadHoldNotEngaged,
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
   evaluateOperationLedgerQuorumConcentration,
   getConcentratedOperationLedgerPartition,

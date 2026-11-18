@@ -20,10 +20,13 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
+  answerKnownClusterIdentity,
   createCanonicalReadinessService,
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 
 test('BootstrapAPI - allows bootstrap when only message-group leaders are missing',

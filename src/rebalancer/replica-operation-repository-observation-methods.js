@@ -1,5 +1,6 @@
 import {SERVICE_TYPE} from '../constants/service.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
+import {REPLICA_CLEANUP_AUTHORITY_KIND} from '../node/replica-cleanup-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {isUnclaimedPreRuntimeFailedCreateRow} from
@@ -128,6 +129,7 @@ function assignReplicaOperationRepositoryObservationMethods(
     REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS,
+    REPLICA_OPERATION_REQUIRED_STATUS_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     ReplicaStatus,
     SQL,
@@ -154,6 +156,15 @@ function assignReplicaOperationRepositoryObservationMethods(
       const decoded = decodeCanonicalObservedReplicaRow(row);
       if (!decoded || !decoded.status) {
         return null;
+      }
+      if (decoded.serviceType === SERVICE_TYPE.PARTITION_CLEANUP) {
+        if (decoded.status === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
+          return ReplicaStatus.REMOVED;
+        }
+        if (decoded.status === REPLICA_CLEANUP_AUTHORITY_KIND.OWNED) {
+          return ReplicaStatus.REMOVING;
+        }
+        return decoded.status;
       }
       if (decoded.serviceType !== SERVICE_TYPE.PARTITION) {
         return decoded.status;
@@ -391,6 +402,12 @@ function assignReplicaOperationRepositoryObservationMethods(
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
       ) {
         return REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS;
+      }
+      if (
+        readOptions?.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
+      ) {
+        return REPLICA_OPERATION_REQUIRED_STATUS_READ_QUERY_OPTIONS;
       }
       return REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS;
     }

@@ -149,6 +149,8 @@ describe('cluster-config: C1b specification and options validation', () => {
       assert.equal(env.MESSAGE_GROUP_REPLICA_COUNT, '3');
       assert.equal(env.PARTITION_DEFAULT_REPLICA_COUNT, '3');
       assert.equal(env.LOG_LEVEL, 'info');
+      assert.equal(env.LAGRANGE_FORMATION_TARGET_NODE_COUNT, i === 0 ? '3' : undefined,
+        'only the seed declares the formation size, as the member count');
     }
   });
 

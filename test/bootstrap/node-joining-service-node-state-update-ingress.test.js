@@ -4,6 +4,8 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_NO_CONNECTION_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -669,7 +671,8 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
       deliveries.push({targetAddress, state: message.state});
       if (targetAddress === 'seed-node-1/message-group/mg-1-r1') {
         return buildDeliveryEnvelope(
-          {acknowledged: false, error: 'No connection to node seed-node-1'});
+          {acknowledged: false, errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+            error: 'No connection to node seed-node-1'});
       }
       return buildDeliveryEnvelope({acknowledged: true});
     },
@@ -738,7 +741,8 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
       if (targetAddress ===
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`) {
         return buildDeliveryEnvelope(
-          {acknowledged: false, error: `No connection to node ${REMOTE_CANONICAL_LEADER_NODE_ID}`});
+          {acknowledged: false, errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+            error: `No connection to node ${REMOTE_CANONICAL_LEADER_NODE_ID}`});
       }
       return buildDeliveryEnvelope({acknowledged: true});
     },
@@ -987,7 +991,8 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
         deliveries.push(targetAddress);
         if (targetAddress === 'stale-node/message-group/mg-1-r9') {
           return buildDeliveryEnvelope(
-            {acknowledged: false, error: 'No connection to node stale-node'});
+            {acknowledged: false, errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+              error: 'No connection to node stale-node'});
         }
         return buildDeliveryEnvelope({acknowledged: true});
       },
@@ -1097,7 +1102,8 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
       deliveries.push(targetAddress);
       if (targetAddress === 'stale-node/message-group/mg-1-r9') {
         return buildDeliveryEnvelope(
-          {acknowledged: false, error: 'No connection to node stale-node'});
+          {acknowledged: false, errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+            error: 'No connection to node stale-node'});
       }
       return buildDeliveryEnvelope({acknowledged: true});
     };
@@ -1315,6 +1321,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on stale
           return buildDeliveryEnvelope(
             {
               acknowledged: false,
+              noHandler: true,
               error: `No handler registered for address ${staleTargetAddress}`,
             });
         }

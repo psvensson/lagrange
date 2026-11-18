@@ -9,6 +9,8 @@ import {
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
 } from '../../transport/transport-semantic-outcome.js';
+import {buildTransportFailureError} from
+  '../../transport/transport-delivery-failure.js';
 import {
   JOINING_ERROR_MSG,
 } from '../node-joining-constants.js';
@@ -40,10 +42,6 @@ const NODE_STATE_PUBLICATION_OWNER_LITERAL = Object.freeze({
   FAILED: 'failed',
   SHUTTING_DOWN: 'shutting_down',
   STOPPED: 'stopped',
-  NO_CONNECTION_TO_NODE: 'No connection to node',
-  CONNECTION_TO_NODE: 'Connection to node',
-  CLOSED: 'closed',
-  MESSAGE_TIMEOUT: 'Message timeout',
   NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
   FAILED_CLUSTER_MESH_RECONCILIATION:
     'Failed to reconcile cluster mesh during node-state publication',
@@ -108,27 +106,23 @@ function buildNodeStateUpdatePublicationDiagnostics(
 
 // `deliveryOutcome` is the transport outcome of an undelivered publication.
 function buildNodeStateUpdateDeliveryError(deliveryOutcome, targetAddress) {
-  const defaultErrorMessage =
+  // The router's code and every transport fact travel with the Error, so
+  // the one delivery-failure decision reads it wherever it is rethrown.
+  return buildTransportFailureError(deliveryOutcome,
     deliveryOutcome?.reasonCode ===
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
       `${NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS} ${targetAddress}` :
-      JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED;
-  const deliveryError = new Error(
-    deliveryOutcome?.error || defaultErrorMessage,
-  );
-  if (typeof deliveryOutcome?.errorCode === 'string') {
-    deliveryError.code = deliveryOutcome.errorCode;
-  }
-  if (deliveryOutcome?.deferRetry === true) {
-    deliveryError.deferRetry = true;
-  }
-  if (Number.isFinite(deliveryOutcome?.retryAfterMs)) {
-    deliveryError.retryAfterMs = Math.max(
-      0,
-      Math.floor(deliveryOutcome.retryAfterMs),
-    );
-  }
-  return deliveryError;
+      JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED);
+}
+
+// No control-plane target is known yet: nothing was sent, and the targets
+// are re-resolved on the next attempt. Named by its code, never its text.
+const NODE_STATE_UPDATE_TARGET_MISSING_CODE =
+  'NODE_STATE_UPDATE_TARGET_MISSING';
+
+function buildNodeStateUpdateTargetMissingError() {
+  return Object.assign(new Error(JOINING_ERROR_MSG.CONTROL_PLANE_TARGET_MISSING),
+    {code: NODE_STATE_UPDATE_TARGET_MISSING_CODE});
 }
 
 function buildNodeStateUpdatePublicationFailureAction(overrides = {}) {
@@ -198,7 +192,9 @@ export {
   NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
   NODE_STATE_UPDATE_PUBLICATION_PATH,
   NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
+  NODE_STATE_UPDATE_TARGET_MISSING_CODE,
   buildNodeStateUpdateDeliveryError,
+  buildNodeStateUpdateTargetMissingError,
   buildNodeStateUpdatePublicationDiagnostics,
   buildNodeStateUpdatePublicationFailureAction,
   buildNodeStateUpdatePublicationFailureError,

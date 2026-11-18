@@ -1,11 +1,23 @@
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  BOOTSTRAP_COHORT_STATE,
+  readEstablishedBootstrapCohort,
+} from './initial-partition-bootstrap-cohort.js';
+import {buildSchemaProvisioningChildIntent} from
+  './schema-provisioning-child-intent.js';
+import {REBALANCER_SKIP_REASON} from '../rebalancer/rebalancer-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
+const BOOTSTRAP_OPERATIONS_NOT_VISIBLE_PREFIX =
+  'Provisioning deferred: the durable bootstrap operations are not visible ' +
+  'yet for partition ';
 
 const {
   ConfigurationManager,
+  OperationType,
+  QUERY_ERROR_CODE,
   SERVICE_TYPE,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
@@ -16,6 +28,63 @@ function extractCohortStrictNodeIds(engine, cohort) {
 }
 
 class SQLQueryEngineProvisioningMethods {
+  /**
+   * The founding cohort a prior attempt of the same schema job durably
+   * established for the partition (R10, R14): read from the coordinator's
+   * authoritative operation rows, never from the serving cohort of the
+   * moment. A retry plans exactly the founders this answer names. A read the
+   * operation owner defers is a typed retryable provisioning refusal.
+   * @param {Object} context - Provisioning context.
+   * @param {string} partitionId
+   * @param {Object|null} bootstrapTableMetadata
+   * @param {Object|null} bootstrapPartitionMetadata
+   * @return {Promise<Object>} A BOOTSTRAP_COHORT_STATE answer.
+   * @private
+   */
+  async readSchemaJobEstablishedBootstrapCohort(
+    context,
+    partitionId,
+    bootstrapTableMetadata,
+    bootstrapPartitionMetadata,
+  ) {
+    const schemaJobId = context?.schemaJobId;
+    if (typeof schemaJobId !== LOCAL_STR_STRING ||
+        schemaJobId.trim().length === 0) {
+      return {state: BOOTSTRAP_COHORT_STATE.NO_DURABLE_INTENT};
+    }
+    let partitionOperations;
+    try {
+      partitionOperations =
+        await this.rebalanceCoordinator.getAuthoritativeOperationsByEntity(
+          SERVICE_TYPE.PARTITION,
+          partitionId,
+        );
+    } catch (cause) {
+      if (cause?.rebalanceSkipReason !==
+          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING) {
+        throw cause;
+      }
+      const error = new Error(
+        `${BOOTSTRAP_OPERATIONS_NOT_VISIBLE_PREFIX}${partitionId}`, {cause});
+      error.code = QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE;
+      error.retryAfterMs = cause.retryAfterMs;
+      throw error;
+    }
+    // This job's own founding operations: the deterministic child intent of
+    // (schema job, target node). Any other operation of the partition - a
+    // later non-genesis ADD, a REMOVE - founds nothing.
+    const schemaJobOperations = partitionOperations.filter((operation) =>
+      operation?.type === OperationType.ADD &&
+      operation.operationId === buildSchemaProvisioningChildIntent(
+        schemaJobId, operation.targetNodeId).operationIntentId);
+    return readEstablishedBootstrapCohort({
+      partitionId,
+      operations: schemaJobOperations,
+      bootstrapTableMetadata,
+      bootstrapPartitionMetadata,
+    });
+  }
+
   resolveInitialPartitionBootstrapLeaderNodeId(
     partitionId,
     plannedOperations = [],
@@ -169,9 +238,7 @@ class SQLQueryEngineProvisioningMethods {
         activeNodeRowCount: 0,
         activeServiceRowCount: 0,
         strictNodeIds: [],
-        degradedFallbackNodeIds: [],
         selectedNodeIds: [],
-        usedDegradedFallback: false,
         epoch: null,
       };
     }
@@ -188,9 +255,7 @@ class SQLQueryEngineProvisioningMethods {
         selectedNodeIds.length,
       activeServiceRowCount: 0,
       strictNodeIds,
-      degradedFallbackNodeIds: [],
       selectedNodeIds,
-      usedDegradedFallback: false,
       epoch: cohort?.epoch || null,
       cohort,
     };

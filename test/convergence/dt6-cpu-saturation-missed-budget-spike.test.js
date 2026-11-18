@@ -8,6 +8,10 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const {INCOMPLETE_OPERATION_OBSERVATION_STATE, WORKFLOW_STEP} = SHARED;
 // Kept equal to the per-test {timeout: ...} declarations below. This value was
@@ -199,9 +203,10 @@ function hostDrainLoop(net, nodeId, {charge}) {
           operations,
         };
       },
-      getOperationByIdVisibilityObservation: async (operationId) => ({
-        operation: inFlight.get(operationId) || null,
-      }),
+      getOperationByIdVisibilityObservation: async (operationId) =>
+        inFlight.has(operationId) ?
+          buildPresentOperationVisibility(inFlight.get(operationId)) :
+          buildAbsentOperationVisibility(),
       isOperationTerminal: () => false,
       isOperationLocallyOwned: () => true,
     },

@@ -463,6 +463,7 @@ class ManagedSplitWorkflow {
         await this.probeChildProvisioningAdmissions({
           childProvisioningTargetNodeIdsByPartitionId,
           minimumRoutableReplicaCount: splitBootstrapReplicaCount,
+          timeoutBudget: executionTimeoutBudget,
         });
       const transitionTopologySnapshot = {
         ...persistedTopologySnapshot,

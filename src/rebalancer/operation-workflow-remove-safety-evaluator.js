@@ -1,7 +1,17 @@
 import {readCommittedNodeFloor} from './operation-workflow-committed-node-floor.js';
+import {
+  COMMITTED_VOTER_CREDIT_NOT_REQUIRED,
+  describeCommittedVoterCreditWait,
+  resolveCommittedVoterCredit,
+} from './operation-workflow-committed-voter-floor.js';
 import {noteReplaceOwnerObservedReplicaRows} from './operation-workflow-replace-owner-wake.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  STOPPING_REMOVE_RESEND,
+  STOPPING_REMOVE_RESEND_DEFERRAL,
+  classifyStoppingRemoveResend,
+} from './operation-workflow-remove-safety-stopping-resend.js';
 import {
   evaluateProjectedPeersContactable,
   evaluateReplaceReplacementVoterReady,
@@ -14,6 +24,11 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  evaluateRemovalLeadershipSafety,
+} from './operation-workflow-removal-leadership-gate.js';
+import {evaluateConcurrentOperationRemoveSafety} from
+  './operation-workflow-remove-safety-concurrent-operation.js';
 import {
   createRemoveSafetyPlanningSnapshotReader,
   resolveRemoveSafetyPlanningSnapshotReader,
@@ -43,7 +58,7 @@ const QUORUM_PROJECTION_SCOPE = Object.freeze({
   SIMPLE_FLOOR: 'simple-floor',
   // Voter-ready count vs minReplicaCount on the completion-safe (R1) path, where the
   // OPTIMISTIC recovery-projection node-union may raise the count (the documented
-  // over-removal seam — recoveryProjectionNodeIds can include catch-up learners).
+  // over-removal seam; plain REMOVE only - a REPLACE passes SIMPLE_FLOOR first).
   COMPLETION_SAFE_FLOOR: 'completion-safe-floor',
   // Distinct-NODE spread vs the published requiredDistinctNodeCount.
   PUBLISHED_SPREAD: 'published-spread',
@@ -439,66 +454,27 @@ async function evaluateRemoveSafety(context, operation) {
   const isReplaceRemoveDispatch =
     context.repository.isReplaceRemoveDispatchPhase(operation);
   if (!isRemoveInitialDispatch && !isReplaceRemoveDispatch) {
-    return context.buildSafeRemoveSafetyEvaluation();
+    const resend = await classifyStoppingRemoveResend(context, operation);
+    if (resend === STOPPING_REMOVE_RESEND.SUBJECT_UNOBSERVED) {
+      return context.buildDeferredRemoveSafetyEvaluation(
+        STOPPING_REMOVE_RESEND_DEFERRAL + operation.replicaId,
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED);
+    }
+    if (resend !== STOPPING_REMOVE_RESEND.STARTS_FRESH) {
+      return context.buildSafeRemoveSafetyEvaluation();
+    }
   }
-
-  // The execution-time safety floor is universal across PARTITIONS: ordinary
-  // user partitions get the same voter/minimum protection as system
-  // partitions. It is not universal across entity types. Message groups and
-  // runtime services have explicit row-identity and lifecycle safety owners.
-  // Only the deeper published-membership / leader-tenure /
-  // priority-control-plane checks below stay scoped to system partitions.
-  const partitionClassification = classifySystemPartition({
-    partitionId: operation.partitionId,
-  });
 
   const {entityType, entityId} =
     assertCanonicalRebalancerEntityIdentity(operation);
 
-  // The operation ledger serializes the actual entity. Hard-coding partition
-  // here lets runtime/message-group replacements overtake their own source
-  // retirement while unrelated partition rows appear idle.
-  const allOps = await context.repository.getOperationsByEntity(
-    entityType,
-    entityId,
-  );
-  // CL-043: a persist-failed concurrent op (coordination row never committed)
-  // stays non-terminal with no terminal-timeout anchor and would otherwise block
-  // every peer surplus-drain forever. Exclude ops whose configured step timeout
-  // has already elapsed — they are reaper candidates, not genuinely in-flight.
-  const concurrentOperationNowMs = context.resolveTimeoutCheckNowMs();
-  let concurrentActiveOp = null;
-  for (const op of allOps) {
-    if (
-      op.operationId === operation.operationId ||
-      context.repository.isOperationTerminal(op) ||
-      context.isConcurrentOperationStalePastStepTimeout(
-        op,
-        concurrentOperationNowMs,
-      )
-    ) {
-      continue;
-    }
-    // CL-044: an op stuck SYNCING/moving to a down target makes no progress yet
-    // would head-of-line-block this peer recovery that targets a LIVE node. Its
-    // ~1s dispatch-retry loop keeps the step-timeout staleness clock fresh, so
-    // the exclusion above can lag the recovery deadline. An op whose move target
-    // fails a live ping is not genuinely in-flight, so it must not hold the
-    // partition serialization lock. The independent voter-ready-minimum,
-    // published-membership, and per-peer-ping checks below still protect quorum
-    // for the operation that is now allowed to proceed.
-    if (await context.isConcurrentOperationTargetUncontactable(op)) {
-      continue;
-    }
-    concurrentActiveOp = op;
-    break;
-  }
-  if (concurrentActiveOp) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
-      `Safety check failed: concurrent ${entityType} operation ` +
-        `${concurrentActiveOp.operationId} is active`,
-    );
+  // The operation ledger serializes the actual entity (not its partition):
+  // the ledger owner's answer, never the cache projection.
+  const concurrentOperationEvaluation =
+    await evaluateConcurrentOperationRemoveSafety(
+      context, operation, {entityType, entityId});
+  if (concurrentOperationEvaluation) {
+    return concurrentOperationEvaluation;
   }
 
   if (entityType !== SERVICE_TYPE.PARTITION) {
@@ -508,7 +484,28 @@ async function evaluateRemoveSafety(context, operation) {
       {partitionId: operation.partitionId, entityType, entityId},
     );
   }
+  // Every partition removal that its floors admit passes the one removal
+  // leadership gate last: a leading replica is never removed (any class).
+  const floors =
+    await evaluatePartitionRemoveFloors(context, operation, isReplaceRemoveDispatch);
+  return floors.classification === REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE ?
+    evaluateRemovalLeadershipSafety(context, operation) : floors;
+}
 
+/**
+ * The partition removal floors (voter-ready minimum, spread, published
+ * membership, peers), universal across PARTITIONS; only the published
+ * membership / publication / priority checks stay scoped to system ones.
+ * @param {Object} context
+ * @param {Object} operation
+ * @param {boolean} isReplaceRemoveDispatch
+ * @returns {Promise<Object>}
+ */
+async function evaluatePartitionRemoveFloors(
+  context, operation, isReplaceRemoveDispatch) {
+  const partitionClassification = classifySystemPartition({
+    partitionId: operation.partitionId,
+  });
   const criticalReplicaRows = await context.getCriticalReplicaRowsForSafety(
     operation.partitionId,
   );
@@ -594,15 +591,14 @@ async function evaluateRemoveSafety(context, operation) {
         }),
       ) || null;
 
-  const requiresSourceLeaderHandoff =
-    operation.type === OperationType.REPLACE &&
-    context.isReplaceSourceLeaderHandoffRequiredPartition(operation.partitionId);
-
-  if (!removingVoterReady && !requiresSourceLeaderHandoff) {
-    // The removed replica is not a voter-ready routable row and no source
-    // leader handoff is required: its removal cannot drop the post-removal
-    // voter-ready count, spread, or quorum. The universal floor needs no
-    // further projection for this operation.
+  // A priority control-plane REPLACE keeps its replacement and published
+  // membership floors even for a non-voter-ready source (a floor class, not
+  // a leadership one: leadership is the gate's, for every partition).
+  const priorityReplaceFloors = isReplaceRemoveDispatch &&
+    partitionClassification.priorityControlPlane;
+  if (!removingVoterReady && !priorityReplaceFloors) {
+    // The removed replica is not a voter-ready routable row: its removal
+    // cannot drop the post-removal voter-ready count, spread, or quorum.
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
@@ -640,7 +636,19 @@ async function evaluateRemoveSafety(context, operation) {
     priorityRecoveryCompletionEvaluation?.classification ===
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE;
 
+  // A remaining voter whose node holds no ready lease (a formation joiner
+  // behind its barrier) is credited only by the group's own committed
+  // evidence; when that cannot be read the floor below waits, typed.
+  let committedVoterCredit = COMMITTED_VOTER_CREDIT_NOT_REQUIRED;
   if (isReplaceRemoveDispatch) {
+    committedVoterCredit = await resolveCommittedVoterCredit(context, operation, {
+      criticalReplicaRows,
+      nodeReadyRows: currentVoterReadyRows,
+      sourceReplicaId: operationReplicaId,
+      replacementReplicaRow,
+      removeSafetyReadiness,
+    });
+    currentVoterReadyRows.push(...committedVoterCredit.creditedRows);
     const replacementGuard = evaluateReplaceReplacementVoterReady(
       context,
       operation,
@@ -648,7 +656,7 @@ async function evaluateRemoveSafety(context, operation) {
         replacementReplicaId,
         replacementReplicaRow,
         removeSafetyReadiness,
-        priorityRecoveryCompletionSafe,
+        committedVoterCredit,
       },
     );
     if (!isRemoveSafetyGuardPassed(replacementGuard)) {
@@ -656,10 +664,14 @@ async function evaluateRemoveSafety(context, operation) {
     }
   }
 
-  if (priorityRecoveryCompletionEvaluation) {
-    if (!requiresSourceLeaderHandoff || !priorityRecoveryCompletionSafe) {
-      return priorityRecoveryCompletionEvaluation;
-    }
+  // The priority-recovery completion contract answers the SPREAD concern. It
+  // never stands in for a REPLACE's voter floor: that removal is decided on
+  // the remaining voters' own liveness below, completion-safe or not.
+  if (
+    priorityRecoveryCompletionEvaluation &&
+    (!priorityRecoveryCompletionSafe || !isReplaceRemoveDispatch)
+  ) {
+    return priorityRecoveryCompletionEvaluation;
   }
 
   const minReplicaCount = await context.getCriticalMinReplicaCount(
@@ -679,15 +691,18 @@ async function evaluateRemoveSafety(context, operation) {
     completionSafe: priorityRecoveryCompletionSafe,
     scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
   });
-  if (!priorityRecoveryCompletionSafe && !simpleFloor.floorSatisfied) {
+  if (
+    (isReplaceRemoveDispatch || !priorityRecoveryCompletionSafe) &&
+    !simpleFloor.floorSatisfied
+  ) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Critical partition ${operation.partitionId}` +
         OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-        ` (${projectedVoterReadyCount}/${minReplicaCount})`,
+        ` (${projectedVoterReadyCount}/${minReplicaCount})` +
+        describeCommittedVoterCreditWait(committedVoterCredit),
     );
   }
-
   if (!priorityRecoveryCompletionSafe) {
     const priorityPublishedMembershipRemoveSafetyEvaluation =
       await context.evaluatePriorityPublishedMembershipRemoveSafety(
@@ -704,7 +719,8 @@ async function evaluateRemoveSafety(context, operation) {
     }
   }
 
-  const priorityPublicationLeaderRemoveSafetyEvaluation =
+  // The publication partition's publication waits (null when none applies).
+  const publicationWait =
     await context.evaluatePriorityPublicationLeaderRemoveSafety(
       operation,
       removingReplicaRow,
@@ -715,14 +731,11 @@ async function evaluateRemoveSafety(context, operation) {
         readAuthoritativePlanningSnapshot: readRemoveSafetyPlanningSnapshot,
       },
     );
-  if (
-    priorityPublicationLeaderRemoveSafetyEvaluation?.classification ===
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE &&
-    priorityRecoveryCompletionSafe &&
-    classifySystemPartition({
-      partitionId: operation?.partitionId,
-    }).priorityControlPlane
-  ) {
+  if (publicationWait) {
+    return publicationWait;
+  }
+  // Completion-safe implies a priority partition and, here, a REPLACE.
+  if (priorityRecoveryCompletionSafe) {
     const completionSafeFloor =
       await resolvePriorityRecoveryQuorumProjection(
         context,
@@ -741,11 +754,6 @@ async function evaluateRemoveSafety(context, operation) {
       );
     }
   }
-  if (priorityPublicationLeaderRemoveSafetyEvaluation &&
-      priorityPublicationLeaderRemoveSafetyEvaluation.classification !==
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE) {
-    return priorityPublicationLeaderRemoveSafetyEvaluation;
-  }
 
   const peerPingGuard = await evaluateProjectedPeersContactable(
     context,
@@ -756,8 +764,7 @@ async function evaluateRemoveSafety(context, operation) {
     return peerPingGuard;
   }
 
-  return priorityPublicationLeaderRemoveSafetyEvaluation ||
-    context.buildSafeRemoveSafetyEvaluation();
+  return context.buildSafeRemoveSafetyEvaluation();
 }
 
 export {

@@ -3,6 +3,8 @@ import {
   LISTENER_PORT_ENV,
   LISTENER_PORT_OFFSET,
 } from '../config/listener-port-model.js';
+import {FORMATION_TARGET_NODE_COUNT_ENV} from
+  '../config/formation-target-node-count.js';
 
 // Keep in lockstep with package.json "version"; the drift-guard in
 // test/release/version-single-source.test.js fails if they diverge. Held as a
@@ -58,7 +60,6 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   HTTP_PREFIX: 'http://',
   HTTPS_PREFIX: 'https://',
   AUTO_REJOIN_BOOTSTRAP_READY_PATH: '/bootstrap/ready',
-  AUTO_REJOIN_HEALTH_PATH: '/health',
   AUTO_REJOIN_PROBE_METHOD: 'GET',
   // ends-on: the peer answers the health probe
   AUTO_REJOIN_PROBE_TIMEOUT_MS: 1000,
@@ -163,6 +164,9 @@ const ENTRYPOINT_TEXT = Object.freeze({
   ENVIRONMENT_LINES: [
     '  NODE_ID          Override auto-generated node ID',
     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
+    `  ${FORMATION_TARGET_NODE_COUNT_ENV}`,
+    '                   Required on a seed founding a new cluster: its',
+    '                   intended total node count (no default; 1 = single node)',
     `  ${LISTENER_PORT_ENV.REST_API}    REST API port ` +
       `(default: ${LISTENER_PORT_DEFAULT.REST_API})`,
     `  ${LISTENER_PORT_ENV.ADMIN_WEBSOCKET}`,

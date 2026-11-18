@@ -39,7 +39,6 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {
-  IN_PROGRESS_REASON,
   TRANSFER_REASON,
   TransferLeadershipDriver,
   assertAccepted,
@@ -268,33 +267,28 @@ test('drain order: a configuration change dropped in a transfer window is ' +
   }
 });
 
-// Semantic leg for the drop classification's configuration input: the
-// acknowledgements commit the leader's own removal in the proposal's turn,
-// and the core then drops the proposal for that cause, not for a transfer.
-test('drain order: acknowledgements pending at a proposal commit the ' +
-  'leader\'s own removal first, and the drop stays non-retryable', async () => {
+// Semantic leg for the drop classification's configuration input. The leg
+// that committed the leader's own removal by pending acknowledgements is
+// superseded (B2, 2026-11-11): the leader's port refuses its own removal
+// (REMOVES_LEADER) before the core is entered, so no such entry exists to
+// commit; the removed leader's non-retryable drop is pinned where one can
+// still arise (removed-leader-step-down.test.js), and the delivered-removal
+// input is pinned in transfer-leadership-decision-inputs.test.js.
+test('drain order: the leader\'s own removal is refused at its port, ' +
+  'nothing entering the core', async () => {
   const driver = formedGroup('order-self-removal');
   try {
     const selfId = driver.raftIdAt(A, A);
-    assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).result.outcome, CORE_OK);
-    // Read before the hand-over: a status read drains delivered messages.
-    assert.equal(driver.status(A).confState.voters.includes(selfId), true,
-      'precondition: the removal is not yet committed at A');
-    driver.deliverOnly([B, C]);
-    const delivered = driver.stepUndrained(A);
-    assert.ok(delivered > 0, 'precondition: acknowledgements are pending');
-    const {answer, entries} = await turn(driver, () =>
-      turnChainValue(driver.port(A).propose({after: 'self-removal'})));
+    const before = driver.coreOperations().length;
+    const answer = await turnChainValue(driver.port(A).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A}));
     assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
-    assert.notEqual(answer.reason, IN_PROGRESS_REASON,
-      'no transfer runs: the drop is the removal\'s');
-    assert.equal(answer.retryable, false);
-    assert.equal(driver.status(A).confState.voters.includes(selfId), false,
-      'the pending acknowledgements committed the removal in that turn');
-    assertDecidedAfterDrain(entries, delivered,
-      {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE});
+    assert.equal(answer.retryable, true);
+    assert.equal(driver.coreOperations().slice(before)
+      .includes(CORE.PROPOSE_CONF_CHANGE), false,
+    'no conf change entered the core');
+    driver.deliver();
+    assert.equal(driver.status(A).confState.voters.includes(selfId), true);
   } finally {
     driver.dispose();
   }

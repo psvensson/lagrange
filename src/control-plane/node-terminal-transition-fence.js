@@ -1,3 +1,5 @@
+import {RECIPIENT_RETIREMENT_WRITE_OPTIONS} from
+  '../partition/partition-cdc-admission-class.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {COLUMN} from '../constants/index.js';
 import {normalizeKnownNodeBootIncarnation} from
@@ -120,7 +122,8 @@ function classifyReadback(read, bootIncarnation, destination) {
  * @param {number} options.bootIncarnation - This process's incarnation.
  * @param {Object} options.destination - Lifecycle columns the transition
  *   establishes (the readback criterion).
- * @param {Function} options.write - (whereClause) => mutation result.
+ * @param {Function} options.write - (whereClause, retirementOptions) =>
+ *   mutation result; the write spreads retirementOptions into its own.
  * @return {Promise<Object>} Frozen {outcome, result, error, row}.
  */
 async function applyNodeTerminalTransition(options) {
@@ -137,7 +140,10 @@ async function applyNodeTerminalTransition(options) {
   let result = null;
   let error = null;
   try {
-    result = await write(buildNodeIncarnationWhereClause(nodeId, bootIncarnation));
+    // A node's terminal transition retires it as a CDC recipient's host: the
+    // write may use the retirement reserve (partition-cdc-admission-class.js).
+    result = await write(buildNodeIncarnationWhereClause(nodeId, bootIncarnation),
+      RECIPIENT_RETIREMENT_WRITE_OPTIONS);
   } catch (writeError) {
     error = writeError;
   }

@@ -27,7 +27,9 @@ class CDCGroupPropagationDeliveryMethods {
     let retry = {state: CDC_GROUP_FOREGROUND_RETRY_STATE.ATTEMPTS_EXHAUSTED};
     while (attempt <= maxAttempts) {
       await wave.deliver();
-      if (wave.complete()) return wave.result();
+      // A recipient's position gap is answered by its own re-list, not by a
+      // foreground retry: the source lane's backoff ships the range again.
+      if (wave.complete() || wave.positionGap()) return wave.result();
       retry = await this.waitForForegroundRetry(wave, attempt, maxAttempts);
       if (retry.state === CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED ||
           this.isPropagationStopped()) return wave.stopped();

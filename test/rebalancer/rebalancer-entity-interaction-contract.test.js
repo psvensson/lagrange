@@ -65,9 +65,11 @@ function buildEvaluationContext({rows, minReplicaCount = 1, operations = []}) {
     nodeId: 'owner-node',
     messageRouter: null,
     repository: {
-      async getOperationsByEntity(entityType, entityId) {
+      async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
         calls.push({entityType, entityId});
-        return operations;
+        return {state: operations.length > 0 ? 'present' : 'empty',
+          complete: true, operationCount: operations.length, operations,
+          deferredOutcome: null, retryAfterMs: null};
       },
       isOperationTerminal: () => false,
       isReplaceRemovePhase: (operation) =>
@@ -427,7 +429,7 @@ test('untyped operation rows are outside canonical entity reads',
     });
     try {
       const runtimeOperations = await coordinator.repository
-        .getOperationsByEntity(
+        .getOperationsByEntityProjection(
           UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
           entityId,
         );
@@ -435,7 +437,7 @@ test('untyped operation rows are outside canonical entity reads',
         ['typed-runtime-op'],
         'runtime serialization sees only typed runtime operations');
       const partitionOperations = await coordinator.repository
-        .getOperationsByEntity(SERVICE_TYPE.PARTITION, entityId);
+        .getOperationsByEntityProjection(SERVICE_TYPE.PARTITION, entityId);
       t.same(partitionOperations.map((operation) => operation.operationId),
         [],
         'an untyped row cannot acquire partition semantics from partition_id');

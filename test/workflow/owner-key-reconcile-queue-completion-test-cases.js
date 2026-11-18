@@ -1,3 +1,6 @@
+import {
+  drainTurn,
+} from '../helpers/reconcile-queue-turns.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OwnerKeyReconcileQueue} from
   '../../src/workflow/owner-key-reconcile-queue.js';
@@ -27,8 +30,7 @@ test('OwnerKeyReconcileQueue - enqueueAndWait observes owner completion',
       settled = true;
       return value;
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainTurn();
     t.equal(settled, false, 'queue admission is not owner completion');
 
     release();

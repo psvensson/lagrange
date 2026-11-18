@@ -1,5 +1,10 @@
 // W7 composite A-before-B provisional-to-native route formation witness across
-// 3 RF5 target groups, 2 connected routers (window 2) and 2 subscribers.
+// 3 RF5 target groups and 2 connected routers (window 2), through the source
+// partition's one propagation subscriber (its source group and its three
+// target groups are its recipients).
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {elapseRecipientBackoff} from '../test-helpers/cdc-delivery-progress-fixture.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
@@ -18,13 +23,12 @@ import {
   PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
   PARTITION_CDC_OBLIGATION_STANDING,
+  PARTITION_CDC_RECIPIENT_STATE,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
 import {resetCdcObligationLane} from
   '../../src/partition/partition-cdc-obligation-delivery.js';
 import {
-  CDC_COVERAGE_STATE,
   buildProvisionalCdcOutcome,
-  emptyCdcCoverage,
   isProvisionalCdcOutcome,
   unknownCdcAcceptance,
 } from '../../src/cdc/cdc-delivery-outcome.js';
@@ -48,15 +52,17 @@ import {
   payloadOf,
   cdcEvents,
 } from './message-group-native-w7-composition.js';
+import {SHIPS_ALONE_FIELDS} from './message-group-native-provisional-route-fixture.js';
 import {
   commandOf,
   assertEnvelope,
   writeReleasedSql,
-  buildDualBridgeSubscribers,
+  buildBridgeSubscribers,
   subscribeWithoutEagerDrive,
 } from './cdc-source-occurrence-helpers.js';
 
 const DRIVE = PARTITION_CDC_OBLIGATION_DRIVE_STATE;
+const W7_SUBSCRIBER_ID = 'w7-sub';
 
 function assertTargetGroupsPremise(f) {
   for (const [groupId, info] of f.targetGroups.entries()) {
@@ -90,7 +96,9 @@ function assertTargetGroupsPremise(f) {
 }
 
 async function seedW7DebtsAndSubscribers(f) {
-  const writeA = registrationInsertForNode(f.source, 'w7-route-a', NODE_A);
+  // A ships as a vector of its own (range shipping), so the B rows stay the
+  // later rows of the same scan that A's coverage must release.
+  const writeA = registrationInsertForNode(f.source, 'w7-route-a', NODE_A, SHIPS_ALONE_FIELDS);
   const debtA = await writeReleasedSql(
     f.producer,
     f.producerLeader,
@@ -122,16 +130,18 @@ async function seedW7DebtsAndSubscribers(f) {
   assert.ok(debtsB[0].logIndex < debtsB[1].logIndex);
   assert.ok(debtsB[1].logIndex < debtsB[2].logIndex);
 
-  const {subSeed, subJoin} = buildDualBridgeSubscribers(
+  // CDC Stage 3: every message-group node listed the source at its start.
+  positionRecipients([...f.services.values()], PARTITION_ID, TABLES.SERVICES,
+    readCdcLedgerIncarnation(f.producerLeader.db));
+  const {seedBridge: subscriber} = buildBridgeSubscribers(
     f,
     TABLES.SERVICES,
     PARTITION_ID,
   );
-  f.subscribers.push(subSeed, subJoin);
-  await subscribeWithoutEagerDrive(f, subSeed, 'w7-seed-sub');
-  await subscribeWithoutEagerDrive(f, subJoin, 'w7-join-sub');
+  f.subscribers.push(subscriber);
+  await subscribeWithoutEagerDrive(f, subscriber, W7_SUBSCRIBER_ID);
   f.subscribersReady = true;
-  return {debtA, debtsB, subJoin};
+  return {debtA, debtsB, subscriber};
 }
 
 function assertProvisionalRoutesReleased(f, capturedTargets) {
@@ -258,9 +268,11 @@ function buildBoundaryNegativeResult(mode, evs) {
   };
 }
 
-async function runTenureResetWhileHeld(f, subJoin, target3FirstHopAddr) {
-  f.producerLeader.unsubscribeFromCDC(subJoin);
-  await subscribeWithoutEagerDrive(f, subJoin, 'w7-join-sub');
+async function runTenureResetWhileHeld(f, subscriber, target3FirstHopAddr) {
+  // Same-text subscriber replacement: the one propagation subscriber leaves
+  // and registers again under its id (a new subscription epoch).
+  f.producerLeader.unsubscribeFromCDC(subscriber);
+  await subscribeWithoutEagerDrive(f, subscriber, W7_SUBSCRIBER_ID);
   const heldSend = Promise.withResolvers();
   f.heldApplications.push(heldSend);
   const enteredSend = Promise.withResolvers();
@@ -282,44 +294,50 @@ async function runTenureResetWhileHeld(f, subJoin, target3FirstHopAddr) {
       ),
     };
   };
+  elapseRecipientBackoff(f.producerLeader, f.producerClock);
   const heldDrivePromise = f.producerLeader.cdcDelivery.driveCdcObligations(
     'w7-tenure-reset-while-held',
   );
   await driveWithPump(f, () => enteredSend.promise);
-  const activeInv = f.producerLeader.cdcDelivery.activeCdcInvocation;
-  assert.ok(activeInv, 'active invocation owns held child send');
+  // The held send belongs to one recipient (a target-3 delivery): that
+  // recipient's custody slot owns it, and only that slot.
+  const heldCustody = () => [...f.producerLeader.cdcDelivery.recipientCustody.values()]
+    .filter((custody) => custody.activeCdcInvocation !== null);
+  const activeInv = heldCustody()[0]?.activeCdcInvocation;
+  assert.ok(activeInv, 'the recipient\'s invocation owns the held child send');
   f.producerClock.elapseWithoutCallbacks(6000);
   f.producerClock.setHoldTimers(false);
   f.producerClock.flushHeldTimers();
   assert.equal((await heldDrivePromise).state, DRIVE.HELD_BY_SUBSCRIBER);
   assert.equal(
-    f.producerLeader.cdcDelivery.activeCdcInvocation === activeInv,
+    heldCustody().some((custody) => custody.activeCdcInvocation === activeInv),
     true,
-    'expired invocation retains slot while raw child send is unclosed',
+    'expired invocation retains its recipient slot while raw child send is unclosed',
   );
   applyReplicaDemotion(f.producerLeader, RAFT_ROLE.FOLLOWER);
   resetCdcObligationLane(f.producerLeader.cdcDelivery);
   applyReplicaLeadership(f.producerLeader, RAFT_ROLE.LEADER);
   resetCdcObligationLane(f.producerLeader.cdcDelivery);
+  assert.deepEqual(
+    f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().recipients,
+    [],
+    'tenure reset dropped every recipient cursor',
+  );
   assert.equal(
-    f.producerLeader.cdcDelivery.obligationLane.currentObligation === null,
+    heldCustody().some((custody) => custody.activeCdcInvocation === activeInv),
     true,
-    'tenure reset dropped the transient progress cell',
+    'the custody slot outlives the lane: the old delivery\'s raw work is still open',
   );
-  const overlappingDrive = await f.producerLeader.cdcDelivery.driveCdcObligations(
-    'w7-no-overlap-while-unclosed',
-  );
-  assert.equal(overlappingDrive.state, DRIVE.JOINED_IN_FLIGHT);
   heldSend.resolve();
   await driveWithPump(f, () => activeInv.context.cleanup);
   await pumpMulti(f, 2);
-  assert.equal(f.producerLeader.cdcDelivery.activeCdcInvocation === null, true);
-  assert.equal(f.topology.activeDurablePropagation === null, true);
+  assert.equal(heldCustody().length, 0, 'every recipient slot is released by actual cleanup');
+  assert.equal(f.topology.activeDurableDeliveries.size, 0);
 }
 
 test(
   'W7: composite A-before-B provisional-to-native route formation across ' +
-    '3 RF5 target groups, 2 connected routers (window 2) and 2 subscribers',
+    '3 RF5 target groups and 2 connected routers (window 2) through one propagation subscriber',
   async (t) => {
     const f = await prepareMultiTargetProvisionalFixture(t, {
       portA: 24385,
@@ -334,17 +352,25 @@ test(
     });
     assert.equal(capturedTargets.length, 3);
 
-    const {debtA, debtsB, subJoin} = await seedW7DebtsAndSubscribers(f);
+    const {debtA, debtsB, subscriber} = await seedW7DebtsAndSubscribers(f);
 
     const isBEnvelope = (envelope) =>
       cdcEvents(envelope).some((ev) =>
         debtsB.some((b) => b.eventKey === ev.eventKey),
       );
     let bVisitedCount = 0;
-    let holdB = true;
+    let holdB = false;
+    const recipientsOf = () =>
+      f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().recipients;
+    const target2Recipients = () =>
+      recipientsOf().filter((recipient) => recipient.groupId === 'mg-w7-target-2');
 
-    const assertNoBAndOwed = () => {
-      assert.equal(bVisitedCount, 0, 'B must not be visited before A scan release');
+    // Recipient isolation: each recipient (the subscriber's source group and
+    // each of its three target groups) is shipped B only after IT accepted A,
+    // so B may reach a recipient that accepted A provisionally while another
+    // recipient is still unconfirmed on A. What holds for all of them: no
+    // provisional acceptance acknowledges anything.
+    const assertAllOwedWithoutAck = () => {
       for (const replica of f.producer.services) {
         for (const debt of f.debts) {
           assert.equal(
@@ -353,9 +379,14 @@ test(
           );
         }
       }
+      assert.equal(
+        f.producerLeader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements,
+        0,
+        'no recipient holds a committed receipt: nothing is acknowledged',
+      );
     };
 
-    // --- Step 1 & 2: Delayed-timer expiry on Target 2 of Subscriber 0 ---
+    // --- Step 1: Delayed-timer expiry on a Target 2 delivery ---
     const target2FirstHopAddr = nodeAddressOf(NODE_B, 'mg-w7-target-2-f1');
     let elapseOnTarget2 = true;
     f.producerClock.setHoldTimers(true);
@@ -376,10 +407,15 @@ test(
       return {overrideResult: realResult};
     };
 
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const drive1 = await driveWithPump(f, () =>
       f.producerLeader.cdcDelivery.driveCdcObligations('w7-attempt-1-expiry'),
     );
-    assert.equal(drive1.state, DRIVE.HELD_BY_SUBSCRIBER);
+    // The expired delivery's raw work closed: that cleanup is the event its
+    // hold waited for, so Target 2 was shipped again at once and answered
+    // provisionally (superseded 2026-11-11: it used to stay held until its
+    // backoff). Its late answer still confirmed nothing.
+    assert.equal(drive1.state, DRIVE.PROVISIONAL);
     assert.equal(
       f.producerClock.heldTimers().some((timer) => timer.cleared),
       true,
@@ -387,101 +423,49 @@ test(
     );
     f.producerClock.setHoldTimers(false);
     f.producerClock.flushHeldTimers();
-    assertNoBAndOwed();
-
-    const cellAfter1 = f.producerLeader.cdcDelivery.obligationLane.currentObligation;
-    assert.ok(cellAfter1);
+    assertAllOwedWithoutAck();
     assert.equal(
-      cellAfter1.nextSubscriber,
-      1,
-      'fair subscriber cursor advances to subscriber 1 (joining bridge)',
-    );
-    assert.equal(
-      cellAfter1.branches[0].topology.targets[0].coverage.state,
-      CDC_COVERAGE_STATE.PROVISIONAL,
-      'pre-expiry Target 1 provisional observation survived',
-    );
-    assert.equal(
-      cellAfter1.branches[0].topology.targets[1].coverage.state,
-      CDC_COVERAGE_STATE.UNCOVERED,
-      'late valid provisional answer after expiry did not cover Target 2',
+      target2Recipients().some((recipient) =>
+        recipient.state === PARTITION_CDC_RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED &&
+        recipient.cursor === null),
+      true,
+      'a late valid provisional answer after expiry did not cover its Target 2 recipient',
     );
 
     // --- Step 2b: Boundary negatives (wrong group & changed vector member) ---
-    let sub0Target2Mode = 'wrong-group';
+    let target2Mode = 'wrong-group';
     f.interceptSend = async ({router, address, envelope}) => {
       if (isBEnvelope(envelope)) bVisitedCount += 1;
-      const onSub0 =
-        cellAfter1.branches[1].coverage.state === CDC_COVERAGE_STATE.PROVISIONAL;
-      const match =
-        router === 'routerA' && address === target2FirstHopAddr && onSub0;
+      const match = router === 'routerA' && address === target2FirstHopAddr &&
+        !isBEnvelope(envelope);
       if (!match) return null;
-      return buildBoundaryNegativeResult(sub0Target2Mode, cdcEvents(envelope));
+      return buildBoundaryNegativeResult(target2Mode, cdcEvents(envelope));
     };
-
-    const drive2 = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w7-attempt-2-wrong-group'),
-    );
-    assert.equal(drive2.state, DRIVE.HELD_BY_SUBSCRIBER);
-    assert.equal(
-      cellAfter1.branches[1].coverage.state,
-      CDC_COVERAGE_STATE.PROVISIONAL,
-      'Subscriber 1 (joining bridge) reached full provisional coverage',
-    );
-    assert.equal(
-      cellAfter1.branches[0].topology.targets[2].coverage.state,
-      CDC_COVERAGE_STATE.PROVISIONAL,
-      'Subscriber 0 covered Target 3',
-    );
-    assert.equal(
-      cellAfter1.branches[0].topology.targets[1].coverage.state,
-      CDC_COVERAGE_STATE.UNCOVERED,
-      'wrong-group provisional response left Target 2 uncovered',
-    );
-    assertNoBAndOwed();
-
-    sub0Target2Mode = 'changed-vector';
-    const drive3 = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w7-attempt-3-changed-vec'),
-    );
-    assert.equal(drive3.state, DRIVE.HELD_BY_SUBSCRIBER);
-    assert.equal(
-      cellAfter1.branches[0].topology.targets[1].coverage.state,
-      CDC_COVERAGE_STATE.UNCOVERED,
-      'changed vector member left Target 2 uncovered',
-    );
-    assertNoBAndOwed();
-
-    // --- Step 2c: Paired negative with weak-coverage accumulation removed ---
-    cellAfter1.branches[0].topology.targets[0].coverage = emptyCdcCoverage();
-    cellAfter1.branches[0].topology.targets[2].coverage = emptyCdcCoverage();
-    const target3FirstHopAddr = nodeAddressOf(NODE_B, 'mg-w7-target-3-f1');
-    f.interceptSend = async ({router, address, envelope}) => {
-      if (isBEnvelope(envelope)) bVisitedCount += 1;
-      if (router === 'routerA' && address === target3FirstHopAddr) {
-        return {
-          overrideResult: buildDeliveryEnvelope(
-            {acknowledged: true},
-            unknownCdcAcceptance(),
-          ),
-        };
-      }
-      return null;
-    };
-    const driveNoWeakAccum = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations(
-        'w7-negative-no-weak-accumulation',
-      ),
-    );
-    assert.equal(driveNoWeakAccum.state, DRIVE.HELD_BY_SUBSCRIBER);
-    assertNoBAndOwed();
+    for (const mode of ['wrong-group', 'changed-vector']) {
+      target2Mode = mode;
+      elapseRecipientBackoff(f.producerLeader, f.producerClock);
+      const drive = await driveWithPump(f, () =>
+        f.producerLeader.cdcDelivery.driveCdcObligations(`w7-attempt-${mode}`),
+      );
+      assert.equal(drive.state, DRIVE.HELD_BY_SUBSCRIBER);
+      assert.equal(target2Recipients().length, 1, 'one Target 2 recipient on the lane');
+      assert.equal(
+        target2Recipients().every((recipient) => recipient.cursor === null &&
+          recipient.state === PARTITION_CDC_RECIPIENT_STATE.SUBSCRIBER_UNCONFIRMED &&
+          recipient.lastPass === 'held'),
+        true,
+        `${mode} provisional response left the Target 2 recipient unconfirmed and held`,
+      );
+      assertAllOwedWithoutAck();
+    }
 
     // --- Step 2d: Same-text subscriber replacement & tenure reset while held ---
-    await runTenureResetWhileHeld(f, subJoin, target3FirstHopAddr);
+    const target3FirstHopAddr = nodeAddressOf(NODE_B, 'mg-w7-target-3-f1');
+    await runTenureResetWhileHeld(f, subscriber, target3FirstHopAddr);
 
-    // --- Step 2e: Clean multi-attempt weak coverage release of A -> B_1..B_3 ---
-    let failTarget3Once = true;
-    f.interceptSend = async ({router, address, envelope}) => {
+    // --- Step 2e: Weak acceptance of A by every recipient releases each to B_1..B_3 ---
+    holdB = true;
+    f.interceptSend = async ({address, envelope}) => {
       if (isBEnvelope(envelope) && holdB) {
         bVisitedCount += 1;
         const held = Promise.withResolvers();
@@ -494,31 +478,12 @@ test(
         });
         await held.promise;
       }
-      const shouldFailTarget3 =
-        failTarget3Once &&
-        router === 'routerA' &&
-        address === target3FirstHopAddr;
-      if (!shouldFailTarget3) return null;
-      failTarget3Once = false;
-      return {
-        overrideResult: buildDeliveryEnvelope(
-          {acknowledged: true},
-          unknownCdcAcceptance(),
-        ),
-      };
+      return null;
     };
-
-    const cleanAttempt1 = await driveWithPump(f, () =>
-      f.producerLeader.cdcDelivery.driveCdcObligations('w7-clean-attempt-1'),
-    );
-    assert.equal(cleanAttempt1.state, DRIVE.HELD_BY_SUBSCRIBER);
-    const bindingOfA =
-      f.producerLeader.cdcDelivery.obligationLane.currentObligation?.binding;
-    assert.equal(typeof bindingOfA, 'string');
-    assertNoBAndOwed();
-
+    const visitedBefore = bVisitedCount;
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const cleanAttempt2Promise = f.producerLeader.cdcDelivery.driveCdcObligations(
-      'w7-clean-attempt-2-release-to-b',
+      'w7-clean-attempt-release-to-b',
     );
     for (
       let round = 0;
@@ -530,17 +495,13 @@ test(
     assert.equal(
       f.events.some((e) => e.kind === 'held-b-before-dispatch'),
       true,
-      'cleanAttempt2 reached held-b-before-dispatch within bounded rounds',
+      'the drive reached held-b-before-dispatch within bounded rounds',
     );
     assert.ok(
-      bVisitedCount > 0,
-      'complete weak coverage across both subscribers and 3 targets released scan to B',
+      bVisitedCount > visitedBefore,
+      'a recipient that accepted A weakly was shipped B',
     );
-    assert.notEqual(
-      f.producerLeader.cdcDelivery.obligationLane.currentObligation?.binding,
-      bindingOfA,
-      'weak scan release discarded A optimization state and advanced cell to B_1',
-    );
+    assertAllOwedWithoutAck();
     const aReturns = f.events.filter(
       (e) => e.kind === 'subscriber-return' && e.eventKey === debtA.eventKey,
     );
@@ -562,8 +523,17 @@ test(
     // --- Step 3: Release B_1..B_3 and verify all 3 FOLLOWER routes resolve ---
     holdB = false;
     for (const held of f.heldApplications.splice(0)) held.resolve();
+    // Each target group is addressed by exactly one recipient of the lane:
+    // every target recipient completes its provisional scan of A and B.
     const cleanAttempt2Result = await driveWithPump(f, () => cleanAttempt2Promise);
-    assert.equal(cleanAttempt2Result.state, DRIVE.PROVISIONAL);
+    const targets = recipientsOf().filter((recipient) =>
+      recipient.recipient.startsWith(`${W7_SUBSCRIBER_ID}>`));
+    assert.deepEqual(targets.map((recipient) => recipient.groupId).sort(),
+      [...TARGET_GROUPS].sort(), 'one recipient per target group');
+    assert.equal(targets.every((recipient) => recipient.lastPass === 'provisional' &&
+      recipient.cursor === null), true,
+    `each target recipient scanned A and B provisionally (${cleanAttempt2Result.state})`);
+    assertAllOwedWithoutAck();
 
     // The followers hear their leaders again; each route is the leader's
     // committed address.
@@ -583,6 +553,7 @@ test(
       return origPressure(events);
     };
 
+    elapseRecipientBackoff(f.producerLeader, f.producerClock);
     const nativeDrive = await driveWithPump(
       f,
       () =>

@@ -167,7 +167,7 @@ function clockAnswer(record) {
       {missingFact: MISSING_FACT.RELEASE_DEADLINE});
   }
   return observed.value >= record.deadlineAtMs ? unavailable(record.request,
-    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) : null;
+    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT) : null;
 }
 
 function observationResult(record, assessment) {
@@ -281,7 +281,7 @@ function timerSubscription(record, slot) {
       slot.state = SLOT_STATE.RETIRED;
       slot.release = null;
       const answer = clockAnswer(record) ?? unavailable(record.request,
-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT);
       terminal(record, answer);
     }, record.timeoutMs);
     if (!fired) {
@@ -329,7 +329,7 @@ function newObservation(handler, service, request, read, adjudicate, records) {
     return budget.nowMs >= request.deadlineAtMs ?
       releaseAnswer(OUTCOME.UNAVAILABLE, request,
         {missingFact: MISSING_FACT.RELEASE_DEADLINE}) :
-      unavailable(request, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+      unavailable(request, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ANSWER_TIMEOUT);
   }
   if (records === undefined) {
     records = new Map();

@@ -4,6 +4,8 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {stubAnsweredIncompleteOperationsRead} from
+  '../rebalancer/incomplete-operations-read-stub.js';
 
 // Quest formation-ledger-spread-completion-self-move-interlock-deadlock (P1) —
 // deterministic reproduction of the affinity-demo run-28 ledger spread-completion
@@ -36,7 +38,7 @@ import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinat
 //
 // HONEST SCOPE: this exercises the REAL interlock method
 // (ensureOperationLedgerSelfMoveSerialized) on a real RebalanceCoordinator, with
-// the cache-first observation seams (queryIncompleteOperations, queryOperationById)
+// the cache-first observation seams (queryIncompleteOperations, queryOperationProjectionById)
 // returning the stale ghost and ONLY the cache-bypassing owner-RPC read
 // (queryAuthoritativeOperationVisibilityObservation) returning the terminal truth
 // — so a fix that consults a cache-first read is proven INERT (stays RED), and
@@ -99,8 +101,8 @@ async function runInterlock({blockerPartitionId, authoritative}) {
   });
   let ownerRpcRequested = false;
   // Cache-first seams: BOTH return the stale non-terminal ghost (run-28 H1).
-  coordinator.queryIncompleteOperations = async () => [ghost];
-  coordinator.queryOperationById = async () => ghost;
+  stubAnsweredIncompleteOperationsRead(coordinator, () => [ghost]);
+  coordinator.queryOperationProjectionById = async () => ghost;
   // The ONLY cache-bypassing truth source.
   coordinator.queryAuthoritativeOperationVisibilityObservation = async (
     _operationId,

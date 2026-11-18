@@ -9,9 +9,12 @@ import {
   registerBootstrapApiReadinessTests,
 } from './bootstrap-api-readiness-test-cases.js';
 import {
+  answerKnownClusterIdentity,
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 import {
   BOOTSTRAP_API_LOG_MSG,
 } from '../../src/bootstrap/bootstrap-api-constants.js';

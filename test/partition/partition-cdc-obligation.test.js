@@ -15,7 +15,7 @@ import Database from 'better-sqlite3';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
-import {PARTITION_SERVICE_DEFAULT, PARTITION_SERVICE_EVENT} from
+import {PARTITION_SERVICE_DEFAULT, PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT} from
   '../../src/partition/partition-service-constants.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
@@ -285,6 +285,7 @@ test('TX1 CDC O3: an obligation is marked delivered only after every subscriber 
     timeSource.advance(RETRY_AFTER_MS);
     await settleTicks();
     facts.afterAcknowledgement = {received: consumer.events.map(identityOfEvent),
+      vectors: consumer.vectors.map((vector) => vector.length),
       ...countCdcObligations(leader.db),
       pending: leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements,
       acksProposed: acksOf(proposed).length};
@@ -305,6 +306,9 @@ test('TX1 CDC O3: an obligation is marked delivered only after every subscriber 
       afterAcknowledgement: {received: [0, 1].map((ordinal) => ({eventKey: txKey(tx, ordinal),
         entryId: `${tx.participantId}:decision:${proposed.find(isDecisionCommand).decisionDigest}`,
         logIndex: decisionIndex, ordinal, identity: buildEventIdentity(consumer.events[ordinal])})),
+      // Range shipping: the entry's two owed events reach the subscriber as
+      // one vector, acknowledged together after its one committed receipt.
+      vectors: [2],
       owed: 2, delivered: 0, pending: 2, acksProposed: 0},
       proposed: {groups: [{logIndex: decisionIndex, events: 2}], matchesLedger: true,
         admitted: true},
@@ -345,6 +349,9 @@ test('TX1 CDC O4: acknowledgements are batched by committed entry under the coun
       applies: [first.prepareApply, first.decisionApply, second.prepareApply,
         second.decisionApply],
       received: consumer.events.length,
+      // Range shipping: rows arrive as bounded vectors, far fewer than rows.
+      shippedWithinBound: consumer.vectors.every((vector) =>
+        vector.length <= BOUND.SHIP_MAX_EVENTS) && consumer.vectors.length < 300 / 10,
       receivedInLogOrder: consumer.events.every((event, index) => index === 0 ||
         event.logIndex > consumer.events[index - 1].logIndex ||
         (event.logIndex === consumer.events[index - 1].logIndex &&
@@ -360,7 +367,8 @@ test('TX1 CDC O4: acknowledgements are batched by committed entry under the coun
           event.ordinal > group.events[index - 1].ordinal))),
     };
     assert.deepEqual(facts, {
-      applies: [null, null, null, null], received: 300, receivedInLogOrder: true,
+      applies: [null, null, null, null], received: 300, shippedWithinBound: true,
+      receivedInLogOrder: true,
       proposedAtBound: [{events: BOUND.ACK_BATCH_MAX_EVENTS, groups: [
         {logIndex: first.decisionIndex, events: 200},
         {logIndex: second.decisionIndex, events: BOUND.ACK_BATCH_MAX_EVENTS - 200}],
@@ -565,6 +573,7 @@ async () => {
       {leaderId: restarted.replicaId, term: 2, partitionId: PARTITION_ID});
     await settleTicks();
     facts.redelivered = consumer.events.map(identityOfEvent);
+    facts.redeliveredVectors = consumer.vectors.map((vector) => vector.length);
     facts.ledgerOrder = durable.map((row) => row.eventKey);
     timeSource.advance(BOUND.ACK_FLUSH_DEADLINE_MS);
     await settleTicks();
@@ -582,6 +591,9 @@ async () => {
         entryId: index < 2 ? first.decision.entryId : second.decision.entryId,
         logIndex: index < 2 ? first.decisionIndex : second.decisionIndex,
         ordinal: index < 2 ? index : 0, identity: buildEventIdentity(consumer.events[index])})),
+      // Range shipping: the new tenure ships the owed rows of both committed
+      // entries as one vector, in ledger order.
+      redeliveredVectors: [3],
       ledgerOrder: expectedKeys,
       ack: {groups: [{logIndex: first.decisionIndex, events: 2},
         {logIndex: second.decisionIndex, events: 1}], matchesLedger: true},
@@ -609,6 +621,8 @@ test('TX1 CDC O9: an acknowledgement whose CDC_DELIVERED never committed is rede
     timeSource.advance(BOUND.ACK_FLUSH_DEADLINE_MS);
     await settleTicks();
     const lost = acksOf(proposed);
+    // Range shipping: one vector per delivery; the redelivery after the lost
+    // acknowledgement is the same two-event vector again.
     const facts = {firstDelivery: consumer.events.map((event) => event.eventKey),
       ackProposedThenLost: lost.length,
       pendingBeforeCrash: leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements};
@@ -620,6 +634,7 @@ test('TX1 CDC O9: an acknowledgement whose CDC_DELIVERED never committed is rede
     await restarted.subscribeToCDCWithHandshake(consumer, {subscriberId: 'c9'});
     await settleTicks();
     facts.redelivered = consumer.events.slice(2).map(identityOfEvent);
+    facts.vectors = consumer.vectors.map((vector) => vector.length);
     facts.consumer = {applied: consumer.applied.size, duplicates: consumer.duplicates,
       sameIdentityAsFirst: consumer.events.slice(2).every((event, index) =>
         buildEventIdentity(event) === buildEventIdentity(consumer.events[index]) &&
@@ -637,6 +652,7 @@ test('TX1 CDC O9: an acknowledgement whose CDC_DELIVERED never committed is rede
       redelivered: [0, 1].map((ordinal) => ({eventKey: txKey(tx, ordinal),
         entryId: consumer.events[ordinal].entryId, logIndex: decisionIndex, ordinal,
         identity: buildEventIdentity(consumer.events[ordinal])})),
+      vectors: [2, 2],
       consumer: {applied: 2, duplicates: 2, sameIdentityAsFirst: true},
       reacknowledged: {groups: [{logIndex: decisionIndex, events: 2}], sameEntryIdAsLost: true},
       ackApply: null, final: {owed: 0, delivered: 2}},
@@ -845,11 +861,9 @@ test('TX1 CDC O15: resolved semantic subscriber refusal cannot acknowledge an ev
   const timeSource = new VirtualTimeSource();
   const {leader, proposed} = await startCdcLeader({timeSource});
   try {
-    await leader.subscribeToCDCWithHandshake({
-      async handleCDCEvent() {
-        return {success: false, failureCode: 'consumer-unavailable'};
-      },
-    }, {subscriberId: 'c15'});
+    await leader.subscribeToCDCWithHandshake(
+      async () => ({success: false, failureCode: 'consumer-unavailable'}),
+      {subscriberId: 'c15'});
     commitHandBuilt(leader, identityOf('c15'), [cdcOperationOf(ROW)]);
     await settleTicks();
     timeSource.advance(BOUND.ACK_FLUSH_DEADLINE_MS);
@@ -862,6 +876,22 @@ test('TX1 CDC O15: resolved semantic subscriber refusal cannot acknowledge an ev
     await shutdownAll(leader);
   }
 });
+
+test('TX1 CDC O15b: a subscriber is a callback; an object with handleCDCEvent is refused',
+  async () => {
+    const {leader} = await startCdcLeader({timeSource: new VirtualTimeSource()});
+    try {
+      await assert.rejects(leader.subscribeToCDCWithHandshake({
+        async handleCDCEvent() {
+          return {success: true};
+        },
+      }, {subscriberId: 'c15b'}),
+      {message: PARTITION_SERVICE_ERROR_MSG.CDC_INVALID_SUBSCRIBER});
+      assert.equal(leader.cdcSubscribers.size, 0);
+    } finally {
+      await shutdownAll(leader);
+    }
+  });
 
 test('TX1 CDC O16: ordinary writes retain an atomic obligation through later writes and replay',
   async () => {
@@ -905,13 +935,16 @@ test('TX1 CDC O17: provisional metadata advances formation without acknowledging
       // Provisional first; then the owner's committed receipt through the one
       // acknowledging fixture (was: undefined, which the receipt gate refuses).
       const acknowledging = acknowledgingCdcSubscriber();
-      await leader.subscribeToCDCWithHandshake(async (event) => {
-        seen.push(event.data.id);
-        return provisional ? buildProvisionalCdcOutcome([event], 50) : acknowledging(event);
+      // The durable subscriber contract: one vector per call, answered over
+      // that exact vector.
+      await leader.subscribeToCDCWithHandshake(async (events) => {
+        seen.push(events.map((event) => event.data.id));
+        return provisional ? buildProvisionalCdcOutcome(events, 50) : acknowledging(events);
       });
       commitHandBuilt(leader, identityOf('c17'), [cdcOperationOf(ROW), cdcOperationOf(ROW_2)]);
       await settleTicks();
-      assert.deepEqual(seen, [ROW.id, ROW_2.id], 'later peer metadata must reach ingress');
+      assert.deepEqual(seen, [[ROW.id, ROW_2.id]],
+        'later peer metadata reaches ingress with the provisional vector');
       assert.deepEqual(countCdcObligations(leader.db), {owed: 2, delivered: 0});
       assert.equal(leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
       provisional = false;
@@ -935,12 +968,15 @@ test('TX1 CDC O18: provisional scanning yields after one page and revisits old d
     commitHandBuilt(leader, identityOf('c18-b'), rowsOf('b', 4).map(cdcOperationOf));
     await settleTicks();
     const seen = [];
-    leader.cdcSubscribers.add(async (event) => {
-      seen.push(event.data.id);
-      return buildProvisionalCdcOutcome([event], 50);
+    leader.cdcSubscribers.add(async (events) => {
+      seen.push(...events.map((event) => event.data.id));
+      return buildProvisionalCdcOutcome(events, 50);
     });
     await leader.cdcDelivery.driveCdcObligations('provisional-page-witness');
-    assert.equal(seen.length, 256, 'one bounded page in the first turn');
+    // One pass visits at most the 256-row quantum, whatever the vector sizes.
+    assert.ok(seen.length > 0 && seen.length <= BOUND.DRIVE_PAGE_ROWS,
+      'one bounded pass in the first turn');
+    assert.ok(seen.length < 260, 'the first turn yields before the whole backlog');
     timeSource.advance(50);
     await settleTicks();
     assert.equal(new Set(seen).size, 260, 'second page is not starved by provisional page one');

@@ -153,6 +153,8 @@
     "analyze:monotone-drain": "node scripts/analyze-monotone-drain.js",
     "analyze:replace-safety-blocks": "node scripts/analyze-replace-safety-blocks.js",
     "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
+    "analyze:run-health": "node scripts/analyze-run-health.js",
+    "analyze:cpu-profile": "node scripts/summarize-cpu-profile.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
     "analyze:formation-release-phases": "node scripts/checks/analyze-formation-release-phases.js",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
@@ -225,8 +227,11 @@
     "gate:preflight": "node scripts/gate-preflight.js",
     "audit:guideline:silent-catch": "node scripts/check-guideline-silent-catch.js",
     "audit:guideline:navigability": "node scripts/check-guideline-navigability.js",
+    "audit:health-hint-imports": "node scripts/checks/check-health-hint-imports.js",
+    "audit:system-table-retention": "node scripts/checks/system-table-retention-budget.js",
+    "audit:guideline:constant-members": "node scripts/checks/check-constant-member-existence.js",
     "audit:guideline:deferred-outcomes": "node scripts/check-guideline-deferred-outcomes.js",
-    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability"
+    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability && npm run audit:guideline:constant-members && npm run audit:health-hint-imports"
   },
   "keywords": [
     "distributed",

@@ -289,16 +289,30 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
+  // Superseded 2026-11-11 (R09, universal removal leadership rule): the
+  // named-target handoff decision moved from this class (priority REPLACEs
+  // only) to the one removal leadership gate every partition removal passes;
+  // this class keeps the publication waits and the attempt's dispatch.
   'src/rebalancer/priority-publication-handoff.js': Object.freeze({
     requiredFragments: Object.freeze([
+      'dispatchRemovalHandoffAttempt',
+      'beginReplaceHandoffAttempt',
+    ]),
+    forbiddenFragments: Object.freeze([
       'evaluateReplaceNamedHandoffSafety',
+    ]),
+  }),
+  'src/rebalancer/operation-workflow-removal-leadership-gate.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'decideRemovalNamedHandoff',
       'REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
-        functionName: 'evaluatePriorityPublicationLeaderRemoveSafety',
+        functionName: 'evaluateRemovalLeadershipSafety',
         requiredFragments: Object.freeze([
-          'evaluateReplaceNamedHandoffSafety',
+          'REMOVAL_LEADERSHIP_SAFE_DECISIONS',
+          'REMOVE_SAFETY_BLOCKED',
         ]),
       }),
     ]),

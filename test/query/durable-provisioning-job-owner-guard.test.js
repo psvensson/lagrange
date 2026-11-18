@@ -11,6 +11,9 @@ const SOURCE = Object.freeze({
   PG_HANDLER: 'src/runtime/pgwire-protocol-handler.js',
   PG_CONSTANTS: 'src/runtime/pgwire-protocol-constants.js',
   PROVISIONING: 'src/query/sql-query-engine-initial-partition-provisioning.js',
+  PROVISIONING_ADMISSION:
+    'src/query/sql-query-engine-provisioning-admission-methods.js',
+  PROVISIONING_SETTLE: 'src/query/provisioning-target-admission-settle.js',
   REPLICA_OWNER:
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
 });
@@ -24,6 +27,8 @@ test('durable provisioning owner trace stays on canonical owners', (t) => {
   const jobOwner = read(SOURCE.JOB_OWNER);
   const jobRepository = read(SOURCE.JOB_REPOSITORY);
   const provisioning = read(SOURCE.PROVISIONING);
+  const provisioningAdmission = read(SOURCE.PROVISIONING_ADMISSION);
+  const provisioningSettle = read(SOURCE.PROVISIONING_SETTLE);
   const replicaOwner = read(SOURCE.REPLICA_OWNER);
   const lifecycle = read(SOURCE.LIFECYCLE);
   const admin = read(SOURCE.ADMIN);
@@ -47,11 +52,19 @@ test('durable provisioning owner trace stays on canonical owners', (t) => {
   t.match(lifecycle, /resumeDurableProvisioningWork/u,
     'runtime activation replays nonterminal jobs');
 
-  t.match(provisioning, /operationIntentId/u);
-  t.match(provisioning, /replicaIntentId/u);
-  t.match(provisioning, /rebalanceCoordinator\.createOperation/u);
-  t.notMatch(provisioning, /replica_operations/u,
-    'SQL never writes or interprets the replica-operation ledger directly');
+  // The initial-partition ADD move is built and created by the provisioning
+  // admission methods (split out of the provisioning file): the schema
+  // job's child intents travel on the one move handed to createOperation.
+  t.match(provisioningAdmission,
+    /operationIntentId: options\.childIntent\.operationIntentId/u);
+  t.match(provisioningAdmission,
+    /replicaIntentId: options\.childIntent\.replicaIntentId/u);
+  t.match(provisioningAdmission,
+    /rebalanceCoordinator\.createOperation\(\s*this\.buildProvisioningCreateOperationMove\(/u);
+  for (const source of [provisioning, provisioningAdmission, provisioningSettle]) {
+    t.notMatch(source, /replica_operations/u,
+      'SQL never writes or interprets the replica-operation ledger directly');
+  }
   t.match(replicaOwner, /move\.operationIntentId \|\| uuidv4/u);
   t.match(replicaOwner, /move\.replicaIntentId \|\|/u);
 

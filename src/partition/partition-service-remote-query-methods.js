@@ -25,6 +25,10 @@ import {
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {CDC_ADMISSION_CLASS_FIELD} from './partition-cdc-admission-class.js';
+import {isPartitionServiceClosed} from './partition-service-closed-refusal.js';
+import {PARTITION_HYDRATION_IMAGE_PAGE_FIELD, PARTITION_HYDRATION_IMAGE_QUERY_FIELD} from
+  './partition-service-hydration-image-methods.js';
 
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
@@ -130,6 +134,9 @@ async function executeRemoteQuery(service, payload) {
     splitMirrorOrigin: payload.splitMirrorOrigin || null,
     sessionId: payload.sessionId || null,
     [STATEMENT_INGRESS_FIELD]: payload[STATEMENT_INGRESS_FIELD] || null,
+    // The write's CDC admission class, as carried (the partition's own
+    // refusal decides whether it may carry one).
+    [CDC_ADMISSION_CLASS_FIELD]: payload[CDC_ADMISSION_CLASS_FIELD],
     resultDeadlineMs: payload[QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS],
     resultMaxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
     resultMaxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
@@ -326,6 +333,14 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    // A hydration-image page (CDC Stage 3 re-list): rows of one leader
+    // snapshot and the position every page of that image is current as of.
+    if (!isWriteOperation && payload[PARTITION_HYDRATION_IMAGE_QUERY_FIELD] === true) {
+      return this.answerHydrationImageQuery(sql, {
+        cursor: payload[PARTITION_HYDRATION_IMAGE_PAGE_FIELD] ?? null,
+        maxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
+        maxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]});
+    }
     const routingRefusal = writeRoutingRefusal(this, payload, isWriteOperation);
     if (routingRefusal !== null) return routingRefusal;
     const ingressRefusal = isWriteOperation ?
@@ -352,6 +367,11 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       const result = await executeRemoteQuery(this, payload);
       return remoteQueryAnswer(this, result, readAuthorityWitness);
     } catch (error) {
+      // A query that met the released connection is answered by the entry's
+      // one service-closed refusal (partition-service-closed-refusal.js).
+      if (isPartitionServiceClosed(this)) {
+        throw error;
+      }
       return remoteQueryFailure(this, sql, error);
     }
   },

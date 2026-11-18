@@ -14,6 +14,8 @@ import {
   isProvisionalCdcOutcome,
   isProvisionalCdcDelivery,
   observeCdcCoverage,
+  unconfirmedCdcAcceptance,
+  unknownCdcAcceptance,
 } from '../../src/cdc/cdc-delivery-outcome.js';
 import {copyCdcEventMetadata} from '../../src/cdc/cdc-event-envelope.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
@@ -216,3 +218,16 @@ for (const [field, values] of Object.entries({
     });
   }
 }
+
+// unconfirmedCdcAcceptance: a CDC outcome names its typed completion in
+// `error` alone (every producer builds it through unknownCdcAcceptance); a
+// `reason` field is not a second source of that answer.
+test('unconfirmedCdcAcceptance carries the typed completion read from error only', () => {
+  for (const code of [CDC_COMPLETION.BACKPRESSURE, CDC_COMPLETION.DUPLICATE_IN_FLIGHT,
+    CDC_COMPLETION.POSITION_GAP]) {
+    const relayed = unconfirmedCdcAcceptance({...unknownCdcAcceptance(code), retryAfterMs: 25});
+    assert.deepEqual(relayed, {...unknownCdcAcceptance(code), retryAfterMs: 25});
+    assert.deepEqual(unconfirmedCdcAcceptance({success: false, reason: code}),
+      unknownCdcAcceptance(), `${code} under reason is no typed completion`);
+  }
+});

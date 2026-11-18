@@ -136,12 +136,9 @@ function readNormalizedServicePartitionId(record) {
   );
 }
 
+// A changed service record is a system-table row: its id is the column.
 function readNormalizedServiceId(record) {
-  return readNormalizedAliasedString(
-    record,
-    COLUMN.SERVICE_ID,
-    FIELD.SERVICE_ID,
-  );
+  return normalizeOptionalString(record?.[COLUMN.SERVICE_ID]);
 }
 
 function buildPriorityPartitionSemanticRecord(record) {

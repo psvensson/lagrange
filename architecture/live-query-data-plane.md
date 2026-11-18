@@ -167,6 +167,66 @@ normal query re-execution. The consumer receives a `reset`/replacement snapshot
 This is still a live query. It is event driven, not polled. Incremental
 maintenance is an optimization of the same contract, not a separate feature.
 
+### Event fields
+
+Every live-query event names each fact once, with the same names in the
+internal event and the admin websocket `live_query_event` message:
+
+| Event | Fields |
+| --- | --- |
+| `insert`/`added` | `data`: the inserted row |
+| `update`/`modified` | `data`: the row after the update; `oldData`: the row before it |
+| `delete`/`removed` | `data`: the deleted row |
+| `snapshot`, `reset` | `rows`: the result rows |
+| `error` | `error`: what failed (the message); `errorCode`: its admin error code |
+
+No other row field (`row`, `new`, `old`, `results`) is emitted.
+
+A `snapshot` is the first result; a `reset` is the query re-executed (the
+invalidation path above, or an incremental continuation that cannot be
+proven). Both replace the result a consumer holds with `rows`; a consumer
+applies them by that one rule, never a snapshot one way and a reset another.
+
+An `error` carries the admin websocket's own error fields (`error`,
+`errorCode`, as on its `error` message) and ends the subscription.
+
+The internal change a query group evaluates names one row, `data`: the row an
+`INSERT` or `UPDATE` leaves, the row a `DELETE` removed. An `UPDATE` (a cache
+`UPSERT` is one) names no previous row: no producer has it (the system-table cache notifies
+the row it holds after the change; a partition CDC envelope, the row written).
+The query group decides whether the row was in the result, and which row it
+was, from its own result set: a row that leaves the predicate is a `delete`
+naming the row held, one that enters is an `insert`, one that stays is an
+`update` whose `oldData` is the row held.
+
+The admin websocket answers a `live_query_subscribe` with the named
+acknowledgement `live_query_subscribed`, never with an event:
+
+| Message | Fields |
+| --- | --- |
+| `live_query_subscribed` | `subscriptionId`, `queryId`, `partitions` (the monitored partitions), `expiresAt` |
+| `live_query_event` | `subscriptionId`, `eventType`, `queryId`, `partitions`, and the event's fields above |
+
+A subscription is pending until its acknowledgement; the subscription's
+`snapshot` event precedes it.
+
+A subscribe that fails is answered once, by the subscription's `error` event
+(`subscriptionId`, `error`, `errorCode`) and never also by a plain admin
+`error`: a statement that does not parse names a parse failure
+(`SYNTAX_ERROR`); any other failure (the snapshot, a refused registration)
+names its own cause. A refused registration leaves no interest on the server.
+
+The client messages are `live_query_subscribe` and `live_query_unsubscribe`;
+there is no renew message. `expiresAt` is when the server's TTL sweep removes
+the registration (`liveQuery.defaultTtlMs`, 30 s by default); that end is not
+yet named to the client.
+
+A row's identity in the incremental path is its table's declared primary key,
+every column of it. A row that lacks a key column is a typed error
+(`LIVE_QUERY_ROW_KEY_MISSING`): in the snapshot it refuses the registration; in
+a change it ends the subscription with an `error` event. No other column
+(`id`, `rowid`) stands in for the key.
+
 ## Partition topology changes
 
 Split, merge, move, and leader change must not leak physical topology into the

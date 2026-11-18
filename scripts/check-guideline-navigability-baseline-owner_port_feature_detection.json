@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.006Z",
-  "rawViolationCount": 2038,
+  "generatedAt": "2026-11-11T10:41:43.110Z",
+  "rawViolationCount": 2028,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 124,
+      "line": 123,
       "column": 4,
       "functionName": "buildReadyLeaseCdcObservationEvidence",
       "kind": "owner_port_feature_detection",
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 231,
+      "line": 227,
       "column": 4,
       "functionName": "buildLogsTableRetentionDiagnostics",
       "kind": "owner_port_feature_detection",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 266,
+      "line": 262,
       "column": 4,
       "functionName": "buildMembershipPublicationOwnerQueueDiagnostics",
       "kind": "owner_port_feature_detection",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 324,
+      "line": 320,
       "column": 6,
       "functionName": "buildCdcReplayRetentionDiagnostics",
       "kind": "owner_port_feature_detection",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 394,
+      "line": 390,
       "column": 4,
       "functionName": "hasControlSnapshotRuntimeReaderAvailable",
       "kind": "owner_port_feature_detection",
@@ -50,7 +50,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 521,
+      "line": 515,
       "column": 6,
       "functionName": "buildControlPlaneDiagnosticsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -59,7 +59,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 589,
+      "line": 583,
       "column": 6,
       "functionName": "buildControlPlaneDiagnosticsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -68,7 +68,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 667,
+      "line": 661,
       "column": 6,
       "functionName": "buildControlPlaneDiagnosticsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -77,7 +77,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 718,
+      "line": 712,
       "column": 8,
       "functionName": "buildControlPlaneDiagnosticsSnapshot",
       "kind": "owner_port_feature_detection",
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 742,
+      "line": 736,
       "column": 6,
       "functionName": "resolvePriorityRecoveryDispatchPendingWorkflowOwner",
       "kind": "owner_port_feature_detection",
@@ -806,7 +806,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 157,
+      "line": 174,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -815,7 +815,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 298,
+      "line": 315,
       "column": 6,
       "functionName": "subscribeToCacheNotifications",
       "kind": "owner_port_feature_detection",
@@ -824,7 +824,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 308,
+      "line": 325,
       "column": 6,
       "functionName": "unsubscribeFromCacheNotifications",
       "kind": "owner_port_feature_detection",
@@ -833,7 +833,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-base.js",
-      "line": 631,
+      "line": 651,
       "column": 6,
       "functionName": "buildCacheDump",
       "kind": "owner_port_feature_detection",
@@ -842,7 +842,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 141,
+      "line": 144,
       "column": 14,
       "functionName": "resolveSpentControlSnapshotRetry",
       "kind": "owner_port_feature_detection",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 164,
+      "line": 167,
       "column": 6,
       "functionName": "resolveServiceDiagnosticsReport",
       "kind": "owner_port_feature_detection",
@@ -860,7 +860,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 377,
+      "line": 390,
       "column": 6,
       "functionName": "buildLocalControlSnapshot",
       "kind": "owner_port_feature_detection",
@@ -914,7 +914,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 94,
+      "line": 113,
       "column": 6,
       "functionName": "resolveLoadLaneReadinessSnapshot",
       "kind": "owner_port_feature_detection",
@@ -923,7 +923,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 107,
+      "line": 126,
       "column": 6,
       "functionName": "resolveLoadLaneReadinessSnapshot",
       "kind": "owner_port_feature_detection",
@@ -1328,7 +1328,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 368,
+      "line": 345,
       "column": 8,
       "functionName": "withdrawFailedJoinAdmission",
       "kind": "owner_port_feature_detection",
@@ -1337,7 +1337,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 392,
+      "line": 369,
       "column": 8,
       "functionName": "resolveMembershipPublicationService",
       "kind": "owner_port_feature_detection",
@@ -1346,7 +1346,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 402,
+      "line": 379,
       "column": 6,
       "functionName": "resolveMembershipPublicationService",
       "kind": "owner_port_feature_detection",
@@ -1355,8 +1355,8 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 614,
-      "column": 6,
+      "line": 620,
+      "column": 8,
       "functionName": "cleanup",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -1364,16 +1364,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 632,
-      "column": 6,
-      "functionName": "cleanup",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 715,
+      "line": 701,
       "column": 8,
       "functionName": "shutdownCdcSqlQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -1382,7 +1373,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 723,
+      "line": 709,
       "column": 7,
       "functionName": "shutdownCdcSqlQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -1391,7 +1382,7 @@
     },
     {
       "filePath": "src/bootstrap/join-cleanup-handler.js",
-      "line": 727,
+      "line": 713,
       "column": 26,
       "functionName": "shutdownCdcSqlQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -1949,7 +1940,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 95,
+      "line": 133,
       "column": 8,
       "functionName": "getStartupAuthorityReadyNodeIds",
       "kind": "owner_port_feature_detection",
@@ -1958,7 +1949,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 169,
+      "line": 220,
       "column": 8,
       "functionName": "buildReadinessByNodeId",
       "kind": "owner_port_feature_detection",
@@ -1967,7 +1958,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 220,
+      "line": 271,
       "column": 11,
       "functionName": "getCurrentEpoch",
       "kind": "owner_port_feature_detection",
@@ -2264,7 +2255,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 84,
+      "line": 88,
       "column": 8,
       "functionName": "pickPorts",
       "kind": "owner_port_feature_detection",
@@ -2273,7 +2264,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 98,
+      "line": 103,
       "column": 5,
       "functionName": "checkDecommissionPreflight",
       "kind": "owner_port_feature_detection",
@@ -2282,7 +2273,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 120,
+      "line": 125,
       "column": 9,
       "functionName": "sendErrorReply",
       "kind": "owner_port_feature_detection",
@@ -2291,7 +2282,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 286,
+      "line": 391,
       "column": 33,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -2300,7 +2291,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/management-v1-owner.js",
-      "line": 301,
+      "line": 406,
       "column": 15,
       "functionName": "getClusterId",
       "kind": "owner_port_feature_detection",
@@ -2336,7 +2327,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 169,
+      "line": 204,
       "column": 31,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -2345,7 +2336,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/rolling-upgrade-owner.js",
-      "line": 170,
+      "line": 205,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -3541,15 +3532,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
-      "line": 168,
-      "column": 16,
-      "functionName": "logPropagationEvent",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/shared/partition-service-activation.js",
       "line": 43,
       "column": 6,
@@ -4451,7 +4433,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-tombstone-store.js",
-      "line": 123,
+      "line": 145,
       "column": 19,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -4460,7 +4442,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-tombstone-store.js",
-      "line": 132,
+      "line": 154,
       "column": 44,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -4469,7 +4451,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 169,
+      "line": 170,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -4829,7 +4811,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
-      "line": 239,
+      "line": 243,
       "column": 6,
       "functionName": "executeAuthoritativeSqlFallbackRead",
       "kind": "owner_port_feature_detection",
@@ -4838,7 +4820,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
-      "line": 277,
+      "line": 281,
       "column": 4,
       "functionName": "getLocalQueryTransportReadiness",
       "kind": "owner_port_feature_detection",
@@ -4847,7 +4829,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
-      "line": 302,
+      "line": 306,
       "column": 4,
       "functionName": "maybeReseedBootstrapOverlay",
       "kind": "owner_port_feature_detection",
@@ -4856,7 +4838,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
-      "line": 400,
+      "line": 404,
       "column": 4,
       "functionName": "executeAuthoritativeOwnerRpcRead",
       "kind": "owner_port_feature_detection",
@@ -4937,6 +4919,15 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
+      "line": 146,
+      "column": 6,
+      "functionName": "hasActiveSystemTableWriteMirror",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
       "line": 147,
       "column": 6,
       "functionName": "hasActiveSystemTableWriteMirror",
@@ -4946,16 +4937,7 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 148,
-      "column": 6,
-      "functionName": "hasActiveSystemTableWriteMirror",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 198,
+      "line": 197,
       "column": 10,
       "functionName": "tryExecuteLocalSystemTableWrite",
       "kind": "owner_port_feature_detection",
@@ -4964,7 +4946,7 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 592,
+      "line": 591,
       "column": 12,
       "functionName": "executeSQLViaQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -5549,7 +5531,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 84,
+      "line": 85,
       "column": 4,
       "functionName": "isWritableCacheTarget",
       "kind": "owner_port_feature_detection",
@@ -5558,7 +5540,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 167,
+      "line": 191,
       "column": 4,
       "functionName": "resolveCachedEntries",
       "kind": "owner_port_feature_detection",
@@ -5567,7 +5549,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 168,
+      "line": 192,
       "column": 4,
       "functionName": "resolveCachedEntries",
       "kind": "owner_port_feature_detection",
@@ -5576,7 +5558,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 172,
+      "line": 196,
       "column": 6,
       "functionName": "resolveCachedEntries",
       "kind": "owner_port_feature_detection",
@@ -5585,7 +5567,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 212,
+      "line": 236,
       "column": 4,
       "functionName": "hasCompleteObservationInputs",
       "kind": "owner_port_feature_detection",
@@ -5594,7 +5576,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 213,
+      "line": 237,
       "column": 4,
       "functionName": "hasCompleteObservationInputs",
       "kind": "owner_port_feature_detection",
@@ -5603,7 +5585,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 219,
+      "line": 243,
       "column": 4,
       "functionName": "hasAuthoritativeObservationStorage",
       "kind": "owner_port_feature_detection",
@@ -5612,7 +5594,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 220,
+      "line": 244,
       "column": 4,
       "functionName": "hasAuthoritativeObservationStorage",
       "kind": "owner_port_feature_detection",
@@ -5621,7 +5603,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 221,
+      "line": 245,
       "column": 4,
       "functionName": "hasAuthoritativeObservationStorage",
       "kind": "owner_port_feature_detection",
@@ -5630,7 +5612,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 547,
+      "line": 571,
       "column": 4,
       "functionName": "buildReconciliationContext",
       "kind": "owner_port_feature_detection",
@@ -6251,7 +6233,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 215,
+      "line": 216,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -6260,7 +6242,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 219,
+      "line": 220,
       "column": 20,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -6269,7 +6251,7 @@
     },
     {
       "filePath": "src/control-plane/membership-lifecycle-controller.js",
-      "line": 222,
+      "line": 223,
       "column": 21,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -6737,7 +6719,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 404,
+      "line": 411,
       "column": 22,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "owner_port_feature_detection",
@@ -6746,7 +6728,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 418,
+      "line": 425,
       "column": 6,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -6755,7 +6737,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 421,
+      "line": 428,
       "column": 6,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "owner_port_feature_detection",
@@ -8177,7 +8159,7 @@
     },
     {
       "filePath": "src/diagnostics/event-loop-gap-watchdog.js",
-      "line": 94,
+      "line": 96,
       "column": 17,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -8186,7 +8168,7 @@
     },
     {
       "filePath": "src/diagnostics/event-loop-gap-watchdog.js",
-      "line": 548,
+      "line": 550,
       "column": 8,
       "functionName": "start",
       "kind": "owner_port_feature_detection",
@@ -8195,7 +8177,7 @@
     },
     {
       "filePath": "src/diagnostics/event-loop-gap-watchdog.js",
-      "line": 756,
+      "line": 762,
       "column": 6,
       "functionName": "logConsoleOnly",
       "kind": "owner_port_feature_detection",
@@ -8213,7 +8195,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 367,
+      "line": 375,
       "column": 6,
       "functionName": "collectComponentStats",
       "kind": "owner_port_feature_detection",
@@ -8222,7 +8204,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 373,
+      "line": 381,
       "column": 6,
       "functionName": "collectComponentStats",
       "kind": "owner_port_feature_detection",
@@ -8231,7 +8213,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 384,
+      "line": 392,
       "column": 27,
       "functionName": "collectComponentStats",
       "kind": "owner_port_feature_detection",
@@ -8240,7 +8222,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 397,
+      "line": 405,
       "column": 6,
       "functionName": "collectComponentStats",
       "kind": "owner_port_feature_detection",
@@ -8249,7 +8231,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 402,
+      "line": 410,
       "column": 6,
       "functionName": "collectComponentStats",
       "kind": "owner_port_feature_detection",
@@ -8357,7 +8339,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 146,
+      "line": 147,
       "column": 6,
       "functionName": "publishNodeShutdownStatus",
       "kind": "owner_port_feature_detection",
@@ -8366,7 +8348,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 290,
+      "line": 292,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -8375,7 +8357,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 343,
+      "line": 345,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -8384,7 +8366,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 476,
+      "line": 484,
       "column": 17,
       "functionName": "scheduleStartupLivenessPulse",
       "kind": "owner_port_feature_detection",
@@ -8393,7 +8375,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 500,
+      "line": 508,
       "column": 6,
       "functionName": "scheduleStartupLivenessPulse",
       "kind": "owner_port_feature_detection",
@@ -8744,7 +8726,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 37,
+      "line": 38,
       "column": 6,
       "functionName": "resolvePartitionRow",
       "kind": "owner_port_feature_detection",
@@ -8753,7 +8735,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 44,
+      "line": 45,
       "column": 6,
       "functionName": "resolvePartitionRow",
       "kind": "owner_port_feature_detection",
@@ -8762,7 +8744,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 229,
+      "line": 230,
       "column": 4,
       "functionName": "createLiveQueryCacheSubscriptionAdapter",
       "kind": "owner_port_feature_detection",
@@ -8771,7 +8753,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 259,
+      "line": 260,
       "column": 6,
       "functionName": "createLiveQueryCacheSubscriptionAdapter",
       "kind": "owner_port_feature_detection",
@@ -8780,7 +8762,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 295,
+      "line": 296,
       "column": 8,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -8789,7 +8771,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 371,
+      "line": 377,
       "column": 6,
       "functionName": "trySubscribeViaPartition",
       "kind": "owner_port_feature_detection",
@@ -8798,7 +8780,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 378,
+      "line": 384,
       "column": 6,
       "functionName": "trySubscribeViaPartition",
       "kind": "owner_port_feature_detection",
@@ -8807,7 +8789,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 411,
+      "line": 417,
       "column": 8,
       "functionName": "subscribeToPartition",
       "kind": "owner_port_feature_detection",
@@ -8816,7 +8798,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 414,
+      "line": 420,
       "column": 8,
       "functionName": "subscribeToPartition",
       "kind": "owner_port_feature_detection",
@@ -8825,7 +8807,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 437,
+      "line": 443,
       "column": 8,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -8834,7 +8816,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 440,
+      "line": 446,
       "column": 8,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -8843,7 +8825,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 448,
+      "line": 454,
       "column": 21,
       "functionName": "unsubscribeFromPartition",
       "kind": "owner_port_feature_detection",
@@ -8870,7 +8852,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 538,
+      "line": 546,
       "column": 10,
       "functionName": "scheduleNext",
       "kind": "owner_port_feature_detection",
@@ -8879,7 +8861,7 @@
     },
     {
       "filePath": "src/logging/logging-service.js",
-      "line": 592,
+      "line": 600,
       "column": 23,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -9005,7 +8987,7 @@
     },
     {
       "filePath": "src/logging/wait-bound-spent.js",
-      "line": 235,
+      "line": 243,
       "column": 16,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -9014,7 +8996,7 @@
     },
     {
       "filePath": "src/logging/wait-bound-spent.js",
-      "line": 314,
+      "line": 324,
       "column": 6,
       "functionName": "readWaitClock",
       "kind": "owner_port_feature_detection",
@@ -9023,7 +9005,7 @@
     },
     {
       "filePath": "src/message-group/cdc-handler.js",
-      "line": 524,
+      "line": 525,
       "column": 10,
       "functionName": "applyEvent",
       "kind": "owner_port_feature_detection",
@@ -9068,7 +9050,7 @@
     },
     {
       "filePath": "src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
-      "line": 260,
+      "line": 255,
       "column": 10,
       "functionName": "forwardDurableCdcPayload",
       "kind": "owner_port_feature_detection",
@@ -9302,7 +9284,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-runtime-support.js",
-      "line": 241,
+      "line": 242,
       "column": 21,
       "functionName": "isWebSocketBasedMessageRouterTransport",
       "kind": "owner_port_feature_detection",
@@ -9311,7 +9293,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-runtime-support.js",
-      "line": 242,
+      "line": 243,
       "column": 24,
       "functionName": "isWebSocketBasedMessageRouterTransport",
       "kind": "owner_port_feature_detection",
@@ -9320,7 +9302,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-runtime-support.js",
-      "line": 244,
+      "line": 245,
       "column": 4,
       "functionName": "isWebSocketBasedMessageRouterTransport",
       "kind": "owner_port_feature_detection",
@@ -9770,7 +9752,7 @@
     },
     {
       "filePath": "src/node/replica-create-admission-owner.js",
-      "line": 312,
+      "line": 311,
       "column": 29,
       "functionName": "acquire",
       "kind": "owner_port_feature_detection",
@@ -9779,7 +9761,7 @@
     },
     {
       "filePath": "src/node/replica-create-admission-owner.js",
-      "line": 339,
+      "line": 338,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -9797,7 +9779,7 @@
     },
     {
       "filePath": "src/node/replica-handler-class.js",
-      "line": 109,
+      "line": 114,
       "column": 4,
       "functionName": "attachStateMachineLiveReplicaRoleResolver",
       "kind": "owner_port_feature_detection",
@@ -9806,7 +9788,7 @@
     },
     {
       "filePath": "src/node/replica-handler-class.js",
-      "line": 153,
+      "line": 158,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -10175,7 +10157,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 355,
+      "line": 382,
       "column": 6,
       "functionName": "resolveLiveReplicaRaftRole",
       "kind": "owner_port_feature_detection",
@@ -10184,7 +10166,7 @@
     },
     {
       "filePath": "src/node/replica-state-machine-lifecycle-observation.js",
-      "line": 379,
+      "line": 406,
       "column": 20,
       "functionName": "readCachedReplicaServiceRow",
       "kind": "owner_port_feature_detection",
@@ -10661,7 +10643,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 126,
+      "line": 143,
       "column": 18,
       "functionName": "isCDCSubscriber",
       "kind": "owner_port_feature_detection",
@@ -10670,7 +10652,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 147,
+      "line": 169,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -10679,7 +10661,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 166,
+      "line": 188,
       "column": 8,
       "functionName": "driveCdcObligations",
       "kind": "owner_port_feature_detection",
@@ -10688,7 +10670,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-delivery.js",
-      "line": 247,
+      "line": 269,
       "column": 6,
       "functionName": "resolveCDCSubscriberReadiness",
       "kind": "owner_port_feature_detection",
@@ -10697,7 +10679,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-delivery.js",
-      "line": 58,
+      "line": 64,
       "column": 6,
       "functionName": "trackOnOwner",
       "kind": "owner_port_feature_detection",
@@ -10706,8 +10688,8 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-progress.js",
-      "line": 37,
-      "column": 9,
+      "line": 65,
+      "column": 5,
       "functionName": "topologyBindingCurrent",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -11201,7 +11183,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 294,
+      "line": 338,
       "column": 6,
       "functionName": "emitSplitSourceAck",
       "kind": "owner_port_feature_detection",
@@ -11210,7 +11192,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 381,
+      "line": 404,
       "column": 21,
       "functionName": "createSplitSnapshotRowIterator",
       "kind": "owner_port_feature_detection",
@@ -11219,7 +11201,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 384,
+      "line": 407,
       "column": 21,
       "functionName": "createSplitSnapshotRowIterator",
       "kind": "owner_port_feature_detection",
@@ -11228,7 +11210,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 458,
+      "line": 476,
       "column": 6,
       "functionName": "markSplitCutoverActive",
       "kind": "owner_port_feature_detection",
@@ -11237,7 +11219,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 736,
+      "line": 742,
       "column": 6,
       "functionName": "rebindCoordinator",
       "kind": "owner_port_feature_detection",
@@ -11246,7 +11228,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 741,
+      "line": 747,
       "column": 8,
       "functionName": "rebindCoordinator",
       "kind": "owner_port_feature_detection",
@@ -11255,7 +11237,7 @@
     },
     {
       "filePath": "src/partition/partition-service-split-accessor-base.js",
-      "line": 780,
+      "line": 777,
       "column": 8,
       "functionName": "setSqlQueryEngine",
       "kind": "owner_port_feature_detection",
@@ -11408,7 +11390,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 651,
+      "line": 656,
       "column": 6,
       "functionName": "resolvePartitionPolicyFactFromOwner",
       "kind": "owner_port_feature_detection",
@@ -11417,7 +11399,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 677,
+      "line": 682,
       "column": 6,
       "functionName": "resolveMessageGroupPolicyFactFromOwner",
       "kind": "owner_port_feature_detection",
@@ -11426,7 +11408,7 @@
     },
     {
       "filePath": "src/policy/table-policy-resolution.js",
-      "line": 721,
+      "line": 726,
       "column": 6,
       "functionName": "readPolicyForPartition",
       "kind": "owner_port_feature_detection",
@@ -11435,7 +11417,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 103,
+      "line": 105,
       "column": 15,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -11444,7 +11426,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 193,
+      "line": 195,
       "column": 8,
       "functionName": "lookupCachedTable",
       "kind": "owner_port_feature_detection",
@@ -11453,7 +11435,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 199,
+      "line": 201,
       "column": 15,
       "functionName": "lookupCachedTable",
       "kind": "owner_port_feature_detection",
@@ -11462,7 +11444,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 220,
+      "line": 222,
       "column": 8,
       "functionName": "lookupCachedPartition",
       "kind": "owner_port_feature_detection",
@@ -11471,7 +11453,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 230,
+      "line": 232,
       "column": 8,
       "functionName": "lookupCachedPartition",
       "kind": "owner_port_feature_detection",
@@ -11480,7 +11462,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 259,
+      "line": 261,
       "column": 6,
       "functionName": "hasAuthoritativeSystemTableReadSource",
       "kind": "owner_port_feature_detection",
@@ -11489,7 +11471,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 262,
+      "line": 264,
       "column": 8,
       "functionName": "hasAuthoritativeSystemTableReadSource",
       "kind": "owner_port_feature_detection",
@@ -11498,7 +11480,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 565,
+      "line": 568,
       "column": 8,
       "functionName": "lookupCachedMessageGroup",
       "kind": "owner_port_feature_detection",
@@ -11507,7 +11489,7 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 573,
+      "line": 576,
       "column": 8,
       "functionName": "lookupCachedMessageGroup",
       "kind": "owner_port_feature_detection",
@@ -11669,7 +11651,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 162,
+      "line": 163,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11678,7 +11660,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 165,
+      "line": 166,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11687,7 +11669,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 173,
+      "line": 174,
       "column": 8,
       "functionName": "getPartition",
       "kind": "owner_port_feature_detection",
@@ -11696,7 +11678,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 531,
+      "line": 532,
       "column": 8,
       "functionName": "executeQueryOnService",
       "kind": "owner_port_feature_detection",
@@ -11705,7 +11687,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 558,
+      "line": 559,
       "column": 6,
       "functionName": "createCancellationPromise",
       "kind": "owner_port_feature_detection",
@@ -11714,7 +11696,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 567,
+      "line": 568,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -11723,7 +11705,7 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 569,
+      "line": 570,
       "column": 23,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -11822,7 +11804,7 @@
     },
     {
       "filePath": "src/query/query-executor-cancellation-routing-install.js",
-      "line": 64,
+      "line": 65,
       "column": 6,
       "functionName": "throwIfCancelled",
       "kind": "owner_port_feature_detection",
@@ -11849,7 +11831,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-attempt-budget.js",
-      "line": 98,
+      "line": 100,
       "column": 9,
       "functionName": "executorNow",
       "kind": "owner_port_feature_detection",
@@ -11858,7 +11840,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-attempt-budget.js",
-      "line": 155,
+      "line": 157,
       "column": 6,
       "functionName": "resolveRecoveryCandidateConnectionState",
       "kind": "owner_port_feature_detection",
@@ -11867,7 +11849,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-attempt-budget.js",
-      "line": 348,
+      "line": 378,
       "column": 8,
       "functionName": "waitForRetryBudget",
       "kind": "owner_port_feature_detection",
@@ -11885,7 +11867,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 772,
+      "line": 776,
       "column": 6,
       "functionName": "notifyHedgeDeliveryObserver",
       "kind": "owner_port_feature_detection",
@@ -12164,7 +12146,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 241,
+      "line": 240,
       "column": 6,
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "owner_port_feature_detection",
@@ -12173,7 +12155,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 274,
+      "line": 273,
       "column": 6,
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "owner_port_feature_detection",
@@ -12182,7 +12164,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 304,
+      "line": 303,
       "column": 6,
       "functionName": "refreshRoutingMetadataOverlay",
       "kind": "owner_port_feature_detection",
@@ -12272,7 +12254,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 73,
+      "line": 74,
       "column": 21,
       "functionName": "resolvePartitionDb",
       "kind": "owner_port_feature_detection",
@@ -12281,7 +12263,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 130,
+      "line": 131,
       "column": 6,
       "functionName": "resolveRowPartitionId",
       "kind": "owner_port_feature_detection",
@@ -12290,7 +12272,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 219,
+      "line": 220,
       "column": 6,
       "functionName": "rollbackConflictingSession",
       "kind": "owner_port_feature_detection",
@@ -12299,7 +12281,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 221,
+      "line": 222,
       "column": 13,
       "functionName": "rollbackConflictingSession",
       "kind": "owner_port_feature_detection",
@@ -12308,7 +12290,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 778,
+      "line": 779,
       "column": 24,
       "functionName": "queryMatchingPkRows",
       "kind": "owner_port_feature_detection",
@@ -12353,7 +12335,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 70,
+      "line": 72,
       "column": 6,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12362,7 +12344,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 71,
+      "line": 73,
       "column": 6,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12371,7 +12353,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 268,
+      "line": 269,
       "column": 6,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12380,7 +12362,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 557,
+      "line": 579,
       "column": 8,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12389,7 +12371,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 558,
+      "line": 580,
       "column": 8,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12398,7 +12380,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 584,
+      "line": 623,
       "column": 8,
       "functionName": "provisionInitialTablePartition",
       "kind": "owner_port_feature_detection",
@@ -12407,7 +12389,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-instance-initializer.js",
-      "line": 94,
+      "line": 134,
       "column": 4,
       "functionName": "initializeSqlQueryEngineInstance",
       "kind": "owner_port_feature_detection",
@@ -12416,7 +12398,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-instance-initializer.js",
-      "line": 289,
+      "line": 335,
       "column": 4,
       "functionName": "initializeSqlQueryEngineInstance",
       "kind": "owner_port_feature_detection",
@@ -12425,7 +12407,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 105,
+      "line": 127,
       "column": 8,
       "functionName": "activateDistributedTransactionRecovery",
       "kind": "owner_port_feature_detection",
@@ -12434,7 +12416,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 240,
+      "line": 263,
       "column": 6,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -12443,7 +12425,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 246,
+      "line": 269,
       "column": 6,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -12452,7 +12434,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 252,
+      "line": 275,
       "column": 6,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -12461,7 +12443,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 259,
+      "line": 282,
       "column": 6,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -12470,7 +12452,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 265,
+      "line": 288,
       "column": 6,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -12479,7 +12461,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 305,
+      "line": 328,
       "column": 6,
       "functionName": "_wireStateProjectionWriter",
       "kind": "owner_port_feature_detection",
@@ -12488,7 +12470,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 313,
+      "line": 336,
       "column": 6,
       "functionName": "_wireStateProjectionWriter",
       "kind": "owner_port_feature_detection",
@@ -12497,7 +12479,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 349,
+      "line": 372,
       "column": 22,
       "functionName": "_wireQueryExecutorFactory",
       "kind": "owner_port_feature_detection",
@@ -12506,7 +12488,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 63,
+      "line": 68,
       "column": 6,
       "functionName": "isCancellationRequested",
       "kind": "owner_port_feature_detection",
@@ -12515,7 +12497,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 66,
+      "line": 71,
       "column": 6,
       "functionName": "isCancellationRequested",
       "kind": "owner_port_feature_detection",
@@ -12524,7 +12506,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 101,
+      "line": 106,
       "column": 4,
       "functionName": "resolveRemainingLookupBudgetMs",
       "kind": "owner_port_feature_detection",
@@ -12533,7 +12515,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 201,
+      "line": 206,
       "column": 4,
       "functionName": "hasDirectControlPlaneAuthority",
       "kind": "owner_port_feature_detection",
@@ -12542,7 +12524,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 205,
+      "line": 210,
       "column": 4,
       "functionName": "hasDirectControlPlaneAuthority",
       "kind": "owner_port_feature_detection",
@@ -12551,7 +12533,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 225,
+      "line": 230,
       "column": 15,
       "functionName": "isGatewayConfigured",
       "kind": "owner_port_feature_detection",
@@ -12560,7 +12542,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 234,
+      "line": 239,
       "column": 4,
       "functionName": "canReadGatewayForTableMetadata",
       "kind": "owner_port_feature_detection",
@@ -12569,7 +12551,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 258,
+      "line": 263,
       "column": 6,
       "functionName": "createRaceCleanupGuard",
       "kind": "owner_port_feature_detection",
@@ -12578,7 +12560,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 412,
+      "line": 450,
       "column": 6,
       "functionName": "findCachedRowByField",
       "kind": "owner_port_feature_detection",
@@ -12587,7 +12569,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 418,
+      "line": 453,
       "column": 6,
       "functionName": "findCachedRowByField",
       "kind": "owner_port_feature_detection",
@@ -12596,7 +12578,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 433,
+      "line": 466,
       "column": 4,
       "functionName": "findExistingCachedRow",
       "kind": "owner_port_feature_detection",
@@ -12605,7 +12587,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
-      "line": 476,
+      "line": 518,
       "column": 15,
       "functionName": "evictMatchingStoreRows",
       "kind": "owner_port_feature_detection",
@@ -12794,7 +12776,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-methods.js",
-      "line": 178,
+      "line": 250,
       "column": 19,
       "functionName": "resolveProvisionTargetNodeDiagnostics",
       "kind": "owner_port_feature_detection",
@@ -12803,7 +12785,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-methods.js",
-      "line": 317,
+      "line": 389,
       "column": 6,
       "functionName": "estimateSplitAdmissionBytes",
       "kind": "owner_port_feature_detection",
@@ -12821,7 +12803,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 71,
+      "line": 277,
       "column": 8,
       "functionName": "hasServiceMetadata",
       "kind": "owner_port_feature_detection",
@@ -12830,7 +12812,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 78,
+      "line": 281,
       "column": 8,
       "functionName": "hasServiceMetadata",
       "kind": "owner_port_feature_detection",
@@ -12839,8 +12821,8 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 109,
-      "column": 8,
+      "line": 303,
+      "column": 13,
       "functionName": "isRoutableService",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -12848,7 +12830,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 118,
+      "line": 307,
       "column": 8,
       "functionName": "hasRoutableServiceMetadata",
       "kind": "owner_port_feature_detection",
@@ -12857,7 +12839,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 125,
+      "line": 311,
       "column": 8,
       "functionName": "hasRoutableServiceMetadata",
       "kind": "owner_port_feature_detection",
@@ -12866,7 +12848,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 133,
+      "line": 317,
       "column": 8,
       "functionName": "hasRoutableServiceMetadata",
       "kind": "owner_port_feature_detection",
@@ -12875,8 +12857,8 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 168,
-      "column": 6,
+      "line": 342,
+      "column": 8,
       "functionName": "getRoutablePartitionServiceNodeIds",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -12884,7 +12866,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 210,
+      "line": 374,
       "column": 24,
       "functionName": "mergeServices",
       "kind": "owner_port_feature_detection",
@@ -12893,8 +12875,8 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 240,
-      "column": 10,
+      "line": 390,
+      "column": 33,
       "functionName": "getPartitionById",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -12902,7 +12884,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 246,
+      "line": 393,
       "column": 15,
       "functionName": "getPartitionById",
       "kind": "owner_port_feature_detection",
@@ -12911,17 +12893,8 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 255,
-      "column": 12,
-      "functionName": "shouldMaskCacheServicesForPartition",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 269,
-      "column": 12,
+      "line": 409,
+      "column": 25,
       "functionName": "refreshPartitionRouting",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -12929,35 +12902,35 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 321,
-      "column": 6,
-      "functionName": "getLocalRuntimeRoutingOverlayServices",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 326,
-      "column": 6,
-      "functionName": "getLocalRuntimeRoutingOverlayServices",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 338,
-      "column": 6,
-      "functionName": "getLocalRuntimeRoutingOverlayServices",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 373,
+      "line": 473,
       "column": 8,
+      "functionName": "getLocalRuntimeRoutingOverlayServices",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
+      "line": 474,
+      "column": 25,
+      "functionName": "getLocalRuntimeRoutingOverlayServices",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
+      "line": 478,
+      "column": 30,
+      "functionName": "getLocalRuntimeRoutingOverlayServices",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
+      "line": 481,
+      "column": 22,
       "functionName": "getLocalRuntimeRoutingOverlayServices",
       "kind": "owner_port_feature_detection",
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
@@ -12974,16 +12947,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 118,
-      "column": 6,
-      "functionName": "requestManagedSplitEvaluationForWrite",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 427,
+      "line": 480,
       "column": 18,
       "functionName": "authorizeRuntimeServiceStatement",
       "kind": "owner_port_feature_detection",
@@ -12992,7 +12956,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 576,
+      "line": 629,
       "column": 6,
       "functionName": "executeAlterTable",
       "kind": "owner_port_feature_detection",
@@ -13361,7 +13325,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 543,
+      "line": 554,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "owner_port_feature_detection",
@@ -13631,7 +13595,7 @@
     },
     {
       "filePath": "src/rebalancer/background-priority-spread-release-tracker.js",
-      "line": 157,
+      "line": 198,
       "column": 4,
       "functionName": "registerBackgroundPrioritySpreadReleaseWake",
       "kind": "owner_port_feature_detection",
@@ -13658,7 +13622,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 994,
+      "line": 959,
       "column": 6,
       "functionName": "getTerminalFailedReplaceTargetReplicaIds",
       "kind": "owner_port_feature_detection",
@@ -13667,7 +13631,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 1018,
+      "line": 983,
       "column": 6,
       "functionName": "getTerminalFailedCreateTargetReplicaIds",
       "kind": "owner_port_feature_detection",
@@ -13676,7 +13640,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 1033,
+      "line": 998,
       "column": 6,
       "functionName": "getFailedCreateTargetCleanupPrecondition",
       "kind": "owner_port_feature_detection",
@@ -13685,7 +13649,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-move-calculation-methods.js",
-      "line": 1047,
+      "line": 1012,
       "column": 6,
       "functionName": "getTerminalFailedCreateTargetClaims",
       "kind": "owner_port_feature_detection",
@@ -13694,7 +13658,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-placement-tail-methods.js",
-      "line": 216,
+      "line": 298,
       "column": 6,
       "functionName": "applyPressureGating",
       "kind": "owner_port_feature_detection",
@@ -13919,7 +13883,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 178,
+      "line": 179,
       "column": 4,
       "functionName": "resolveCoordinatorCreatedOperationOwnerNodeId",
       "kind": "owner_port_feature_detection",
@@ -13928,7 +13892,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
-      "line": 76,
+      "line": 83,
       "column": 9,
       "functionName": "isDispatchEpochGateEngaged",
       "kind": "owner_port_feature_detection",
@@ -13937,7 +13901,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
-      "line": 140,
+      "line": 164,
       "column": 4,
       "functionName": "ensureDispatchMembershipEpochOrSkip",
       "kind": "owner_port_feature_detection",
@@ -13946,7 +13910,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
-      "line": 145,
+      "line": 169,
       "column": 6,
       "functionName": "ensureDispatchMembershipEpochOrSkip",
       "kind": "owner_port_feature_detection",
@@ -13982,7 +13946,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 608,
+      "line": 634,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -14027,7 +13991,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 555,
+      "line": 556,
       "column": 10,
       "functionName": "executeOperationInternal",
       "kind": "owner_port_feature_detection",
@@ -14036,7 +14000,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 1175,
+      "line": 1172,
       "column": 6,
       "functionName": "reconcileCreateInProgressDispatchResponse",
       "kind": "owner_port_feature_detection",
@@ -14045,7 +14009,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 1177,
+      "line": 1174,
       "column": 6,
       "functionName": "reconcileCreateInProgressDispatchResponse",
       "kind": "owner_port_feature_detection",
@@ -14054,7 +14018,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 61,
+      "line": 62,
       "column": 4,
       "functionName": "getDispatchWakeObservedTargetStatus",
       "kind": "owner_port_feature_detection",
@@ -14063,7 +14027,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 102,
+      "line": 103,
       "column": 6,
       "functionName": "buildDispatchWakeProgressPreemptEvidence",
       "kind": "owner_port_feature_detection",
@@ -14072,25 +14036,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 169,
-      "column": 6,
-      "functionName": "reconcileDispatchWakeOperationProgress",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 174,
-      "column": 6,
-      "functionName": "reconcileDispatchWakeOperationProgress",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 203,
+      "line": 268,
       "column": 4,
       "functionName": "reconcileDispatchWakePendingTargetProgress",
       "kind": "owner_port_feature_detection",
@@ -14099,7 +14045,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
-      "line": 215,
+      "line": 280,
       "column": 4,
       "functionName": "reconcileDispatchWakePendingTargetProgress",
       "kind": "owner_port_feature_detection",
@@ -14126,7 +14072,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 172,
+      "line": 171,
       "column": 6,
       "functionName": "getReconciledReplicaStatus",
       "kind": "owner_port_feature_detection",
@@ -14135,7 +14081,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 192,
+      "line": 191,
       "column": 6,
       "functionName": "getReconciledReplicaStatus",
       "kind": "owner_port_feature_detection",
@@ -14144,7 +14090,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 327,
+      "line": 326,
       "column": 6,
       "functionName": "runRetainedOperationOwnerAction",
       "kind": "owner_port_feature_detection",
@@ -14153,7 +14099,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 333,
+      "line": 332,
       "column": 8,
       "functionName": "runRetainedOperationOwnerAction",
       "kind": "owner_port_feature_detection",
@@ -14162,7 +14108,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 606,
+      "line": 605,
       "column": 6,
       "functionName": "renewOperationOwnerLeaseAfterCommittedTransition",
       "kind": "owner_port_feature_detection",
@@ -14387,7 +14333,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-shared.js",
-      "line": 504,
+      "line": 505,
       "column": 4,
       "functionName": "buildHandoffDeferralTransportDiagnostics",
       "kind": "owner_port_feature_detection",
@@ -14414,7 +14360,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 351,
+      "line": 346,
       "column": 6,
       "functionName": "resolvePriorityRecoveryPreSyncReplaceTargetState",
       "kind": "owner_port_feature_detection",
@@ -14450,7 +14396,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
-      "line": 405,
+      "line": 409,
       "column": 6,
       "functionName": "selectCoordinatorCreatedCacheReentryOperation",
       "kind": "owner_port_feature_detection",
@@ -14459,7 +14405,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
-      "line": 531,
+      "line": 535,
       "column": 6,
       "functionName": "observeStoppingReplicaProgress",
       "kind": "owner_port_feature_detection",
@@ -14468,7 +14414,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
-      "line": 534,
+      "line": 536,
       "column": 6,
       "functionName": "hasActivePriorityRecoveryDispatchPendingRemoteRetry",
       "kind": "owner_port_feature_detection",
@@ -14486,7 +14432,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 123,
+      "line": 126,
       "column": 6,
       "functionName": "isRuntimeServiceActiveCacheHandoffAligned",
       "kind": "owner_port_feature_detection",
@@ -14513,7 +14459,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 246,
+      "line": 243,
       "column": 6,
       "functionName": "isActiveReplaceSourceReplicaVisibleInCache",
       "kind": "owner_port_feature_detection",
@@ -14540,7 +14486,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 451,
+      "line": 449,
       "column": 8,
       "functionName": "touchOwnerLease",
       "kind": "owner_port_feature_detection",
@@ -14549,7 +14495,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 750,
+      "line": 748,
       "column": 19,
       "functionName": "isConcurrentOperationTargetUncontactable",
       "kind": "owner_port_feature_detection",
@@ -14558,7 +14504,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 959,
+      "line": 957,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationDrainReleaseEligibleReplace",
       "kind": "owner_port_feature_detection",
@@ -14567,7 +14513,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-universal-tier.js",
-      "line": 104,
+      "line": 107,
       "column": 8,
       "functionName": "evaluateProjectedPeersContactable",
       "kind": "owner_port_feature_detection",
@@ -14576,7 +14522,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-universal-tier.js",
-      "line": 109,
+      "line": 112,
       "column": 23,
       "functionName": "evaluateProjectedPeersContactable",
       "kind": "owner_port_feature_detection",
@@ -14585,7 +14531,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
-      "line": 87,
+      "line": 123,
       "column": 9,
       "functionName": "nowMsOf",
       "kind": "owner_port_feature_detection",
@@ -14621,7 +14567,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 126,
+      "line": 127,
       "column": 15,
       "functionName": "collectReplaceOwnerNodeIds",
       "kind": "owner_port_feature_detection",
@@ -14630,7 +14576,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 184,
+      "line": 185,
       "column": 6,
       "functionName": "sourceRowLevel",
       "kind": "owner_port_feature_detection",
@@ -14639,7 +14585,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 214,
+      "line": 215,
       "column": 6,
       "functionName": "concurrentOperationLevel",
       "kind": "owner_port_feature_detection",
@@ -14648,7 +14594,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 380,
+      "line": 385,
       "column": 6,
       "functionName": "wakeRemoteReplaceOwners",
       "kind": "owner_port_feature_detection",
@@ -14657,7 +14603,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 382,
+      "line": 387,
       "column": 6,
       "functionName": "wakeRemoteReplaceOwners",
       "kind": "owner_port_feature_detection",
@@ -14666,7 +14612,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 417,
+      "line": 422,
       "column": 6,
       "functionName": "ensureWakeSubscriptions",
       "kind": "owner_port_feature_detection",
@@ -14675,7 +14621,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner-wake.js",
-      "line": 441,
+      "line": 446,
       "column": 6,
       "functionName": "attachReplicaConsensusEvents",
       "kind": "owner_port_feature_detection",
@@ -14684,7 +14630,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-owner.js",
-      "line": 262,
+      "line": 261,
       "column": 6,
       "functionName": "isTargetFailureDetectorDead",
       "kind": "owner_port_feature_detection",
@@ -14702,7 +14648,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-surviving-membership.js",
-      "line": 118,
+      "line": 117,
       "column": 15,
       "functionName": "survivingMembersOf",
       "kind": "owner_port_feature_detection",
@@ -14711,7 +14657,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-surviving-membership.js",
-      "line": 173,
+      "line": 172,
       "column": 15,
       "functionName": "memberRouteOf",
       "kind": "owner_port_feature_detection",
@@ -14720,7 +14666,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 134,
+      "line": 131,
       "column": 24,
       "functionName": "readReplaceDurableStep",
       "kind": "owner_port_feature_detection",
@@ -14729,7 +14675,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 144,
+      "line": 141,
       "column": 9,
       "functionName": "observeCreateTarget",
       "kind": "owner_port_feature_detection",
@@ -14738,7 +14684,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 261,
+      "line": 258,
       "column": 23,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "owner_port_feature_detection",
@@ -14747,7 +14693,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 263,
+      "line": 260,
       "column": 6,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "owner_port_feature_detection",
@@ -14756,7 +14702,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 282,
+      "line": 279,
       "column": 29,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "owner_port_feature_detection",
@@ -14801,7 +14747,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 130,
+      "line": 156,
       "column": 10,
       "functionName": "runAtomicTransitionUnderLane",
       "kind": "owner_port_feature_detection",
@@ -14810,7 +14756,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 156,
+      "line": 196,
       "column": 8,
       "functionName": "runAtomicTransitionUnderLane",
       "kind": "owner_port_feature_detection",
@@ -14819,7 +14765,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
-      "line": 751,
+      "line": 710,
       "column": 6,
       "functionName": "failOperation",
       "kind": "owner_port_feature_detection",
@@ -14828,7 +14774,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-retry.js",
-      "line": 158,
+      "line": 458,
       "column": 4,
       "functionName": "cannotRegisterTransitionRetry",
       "kind": "owner_port_feature_detection",
@@ -14837,7 +14783,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-handoff.js",
-      "line": 57,
+      "line": 68,
       "column": 8,
       "functionName": "resolveLeaderRemoveSafetyPlanningSnapshot",
       "kind": "owner_port_feature_detection",
@@ -14846,7 +14792,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-handoff.js",
-      "line": 331,
+      "line": 352,
       "column": 6,
       "functionName": "resolvePriorityRecoveryIncompleteOperationObservation",
       "kind": "owner_port_feature_detection",
@@ -14882,7 +14828,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 261,
+      "line": 277,
       "column": 6,
       "functionName": "getCachedCriticalReplicaRows",
       "kind": "owner_port_feature_detection",
@@ -15071,7 +15017,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 131,
+      "line": 132,
       "column": 6,
       "functionName": "isLiveOperationLedgerInterlockOperation",
       "kind": "owner_port_feature_detection",
@@ -15593,7 +15539,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 382,
+      "line": 406,
       "column": 6,
       "functionName": "isPriorityRecoveryOperationCreationRequiredForPlanningGate",
       "kind": "owner_port_feature_detection",
@@ -15602,7 +15548,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 614,
+      "line": 638,
       "column": 6,
       "functionName": "resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation",
       "kind": "owner_port_feature_detection",
@@ -15620,7 +15566,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-liveness.js",
-      "line": 518,
+      "line": 517,
       "column": 54,
       "functionName": "getOwnerNodeStartMs",
       "kind": "owner_port_feature_detection",
@@ -15665,7 +15611,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 111,
+      "line": 113,
       "column": 12,
       "functionName": "retryOperationMutation",
       "kind": "owner_port_feature_detection",
@@ -15674,7 +15620,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 128,
+      "line": 130,
       "column": 10,
       "functionName": "runAdmittedOperationMutationAttempt",
       "kind": "owner_port_feature_detection",
@@ -15683,7 +15629,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 137,
+      "line": 139,
       "column": 9,
       "functionName": "runAdmittedOperationMutationAttempt",
       "kind": "owner_port_feature_detection",
@@ -15692,7 +15638,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 181,
+      "line": 183,
       "column": 10,
       "functionName": "resolveOperationMutationRetryableStep",
       "kind": "owner_port_feature_detection",
@@ -15701,7 +15647,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 268,
+      "line": 270,
       "column": 12,
       "functionName": "retryReplicaOperationGatewayMutation",
       "kind": "owner_port_feature_detection",
@@ -15710,7 +15656,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 312,
+      "line": 314,
       "column": 12,
       "functionName": "executeReplicaOperationGatewayMutation",
       "kind": "owner_port_feature_detection",
@@ -15719,7 +15665,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 317,
+      "line": 319,
       "column": 10,
       "functionName": "executeReplicaOperationGatewayMutation",
       "kind": "owner_port_feature_detection",
@@ -15728,7 +15674,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 327,
+      "line": 329,
       "column": 10,
       "functionName": "executeReplicaOperationGatewayMutation",
       "kind": "owner_port_feature_detection",
@@ -15737,7 +15683,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 338,
+      "line": 340,
       "column": 8,
       "functionName": "executeReplicaOperationGatewayMutation",
       "kind": "owner_port_feature_detection",
@@ -15746,7 +15692,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 355,
+      "line": 357,
       "column": 8,
       "functionName": "canUseReplicaOperationMutationIngress",
       "kind": "owner_port_feature_detection",
@@ -15755,7 +15701,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 360,
+      "line": 362,
       "column": 10,
       "functionName": "canUseReplicaOperationMutationIngress",
       "kind": "owner_port_feature_detection",
@@ -15764,7 +15710,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 365,
+      "line": 367,
       "column": 10,
       "functionName": "canUseReplicaOperationMutationIngress",
       "kind": "owner_port_feature_detection",
@@ -15773,25 +15719,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 235,
-      "column": 12,
-      "functionName": "readAllServiceRows",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 238,
-      "column": 12,
-      "functionName": "readAllServiceRows",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 245,
+      "line": 300,
       "column": 8,
       "functionName": "getObservedReplicaRowFromCache",
       "kind": "owner_port_feature_detection",
@@ -15800,7 +15728,25 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 621,
+      "line": 311,
+      "column": 12,
+      "functionName": "readAllServiceRows",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
+      "line": 314,
+      "column": 12,
+      "functionName": "readAllServiceRows",
+      "kind": "owner_port_feature_detection",
+      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
+      "line": 610,
       "column": 6,
       "functionName": "emitReplicaStatusDivergence",
       "kind": "owner_port_feature_detection",
@@ -15809,7 +15755,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 174,
+      "line": 175,
       "column": 12,
       "functionName": "executeReplicaOperationsRead",
       "kind": "owner_port_feature_detection",
@@ -15818,7 +15764,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 194,
+      "line": 195,
       "column": 6,
       "functionName": "buildReplicaOperationReadParticipationFailure",
       "kind": "owner_port_feature_detection",
@@ -15827,7 +15773,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 432,
+      "line": 421,
       "column": 10,
       "functionName": "getReplicaOperationRowFromCache",
       "kind": "owner_port_feature_detection",
@@ -15836,7 +15782,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 435,
+      "line": 424,
       "column": 10,
       "functionName": "getReplicaOperationRowFromCache",
       "kind": "owner_port_feature_detection",
@@ -15845,7 +15791,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 450,
+      "line": 439,
       "column": 10,
       "functionName": "filterReplicaOperationRowsFromCache",
       "kind": "owner_port_feature_detection",
@@ -15854,7 +15800,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 453,
+      "line": 442,
       "column": 10,
       "functionName": "filterReplicaOperationRowsFromCache",
       "kind": "owner_port_feature_detection",
@@ -15863,7 +15809,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 467,
+      "line": 456,
       "column": 7,
       "functionName": "hasReplicaOperationCacheObservationBoundary",
       "kind": "owner_port_feature_detection",
@@ -15872,7 +15818,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-row-methods.js",
-      "line": 468,
+      "line": 457,
       "column": 8,
       "functionName": "hasReplicaOperationCacheObservationBoundary",
       "kind": "owner_port_feature_detection",
@@ -16340,7 +16286,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-rebalance-loop.js",
-      "line": 425,
+      "line": 509,
       "column": 6,
       "functionName": "resolvePublishedMembershipPlanningEpoch",
       "kind": "owner_port_feature_detection",
@@ -17240,7 +17186,7 @@
     },
     {
       "filePath": "src/service/service-dispatcher.js",
-      "line": 154,
+      "line": 152,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17249,7 +17195,7 @@
     },
     {
       "filePath": "src/service/service-dispatcher.js",
-      "line": 157,
+      "line": 155,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17258,7 +17204,7 @@
     },
     {
       "filePath": "src/service/service-dispatcher.js",
-      "line": 160,
+      "line": 158,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17267,7 +17213,7 @@
     },
     {
       "filePath": "src/service/service-dispatcher.js",
-      "line": 163,
+      "line": 161,
       "column": 8,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",
@@ -17492,34 +17438,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 89,
-      "column": 4,
-      "functionName": "enqueueWaitingDurableSliceTable",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 131,
-      "column": 6,
-      "functionName": "notifyNextWaitingDurableSliceTable",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 332,
-      "column": 9,
-      "functionName": "bindWaveProgress",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/topology/cdc-group-propagation-durable-delivery.js",
-      "line": 362,
+      "line": 65,
       "column": 4,
       "functionName": "deliverTarget",
       "kind": "owner_port_feature_detection",
@@ -17555,7 +17474,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-routing.js",
-      "line": 236,
+      "line": 235,
       "column": 6,
       "functionName": "collectActiveServiceRows",
       "kind": "owner_port_feature_detection",
@@ -17564,7 +17483,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-routing.js",
-      "line": 448,
+      "line": 687,
       "column": 34,
       "functionName": "isMessageRouterDeliverable",
       "kind": "owner_port_feature_detection",
@@ -17573,7 +17492,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-service.js",
-      "line": 233,
+      "line": 210,
       "column": 8,
       "functionName": "assertPropagationRequest",
       "kind": "owner_port_feature_detection",
@@ -17582,7 +17501,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-service.js",
-      "line": 234,
+      "line": 211,
       "column": 8,
       "functionName": "assertPropagationRequest",
       "kind": "owner_port_feature_detection",
@@ -17699,7 +17618,7 @@
     },
     {
       "filePath": "src/transport/message-router-ack-delivery.js",
-      "line": 24,
+      "line": 32,
       "column": 10,
       "functionName": "rejectBeforeSend",
       "kind": "owner_port_feature_detection",
@@ -17708,7 +17627,7 @@
     },
     {
       "filePath": "src/transport/message-router-ack-delivery.js",
-      "line": 25,
+      "line": 33,
       "column": 15,
       "functionName": "rejectBeforeSend",
       "kind": "owner_port_feature_detection",
@@ -17717,7 +17636,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-authority.js",
-      "line": 351,
+      "line": 392,
       "column": 8,
       "functionName": "resolveNodeAddressForDelivery",
       "kind": "owner_port_feature_detection",
@@ -17780,7 +17699,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-lifecycle-methods.js",
-      "line": 386,
+      "line": 387,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -17789,7 +17708,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-lifetime.js",
-      "line": 31,
+      "line": 38,
       "column": 7,
       "functionName": "validateDeliveryCallbacks",
       "kind": "owner_port_feature_detection",
@@ -17798,7 +17717,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-pressure-routing.js",
-      "line": 47,
+      "line": 60,
       "column": 6,
       "functionName": "resolveQueryDataPlaneTransportSelection",
       "kind": "owner_port_feature_detection",
@@ -17807,7 +17726,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-pressure-routing.js",
-      "line": 56,
+      "line": 69,
       "column": 8,
       "functionName": "resolveQueryDataPlaneTransportSelection",
       "kind": "owner_port_feature_detection",
@@ -17816,7 +17735,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-pressure-routing.js",
-      "line": 66,
+      "line": 79,
       "column": 8,
       "functionName": "resolveQueryDataPlaneTransportSelection",
       "kind": "owner_port_feature_detection",
@@ -17825,7 +17744,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 378,
+      "line": 382,
       "column": 4,
       "functionName": "ensureNodeConnection",
       "kind": "owner_port_feature_detection",
@@ -17834,7 +17753,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 562,
+      "line": 566,
       "column": 5,
       "functionName": "scheduleRetiredSocketTermination",
       "kind": "owner_port_feature_detection",
@@ -17843,7 +17762,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 563,
+      "line": 567,
       "column": 6,
       "functionName": "scheduleRetiredSocketTermination",
       "kind": "owner_port_feature_detection",
@@ -17852,7 +17771,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 573,
+      "line": 577,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -17861,7 +17780,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 575,
+      "line": 579,
       "column": 17,
       "functionName": "<anonymous>",
       "kind": "owner_port_feature_detection",
@@ -17870,7 +17789,7 @@
     },
     {
       "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 582,
+      "line": 586,
       "column": 6,
       "functionName": "scheduleRetiredSocketTermination",
       "kind": "owner_port_feature_detection",
@@ -17878,17 +17797,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/transport/message-router-reconnect-behaviors.js",
-      "line": 652,
-      "column": 7,
-      "functionName": "quarantineConnectionAfterAckTimeout",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/transport/message-router-stats-shutdown.js",
-      "line": 240,
+      "line": 243,
       "column": 14,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -17897,7 +17807,7 @@
     },
     {
       "filePath": "src/transport/message-router-stats-shutdown.js",
-      "line": 246,
+      "line": 249,
       "column": 14,
       "functionName": "shutdown",
       "kind": "owner_port_feature_detection",
@@ -17906,7 +17816,7 @@
     },
     {
       "filePath": "src/transport/message-router.js",
-      "line": 257,
+      "line": 258,
       "column": 6,
       "functionName": "constructor",
       "kind": "owner_port_feature_detection",

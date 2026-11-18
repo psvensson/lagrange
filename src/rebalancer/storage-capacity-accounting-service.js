@@ -41,6 +41,9 @@ const STORAGE_ACCOUNTING_SQL = Object.freeze({
   [TABLES.REPLICA_OPERATIONS]: 'SELECT * FROM replica_operations',
 });
 
+const STORAGE_CAPACITY_ACCOUNTING_UNAVAILABLE_CODE =
+  'STORAGE_CAPACITY_ACCOUNTING_UNAVAILABLE';
+
 function isFutureCapacityDeadline(value, nowMs) {
   return Number.isSafeInteger(value) && value > nowMs;
 }
@@ -204,21 +207,24 @@ class StorageCapacityAccountingService {
       return this.systemTableCache.getAll(tableName) || [];
     }
 
-    if (!this.controlPlaneSystemTableGateway) {
-      return [];
-    }
-
-    const query = STORAGE_ACCOUNTING_SQL[tableName];
-    if (!query) {
-      return [];
-    }
-
+    // ensureDataSource above proved the gateway reads; every accounting
+    // table has its query.
     const result = await this.controlPlaneSystemTableGateway.readRows(
       tableName,
-      query,
+      STORAGE_ACCOUNTING_SQL[tableName],
       [],
     );
-    return result?.rows || [];
+    // A failed read is unavailability: an empty list here understated used
+    // and reserved bytes and opened capacity admission on an unknown total.
+    if (result?.success !== true || !Array.isArray(result.rows)) {
+      const error = new Error(
+        `${STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_READ_UNAVAILABLE}${tableName}`);
+      error.code = STORAGE_CAPACITY_ACCOUNTING_UNAVAILABLE_CODE;
+      error.retryable = true;
+      error.cause = result || null;
+      throw error;
+    }
+    return result.rows;
   }
 
   getSystemTableRowsSync(tableName) {

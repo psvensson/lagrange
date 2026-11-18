@@ -536,7 +536,6 @@ function createHarness(store) {
     'reconcileReplaceActualActive',
     'updateStep',
     'replayReplaceActiveSourceRemovalFromAuthoritative',
-    'replayReplaceActiveSourceRemovalFromObservedTarget',
     'scheduleExecutorOutcomeRetry',
     'ensurePriorityActiveReplaceRetryArmed',
     'completeOperation',
@@ -1017,13 +1016,11 @@ test(
             'red if it goes back to returning undefined/void',
           );
           t.equal(
-            callsOf(
-              harness.calls,
-              'replayReplaceActiveSourceRemovalFromObservedTarget',
-            ).length,
-            0,
-            'exit (b) path (observed-target replay) never ran — ' +
-            'updateStep returned false instead of throwing',
+            updateStepCallsTo(harness.calls, WORKFLOW_STEP.ACTIVE)
+              .some((call) => Boolean(call?.error)),
+            false,
+            'exit (b) path never ran — updateStep returned false instead ' +
+            'of throwing',
           );
 
           // --- GUARD fix piece 2: the evidence SURVIVES the failed
@@ -1188,15 +1185,20 @@ test(
       },
     );
 
+    // SUPERSEDED (R09): this case pinned the owner-local deferred-progress
+    // lane of quest formation-ledger-self-move-blocks-cluster-ops (ACTIVE
+    // absorbed locally, source removal actuated with the durable row still
+    // at SYNCING). The superseding rule is "an operation's step advances
+    // only by its committed row": a retryable ACTIVE persist failure defers
+    // the transition, nothing runs from an unpersisted ACTIVE, and the
+    // retry owners stay armed until the row commits.
     await t.test(
-      'ledger exit (b) superseded: a retryable CAS persist failure at ' +
-      'ACTIVE is absorbed by the owner-local deferred-progress lane ' +
-      '(quest formation-ledger-self-move-blocks-cluster-ops) — updateStep ' +
-      'does not throw, the observed-target replay is not needed, source ' +
-      'removal actuates directly with the durable row still at SYNCING, ' +
-      'a durable retry owner is retained (the CL-029 invariant), and the ' +
-      'persist error is still LOGGED (the 145024Z-run3 discriminator ' +
-      'holds: that run had none)',
+      'ledger exit (b): a retryable CAS persist failure at ACTIVE defers ' +
+      'the transition — updateStep throws, the REPLACE does not advance ' +
+      'or remove its source from an unpersisted ACTIVE, the durable row ' +
+      'stays at SYNCING, a transition retry owner is armed (the CL-029 ' +
+      'invariant), and the persist error is still LOGGED (the ' +
+      '145024Z-run3 discriminator holds: that run had none)',
       async (t) => {
         const operation = buildReplaceOperation();
         const store = createCasBackedReplicaOperationStore(operation);
@@ -1222,42 +1224,32 @@ test(
           );
           t.equal(
             activeUpdateCalls.length >= 1 &&
-              !activeUpdateCalls.some((call) => Boolean(call?.error)),
+              activeUpdateCalls.every((call) => Boolean(call?.error)),
             true,
-            'updateStep(operation, ACTIVE) absorbed the retryable ' +
-            'control-plane persist error via the owner-local ' +
-            'deferred-progress lane instead of throwing',
-          );
-          const replayObservedTargetCalls = callsOf(
-            harness.calls,
-            'replayReplaceActiveSourceRemovalFromObservedTarget',
+            'updateStep(operation, ACTIVE) surfaced the retryable ' +
+            'control-plane persist error: the step did not advance',
           );
           t.equal(
-            replayObservedTargetCalls.length,
+            removeDeliveries(harness).length,
             0,
-            'the observed-target replay was not needed — the workflow ' +
-            'advanced directly off the owner-local ACTIVE row',
+            'no source removal is dispatched from an ACTIVE step that is ' +
+            'not durable',
           );
           t.ok(
             countLiveOwnerRetryState(owner).transitionRetryTimers >= 1,
-            'a durable transition retry owner is retained until the ' +
-            'ACTIVE persist lands (the CL-029 invariant under the new ' +
-            'route)',
+            'a transition retry owner is armed until the ACTIVE persist ' +
+            'lands (the CL-029 invariant)',
           );
           t.equal(
             store.state.authoritative.workflowStep,
             WORKFLOW_STEP.SYNCING,
-            'the DURABLE row never records ACTIVE (or any later step) — ' +
-            'still SYNCING; progress continues via the dispatched removal',
+            'the durable row is still SYNCING',
           );
           t.equal(
-            owner.executorOutcomeRetryPayloadByOperationId.size +
-              owner.executorOutcomeRetryTimerByOperationId.size,
-            0,
-            'no executor-outcome retry owner remains — correct here ' +
-            '(unlike exit (a)) because the evidence WAS applied via the ' +
-            'observed-target replay, so clearing it is consumption, not ' +
-            'loss',
+            owner.deferredStepWriteByOperationId.get(TEST_OPERATION_ID)?.step,
+            WORKFLOW_STEP.ACTIVE,
+            'the ACTIVE write is recorded as owed: its retry re-attempts ' +
+            'the write and repeats no effect',
           );
           // The discriminating observable vs the real run:
           t.ok(

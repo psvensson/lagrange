@@ -14,6 +14,7 @@ import {
   PARTITION_SERVICE_REMOTE_QUERY_METHODS,
 } from '../../src/partition/partition-service-remote-query-methods.js';
 import {
+  CDC_CATCHUP_TRIGGER,
   hydrateCdcPropagatedTablesFromAuthority,
 } from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import {
@@ -142,7 +143,7 @@ test('CDCHandler preserves and forwards owner revision metadata to SystemTableCa
       sourceReplica: 'node-1',
       sourceLogIndex: 15,
       sourceOrdinal: 2,
-      eventKey: 'tables:users',
+      eventKey: 'tables:users-update-15-2',
       entryId: 'entry-15-2',
       causeId: 'cause-pub-2',
     },
@@ -281,6 +282,7 @@ test('hydrateCdcPropagatedTablesFromAuthority binds leader witness revisions on 
   };
 
   const summary = await hydrateCdcPropagatedTablesFromAuthority(fakeService, {
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [TABLE_NAME],
   });
 

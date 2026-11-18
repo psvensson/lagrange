@@ -13,23 +13,25 @@ import {
 } from '../../src/control-plane/publication-recovery-gate.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
+import {publicationsOwnerOverRows} from
+  '../control-plane/publication-owner-test-support.js';
 
 // DT6 item 2 — drive the REAL publication PERSIST + ACK pipeline on the virtual clock, replacing
 // step 8's in-process ack-ledger stand-in. Step 8 stored acks in a bespoke Map and called the ack
 // state machine directly; this guard routes publish + ack through the real persist coordinator:
 //
-//  - persistPublicationRow (membership-publication-coordinator-persist.js) — the real persist
-//    orchestration: serialize -> owner.getPublication read-back -> mergePublicationRows ->
-//    owner.upsertPublication -> verify via publicationRowSatisfiesDesiredState.
-//  - acknowledgePublication (same file) — the real ack round-trip: getPublication ->
-//    mergePublicationRows -> acknowledgeMembershipPublication (the real ack state machine) ->
-//    re-persist if the ack changed the row.
+//  - admitPublicationRow (membership-publication-coordinator-persist.js) — the real admission:
+//    serialize -> ControlPlanePublicationsOwner.admitPublication (insert-only, revision 1),
+//    answered as a typed outcome.
+//  - acknowledgePublication (same file) — the real ack round-trip: the publications owner reads
+//    the durable row, applies acknowledgeMembershipPublication (the real ack state machine) to it
+//    and writes the change guarded by the row's revision.
 //
-// Only the durable boundary is stubbed: an in-memory controlPlanePublicationsOwner (a Map keyed by
-// publication_id) standing in for the owner -> CDC -> SQL/raft system-table write, and an inline
-// acknowledgement lane (no contention in a deterministic single-owner run). buildMembershipPublicationRow,
-// serializeMembershipPublicationRow, mergePublicationRows, the ack state machine, and the recovery
-// gate are all real production code.
+// Only the durable boundary is stubbed: the real ControlPlanePublicationsOwner writes through an
+// in-memory row store (a Map keyed by publication_id) standing in for the CDC -> SQL/raft
+// system-table write, and an inline acknowledgement lane (no contention in a deterministic
+// single-owner run). buildMembershipPublicationRow, serializeMembershipPublicationRow, the owner's
+// guarded change, the ack state machine, and the recovery gate are all real production code.
 //
 // An owner tick on the network TimeSource: first tick publishes membership v1 UNACKNOWLEDGED through
 // the real persist path; subsequent ticks acknowledge one required node at a time through the real
@@ -37,8 +39,8 @@ import {MEMBERSHIP_PUBLICATION_STATUS} from
 // The gate converges ACK_PENDING -> READY as the real persisted acknowledged set fills, on the
 // virtual clock, deterministically.
 //
-// HONEST SCOPE: the persist orchestration + ack state machine + recovery gate are real; the durable
-// store (owner upsert -> CDC -> SQL/raft replication) is the in-memory boundary. The real
+// HONEST SCOPE: the admission, the guarded change, the ack state machine and the recovery gate are
+// real; the durable store (CDC -> SQL/raft replication) is the in-memory boundary. The real
 // quorum-replicated commit of the publication row is covered separately (step 7/8 via raft.command);
 // this item covers the row PERSIST + ACK convergence pipeline.
 
@@ -56,17 +58,18 @@ function hostPersistPipeline(net, nodeId) {
   const coordinator = {
     now: () => ts.now(),
     buildOwnerKey: () => 'membership-owner',
-    persistPublicationRow: reconcileProto.persistPublicationRow,
+    admitPublicationRow: reconcileProto.admitPublicationRow,
+    buildPublicationWriteOptions: reconcileProto.buildPublicationWriteOptions,
     acknowledgePublication: reconcileProto.acknowledgePublication,
-    controlPlanePublicationsOwner: {
-      upsertPublication: async (row) => {
+    controlPlanePublicationsOwner: publicationsOwnerOverRows({
+      storeRow: async (row) => {
         store.set(row.publication_id, {...row});
       },
       getPublication: async (publicationId) => {
         const row = store.get(publicationId);
         return row ? {...row} : null;
       },
-    },
+    }),
     publicationAcknowledgementLane: {run: async (_opts, fn) => fn()},
   };
 
@@ -93,10 +96,8 @@ function hostPersistPipeline(net, nodeId) {
           status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
           nowMs: ts.now(),
         });
-        const persisted = await coordinator.persistPublicationRow(row, {
-          skipPublicationWriteReadback: false,
-        });
-        state.pubId = persisted.publication_id;
+        const admitted = await coordinator.admitPublicationRow(row);
+        state.pubId = admitted.row.publication_id;
       } else {
         // Acknowledge the next still-pending required node through the real ack round-trip.
         const current = store.get(state.pubId);
@@ -147,7 +148,7 @@ async function runPersistPipeline() {
 t.test('publish + ack converge through the REAL persist coordinator to a fully-acked PUBLISHED row',
   async (t) => {
     const m = await runPersistPipeline();
-    t.ok(m.finalRow, 'a publication row was persisted through the real persistPublicationRow path');
+    t.ok(m.finalRow, 'a publication row was admitted through the real admitPublicationRow path');
     t.same(m.finalRow.acknowledged_node_ids, EXPECTED,
       'every required node acknowledged through the real acknowledgePublication round-trip');
     t.equal(m.finalRow.status, MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,

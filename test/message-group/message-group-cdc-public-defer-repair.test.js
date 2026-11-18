@@ -19,6 +19,7 @@ import {LEADER, NODE_ID, TARGET_GROUP, addressOf, provisionalRouteFixture, pump,
   releaseFollower} from
   './message-group-native-provisional-route-fixture.js';
 
+import {withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
 const RECEIVED_MS = 5000;
 const PROBE_GROUP = 'mg-public-defer-probe';
 
@@ -37,7 +38,8 @@ function publicReceive(service, event, messageId) {
   const observed = {settled: false};
   observed.completion = service.receiveMessage({messageId, payload: {
     type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH,
-    events: [event], targetGroupId: TARGET_GROUP, [CDC_DELIVERY_REMAINING_MS]: RECEIVED_MS}})
+    events: [event], targetGroupId: TARGET_GROUP, [CDC_DELIVERY_REMAINING_MS]: RECEIVED_MS,
+    ...withSourceRange([event])}})
     .then((answer) => Object.assign(observed, {settled: true, answer}),
       (error) => Object.assign(observed, {settled: true, error}));
   return observed;

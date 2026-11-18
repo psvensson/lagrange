@@ -212,7 +212,6 @@ test('AdminWebSocketAPI - local SQL diagnostics endpoint exposes coordinator met
           diagnostics: {
             selectedNodeIds: ['node-1'],
             resolvedNodeIds: ['node-1'],
-            usedDegradedFallback: false,
           },
         }),
         lastTransactionRecoveryReplayResult: {
@@ -632,7 +631,7 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       LogsTableService.instance = originalLogsTableInstance;
     });
     cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
-      id: 'table-1',
+      table_id: 'table-1',
       partition_transition_state: 'failed',
       partition_transition_metadata: JSON.stringify({
         workflowId,

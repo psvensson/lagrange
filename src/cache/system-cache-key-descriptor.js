@@ -81,9 +81,18 @@ function getSystemCachePrimaryKeyFieldOrFallback(
   return keyField || fallback;
 }
 
+/**
+ * The row's declared key: the value of its table's primary-key field. A row
+ * without a usable value there has no key (undefined); the caller refuses it.
+ * No other field stands in for the declared key.
+ *
+ * @param {string} tableName - System table name.
+ * @param {Object} row - System-table row.
+ * @return {*} The declared key, or undefined when the row has none.
+ */
 function resolveSystemCacheRowKey(tableName, row) {
-  const keyField = getSystemCachePrimaryKeyField(tableName);
-  return row?.[keyField] || row?.[SYSTEM_CACHE_KEY_FALLBACK];
+  const key = row?.[getSystemCachePrimaryKeyField(tableName)];
+  return key ? key : undefined;
 }
 
 function isUsableSystemCacheKey(value) {

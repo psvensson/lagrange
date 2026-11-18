@@ -3,6 +3,8 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {STORAGE_CONFIG_KEY} from '../storage/storage-constants.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
+import {MessageGroupServiceRegistry} from './shared/message-group-service-registry.js';
+import {PartitionServiceRegistry} from './shared/partition-service-registry.js';
 import {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
@@ -206,11 +208,11 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       typeof options.httpPost === 'function' ?
         options.httpPost :
         this.httpPost.bind(this); // Services created during joining
-    this.messageGroupServices = new Map();
+    this.messageGroupServices = new MessageGroupServiceRegistry();
     this.messageGroupSelectionOwner = new BootstrapMessageGroupSelectionOwner({
       delegates: {getMessageGroupServices: () => this.messageGroupServices},
     });
-    this.partitionServices = new Map();
+    this.partitionServices = new PartitionServiceRegistry();
     this.transport = null; // MessageRouter for unified local/remote message routing
     this.messageRouter = null; // Unified lifecycle desired-state descriptors for join-created services.
     this.joinDesiredServiceDefinitions = new Map(); // Join replica creation options keyed by canonical serviceId.

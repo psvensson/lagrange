@@ -13,6 +13,8 @@ import {
   ENTRYPOINT_RUNTIME_VALUE,
 } from './constants/entrypoint.js';
 import {raiseBootIncarnationFloor} from './bootstrap/boot-incarnation-owner.js';
+import {acceptJoinResponseClusterIdentity} from
+  './bootstrap/join-cluster-identity.js';
 import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
 
 const LOCAL_STR_ABORT = 'abort';
@@ -135,9 +137,9 @@ async function resolveFailedJoinReattempt(options) {
     joinAttempt + LOCAL_NUM_ONE < options.reattemptPolicy.maxAttempts;
   if (!allowed) {
     reportJoinReattemptsSpent(options, joinAttempt);
-    throw new Error(
+    throw Object.assign(new Error(
       options.joinResult.error || ENTRYPOINT_LOG_MSG.FAILED_JOIN,
-    );
+    ), {code: options.joinResult.code ?? null});
   }
   const cappedExponent = Math.min(
     joinAttempt,
@@ -168,11 +170,12 @@ async function resolveFailedJoinReattempt(options) {
   });
 }
 
+// The id persisted after a join: the same acceptance the contact phase
+// applied (a held id is kept only on MATCH; a first join adopts the
+// response's), never an overwrite without comparison.
 function resolveJoinedClusterId(nodeJoiningService, persistedClusterId) {
-  const joinedClusterId = nodeJoiningService.bootstrapResponse?.clusterId;
-  return typeof joinedClusterId === 'string' && joinedClusterId.length > 0 ?
-    joinedClusterId :
-    persistedClusterId;
+  return acceptJoinResponseClusterIdentity(
+    persistedClusterId, nodeJoiningService.bootstrapResponse);
 }
 
 export {

@@ -13,9 +13,9 @@ const {
 } = SHARED;
 
 // Observability (no behavior change): a single debug-level trace of every
-// applicable, not-yet-safe priority source-leader decision. A partition
-// REPLACE's leadership is decided by its named-target handoff (the REPLACE
-// owner); this trace records the row-observed leadership inputs.
+// applicable, not-yet-safe publication-partition source-leader snapshot. A
+// partition removal's leadership is decided by the removal leadership gate;
+// this trace records the row-observed leadership inputs.
 const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG =
   'priority-publication leader-remove-safety decision';
 
@@ -177,11 +177,13 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       priorityRecoveryFollowerSourceRemovalSafe;
     const publicationStatus =
       this.normalizePriorityPublicationStatus(planningSnapshot);
-    if (
+    // The only waits this snapshot decides are the control-plane
+    // publication partition's (a REPLACE of it waits for PUBLISHED);
+    // leadership is the removal leadership gate's, for every partition.
+    const publicationReplace =
       operation?.type === OperationType.REPLACE &&
-      this.isReplaceSourceLeaderHandoffRequiredPartition(partitionId) &&
-      !sourceRemovalLeadershipSafe
-    ) {
+      partitionId === publicationPartitionId;
+    if (publicationReplace && !sourceRemovalLeadershipSafe) {
       this.logger?.debug?.(
         PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG,
         {
@@ -199,10 +201,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       );
     }
 
-    if (
-      operation?.type !== OperationType.REPLACE ||
-      !this.isReplaceSourceLeaderHandoffRequiredPartition(partitionId)
-    ) {
+    if (!publicationReplace) {
       return Object.freeze({
         state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.NOT_APPLICABLE,
         partitionId,
@@ -223,7 +222,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       });
     }
 
-    if (partitionId === publicationPartitionId && !publicationStatus) {
+    if (!publicationStatus) {
       return Object.freeze({
         state:
           PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.PUBLICATION_STATUS_UNAVAILABLE,
@@ -245,10 +244,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       });
     }
 
-    if (
-      partitionId === publicationPartitionId &&
-      publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
-    ) {
+    if (publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
       return Object.freeze({
         state:
           PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_PUBLICATION_PUBLISHED,
@@ -292,8 +288,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       });
     }
 
-    // A partition REPLACE's leadership is decided by its named-target handoff
-    // (the REPLACE owner, priority-publication-handoff.js); the per-leg
+    // A partition removal's leadership is decided by the removal leadership
+    // gate (operation-workflow-removal-leadership-gate.js); the per-leg
     // handoff answers and their evidence maps are deleted (fix-f1, section 9).
     return Object.freeze({
       state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.LEADERSHIP_PENDING,

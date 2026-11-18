@@ -17,7 +17,6 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   classifySystemPartition,
-  isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
   isOperationLedgerPartition as isOperationLedgerPartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
@@ -206,12 +205,6 @@ const STORAGE_RESERVATION_READ_QUERY_OPTIONS = Object.freeze({
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE
       .OWNER_RPC_PREFERRED_SQL_FALLBACK,
 });
-const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
-  readOptions: {
-    authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-  },
-});
 const PRIORITY_RECENT_INTENT_TTL_MS = TIME_MS.MINUTE * 2;
 const RECENT_OPERATION_INTENT_VISIBILITY_STATE = Object.freeze({
   DEFERRED: 'deferred',
@@ -297,7 +290,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
   STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
   SYSTEM_TABLE_NAME,
   StartupRecoveryCoordinator,
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -323,7 +315,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   createTopLevelOperationBudget,
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
   isPriorityRecoveryEmergencyPartition,
   isOperationLedgerPartitionTable,
   isRetryableControlPlaneError,

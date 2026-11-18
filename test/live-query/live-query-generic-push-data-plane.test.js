@@ -299,7 +299,7 @@ test('D2 & D3: gap-free attachAfterVersion handshake deduplicates overlap and ap
 
   t.equal(group.lifecycleState, 'LIVE', 'group transitioned to LIVE');
   t.equal(client.messages.length, 1, 'only one delta delivered (deduplicated version <= 20)');
-  t.equal(client.messages[0].row.id, 3, 'applied event with logIndex 30');
+  t.equal(client.messages[0].data.id, 3, 'applied event with logIndex 30');
 
   // 5. Subsequent live event (logIndex 40) is delivered immediately
   await group.handleCDCEvent({
@@ -310,7 +310,7 @@ test('D2 & D3: gap-free attachAfterVersion handshake deduplicates overlap and ap
   }, 'p1');
 
   t.equal(client.messages.length, 2, 'second live event delivered promptly');
-  t.equal(client.messages[1].row.id, 4, 'second live event received');
+  t.equal(client.messages[1].data.id, 4, 'second live event received');
 });
 
 // -----------------------------------------------------------------------------
@@ -328,6 +328,9 @@ test('D4 Tier 1: emits push-backed single-table incremental deltas', async (t) =
         right: {type: 'literal', value: 100},
       },
     },
+    // A row's identity is the table's declared primary key.
+    systemCache: createTableCache(
+      [{table_name: 'orders', primary_key: 'id', partition_key_type: 'INTEGER'}], []),
     deltaFormat: true,
   });
 
@@ -344,17 +347,18 @@ test('D4 Tier 1: emits push-backed single-table incremental deltas', async (t) =
   // DELETE matching predicate
   const deleteRes = group.evaluateChange({
     operation: 'DELETE',
-    old_data: {id: 1, amount: 150},
+    data: {id: 1, amount: 150},
     hlc_timestamp: '2:0:node1',
   });
   t.equal(deleteRes.type, LIVE_QUERY_EVENT.REMOVED, 'DELETE matching predicate emits removed');
   t.equal(deleteRes.operation, LIVE_QUERY_OPERATION.DELETE);
   t.same(deleteRes.data, {id: 1, amount: 150});
 
-  // UPDATE: entering predicate (old did not match, new matches)
+  // An UPDATE names only the row it leaves; membership before it is the
+  // group's result set.
+  // UPDATE: entering predicate (not in the result, new matches)
   const enterRes = group.evaluateChange({
     operation: 'UPDATE',
-    old_data: {id: 2, amount: 50},
     data: {id: 2, amount: 150},
     hlc_timestamp: '3:0:node1',
   });
@@ -362,28 +366,26 @@ test('D4 Tier 1: emits push-backed single-table incremental deltas', async (t) =
   t.equal(enterRes.operation, LIVE_QUERY_OPERATION.INSERT);
   t.same(enterRes.data, {id: 2, amount: 150});
 
-  // UPDATE: exiting predicate (old matched, new does not match)
-  const exitRes = group.evaluateChange({
-    operation: 'UPDATE',
-    old_data: {id: 2, amount: 150},
-    data: {id: 2, amount: 50},
-    hlc_timestamp: '4:0:node1',
-  });
-  t.equal(exitRes.type, LIVE_QUERY_EVENT.REMOVED, 'UPDATE exiting filter emits removed');
-  t.equal(exitRes.operation, LIVE_QUERY_OPERATION.DELETE);
-  t.same(exitRes.data, {id: 2, amount: 150});
-
-  // UPDATE: staying in predicate (both match)
+  // UPDATE: staying in predicate (in the result, new matches)
   const stayRes = group.evaluateChange({
     operation: 'UPDATE',
-    old_data: {id: 2, amount: 150},
     data: {id: 2, amount: 250},
-    hlc_timestamp: '5:0:node1',
+    hlc_timestamp: '4:0:node1',
   });
   t.equal(stayRes.type, LIVE_QUERY_EVENT.MODIFIED, 'UPDATE staying in filter emits modified');
   t.equal(stayRes.operation, LIVE_QUERY_OPERATION.UPDATE);
   t.same(stayRes.data, {id: 2, amount: 250});
   t.same(stayRes.oldData, {id: 2, amount: 150});
+
+  // UPDATE: exiting predicate (in the result, new does not match)
+  const exitRes = group.evaluateChange({
+    operation: 'UPDATE',
+    data: {id: 2, amount: 50},
+    hlc_timestamp: '5:0:node1',
+  });
+  t.equal(exitRes.type, LIVE_QUERY_EVENT.REMOVED, 'UPDATE exiting filter emits removed');
+  t.equal(exitRes.operation, LIVE_QUERY_OPERATION.DELETE);
+  t.same(exitRes.data, {id: 2, amount: 250}, 'the removal names the row held');
 });
 
 test('D4 Tier 2: complex queries with ORDER BY, LIMIT re-execute on push without polling', async (t) => {
@@ -471,8 +473,7 @@ test('D5: dynamic partition split reconfigures subscriptions without client resu
 
   await manager.handlePartitionTopologyChange({
     operation: 'UPDATE',
-    old: {table_name: 'orders'},
-    new: {table_name: 'orders'},
+    data: {table_name: 'orders'},
   });
 
   t.ok(unsubscribedPartitions.has('p1'), 'unsubscribed from retired partition p1');

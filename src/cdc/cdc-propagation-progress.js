@@ -1,8 +1,11 @@
-// Canonical metadata for one captured propagation requirement. The source
-// lane stores this between invocations; a direct caller's topology wave may
-// store it only until that wave closes. There is no payload or timer here.
-import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCoverageState, completeCdcPropagation,
-  emptyCdcCoverage, observeCdcCoverage, observeCdcDeliveryCoverage} from './cdc-delivery-outcome.js';
+// Canonical metadata of the recipient set of one propagation source: the
+// target groups the topology owner observed, each a leaf with its observed
+// route and its volatile cursor (the ledger position through which that
+// recipient holds a committed receipt; null until its first). The source lane
+// stores this for its leadership tenure and attaches each leaf's drive state;
+// a cursor is never durable: a new tenure starts every leaf again from the
+// ledger. There is no payload or timer here.
+import {TABLES} from '../constants/index.js';
 import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
 import {
   collectKnownMessageGroupDomain,
@@ -28,15 +31,8 @@ function sameObservedRoute(previous, target) {
       target[field] === null || target[field] === undefined || previous[field] === target[field]);
 }
 
-function discardProvisionalCoverage(progress) {
-  if (progress.sourceCoverage.state === CDC_COVERAGE_STATE.PROVISIONAL) {
-    progress.sourceCoverage = emptyCdcCoverage();
-  }
-  for (const leaf of progress.targets) {
-    if (leaf.coverage.state === CDC_COVERAGE_STATE.PROVISIONAL) {
-      leaf.coverage = emptyCdcCoverage();
-    }
-  }
+function recipientLeaf(target) {
+  return {groupId: target.groupId, route: observedRoute(target), cursor: null, drive: null};
 }
 
 function hasRouteAddress(routeOrTarget) {
@@ -71,7 +67,7 @@ function transferInvalidLatencyBindings(progress, targets) {
     }
     if (
       !hasRouteAddress(leaf.route) &&
-      leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED &&
+      leaf.cursor === null &&
       !targets.some((t) => t.groupId === leaf.groupId) &&
       isPreActivationLatencyGroup(leaf.groupId, systemTableCache, domain)
     ) {
@@ -85,18 +81,16 @@ function transferInvalidLatencyBindings(progress, targets) {
     }
     changed = true;
     for (const candidateGroupId of candidates) {
+      // A source is never its own target: the branch's primary recipient is
+      // the source group, and no two recipients of a lane name one group.
+      if (candidateGroupId === progress.sourceGroupId) continue;
       const existing =
         retainedTargets.find((entry) => entry.groupId === candidateGroupId) ||
         progress.targets.find((entry) => entry.groupId === candidateGroupId);
       if (!existing) {
         const matchingTarget = targets.find((t) => t.groupId === candidateGroupId);
-        retainedTargets.push({
-          groupId: candidateGroupId,
-          route: matchingTarget ?
-            observedRoute(matchingTarget) :
-            observedRoute({groupId: candidateGroupId, address: null}),
-          coverage: emptyCdcCoverage(),
-        });
+        retainedTargets.push(recipientLeaf(
+          matchingTarget ?? {groupId: candidateGroupId, address: null}));
       }
     }
   }
@@ -106,35 +100,50 @@ function transferInvalidLatencyBindings(progress, targets) {
   return changed;
 }
 
+// Re-observation may add a required group (a new leaf, cursor unknown) or
+// replace a leaf's route; an omitted group remains required. A route
+// replacement keeps the cursor: a committed receipt is a fact of the group.
+// It clears the leaf's backoff: the route it was refused on is gone, so the
+// lane's next observation starts it at once.
 function refreshCdcPropagationRoutes(progress, targets) {
-  let requirementsChanged = transferInvalidLatencyBindings(progress, targets);
+  transferInvalidLatencyBindings(progress, targets);
+  // The groups the topology owner names now: an omitted leaf stays required;
+  // its omission is only a hint to ask the lifecycle owner (never evidence).
+  progress.plannedGroupIds = new Set(targets.map((target) => target.groupId));
   for (const target of targets) {
     const leaf = progress.targets.find((entry) => entry.groupId === target.groupId);
     if (!leaf) {
-      progress.targets.push({groupId: target.groupId, route: observedRoute(target),
-        coverage: emptyCdcCoverage()});
-      requirementsChanged = true;
+      progress.targets.push(recipientLeaf(target));
       continue;
     }
     if (!hasRouteAddress(target) && hasRouteAddress(leaf.route)) continue;
     if (sameObservedRoute(leaf.route, target)) continue;
-    // Observed route replacement invalidates weak coverage. A native receipt
-    // remains a fact of its captured group; omitted groups remain required.
-    if (leaf.coverage.state === CDC_COVERAGE_STATE.PROVISIONAL) {
-      leaf.coverage = emptyCdcCoverage();
-    }
     leaf.route = observedRoute(target);
+    if (leaf.drive) leaf.drive.dueAtMs = null;
   }
-  // The existing topology owner has exposed a larger obligation set. Native
-  // receipts remain facts, while weak coverage must be observed for this set.
-  if (requirementsChanged) discardProvisionalCoverage(progress);
 }
 
-function createCdcPropagationProgress(owner, source, targets) {
+// The recipient-domain tables of the sender's cache: a change to any of them
+// can add, retire or re-route a recipient group, so it wakes the source lane
+// to re-observe its recipient set (CDC Stage 3: a group that becomes a
+// recipient is contacted without waiting for the next owed row).
+const RECIPIENT_DOMAIN_TABLES = Object.freeze(new Set([TABLES.SERVICES, TABLES.MESSAGE_GROUPS,
+  TABLES.LATENCY_GROUPS, TABLES.NODES]));
+
+function watchRecipientDomain(cache, onChanged) {
+  const listener = (tableName) => {
+    if (RECIPIENT_DOMAIN_TABLES.has(tableName)) onChanged();
+  };
+  cache.onCacheChange(listener);
+  return () => cache.offCacheChange(listener);
+}
+
+function createCdcPropagationProgress(owner, source, targets, onRecipientDomainChanged) {
   const progress = {owner, source, lifetime: owner.durablePropagationLifetime,
     cache: owner.systemTableCache, tree: owner.latencyTreeService, router: owner.messageRouter,
     port: source.raft, sourceLifetime: source.cdcCommitLifetime,
-    sourceGroupId: source.groupId, sourceCoverage: emptyCdcCoverage(), targets: [], nextLeaf: 0};
+    sourceGroupId: source.groupId, targets: [], plannedGroupIds: new Set(),
+    unwatch: watchRecipientDomain(owner.systemTableCache, onRecipientDomainChanged)};
   refreshCdcPropagationRoutes(progress, targets);
   return progress;
 }
@@ -154,74 +163,5 @@ function cdcPropagationProgressCurrent(progress) {
   return true;
 }
 
-function cdcPropagationCoverage(progress, binding) {
-  return cdcCoverageState([progress.sourceCoverage,
-    ...progress.targets.map((leaf) => leaf.coverage)], binding);
-}
-
-function nextUncoveredLeaf(progress, passState) {
-  const count = progress.targets.length + 1;
-  while (passState.inspected < count) {
-    const index = progress.nextLeaf % count;
-    progress.nextLeaf = (index + 1) % count;
-    passState.inspected += 1;
-    const leaf = index === 0 ? progress : progress.targets[index - 1];
-    const coverage = index === 0 ? progress.sourceCoverage : leaf.coverage;
-    if (coverage.state === CDC_COVERAGE_STATE.UNCOVERED) {
-      return Object.freeze({target: leaf, route: index === 0 ? null : leaf.route});
-    }
-  }
-  return null;
-}
-
-function bindCdcPropagationProgress(context, progress, events) {
-  const passState = {inspected: 0};
-  const assertCurrent = () => {
-    context.assertCurrent();
-    if (!cdcPropagationProgressCurrent(progress)) {
-      throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {deferRetry: true});
-    }
-  };
-  return Object.freeze({
-    leafCount: () => {
-      passState.inspected = 0;
-      return progress.targets.length + 1;
-    },
-    next: () => {
-      assertCurrent();
-      return nextUncoveredLeaf(progress, passState);
-    },
-    isSource: (dispatch) => dispatch.target === progress,
-    // The source leaf observes its local answer; a target leaf observes its
-    // delivery envelope, or null when it was not sent (uncovered).
-    observe: (dispatch, observed) => {
-      assertCurrent();
-      const leaf = dispatch.target;
-      if (leaf === progress) {
-        progress.sourceCoverage = observeCdcCoverage(observed, events, progress.sourceGroupId);
-      } else if (progress.targets.includes(leaf)) {
-        const coverage = observed === null ? emptyCdcCoverage() :
-          observeCdcDeliveryCoverage(observed, events, leaf.groupId);
-        // A native receipt remains a fact of the captured group. Weak ingress
-        // from a replaced route cannot cover the newly selected route.
-        if (coverage.state === CDC_COVERAGE_STATE.COMMITTED || leaf.route === dispatch.route) {
-          leaf.coverage = coverage;
-        }
-      } else {
-        throw Object.assign(new Error(CDC_COMPLETION.INVALID), {deferRetry: true});
-      }
-    },
-    result: () => {
-      assertCurrent();
-      return completeCdcPropagation(events, progress.sourceCoverage,
-        progress.targets.map((leaf) => leaf.coverage), progress.sourceGroupId,
-        progress.source.resolveStrictCdcForwardRetryAfterMs());
-    },
-    failedTargetGroupIds: () => progress.targets
-      .filter((leaf) => leaf.coverage.state === CDC_COVERAGE_STATE.UNCOVERED)
-      .map((leaf) => leaf.groupId),
-  });
-}
-
-export {bindCdcPropagationProgress, cdcPropagationCoverage, cdcPropagationProgressCurrent,
-  createCdcPropagationProgress, refreshCdcPropagationRoutes};
+export {cdcPropagationProgressCurrent, createCdcPropagationProgress,
+  refreshCdcPropagationRoutes};

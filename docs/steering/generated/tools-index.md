@@ -30,6 +30,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `analyze:causal-model` — Print stop-condition and critical-path evidence from a scenario artifact.
 - `analyze:cl039-link-rate` — `node scripts/analyze-cl039-link-rate.js`
+- `analyze:cpu-profile` — Print a .cpuprofile's top self-time functions, top files and top call paths by file as text (profiles come from a distributed run started with --profile-node).
 - `analyze:distributed-failure` — Summarize a distributed failure report or bundle; the first analyzer to reach for over raw-log grep.
 - `analyze:fix-engagement` — Report whether candidate fixes actually engaged in a run.
 - `analyze:formation-release-phases` — Print per-node formation-release phases (W -> handoff observed -> barrier release -> READY with deltas) and the analyzer-classified outcome for one five-node GCP run directory.
@@ -47,6 +48,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
 - `analyze:replace-safety-blocks` — `node scripts/analyze-replace-safety-blocks.js`
 - `analyze:rolling-restart-liveness` — Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.
+- `analyze:run-health` — Classify one scenario directory's run health (per-node and per-link verdicts, offered load, infrastructure_suspect) from its samples, node logs, node health and link baseline; reads files only.
 - `analyze:soft-warning-strikes` — `node scripts/analyze-soft-warning-strikes.js`
 - `analyze:topology-convergence` — Explain topology-convergence edges from a scenario artifact (add --explain <edge>).
 
@@ -68,13 +70,15 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:file-size:strict` — `node scripts/check-file-size-thresholds.js --strict`
 - `audit:guideline:ambient-intrinsics` — `node scripts/check-guideline-ambient-intrinsics.js`
 - `audit:guideline:boundary-mode-contracts` — `node scripts/check-guideline-boundary-mode-contracts.js`
+- `audit:guideline:constant-members` — Fail on any read of a member that does not exist on an imported, same-file frozen, injected-bag or class-static constants object (it evaluates to undefined); zero violations, an unloadable module fails it, and unexamined reads are counted per reason and ratcheted one-way.
 - `audit:guideline:decision-boundaries` — `node scripts/check-guideline-decision-boundaries.js`
 - `audit:guideline:deferred-outcomes` — `node scripts/check-guideline-deferred-outcomes.js`
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
 - `audit:guideline:literals` — `node scripts/check-guideline-literals.js`
 - `audit:guideline:navigability` — One-way ratchet per navigability/fallback pattern over the shared detector module; ESLint-promoted patterns are skipped, --update-baseline only lowers.
 - `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
-- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability`
+- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability && npm run audit:guideline:constant-members && npm run audit:health-hint-imports`
+- `audit:health-hint-imports` — Fail when any src module reaches the node health buffer, its collection function or the resource diagnostics sampler outside the allow-list (the admin route, declared producers, the composition root, recorded debt), by import, re-export, dynamic import, require or a relay: health data is a hint, never a decision input.
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:impact-contracts` — `node scripts/checks/impact-contract-registry.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
@@ -97,6 +101,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:steering-diet` — `node scripts/checks/check-steering-diet.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
 - `audit:style-terminal-vocabulary` — `node scripts/check-style-terminal-vocabulary.js`
+- `audit:system-table-retention` — system-table-retention epic budget: refuse unless every table in TABLES has a declared lifetime (solve/epics/system-table-retention/table-lifetimes.json; retained names its owner, unbounded its quest), then print the number of unbounded tables as the last line (target 0); reads files only.
 - `audit:voter-readiness-owner` — `node scripts/check-voter-readiness-single-owner.js`
 
 ## build
@@ -296,4 +301,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-197 scripts indexed; 39 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+202 scripts indexed; 44 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.

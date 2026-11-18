@@ -5,8 +5,9 @@
  * canonical owner (the startup decision seam consumes its boolean verdict).
  *
  * A persisted seed role is NOT proof of cluster membership: before a durable
- * seed may serve bootstrap it must confirm its cluster identity (present on
- * both the node-local hints and the startup expectation) AND hold either live
+ * seed may serve bootstrap it must confirm its cluster identity (the hints
+ * record and its own durable CONFIG row agree: local-cluster-identity.js;
+ * UNKNOWN, e.g. no local CONFIG replica, is not confirmation) AND hold either live
  * peer contact (a probed-reachable current member) or durable quorum evidence
  * (a multi-node membership record with at least one recovered peer). This is
  * what stops an isolated stale seed from resurrecting a divergent cluster
@@ -27,7 +28,9 @@ const SEED_RECOVERY_PROOF_MISSING_ERROR_MESSAGE =
 /**
  * Decide whether a durable seed holds sufficient recovery proof to serve.
  * @param {Object} options - The startup decision inputs.
- * @param {string} options.clusterIdMatch - classifyClusterIdMatch outcome.
+ * @param {string} options.clusterIdMatch - The local cluster identity
+ *   comparison state (compareLocalClusterIdentity): MATCH, MISMATCH or
+ *   UNKNOWN; only MATCH confirms.
  * @param {string|null} options.selectedPeerAddress - Probed-reachable peer.
  * @param {number} options.clusterNodeCount - Durable membership node count.
  * @param {Array<string>} options.peerAddresses - Recovered peer addresses.
@@ -46,6 +49,22 @@ function resolveSeedRecoveryProofSatisfied({
   const durableQuorumProof = clusterNodeCount > 1 ||
     (Array.isArray(peerAddresses) && peerAddresses.length > 0);
   return clusterIdConfirmed && (livePeerProof || durableQuorumProof);
+}
+
+/**
+ * Whether a persisted seed that may not serve as an authority instead
+ * rejoins as a member to have the cluster confirm its identity: it holds an
+ * id it cannot compare locally (no CONFIG replica after formation spread the
+ * replicas, the normal state of an original seed) and its durable records
+ * name peers. The join gate then confirms (MATCH) or refuses it; a typed
+ * retryable contact refusal applies while no peer answers.
+ * @param {Object} context - The collected startup decision context.
+ * @return {boolean}
+ */
+function resolveSeedRejoinsToConfirmIdentity(context) {
+  return context.seedRecoveryProofSatisfied !== true &&
+    context.identityConfirmableAtJoin === true &&
+    context.peerAddresses.length > 0;
 }
 
 /**
@@ -130,5 +149,6 @@ function buildSeedServingStartupDecision(context, state, vocabulary) {
 export {
   buildSeedServingStartupDecision,
   resolveSeedRecoveryProofSatisfied,
+  resolveSeedRejoinsToConfirmIdentity,
   resolveSeedServingDecisionState,
 };

@@ -18,19 +18,19 @@
  *    REMOVE_REPLICA while the source row is still admissible, R-1f
  *    re-drive of REMOVE_PEER through the witness while the source is a voter
  *    and its row is gone or retiring, and the D2 target-death rule;
- *  - D2: after durable intent, the only admitted FAILED is target death with
- *    the source still a voter. No elapsed-time budget fails a REPLACE after
- *    its intent; budgets become the bounded diagnostics recorded here.
+ *  - D2: after durable intent, the only admitted FAILED is target death:
+ *    with the source still a voter its node cancels the source's removal
+ *    first (CANCEL_REPLICA_REMOVAL); CANCELLED or NOT_IN_PROGRESS records
+ *    the source retained, ALREADY_REMOVED is reported as the named degraded
+ *    group and completes by R-1a, anything else waits (2026-11-11). No
+ *    elapsed-time budget fails
+ *    a REPLACE after its intent; budgets become bounded diagnostics.
  * Prohibited: completing from a row, the AVAILABLE readiness verdict, a
  * release, a predicted configuration or any third replica; failing a
  * post-intent REPLACE on elapsed time; resubmitting REMOVE_PEER on a wake
  * that changed nothing.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-} from './replica-operation-constants.js';
 import {
   PARTITION_REPLICA_MEMBERSHIP_STATE,
 } from '../partition/partition-replica-membership-constants.js';
@@ -49,11 +49,13 @@ import {
 import {
   isReplaceTargetGone,
   readReplaceCompletionAuthority,
-  replaceRetirementRouteOf,
 } from './operation-workflow-replace-surviving-membership.js';
-import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
-  deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
+  evaluateRemovalLeadershipSafety,
+  isRemovalSubjectCorroboratedLeader,
+} from './operation-workflow-removal-leadership-gate.js';
+import {
+  replaceAnswerStatus,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
@@ -80,11 +82,18 @@ import {
   REPLACE_OWNER_RESTART_CLASS,
   REPLACE_OWNER_STALENESS_CLASS,
   REPLACE_SOURCE_ROW_CLASS,
-  claimReplaceAttemptStateRebuild,
   classifyReplaceOwnerPhase,
   releaseReplaceOwnerSessionOperation,
   startReplaceOwnerSession,
 } from './operation-workflow-replace-owner-recovery.js';
+import {redriveReplaceSourceRetirement} from
+  './operation-workflow-replace-source-retirement.js';
+import {cancelReplaceSourceRemoval, degradedCompletionStepMetadataOf,
+  isSourceRetainedAnswer, reportTargetDeadSourceRemoved,
+  targetDeathStepMetadataOf} from
+  './operation-workflow-replace-source-cancellation.js';
+import {REPLICA_REMOVAL_CANCEL_ANSWER} from
+  '../node/replica-removal-cancel-contract.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -133,8 +142,13 @@ const REPLACE_WAIT_REASON = Object.freeze({
   SOURCE_REMOVAL_EFFECT_PENDING: 'source_removal_effect_pending',
   SOURCE_MEMBERSHIP_REMOVAL_PENDING: 'source_membership_removal_pending',
   TARGET_DEAD_WITNESS_UNAVAILABLE: 'target_dead_witness_unavailable',
+  // D2: the source's node has not answered the cancellation of its removal.
+  SOURCE_REMOVAL_CANCEL_PENDING: 'source_removal_cancel_pending',
   REMOVAL_INTENT_NOT_DURABLE: 'removal_intent_not_durable',
   EFFECT_REVALIDATION_MOVED: 'effect_revalidation_inputs_moved',
+  // The corroborated leader is the source: no RemoveNode is proposed through
+  // it; the removal leadership gate hands its leadership off first.
+  SOURCE_LEADS: 'source_leads_handoff_pending',
   // BR12: the owner's copy is a deferred-visibility snapshot.
   DEFERRED_VISIBILITY: 'deferred_visibility_snapshot',
   // A former step or operation budget elapsed while no other wait was
@@ -290,109 +304,6 @@ function clearAllReplaceOwnerState(owner) {
   startReplaceOwnerSession(owner, REPLACE_OWNER_RESTART_CLASS.COORDINATOR_REINIT);
 }
 
-const RETIREMENT_LEVEL_SEPARATOR = '|';
-// The sequence of an attempt record rebuilt after a restart (BR10): not one
-// this session issued.
-const REBUILT_ATTEMPT_SEQ = 0;
-
-// The leader, term and membership the witness reported: an R-1f attempt is
-// re-issued only when one of them moved since it was issued (a proposal a
-// leader change dropped), or the backstop window passed with no answer
-// resolving it.
-function retirementLevelOf(observation) {
-  return [
-    observation?.leaderReplicaId ?? '',
-    observation?.term ?? '',
-    observation?.state ?? '',
-  ].join(RETIREMENT_LEVEL_SEPARATOR);
-}
-
-function shouldIssueRetirementAttempt(owner, attempt, observation) {
-  if (!attempt) {
-    return true;
-  }
-  if (attempt.answer === null) {
-    // One uncertain attempt at a time: a wake re-evaluates, never resubmits.
-    return false;
-  }
-  if (attempt.level !== retirementLevelOf(observation)) {
-    return true;
-  }
-  const windowMs = Number(observation?.transferWindowMaxMs);
-  const backstopMs = Number.isFinite(windowMs) && windowMs > 0 ?
-    windowMs : REPLACE_REMOVAL_PENDING_ESCALATION_MS;
-  return nowMsOf(owner) - attempt.answeredAtMs >= backstopMs;
-}
-
-/**
- * BR10: the previous owner session may have issued a REMOVE_PEER whose
- * outcome is unknown. Its record is rebuilt as an outstanding attempt,
- * answered now at the witness's current level: a changed level or the
- * backstop window resolves it; nothing is issued before.
- * @param {Object} owner
- * @param {Object} state - The owner state.
- * @param {Object} operation
- * @param {Object} observation - The fresh witness observation.
- */
-function rebuildLostRetirementAttempt(owner, state, operation, observation) {
-  if (state.retirementAttemptByOperationId.has(operation.operationId)) {
-    return;
-  }
-  const rebuild = claimReplaceAttemptStateRebuild(owner, operation);
-  if (!rebuild.due) {
-    return;
-  }
-  const nowMs = nowMsOf(owner);
-  state.retirementAttemptByOperationId.set(operation.operationId, {
-    attemptSeq: REBUILT_ATTEMPT_SEQ,
-    issuedAtMs: nowMs,
-    level: retirementLevelOf(observation),
-    answer: Object.freeze({rebuiltAfter: rebuild.restartClass}),
-    answeredAtMs: nowMs,
-    rebuiltAfter: rebuild.restartClass,
-  });
-}
-
-/**
- * R-1f: propose REMOVE_PEER of the source through the group's leader (the
- * one port that takes a conf change; the target when it leads) while the
- * source is still a voter and its row is gone or retiring. At most one
- * attempt is in flight; a repeat after a leader, term or membership change,
- * or after the backstop window, is a raft no-op if the first one committed.
- * @param {Object} owner
- * @param {Object} operation
- * @param {Object} observation
- * @return {Promise<boolean>} Whether an attempt was issued.
- */
-async function redriveReplaceSourceRetirement(owner, operation, observation) {
-  const state = readOwnerState(owner);
-  rebuildLostRetirementAttempt(owner, state, operation, observation);
-  const attempt =
-    state.retirementAttemptByOperationId.get(operation.operationId) || null;
-  if (!shouldIssueRetirementAttempt(owner, attempt, observation)) {
-    return false;
-  }
-  const issued = {
-    attemptSeq: state.nextAttemptSeq,
-    issuedAtMs: nowMsOf(owner),
-    level: retirementLevelOf(observation),
-    answer: null,
-    answeredAtMs: null,
-  };
-  state.nextAttemptSeq += 1;
-  state.retirementAttemptByOperationId.set(operation.operationId, issued);
-  const delivery = await deliverToReplaceWitness(
-    owner, operation, ReplicaOperationMessageType.RETIRE_REPLICA_PEER,
-    replaceRetirementRouteOf(owner, operation, observation));
-  if (state.retirementAttemptByOperationId.get(operation.operationId) ===
-      issued) {
-    issued.answer = delivery.response?.[ReplicaOperationField.PROPOSAL] ||
-      {reason: deliveryUnavailableReason(delivery)};
-    issued.answeredAtMs = nowMsOf(owner);
-  }
-  return true;
-}
-
 /**
  * Record that the REMOVE_REPLICA effect was delivered and what the source
  * answered. T5' re-sends only when no effect is recorded (a restart lost it)
@@ -506,20 +417,55 @@ function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
 
 async function handleReplaceTargetDeath(owner, operation, decision, context) {
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.STILL_VOTER) {
-    // D2: a real premise change - fail safely and retain the source.
-    await owner.failOperation(
-      operation,
-      REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
-      {replacePostIntentFailure:
-        REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED},
-    );
-    return true;
+    // D2: a real premise change. The source is retained only once its node
+    // cancelled its removal; an unanswered cancel records nothing
+    // (2026-11-11). Its node answering ALREADY_REMOVED means the removal
+    // happened: never "retained" - the degraded group is reported by name
+    // with its repair, and R-1a completes from the committed absence at the
+    // next entry (as when the absence is read first, P6 (c)).
+    const cancel = await cancelReplaceSourceRemoval(owner, operation);
+    const stepMetadata = targetDeathStepMetadataOf(cancel,
+      decision.observation, replaceReplicaIdsOf(owner, operation));
+    if (isSourceRetainedAnswer(cancel)) {
+      await owner.failOperation(operation,
+        REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
+        {replacePostIntentFailure:
+          REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
+        stepMetadata});
+      return true;
+    }
+    const removed =
+      cancel.answer === REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED;
+    if (removed) {
+      reportTargetDeadSourceRemoved(owner, operation, stepMetadata);
+    }
+    // Removed: the one completion edge above (R-1a) decides at the next
+    // entry, woken by the committed membership change.
+    return waitForReplaceOwner(owner, operation, removed ?
+      REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING :
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_CANCEL_PENDING,
+    {...context, observation: decision.observation});
   }
   // The witness is the dead target: its configuration cannot be read, so
   // nothing is concluded - the REPLACE waits visibly (never a rollback).
   return waitForReplaceOwner(owner, operation,
     REPLACE_WAIT_REASON.TARGET_DEAD_WITNESS_UNAVAILABLE,
     {...context, observation: decision.observation});
+}
+
+/**
+ * The durable record a REPLACE completion carries when its target is gone:
+ * the source left (R-1a), the group runs degraded, the repair it owes is
+ * named. Recorded by the one completion sink for every success edge.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} decision - decideReplaceCompletion's SOURCE_RETIRED answer.
+ * @return {Object|null} Step metadata, or null with a live target.
+ */
+function replaceCompletionStepMetadataOf(owner, operation, decision) {
+  return isReplaceTargetGone(owner, operation) ?
+    degradedCompletionStepMetadataOf(decision.observation,
+      replaceReplicaIdsOf(owner, operation)) : null;
 }
 
 /**
@@ -572,6 +518,12 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     return waitForReplaceOwner(owner, operation,
       VERDICT_WAIT_REASON[decision.verdict], waitContext);
   }
+  if (isRemovalSubjectCorroboratedLeader(owner, operation,
+    decision.observation)) {
+    // Leadership moved onto the source: no RETIRE through it; the gate's
+    // named handoff leaves and the owner waits until a survivor leads.
+    return handOffLeadingSource(owner, operation, waitContext);
+  }
   const sourceRow = await observeReplaceSourceRow(owner, operation);
   if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
     return waitForReplaceOwner(owner, operation,
@@ -602,6 +554,18 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   await redriveReplaceSourceRetirement(owner, operation, decision.observation);
   return waitForReplaceOwner(owner, operation,
     REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, rowContext);
+}
+
+// The source leads at STOPPING: the gate decides (an attempt out waits for
+// its resolution); its handoff leaves; the owner waits on the one wake.
+async function handOffLeadingSource(owner, operation, waitContext) {
+  const evaluation = await evaluateRemovalLeadershipSafety(owner, operation);
+  if (evaluation?.handoffRequest) {
+    await owner.dispatchRemoveSafetyHandoffRequest(operation,
+      evaluation.handoffRequest);
+  }
+  return waitForReplaceOwner(owner, operation,
+    REPLACE_WAIT_REASON.SOURCE_LEADS, waitContext);
 }
 
 function waitAdmission(reason, witness = null) {
@@ -698,17 +662,6 @@ async function adoptObservedReplaceSourceRetirement(owner, operation) {
 }
 
 /**
- * S9 (ACTIVE: no time bound) and D2 (after durable intent: no timer-driven
- * FAILED): no elapsed-time budget may end a partition REPLACE at ACTIVE or
- * STOPPING; the budget becomes this diagnostic.
- * @param {Object} operation
- * @return {boolean}
- */
-function isReplaceExemptFromTimeBudget(operation) {
-  return isPartitionReplaceOwnerPhase(operation);
-}
-
-/**
  * Record an exhausted budget of a time-exempt REPLACE as its bounded
  * diagnostic (severity only, never a state change).
  * @param {Object} owner
@@ -774,11 +727,11 @@ export {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,
+  replaceCompletionStepMetadataOf,
   recordReplaceBudgetDiagnostic,
   recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,

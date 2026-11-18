@@ -1,8 +1,13 @@
 import {EventEmitter} from 'events';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  MIGRATION_RECOVERY_ERROR,
   wireMigrationRecoveryOnLeaderElection,
 } from '../../src/migration/migration-recovery-trigger.js';
+import {PartitionServiceRegistry} from
+  '../../src/bootstrap/shared/partition-service-registry.js';
+import {PRESSURE_GOVERNOR_ACTION} from
+  '../../src/control-plane/pressure-governor.js';
 import {
   PARTITION_SERVICE_EVENT,
 } from '../../src/partition/partition-service-constants.js';
@@ -11,11 +16,13 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// The node's real partition-service registry, holding stand-in partition
+// services that only emit (the trigger reads nothing else of them).
 function createPartitionServices() {
-  return new Map([
-    ['r1', new EventEmitter()],
-    ['r2', new EventEmitter()],
-  ]);
+  const registry = new PartitionServiceRegistry();
+  registry.set('r1', new EventEmitter());
+  registry.set('r2', new EventEmitter());
+  return registry;
 }
 
 function createSqlQueryEngine(recoverCalls) {
@@ -157,4 +164,84 @@ test('wireMigrationRecoveryOnLeaderElection defers leader-election ' +
   );
 
   detach();
+});
+
+const SILENT_LOGGER = Object.freeze({info() {}, debug() {}, error() {}});
+
+function manualScheduler() {
+  const scheduled = [];
+  return {
+    scheduled,
+    scheduleTimeout: (callback, delayMs) => {
+      const entry = {callback, delayMs, cleared: false};
+      scheduled.push(entry);
+      return entry;
+    },
+    cancelTimeout: (entry) => {
+      if (entry) entry.cleared = true;
+    },
+    fire: async () => {
+      for (const entry of scheduled.splice(0)) {
+        if (!entry.cleared) entry.callback();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+  };
+}
+
+test('a partition registered after the trigger armed starts migration ' +
+  'recovery when it elects a leader (PartitionServiceRegistry)', async (t) => {
+  const recoverCalls = [];
+  const partitionServices = new PartitionServiceRegistry();
+  const scheduler = manualScheduler();
+  const detach = wireMigrationRecoveryOnLeaderElection({
+    sqlQueryEngine: createSqlQueryEngine(recoverCalls),
+    partitionServices,
+    leaderElectionCooldownMs: 0,
+    now: () => 0,
+    scheduleTimeout: scheduler.scheduleTimeout,
+    cancelTimeout: scheduler.cancelTimeout,
+    pressureGovernor: {
+      evaluate: () => ({action: PRESSURE_GOVERNOR_ACTION.ALLOW, retryAfterMs: 0}),
+    },
+    logger: SILENT_LOGGER,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  t.equal(recoverCalls.length, 1, 'node restart recovery ran once');
+
+  const later = new EventEmitter();
+  partitionServices.set('r-later', later);
+  later.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED);
+  await scheduler.fire();
+  t.equal(recoverCalls.length, 2,
+    'the later partition\'s leader election triggered recovery');
+
+  const leading = Object.assign(new EventEmitter(), {isLeader: true});
+  partitionServices.set('r-leading', leading);
+  await scheduler.fire();
+  t.equal(recoverCalls.length, 3,
+    'a partition already leading when registered announces at registration');
+
+  detach();
+  later.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED);
+  await scheduler.fire();
+  t.equal(recoverCalls.length, 3, 'detach unsubscribes from the registry');
+  partitionServices.delete('r-later');
+  later.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED);
+  t.equal(later.listenerCount(PARTITION_SERVICE_EVENT.LEADER_ELECTED), 0,
+    'a removed partition keeps no relay listener');
+});
+
+test('migration recovery refuses an enumerated partition map: the registry ' +
+  'is required (typed)', async (t) => {
+  t.throws(() => wireMigrationRecoveryOnLeaderElection({
+    sqlQueryEngine: createSqlQueryEngine([]),
+    partitionServices: new Map([['r1', new EventEmitter()]]),
+    logger: SILENT_LOGGER,
+  }), {code: MIGRATION_RECOVERY_ERROR.REGISTRY_REQUIRED.code});
+  t.throws(() => wireMigrationRecoveryOnLeaderElection({
+    sqlQueryEngine: null,
+    partitionServices: new PartitionServiceRegistry(),
+    logger: SILENT_LOGGER,
+  }), {code: MIGRATION_RECOVERY_ERROR.ENGINE_REQUIRED.code});
 });

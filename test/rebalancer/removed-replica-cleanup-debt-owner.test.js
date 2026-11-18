@@ -24,6 +24,8 @@
  * Epic: solve/epics/rebalancer-operation-safety-audit-remediation.md
  */
 
+import {withRemovalServingSurface} from
+  '../test-helpers/partition-removal-serving-surface.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -46,6 +48,8 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../../src/storage/storage-constants.js';
+import {isRetryableControlPlaneError} from
+  '../../src/control-plane/control-plane-error-classification.js';
 import {
   createCanonicalLifecycleServiceRow,
   createLifecycleCdcServiceForCache,
@@ -184,10 +188,11 @@ test('removed-replica cleanup debt owner', async (t) => {
       handler.initialize();
       await handler.removedReplicaCleanupDebtSweepTask;
 
-      const liveService = {shutdownCalls: ZERO_COUNT,
+      const liveService = withRemovalServingSurface({
+        shutdownCalls: ZERO_COUNT,
         async shutdown() {
           this.shutdownCalls += 1;
-        }};
+        }});
       handler.localServices.set(TEST_REPLICA_ID, liveService);
 
       // Force the removal-cleanup failure AFTER the durable row delete so
@@ -258,6 +263,75 @@ test('removed-replica cleanup debt owner', async (t) => {
       t.notOk(fs.existsSync(`${strandedDbPath}-wal`),
         'the stranded WAL file is deleted by the startup sweep');
       await restartHandler.shutdown();
+    },
+  );
+
+  await t.test(
+    'R14: a duplicate REMOVE of a replica its own operation already removed ' +
+    'answers COMPLETED (satisfied), never a retryable authority debt',
+    async (t) => {
+      const dataDir = makeTempDataDir(t);
+      const cache = createHandlerCache();
+      seedServicesRow(cache, {
+        replicaId: TEST_REPLICA_ID,
+        partitionId: TEST_PARTITION_ID,
+        nodeId: TEST_NODE_ID,
+        status: ReplicaStatus.ACTIVE,
+      });
+      const handler = createHandler({cache, dataDir});
+      handler.initialize();
+      await handler.removedReplicaCleanupDebtSweepTask;
+      handler.localServices.set(TEST_REPLICA_ID,
+        withRemovalServingSurface({async shutdown() {}}));
+      const removeMessage = {
+        correlationId: TEST_CORRELATION_ID,
+        payload: {
+          type: ReplicaOperationMessageType.REMOVE_REPLICA,
+          operationId: TEST_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      };
+      const removed = waitForReplicaEvent(
+        handler,
+        REPLICA_HANDLER_EVENT.REMOVED,
+        REPLICA_HANDLER_EVENT.REMOVAL_FAILED,
+      );
+      const first = await handler.handleMessage(removeMessage);
+      t.equal(first.status, ReplicaOperationResponseStatus.INITIATED,
+        'the first REMOVE initiates the removal');
+      await removed;
+      t.equal(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID) ?? null,
+        null, 'the durable row is gone: the removal effect is complete');
+      t.equal(handler.getLocalReplica(TEST_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVED, 'the replica is locally REMOVED');
+
+      // The same operation's REMOVE re-sent after completion (the STOPPING
+      // re-drive): a completed effect answers satisfied.
+      const duplicate = await handler.handleMessage(removeMessage);
+      t.equal(duplicate.status, ReplicaOperationResponseStatus.COMPLETED,
+        'the duplicate answers COMPLETED');
+      t.notMatch(String(duplicate.error ?? ''), /durable authority/,
+        'no authority-debt error is answered');
+      // Generic absence still proves nothing for another operation.
+      const otherOperation = await handler.handleMessage({
+        ...removeMessage,
+        payload: {...removeMessage.payload, operationId: 'op-other-remove'},
+      });
+      t.equal(otherOperation.status, ReplicaOperationResponseStatus.ERROR,
+        'another operation\'s REMOVE of the removed replica fails closed');
+
+      // An unreadable durable authority is a retryable debt, and the answer
+      // keeps that typing so the coordinator defers instead of failing.
+      handler.replicaStateMachine.bindAuthoritativeRemovalAuthority =
+        async () => ({kind: 'unavailable'});
+      const unreadable = await handler.handleMessage(removeMessage);
+      t.equal(unreadable.status, ReplicaOperationResponseStatus.ERROR,
+        'an unreadable authority is not answered satisfied');
+      t.equal(unreadable.deferRetry, true, 'the answer is typed retryable');
+      t.ok(isRetryableControlPlaneError(unreadable),
+        'the coordinator classifies the answer retryable');
+      await handler.shutdown();
     },
   );
 

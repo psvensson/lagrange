@@ -173,10 +173,6 @@ function nextSemanticGeneration(owner, value) {
   return value + 1;
 }
 
-function defaultMacrotaskScheduler(callback) {
-  return setImmediate(callback);
-}
-
 function isReadinessBuildFailureRetryable() {
   return true;
 }
@@ -381,7 +377,6 @@ export {
   isDeferredReadinessPlanningSnapshot,
   isNodeTableOnlyTokenAdvance,
   isTokenCurrentExceptNodeTable,
-  defaultMacrotaskScheduler,
   encodeSignatureValues,
   freezeToken,
   getReadinessBuildFailureReason,

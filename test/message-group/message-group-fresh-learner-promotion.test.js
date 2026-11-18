@@ -12,6 +12,7 @@ import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {proposeMembershipTransition} from
   '../../src/raft/raft-rs-membership-transition-runtime.js';
+import {createVoterLiveness} from '../../src/raft/raft-rs-voter-liveness.js';
 
 const GROUP = 'fresh-message-group-promotion';
 const FOUNDERS = Object.freeze(['promotion-a', 'promotion-b', 'promotion-c']);
@@ -37,6 +38,9 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
   const group = {lifecycleIncarnation: 'lifecycle',
     membershipGenerationKnown: true, membershipGenerationIndex: 9,
     membershipTransitionFence: null,
+    // The runtime owner's own liveness record (a fresh group's, as
+    // raft-rs-runtime-owner.js creates it): the admission reads it.
+    voterLiveness: createVoterLiveness(),
     resolvePeerNodeId: () => 'target-node'};
   let statusReads = 0;
   let proposals = 0;

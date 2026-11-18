@@ -5,9 +5,7 @@ import {
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {PUBLICATION_RECOVERY_MACHINE_ACTION} from './publication-recovery-state-machine.js';
 import {
-  abandonMembershipPublication,
   buildTransitionHistoryEntry,
-  hasPublicationTimedOut,
   normalizeNodeIdList,
   resolveNowMs,
 } from './membership-publication-row-helpers.js';
@@ -17,6 +15,16 @@ import {
   closeAcknowledgedMetadataRefreshRow,
 } from './membership-publication-planning-evidence.js';
 
+/**
+ * The row an acknowledgement by `nodeId` leaves: the node added to the
+ * acknowledged set, and the row closed when every required node has
+ * acknowledged. An acknowledger only adds itself: it never abandons the row
+ * (the timeout decision is the publication owner's, see
+ * membership-publication-row-changes.js). A node the row does not require
+ * is not added.
+ * @param {Object} options - {publicationRow, nodeId, nowMs}.
+ * @return {Object} The next row.
+ */
 function acknowledgeMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
@@ -34,13 +42,6 @@ function acknowledgeMembershipPublication(options = {}) {
           normalizedPublication.transitionHistory),
       ],
     };
-  }
-  if (hasPublicationTimedOut(publicationRow, options)) {
-    return abandonMembershipPublication({
-      publicationRow,
-      nowMs,
-      reasonCode: options.timeoutReasonCode,
-    });
   }
   const acknowledgedNodeIds = normalizeNodeIdList([
     ...normalizedPublication.acknowledgedNodeIds,

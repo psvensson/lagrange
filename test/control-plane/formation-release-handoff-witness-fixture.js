@@ -59,6 +59,8 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 const {STARTUP_JOIN_MODE} = NODE_JOINING_SERVICE_SHARED;
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON: RECOVERY_REASON,
@@ -250,28 +252,27 @@ function buildStorageOwner() {
   let durableRow = null;
   const publishers = [];
   const readOptions = [];
-  return {
-    async upsertPublication(row) {
+  const durableRowOf = (publicationId) =>
+    (durableRow && durableRow.publication_id === publicationId ?
+      durableRow :
+      null);
+  return publicationsOwnerOverRows({
+    async storeRow(row) {
       durableRow = row;
       publishers.push(row.publisher_node_id);
-      return row;
     },
     async getPublication(publicationId, options) {
       readOptions.push(options);
-      return this.durableRow(publicationId);
+      return durableRowOf(publicationId);
     },
-    durableRow(publicationId) {
-      return durableRow && durableRow.publication_id === publicationId ?
-        durableRow :
-        null;
-    },
+    durableRow: durableRowOf,
     publisherNodeIds() {
       return [...publishers];
     },
     readOptions() {
       return [...readOptions];
     },
-  };
+  }, {durableRead: durableRowOf});
 }
 
 // The replica host as system-table routing sees it (quest
@@ -308,9 +309,10 @@ function buildNonHostingStorageOwner(storageOwner, hostReport) {
   const reads = [];
   return {
     reads,
-    async upsertPublication(row, options) {
-      return storageOwner.upsertPublication(row, options);
-    },
+    admitPublication: (row, options) =>
+      storageOwner.admitPublication(row, options),
+    applyPublicationChange: (publicationId, change, options) =>
+      storageOwner.applyPublicationChange(publicationId, change, options),
     async getPublication(publicationId, options) {
       const readAuthority = buildControlPlaneReadAuthority(
         readOptionsOwner.buildPublicationReadOptions(options),

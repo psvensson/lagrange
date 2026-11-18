@@ -22,6 +22,8 @@ import {
   createService,
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const HEARTBEAT_READY_CAPABILITY_TEST_NAME =
   'ReplicaDispatchService heartbeat-only READY updates explicit capabilities';
@@ -473,7 +475,7 @@ test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
       repository: {
         async queryIncompleteOperations(options) {
           queryOptions.push(options);
-          return [{
+          return buildAnsweredIncompleteOperationListObservation([{
             operationId: CREATING_REARM_REPLAY_OPERATION_ID,
             partitionId: CREATING_REARM_REPLAY_PARTITION_ID,
             entityType: 'partition',
@@ -487,7 +489,7 @@ test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
             stepsHistory: [],
             createdAt: CREATING_REARM_REPLAY_CREATED_AT,
             updatedAt: CREATING_REARM_REPLAY_UPDATED_AT,
-          }];
+          }]);
         },
       },
       isOperationLocallyOwned(operation) {

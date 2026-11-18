@@ -35,8 +35,8 @@ function createFacadeCoordinator(overrides = {}) {
   };
 
   const repository = {
-    async queryOperationById(operationId) {
-      calls.repository.push(['queryOperationById', operationId]);
+    async queryOperationProjectionById(operationId) {
+      calls.repository.push(['queryOperationProjectionById', operationId]);
       return {operationId};
     },
     async queryExistingInFlightOperation(...args) {
@@ -61,10 +61,6 @@ function createFacadeCoordinator(overrides = {}) {
     async getAllOperations() {
       calls.repository.push(['getAllOperations']);
       return [{operationId: 'op-a'}];
-    },
-    async getOperationsByEntity(entityType, entityId) {
-      calls.repository.push(['getOperationsByEntity', entityType, entityId]);
-      return [{entityType, entityId}];
     },
     async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
       calls.repository.push([
@@ -196,7 +192,7 @@ test('RebalanceCoordinator facade delegates repository contract methods',
   async (t) => {
     const {coordinator, calls} = createFacadeCoordinator();
 
-    const byId = await coordinator.queryOperationById('op-1');
+    const byId = await coordinator.queryOperationProjectionById('op-1');
     t.equal(byId.operationId, 'op-1');
 
     const inFlight = await coordinator.queryExistingInFlightOperation(
@@ -221,17 +217,18 @@ test('RebalanceCoordinator facade delegates repository contract methods',
     );
     const allOperations = await coordinator.getAllOperations();
     t.equal(allOperations.length, 1);
-    const byEntity = await coordinator.getOperationsByEntity('partition', 'partition-1');
-    t.equal(byEntity.length, 1);
+    t.equal(coordinator.getOperationsByEntity, undefined,
+      'the coordinator exposes no cache-projection entity read');
+    t.equal(coordinator.getOperationsByPartition, undefined,
+      'the coordinator exposes no cache-projection partition read');
 
     t.same(calls.repository.map(([name]) => name), [
-      'queryOperationById',
+      'queryOperationProjectionById',
       'queryExistingInFlightOperation',
       'persistNewOperation',
       'runReplicaOperationTransitionExclusive',
       'persistOperationUpdate',
       'getAllOperations',
-      'getOperationsByEntity',
     ]);
     t.same(
       calls.repository[3][1],
@@ -277,10 +274,9 @@ test(
   async (t) => {
     const {coordinator, calls} = createFacadeCoordinator();
 
-    const byEntity = await coordinator.getOperationsByEntity(
+    const byEntity = await coordinator.getAuthoritativeOperationsByEntity(
       'partition',
       'partition-1',
-      {visibilityReadMode: 'owner_rpc_required'},
     );
 
     t.equal(byEntity.length, 1);

@@ -295,6 +295,23 @@ function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
     candidateStatus !== normalizedLatestPublication.status;
 }
 
+// Whether an unchanged candidate asks the owner to refresh the latest row:
+// its summaries, its acknowledgements or its status moved.
+function shouldRefreshPublicationRow(latestPublicationRow, candidate) {
+  const hasSummary = (summary) => Boolean(summary) &&
+    typeof summary === 'object';
+  return (
+    candidate.priorityPartitionSummaryChanged === true &&
+    (hasSummary(candidate.priorityPartitionSummary) ||
+      hasSummary(candidate.membershipLifecycleSummary))
+  ) || (
+    candidate.membershipLifecycleSummaryChanged === true &&
+    hasSummary(candidate.membershipLifecycleSummary)
+  ) ||
+    hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate) ||
+    hasCandidateStatusRefresh(latestPublicationRow, candidate);
+}
+
 function isNodeAckCompletionEligible(dimensions = {}) {
   if (
     dimensions[
@@ -437,6 +454,7 @@ export {
   CONVERGENCE_TRACE_LEVEL,
   DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
   DEFERRED_PROPAGATED_CATCHUP_OUTCOME,
+  DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS,
   DEFERRED_PROPAGATED_CATCHUP_TABLES,
   DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS,
   EMPTY_PUBLICATION_CANDIDATE_REASON,
@@ -453,11 +471,10 @@ export {
   OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS,
   PRIORITY_SUMMARY_REFRESHED_REASON,
   buildPublicationReadinessTraceFields,
-  hasCandidateAcknowledgementRefresh,
-  hasCandidateStatusRefresh,
   hasPrioritySummaryRefreshClearedGap,
   reportOwnerMembershipReconcileSpent,
   resolveDeferredPropagatedCatchupCooldownMs,
   resolveOwnerAckCompletionPendingNodeIds,
   shouldDeferMembershipReconcileToWriteLeader,
+  shouldRefreshPublicationRow,
 };

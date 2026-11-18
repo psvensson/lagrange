@@ -5,6 +5,13 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE, REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
   './replica-operation-repository-constants.js';
+import {buildOperationListUnavailableError} from
+  './replica-operation-repository-operation-visibility.js';
+
+const LIST_SCOPE = Object.freeze({
+  ALL: 'all operations',
+  ENTITY: 'entity operations ',
+});
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -37,14 +44,11 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
-    REPLICA_OPERATION_VISIBILITY_READ_MODE,
     SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
     UNIFIED_SERVICE_TYPE,
     WORKFLOW_STEP,
-    buildReplicaOperationVisibilityReadOptions,
-    resolveReplicaOperationVisibilityReadMode,
   } = options;
   const LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS = Object.freeze({
     ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
@@ -105,7 +109,9 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       return replicaIds;
     }
     /**
-   * Get all operations (cache-first, SQL fallback).
+   * ADVISORY projection of all operations: the cache when it exists, else
+   * an owner-preferred read. Never "no operations" on a failed read: that
+   * throws the typed unavailability.
    * @return {Promise<Array>}
    */
     async getAllOperations() {
@@ -132,17 +138,20 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows) {
-        return [];
+        throw buildOperationListUnavailableError(result, LIST_SCOPE.ALL);
       }
       return result.rows.map((row) => this.rowToOperation(row));
     }
     /**
-   * Get operations for an entity (cache-first, SQL fallback).
+   * ADVISORY projection of an entity's operations: the cache when it
+   * exists (possibly lagging or partial), else an owner-preferred read. A
+   * failed read throws the typed unavailability, never []. A caller that
+   * decides on absence uses getOperationsByEntityAuthoritativeObservation.
    * @param {string} entityType
    * @param {string} entityId
    * @return {Promise<Array>}
    */
-    async getOperationsByEntity(entityType, entityId) {
+    async getOperationsByEntityProjection(entityType, entityId) {
       const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
         if (!row) {
           return false;
@@ -158,7 +167,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         REPLICA_OPERATION_OWNER_PREFERRED_READ_QUERY_OPTIONS,
       );
       if (!result.success || !result.rows) {
-        return [];
+        throw buildOperationListUnavailableError(
+          result, `${LIST_SCOPE.ENTITY}${entityType}:${entityId}`);
       }
       return result.rows.map((row) => this.rowToOperation(row));
     }
@@ -257,39 +267,6 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       }
 
       return this.buildEntityOperationVisibilityObservation(operations, null);
-    }
-
-    /**
-   * Get count of non-terminal REMOVE operations.
-   * @param {object} [options={}]
-   * @return {Promise<number>}
-   */
-    async getConcurrentRemoveCount(options = {}) {
-      const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
-      if (visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
-        const cachedCount = this.queryCachedIncompleteOperations().filter(
-          (operation) => operation?.type === OperationType.REMOVE,
-        ).length;
-        if (
-          cachedCount > 0 ||
-        visibilityReadMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
-        ) {
-          return cachedCount;
-        }
-      }
-
-      const result = await this.executeReplicaOperationsRead(
-        SQL.SELECT_IN_FLIGHT_BY_TYPE,
-        [OperationType.REMOVE],
-        buildReplicaOperationVisibilityReadOptions(visibilityReadMode),
-      );
-      if (!result.success || !result.rows) {
-        return 0;
-      }
-
-      return result.rows
-        .map((row) => this.rowToOperation(row))
-        .filter((op) => !this.isOperationTerminal(op)).length;
     }
 
     /**

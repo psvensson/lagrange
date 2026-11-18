@@ -24,6 +24,7 @@ import {
 } from './application-database-statement-policy.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
+import {cdcAdmissionClassOfIntent} from '../partition/partition-cdc-admission-class.js';
 
 const objectFreeze = Object.freeze;
 const LOCAL_STR_STRING = 'string';
@@ -121,9 +122,9 @@ function admitClientSystemTableWrite(ast, options) {
 }
 
 /**
- * The one engine-entry refusal of an inadmissible client statement: the
- * embedded application's statement policy, then the system-table write
- * admission. Null when the statement may run.
+ * The one engine-entry refusal of an inadmissible statement: the embedded
+ * application's statement policy, a CDC admission class the statement may not
+ * carry, then the system-table write admission. Null when it may run.
  * @param {Object} ast - Parsed statement.
  * @param {Object} options - SqlCore execution options.
  * @return {Object|null} The typed refusal, or null.
@@ -134,9 +135,17 @@ function resolveClientStatementRefusal(ast, options) {
   if (applicationDecision.allowed !== true) {
     return applicationDecision.failure;
   }
-  const admission = admitClientSystemTableWrite(ast, options);
-  return admission.state === SYSTEM_TABLE_WRITE_ADMISSION.REFUSED ?
-    admission.failure : null;
+  // A write's CDC admission class is an in-process lifecycle owner's intent
+  // (partition-cdc-admission-class.js): a client statement, a raw class
+  // value or a forged intent is refused typed before anything executes.
+  const admission = cdcAdmissionClassOfIntent(options,
+    {client: resolveStatementIngress(options) === STATEMENT_INGRESS.CLIENT});
+  if (admission.refusal !== undefined) {
+    return admission.refusal;
+  }
+  const systemTableWrite = admitClientSystemTableWrite(ast, options);
+  return systemTableWrite.state === SYSTEM_TABLE_WRITE_ADMISSION.REFUSED ?
+    systemTableWrite.failure : null;
 }
 
 /**

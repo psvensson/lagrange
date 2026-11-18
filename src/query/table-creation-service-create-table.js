@@ -1,11 +1,9 @@
 import {validateUserTableCreateIntent} from './user-table-create-intent.js';
-import {v4 as uuidv4} from 'uuid';
 import {resolveDeclaredPartitionKeyType} from '../partition/partition-boundary-representation.js';
 import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
@@ -16,6 +14,10 @@ import {
   buildCreateTableSuccessResult,
   resolveTableCreationCompletion,
 } from './table-creation-service-completion.js';
+import {METADATA_AUTHORITY_REFRESH_OUTCOME} from
+  './metadata-authority-outcome-constants.js';
+import {metadataLookupUnavailableError} from
+  './table-creation-service-metadata-lookup.js';
 
 const EMPTY_SCHEMA_DEFINITION_JSON = '{}';
 
@@ -28,7 +30,6 @@ function sortObject(value) {
 }
 
 function assertDurableMetadataIdentity(service, existingTable, ast, options) {
-  if (!options.schemaJobId) return;
   const existingTableId = existingTable.table_id || existingTable.tableId;
   const expectedSchema = sortObject(
     service.buildSchemaDefinition(ast.columns, ast),
@@ -54,7 +55,6 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
 }
 
 function requireDurableMetadataGateway(service, options) {
-  if (!options.schemaJobId) return null;
   const gateway = service.getControlPlaneSystemTableGateway();
   if (typeof gateway?.submitMutation === 'function') return gateway;
   const error = new Error(
@@ -68,20 +68,10 @@ function firstTruthyValue(...values) {
   return values.find(Boolean) || null;
 }
 
-function createTableExistsError(tableName) {
-  const error = new Error(
-    `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
-    QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
-  );
-  error.code = QUERY_ERROR_CODE.TABLE_EXISTS;
-  return error;
-}
-
 function buildExistingReconciliationOptions(options) {
   return {
-    timeoutBudget: options?.timeoutBudget,
     cancellationToken: options?.cancellationToken || null,
-    schemaJobId: options.schemaJobId || null,
+    schemaJobId: options.schemaJobId,
     schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
     assertProvisioningOwnership:
       options.assertProvisioningOwnership || null,
@@ -152,9 +142,6 @@ async function reconcileExistingCreateTable(
   existingTable,
 ) {
   assertDurableMetadataIdentity(service, existingTable, ast, options);
-  if (!ast.ifNotExists && !options.schemaJobId) {
-    throw createTableExistsError(ast.tableName);
-  }
   const reconciliation = await service.reconcileExistingInitialPartition(
     ast.tableName,
     existingTable,
@@ -168,8 +155,7 @@ async function reconcileExistingCreateTable(
 
 function buildCreateTableMetadataContext(service, ast, options) {
   const partitionKey = service.derivePartitionKey(ast.primaryKey);
-  const tableId = options.tableId || `tbl-${uuidv4()}`;
-  const partitionId = options.partitionId || `${tableId}-p1`;
+  const {tableId, partitionId} = options;
   const schemaDefinition = service.buildSchemaDefinition(ast.columns, ast);
   const tableMetadata = {
     table_id: tableId,
@@ -212,7 +198,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
   };
 }
 
-function buildBaseProvisioningInput(context, options) {
+function buildDurableProvisioningInput(context, options) {
   return {
     tableId: context.tableId,
     tableName: context.tableName,
@@ -220,15 +206,8 @@ function buildBaseProvisioningInput(context, options) {
     partitionId: context.partitionId,
     partitionMetadata: context.partitionMetadata,
     replicaCount: context.partitionMetadata.replica_count,
-    timeoutBudget: options?.timeoutBudget,
     cancellationToken: options?.cancellationToken || null,
-  };
-}
-
-function buildDurableProvisioningInput(context, options) {
-  return {
-    ...buildBaseProvisioningInput(context, options),
-    schemaJobId: options.schemaJobId || null,
+    schemaJobId: options.schemaJobId,
     schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
     assertProvisioningOwnership:
       options.assertProvisioningOwnership || null,
@@ -308,13 +287,6 @@ async function executePersistedCreateTable(service, context, options, gateway) {
   return buildCreatedTableResult(service, context, provisioningSummary);
 }
 
-async function executeUnpersistedCreateTable(service, context, options) {
-  const provisioningSummary = await service.provisionInitialPartition(
-    buildBaseProvisioningInput(context, options),
-  );
-  return buildCreatedTableResult(service, context, provisioningSummary);
-}
-
 const tableCreationCreateTableMethods = {
   async executeCreateTableProvisioning(ast, options = {}) {
     validateUserTableCreateIntent(ast);
@@ -325,29 +297,23 @@ const tableCreationCreateTableMethods = {
       ifNotExists: ast.ifNotExists,
     });
 
-    const existingTable = await this.findExistingTableRecord(ast.tableName);
-    if (existingTable) {
-      return reconcileExistingCreateTable(
-        this,
-        ast,
-        options,
-        existingTable,
-      );
+    // An unreadable metadata owner is never "the table does not exist":
+    // the step refuses typed retryable and writes nothing.
+    const lookup = await this.lookupTableRecord(ast.tableName);
+    if (lookup.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.UNAVAILABLE) {
+      throw metadataLookupUnavailableError(`table ${ast.tableName}`, lookup);
+    }
+    if (lookup.outcome === METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND) {
+      return reconcileExistingCreateTable(this, ast, options, lookup.row);
     }
 
     const context = buildCreateTableMetadataContext(this, ast, options);
-    const durableMetadataGateway = requireDurableMetadataGateway(this, options);
-    if (this.cdcIntegrationService || durableMetadataGateway) {
-      const metadataGateway = durableMetadataGateway ||
-        this.getControlPlaneSystemTableGateway();
-      return executePersistedCreateTable(
-        this,
-        context,
-        options,
-        metadataGateway,
-      );
-    }
-    return executeUnpersistedCreateTable(this, context, options);
+    return executePersistedCreateTable(
+      this,
+      context,
+      options,
+      requireDurableMetadataGateway(this, options),
+    );
   },
 };
 

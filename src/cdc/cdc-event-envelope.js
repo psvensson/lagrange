@@ -2,7 +2,6 @@ import {CDC_EVENT_IDENTITY} from '../constants/cdc-lifecycle-constants.js';
 import {buildEventIdentity} from '../partition/cdc-event-buffer.js';
 import {copyArrayByIndex, isDenseDataArray, isRecord} from '../utils/canonical-json-data.js';
 import {CDC_OPERATION} from '../constants/cdc.js';
-import {CDC_EMITTER_FIELD} from './cdc-emitter-constants.js';
 import {PARTITION_CDC_OBLIGATION_EVENT_FIELD} from
   '../partition/partition-cdc-obligation-constants.js';
 import {isCdcSourceScopeEvidence} from './cdc-source-scope-evidence.js';
@@ -24,10 +23,19 @@ const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
 const CDC_OPERATIONS = new SetConstructor(Object.values(CDC_OPERATION));
 const capturedCdcData = new WeakSet();
 
+// The field names of one CDC event; this envelope is their owner.
+const CDC_EVENT_FIELD = objectFreeze({
+  TABLE_NAME: 'tableName',
+  OPERATION: 'operation',
+  DATA: 'data',
+  TIMESTAMP: 'timestamp',
+  SOURCE_PARTITION: 'sourcePartition',
+  SOURCE_REPLICA: 'sourceReplica',
+});
 const CDC_EVENT_METADATA_FIELD = objectFreeze({
-  TIMESTAMP: CDC_EMITTER_FIELD.TIMESTAMP,
-  SOURCE_PARTITION: CDC_EMITTER_FIELD.SOURCE_PARTITION,
-  SOURCE_REPLICA: CDC_EMITTER_FIELD.SOURCE_REPLICA,
+  TIMESTAMP: CDC_EVENT_FIELD.TIMESTAMP,
+  SOURCE_PARTITION: CDC_EVENT_FIELD.SOURCE_PARTITION,
+  SOURCE_REPLICA: CDC_EVENT_FIELD.SOURCE_REPLICA,
   EVENT_KEY: PARTITION_CDC_OBLIGATION_EVENT_FIELD.EVENT_KEY,
   ENTRY_ID: PARTITION_CDC_OBLIGATION_EVENT_FIELD.ENTRY_ID,
   SOURCE_LOG_INDEX: 'sourceLogIndex',
@@ -38,7 +46,7 @@ const CDC_EVENT_METADATA_FIELD = objectFreeze({
 });
 const CDC_METADATA_FIELDS = objectFreeze(Object.values(CDC_EVENT_METADATA_FIELD));
 const CDC_REQUIRED_FIELDS = objectFreeze([
-  CDC_EMITTER_FIELD.TABLE_NAME, CDC_EMITTER_FIELD.OPERATION, CDC_EMITTER_FIELD.DATA,
+  CDC_EVENT_FIELD.TABLE_NAME, CDC_EVENT_FIELD.OPERATION, CDC_EVENT_FIELD.DATA,
 ]);
 
 function invalidCdcIdentity() {

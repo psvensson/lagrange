@@ -1,6 +1,10 @@
 // S2: genuine depth-0 -> depth-1 CDC relay hydrates a strict follower, then
 // the same source debt reaches its real native leader through the depth-2 route.
 // One critical target only: this is not the full multi-window W7 witness.
+import {positionRecipients} from '../test-helpers/cdc-source-range-fixture.js';
+import {readCdcLedgerIncarnation} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
@@ -27,8 +31,10 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {CDC_GROUP_PROPAGATION_STATE} from '../../src/topology/cdc-group-propagation-constants.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
-import {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
-  json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
+import {SHIPS_ALONE_FIELDS, provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
+  diagnostic, elapseProducerBackoff, json, note, pump,
+  tick, releaseB, releaseFollower, disarmProducerRetryTimer,
+  driveWithPump,
   addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
   TARGET_REPLICAS, LEADER, FIRST_HOP, FOLLOWER, PARTITION_ID} from
   './message-group-native-provisional-route-fixture.js';
@@ -56,9 +62,9 @@ function assertEnvelope(event, debt) {
   assert.equal(event.sourceOrdinal, debt.ordinal);
 }
 
-async function writeOrdinarySource(t, f, service, entryId) {
+async function writeOrdinarySource(t, f, service, entryId, extraFields = null) {
   assert.equal(f.producerLeader.cdcSubscribers.size, 0);
-  const write = registrationInsert(service, entryId);
+  const write = registrationInsert(service, entryId, extraFields);
   const answer = await f.producerLeader.executeQuery(write.sql, write.params, {entryId});
   assert.equal(answer.success, true, `setup: released SERVICES ordinary SQL ${json(answer)}`);
   const debts = () => f.producer.services.map((replica) =>
@@ -98,7 +104,7 @@ async function writeOrdinarySource(t, f, service, entryId) {
     assert.equal(row.status, SERVICE_STATUS.STOPPED);
     assert.equal(row.address, service.unifiedAddress);
   }
-  t.diagnostic(json({stage: 'setup-released-services-query-and-exact-debt', answer, debt}));
+  t.diagnostic(diagnostic({stage: 'setup-released-services-query-and-exact-debt', answer, debt}));
   return debt;
 }
 
@@ -110,7 +116,7 @@ function targets(f) {
 function assertPartialRouteSetup(t, f) {
   const first = f.first.raft.readStatus();
   const follower = f.follower.raft.readStatus();
-  t.diagnostic(json({stage: 'setup-partial-route-observations-before-assertions', first, follower,
+  t.diagnostic(diagnostic({stage: 'setup-partial-route-observations-before-assertions', first, follower,
     firstRows: f.first.systemTableCache.getAll(TABLES.SERVICES),
     followerRows: f.follower.systemTableCache.getAll(TABLES.SERVICES)}));
   assert.notEqual(first.role, RAFT_ROLE.LEADER);
@@ -146,7 +152,7 @@ function assertPartialRouteSetup(t, f) {
     createAttemptToken: selectedRoute.create_attempt_token ?? null,
     nodeBootIncarnation: selectedNode?.boot_incarnation ?? null}]);
   f.followerBefore = follower;
-  t.diagnostic(json({stage: 'setup-real-rf5-retained-reopens-and-partial-routes',
+  t.diagnostic(diagnostic({stage: 'setup-real-rf5-retained-reopens-and-partial-routes',
     formed: f.formed, first, follower, forward, targets: f.capturedTargets,
     reopens: f.events.filter((event) => event.kind === 'retained-reopen')}));
 }
@@ -167,6 +173,9 @@ function connectSubscriber(f) {
     getLatencyTopology: () => ({cdcGroupPropagationService: f.topology}),
   }});
   const inventory = [...f.services.values()];
+  // CDC Stage 3: every message-group node listed the source at its start.
+  positionRecipients(inventory, PARTITION_ID, TABLES.SERVICES,
+    readCdcLedgerIncarnation(f.producerLeader.db));
   assert.equal(inventory.length, TARGET_REPLICAS.length + 1, 'selection sees every hosted actual MG');
   const select = (options) => resolveOperationalMessageGroupSelection(inventory, options);
   assert.equal(select({requiredTables: [TABLES.SERVICES]}).service, f.source);
@@ -181,12 +190,15 @@ function connectSubscriber(f) {
       return selection;
     },
     buildMessageGroupOwnerNotReadyError,
-    beforePropagation: (event) => note(f, 'actual-subscriber-input', {event: structuredClone(event), source: sourceView(f)}),
-    propagatePartitionCDCEvent: async (service, event, deliveryContext) => {
+    beforePropagation: ([event]) => note(f, 'actual-subscriber-input',
+      {event: structuredClone(event), source: sourceView(f)}),
+    propagatePartitionCDCEvent: async (service, events, deliveryContext) => {
       assert.equal(service, f.source);
-      const result = await bridge.propagatePartitionCDCEvent(service, event, deliveryContext);
-      note(f, 'actual-topology-return', {event: structuredClone(event), result: structuredClone(result),
-        source: sourceView(f), target: targetView(f)});
+      assert.equal(events.length, 1, 'A and B travel as vectors of their own');
+      const result = await propagatePartitionCdcVector(bridge.delegates.getLatencyTopology(),
+        'no topology', service, events, deliveryContext);
+      note(f, 'actual-topology-return', {event: structuredClone(events[0]),
+        result: structuredClone(result), source: sourceView(f), target: targetView(f)});
       return result;
     },
   });
@@ -224,13 +236,16 @@ function pendingRouteSnapshot(f) {
     applicationsHeld: f.heldApplications.length,
     applicationSettlements: f.applicationSettlements.size,
     sourceLane: {tenureCurrent: lane.tenure === f.producerLeader.leadershipTenure,
-      inFlight: lane.inFlight, rerun: lane.rerun, scan: structuredClone(lane.scan),
+      // Captured lane data only: every recipient's cursor and scan position.
+      recipients: [...lane.branches.values()].map((branch) => ({cursor: branch.primary.cursor,
+        scanAfter: branch.primary.drive?.scanAfter ?? null,
+        running: branch.primary.drive?.running ?? false})),
       pending: lane.pending.size, commands: lane.commands.size,
       // Read the captured handle: the diagnostic owner's laneOf can change tenure.
       retryArmed: lane.retryTimer.handle !== null, flushArmed: lane.flushTimer !== null,
       lastDrive: lane.lastDrive, lastFlush: lane.lastFlush},
     topology: {state: topology.state, retrySleeps: topology.retrySleepReleases.size,
-      activeWave: topology.activeDurablePropagation !== null},
+      activeDeliveries: topology.activeDurableDeliveries.size},
   };
 }
 
@@ -291,7 +306,10 @@ function assertSourceGroupApplied(provisional, debt) {
 test('SERVICES scan releases provisional relay to the real native leader', async (t) => {
   const f = await provisionalRouteFixture(t);
   assertPartialRouteSetup(t, f);
-  const a = await writeOrdinarySource(t, f, f.source, 'provisional-route-a');
+  // A ships as a vector of its own (range shipping), so B stays the later
+  // row of the same scan that A's coverage must release.
+  const a = await writeOrdinarySource(t, f, f.source, 'provisional-route-a',
+    SHIPS_ALONE_FIELDS);
   const b = await writeOrdinarySource(t, f, f.services.get(LEADER), 'provisional-route-b');
   f.debts = [a, b];
   assert.ok(a.logIndex < b.logIndex, 'B is later metadata in the same actual source scan');
@@ -322,16 +340,18 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   const held = f.events.find((event) => event.kind === 'held-b-before-dispatch');
   assert.ok(held, 'S2_WEAK_PROGRESS: actual source scan reached later B while A remained owed');
   assert.ok(held.ordinal > provisional.ordinal);
+  // Each recipient group answers for itself (recipient isolation): the source
+  // group holds its native receipt, the target group answers provisionally,
+  // and the target recipient's provisional scan reaches B without any ACK.
   const aggregate = f.events.find((event) => event.kind === 'actual-topology-return' &&
-    event.event.eventKey === a.eventKey);
-  assert.ok(aggregate, 'source scan consumes the real complete topology outcome');
+    event.event.eventKey === a.eventKey &&
+    isProvisionalCdcOutcome(event.result, [event.event]));
+  assert.ok(aggregate, 'the target recipient consumes its real provisional topology outcome');
   assert.equal(aggregate.result.targetGroupCount, 1);
-  assert.equal(isProvisionalCdcOutcome(aggregate.result, [aggregate.event]), true,
-    'complete mixed native/provisional coverage permits scanning B without ACK');
   assertOwedWithoutAck(held.source, f.debts);
   assert.equal(f.follower.systemTableCache.get(TABLES.SERVICES, LEADER), undefined);
   assert.deepEqual(targets(f), f.capturedTargets);
-  t.diagnostic(json({stage: 'semantic-provisional-a-retains-custody-and-scan-reaches-b', provisional, held}));
+  t.diagnostic(diagnostic({stage: 'semantic-provisional-a-retains-custody-and-scan-reaches-b', provisional, held}));
 
   const handshakeDrives = [...f.producerLeader.pendingCDCEventDeliveries];
   releaseB(f);
@@ -357,9 +377,9 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.equal(f.first.systemTableCache.get(TABLES.SERVICES, LEADER), undefined,
     'first relay did not hydrate itself');
   assert.deepEqual(targets(f), f.capturedTargets, 'STOPPED B does not replace the captured F1 target');
-  t.diagnostic(json({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
+  t.diagnostic(diagnostic({stage: 'semantic-follower-hears-leader-releases-route', hydrated, after}));
 
-  disarmProducerRetryTimer(f);
+  await elapseProducerBackoff(f);
   const driven = await driveWithPump(f, () =>
     f.producerLeader.cdcDelivery.driveCdcObligations('native-provisional-route-redrive')
       .then((answer) => ({answer}), (error) => ({error})));
@@ -425,7 +445,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
       assert.ok(BigInt(peer.record.appliedIndex) >= BigInt(entry.index));
     }
   }
-  t.diagnostic(json({stage: 'semantic-fresh-native-route-and-source-ack', native,
+  t.diagnostic(diagnostic({stage: 'semantic-fresh-native-route-and-source-ack', native,
     source: sourceView(f), targets: targets(f)}));
   await pump(f);
 });

@@ -28,7 +28,6 @@ const HEARTBEAT_PUBLICATION_GAP_STALE_DELTA_MS = 1000;
 const HEARTBEAT_PUBLICATION_GAP_CREATED_STALE_DELTA_MS = 10000;
 const HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW = null;
 const HEARTBEAT_PUBLICATION_GAP_NO_READY_LEASE = null;
-const HEARTBEAT_PUBLICATION_GAP_SKIP_WRITE_READBACK = true;
 const HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS = Object.freeze(
   [
     HEARTBEAT_PUBLICATION_GAP_NODE_ID,
@@ -250,16 +249,16 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
         'answer at their commit)',
     );
     t.equal(
-      reconcileCalls[0]?.context?.skipPublicationWriteReadback,
-      HEARTBEAT_PUBLICATION_GAP_SKIP_WRITE_READBACK,
-      'publication repair should avoid readback while durable visibility is pending',
+      'skipPublicationWriteReadback' in (reconcileCalls[0]?.context ?? {}),
+      false,
+      'publication repair cannot ask a publication write to skip its ' +
+        'confirmation',
     );
     t.same(
       acknowledgementCalls,
-      [
-        HEARTBEAT_PUBLICATION_GAP_NODE_ID,
-      ],
-      'cache-stale publication membership should still probe the ACK owner',
+      [],
+      'another node\'s READY row is the owner\'s reconcile trigger; this ' +
+        'node never acknowledges on that node\'s behalf',
     );
 
     service.stop();
@@ -334,8 +333,9 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
     );
     t.same(
       acknowledgementCalls,
-      ['node-cache-publication-gap'],
-      'open publication rows should be acknowledged once READY visibility appears',
+      [],
+      'an open publication row is acknowledged by its own node, never by ' +
+        'this node observing that node\'s READY row',
     );
 
     service.stop();
@@ -408,9 +408,9 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
     );
     t.same(
       acknowledgementCalls,
-      ['node-inflight-publication-gap'],
-      'in-flight publications should delegate acknowledgement ownership ' +
-        'even when cache membership lags',
+      [],
+      'an in-flight publication is acknowledged by its own node, never by ' +
+        'this node observing that node\'s READY row',
     );
 
     service.stop();

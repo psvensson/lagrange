@@ -1,11 +1,7 @@
-import {readStateField} from '../utils/state-field-read.js';
-import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
 const LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM =
   'would drop active replicas below minimum';
 const LOCAL_STR_SAFETY_POLICY_UNAVAILABLE = 'safety policy unavailable';
-import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
-  './operation-reservation-attempt-outcome.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -47,14 +43,14 @@ import {
   shouldRefreshPriorityRecoveryDispatchPendingRemoteRetry,
   shouldReconcilePriorityRecoveryDispatchPendingDrain,
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REBALANCE_COORDINATOR_DEFER_REASON,
-  REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SAFETY_DEFERRED_LOG_THROTTLE_MS,
   WORKFLOW_STEP,
   classifySystemPartition,
@@ -85,6 +81,17 @@ function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
   return history;
 }
 
+const CRITICAL_REMOVE_REPLICATION_STATE = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  OVER_REPLICATED: 'over_replicated',
+  AT_OR_BELOW_MINIMUM: 'at_or_below_minimum',
+  UNAVAILABLE: 'unavailable',
+});
+const CRITICAL_REMOVE_DEFERRING_STATES = Object.freeze(new Set([
+  CRITICAL_REMOVE_REPLICATION_STATE.OVER_REPLICATED,
+  CRITICAL_REMOVE_REPLICATION_STATE.UNAVAILABLE,
+]));
+
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   constructor(options) {
     super(options);
@@ -111,22 +118,25 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   }
 
   /** Census every operation still owing a membership obligation and recover
-   * the exact learner outcome through the existing recorder; nothing else. */
-  reconcileMessageGroupMembershipDebt(census = DEBT_CENSUS.CACHE_HINT) {
-    return reconcileMessageGroupMembershipDebt(this, census);
-  }
-
-  /** The restart scan reads the authoritative census (a restart must not
-   * trust the cache); a failure there is reported and the scan still finishes. */
-  async reconcileMembershipDebtOnRecovery() {
-    try {
-      return await this.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.AUTHORITATIVE);
-    } catch (error) {
-      const failure = {available: false, error: error?.message || String(error)};
-      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE,
-        {nodeId: this.nodeId, error: failure.error});
-      return failure;
+   * the exact learner outcome through the existing recorder; nothing else.
+   * The restart trigger: until one AUTHORITATIVE census has answered on this
+   * owner (a restart must not trust the cache to list an owing row), each
+   * sweep tick reads the owner's census; after that the cache hint serves.
+   * A row whose learner proposal may be in flight is left to this owner on
+   * restart - nothing fails or re-drives it - so this census is what picks
+   * it up. A census that did not answer is retried on the next tick.
+   * @param {string} [census] - DEBT_CENSUS; omitted: the restart rule above.
+   * @return {Promise<Object>}
+   */
+  async reconcileMessageGroupMembershipDebt(census) {
+    const restartCensusOwed = this.membershipDebtRestartCensusAnswered !== true;
+    const resolvedCensus = census ||
+      (restartCensusOwed ? DEBT_CENSUS.AUTHORITATIVE : DEBT_CENSUS.CACHE_HINT);
+    const summary = await reconcileMessageGroupMembershipDebt(this, resolvedCensus);
+    if (resolvedCensus === DEBT_CENSUS.AUTHORITATIVE && summary.available === true) {
+      this.membershipDebtRestartCensusAnswered = true;
     }
+    return summary;
   }
 
   /**
@@ -312,131 +322,6 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     );
   }
 
-  async handleRecovery() {
-    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
-      nodeId: this.nodeId,
-    });
-
-    const result = {
-      totalIncomplete: 0,
-      markedFailed: 0,
-      reconciled: 0,
-      errors: [],
-    };
-
-    const canUseCacheObservationBoundary =
-      this.repository.hasReplicaOperationCacheObservationBoundary();
-    const cachedIncompleteOps = canUseCacheObservationBoundary ?
-      await this.repository.queryCachedIncompleteOperations() :
-      [];
-    const incompleteOperationObservation =
-      await this.repository.getIncompleteOperationVisibilityObservation({
-        cachedOperations: cachedIncompleteOps,
-        visibilityReadMode:
-          REPLICA_OPERATION_VISIBILITY_READ_MODE
-            .CACHE_PREFERRED_SQL_FALLBACK,
-      });
-    const incompleteOps = Array.isArray(
-      incompleteOperationObservation?.operations,
-    ) ?
-      incompleteOperationObservation.operations :
-      [];
-    result.totalIncomplete = incompleteOps.length;
-    result.incompleteOperationObservationState =
-      incompleteOperationObservation.state;
-    result.incompleteOperationRetryAfterMs =
-      incompleteOperationObservation.retryAfterMs;
-
-    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
-      count: incompleteOps.length,
-      incompleteOperationObservationState:
-        incompleteOperationObservation.state,
-      incompleteOperationRetryAfterMs:
-        incompleteOperationObservation.retryAfterMs,
-      nodeId: this.nodeId,
-    });
-
-    for (const op of incompleteOps) {
-      if (!this.repository.isOperationLocallyOwned(op)) {
-        continue;
-      }
-
-      const originalStep = op.workflowStep;
-
-      const singleFlightKey = this.getOperationOwnerSingleFlightKey(
-        op.operationId,
-      );
-
-      let recoveryOutcome;
-      try {
-        recoveryOutcome = await this.operationWorkflowRunExclusive(
-          singleFlightKey,
-          () => this.reconcileRecoveryOperation(op),
-        );
-      } catch (error) {
-        if (this.deferTransitionRetry(op.operationId, error, {
-          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
-          workflowStep: readStateField(op?.workflowStep),
-          partitionId: op?.partitionId || null,
-          updatedAt: op?.updatedAt,
-          createdAt: op?.createdAt,
-        })) {
-          continue;
-        }
-        result.errors.push({
-          operationId: op.operationId,
-          error: error.message,
-        });
-        this.logger.error(
-          REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED,
-          {
-            operationId: op.operationId,
-            workflowStep: originalStep,
-            partitionId: op.partitionId,
-            error: error.message,
-          },
-        );
-        continue;
-      }
-
-      if (
-        recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
-          .RESERVATION_BACKED_PENDING_REDRIVEN ||
-        this.isRemoveInitialDispatchPhase({
-          type: op.type,
-          workflowStep: originalStep,
-        })
-      ) {
-        result.reconciled++;
-      } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
-        result.markedFailed++;
-      } else if (originalStep === WORKFLOW_STEP.SYNCING) {
-        result.reconciled++;
-      }
-    }
-
-    // Membership debt outlives ordinary settlement, so the incomplete census
-    // above cannot see it; the restart scan is one of its named triggers.
-    result.membershipDebt = await this.reconcileMembershipDebtOnRecovery();
-
-    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
-      nodeId: this.nodeId,
-      ...result,
-    });
-
-    const reservationResult = await this.reconcileReservations();
-    result.reservationsExpired = reservationResult.expired;
-    result.reservationsOrphansReleased =
-      reservationResult.orphansReleased;
-
-    this.emitter.emit(
-      REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED,
-      result,
-    );
-
-    return result;
-  }
-
   isSafetyPolicyFailure(errorMessage) {
     if (
       typeof errorMessage !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
@@ -490,30 +375,50 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       return REBALANCE_COORDINATOR_DEFER_REASON
         .REPLACE_REMOVE_SAFETY_BLOCKED;
     }
-    if (
-      operation.type !== OperationType.REMOVE ||
-      !await this.isCriticalRemoveOverReplicated(operation)
-    ) {
-      return null;
-    }
-    return REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+    return this.resolveCriticalRemoveDeferReason(operation);
   }
 
-  async isCriticalRemoveOverReplicated(operation) {
+  /**
+   * Whether a refused system-partition REMOVE is over-replicated (so it
+   * waits for a later removal window) - as a named state: an unavailable
+   * replica-row read is UNAVAILABLE, never "not over-replicated" (which
+   * turned a blocked REMOVE into a FAIL on a read that did not answer).
+   * @param {Object} operation
+   * @return {Promise<string>} CRITICAL_REMOVE_REPLICATION_STATE
+   */
+  async classifyCriticalRemoveReplication(operation) {
     if (
       !operation ||
       operation.type !== OperationType.REMOVE ||
       !classifySystemPartition({partitionId: operation.partitionId}).systemTable
     ) {
-      return false;
+      return CRITICAL_REMOVE_REPLICATION_STATE.NOT_APPLICABLE;
     }
     const criticalReplicaRows = await this.getCriticalReplicaRowsForSafety(
       operation.partitionId,
     );
+    if (criticalReplicaRows.authoritativeReadAvailable === false) {
+      return CRITICAL_REMOVE_REPLICATION_STATE.UNAVAILABLE;
+    }
     const minReplicaCount = await this.getCriticalMinReplicaCount(
       operation.partitionId,
     );
-    return criticalReplicaRows.length > minReplicaCount;
+    return criticalReplicaRows.length > minReplicaCount ?
+      CRITICAL_REMOVE_REPLICATION_STATE.OVER_REPLICATED :
+      CRITICAL_REMOVE_REPLICATION_STATE.AT_OR_BELOW_MINIMUM;
+  }
+
+  /**
+   * The remove-safety deferral a refused REMOVE takes, or null (it fails):
+   * it waits while over-replicated or while that cannot be read.
+   * @param {Object} operation
+   * @return {Promise<string|null>}
+   */
+  async resolveCriticalRemoveDeferReason(operation) {
+    return CRITICAL_REMOVE_DEFERRING_STATES.has(
+      await this.classifyCriticalRemoveReplication(operation)) ?
+      REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED :
+      null;
   }
 
   clearDeferredSafetyBlockState(operationId) {
@@ -569,7 +474,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     try {
       if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
           await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-            undefined, {stepMetadata, requireDurable: true}) &&
+            undefined, {stepMetadata}) &&
           replaceIntentEntryOf(operation)) {
         // This owner's own durable transition committed the intent entry.
         return true;
@@ -592,8 +497,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @private
    */
   async ensureReplaceRemovalIntentRecorded(operation, stepMetadata) {
-    const durable = await this.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+    const durable = presentOperationOf(await this.repository
+      .queryReplicaOperationPersistenceAuthorityObservation(operation));
     if (!durable || this.repository.isOperationTerminal(durable)) {
       return false;
     }
@@ -602,7 +507,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         return false;
       }
       if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
-        undefined, {stepMetadata, requireDurable: true}) &&
+        undefined, {stepMetadata}) &&
           replaceIntentEntryOf(durable)) {
         adoptDurableReplaceIntent(operation, durable);
         return true;
@@ -752,6 +657,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const candidateValues = [
       errorLike.message,
       errorLike.errorMessage,
+      // A handler answer or a transport outcome carries its text as `error`.
+      errorLike.error,
       errorLike.error?.message,
       errorLike.error?.errorMessage,
       errorLike.details?.message,

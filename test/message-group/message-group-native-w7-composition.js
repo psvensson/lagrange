@@ -81,7 +81,10 @@ function activeServiceRow(groupId, replicaId, nodeId, role = RAFT_ROLE.FOLLOWER)
   };
 }
 
-function registrationInsertForNode(service, entryId, nodeId = service.nodeId) {
+// extraFields: further row fields (a witness sizes a row with them so that
+// the row ships as a vector of its own; see SHIPS_ALONE_FIELDS).
+function registrationInsertForNode(service, entryId, nodeId = service.nodeId,
+  extraFields = null) {
   const row = MessageGroupServiceRowOwner.buildRegistrationRow({
     groupId: service.groupId,
     replicaId: service.replicaId,
@@ -89,6 +92,7 @@ function registrationInsertForNode(service, entryId, nodeId = service.nodeId) {
     service,
     timestamp: 2,
     status: SERVICE_STATUS.STOPPED,
+    extraFields,
   });
   const parts = cdcSqlBuilder.buildInsertParts(row);
   return {

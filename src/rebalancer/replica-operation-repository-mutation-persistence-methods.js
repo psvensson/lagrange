@@ -7,12 +7,20 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
+  OPERATION_VISIBILITY_STATE,
+  buildOperationVisibilityUnavailableError,
+  buildUnavailableOperationVisibility,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
+import {
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
 } from './replica-operation-message-group-membership-fields.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
 const SETTLED_MEMBERSHIP_OBLIGATION_STATE = 'settled';
+const PERSISTENCE_AUTHORITY_OPERATION_IDENTITY_MISSING =
+  'persistence_authority_operation_identity_missing';
 const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
@@ -198,6 +206,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     }).operationLedger === true;
   }
 
+  function requireAnsweredConflictRead(observation, operationId) {
+    if (
+      readOperationVisibilityState(observation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      throw buildOperationVisibilityUnavailableError(observation, operationId);
+    }
+    return observation.operation;
+  }
+
   async function resolveNewOperationInsertCollision(
     repository,
     operation,
@@ -214,10 +232,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       });
     if (!existingOperation) {
-      const conflictingMembershipOperation =
-        await repository.queryAuthoritativeOperationByMessageGroupMembershipLane(
+      // Each conflict read must answer: an unavailable one cannot prove the
+      // collision is not its conflict.
+      const conflictingMembershipOperation = requireAnsweredConflictRead(
+        await repository.observeAuthoritativeOperationByMessageGroupMembershipLane(
           operation.messageGroupMembershipLaneKey,
-        );
+        ),
+        operation.operationId,
+      );
       if (conflictingMembershipOperation) {
         repository.emitReplicaOperationPersistenceDivergence(
           conflictingMembershipOperation,
@@ -228,10 +250,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           conflictingMembershipOperation,
         );
       }
-      const conflictingTargetOperation =
-        await repository.queryAuthoritativeOperationByTargetClaimKey(
+      const conflictingTargetOperation = requireAnsweredConflictRead(
+        await repository.observeAuthoritativeOperationByTargetClaimKey(
           operation.targetClaimKey,
-        );
+        ),
+        operation.operationId,
+      );
       if (conflictingTargetOperation) {
         repository.emitReplicaOperationPersistenceDivergence(
           conflictingTargetOperation,
@@ -392,18 +416,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         null;
     }
 
-    async queryReplicaOperationPersistenceAuthorityOperation(operation, options = {}) {
-      const observation =
-        await this.queryReplicaOperationPersistenceAuthorityObservation(
-          operation,
-          options,
-        );
-      return observation?.operation || null;
-    }
-
     async queryReplicaOperationPersistenceAuthorityObservation(operation, options = {}) {
       if (!operation?.operationId) {
-        return Object.freeze({operation: null, deferredOutcome: null});
+        // Nothing was read: unavailability, never absence.
+        return buildUnavailableOperationVisibility({
+          reasonCode: PERSISTENCE_AUTHORITY_OPERATION_IDENTITY_MISSING,
+        });
       }
       const observationOptions = {
         allowPriorityRecoveryDeferredVisibility:

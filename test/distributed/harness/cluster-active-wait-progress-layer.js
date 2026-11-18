@@ -1,5 +1,9 @@
 import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
+  isOwnerRecoveryWaitProgress,
+  readOwnerRecoveryWaitOutcomeState,
+} from './membership-publication-owner-recovery-wait-progress.js';
+import {
   TYPEOF_STRING,
   normalizeDistinctStringArray,
   normalizeFirstNonEmptyDistinctStringArray,
@@ -63,8 +67,6 @@ const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE =
   'owner_reconcile_pending';
 const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_NEXT_ACTION_WAIT =
   'wait_owner_recovery';
-const ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_OUTCOME_WRITE_DEFERRED =
-  'write_deferred';
 
 /**
  * Evaluate whether load-mode startup can trust published membership convergence.
@@ -343,8 +345,7 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
   publicationActiveGateHandoffNextAction,
   publicationActiveGateHandoffRuntimePromotionAllowed,
   membershipPublicationHandoffOutcomeState,
-  membershipPublicationHandoffOutcomeReasonCode,
-  membershipPublicationHandoffOutcomeEnqueued,
+  membershipPublicationHandoffOutcomeOwnerRecoveryWait,
   membershipPublicationHandoffOutcomeRetryAfterMs,
   selectedControlPlaneOwnerQueueDepth,
 } = {}) {
@@ -359,9 +360,6 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
   ) {
     return false;
   }
-  const pendingWrites = normalizeNonNegativeInteger(
-    selectedControlPlaneOwnerQueueDepth?.pendingWrites,
-  );
   const pendingWriteGrowthCount = normalizeNonNegativeInteger(
     selectedControlPlaneOwnerQueueDepth?.pendingWriteGrowthCount,
   );
@@ -397,17 +395,13 @@ function hasBoundedOwnerRecoverySnapshotCoverage({
     publicationActiveGateHandoffNextAction ===
       ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_NEXT_ACTION_WAIT &&
     publicationActiveGateHandoffRuntimePromotionAllowed !== true &&
-    membershipPublicationHandoffOutcomeState ===
-      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_OUTCOME_WRITE_DEFERRED &&
-    membershipPublicationHandoffOutcomeReasonCode ===
-      ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_REASON_OWNER_RECONCILE &&
-    membershipPublicationHandoffOutcomeEnqueued === true &&
-    normalizeNonNegativeInteger(membershipPublicationHandoffOutcomeRetryAfterMs) >
-      ZERO &&
-    pendingWrites >= Math.max(
-      pendingRecoveryCount,
-      activeGateOwnerCohortPendingRecoveryNodeIds.length,
-    ) &&
+    // The owner's named wait, bounded by its retry; it queues nothing for
+    // itself while it waits, so queued-write depth is not evidence of it.
+    isOwnerRecoveryWaitProgress({
+      membershipPublicationHandoffOutcomeState,
+      membershipPublicationHandoffOutcomeOwnerRecoveryWait,
+      membershipPublicationHandoffOutcomeRetryAfterMs,
+    }) &&
     pendingWriteGrowthCount === ZERO
   );
 }
@@ -768,6 +762,8 @@ function buildActiveWaitProgressSnapshot(
     membershipPublicationHandoffOutcome?.[
       MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.ENQUEUED
     ] === true;
+  const membershipPublicationHandoffOutcomeOwnerRecoveryWait =
+    readOwnerRecoveryWaitOutcomeState(membershipPublicationHandoffOutcome);
   const membershipPublicationHandoffOutcomeRetryAfterMs = Number.isFinite(
     membershipPublicationHandoffOutcome?.[
       MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD.RETRY_AFTER_MS
@@ -927,7 +923,7 @@ function buildActiveWaitProgressSnapshot(
       publicationActiveGateHandoffRuntimePromotionAllowed,
       membershipPublicationHandoffOutcomeState,
       membershipPublicationHandoffOutcomeReasonCode,
-      membershipPublicationHandoffOutcomeEnqueued,
+      membershipPublicationHandoffOutcomeOwnerRecoveryWait,
       membershipPublicationHandoffOutcomeRetryAfterMs,
       selectedControlPlaneOwnerQueueDepth,
     });
@@ -1031,6 +1027,7 @@ function buildActiveWaitProgressSnapshot(
       membershipPublicationHandoffOutcomeState,
       membershipPublicationHandoffOutcomeReasonCode,
       membershipPublicationHandoffOutcomeEnqueued,
+      membershipPublicationHandoffOutcomeOwnerRecoveryWait,
       membershipPublicationHandoffOutcomeRetryAfterMs,
     },
     publicationConvergence,
@@ -1109,6 +1106,7 @@ function buildActiveWaitProgressSnapshot(
     membershipPublicationHandoffOutcomeState,
     membershipPublicationHandoffOutcomeReasonCode,
     membershipPublicationHandoffOutcomeEnqueued,
+    membershipPublicationHandoffOutcomeOwnerRecoveryWait,
     membershipPublicationHandoffOutcomeRetryAfterMs,
     perNodePublicationDisagreementSet,
     selectedPublishedActiveNodeIds,

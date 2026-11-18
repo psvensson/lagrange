@@ -46,7 +46,6 @@ const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_DATA_FIELD =
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD =
   Object.freeze({
     HANDOFF_CONTRACT: 'handoffContract',
-    PENDING_RECOVERY_COUNT: 'pendingRecoveryCount',
   });
 const CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   NEXT_ACTION: 'nextAction',
@@ -298,19 +297,12 @@ function isControlSnapshotOwnerRecoveryWakeOutcome(outcome = null) {
       CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD
         .HANDOFF_CONTRACT
     ];
-  return (
-    handoffContract?.[
-      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_ACTION
-    ] ===
-      CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .WAIT_OWNER_RECOVERY &&
-    normalizeControlSnapshotHandoffInteger(
-      target?.[
-        CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_TARGET_FIELD
-          .PENDING_RECOVERY_COUNT
-      ],
-    ) > 0
-  );
+  // The named action: a wait for the cluster recovery gate lists no node.
+  return handoffContract?.[
+    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NEXT_ACTION
+  ] ===
+    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
+      .WAIT_OWNER_RECOVERY;
 }
 
 function selectMembershipPublicationHandoffRetryAfterMs(snapshot = null) {

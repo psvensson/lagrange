@@ -1,3 +1,5 @@
+import {RECIPIENT_RETIREMENT_WRITE_OPTIONS} from
+  '../../partition/partition-cdc-admission-class.js';
 import {COLUMN, TABLES} from '../../constants/index.js';
 import {NODE_STATE} from '../../constants/node-state.js';
 import {requireIssuedBootIncarnation} from '../../bootstrap/boot-incarnation-contract.js';
@@ -93,7 +95,10 @@ class NodesOwner extends SystemMetadataOwnerBase {
   async removeTerminalNode(nodeId, observation, options = {}) {
     // Capture once: retrying the gateway write cannot select another row.
     const predicate = terminalRemovalPredicate(nodeId, observation);
-    const result = await this.deleteWhere(predicate, options);
+    // Removing a terminal node is a retirement write; this owner declares it
+    // (a caller's options never can: the intent is spread last).
+    const result = await this.deleteWhere(predicate,
+      {...options, ...RECIPIENT_RETIREMENT_WRITE_OPTIONS});
     const effect = classifyControlPlaneMutationResult(result);
     if (effect.applied && effect.affectedRowsPresent && effect.affectedRows === 1) {
       return Object.freeze({nodeId, bootIncarnation: predicate[COLUMN.BOOT_INCARNATION],

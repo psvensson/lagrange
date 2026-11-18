@@ -135,9 +135,9 @@ test('OwnerKeyReconcileQueue releases retry diagnostic graphs on shutdown',
     });
     queue.logger = {debug: () => {}, error: () => {}, warn: () => {}};
     queue.enqueue('node-retry', RETRY_REASON);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    // The drain runs on its own host turn: wait for the queue's own
+    // current-work signal, never a count of microtask ticks.
+    await queue.awaitCurrentWorkIdle();
 
     const diagnostics = queue.getDiagnostics();
     t.equal(diagnostics.recentRetryableDrainFailureSamples.length, 1,

@@ -1,4 +1,7 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {
+  syncPlanningTargetReadinessWake,
+} from './rebalancer-no-target-pass-diagnostic.js';
 
 const {
   REBALANCER_LOG_MSG,
@@ -31,9 +34,34 @@ const REBALANCER_EVALUATION_METHODS = {
    * @return {Promise<boolean>} True if rebalancing is needed.
    */
   async evaluateState(policy = null, evaluationContext = null) {
+    const nodePlan = this.getAvailableNodePlan();
+    const needed = await this.evaluateStateForPlan(
+      nodePlan,
+      policy,
+      evaluationContext,
+    );
+    if (!needed) {
+      // 'No need' (or a target shrunk to the ready topology) that rests on
+      // a DEFERRED candidate is not final: the publication that answers it
+      // wakes this entity instead of its backed-off cadence.
+      syncPlanningTargetReadinessWake(this, nodePlan);
+    }
+    return needed;
+  },
+
+  /**
+   * evaluateState on one classified placement answer (READY / NOT_READY /
+   * DEFERRED / OUT_OF_SCOPE): the same answer rebalance() plans on.
+   * @param {Object} nodePlan
+   * @param {Object|null} policy
+   * @param {Object|null} evaluationContext
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async evaluateStateForPlan(nodePlan, policy, evaluationContext) {
     const currentReplicas = this.getCurrentReplicas();
     const effectivePolicy = policy || (await this.getPolicy());
-    const availableNodes = this.getAvailableNodes();
+    const availableNodes = nodePlan.availableNodes;
     const assessment = this.movePlanner.assessState(
       currentReplicas,
       effectivePolicy,

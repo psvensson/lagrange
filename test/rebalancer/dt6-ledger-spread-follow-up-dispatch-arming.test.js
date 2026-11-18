@@ -22,6 +22,8 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildAbsentOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -177,12 +179,12 @@ test('run-26 root cause: ACK-swallowed wake + read-starved op row — the ' +
   const operation = buildRemoteOwnedLedgerSelfMove();
 
   // The op row lives in the moving ledger partition: authoritative and
-  // visibility reads see nothing (and report no deferred outcome) — the
+  // visibility reads answer with no row (ABSENT, no deferred outcome) — the
   // run-26 'No row found for CDC update' starvation.
   coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
     async () => null;
   coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
-    async () => null;
+    async () => buildAbsentOperationVisibility();
 
   const armed =
     await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
@@ -286,7 +288,8 @@ test('control: the snapshot retry loop is BOUNDED — past the operation ' +
     return originalWarn(message, payload);
   };
   owner.repository.queryAuthoritativeOperationById = async () => null;
-  owner.repository.getOperationByIdVisibilityObservation = async () => null;
+  owner.repository.getOperationByIdVisibilityObservation = async () =>
+    buildAbsentOperationVisibility();
 
   await owner.armCoordinatorCreatedOperation(operation);
   const deliveriesAfterArm = deliveries.length;
@@ -331,7 +334,8 @@ test('control: a degenerate snapshot (no timestamps) stops LOUDLY instead ' +
     return originalWarn(message, payload);
   };
   owner.repository.queryAuthoritativeOperationById = async () => null;
-  owner.repository.getOperationByIdVisibilityObservation = async () => null;
+  owner.repository.getOperationByIdVisibilityObservation = async () =>
+    buildAbsentOperationVisibility();
 
   await owner.armCoordinatorCreatedOperation(operation);
   const deliveriesAfterArm = deliveries.length;
@@ -355,7 +359,8 @@ test('control (R4): a late delivery-honored event with an INVISIBLE row ' +
   const operation = buildRemoteOwnedLedgerSelfMove();
   const owner = coordinator.workflowOwner;
   owner.repository.queryAuthoritativeOperationById = async () => null;
-  owner.repository.getOperationByIdVisibilityObservation = async () => null;
+  owner.repository.getOperationByIdVisibilityObservation = async () =>
+    buildAbsentOperationVisibility();
 
   await owner.armCoordinatorCreatedOperation(operation);
   t.ok(
@@ -398,7 +403,8 @@ test('part 2: a wake whose transport ACK carries noHandler routes into the ' +
     return buildDeliveryEnvelope({acknowledged: true, noHandler: true});
   };
   owner.repository.queryAuthoritativeOperationById = async () => null;
-  owner.repository.getOperationByIdVisibilityObservation = async () => null;
+  owner.repository.getOperationByIdVisibilityObservation = async () =>
+    buildAbsentOperationVisibility();
 
   const armed = await owner.armCoordinatorCreatedOperation(operation);
   t.notOk(

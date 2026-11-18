@@ -1,7 +1,7 @@
-import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from
-  '../../src/rebalancer/replica-operation-repository.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {buildDeferredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
   test,
   assert,
@@ -115,6 +115,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         enableTimeouts: false,
       }));
       coordinator.initialize();
+      // The create-dedupe read answered: no in-flight operation for this
+      // move (this fixture has no replica_operations read port).
+      coordinator.repository.queryExistingInFlightOperation = async () => null;
       coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async (entityType, entityId) => (
           coordinator.repository.buildEntityOperationVisibilityObservation([
@@ -185,7 +188,10 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       enableTimeouts: false,
     }));
     coordinator.initialize();
-    coordinator.repository.getOperationsByEntity = async () => [];
+    // The create-dedupe read answered: no in-flight operation for this
+    // move (this fixture has no replica_operations read port).
+    coordinator.repository.queryExistingInFlightOperation = async () => null;
+    coordinator.repository.getOperationsByEntityProjection = async () => [];
     coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async (entityType, entityId) => (
           coordinator.repository.buildEntityOperationVisibilityObservation([
@@ -425,13 +431,12 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       priorityCount: 0,
       ordinaryPriorityCount: 0,
       nonPriorityCount: 0,
-    });
-    coordinator.getIncompleteOperationObservation = () =>
-      (coordinator.repository.buildEntityOperationVisibilityObservation([], {
+      observation: buildDeferredIncompleteOperationListObservation({
         completionState: 'operation_visibility_deferred',
         reasonCode: 'operation_visibility_deferred',
         retryAfterMs: 125,
-      }));
+      }),
+    });
 
     const identityReads = [];
     for (const method of ['getEntityAllocatedOperationReplicaIds',
@@ -483,9 +488,8 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         observation.state === 'bounded_usable' && observation.deferredOutcome &&
         observation.operationCount === 0),
       'the existing pressure owner explicitly authorized every recovery identity observation');
-      await t.rejects(coordinator.getOperationsByEntity(
+      await t.rejects(coordinator.getAuthoritativeOperationsByEntity(
         'partition', BLOCKED_PRIORITY_PARTITION_ID,
-        {visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED},
       ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING},
       'the strict consumer still refuses under the same contained pressure');
       coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () =>
@@ -496,7 +500,8 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       const retained = await coordinator.getEntityRecoveryOperationObservation(
         'partition', BLOCKED_PRIORITY_PARTITION_ID,
       );
-      t.equal(retained.state, 'present', 'nonzero retained work cannot acquire bounded use');
+      t.equal(retained.state, 'deferred',
+        'nonzero retained work cannot acquire bounded use: it stays DEFERRED');
       t.throws(() => coordinator.requireEntityOperationRows(
         retained, 'partition', BLOCKED_PRIORITY_PARTITION_ID,
       ), {rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING});

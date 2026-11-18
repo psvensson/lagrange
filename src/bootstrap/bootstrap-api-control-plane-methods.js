@@ -14,6 +14,7 @@ import {
 import {
   CLUSTER_ID_CONFIG_KEY,
 } from './cluster-identity-constants.js';
+import {readServerClusterIdentity} from './join-cluster-identity.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -131,10 +132,19 @@ const bootstrapApiControlPlaneMethods = {
   },
 
   /**
-   * Read the durable cluster identity (replicated CONFIG-row singleton)
-   * through the live system-table cache. Absent row — pre-identity cluster
-   * or pre-hydration cache — reads as null, which the bootstrap response and
-   * the join-gate compatibility policy treat as UNKNOWN, never as a match.
+   * This server's cluster identity from the durable owner (the CONFIG
+   * partition, authoritative read): KNOWN{facts} or UNAVAILABLE{reason}.
+   * The join gate answers a join only on KNOWN (join-cluster-identity.js).
+   * @return {Promise<Object>}
+   */
+  readClusterIdentity() {
+    return readServerClusterIdentity(this.getControlPlaneSystemTableGateway());
+  },
+
+  /**
+   * The cluster identity row as the local system-table cache holds it, or
+   * null while the cache lacks it: a projection for the management and
+   * backup surfaces, never the join gate's answer (readClusterIdentity).
    * @return {string|null}
    * @private
    */

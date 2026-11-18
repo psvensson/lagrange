@@ -14,6 +14,7 @@ import {
 import {OperationType} from '../rebalancer/replica-status.js';
 import {CREATE_ADMISSION_ERROR_CODE} from
   './replica-create-admission-owner.js';
+import {handleCancelReplicaRemoval} from './replica-removal-cancellation.js';
 import {
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
@@ -67,6 +68,8 @@ async function dispatchReplicaMessage(handler, type, payload) {
     return handler.handleReadCommittedMembership(payload);
   case ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP:
     return handler.handleClaimFailedCreateCleanup(payload);
+  case ReplicaOperationMessageType.CANCEL_REPLICA_REMOVAL:
+    return handleCancelReplicaRemoval(handler, payload);
   default:
     return handler.buildReplicaOperationResponse(
       ReplicaOperationResponseStatus.ERROR,

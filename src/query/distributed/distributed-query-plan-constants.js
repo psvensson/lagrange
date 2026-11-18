@@ -38,6 +38,8 @@ const DISTRIBUTED_ROLE_HINT = Object.freeze({
 
 const DISTRIBUTED_PREDICATE_SHAPE = Object.freeze({
   EQ: 'eq',
+  // A contradictory key predicate: it selects no key, so no partition.
+  CONTRADICTION: 'contradiction',
   RANGE: 'range',
   IN: 'in',
   BETWEEN: 'between',

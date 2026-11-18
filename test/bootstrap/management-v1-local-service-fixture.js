@@ -145,7 +145,5 @@ function buildLocalPartitionService(partitionId, overrides = {}) {
 }
 
 export {
-  NODE_IDS,
   buildLocalPartitionService,
-  resolveLocalServiceStubConfig,
 };

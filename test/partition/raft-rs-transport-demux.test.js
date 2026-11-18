@@ -171,8 +171,36 @@ test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
 
     t.equal(result.acknowledged, true,
       'semantic raft-rs traffic uses the existing consensus fast path');
+    t.equal(transmitted?.oneWay, true,
+      'direct Raft delivery stamps oneWay: true on the wire frame');
     t.same(transmitted?.payload, payload,
       'MessageRouter preserves the semantic envelope unchanged');
     t.equal(transmitted?.payload?.type, undefined,
       'MessageRouter does not fabricate a native packet type');
+
+    const inboundFramesSent = [];
+    const recipientRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-r2',
+      inProcess: true,
+    });
+    let handledEnvelope = null;
+    recipientRouter.register('node-r2/partition/transport-p1-r2', (envelope) => {
+      handledEnvelope = envelope;
+      return null;
+    });
+    recipientRouter.handleServiceMessage(
+      {
+        readyState: 1,
+        send(value) {
+          inboundFramesSent.push(JSON.parse(value));
+        },
+      },
+      transmitted,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    t.same(handledEnvelope?.payload, payload,
+      'recipient dispatches the one-way Raft frame to its handler');
+    t.equal(inboundFramesSent.length, 0,
+      'recipient does not emit orphaned ACK or SERVICE_RESPONSE frames for oneWay Raft traffic');
   });

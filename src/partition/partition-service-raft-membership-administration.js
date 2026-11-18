@@ -149,6 +149,16 @@ function proposePeerRetirement(service, change) {
 }
 
 /**
+ * Forget a peer's deferred row-driven retirement: its row serves again (the
+ * removal that retired it was cancelled), so no settlement re-proposes it.
+ * @param {Object} service - The partition service.
+ * @param {string} replicaIdentity - The peer.
+ */
+function forgetDeferredRetirement(service, replicaIdentity) {
+  retirementsDeferredOf(service).delete(replicaIdentity);
+}
+
+/**
  * The deferred row-driven retirements, handed over and forgotten.
  * @param {Object} service - The partition service.
  * @return {Array<Object>} The REMOVE_PEER changes.
@@ -321,6 +331,8 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  forgetDeferredRetirement,
+  leadershipTransferWindowMaxMsOf,
   readPartitionCommittedMembership,
   readPartitionReplicaMembership,
   proposePeerRetirement,

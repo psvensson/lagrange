@@ -43,11 +43,11 @@ import {
   LOGS_ACTION_SHOW_DETAIL,
   LOGS_COLUMN_TIMESTAMP,
   LOGS_EMPTY_STRING,
+  LOGS_EVENT_LIVEQUERY_ERROR,
   LOGS_EVENT_LIVEQUERY_EVENT,
-  LOGS_EVENT_LIVEQUERY_INITIALIZED,
+  LOGS_EVENT_LIVEQUERY_RESULT,
   LOGS_EVENT_TYPE_DELETE,
   LOGS_EVENT_TYPE_INSERT,
-  LOGS_EVENT_TYPE_SNAPSHOT,
   LOGS_EVENT_TYPE_UPDATE,
   LOGS_EVENT_VIEW_REFRESH,
   LOGS_HIGHLIGHT_MAX_CHANGED_ROWS,
@@ -145,40 +145,32 @@ export class LogsView extends BaseView {
   }
 
   /**
-   * Listen for live query events (initial snapshot and incremental CDC).
+   * Listen for the active subscription's live query outcomes: a whole result
+   * (snapshot or reset) replaces the rows, an error is shown as an error row,
+   * and a change is applied incrementally.
    * @private
    */
   setupLiveQueryListeners() {
     if (!this.eventBus) {
       return;
     }
+    const onActive = (listener) => (event) => {
+      if (this.activeSubscriptionId && event.subscriptionId === this.activeSubscriptionId) {
+        listener(event);
+      }
+    };
 
-    this.eventBus.on(LOGS_EVENT_LIVEQUERY_INITIALIZED, (event) => {
-      if (!this.activeSubscriptionId) {
-        return;
-      }
-      if (event.subscriptionId !== this.activeSubscriptionId) {
-        return;
-      }
-      const rows = Array.isArray(event.data) ? event.data : [];
-      this.applySnapshotRows(rows);
+    this.eventBus.on(LOGS_EVENT_LIVEQUERY_RESULT, onActive((event) => {
+      this.applySnapshotRows(event.rows);
       this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
-    });
+    }));
 
-    this.eventBus.on(LOGS_EVENT_LIVEQUERY_EVENT, (event) => {
-      if (!this.activeSubscriptionId) {
-        return;
-      }
-      if (event.subscriptionId !== this.activeSubscriptionId) {
-        return;
-      }
+    this.eventBus.on(LOGS_EVENT_LIVEQUERY_ERROR, onActive((event) => {
+      this.applyQueryError(`${event.errorCode}: ${event.error}`);
+    }));
+
+    this.eventBus.on(LOGS_EVENT_LIVEQUERY_EVENT, onActive((event) => {
       const eventType = (event.eventType || LOGS_EMPTY_STRING).toUpperCase();
-      if (eventType === LOGS_EVENT_TYPE_SNAPSHOT && Array.isArray(event.data)) {
-        this.applySnapshotRows(event.data);
-        this.eventBus.emit(LOGS_EVENT_VIEW_REFRESH, {view: this});
-        return;
-      }
-
       if ((eventType === LOGS_EVENT_TYPE_INSERT ||
         eventType === LOGS_EVENT_TYPE_UPDATE) &&
         event.data) {
@@ -190,7 +182,7 @@ export class LogsView extends BaseView {
       if (eventType === LOGS_EVENT_TYPE_DELETE) {
         this.applyLiveQueryDelete(event);
       }
-    });
+    }));
   }
 
   /**
@@ -230,8 +222,7 @@ export class LogsView extends BaseView {
    * @private
    */
   applyLiveQueryDelete(event) {
-    const deletedLog = event.data || event.oldData || null;
-    const deletedLogId = this.getItemKey(deletedLog || {});
+    const deletedLogId = this.getItemKey(event.data || {});
     if (!deletedLogId) {
       return;
     }

@@ -1,3 +1,5 @@
+import {AVAILABLE_NODE_PLANNING_STATE} from
+  './rebalancer-no-target-pass-diagnostic.js';
 import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
@@ -9,6 +11,12 @@ import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {INCOMPLETE_OPERATION_OBSERVATION_STATE} from
+  './replica-operation-repository.js';
+import {
+  buildOperationListUnavailableError,
+  isOperationVisibilityUnavailableError,
+} from './replica-operation-repository-operation-visibility.js';
 
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -29,6 +37,21 @@ const {
   UNIFIED_REBALANCER_LITERAL,
   buildControlPlaneWorkloadProfile,
 } = SHARED;
+
+const GLOBAL_IN_FLIGHT_COUNT_SCOPE = 'global in-flight operation count';
+
+// The serial gate's own answer about its in-flight count: COUNTED - the
+// owner answered the list completely; UNANSWERED - the list read was
+// DEFERRED or only a projection, so the count is unknown, never zero.
+const ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE = Object.freeze({
+  COUNTED: 'counted',
+  UNANSWERED: 'unanswered',
+});
+
+function isCompleteIncompleteOperationObservation(observation) {
+  return observation?.complete === true &&
+    observation.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED;
+}
 
 const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE = Object.freeze({
   FOLLOW_UP_WITHOUT_SERIAL_WAIT: 'follow_up_without_serial_wait',
@@ -129,25 +152,50 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       this.rebalanceBudget;
   }
 
+  /**
+   * The cluster-wide in-flight operation count the global move budget is
+   * charged with. The read prefers this node's replica of replica_operations
+   * and asks the owner when it is not hosted here; a read that still does not
+   * answer is the typed list unavailability (never a count of zero, which
+   * opened the whole budget), and the OPERATION_LIST_READ_DEFERRED wait is
+   * armed so the event that can let the owner answer re-asks.
+   * @return {Promise<number>}
+   */
   async getGlobalInFlightOperationCount() {
     const result = await this.executeBudgetRead(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
+      SQL_BUDGET.SELECT_IN_FLIGHT_OPERATION_IDS,
       [],
     );
-
-    if (
-      !result.success ||
-      !result.rows ||
-      result.rows.length === UNIFIED_REBALANCER_LITERAL.ZERO
-    ) {
-      return UNIFIED_REBALANCER_LITERAL.ZERO;
+    if (result?.success !== true || !Array.isArray(result.rows)) {
+      this.armOperationListReadWake();
+      throw buildOperationListUnavailableError(result,
+        GLOBAL_IN_FLIGHT_COUNT_SCOPE);
     }
+    return result.rows.length;
+  }
 
-    const parsed = Number(result.rows[0].total_count);
-    return Number.isFinite(parsed) && parsed >= UNIFIED_REBALANCER_LITERAL.ZERO ?
-      parsed :
-      UNIFIED_REBALANCER_LITERAL.ZERO;
+  /**
+   * The global budget's in-flight count for this entity's pass. An
+   * unanswered count holds every entity (the pass reports the budget query
+   * failure) except the emergency lane: replica_operations and
+   * control-plane publication partitions, whose recovery is what lets the
+   * owner answer. For them an unknown count is no free budget, and the
+   * coordinator's emergency admission decides through the priority budget
+   * bypass (canBypassGlobalBudgetForPriorityRecovery) - so the cycle
+   * "count needs the owner, the owner needs this ADD" cannot close.
+   * @return {Promise<number>}
+   */
+  async resolveGlobalInFlightOperationCountForBudget() {
+    try {
+      return await this.getGlobalInFlightOperationCount();
+    } catch (error) {
+      if (!isOperationVisibilityUnavailableError(error) ||
+          !this.isEmergencyPriorityControlPlanePartition(this.entityId)) {
+        throw error;
+      }
+      return Number.POSITIVE_INFINITY;
+    }
   }
 
   hasPriorityBudgetBypassCandidateMove(moves = []) {
@@ -340,21 +388,65 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-    const ordinaryPriorityInFlightCount = Number.isFinite(
-      counts?.ordinaryPriorityCount,
-    ) ?
-      counts.ordinaryPriorityCount :
-      0;
+    // A list the owner did not answer completely holds the gate: its count
+    // is unknown, and reading it as zero admitted a second ordinary-priority
+    // ADD beside one already in flight. The named wait re-asks on the event
+    // that can let the owner answer; its bound is the cadence check.
+    // The emergency lane (replica_operations, control-plane publications),
+    // whose recovery restores that answer, is never gated here.
+    if (!isCompleteIncompleteOperationObservation(counts.observation)) {
+      this.armOperationListReadWake();
+      return Object.freeze({
+        applicable: true,
+        serialLimit: 1,
+        countState: ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE.UNANSWERED,
+        ordinaryPriorityInFlightCount: null,
+        observationState: counts.observation.state,
+        deferredOutcome: counts.observation.deferredOutcome,
+        blocked: true,
+      });
+    }
+    this.disarmOperationListReadWake();
     return Object.freeze({
       applicable: true,
       serialLimit: 1,
-      ordinaryPriorityInFlightCount,
-      blocked: ordinaryPriorityInFlightCount >= 1,
+      countState: ORDINARY_PRIORITY_SERIAL_GATE_COUNT_STATE.COUNTED,
+      ordinaryPriorityInFlightCount: counts.ordinaryPriorityCount,
+      observationState: counts.observation.state,
+      deferredOutcome: null,
+      blocked: counts.ordinaryPriorityCount >= 1,
     });
   }
 
   isCriticalSystemPartition() {
     return this.isSystemPartitionEntity();
+  }
+
+  /**
+   * The nodes whose replicas are not counted unhealthy: READY candidates and
+   * DEFERRED ones. A deferred readiness read means the node's health is
+   * unknown (a rebuild is queued), not that it is unhealthy: counting its
+   * replicas as missing made the planner mint ADDs for replicas that exist.
+   * No ADD may rest on an unknown, so its replicas still count, and the
+   * planning-target wake is armed so the publication that answers the read
+   * re-evaluates this entity. (Removal safety is not decided here: the
+   * remove-safety evaluator reads committed node and group evidence.)
+   * @return {Set<string>}
+   */
+  resolveNotUnhealthyNodeIds() {
+    const nodePlan = this.getAvailableNodePlan();
+    const deferredNodeIds = nodePlan.candidates
+      .filter((candidate) =>
+        candidate.state === AVAILABLE_NODE_PLANNING_STATE.DEFERRED)
+      .map((candidate) => candidate.nodeId);
+    // Armed against the generation this answer was read at, never by
+    // re-reading it.
+    this.armPlanningTargetReadinessWake(deferredNodeIds,
+      nodePlan.planningPublicationGeneration);
+    return new Set([
+      ...nodePlan.availableNodes.map((node) => node.node_id),
+      ...deferredNodeIds,
+    ]);
   }
 
   getHealthyReplicas(replicas) {
@@ -369,9 +461,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       return activeReplicas;
     }
 
-    const readyNodeIds = new Set(
-      this.getAvailableNodes().map((node) => node.node_id),
-    );
+    const readyNodeIds = this.resolveNotUnhealthyNodeIds();
 
     return activeReplicas.filter((replica) => {
       if (!replica?.node_id || !replica?.address) {
@@ -411,9 +501,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }
-    const readyNodeIds = new Set(
-      this.getAvailableNodes().map((node) => node.node_id),
-    );
+    const readyNodeIds = this.resolveNotUnhealthyNodeIds();
     return activeReplicas.filter(
       (replica) =>
         replica?.node_id &&

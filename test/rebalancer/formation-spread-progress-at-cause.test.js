@@ -31,6 +31,7 @@ import {
 } from '../../src/control-plane/formation-release-handoff-contract.js';
 import {FIXTURE_ENDPOINT_INCARNATION} from '../test-helpers/endpoint-incarnation-fixture.js';
 import {
+  BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE,
   observeBackgroundPrioritySpreadBlocked,
   registerBackgroundPrioritySpreadReleaseWake,
   resolveBackgroundPrioritySpreadStableRelease,
@@ -496,6 +497,8 @@ test('unchanged-bounds-and-owned-wake: progress occurs via owned canonical wake 
     readinessOwner: mockReadinessOwner,
     observedAt: 2000,
     requiredStableMs: 0,
+    releaseConditionState:
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE.HELD,
   });
 
   assert.equal(wakeTriggered, true, 'owned canonical wake fires without waiting for timer fallback');

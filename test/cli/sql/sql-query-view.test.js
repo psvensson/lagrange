@@ -398,13 +398,6 @@ test('SQLQueryView', async (t) => {
     t.equal(view.cancelLiveQuery(), false);
   });
 
-  t.test('renewLiveQuery returns false when no live query', async (t) => {
-    const view = new SQLQueryView();
-    view.initialize();
-
-    t.equal(view.renewLiveQuery(), false);
-  });
-
   t.test('getLiveStreamPanel returns panel instance', async (t) => {
     const view = new SQLQueryView();
     view.initialize();

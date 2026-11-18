@@ -2,6 +2,8 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 const PRIORITY_REFRESH_NODE_IDS = Object.freeze([
   'node-1',
@@ -126,15 +128,15 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [durableRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durableRow = row;
           },
-        },
+        }),
         systemTableCache: {
           getAll(tableName) {
             if (tableName === SYSTEM_TABLE_NAME.NODES) {
@@ -297,15 +299,15 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [durableRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             persistedRows.push(row);
             durableRow = row;
           },
-        },
+        }),
         authoritativeControlPlaneView: {
           canRead() {
             return true;
@@ -452,14 +454,14 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        controlPlanePublicationsOwner: {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
           async listPublications() {
             return {rows: [durableRow]};
           },
-          async upsertPublication(row) {
+          async storeRow(row) {
             durableRow = row;
           },
-        },
+        }),
         authoritativeControlPlaneView: {
           canRead() {
             return true;
@@ -555,11 +557,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        controlPlanePublicationsOwner: {
-          async upsertPublication(row) {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         now: () => REFRESH_NOW_MS,
       });
 
@@ -649,11 +651,11 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
-        controlPlanePublicationsOwner: {
-          async upsertPublication(row) {
+        controlPlanePublicationsOwner: publicationsOwnerOverRows({
+          async storeRow(row) {
             persistedRows.push(row);
           },
-        },
+        }),
         now: () => REFRESH_NOW_MS,
       });
 

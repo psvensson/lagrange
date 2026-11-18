@@ -16,6 +16,7 @@ import {
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
 import {ManagementV1Owner} from './owners/management-v1-owner.js';
+import {readCachedDeclaredFormationSize} from './formation-target-record.js';
 
 const LOCAL_STR_METRICS_BOOTSTRAP_API_HEALTH_INITIALIZIN = 'metrics.bootstrap_api.health.initializing';
 const REQUEST_CELL_HTTP_METHODS = Object.freeze([
@@ -326,6 +327,8 @@ const bootstrapApiServerMethods = {
         getClusterSnapshot: () => this.getManagementClusterSnapshot(),
         ...this.managementAdapters,
         getClusterId: () => this.getClusterId(),
+        getDeclaredFormationSize: () =>
+          readCachedDeclaredFormationSize(this.getSystemTableCache()),
       });
     }
     return this.managementV1Owner;

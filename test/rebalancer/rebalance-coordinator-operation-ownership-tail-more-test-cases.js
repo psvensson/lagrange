@@ -3,6 +3,8 @@ import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID =
   'op-system-replace-target-owner';
@@ -188,7 +190,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
       coordinator.workflowOwner.repository.queryIncompleteOperations =
       async () => {
-        return [
+        return buildAnsweredIncompleteOperationListObservation([
           {
             operationId: 'op-remote-owner',
             type: 'ADD',
@@ -249,7 +251,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             errorMessage: null,
             stepsHistory: [],
           },
-        ];
+        ]);
       };
       coordinator.workflowOwner.reconcileOperationProgress =
       async (operation) => {
@@ -889,9 +891,9 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       coordinator.workflowOwner.repository.queryIncompleteOperations =
       async () => {
         if (failedCount > 0) {
-          return [];
+          return buildAnsweredIncompleteOperationListObservation([]);
         }
-        return [operation];
+        return buildAnsweredIncompleteOperationListObservation([operation]);
       };
       coordinator.workflowOwner.reconcileOperationProgress =
       async () => false;

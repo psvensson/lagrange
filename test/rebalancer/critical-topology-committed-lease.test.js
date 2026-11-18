@@ -133,7 +133,8 @@ function createRebalancer(overrides = {}) {
         checkAdd: async () => ({decision: 'allow'}),
         checkReplace: async () => ({decision: 'allow'}),
       },
-      getOperationsByEntity: overrides.getOperationsByEntity || (async () => []),
+      getAuthoritativeOperationsByEntity:
+        overrides.getAuthoritativeOperationsByEntity || (async () => []),
     },
     sqlQueryEngine: {
       async executeQuery() {
@@ -391,12 +392,7 @@ test(
     const cache = createCache({replicaOperations: []});
     const rebalancer = createRebalancer({
       cache,
-      getOperationsByEntity: async (_entityType, _entityId, options) => {
-        if (options?.visibilityReadMode === 'owner_rpc_required') {
-          return [authoritativeOp];
-        }
-        return [];
-      },
+      getAuthoritativeOperationsByEntity: async () => [authoritativeOp],
     });
 
     const decision = await rebalancer.resolveTopologySettlingPlanningGateDecision();
@@ -435,7 +431,7 @@ test(
     });
     const rebalancer = createRebalancer({
       cache,
-      getOperationsByEntity: async () => {
+      getAuthoritativeOperationsByEntity: async () => {
         throw new Error('rpc leader read unavailable');
       },
     });

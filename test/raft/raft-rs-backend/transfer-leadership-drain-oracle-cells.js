@@ -146,12 +146,11 @@ async function removalOfCAtA(run) {
   await run.deliverOnly([B]);
 }
 
-// B's and C's acknowledgements commit A's own removal.
-async function selfRemovalAtA(run) {
-  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
-  await run.deliverOnly([B, C]);
-}
+// Cells whose leader is removed by its own proposal are superseded (B2,
+// 2026-11-11): the leader's port refuses its own removal (REMOVES_LEADER)
+// before the core is entered, so no such state is built at A; a removed
+// leader built by the race that can still produce one, its terminal drop
+// and its step-down are pinned in removed-leader-step-down.test.js.
 
 // A removes C; the commit that includes it reaches C, which is still a
 // voter in its own view until it processes that commit.
@@ -174,14 +173,6 @@ async function leaderInTransfer(run) {
   await run.propose(A, {lag: C});
   await run.act(() =>
     turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
-}
-
-// A's own removal is committed and applied; raft-rs keeps it leading.
-async function leaderSelfRemoved(run) {
-  await run.act(() => turnChainValue(run.driver.port(A).proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A})));
-  await run.deliver();
-  assert.equal(run.leads(A), true, 'setup: the removed leader leads');
 }
 
 // B stands for election and every vote request is lost.
@@ -232,9 +223,6 @@ const INPUT_EVENTS = Object.freeze([
   {input: 'transfer in progress (a forwarded MsgTransferLeader)',
     type: 'MsgTransferLeader', build: forwardedTransferToBAtA,
     moves: [INPUT.TRANSFER]},
-  {input: 'own membership at the leader (its removal committed)',
-    type: 'MsgAppendResponse', build: selfRemovalAtA,
-    moves: [INPUT.SELF, INPUT.CONF]},
   {input: 'own membership at a follower (its removal committed)',
     type: 'MsgAppend', build: ownRemovalAtFollowerC, requester: C, target: B,
     moves: [INPUT.SELF, INPUT.CONF]},
@@ -252,12 +240,6 @@ const CATALOGUE = Object.freeze({
       decisions: ['D3'], refusedFrom: B,
       build: async (run) => {
         await leaderInTransfer(run);
-        await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
-      }},
-    {predicate: 'leader removed from its configuration', requester: A,
-      decisions: ['D3'], refusedFrom: B,
-      build: async (run) => {
-        await leaderSelfRemoved(run);
         await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
       }},
     {predicate: 'candidate', requester: B, decisions: ['D3'],
@@ -289,9 +271,6 @@ const CATALOGUE = Object.freeze({
     {predicate: 'sender with progress, commits the target\'s removal',
       requester: A, decisions: ['D1'], moves: [INPUT.CONF, INPUT.PROGRESS],
       build: removalOfCAtA},
-    {predicate: 'sender with progress, commits the leader\'s own removal',
-      requester: A, decisions: ['D3', 'D4', 'D5'],
-      moves: [INPUT.SELF, INPUT.CONF], build: selfRemovalAtA},
   ],
   MsgRequestVote: [
     {predicate: 'leader, higher term', requester: A, decisions: ['D1', 'D2'],

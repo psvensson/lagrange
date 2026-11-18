@@ -189,7 +189,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     );
     if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
       throw policyReadUnavailable(
-        policyRefusalReason(decision, POLICY_READ_REASON.POLICY_READ_UNAVAILABLE),
+        policyRefusalReason(decision, POLICY_READ_REASON.READ_FAILED),
         {
           groupId: entityId,
           authorityState:
@@ -311,7 +311,7 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     );
     if (decision?.state !== POLICY_AUTHORITY_STATE.AUTHORITATIVE_POLICY) {
       throw policyReadUnavailable(
-        policyRefusalReason(decision, POLICY_READ_REASON.POLICY_READ_UNAVAILABLE),
+        policyRefusalReason(decision, POLICY_READ_REASON.READ_FAILED),
         {
           partitionId,
           authorityState:

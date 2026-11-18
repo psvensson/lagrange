@@ -157,10 +157,12 @@ function createDurableGateway(t, serviceRows) {
       ) : candidates.filter((row) => row.table_identity_key === params[0])};
     }
     if (tableName === TABLES.TABLES) {
-      return {rows: candidates.filter((row) => row.table_name === params[0])};
+      return {success: true,
+        rows: candidates.filter((row) => row.table_name === params[0])};
     }
     if (tableName === TABLES.PARTITIONS) {
-      return {rows: candidates.filter((row) => row.partition_id === params[0])};
+      return {success: true,
+        rows: candidates.filter((row) => row.partition_id === params[0])};
     }
     return {success: true, rows: candidates};
   }

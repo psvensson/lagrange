@@ -21,6 +21,7 @@ import {MESSAGE_GROUP_SERVICE_LITERAL} from
 import {captureCdcEvents, copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
 import {registerCdcCommittedAcceptance} from './message-group-cdc-committed-acceptance.js';
+import {applyCommittedCdcRange} from './message-group-cdc-source-range.js';
 
 function isValidTimingConfig(timingConfig, hasTickInterval) {
   const tickIntervalMs = timingConfig.tickIntervalMs;
@@ -62,13 +63,10 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
     }, committed, command);
   },
   [MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH]: (service, committed) => {
-    const events = hasDurableCdcEvents(committed.command.events) ?
-      captureCdcEvents(committed.command.events) :
+    const durable = hasDurableCdcEvents(committed.command.events);
+    const events = durable ? captureCdcEvents(committed.command.events) :
       service.normalizeCDCBatchEvents(committed.command.events);
-    // Receipt registration below binds every captured member, so application
-    // must consume that exact membership without consulting an array iterator.
-    for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
-      const event = events[eventIndex];
+    const applyMember = (event) => {
       const causeId = normalizeCauseId(event.causeId);
       applyCommittedCdcChange(service, {
         ...copyCdcEvent(event),
@@ -80,6 +78,17 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
         logIndex: committed.index,
         causeId,
       });
+    };
+    // A durable range is decided against this node's position cell (CDC
+    // Stage 3): applied, already applied, or a gap that lists the table.
+    if (durable) {
+      applyCommittedCdcRange(service, committed, events, applyMember);
+      return;
+    }
+    // Receipt registration below binds every captured member, so application
+    // must consume that exact membership without consulting an array iterator.
+    for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+      applyMember(events[eventIndex]);
     }
   },
   [MESSAGE_GROUP_COMMAND_TYPE.ACK]: (service, {command}) => {

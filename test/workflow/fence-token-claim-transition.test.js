@@ -1,3 +1,7 @@
+import {
+  drainTurn,
+  settleReconcileQueue,
+} from '../helpers/reconcile-queue-turns.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
@@ -233,9 +237,7 @@ test('OwnerKeyReconcileQueue - enqueue with fence token tracks ' +
   );
   t.equal(created, true, 'enqueue with fence token must succeed');
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   t.equal(reconciled.length, 1, 'item must be drained');
   t.equal(reconciled[0].ownerKey, 'op-1');
@@ -267,9 +269,7 @@ test('OwnerKeyReconcileQueue - enqueue rejects stale fence token',
     t.equal(staleResult, false,
       'stale fence token enqueue must return false');
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     // Only the first enqueue should have been processed.
     t.equal(reconciled.length, 1,
@@ -307,9 +307,7 @@ test('OwnerKeyReconcileQueue - enqueue accepts equal fence token',
       {fenceToken: FENCE_EPOCH_3},
     );
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.ok(reconciled.length >= 1, 'equal fence token must be accepted');
 
@@ -340,9 +338,7 @@ test('OwnerKeyReconcileQueue - enqueue accepts higher fence token',
       {fenceToken: FENCE_EPOCH_10},
     );
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     t.ok(reconciled.length >= 1, 'higher fence token must be accepted');
 
@@ -364,9 +360,7 @@ test('OwnerKeyReconcileQueue - enqueue without fence token skips ' +
   queue.enqueue('op-1', RECONCILE_REASON.PERIODIC_CHECK);
   queue.enqueue('op-1', RECONCILE_REASON.NODE_FAILED);
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   t.ok(reconciled.length >= 1,
     'enqueue without fence token must succeed');
@@ -384,9 +378,7 @@ test('OwnerKeyReconcileQueue - shutdown clears fence tokens',
       {fenceToken: FENCE_EPOCH_5},
     );
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await settleReconcileQueue(queue);
 
     queue.shutdown();
 
@@ -418,8 +410,7 @@ test('OwnerKeyReconcileQueue - drain rejects stale-fenced item ' +
     {fenceToken: FENCE_EPOCH_2},
   );
 
-  await Promise.resolve();
-  await Promise.resolve();
+  await drainTurn();
 
   // While op-1 is in-flight, enqueue with higher epoch.
   // This updates the tracked fence token to 10.
@@ -431,9 +422,7 @@ test('OwnerKeyReconcileQueue - drain rejects stale-fenced item ' +
   // Release the first reconcile.
   resolveFirst();
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await settleReconcileQueue(queue);
 
   // The deferred item with epoch 10 should have been processed
   // because it matches the current fence.

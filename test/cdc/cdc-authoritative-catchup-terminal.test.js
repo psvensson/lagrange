@@ -19,6 +19,7 @@
 // pressure, and records whether each read was issued after terminal. Order is
 // controlled by awaiting turns; the virtual clock never moves.
 
+import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -82,6 +83,7 @@ test('markShuttingDown while the catch-up sleeps between deferred reads: it ' +
   'settles at once, no read after terminal, no pending timer', async () => {
   const composed = composeCatchupOwner();
   const box = track(composed.service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [...CATCHUP_TABLES],
   }));
   await turns(TURNS);
@@ -100,6 +102,7 @@ test('a catch-up started after terminal makes no read', async () => {
   composed.service.markShuttingDown();
 
   const box = track(composed.service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [...CATCHUP_TABLES],
   }));
   await turns(TURNS);

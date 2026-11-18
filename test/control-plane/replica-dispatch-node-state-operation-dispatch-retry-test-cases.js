@@ -12,6 +12,11 @@ import {
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 
 const OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH =
   'refreshRowBeforeDispatch';
@@ -322,9 +327,9 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       },
       rebalanceCoordinator: {
         repository: {
-          async queryAuthoritativeOperationById() {
+          async getOperationByIdVisibilityObservation() {
             authoritativeReadCalls += 1;
-            return null;
+            return buildAbsentOperationVisibility();
           },
         },
         async dispatchOperation() {
@@ -406,29 +411,7 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       entity_type: 'partition',
       entity_id: 'sql_transactions-p1',
     };
-    const visibilityFallbackOperation = {
-      operationId: OPERATION_ID,
-      type: OperationType.REPLACE,
-      partitionId: 'sql_transactions-p1',
-      entityType: 'partition',
-      entityId: 'sql_transactions-p1',
-      replicaId: 'sql_transactions-p1-r4',
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      status: 'pending',
-      workflowStep: WORKFLOW_STEP.PENDING,
-      createdAt: originalOperationRow.created_at,
-      updatedAt: originalOperationRow.updated_at + 25,
-      completedAt: null,
-      errorMessage: null,
-      stepsHistory: [{
-        step: WORKFLOW_STEP.PENDING,
-        timestamp: originalOperationRow.updated_at,
-        sourceReplicaId: 'sql_transactions-p1-r1',
-      }],
-    };
     let dispatchCalls = 0;
-    let authoritativeReadCalls = 0;
     let visibilityObservationCalls = 0;
     const scheduled = [];
 
@@ -453,10 +436,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       operationDispatchRetryAfterMs: ORIGINAL_RETRY_DELAY_MS,
       rebalanceCoordinator: {
         repository: {
-          async queryAuthoritativeOperationById() {
-            authoritativeReadCalls += 1;
-            return null;
-          },
           async getOperationByIdVisibilityObservation(observedOperationId) {
             visibilityObservationCalls += 1;
             t.equal(
@@ -464,12 +443,11 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
               OPERATION_ID,
               'visibility recovery should query the same operation id',
             );
-            return {
-              operation: {...visibilityFallbackOperation},
-              deferredOutcome: {
-                retryAfterMs: CANONICAL_RETRY_DELAY_MS,
-              },
-            };
+            return buildUnavailableOperationVisibility({
+              reasonCode: 'authoritative_read_unavailable',
+              retryable: true,
+              retryAfterMs: CANONICAL_RETRY_DELAY_MS,
+            });
           },
         },
         async dispatchOperation() {
@@ -502,11 +480,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         'visibility recovery should consult the canonical repository visibility observation',
       );
       t.equal(
-        authoritativeReadCalls,
-        0,
-        'canonical visibility recovery should replace the raw authoritative row miss path when available',
-      );
-      t.equal(
         scheduled.length,
         1,
         'visibility recovery should still arm one deferred retry',
@@ -519,8 +492,9 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       t.equal(
         service.operationDispatchDeferredRetries.get(OPERATION_ID)?.row
           ?.steps_history,
-        JSON.stringify(visibilityFallbackOperation.stepsHistory),
-        'the deferred retry should retain the canonical visibility fallback row, not the stale wake-up payload',
+        originalOperationRow.steps_history,
+        'an UNAVAILABLE observation carries no row: the retry keeps the ' +
+          'wake-up row, which the owner\'s answer replaces on re-entry',
       );
     } finally {
       service.stop();
@@ -592,14 +566,14 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
       },
       rebalanceCoordinator: {
         repository: {
-          async queryAuthoritativeOperationById(observedOperationId) {
+          async getOperationByIdVisibilityObservation(observedOperationId) {
             authoritativeReadCalls += 1;
             t.equal(
               observedOperationId,
               operationId,
               'authoritative suppression should inspect the same operation id',
             );
-            return {...authoritativeOperation};
+            return buildPresentOperationVisibility(authoritativeOperation);
           },
         },
         async dispatchOperation() {

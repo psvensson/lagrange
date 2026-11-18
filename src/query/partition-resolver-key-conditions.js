@@ -63,7 +63,7 @@ const createInitialKeyConditions = () => ({
 
 const resolvePredicateShape = (conditions) => {
   if (conditions.contradiction) {
-    return PREDICATE_SHAPE.POINT;
+    return PREDICATE_SHAPE.CONTRADICTION;
   }
   if (conditions.type === KEY_CONDITION_TYPE.EQUALS) {
     return PREDICATE_SHAPE.EQ;

@@ -116,7 +116,6 @@ const READINESS_ADMISSION_TERM = objectFreeze({
   COMPLETED_RECORD_ABSENT: 'completed_record_absent',
   GENERATION_SATURATED: 'generation_saturated',
   PLANNING_IDENTITY_SATURATED: 'planning_identity_saturated',
-  BUILD_OPTIONS_KEY_CHANGED: 'build_options_key_changed',
   FRESHNESS_NOT_CURRENT: 'freshness_not_current',
   LIVE_EVIDENCE_VETO: 'live_evidence_veto',
 });
@@ -151,7 +150,6 @@ const READINESS_ADMISSION_TERM_NAMES = objectFreeze([
   READINESS_ADMISSION_TERM.COMPLETED_RECORD_ABSENT,
   READINESS_ADMISSION_TERM.GENERATION_SATURATED,
   READINESS_ADMISSION_TERM.PLANNING_IDENTITY_SATURATED,
-  READINESS_ADMISSION_TERM.BUILD_OPTIONS_KEY_CHANGED,
   READINESS_ADMISSION_TERM.FRESHNESS_NOT_CURRENT,
   READINESS_ADMISSION_TERM.LIVE_EVIDENCE_VETO,
 ]);
@@ -609,6 +607,42 @@ function readReadinessAdmissionTrackedVariantCount(owner) {
   return total;
 }
 
+/**
+ * What this record currently says about one owner key and build variant, for
+ * a consumer's diagnostic: its admission state, the terms its latest
+ * transition failed on, and for how long it has been deferred. Reads no
+ * clock; `nowMs` is the caller's own observation.
+ *
+ * @param {Object|null} owner - The planning owner.
+ * @param {string|null} ownerKey - The owner key.
+ * @param {string|null} buildOptionsKey - The build variant.
+ * @param {string|null} participationKind - The read's participation kind.
+ * @param {number|null} nowMs - The caller's observation time.
+ * @return {Object|null} The description, or null when nothing is recorded.
+ */
+function describeReadinessAdmissionVariant(
+  owner,
+  ownerKey,
+  buildOptionsKey,
+  participationKind,
+  nowMs,
+) {
+  const record = readVariantRecord(
+    owner, ownerKey, buildOptionsKey, participationKind, false);
+  if (!record) return null;
+  const deferred =
+    record.admissionState === READINESS_ADMISSION_STATE.DEFERRED;
+  return objectFreeze({
+    admissionState: record.admissionState,
+    failedTerms: deferred ?
+      renderTerms(record.admissionSignature, READINESS_ADMISSION_TERM_NAMES) :
+      objectFreeze([]),
+    deferredForMs: deferred ?
+      resolveAgeMs(normalizeNowMs(nowMs), record.deferredSinceMs) :
+      null,
+  });
+}
+
 export {
   READINESS_ADMISSION_LOG_MSG,
   READINESS_ADMISSION_STATE,
@@ -620,6 +654,7 @@ export {
   READINESS_PUBLICATION_REFUSAL_TERM_NAMES,
   READINESS_PUBLICATION_STATE,
   beginReadinessAdmissionRead,
+  describeReadinessAdmissionVariant,
   forgetReadinessAdmissionOwner,
   forgetReadinessAdmissionVariant,
   noteReadinessAdmissionRead,

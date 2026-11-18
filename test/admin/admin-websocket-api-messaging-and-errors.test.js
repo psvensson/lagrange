@@ -280,7 +280,7 @@ test('AdminWebSocketAPI - CDC event broadcasting', async (t) => {
 
   // Broadcast CDC event
   api.broadcastCDCEvent('nodes', 'INSERT', {
-    id: 'node-2',
+    node_id: 'node-2',
     address: 'localhost:8081',
     status: 'active',
   });
@@ -293,7 +293,7 @@ test('AdminWebSocketAPI - CDC event broadcasting', async (t) => {
   t.equal(event1.type, MessageType.CDC_EVENT, 'client 1 should receive event');
   t.equal(event1.table, 'nodes', 'should have correct table');
   t.equal(event1.operation, 'insert', 'should have correct operation');
-  t.equal(event1.record.id, 'node-2', 'should have correct record');
+  t.equal(event1.record.node_id, 'node-2', 'should have correct record');
 
   t.equal(event2.type, MessageType.CDC_EVENT, 'client 2 should receive event');
 

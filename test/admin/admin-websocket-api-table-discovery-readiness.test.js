@@ -134,7 +134,7 @@ test(
       leader_node_id: 'node-1',
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -218,7 +218,7 @@ test(
       updated_at: 123,
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -227,7 +227,7 @@ test(
       address: '10.0.0.1:7001',
     });
     cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
-      id: 'service-benchmark-events-node-2',
+      service_id: 'service-benchmark-events-node-2',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-2',

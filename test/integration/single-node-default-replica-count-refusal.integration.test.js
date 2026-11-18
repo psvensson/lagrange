@@ -30,7 +30,7 @@ test('single node with omitted replica configuration refuses RF3 provisioning',
     const cluster = createEmbeddedCluster(t);
     // Use the public startup owner with omitted partition configuration.
     // formCluster also requires application writes, which this test refuses.
-    const seed = await cluster.startEmbeddedNode();
+    const seed = await cluster.startEmbeddedNode({formationTargetNodeCount: 1});
     t.pass('public seed startup succeeds');
     const session = await seed.openApplicationDatabase(APPLICATION_ID);
 

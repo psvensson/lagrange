@@ -3,6 +3,8 @@ import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {resolveCandidateNodeKey} from
+  './query-executor-partition-candidate-state.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -224,22 +226,32 @@ function createPartitionAttemptBudget({
     if (!forRead || !Array.isArray(candidateQueue)) {
       return 1;
     }
-    let remainingCount = 1;
+    const remainingTargetKeys = new Set();
+    const currentTargetKey = resolveCandidateNodeKey(
+      candidateQueue[currentCandidateIndex],
+    );
+    if (currentTargetKey) {
+      remainingTargetKeys.add(currentTargetKey);
+    }
     for (
       let index = currentCandidateIndex + 1;
       index < candidateQueue.length;
       index += 1
     ) {
-      const address = candidateQueue[index]?.address;
+      const candidate = candidateQueue[index];
+      const address = candidate?.address;
       if (
         typeof address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
         address.length > 0 &&
         !attemptedAddresses.has(address)
       ) {
-        remainingCount += 1;
+        const targetKey = resolveCandidateNodeKey(candidate);
+        if (targetKey) {
+          remainingTargetKeys.add(targetKey);
+        }
       }
     }
-    return remainingCount;
+    return Math.max(1, remainingTargetKeys.size);
   };
   const resolveRouterDeliveryTimeoutMs = (
     remainingBudgetMs,
@@ -263,34 +275,50 @@ function createPartitionAttemptBudget({
       currentCandidateIndex,
       attemptedAddresses,
     );
-    const capRecoveryCandidateBudget = (deliveryTimeoutMs) => {
-      if (!shouldBoundRecoveryCandidateAckTimeout(candidate)) {
-        return deliveryTimeoutMs;
-      }
-      const reconnectIntervalMs = Number(
-        executor.messageRouter?.reconnectIntervalMs,
-      );
-      if (
-        !Number.isFinite(reconnectIntervalMs) ||
-        reconnectIntervalMs <= 0
-      ) {
-        return deliveryTimeoutMs;
-      }
-      return Math.min(
-        deliveryTimeoutMs,
-        Math.max(
-          READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
-          Math.floor(reconnectIntervalMs),
-        ),
-      );
-    };
     if (remainingReadCandidates <= 1) {
-      return capRecoveryCandidateBudget(remainingBudgetMs);
+      return remainingBudgetMs;
     }
-    return capRecoveryCandidateBudget(Math.max(
+    return Math.max(
       READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
       Math.floor(remainingBudgetMs / remainingReadCandidates),
-    ));
+    );
+  };
+  // The ACK bound of one delivery to a connected candidate: whether the peer
+  // is there is answered within one reconnect interval, so a connected
+  // candidate that never acknowledges is left after that interval. It bounds
+  // only the wait for the transport ACK (the router's `ackTimeoutMs`); the
+  // answer wait keeps the candidate's whole share (`timeoutMs`). Null when
+  // the candidate is not a connected one or the router states no interval:
+  // the ACK wait is then bounded by the delivery's lifetime.
+  const resolveRouterDeliveryAckTimeoutMs = (deliveryTimeoutMs, candidateQueue, index) => {
+    const candidate = Array.isArray(candidateQueue) ? candidateQueue[index] : null;
+    if (!shouldBoundRecoveryCandidateAckTimeout(candidate)) {
+      return null;
+    }
+    const reconnectIntervalMs = Number(
+      executor.messageRouter?.reconnectIntervalMs,
+    );
+    if (
+      !Number.isFinite(reconnectIntervalMs) ||
+      reconnectIntervalMs <= 0
+    ) {
+      return null;
+    }
+    const ackTimeoutMs = Math.min(
+      deliveryTimeoutMs,
+      Math.max(
+        READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
+        Math.floor(reconnectIntervalMs),
+      ),
+    );
+    // A share below one millisecond is its own bound; the router takes an
+    // ACK bound only as a whole positive duration.
+    return ackTimeoutMs >= 1 ? ackTimeoutMs : null;
+  };
+  const resolveRouterDeliveryAckBound = (deliveryTimeoutMs, candidateQueue, index) => {
+    const ackTimeoutMs = resolveRouterDeliveryAckTimeoutMs(
+      deliveryTimeoutMs, candidateQueue, index);
+    return ackTimeoutMs === null ? {} : {ackTimeoutMs};
   };
   const buildRouterDeliveryOptions = (
     candidateQueue = null,
@@ -333,6 +361,8 @@ function createPartitionAttemptBudget({
         currentCandidateIndex,
         attemptedAddresses,
       );
+      Object.assign(routerOptions, resolveRouterDeliveryAckBound(
+        routerOptions.timeoutMs, candidateQueue, currentCandidateIndex));
     }
     if (Object.keys(routerOptions).length === 0) {
       return undefined;

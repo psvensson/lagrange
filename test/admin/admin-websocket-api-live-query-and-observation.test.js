@@ -64,10 +64,14 @@ test('live query subscribe routes to liveQueryManager', async (t) => {
 
   // Wait for the registration to be processed
   const response = await waitForMessage(ws);
-  t.equal(response.type, MessageType.LIVE_QUERY_EVENT,
-    'should respond with live_query_event');
+  t.equal(response.type, 'live_query_subscribed',
+    'the subscribe answer is the named acknowledgement');
   t.equal(response.subscriptionId, 'sub-1',
     'should include subscriptionId');
+  t.same(response.partitions, ['partition-1'],
+    'the acknowledgement names the monitored partitions');
+  t.equal(Object.hasOwn(response, 'eventType'), false,
+    'the acknowledgement is not an event');
   t.equal(registrations.length, 1,
     'should register with live query manager');
   t.ok(registrations[0].parsedQuery,
@@ -211,7 +215,7 @@ test('AdminWebSocketAPI - local system-table observation query avoids routed SQL
     t.equal(result.success, true, 'local cache observation query should succeed');
     t.equal(result.tableName, TABLES.NODES, 'query should identify the system table');
     t.same(
-      result.rows.map((row) => row.id),
+      result.rows.map((row) => row.node_id),
       ['node-1'],
       'local cache observation query should return cache-backed rows',
     );
@@ -274,7 +278,7 @@ async (t) => {
 
   t.equal(result.success, true, 'local observation query should still succeed');
   t.same(
-    result.rows.map((row) => row.node_id || row.id).sort(),
+    result.rows.map((row) => row.node_id).sort(),
     ['node-1'],
     'raw observation should preserve the incomplete local cache view',
   );

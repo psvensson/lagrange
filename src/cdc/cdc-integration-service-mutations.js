@@ -1,3 +1,4 @@
+import {CDC_ADMISSION_INTENT_FIELD} from '../partition/partition-cdc-admission-class.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {classifyControlPlaneMutationResult} from
@@ -102,6 +103,8 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
         deliveryPriority: options?.deliveryPriority,
         deliverySource: options?.deliverySource,
         replacePendingKey: options?.replacePendingKey,
+        // The lifecycle owner's intent, never dropped here (one pick-list).
+        [CDC_ADMISSION_INTENT_FIELD]: options?.[CDC_ADMISSION_INTENT_FIELD],
       });
       if (!result.success) {
         throw buildSystemTableMutationError(
@@ -224,6 +227,8 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
         deliveryPriority: options?.deliveryPriority,
         deliverySource: options?.deliverySource,
         replacePendingKey: options?.replacePendingKey,
+        // The lifecycle owner's intent, never dropped here (one pick-list).
+        [CDC_ADMISSION_INTENT_FIELD]: options?.[CDC_ADMISSION_INTENT_FIELD],
       });
       if (!result.success) {
         throw buildSystemTableMutationError(

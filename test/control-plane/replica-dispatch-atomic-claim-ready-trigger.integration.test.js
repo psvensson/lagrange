@@ -3,6 +3,7 @@
  * ReplicaDispatchService.
  */
 
+import {settleReplicaDispatchQueues} from '../helpers/reconcile-queue-turns.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
@@ -27,7 +28,7 @@ async function waitForRetryDrain(service) {
   while (service.retryInFlightNodes.size > 0) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await settleReplicaDispatchQueues(service);
 }
 
 test(

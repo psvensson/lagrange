@@ -1,7 +1,7 @@
 /**
  * Owner-path convergence tests for RebalanceCoordinator.
  *
- * Proves that recovery, polling/timeout, and event-triggered
+ * Proves that the restart orphan sweep, polling/timeout, and event-triggered
  * progression all route through the same owner-key reconcile
  * queue (operationWorkflowRunExclusive / DurableWorkflowCoordinator
  * .runExclusive). No alternate mutation path exists outside the
@@ -14,6 +14,11 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  buildAbsentOperationVisibility,
+  buildPresentOperationVisibility,
+  buildUnavailableOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -299,31 +304,38 @@ function createConvergenceCoordinator(options = {}) {
 test('Owner-path convergence: all progression entry points ' +
   'route through runExclusive', async (t) => {
   await t.test(
-    'recovery routes per-operation work through ' +
+    'the restart orphan sweep routes per-operation work through ' +
     'operationWorkflowRunExclusive',
     async (t) => {
+      // Stale past its PENDING step budget: the orphan sweep acts on it.
+      const staleAtMs = Date.now() - 600000;
       const opRow = buildOperationRow({
         workflowStep: WORKFLOW_STEP.PENDING,
         status: ReplicaStatus.PENDING,
+        createdAt: staleAtMs,
+        updatedAt: staleAtMs,
+        stepsHistory: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: staleAtMs},
+        ]),
       });
       const {coordinator, recordedOwnerKeys} =
         createConvergenceCoordinator({operationRows: [opRow]});
 
       try {
-        await coordinator.handleRecovery();
+        await coordinator.reconcileOrphanedOperations();
 
         const recoveryKeys = recordedOwnerKeys.filter((k) => {
           return k === buildOperationOwnerKey(TEST_OPERATION_ID);
         });
         t.ok(
           recoveryKeys.length > 0,
-          'recovery must route through runExclusive ' +
+          'the orphan sweep must route through runExclusive ' +
           'with the shared per-operation owner key',
         );
         t.equal(
           recoveryKeys[0],
           buildOperationOwnerKey(TEST_OPERATION_ID),
-          'recovery owner key must match the shared operation owner key',
+          'orphan-sweep owner key must match the shared operation owner key',
         );
       } finally {
         await coordinator.shutdown();
@@ -457,7 +469,8 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
-    'services cache progression keeps REPLACE source removal moving when ' +
+    'services cache progression keeps REPLACE source removal retained, and ' +
+    'moving once the owner answers, when ' +
     'authoritative operation visibility is missing',
     async (t) => {
       const replaceRow = buildOperationRow({
@@ -495,6 +508,7 @@ test('Owner-path convergence: all progression entry points ' +
           return originalEvaluateRemoveSafety(operation);
         };
       coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      let ownerReadDeferred = true;
       coordinator.repository.getOperationByIdVisibilityObservation =
         async (operationId, options = {}) => {
           visibilityObservationCalls.push({
@@ -502,25 +516,22 @@ test('Owner-path convergence: all progression entry points ' +
             options: {...options},
           });
           if (operationId !== TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID) {
-            return {
-              operation: null,
-              deferredOutcome: null,
-            };
+            return buildAbsentOperationVisibility();
           }
-          return {
-            operation: {
-              ...coordinator.repository.rowToOperation(
-                operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
-              ),
-              sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
-            },
-            deferredOutcome: {
+          if (ownerReadDeferred) {
+            return buildUnavailableOperationVisibility({
               completionState: 'deferred',
               retryAfterMs:
                 TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS,
               source: TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE,
-            },
-          };
+            });
+          }
+          return buildPresentOperationVisibility({
+            ...coordinator.repository.rowToOperation(
+              operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
+            ),
+            sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
+          });
         };
 
       try {
@@ -532,7 +543,33 @@ test('Owner-path convergence: all progression entry points ' +
           status: ReplicaStatus.ACTIVE,
           raft_role: 'follower',
         });
+        for (let turn = 0; turn < 20; turn += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        const stepBeforeAnswer = operationMap.get(
+          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        )?.workflow_step;
+        t.not(
+          stepBeforeAnswer,
+          WORKFLOW_STEP.STOPPING,
+          'a deferred owner read drives no transition from a cached row',
+        );
+        t.same(
+          visibilityObservationCalls,
+          [{
+            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+            options: {
+              allowPriorityRecoveryDeferredVisibility: true,
+            },
+          }],
+          'observed progress reads the owner through the repository visibility contract',
+        );
 
+        // The owner answers: the retained observed-progress wake continues.
+        ownerReadDeferred = false;
+        await coordinator.workflowOwner.reconcileObservedProgressOperation(
+          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        );
         // The owner reads the witness and persists the removal intent before
         // the effect (quest replace-source-removal-owner): settle its turns.
         for (let turn = 0; turn < 20; turn += 1) {
@@ -545,22 +582,12 @@ test('Owner-path convergence: all progression entry points ' +
         t.equal(
           updated?.workflow_step,
           WORKFLOW_STEP.STOPPING,
-          'service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss',
+          'once the owner answers, service-row progress continues the REPLACE into source removal',
         );
         t.equal(
           updated?.status,
           ReplicaStatus.REMOVING,
-          'the durable row should reflect source removal in progress after the visibility fallback',
-        );
-        t.same(
-          visibilityObservationCalls,
-          [{
-            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
-            options: {
-              allowPriorityRecoveryDeferredVisibility: true,
-            },
-          }],
-          'observed progress should use the repository visibility observation contract instead of abandoning on authoritative reread misses',
+          'the durable row reflects source removal in progress',
         );
         t.ok(
           recordedOwnerKeys.includes(
@@ -568,7 +595,7 @@ test('Owner-path convergence: all progression entry points ' +
               TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
             ),
           ),
-          'services cache progression must still route through the shared owner key during visibility fallback',
+          'services cache progression must still route through the shared owner key',
         );
       } finally {
         await coordinator.shutdown();
@@ -623,17 +650,14 @@ test('Owner-path convergence: all progression entry points ' +
             operationId,
             options: {...options},
           });
-          return {
-            operation: null,
-            deferredOutcome: {
-              completionState:
-                TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE,
-              retryAfterMs:
-                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS,
-              source:
-                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE,
-            },
-          };
+          return buildUnavailableOperationVisibility({
+            completionState:
+              TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE,
+            retryAfterMs:
+              TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS,
+            source:
+              TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE,
+          });
         };
 
       try {
@@ -678,6 +702,7 @@ test('Owner-path convergence: all progression entry points ' +
           [{
             operationId: TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
             options: {
+              authoritativeReadMode: 'owner_rpc_required',
               allowPriorityRecoveryDeferredVisibility: true,
               allowOwnerPersistedTransitionDeferredVisibility: false,
             },
@@ -704,10 +729,16 @@ test('Owner-path convergence: all progression entry points ' +
     async (t) => {
       // Use three separate operations so they don't collide
       // in the single-flight map.
+      const staleAtMs = Date.now() - 600000;
       const recoveryOp = buildOperationRow({
         operationId: 'op-recovery-path',
         workflowStep: WORKFLOW_STEP.PENDING,
         status: ReplicaStatus.PENDING,
+        createdAt: staleAtMs,
+        updatedAt: staleAtMs,
+        stepsHistory: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: staleAtMs},
+        ]),
       });
       const timeoutOp = buildOperationRow({
         operationId: 'op-timeout-path',
@@ -728,8 +759,10 @@ test('Owner-path convergence: all progression entry points ' +
         });
 
       try {
-        // Trigger all three entry points
-        await coordinator.handleRecovery();
+        // Trigger all three entry points; the orphan sweep (the restart
+        // re-drive) first, its keys captured before the timeout sweep runs.
+        await coordinator.reconcileOrphanedOperations();
+        const orphanSweepKeys = [...recordedOwnerKeys];
 
         await coordinator.checkTimeouts();
 
@@ -740,7 +773,7 @@ test('Owner-path convergence: all progression entry points ' +
         );
         await new Promise((r) => setImmediate(r));
 
-        const hasRecovery = recordedOwnerKeys.includes(
+        const hasRecovery = orphanSweepKeys.includes(
           buildOperationOwnerKey('op-recovery-path'),
         );
         const hasTimeout = recordedOwnerKeys.includes(
@@ -750,7 +783,7 @@ test('Owner-path convergence: all progression entry points ' +
           buildOperationOwnerKey('op-outcome-path'),
         );
 
-        t.ok(hasRecovery, 'recovery path recorded');
+        t.ok(hasRecovery, 'orphan-sweep (restart) path recorded');
         t.ok(hasTimeout, 'timeout path recorded');
         t.ok(hasOutcome, 'outcome path recorded');
 
@@ -1016,7 +1049,7 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
-    'recovery reconciles SYNCING operations through the ' +
+    'the restart orphan sweep reconciles SYNCING operations through the ' +
     'same owner path as event-triggered progression',
     async (t) => {
       const opRow = buildOperationRow({
@@ -1030,22 +1063,28 @@ test('Owner-path convergence: all progression entry points ' +
         node_id: TEST_NODE_ID,
         status: ReplicaStatus.ACTIVE,
       };
-      const {coordinator, recordedOwnerKeys} =
+      const {coordinator, recordedOwnerKeys, operationMap} =
         createConvergenceCoordinator({
           operationRows: [opRow],
           serviceRows: [serviceRow],
         });
 
       try {
-        await coordinator.handleRecovery();
+        // The replica reached ACTIVE the row has not applied: actionable.
+        await coordinator.reconcileOrphanedOperations();
 
         const recoveryKeys = recordedOwnerKeys.filter((k) => {
           return k === buildOperationOwnerKey(TEST_OPERATION_ID);
         });
         t.ok(
           recoveryKeys.length > 0,
-          'SYNCING reconciliation during recovery must ' +
+          'SYNCING reconciliation by the orphan sweep must ' +
           'route through runExclusive',
+        );
+        t.not(
+          operationMap.get(TEST_OPERATION_ID).workflow_step,
+          WORKFLOW_STEP.FAILED,
+          'the sweep never fails a SYNCING row whose replica is ACTIVE',
         );
       } finally {
         await coordinator.shutdown();

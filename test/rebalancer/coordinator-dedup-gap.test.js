@@ -1198,13 +1198,13 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         expiresAt: Date.now() + 60_000,
       });
 
-      const originalQueryOperationById = coordinator.queryOperationById;
+      const originalQueryOperationById = coordinator.queryOperationProjectionById;
       const originalQueryAuthoritativeOperationById =
         coordinator.repository.queryAuthoritativeOperationById;
       const originalCreateOperationInternal = coordinator.createOperationInternal;
       let createdOperationCount = 0;
 
-      coordinator.queryOperationById = async () => ({
+      coordinator.queryOperationProjectionById = async () => ({
         operationId: 'priority-op-terminal',
         type: OperationType.REPLACE,
         partitionId: 'replica_operations-p1',
@@ -1243,7 +1243,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           'terminal intent should be removed from recent-intent cache',
         );
       } finally {
-        coordinator.queryOperationById = originalQueryOperationById;
+        coordinator.queryOperationProjectionById = originalQueryOperationById;
         coordinator.repository.queryAuthoritativeOperationById =
           originalQueryAuthoritativeOperationById;
         coordinator.createOperationInternal = originalCreateOperationInternal;

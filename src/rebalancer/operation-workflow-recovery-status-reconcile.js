@@ -1,4 +1,7 @@
-import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {
+  PRE_SYNC_WORKFLOW_STEPS,
+  isReplaceExemptFromTimeBudget,
+} from './replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
@@ -12,7 +15,6 @@ import {
   REPLACE_TARGET_DEAD_BEFORE_INTENT,
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   isPartitionReplace,
-  isReplaceExemptFromTimeBudget,
   isReplaceRemovalIntentDurable,
   recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
@@ -20,6 +22,7 @@ import {
 import {
   observedReplaceTargetStatus,
 } from './operation-workflow-replace-surviving-membership.js';
+import {reconcileDeferredStepWriteOnTimeout} from './operation-workflow-transition-retry.js';
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -27,7 +30,6 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  REBALANCE_COORDINATOR_LOG_MSG,
   RECONCILED_REPLICA_STATUS_ABSENT_VALUES,
   RECONCILED_REPLICA_STATUS_AUTHORITATIVE_TERMINAL_STATUSES,
   RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS,
@@ -36,7 +38,6 @@ const {
   RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE,
   RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES,
   ReplicaStatus,
-  SQL_RECONCILIATION_REASON,
   STOPPING_REPLICA_OBSERVATION_STATE,
   SYSTEM_TABLE_NAME,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
@@ -253,7 +254,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   }
 
   async applyReconciledReplicaStatus(operation, actualStatus, options = {}) {
-    const cause = options.cause || 'progress';
     const reconciledStatus = this.resolveReconciledReplicaStatus(
       operation,
       actualStatus,
@@ -328,22 +328,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     if (reconciledStatus === ReplicaStatus.FAILED) {
       await this.failOperation(
         operation,
-        cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
-          operation.workflowStep === WORKFLOW_STEP.SYNCING ?
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_SYNC :
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
-      );
-      return true;
-    }
-
-    if (
-      reconciledStatus === null &&
-      cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
-      operation.workflowStep === WORKFLOW_STEP.SYNCING
-    ) {
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_NOT_FOUND_DURING_RECOVERY_RECONCILIATION,
+        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
       );
       return true;
     }
@@ -420,6 +405,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return false;
     }
     const priorityRecoveryDrainSnapshot =
+      options.priorityRecoveryDrainSnapshot ||
       await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
     if (
       await this.reconcilePriorityRecoveryOperationDrain(
@@ -438,48 +424,24 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
 
     const cause = options.cause || 'progress';
-    const lifecycleAction = this.resolveOperationLifecycleAction(
-      operation,
-      cause,
-    );
+    const lifecycleAction = this.resolveOperationLifecycleAction(operation);
     switch (lifecycleAction) {
-    case OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY:
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_OPERATION,
-      );
-      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
-        operationId: operation.operationId,
-        workflowStep: operation.workflowStep,
-        partitionId: operation.partitionId,
-      });
-      return true;
-    case OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY:
-      if (isReplaceRemovalIntentDurable(operation)) {
-        // D2: recovery of a post-intent REPLACE resumes its owner; it never
-        // re-enables a timer- or restart-driven FAILED.
-        await this.runReplaceStoppingOwner(operation);
-        return true;
-      }
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION,
-      );
-      this.logger.info(
-        REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_REMOVE_FAILED,
-        {
-          operationId: operation.operationId,
-          workflowStep: operation.workflowStep,
-          partitionId: operation.partitionId,
-        },
-      );
-      return true;
     case OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE: {
       if (await reconcilePartitionReplaceTargetStatus(this, operation,
         observedReplaceTargetStatus(this, operation))) {
         return true;
       }
       if (await this.reconcileActiveReplaceSourceRemovalProgress(operation)) {
+        return true;
+      }
+      // A timeout tick stands down only for a retry that will itself
+      // re-enter this owner; every other ACTIVE REPLACE is re-driven here,
+      // because its time-exempt step has no later wake.
+      if (
+        cause === OPERATION_WORKFLOW_OWNER_LITERAL.TIMEOUT &&
+        this.readOperationRetryArmedState(operation.operationId)
+          .retryWakeArmed
+      ) {
         return true;
       }
       const activeReplaceResumeResult =
@@ -512,13 +474,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
           this.isPreSyncCreateOperation(operation),
       },
     );
-    if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
-      this.repository.emitReplicaStatusDivergence(
-        operation.replicaId,
-        actualStatus,
-        SQL_RECONCILIATION_REASON.RECOVERY_REPLICA_STATUS,
-      );
-    }
     return this.applyReconciledReplicaStatus(operation, actualStatus, {
       cause,
     });
@@ -528,13 +483,14 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return this.reconcileOperationLifecycle(operation, options);
   }
 
-  async reconcileObservedTargetProgressDuringTransitionGrace(operation, now) {
-    if (!this.hasObservedOperationRowTargetProgress(operation)) {
-      return false;
-    }
+  async reconcileObservedTargetProgressDuringTransitionGrace(
+    operation, now, priorityRecoveryDrainSnapshot = null,
+  ) {
+    if (!this.hasObservedOperationRowTargetProgress(operation)) return false;
     return this.reconcileOperationProgress(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
       now,
+      priorityRecoveryDrainSnapshot,
     });
   }
 
@@ -584,30 +540,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       fallbackOperationId.length > 0 &&
       fallbackOperation &&
       typeof fallbackOperation === 'object';
-    const visibilityWorkflowRank =
-      hasVisibilityOperation ?
-        this.getOperationWorkflowStepRank(visibilityOperation) :
-        -1;
-    const fallbackWorkflowRank =
-      hasFallbackOperation ?
-        this.getOperationWorkflowStepRank(fallbackOperation) :
-        -1;
-    const visibilityUpdatedAt = Number(visibilityOperation?.updatedAt);
-    const fallbackUpdatedAt = Number(fallbackOperation?.updatedAt);
-    const fallbackWorkflowRankAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank > visibilityWorkflowRank;
-    const fallbackUpdatedAtAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank === visibilityWorkflowRank &&
-      Number.isFinite(fallbackUpdatedAt) &&
-      (
-        !Number.isFinite(visibilityUpdatedAt) ||
-        fallbackUpdatedAt > visibilityUpdatedAt
-      );
-
     return Object.freeze({
       hasVisibilityOperation,
       hasFallbackOperation,
@@ -621,8 +553,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       fallbackTerminal:
         hasFallbackOperation &&
         this.repository.isOperationTerminal(fallbackOperation),
-      fallbackWorkflowRankAhead,
-      fallbackUpdatedAtAhead,
     });
   }
 
@@ -669,26 +599,29 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return null;
   }
 
-  async reconcileTimeoutOperation(operation, now) {
+  async reconcileTimeoutOperation(
+    operation, now, priorityRecoveryDrainSnapshot = null,
+  ) {
+    if (await reconcileDeferredStepWriteOnTimeout(this, operation, now)) {
+      return;
+    }
     if (
       this.hasActiveTransitionRetryGrace(operation?.operationId || null, now)
     ) {
-      if (
-        await this.reconcileObservedTargetProgressDuringTransitionGrace(
-          operation,
-          now,
-        )
-      ) {
+      if (await this.reconcileObservedTargetProgressDuringTransitionGrace(
+        operation, now, priorityRecoveryDrainSnapshot)) {
         return;
       }
-      if (await this.reconcilePriorityRecoveryOperationDrain(operation)) {
+      if (await this.reconcilePriorityRecoveryOperationDrain(
+        operation, priorityRecoveryDrainSnapshot)) {
         return;
       }
       return;
     }
     const progressed = await this.reconcileOperationProgress(operation, {
-      cause: 'timeout',
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.TIMEOUT,
       now,
+      priorityRecoveryDrainSnapshot,
     });
     if (progressed) {
       return;

@@ -15,6 +15,9 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {answerKnownClusterIdentity} from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();

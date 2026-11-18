@@ -19,6 +19,8 @@ import {readReplaceHandoffAttempt,
   '../../../src/rebalancer/operation-workflow-replace-handoff-attempt.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   '../../../src/rebalancer/operation-workflow-owner-shared.js';
+import {evaluateRemovalLeadershipSafety} from
+  '../../../src/rebalancer/operation-workflow-removal-leadership-gate.js';
 import {applyUserTableLeaderPlacementCure,
   USER_TABLE_LEADER_PLACEMENT_CURE_STATE as CURE} from
   '../../../src/rebalancer/user-table-leader-placement-cure.js';
@@ -60,7 +62,7 @@ test('actual REPLACE handoff evaluator defers after acceptance until its target 
     const observer = observeConsumerDeliveries(f.leader.transport, (_, packet) =>
       packet?.type === MESSAGE.READ_REPLICA_MEMBERSHIP ||
       packet?.type === MESSAGE.STEP_DOWN_REPLICA);
-    const initial = await owner.evaluateReplaceNamedHandoffSafety(operation);
+    const initial = await evaluateRemovalLeadershipSafety(owner, operation);
     assert.equal(initial.classification, SAFETY.DEFER);
     assert.equal(initial.handoffRequest.requestReplicaId, target.replicaId);
     // Park the source in its real Ready send. The follower's named transfer
@@ -87,7 +89,7 @@ test('actual REPLACE handoff evaluator defers after acceptance until its target 
       assert.notEqual(target.role, RAFT_ROLE.LEADER);
       // The actual production evaluator reads its target's native membership,
       // not the separate majority-corroborated terminal completion owner.
-      const waiting = await owner.evaluateReplaceNamedHandoffSafety(operation);
+      const waiting = await evaluateRemovalLeadershipSafety(owner, operation);
       traceConsumer(t, 'replace-accepted-without-safety', {before, initial, accepted,
         waiting, attempt: readReplaceHandoffAttempt(owner, operation.operationId),
         status: statuses(f.group.services), requests: observer.evidence(),
@@ -105,7 +107,7 @@ test('actual REPLACE handoff evaluator defers after acceptance until its target 
       assert.equal(await f.group.waitFor(() =>
         target.raft.readStatus().role === RAFT_ROLE.LEADER), true,
       'post-measurement: actual native transfer elects the named target');
-      const current = await owner.evaluateReplaceNamedHandoffSafety(operation);
+      const current = await evaluateRemovalLeadershipSafety(owner, operation);
       traceConsumer(t, 'replace-fresh-safety', {current,
         status: statuses(f.group.services), requests: observer.evidence()});
       assert.equal(current.classification, SAFETY.SAFE);

@@ -141,6 +141,12 @@ test('T1: a joint configuration is refused to a bootstrap read and ' +
   try {
     const leader = cluster.leaderReplicaId();
     const leaving = FOUNDING.find((replicaId) => replicaId !== leader);
+    // A removal is admitted only while its resulting voters are a live
+    // quorum by the leader's own activity record (REMOVES_LIVE_QUORUM,
+    // raft-rs-conf-change-admission.js): a leader fresh from its election
+    // has heard no voter yet. A write every replica applied is the leader
+    // hearing them.
+    committedWrite(cluster, leader, 'joint-setup-heard-voters');
     const wire = bindingWireNumbers();
     cluster.proposeConfigurationChange([{
       changeType: wire.changeType.RemoveNode,

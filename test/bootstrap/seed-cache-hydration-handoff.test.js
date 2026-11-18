@@ -11,6 +11,8 @@
  * (test/partition/cdc-hydration-live-handoff.test.js); here the partitions
  * are recording doubles of that owner's two surfaces.
  */
+import {propagatePartitionCdcVector} from
+  '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {SeedCacheHydrationPhase} from
@@ -29,6 +31,8 @@ import {BootstrapNodeReadyRebalanceOwner} from
   '../../src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js';
 import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
 import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {beginDurableCdcInvocation, createDurableCdcEvent} from
+  '../topology/cdc-group-propagation-service-harness.js';
 
 const SEED_NODE_ID = 'seed-handoff-node';
 const LEADER_WAIT_REACHED = 'leader wait reached';
@@ -222,16 +226,19 @@ test('seed handoff: before the latency owners exist the lane retries a nodes eve
   };
   const bridge = new SeedRuntimeBridgeOwner({delegates});
   delegates.propagatePartitionCDCEvent = (service, event, context) =>
-    bridge.propagatePartitionCDCEvent(service, event, context);
+    propagatePartitionCdcVector(delegates.getLatencyTopology(),
+      BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING, service, event, context);
   const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: bridge});
   await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
-  const event = {tableName: TABLES.NODES, operation: 'UPDATE',
+  // The durable subscriber contract: one vector under a delivery invocation.
+  const event = createDurableCdcEvent({tableName: TABLES.NODES, operation: 'UPDATE',
     data: {node_id: 'remote-node', status: SERVICE_STATUS.ACTIVE,
-      ready_lease_expires_at: Date.now() + READY_LEASE_MS}};
+      ready_lease_expires_at: Date.now() + READY_LEASE_MS}});
   const refusals = [];
   try {
     for (let retry = 0; retry < LANE_RETRIES; retry += 1) {
-      await subscribers[0](event).catch((error) => refusals.push(error.message));
+      await subscribers[0]([event], beginDurableCdcInvocation())
+        .catch((error) => refusals.push(error.message));
     }
     assert.deepEqual({
       refusals,

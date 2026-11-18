@@ -2,7 +2,6 @@ import {
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   CONTROL_PLANE_FAILURE_REASON,
   getControlPlaneFailureSummary,
-  getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
 import {isControlPlanePublicationsWriteLeader} from './control-plane-publications-leadership.js';
@@ -29,8 +28,19 @@ import {
   buildControlPlaneConvergenceOutcome,
   buildCriticalControlPlaneConvergenceOptions,
   buildCriticalConvergenceErrorOutcome,
-  normalizeControlPlaneConvergenceRetryAfterMs,
 } from './membership-publication-control-plane-convergence.js';
+import {
+  MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT,
+  buildMembershipPublicationOwnerRecoveryWaitConvergence,
+  requireMembershipPublicationOwnerRecoveryWait,
+  resolveMembershipPublicationOwnerRecoveryWait,
+} from './membership-publication-owner-recovery-wait.js';
+import {
+  ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_WRITE_REQUEUE,
+  isActiveGateMembershipPublicationHandoffRetryAccepted,
+  resolveActiveGateMembershipPublicationDeferredReasonCode,
+  resolveActiveGateMembershipPublicationHandoffRetryAfterMs,
+} from './membership-publication-active-gate-deferred-outcome.js';
 import {SnapshotService} from './snapshot-service.js';
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_SCHEMA_VERSION = 1;
 const ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON = 'active_gate_handoff_owner_reconcile';
@@ -398,6 +408,8 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
     target: options.target || null,
     publicationRow,
     enqueued: options.enqueued === true,
+    ownerRecoveryWait:
+      requireMembershipPublicationOwnerRecoveryWait(options.ownerRecoveryWait),
     ...(Number.isFinite(options.retryAfterMs) && options.retryAfterMs > 0 ?
       {retryAfterMs: Math.floor(options.retryAfterMs)} :
       {}),
@@ -421,22 +433,6 @@ function buildActiveGateMembershipPublicationReconcileOutcome(
       } :
       {}),
   });
-}
-function resolveActiveGateMembershipPublicationHandoffRetryAfterMs(
-  error,
-  controlPlaneConvergence,
-) {
-  if (
-    Number.isFinite(controlPlaneConvergence?.retryAfterMs) &&
-    controlPlaneConvergence.retryAfterMs > 0
-  ) {
-    return normalizeControlPlaneConvergenceRetryAfterMs(
-      controlPlaneConvergence.retryAfterMs,
-    );
-  }
-  return normalizeControlPlaneConvergenceRetryAfterMs(
-    getControlPlaneRetryAfterMs(error),
-  );
 }
 function buildActiveGateMembershipPublicationDeferredContext(
   context,
@@ -494,100 +490,6 @@ function resolveActiveGateMembershipPublicationErrorOutcome(error) {
     return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.WRITE_DEFERRED;
   }
   return ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT;
-}
-function isActiveGateMembershipPublicationHandoffRetryAccepted(
-  rawEnqueueOutcome,
-  controlPlaneConvergence,
-) {
-  return rawEnqueueOutcome === true ||
-    controlPlaneConvergence?.pressureOutcome ===
-      CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED;
-}
-function resolveActiveGateMembershipPublicationDeferredReasonCode(
-  target,
-  controlPlaneConvergence,
-) {
-  const convergenceReasonCode = controlPlaneConvergence?.reasonCode;
-  if (
-    typeof convergenceReasonCode === 'string' &&
-    convergenceReasonCode.length > 0
-  ) {
-    return convergenceReasonCode;
-  }
-  const handoffReasonCode = target?.handoffContract?.reasonCode;
-  return typeof handoffReasonCode === 'string' &&
-    handoffReasonCode.length > 0 ?
-    handoffReasonCode :
-    null;
-}
-function resolveActiveGateMembershipPublicationOwnerRecoveryOwnerKey(
-  coordinator,
-  target,
-) {
-  if (typeof coordinator?.buildOwnerKey === 'function') {
-    const ownerKey = coordinator.buildOwnerKey();
-    if (typeof ownerKey === 'string' && ownerKey.length > 0) {
-      return ownerKey;
-    }
-  }
-  const pendingRecoveryNodeIds = normalizeNodeIdList(
-    target?.pendingRecoveryNodeIds,
-  );
-  return pendingRecoveryNodeIds[0] ||
-    ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_TEXT;
-}
-function resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
-  queueOutcome,
-  enqueued,
-) {
-  const pressureOutcome = queueOutcome?.pressureOutcome;
-  return typeof pressureOutcome === 'string' &&
-    pressureOutcome.length > 0 ?
-    pressureOutcome :
-    (
-      enqueued === true ?
-        CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED :
-        CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_DEFERRED
-    );
-}
-function buildActiveGateMembershipPublicationOwnerRecoveryWakeConvergence(
-  coordinator,
-  target,
-  enqueued,
-) {
-  const queueOutcome =
-    coordinator?.lastControlPlaneConvergenceQueueOutcome || null;
-  return buildControlPlaneConvergenceOutcome({
-    pressureOutcome:
-      resolveActiveGateMembershipPublicationOwnerRecoveryPressureOutcome(
-        queueOutcome,
-        enqueued,
-      ),
-    ownerKey:
-      resolveActiveGateMembershipPublicationOwnerRecoveryOwnerKey(
-        coordinator,
-        target,
-      ),
-    operation:
-      CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.OWNER_RECOVERY_WAKE,
-    queueOutcome: queueOutcome?.queueOutcome,
-    reasonCode:
-      resolveActiveGateMembershipPublicationDeferredReasonCode(
-        target,
-        queueOutcome,
-      ),
-    retryAfterMs: normalizeControlPlaneConvergenceRetryAfterMs(
-      queueOutcome?.retryAfterMs ?? target?.handoffContract?.retryAfterMs,
-    ),
-    pressureReason: queueOutcome?.pressureReason,
-  });
-}
-function isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(
-  target = null,
-) {
-  return target?.handoffContract?.nextAction ===
-    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-    target.pendingRecoveryCount > 0;
 }
 async function drainActiveGateMembershipPublicationSnapshotQueue() {
   const queuePressureDetected = SnapshotService.isQueuePressureDetected();
@@ -687,31 +589,17 @@ async function reconcileActiveGateMembershipPublication(
     }
   }
   if (target.reconcileRequired !== true) {
+    // The owner-recovery wait never re-enqueues itself: see
+    // membership-publication-owner-recovery-wait.js for what ends it.
     const ownerRecoveryWait =
-      isActiveGateMembershipPublicationOwnerRecoveryWaitTarget(target);
-    const drainedSnapshotQueue = ownerRecoveryWait ?
+      resolveMembershipPublicationOwnerRecoveryWait(target);
+    const awaitingRecovery = ownerRecoveryWait ===
+      MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT.AWAITING_RECOVERY_PROGRESS;
+    const enqueued = awaitingRecovery ?
       await drainActiveGateMembershipPublicationSnapshotQueue() :
       false;
-    const rawEnqueueOutcome =
-      ownerRecoveryWait &&
-      typeof coordinator?.enqueueClusterMembershipReconcile ===
-        'function' ?
-        coordinator.enqueueClusterMembershipReconcile(
-          ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
-          {
-            [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-              .PUBLICATION_ACTIVE_GATE_HANDOFF]: publicationActiveGateHandoff,
-          },
-        ) :
-        false;
-    const enqueued =
-      drainedSnapshotQueue ||
-      isActiveGateMembershipPublicationHandoffRetryAccepted(
-        rawEnqueueOutcome,
-        coordinator?.lastControlPlaneConvergenceQueueOutcome,
-      );
-    const controlPlaneConvergence = ownerRecoveryWait ?
-      buildActiveGateMembershipPublicationOwnerRecoveryWakeConvergence(
+    const controlPlaneConvergence = awaitingRecovery ?
+      buildMembershipPublicationOwnerRecoveryWaitConvergence(
         coordinator,
         target,
         enqueued,
@@ -731,6 +619,7 @@ async function reconcileActiveGateMembershipPublication(
           ),
         retryAfterMs: controlPlaneConvergence?.retryAfterMs,
         controlPlaneConvergence,
+        ownerRecoveryWait,
       },
     );
   }
@@ -773,6 +662,8 @@ async function reconcileActiveGateMembershipPublication(
               publicationRow: visibleRow,
               target,
               enqueued: drainedSnapshotQueue,
+              ownerRecoveryWait:
+                MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT.NOT_WAITING,
               controlPlaneConvergence: buildControlPlaneConvergenceOutcome({
                 pressureOutcome:
                   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME.CRITICAL_ADMITTED,
@@ -815,6 +706,7 @@ async function reconcileActiveGateMembershipPublication(
     const rawEnqueueOutcome = coordinator.enqueueClusterMembershipReconcile(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
       deferredContext,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_WRITE_REQUEUE,
     );
     const controlPlaneConvergence =
       coordinator.lastControlPlaneConvergenceQueueOutcome ||
@@ -840,6 +732,8 @@ async function reconcileActiveGateMembershipPublication(
           deferredPublicationRow,
         target,
         enqueued,
+        ownerRecoveryWait:
+          MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT.NOT_WAITING,
         reasonCode:
           resolveActiveGateMembershipPublicationDeferredReasonCode(
             target,
@@ -872,6 +766,7 @@ async function reconcileActiveGateMembershipPublication(
     const rawEnqueueOutcome = coordinator.enqueueClusterMembershipReconcile(
       ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_REASON,
       deferredContext,
+      ACTIVE_GATE_MEMBERSHIP_PUBLICATION_DEFERRED_WRITE_REQUEUE,
     );
     const queueOutcome =
       coordinator.lastControlPlaneConvergenceQueueOutcome || null;
@@ -901,6 +796,8 @@ async function reconcileActiveGateMembershipPublication(
           deferredPublicationRow,
         target,
         enqueued,
+        ownerRecoveryWait:
+          MEMBERSHIP_PUBLICATION_OWNER_RECOVERY_WAIT.NOT_WAITING,
         reasonCode:
           resolveActiveGateMembershipPublicationDeferredReasonCode(
             target,

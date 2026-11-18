@@ -137,6 +137,8 @@ function createRebalancer({infoLogs, mockCoordinator}) {
   });
 
   rebalancer.initialize();
+  // Moves execute only under the rebalancer's own leadership.
+  rebalancer.setLeader(true);
   rebalancer.logger = {
     info: (message, fields) => infoLogs.push({message, ...fields}),
     debug: () => {},

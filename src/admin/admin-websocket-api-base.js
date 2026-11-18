@@ -414,6 +414,9 @@ class AdminWebSocketAPIBase {
         return this.handleServiceDiagnostics(reply);
       },
     );
+    this.fastify.get(ADMIN_ROUTE.NODE_HEALTH, async (request, reply) => {
+      return this.handleNodeHealth(request, reply);
+    });
     this.fastify.get(ADMIN_ROUTE.CDC_DIAGNOSTICS, async (_request, reply) => {
       return this.handleCdcDiagnostics(reply);
     });

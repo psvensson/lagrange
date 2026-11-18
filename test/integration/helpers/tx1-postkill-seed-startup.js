@@ -9,21 +9,22 @@ import path from 'node:path';
 import {readDurableNodesTableSnapshot, readDurableServicesIdentitySnapshot} from
   '../../../src/bootstrap/rejoin-hints-durable-evidence.js';
 import {
-  readPersistedLocalClusterId,
   readRejoinHints,
   resolveAutoRejoinStartupDecision,
 } from '../../../src/bootstrap/rejoin-hints.js';
+import {readLocalClusterIdentity} from
+  '../../../src/bootstrap/local-cluster-identity.js';
 import {MEMBERSHIP_OWNER_OUTCOME_TYPE} from
   '../../../src/bootstrap/rejoin-hints-constants.js';
 
 const {dataDir} = JSON.parse(fs.readFileSync(process.stdin.fd, 'utf8'));
 assert.equal(typeof dataDir, 'string');
 const hints = await readRejoinHints(dataDir);
-const clusterId = await readPersistedLocalClusterId(dataDir);
+const clusterId = (await readLocalClusterIdentity(dataDir)).heldValue;
 const nodeId = hints?.localNodeId ?? 'tx1-m1-seed';
 const nodeAddress = hints?.localNodeAddress ?? null;
 const decision = await resolveAutoRejoinStartupDecision({
-  dataDir, nodeId, nodeAddress, expectedClusterId: clusterId || undefined,
+  dataDir, nodeId, nodeAddress,
   probePeerAddress: async () => false,
 });
 const partitionRoot = path.join(dataDir, 'partitions');

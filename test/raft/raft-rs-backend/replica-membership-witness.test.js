@@ -27,6 +27,8 @@ const PARTITION_ID = 'replica-membership-witness-partition';
 const FOUNDING = Object.freeze(['replica-a', 'replica-b', 'replica-c']);
 const SETTLE_ROUNDS = 400;
 
+const LIVENESS_ROUNDS = 3;
+
 function electedCluster() {
   const cluster = new PartitionNodeCluster({
     partitionId: PARTITION_ID,
@@ -35,6 +37,9 @@ function electedCluster() {
   cluster.tickers = [FOUNDING[0]];
   assert.ok(cluster.settle(() => cluster.leaderReplicaId() !== null,
     {rounds: SETTLE_ROUNDS}), 'the partition elects a leader');
+  // The leader hears its voters answer before a removal is asked of it: its
+  // admission counts only voters it heard from (REMOVES_LIVE_QUORUM).
+  cluster.settle(() => false, {rounds: LIVENESS_ROUNDS});
   return cluster;
 }
 

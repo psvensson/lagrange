@@ -43,6 +43,8 @@ const TERMINAL_TRANSITION_REPAIR_RETRY_MAX_DELAY_MS = TIME_MS.SECOND * 30;
 const TERMINAL_TRANSITION_REPAIR_RETRY_BACKOFF_MULTIPLIER = 2;
 const FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY =
   'failed-create-cleanup-release-recovery-scan';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 const TERMINAL_TRANSITION_REPAIR_CAUSE = Object.freeze({
   CONFIRMATION_FAILED: 'confirmation_failed',
   CONFIRMATION_DEFERRED: 'confirmation_deferred',
@@ -586,10 +588,10 @@ async function runFailedCreateCleanupReleaseAttempt(
   operationId,
   heldState,
 ) {
-  const authoritative = await owner.repository
-    .queryReplicaOperationPersistenceAuthorityOperation(
+  const authoritative = presentOperationOf(await owner.repository
+    .queryReplicaOperationPersistenceAuthorityObservation(
       heldState.projectedOperation,
-    );
+    ));
   if (!isTerminalFailedCreateCleanupRemove(authoritative) ||
       !await deliverFailedCreateCleanupRelease(owner, authoritative)) {
     rearmTerminalTransitionRepairIfHeld(owner, operationId);
@@ -627,10 +629,10 @@ async function resolveRefusedTerminalTransitionRepairPersist(
   operationId,
   heldState,
 ) {
-  const authoritativeOperation =
-    await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
+  const authoritativeOperation = presentOperationOf(
+    await owner.repository.queryReplicaOperationPersistenceAuthorityObservation(
       heldState.projectedOperation,
-    );
+    ));
   if (
     authoritativeOperation &&
     owner.repository.isAuthoritativeOperationTerminal(authoritativeOperation)

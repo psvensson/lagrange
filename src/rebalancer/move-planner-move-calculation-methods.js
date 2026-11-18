@@ -1,7 +1,4 @@
 import {NUM} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
-import {isExplicitNonLeaderRaftRole} from
-  '../raft/replica-voter-readiness.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {isFailedCreateCleanupToken} from
@@ -365,45 +362,9 @@ class MovePlannerMoveCalculationMethods {
     // leadership move. This never changes WHICH replicas are removed (the
     // surplus set is fixed by targetNodes) — only whether the leader is drained
     // as a REPLACE source vs a plain REMOVE, and which same-node replica drops.
-    const partitionLeaderNodeId =
-      this.resolveRemovalSourcePartitionLeaderNodeId();
-    const partitionLeaderReplicaId =
-      this.resolveRemovalSourcePartitionLeaderReplicaId();
-    const isLeaderRemovalCandidate = (replica) => {
-      if (!replica) {
-        return false;
-      }
-      const candidateReplicaId =
-        replica.replica_id || replica.service_id || null;
-      if (
-        partitionLeaderReplicaId &&
-        candidateReplicaId === partitionLeaderReplicaId
-      ) {
-        return true;
-      }
-      const role =
-        typeof replica.raft_role === 'string' ?
-          replica.raft_role.trim().toLowerCase() :
-          null;
-      if (role === RAFT_ROLE.LEADER) {
-        return true;
-      }
-      // A partition leader_node_id identifies the hosting node, not the
-      // individual replica. During seed formation several replicas can share
-      // that node, so applying the node fallback to an explicit follower would
-      // classify every co-located replica as the leader and restore first-wins
-      // source selection. Preserve per-replica role evidence; use the node-level
-      // owner only when the service row has no recognized role yet.
-      if (isExplicitNonLeaderRaftRole(role)) {
-        return false;
-      }
-      const candidateNodeId = replica.node_id || replica.nodeId || null;
-      return (
-        !!partitionLeaderNodeId &&
-        !!candidateNodeId &&
-        candidateNodeId === partitionLeaderNodeId
-      );
-    };
+    // The planner's own live leadership decides when it holds it; cached row
+    // evidence only without it (buildRemovalSourceLeaderClassifier).
+    const isLeaderRemovalCandidate = this.buildRemovalSourceLeaderClassifier();
 
     // Group active placement replicas by node for removal selection
     const replicasByNode = new Map();
@@ -820,6 +781,9 @@ class MovePlannerMoveCalculationMethods {
         candidateRemoves,
         resolvePartitionRow,
         observedMembershipEpoch,
+        recordDecision: serializeCriticalReplace ? (decision) =>
+          this.logPrioritySpreadPlanDecision(decision, replaceCandidates) :
+          null,
       });
       const consumedRemoveReplicaIds = new Set();
       const relocationCure = resolvePlacementCure(

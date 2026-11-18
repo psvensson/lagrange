@@ -40,7 +40,7 @@ test('CDC subscription - only leader replicates events', async (_t) => {
   // Mock partition
   const partition = new EventEmitter();
   const cdcSubscribers = [];
-  partition.subscribeToCDC = (handler) => {
+  partition.subscribeToCDCWithHandshake = async (handler) => {
     cdcSubscribers.push(handler);
   };
 
@@ -48,7 +48,7 @@ test('CDC subscription - only leader replicates events', async (_t) => {
   for (const messageGroup of [leaderMessageGroup, followerMessageGroup]) {
     await messageGroup.subscribeToCDC('nodes');
 
-    partition.subscribeToCDC(async (cdcEvent) => {
+    void partition.subscribeToCDCWithHandshake(async (cdcEvent) => {
       if (cdcEvent.tableName === 'nodes') {
         // Only apply CDC event if this message group is the leader
         if (messageGroup.isLeaderReplica()) {
@@ -94,14 +94,14 @@ test('CDC subscription - follower does not replicate', async (_t) => {
   // Mock partition
   const partition = new EventEmitter();
   const cdcSubscribers = [];
-  partition.subscribeToCDC = (handler) => {
+  partition.subscribeToCDCWithHandshake = async (handler) => {
     cdcSubscribers.push(handler);
   };
 
   // Setup CDC subscription
   await followerMessageGroup.subscribeToCDC('nodes');
 
-  partition.subscribeToCDC(async (cdcEvent) => {
+  void partition.subscribeToCDCWithHandshake(async (cdcEvent) => {
     if (cdcEvent.tableName === 'nodes') {
       // Only apply if leader
       if (followerMessageGroup.isLeaderReplica()) {

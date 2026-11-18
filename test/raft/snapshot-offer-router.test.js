@@ -1,3 +1,4 @@
+import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -218,7 +219,8 @@ test('replaceLocalReplicaService swaps where registerExistingReplica ' +
     nodeId: 'offer-router-node',
     systemTableCache: {filter: () => []},
     cdcIntegrationService: {},
-    replicaStateMachine: {},
+    // The lifecycle owner's event port (the handler subscribes to it).
+    replicaStateMachine: new EventEmitter(),
     createPartitionService: async () => ({}),
   });
   const original = {partitionId: PARTITION_ID, tableName: STATE_TABLE};

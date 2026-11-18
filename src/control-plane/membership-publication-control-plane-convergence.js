@@ -140,6 +140,7 @@ function buildCriticalConvergenceErrorOutcome(error, ownerKey, operation) {
 export {
   CONTROL_PLANE_CONVERGENCE_FIELD,
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
+  CONTROL_PLANE_CRITICAL_CONVERGENCE_RETRY_AFTER_MS,
   buildControlPlaneConvergenceOutcome,
   buildCriticalControlPlaneConvergenceOptions,
   buildCriticalConvergenceErrorOutcome,

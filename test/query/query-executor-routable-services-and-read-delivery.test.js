@@ -1061,10 +1061,13 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     reconnectIntervalMs,
     getConnectionState: () => 'connected',
     deliver: async (address, _message, options) => {
-      deliveries.push({address, timeoutMs: options?.timeoutMs});
+      deliveries.push({address, timeoutMs: options?.timeoutMs,
+        ackTimeoutMs: options?.ackTimeoutMs});
+      // The connected peer never acknowledged: the router's ACK timeout.
       return buildDeliveryEnvelope(
         {
           acknowledged: false,
+          acknowledgement: 'unacknowledged',
           error: 'Message timeout',
           errorCode: 'ROUTER_MESSAGE_TIMEOUT',
           retryAfterMs: reconnectIntervalMs,
@@ -1099,10 +1102,14 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
   t.equal(result.success, false,
     'read should defer when the connected recovery candidate does not ack');
   t.same(
-    deliveries,
-    [{address: staleAddress, timeoutMs: reconnectIntervalMs}],
+    deliveries.map(({address, ackTimeoutMs}) => ({address, ackTimeoutMs})),
+    [{address: staleAddress, ackTimeoutMs: reconnectIntervalMs}],
     'connected stale recovery candidate should receive a bounded ack budget',
   );
+  t.ok(deliveries[0].timeoutMs > reconnectIntervalMs &&
+    deliveries[0].timeoutMs <= queryTimeoutMs,
+  'the ACK bound is not the delivery lifetime: the answer wait keeps the ' +
+    `candidate's share of the query budget (${deliveries[0].timeoutMs}ms)`);
   t.equal(
     result.errorCode,
     'ROUTER_MESSAGE_TIMEOUT',

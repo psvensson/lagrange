@@ -25,6 +25,13 @@ async function advanceClockAndDrainRetries(clock, ms) {
   }
 }
 
+// The production restart path: the coordinator timer's step-budget sweep,
+// then its level-triggered orphan sweep (rebalance-coordinator-lifecycle.js).
+async function runRestartTimerTick(coordinator) {
+  await coordinator.checkTimeouts();
+  await coordinator.reconcileOrphanedOperations();
+}
+
 const SYSTEM_PARTITION_BY_TABLE = Object.freeze({
   partitions: 'partitions-p1',
   tables: 'tables-p1',
@@ -39,7 +46,12 @@ function serviceRow(index) {
     node_id: `node-${index}`,
     service_type: 'partition',
     status: 'active',
-    raft_role: index === 1 ? 'leader' : 'follower',
+    // The removed replica (r1) is a follower: these cells are about the
+    // policy floor and its retained retry, not leadership; a leading r1
+    // would be held by the removal leadership gate (2026-11-11) for a
+    // named transfer this fixture group (no voters beyond its leader)
+    // cannot model.
+    raft_role: index === 2 ? 'leader' : 'follower',
     address: `node-${index}/partition/${PARTITION}-r${index}`,
   };
 }
@@ -401,7 +413,8 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
           assert.equal(retained.completedAt, null);
 
           // Simulate coordinator restart WHILE the policy fault is still active:
-          // recovery must not authorize removal or fail the operation, and must retain the retry timer.
+          // the production restart path (the coordinator timer tick) must not
+          // authorize removal or fail the operation, and must retain the retry timer.
           await world.coordinator.shutdown();
           restartedCoordinator = buildCoordinatorForCache({
             clock: world.clock,
@@ -410,12 +423,14 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             removals: world.removals,
             Deletions: world.sourceDeletions,
           });
-          const recoveryDuringFault = await restartedCoordinator.handleRecovery();
-          assert.equal(
-            recoveryDuringFault.markedFailed,
-            0,
-            'pending REMOVE must not be marked failed on coordinator restart during policy fault',
+          await runRestartTimerTick(restartedCoordinator);
+          const afterRestart = await restartedCoordinator.getOperation(operation.operationId);
+          assert.notEqual(
+            afterRestart.workflowStep,
+            'failed',
+            'pending REMOVE must not be failed on coordinator restart during policy fault',
           );
+          assert.equal(afterRestart.completedAt, null);
           assert.deepEqual(world.removals, []);
           assert.deepEqual(world.sourceDeletions, []);
           assert.equal(
@@ -507,7 +522,8 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
           assert.notEqual(retained.workflowStep, 'failed');
           assert.equal(retained.completedAt, null);
 
-          // Simulate coordinator restart WHILE the policy fault is still active.
+          // Simulate coordinator restart WHILE the policy fault is still active;
+          // the production restart path is the coordinator timer tick.
           await world.coordinator.shutdown();
           restartedCoordinator = buildCoordinatorForCache({
             clock: world.clock,
@@ -516,8 +532,11 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             removals: world.removals,
             Deletions: world.sourceDeletions,
           });
-          const recoveryDuringFault = await restartedCoordinator.handleRecovery();
-          assert.equal(recoveryDuringFault.markedFailed, 0);
+          await runRestartTimerTick(restartedCoordinator);
+          const afterRestart = await restartedCoordinator.getOperation(operation.operationId);
+          assert.notEqual(afterRestart.workflowStep, 'failed',
+            'pending REMOVE must not be failed on coordinator restart during policy fault');
+          assert.equal(afterRestart.completedAt, null);
           assert.deepEqual(world.removals, []);
           assert.deepEqual(world.sourceDeletions, []);
           assert.equal(

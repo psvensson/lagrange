@@ -34,6 +34,11 @@ spec:
           {{- include "lagrange-node.containerCommon" . | nindent 10 }}
           env:
             {{- include "lagrange-node.envCommon" . | nindent 12 }}
+            # The declared formation size: the intended total node count of
+            # the cluster this seed founds (1 seed + joiners.replicas). Only
+            # the seed declares it; the runtime has no default.
+            - name: LAGRANGE_FORMATION_TARGET_NODE_COUNT
+              value: {{ add 1 (int .Values.joiners.replicas) | quote }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

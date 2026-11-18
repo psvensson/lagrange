@@ -127,16 +127,40 @@ test('below its participation gate an absence is a lag, not a removal',
       'absent once the gate opened: its removal applied');
   });
 
-test('a typed refusal of the read is the group unavailable to it',
-  async (t) => {
-    const stub = stubService([{
-      kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
-      reason: COMMITTED_MEMBERSHIP_REFUSAL.HELD,
-    }]);
-    t.same(await awaitReplicaConsensusExit(stub.service,
-      {replicaId: SELF, backstopMs: LONG_MS}),
-    {reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_UNAVAILABLE});
-  });
+test('a typed refusal of the read, a read that throws and an unresolved ' +
+  'voter are no evidence: the wait goes on to its bound (2026-11-11)',
+async (t) => {
+  // The backstop timer does not hold the process open; this test does.
+  const keepAlive = setTimeout(() => {}, LONG_MS);
+  t.teardown(() => clearTimeout(keepAlive));
+  const refused = stubService([{
+    kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+    reason: COMMITTED_MEMBERSHIP_REFUSAL.HELD,
+  }]);
+  t.same(await awaitReplicaConsensusExit(refused.service,
+    {replicaId: SELF, backstopMs: 20}),
+  {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP,
+    lastObservation: {state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
+      gateOpen: null}}, 'a refused read: the bound, never an exit');
+  const throwing = stubService([committed({voters: [SELF_PEER]})]);
+  throwing.service.raft[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP] = () => {
+    throw new Error('port closed');
+  };
+  t.same(await awaitReplicaConsensusExit(throwing.service,
+    {replicaId: SELF, backstopMs: 20}),
+  {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP,
+    lastObservation: {state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
+      gateOpen: null}}, 'a read that throws: the bound, never an exit');
+  // A configuration naming a voter this replica cannot resolve, past its
+  // gate: nothing is concluded (before 2026-11-11 this read as its removal).
+  const unresolved = stubService([{...committed({voters: [OTHER_PEER]}),
+    identities: {[OTHER_PEER]: null}}]);
+  t.same(await awaitReplicaConsensusExit(unresolved.service,
+    {replicaId: SELF, backstopMs: 20}),
+  {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP,
+    lastObservation: {state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNRESOLVED,
+      gateOpen: true}}, 'an unresolved voter: the bound, never an exit');
+});
 
 test('the backstop bounds a removal nobody proposes; release ends it at ' +
   'once; no port means nothing to wait for', async (t) => {

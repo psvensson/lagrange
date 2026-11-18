@@ -60,6 +60,7 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   CUTOVER_PAUSED: 'partition_write_cutover_paused',
   CDC_CAPACITY: 'partition_write_cdc_capacity',
   CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
+  CDC_RETIREMENT_RESERVE_EXHAUSTED: 'partition_write_cdc_retirement_reserve_exhausted',
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
@@ -88,6 +89,7 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.RESERVED,
   REFUSAL.CUTOVER_PAUSED,
   REFUSAL.CDC_CAPACITY,
+  REFUSAL.CDC_RETIREMENT_RESERVE_EXHAUSTED,
 ]);
 
 // Why pending writes are released without an answer from consensus: their
@@ -200,6 +202,21 @@ function pickTypedWriteAnswer(answer) {
  */
 function isWriteOutcomeUnknown(answer) {
   return answer?.failureCode === REFUSAL.OUTCOME_UNKNOWN;
+}
+
+/**
+ * Whether a statement failure carries an unknown write outcome, on itself or
+ * on a participant (the query layer's buildParticipantFailureEntry keeps each
+ * participant's failureCode). Only a re-delivery under that entryId resolves
+ * it; a client re-issue of the statement is a second write.
+ * @param {*} failure - A statement failure (result or thrown error).
+ * @return {boolean} Whether any part of it is the typed unknown outcome.
+ */
+function hasWriteOutcomeUnknown(failure) {
+  return isWriteOutcomeUnknown(failure) ||
+    isWriteOutcomeUnknown(failure?.firstFailedParticipant) ||
+    (Array.isArray(failure?.participantFailures) &&
+      failure.participantFailures.some(isWriteOutcomeUnknown));
 }
 
 /**
@@ -581,6 +598,7 @@ export {
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
+  hasWriteOutcomeUnknown,
   pickTypedWriteAnswer,
   resolvePartitionWriteCommitMode,
 };

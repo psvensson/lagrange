@@ -1,5 +1,6 @@
 import {STATE_ABSENT} from '../utils/state-field-read.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {isAnsweredIncompleteOperationList} from './incomplete-operation-list-observation.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
@@ -29,13 +30,23 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = REBALANCE_COORDINATOR_SHARED;
 
+/**
+ * The ADD budget count with the list observation it was counted from: a
+ * count is known only on the owner's answer (null when DEFERRED).
+ * @param {Object} coordinator
+ * @param {Object} [options]
+ * @return {Promise<{count: (number|null), observation: Object}>}
+ */
 async function getConcurrentAddCount(coordinator, options = {}) {
-  const inFlight = await coordinator.queryIncompleteOperations(options);
-  return (await filterConcurrentAddBudgetOperations(
-    coordinator,
-    inFlight,
-    options,
-  )).length;
+  const observation = await coordinator.queryIncompleteOperations(options);
+  if (!isAnsweredIncompleteOperationList(observation)) {
+    return Object.freeze({count: null, observation});
+  }
+  return Object.freeze({
+    count: (await filterConcurrentAddBudgetOperations(
+      coordinator, observation.operations, options)).length,
+    observation,
+  });
 }
 
 function getAddBudgetOperationPartitionId(coordinator, operation = null) {
@@ -377,12 +388,25 @@ function isAddBudgetOperationPastWorkflowTimeout(coordinator, operation = null) 
   return coordinator.nowFn() - observedAtMs >= timeoutMs;
 }
 
+/**
+ * The ADD budget counts by priority class, with the named observation of
+ * the list read they were counted from: a DEFERRED observation carries no
+ * list, so its counts are zeros that mean "unknown", never "nothing in
+ * flight"; a gate that consumes the counts decides on `observation` first.
+ * @param {Object} coordinator
+ * @param {Object} [options]
+ * @return {Promise<Object>}
+ */
 async function getConcurrentAddCountByPriorityClass(coordinator, options = {}) {
-  const inFlight = await coordinator.queryIncompleteOperations(options);
-  return buildConcurrentAddCountByPriorityClass(
-    coordinator,
-    await filterConcurrentAddBudgetOperations(coordinator, inFlight, options),
-  );
+  const observation = await coordinator.queryIncompleteOperations(options);
+  return Object.freeze({
+    ...buildConcurrentAddCountByPriorityClass(
+      coordinator,
+      await filterConcurrentAddBudgetOperations(
+        coordinator, observation.operations, options),
+    ),
+    observation,
+  });
 }
 
 function isConcurrentAddBudgetOperation(coordinator, operation) {
@@ -401,11 +425,41 @@ function isConcurrentAddBudgetOperation(coordinator, operation) {
   return !coordinator.isReplaceRemoveDispatchPhase(operation);
 }
 
+/**
+ * The REMOVE budget count with the list observation it was counted from
+ * (null when DEFERRED).
+ * @param {Object} coordinator
+ * @param {Object} [options]
+ * @return {Promise<{count: (number|null), observation: Object}>}
+ */
 async function getConcurrentRemoveCount(coordinator, options = {}) {
-  const inFlight = await coordinator.queryIncompleteOperations(options);
-  return inFlight.filter(
-    (operation) => operation?.type === OperationType.REMOVE,
-  ).length;
+  const observation = await coordinator.queryIncompleteOperations(options);
+  return Object.freeze({
+    count: isAnsweredIncompleteOperationList(observation) ?
+      observation.operations.filter(
+        (operation) => operation?.type === OperationType.REMOVE).length :
+      null,
+    observation,
+  });
+}
+
+/**
+ * Whether an unanswered list may still admit: only the owner's
+ * contained-priority-recovery exception, and only while the cache
+ * projection shows nothing in flight either (the projection may narrow the
+ * exception, never widen admission).
+ * @param {Object} coordinator
+ * @param {string} partitionId
+ * @param {Object} observation - The DEFERRED list observation.
+ * @param {number} cachedOperationCount
+ * @return {boolean}
+ */
+function admitsUnansweredListUnderContainedPressure(
+  coordinator, partitionId, observation, cachedOperationCount,
+) {
+  return cachedOperationCount === 0 &&
+    shouldAllowPriorityRecoveryDeferredObservation(
+      coordinator, partitionId, observation);
 }
 
 async function executeReplicaOperationsRead(coordinator, sql, params = []) {
@@ -422,25 +476,20 @@ async function resolveAuthoritativeAddAdmission(
     partitionId: options.partitionId,
     visibilityReadMode,
   };
-  const authoritativeOperations = await filterConcurrentAddBudgetOperations(
-    coordinator,
-    await coordinator.queryIncompleteOperations(authoritativeReadOptions),
-    authoritativeReadOptions,
-  );
-  const authoritativeCount = authoritativeOperations.length;
   const authoritativeObservation =
-    coordinator.getIncompleteOperationObservation();
+    await coordinator.queryIncompleteOperations(authoritativeReadOptions);
   coordinator.reconcileIncompleteOperationEmptyQueryDelay(
     authoritativeObservation,
   );
-  if (
-    coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-      authoritativeObservation,
-    )
-  ) {
+  if (!isAnsweredIncompleteOperationList(authoritativeObservation)) {
     return false;
   }
-  return authoritativeCount < resolveRuntimeServicePlacementReservedAddLimit(
+  const authoritativeOperations = await filterConcurrentAddBudgetOperations(
+    coordinator,
+    authoritativeObservation.operations,
+    authoritativeReadOptions,
+  );
+  return authoritativeOperations.length < resolveRuntimeServicePlacementReservedAddLimit(
     coordinator,
     authoritativeOperations,
     concurrentAddLimit,
@@ -555,29 +604,16 @@ async function canStartAddOperation(coordinator, options = {}) {
       REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT,
     );
   }
-  const count = await getConcurrentAddCount(coordinator, {
+  const {count, observation} = await getConcurrentAddCount(coordinator, {
     partitionId: options.partitionId,
   });
-  const incompleteOperationObservation =
-    coordinator.getIncompleteOperationObservation();
-  coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-    incompleteOperationObservation,
-  );
-  if (
-    shouldAllowPriorityRecoveryDeferredObservation(
-      coordinator,
-      options.partitionId,
-      incompleteOperationObservation,
-    )
-  ) {
-    return count < cachedCandidateEffectiveLimit;
-  }
-  if (
-    coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-      incompleteOperationObservation,
-    )
-  ) {
-    return false;
+  coordinator.reconcileIncompleteOperationEmptyQueryDelay(observation);
+  if (!isAnsweredIncompleteOperationList(observation)) {
+    // Unanswered: the count is unknown. Only the owner's contained-pressure
+    // exception admits, against nothing in flight; otherwise hold.
+    return admitsUnansweredListUnderContainedPressure(
+      coordinator, options.partitionId, observation, cachedOperationCount,
+    ) && 0 < cachedCandidateEffectiveLimit;
   }
   return count < cachedCandidateEffectiveLimit;
 }
@@ -637,27 +673,12 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
         visibilityReadMode:
           REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
-    const authoritativeObservation = coordinator.getIncompleteOperationObservation();
     coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-      authoritativeObservation,
+      authoritativeCounts.observation,
     );
-    if (
-      shouldAllowPriorityRecoveryDeferredObservation(
-        coordinator,
-        options.partitionId,
-        authoritativeObservation,
-      )
-    ) {
-      return isPriorityCountsAdmitted(authoritativeCounts);
-    }
-    if (
-      coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-        authoritativeObservation,
-      )
-    ) {
-      return false;
-    }
-    return isPriorityCountsAdmitted(authoritativeCounts);
+    // The cache shows operations in flight, so an unanswered recheck holds.
+    return isAnsweredIncompleteOperationList(authoritativeCounts.observation) &&
+      isPriorityCountsAdmitted(authoritativeCounts);
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||
@@ -671,26 +692,11 @@ async function canStartPriorityAddOperation(coordinator, options = {}) {
   const counts = await getConcurrentAddCountByPriorityClass(coordinator, {
     partitionId: options.partitionId,
   });
-  const incompleteOperationObservation =
-    coordinator.getIncompleteOperationObservation();
-  coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-    incompleteOperationObservation,
-  );
-  if (
-    shouldAllowPriorityRecoveryDeferredObservation(
-      coordinator,
-      options.partitionId,
-      incompleteOperationObservation,
-    )
-  ) {
-    return isPriorityCountsAdmitted(counts);
-  }
-  if (
-    coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-      incompleteOperationObservation,
-    )
-  ) {
-    return false;
+  coordinator.reconcileIncompleteOperationEmptyQueryDelay(counts.observation);
+  if (!isAnsweredIncompleteOperationList(counts.observation)) {
+    return admitsUnansweredListUnderContainedPressure(
+      coordinator, options.partitionId, counts.observation, cachedOperationCount,
+    ) && isPriorityCountsAdmitted(counts);
   }
   return isPriorityCountsAdmitted(counts);
 }
@@ -720,23 +726,16 @@ async function canStartRemoveOperation(coordinator, options = {}) {
     ) {
       return false;
     }
-    const authoritativeCount = await getConcurrentRemoveCount(coordinator, {
+    const authoritative = await getConcurrentRemoveCount(coordinator, {
       partitionId: options.partitionId,
       visibilityReadMode:
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
     });
-    const authoritativeObservation = coordinator.getIncompleteOperationObservation();
     coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-      authoritativeObservation,
+      authoritative.observation,
     );
-    if (
-      coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-        authoritativeObservation,
-      )
-    ) {
-      return false;
-    }
-    return authoritativeCount < coordinator.config.maxConcurrentRemoves;
+    return isAnsweredIncompleteOperationList(authoritative.observation) &&
+      authoritative.count < coordinator.config.maxConcurrentRemoves;
   }
   const bypassEmptyQueryDelay =
     options?.bypassEmptyQueryDelay === true ||
@@ -747,29 +746,14 @@ async function canStartRemoveOperation(coordinator, options = {}) {
   ) {
     return false;
   }
-  const count = await getConcurrentRemoveCount(coordinator, {
+  const {count, observation} = await getConcurrentRemoveCount(coordinator, {
     partitionId: options.partitionId,
   });
-  const incompleteOperationObservation =
-    coordinator.getIncompleteOperationObservation();
-  coordinator.reconcileIncompleteOperationEmptyQueryDelay(
-    incompleteOperationObservation,
-  );
-  if (
-    shouldAllowPriorityRecoveryDeferredObservation(
-      coordinator,
-      options.partitionId,
-      incompleteOperationObservation,
-    )
-  ) {
-    return count < coordinator.config.maxConcurrentRemoves;
-  }
-  if (
-    coordinator.shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-      incompleteOperationObservation,
-    )
-  ) {
-    return false;
+  coordinator.reconcileIncompleteOperationEmptyQueryDelay(observation);
+  if (!isAnsweredIncompleteOperationList(observation)) {
+    return admitsUnansweredListUnderContainedPressure(
+      coordinator, options.partitionId, observation, cachedOperationCount,
+    ) && 0 < coordinator.config.maxConcurrentRemoves;
   }
   return count < coordinator.config.maxConcurrentRemoves;
 }

@@ -308,4 +308,4 @@ class SystemTableCacheTombstoneStore {
   }
 }
 
-export {SystemTableCacheTombstoneStore};
+export {SystemTableCacheTombstoneStore, versionStampsOf, writeSupersedesTombstone};

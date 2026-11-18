@@ -825,7 +825,7 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
   const subscriber = acknowledgingCdcSubscriber();
   const cdcEvents = subscriber.events;
 
-  partition.subscribeToCDC(subscriber);
+  void partition.subscribeToCDCWithHandshake(subscriber);
   // The subscription's own drive settles first: a write committed while a
   // drive is in flight joins it and is delivered on the owner's retry timer.
   await settlePendingCdcDeliveries(partition);

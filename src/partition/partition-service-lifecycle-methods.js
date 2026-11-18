@@ -1,3 +1,5 @@
+import {notifyRemovalServingDrain} from
+  './partition-service-removal-drain-wake.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -9,6 +11,8 @@ import {
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
+import {releaseRemovalSubjectHandoff} from
+  './partition-service-removal-subject-handoff.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 const {
@@ -76,9 +80,12 @@ async function retirePartitionTransportHandler(service) {
 }
 
 function closePartitionPersistenceResources(service) {
+  // Held hydration-image snapshots close with the partition (R13).
+  service.hydrationImages?.closeAll();
   if (service.db) {
     service.db.close();
     service.db = null;
+    notifyRemovalServingDrain(service);
   }
 }
 
@@ -183,6 +190,7 @@ class PartitionServiceLifecycleMethods {
       this.clearLocalCanonicalLeaderClaimOnTeardown?.();
       // No reader continues a closed replica's leadership.
       endReplicaLeadershipTenure(this);
+      releaseRemovalSubjectHandoff(this);
       await closePartitionConsensusResources(this);
       this.stopPeriodicSizeUpdates();
       this.stopPreparedStateHoldTimeoutSweep();

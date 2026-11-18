@@ -11,6 +11,7 @@ import {performance} from 'node:perf_hooks';
 import {NUM, SUBSYSTEM} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
+import {sharedHostResourceFactsReader} from './host-resource-facts.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -90,6 +91,9 @@ class ResourceDiagnosticsSampler {
    * @param {number} [options.historyLimit]
    * @param {number} [options.trendWindowSamples]
    * @param {number} [options.topSignalLimit]
+   * @param {Object} [options.hostFactsReader] Reader of the machine's /proc
+   *   and /sys facts carried in every sample's `host` section; the process's
+   *   one shared reader unless a test supplies its own.
    */
   constructor(options = {}) {
     this.nodeId = options.nodeId || UNKNOWN_NODE_ID;
@@ -114,6 +118,7 @@ class ResourceDiagnosticsSampler {
     this.lastWriteTimestampMs = Date.now();
     this.lastEluSample = performance.eventLoopUtilization();
     this.signalLimitWarningLogged = false;
+    this.hostFactsReader = options.hostFactsReader || sharedHostResourceFactsReader;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -226,6 +231,9 @@ class ResourceDiagnosticsSampler {
           roundToTwo(writeBytesPerSec) :
           null,
       },
+      // Machine and network-namespace facts, each a measured or a typed
+      // unavailable state (host-resource-facts.js).
+      host: this.hostFactsReader.read(nowMs),
       components: componentStats,
       componentSignals,
     };
@@ -270,6 +278,7 @@ class ResourceDiagnosticsSampler {
         writeBytesDelta: sample.io.writeBytesDelta,
         writeBytesPerSec: sample.io.writeBytesPerSec,
       },
+      host: sample.host,
       components: sample.components,
     };
   }

@@ -9,15 +9,8 @@ import {
 const ROUTING_DOMAIN_GROUP = Object.freeze({
   DEGRADED: 'degraded',
   SYSTEM: 'system',
-  RETIRED: 'retired',
-  INACTIVE: 'inactive',
 });
 
-const INACTIVE_MESSAGE_GROUP_VALUES = new Set([
-  ROUTING_DOMAIN_GROUP.RETIRED,
-  ROUTING_DOMAIN_GROUP.INACTIVE,
-  SERVICE_STATUS.STOPPED,
-]);
 
 function buildGroupedContextResult(sourceGroupId, targets, fallbackReason) {
   return {
@@ -173,24 +166,16 @@ function isEligibleLatencyGroupRow(groupRow) {
   return (
     !groupValue ||
     groupValue === LATENCY_GROUP_STATE.ACTIVE ||
-    groupValue === LATENCY_GROUP_STATE.DEGRADED ||
     groupValue === ROUTING_DOMAIN_GROUP.DEGRADED
   );
 }
 
+// message_groups rows carry no lifecycle column (MESSAGE_GROUPS_SCHEMA): a
+// group's retirement is its replica rows' (services), never this row's.
 function isEligibleMessageGroupRow(groupRow) {
   const groupId = groupRow?.[COLUMN.GROUP_ID];
-  if (
-    typeof groupId !== 'string' ||
-    groupId.length === 0 ||
-    groupId === ROUTING_DOMAIN_GROUP.SYSTEM
-  ) {
-    return false;
-  }
-  return (
-    !INACTIVE_MESSAGE_GROUP_VALUES.has(groupRow?.[COLUMN.STATUS]) &&
-    !INACTIVE_MESSAGE_GROUP_VALUES.has(groupRow?.[COLUMN.STATE])
-  );
+  return typeof groupId === 'string' && groupId.length > 0 &&
+    groupId !== ROUTING_DOMAIN_GROUP.SYSTEM;
 }
 
 function collectActiveLatencyGroups(systemTableCache) {
@@ -341,11 +326,6 @@ function resolveLatencyGroupTargetCandidates(rowOrId, options, domain) {
     return [...latencyHostedGroups].sort((left, right) => left.localeCompare(right));
   }
   return [];
-}
-
-function resolveLatencyGroupRecipients(latencyGroupId, options = {}) {
-  const domain = collectKnownMessageGroupDomain(options);
-  return resolveLatencyGroupTargetCandidates(latencyGroupId, options, domain);
 }
 
 function collectCacheTargetGroupIds(options = {}, sourceGroupId = null, domain = null) {
@@ -776,10 +756,11 @@ function buildGroupedContext(options = {}, sourceGroupIdOverride = null) {
 }
 
 export {
+  ROUTING_DOMAIN_GROUP,
   buildGroupedContext,
   buildSafeTargets,
   collectKnownMessageGroupDomain,
   isPreActivationLatencyGroup,
-  resolveLatencyGroupRecipients,
   resolveLatencyGroupTargetCandidates,
+  resolveMessageGroupId,
 };

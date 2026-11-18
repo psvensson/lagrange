@@ -25,12 +25,8 @@ import {
   parseLiveSelect,
   sortObject,
 } from './live-query-service.js';
-import {
-  buildSelectSQL as renderSelectSQL,
-  extractReferencedTables,
-} from './live-query-sql-renderer.js';
+import {extractReferencedTables} from './live-query-sql-renderer.js';
 
-const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const CANONICAL_SEPARATOR = ',';
 const WILDCARD_COLUMNS = '*';
 const DISTINCT_MODIFIER = 'DISTINCT';
@@ -85,41 +81,6 @@ async function initializeNewGroup(manager, group, client, options) {
     queryId: group.queryId,
     partitionCount: group.subscribedPartitions.size,
   });
-}
-
-function recordSnapshotFrontiers(group, options, result) {
-  if (options.attachAfterVersion !== undefined && options.partitionId) {
-    group.partitionFrontiers.set(options.partitionId, options.attachAfterVersion);
-  }
-  if (options.partitionFrontiers) {
-    for (const [pid, ver] of options.partitionFrontiers) {
-      group.partitionFrontiers.set(pid, ver);
-    }
-  }
-  if (result.appliedIndex !== undefined && options.partitionId) {
-    group.partitionFrontiers.set(options.partitionId, result.appliedIndex);
-  }
-}
-
-function resolveSnapshotExecutionSql(manager, group) {
-  if (group.sql) return group.sql;
-  if (manager.sqlQueryEngine?.executor?.buildSelectSQL) {
-    return manager.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery);
-  }
-  return manager.buildSelectSQL(group.parsedQuery);
-}
-
-function populateSnapshotRows(group, result) {
-  const rawRows = result.rows ?? result.results ?? [];
-  const rows = rawRows.map((r) => (group.projectRow ? group.projectRow(r) : r));
-  group.lastResultSet = rows;
-  if (group.resultSet) {
-    for (const row of rawRows) {
-      const pk = group.getRowPrimaryKey ? group.getRowPrimaryKey(row) : (row.id ?? null);
-      if (pk != null) group.resultSet.set(pk, row);
-    }
-  }
-  return rows;
 }
 
 function canonicalPart(value, fallback = '', isPredicate = false) {
@@ -179,8 +140,6 @@ class LiveQueryManager extends EventEmitter {
       LIVE_QUERY_DEFAULTS.MAX_PER_CLIENT;
     this.cleanupIntervalMs = this.config.get(LIVE_QUERY_CONFIG_KEY.CLEANUP_INTERVAL_MS) ||
       LIVE_QUERY_DEFAULTS.CLEANUP_INTERVAL_MS;
-    this.cursorRetentionMs = this.config.get(LIVE_QUERY_CONFIG_KEY.CURSOR_RETENTION_MS) ||
-      LIVE_QUERY_DEFAULTS.CURSOR_RETENTION_MS;
 
     // Cleanup interval
     this.cleanupInterval = null;
@@ -286,7 +245,7 @@ class LiveQueryManager extends EventEmitter {
     let group = this.queryGroups.get(groupKey);
     const isNewGroup = !group;
 
-    if (group) {
+    if (!isNewGroup) {
       group.addClient(client);
       this.logger.info(LIVE_QUERY_LOG_MSG.CLIENT_JOINED_EXISTING, {
         groupKey,
@@ -294,7 +253,6 @@ class LiveQueryManager extends EventEmitter {
         clientId,
         clientCount: group.clients.size,
       });
-      await this.sendSnapshotToClient(group, client, options);
     } else {
       group = new QueryGroup({
         parsedQuery: ast,
@@ -308,7 +266,15 @@ class LiveQueryManager extends EventEmitter {
         groupKey,
       });
       group.addClient(client);
-      await initializeNewGroup(this, group, client, options);
+    }
+    try {
+      await (isNewGroup ? initializeNewGroup(this, group, client, options) :
+        this.sendSnapshotToClient(group, client, options));
+    } catch (error) {
+      // A refused registration leaves no interest behind: the client was
+      // answered with the failure and must receive nothing further.
+      if (group.removeClient(clientId)) this.removeGroup(group);
+      throw error;
     }
 
     if (!this.clientSubscriptions.has(clientId)) {
@@ -333,7 +299,6 @@ class LiveQueryManager extends EventEmitter {
     return {
       queryId: group.queryId,
       expiresAt: Date.now() + group.ttlMs,
-      renewBefore: Date.now() + Math.floor(group.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
       partitions: Array.from(group.subscribedPartitions),
     };
   }
@@ -354,16 +319,12 @@ class LiveQueryManager extends EventEmitter {
     }
 
     try {
-      const sql = resolveSnapshotExecutionSql(this, group);
-      const result = await this.sqlQueryEngine.executeQuery(sql, group.params || options.params);
-      const rows = populateSnapshotRows(group, result);
-      recordSnapshotFrontiers(group, options, result);
-
+      const {rows, count} = await group.executeInitialQuery(options);
       const snapshot = {
         type: LIVE_QUERY_EVENT.SNAPSHOT,
         queryId: group.queryId,
         rows,
-        count: result.count ?? rows.length,
+        count,
       };
 
       if (client && typeof client.send === 'function') {
@@ -389,112 +350,6 @@ class LiveQueryManager extends EventEmitter {
       }
       throw error;
     }
-  }
-
-  /**
-   * Build SELECT SQL from parsed query.
-   * @param {Object} parsedQuery - Parsed query AST.
-   * @return {string} SQL string.
-   * @private
-   */
-  buildSelectSQL(parsedQuery) {
-    return renderSelectSQL(parsedQuery);
-  }
-
-  /**
-   * Renew a live query subscription.
-   * @param {string} queryId - Query ID.
-   * @param {string} clientId - Client ID.
-   * @param {string} cursor - Last seen HLC timestamp.
-   * @return {Object|null} Renewal result or null.
-   */
-  renewLiveQuery(queryId, clientId, cursor) {
-    const group = this.findGroupByQueryId(queryId);
-    if (!group) {
-      return null;
-    }
-
-    const result = group.renewClient(clientId, cursor);
-
-    if (result) {
-      this.logger.debug(LIVE_QUERY_LOG_MSG.QUERY_RENEWED, {
-        queryId,
-        clientId,
-        cursor,
-      });
-
-      this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_RENEWED, {
-        queryId,
-        clientId,
-        cursor,
-      });
-    }
-
-    return result;
-  }
-
-  /**
-   * Resume a live query from cursor position.
-   * @param {string} queryId - Query ID.
-   * @param {string} clientId - Client ID.
-   * @param {string} cursor - HLC cursor to resume from.
-   * @return {Promise<Object>} Resume result.
-   */
-  async resumeLiveQuery(queryId, clientId, cursor) {
-    const group = this.findGroupByQueryId(queryId);
-    if (!group) {
-      throw new Error(`${LIVE_QUERY_ERROR_MSG.QUERY_GROUP_NOT_FOUND_PREFIX}${queryId}`);
-    }
-
-    // Validate cursor is within retention window
-    const cursorTime = this.parseCursorTime(cursor);
-    const oldestAllowed = Date.now() - this.cursorRetentionMs;
-
-    if (cursorTime < oldestAllowed) {
-      throw new Error(LIVE_QUERY_ERROR_MSG.CURSOR_TOO_OLD);
-    }
-
-    // Re-add client to group
-    const client = {id: clientId};
-    group.addClient(client);
-
-    // Track subscription
-    if (!this.clientSubscriptions.has(clientId)) {
-      this.clientSubscriptions.set(clientId, new Set());
-    }
-    this.clientSubscriptions.get(clientId).add(queryId);
-
-    // Update query count
-    const currentCount = this.clientQueryCounts.get(clientId) || 0;
-    this.clientQueryCounts.set(clientId, currentCount + 1);
-
-    this.logger.info(LIVE_QUERY_LOG_MSG.QUERY_RESUMED, {
-      queryId,
-      clientId,
-      cursor,
-    });
-
-    return {
-      queryId,
-      resumed: true,
-      fromCursor: cursor,
-      expiresAt: Date.now() + group.ttlMs,
-    };
-  }
-
-  /**
-   * Parse cursor time from HLC string.
-   * @param {string} cursor - HLC cursor string.
-   * @return {number} Physical time in milliseconds.
-   * @private
-   */
-  parseCursorTime(cursor) {
-    if (!cursor) return 0;
-
-    // HLC format: "physical:logical:nodeId" or just timestamp
-    const parts = cursor.split(LIVE_QUERY_CURSOR.SEPARATOR);
-    const physical = parseInt(parts[0], 10);
-    return isNaN(physical) ? 0 : physical;
   }
 
   /**
@@ -630,11 +485,11 @@ class LiveQueryManager extends EventEmitter {
 
   /**
    * Handle partition topology change (split/merge).
-   * @param {Object} change - Partition CDC change event.
+   * @param {{operation: string, data: Object}} change - The changed
+   *   partitions row (live-query-startup-wiring buildPartitionTopologyChange).
    */
   async handlePartitionTopologyChange(change) {
-    const tableName = change.new?.table_name || change.old?.table_name ||
-      change.new?.tableName || change.old?.tableName;
+    const tableName = change.data.table_name;
 
     // Find all groups that reference this table
     for (const group of this.queryGroups.values()) {

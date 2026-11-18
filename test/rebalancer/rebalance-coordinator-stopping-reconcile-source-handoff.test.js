@@ -1,6 +1,79 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
+// The partition's two other voters, co-located on the fixture's third ready
+// node. A REPLACE's source removal is decided on the voters that remain
+// (2026-11-11, committed-voter floor), never on a planning projection's node
+// count, so every world that removes a source names them.
+const REMAINING_VOTER_NODE_ID = 'node-peer';
+
+function remainingVoterRows(partitionId) {
+  return ['-peer-a', '-peer-b'].map((suffix) => ({
+    service_id: partitionId + suffix,
+    replica_id: partitionId + suffix,
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: REMAINING_VOTER_NODE_ID,
+    raft_role: 'follower',
+    status: 'active',
+    address: REMAINING_VOTER_NODE_ID + '/partition/' + partitionId + suffix,
+  }));
+}
+
+function replicaServiceRow(partitionId, replicaId, nodeId) {
+  return {
+    service_id: replicaId,
+    replica_id: replicaId,
+    service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    partition_id: partitionId,
+    node_id: nodeId,
+    raft_role: RAFT_ROLE.FOLLOWER,
+    status: ReplicaStatus.ACTIVE,
+    address: nodeId + '/partition/' + replicaId,
+  };
+}
+
+// The remaining voters plus the REPLACE's active source and target legs.
+function replaceWorldServiceRows(partitionId, sourceReplicaId, targetReplicaId) {
+  return [
+    ...remainingVoterRows(partitionId),
+    replicaServiceRow(partitionId, sourceReplicaId,
+      PRIORITY_DRAIN_TEST_SOURCE_NODE_ID),
+    replicaServiceRow(partitionId, targetReplicaId,
+      PRIORITY_DRAIN_TEST_TARGET_NODE_ID),
+  ];
+}
+
+// The world's priority REPLACE row: PENDING names the source replica, then
+// each later [step, previousStep] in order, all at the world's clock.
+function priorityReplaceOperationRow(ids, {status, workflowStep, laterSteps}) {
+  return {
+    operation_id: ids.operationId,
+    type: OperationType.REPLACE,
+    partition_id: ids.partitionId,
+    replica_id: ids.targetReplicaId,
+    source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    status,
+    workflow_step: workflowStep,
+    created_at: ids.nowMs,
+    updated_at: ids.nowMs,
+    completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+    error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+    entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    entity_id: ids.partitionId,
+    steps_history: JSON.stringify([
+      {
+        step: WORKFLOW_STEP.PENDING,
+        timestamp: ids.nowMs,
+        sourceReplicaId: ids.sourceReplicaId,
+      },
+      ...laterSteps.map(([step, previousStep]) =>
+        ({step, timestamp: ids.nowMs, previousStep})),
+    ]),
+  };
+}
+
 test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
   const TEST_PARTITION_ID = 'control_plane_publications-p1';
@@ -8,14 +81,11 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
   const TEST_OPERATION_ID = 'priority-drain-source-active';
   const TEST_NOW_MS = Date.now();
-  const TEST_SERVICE_TYPE = 'partition';
-  const TEST_VOTER_RAFT_ROLE = 'follower';
-  const TEST_SOURCE_ADDRESS =
-    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
-    TEST_SOURCE_REPLICA_ID;
-  const TEST_TARGET_ADDRESS =
-    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
-    TEST_TARGET_REPLICA_ID;
+  const TEST_IDS = {
+    operationId: TEST_OPERATION_ID, partitionId: TEST_PARTITION_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+    targetReplicaId: TEST_TARGET_REPLICA_ID, nowMs: TEST_NOW_MS,
+  };
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
@@ -24,57 +94,16 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
-      services: [
-        {
-          service_id: TEST_SOURCE_REPLICA_ID,
-          replica_id: TEST_SOURCE_REPLICA_ID,
-          service_type: TEST_SERVICE_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          raft_role: TEST_VOTER_RAFT_ROLE,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_SOURCE_ADDRESS,
-        },
-        {
-          service_id: TEST_TARGET_REPLICA_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          service_type: TEST_SERVICE_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-          raft_role: TEST_VOTER_RAFT_ROLE,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_TARGET_ADDRESS,
-        },
-      ],
+      services: replaceWorldServiceRows(
+        TEST_PARTITION_ID, TEST_SOURCE_REPLICA_ID, TEST_TARGET_REPLICA_ID),
       replicaOperations: [
-        {
-          operation_id: TEST_OPERATION_ID,
-          type: OperationType.REPLACE,
-          partition_id: TEST_PARTITION_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        priorityReplaceOperationRow(TEST_IDS, {
           status: ReplicaStatus.CREATING,
-          workflow_step: WORKFLOW_STEP.CREATING,
-          created_at: TEST_NOW_MS,
-          updated_at: TEST_NOW_MS,
-          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
-          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
-          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          entity_id: TEST_PARTITION_ID,
-          steps_history: JSON.stringify([
-            {
-              step: WORKFLOW_STEP.PENDING,
-              timestamp: TEST_NOW_MS,
-              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
-            },
-            {
-              step: WORKFLOW_STEP.CREATING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.SENDING,
-            },
-          ]),
-        },
+          workflowStep: WORKFLOW_STEP.CREATING,
+          laterSteps: [
+            [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING],
+          ],
+        }),
       ],
     },
   });
@@ -161,14 +190,11 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
   const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
   const TEST_OPERATION_ID = 'priority-drain-sending-target-cache-active';
   const TEST_NOW_MS = Date.now();
-  const TEST_SERVICE_TYPE = 'partition';
-  const TEST_VOTER_RAFT_ROLE = 'follower';
-  const TEST_SOURCE_ADDRESS =
-    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
-    TEST_SOURCE_REPLICA_ID;
-  const TEST_TARGET_ADDRESS =
-    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
-    TEST_TARGET_REPLICA_ID;
+  const TEST_IDS = {
+    operationId: TEST_OPERATION_ID, partitionId: TEST_PARTITION_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+    targetReplicaId: TEST_TARGET_REPLICA_ID, nowMs: TEST_NOW_MS,
+  };
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
@@ -177,57 +203,16 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
-      services: [
-        {
-          service_id: TEST_SOURCE_REPLICA_ID,
-          replica_id: TEST_SOURCE_REPLICA_ID,
-          service_type: TEST_SERVICE_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          raft_role: TEST_VOTER_RAFT_ROLE,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_SOURCE_ADDRESS,
-        },
-        {
-          service_id: TEST_TARGET_REPLICA_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          service_type: TEST_SERVICE_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-          raft_role: TEST_VOTER_RAFT_ROLE,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_TARGET_ADDRESS,
-        },
-      ],
+      services: replaceWorldServiceRows(
+        TEST_PARTITION_ID, TEST_SOURCE_REPLICA_ID, TEST_TARGET_REPLICA_ID),
       replicaOperations: [
-        {
-          operation_id: TEST_OPERATION_ID,
-          type: OperationType.REPLACE,
-          partition_id: TEST_PARTITION_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        priorityReplaceOperationRow(TEST_IDS, {
           status: ReplicaStatus.PENDING,
-          workflow_step: WORKFLOW_STEP.SENDING,
-          created_at: TEST_NOW_MS,
-          updated_at: TEST_NOW_MS,
-          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
-          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
-          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          entity_id: TEST_PARTITION_ID,
-          steps_history: JSON.stringify([
-            {
-              step: WORKFLOW_STEP.PENDING,
-              timestamp: TEST_NOW_MS,
-              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
-            },
-            {
-              step: WORKFLOW_STEP.SENDING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.PENDING,
-            },
-          ]),
-        },
+          workflowStep: WORKFLOW_STEP.SENDING,
+          laterSteps: [
+            [WORKFLOW_STEP.SENDING, WORKFLOW_STEP.PENDING],
+          ],
+        }),
       ],
     },
   });
@@ -290,12 +275,11 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
   const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
   const TEST_OPERATION_ID = 'priority-drain-creating-target-cache-active';
   const TEST_NOW_MS = Date.now();
-  const TEST_SOURCE_ADDRESS =
-    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
-    TEST_SOURCE_REPLICA_ID;
-  const TEST_TARGET_ADDRESS =
-    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
-    TEST_TARGET_REPLICA_ID;
+  const TEST_IDS = {
+    operationId: TEST_OPERATION_ID, partitionId: TEST_PARTITION_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+    targetReplicaId: TEST_TARGET_REPLICA_ID, nowMs: TEST_NOW_MS,
+  };
   const TEST_AUTHORITATIVE_OBSERVED_SOURCE = Object.freeze({
     state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
     source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
@@ -322,62 +306,17 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
-      services: [
-        {
-          service_id: TEST_SOURCE_REPLICA_ID,
-          replica_id: TEST_SOURCE_REPLICA_ID,
-          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          raft_role: RAFT_ROLE.FOLLOWER,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_SOURCE_ADDRESS,
-        },
-        {
-          service_id: TEST_TARGET_REPLICA_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-          raft_role: RAFT_ROLE.FOLLOWER,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_TARGET_ADDRESS,
-        },
-      ],
+      services: replaceWorldServiceRows(
+        TEST_PARTITION_ID, TEST_SOURCE_REPLICA_ID, TEST_TARGET_REPLICA_ID),
       replicaOperations: [
-        {
-          operation_id: TEST_OPERATION_ID,
-          type: OperationType.REPLACE,
-          partition_id: TEST_PARTITION_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        priorityReplaceOperationRow(TEST_IDS, {
           status: ReplicaStatus.CREATING,
-          workflow_step: WORKFLOW_STEP.CREATING,
-          created_at: TEST_NOW_MS,
-          updated_at: TEST_NOW_MS,
-          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
-          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
-          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          entity_id: TEST_PARTITION_ID,
-          steps_history: JSON.stringify([
-            {
-              step: WORKFLOW_STEP.PENDING,
-              timestamp: TEST_NOW_MS,
-              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
-            },
-            {
-              step: WORKFLOW_STEP.SENDING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.PENDING,
-            },
-            {
-              step: WORKFLOW_STEP.CREATING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.SENDING,
-            },
-          ]),
-        },
+          workflowStep: WORKFLOW_STEP.CREATING,
+          laterSteps: [
+            [WORKFLOW_STEP.SENDING, WORKFLOW_STEP.PENDING],
+            [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING],
+          ],
+        }),
       ],
     },
   });
@@ -432,21 +371,16 @@ test('RebalanceCoordinator forwards remote observed active target progress ' +
   const TEST_OBSERVER_NODE_ID = 'node-observer';
   const TEST_CACHE_OPERATION_UPSERT = 'UPSERT';
   const TEST_DISPATCH_INGRESS = '/service/replica-dispatch';
-  const TEST_TARGET_ADDRESS =
-    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
-    TEST_TARGET_REPLICA_ID;
   const TEST_NOW_MS = Date.now();
-  const deliveries = [];
-  const targetServiceRow = {
-    service_id: TEST_TARGET_REPLICA_ID,
-    replica_id: TEST_TARGET_REPLICA_ID,
-    service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-    partition_id: TEST_PARTITION_ID,
-    node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-    raft_role: RAFT_ROLE.FOLLOWER,
-    status: ReplicaStatus.ACTIVE,
-    address: TEST_TARGET_ADDRESS,
+  const TEST_IDS = {
+    operationId: TEST_OPERATION_ID, partitionId: TEST_PARTITION_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+    targetReplicaId: TEST_TARGET_REPLICA_ID, nowMs: TEST_NOW_MS,
   };
+  const deliveries = [];
+  const targetServiceRow = replicaServiceRow(
+    TEST_PARTITION_ID, TEST_TARGET_REPLICA_ID,
+    PRIORITY_DRAIN_TEST_TARGET_NODE_ID);
   const coordinator = createTestCoordinator({
     nodeId: TEST_OBSERVER_NODE_ID,
     enableTimeouts: false,
@@ -461,39 +395,14 @@ test('RebalanceCoordinator forwards remote observed active target progress ' +
     cacheData: {
       services: [targetServiceRow],
       replicaOperations: [
-        {
-          operation_id: TEST_OPERATION_ID,
-          type: OperationType.REPLACE,
-          partition_id: TEST_PARTITION_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+        priorityReplaceOperationRow(TEST_IDS, {
           status: ReplicaStatus.CREATING,
-          workflow_step: WORKFLOW_STEP.CREATING,
-          created_at: TEST_NOW_MS,
-          updated_at: TEST_NOW_MS,
-          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
-          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
-          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          entity_id: TEST_PARTITION_ID,
-          steps_history: JSON.stringify([
-            {
-              step: WORKFLOW_STEP.PENDING,
-              timestamp: TEST_NOW_MS,
-              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
-            },
-            {
-              step: WORKFLOW_STEP.SENDING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.PENDING,
-            },
-            {
-              step: WORKFLOW_STEP.CREATING,
-              timestamp: TEST_NOW_MS,
-              previousStep: WORKFLOW_STEP.SENDING,
-            },
-          ]),
-        },
+          workflowStep: WORKFLOW_STEP.CREATING,
+          laterSteps: [
+            [WORKFLOW_STEP.SENDING, WORKFLOW_STEP.PENDING],
+            [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING],
+          ],
+        }),
       ],
     },
   });
@@ -550,12 +459,11 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
   const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
   const TEST_OPERATION_ID = 'priority-drain-dispatch-wake-creating-active';
   const TEST_NOW_MS = Date.now();
-  const TEST_SOURCE_ADDRESS =
-    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
-    TEST_SOURCE_REPLICA_ID;
-  const TEST_TARGET_ADDRESS =
-    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
-    TEST_TARGET_REPLICA_ID;
+  const TEST_IDS = {
+    operationId: TEST_OPERATION_ID, partitionId: TEST_PARTITION_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+    targetReplicaId: TEST_TARGET_REPLICA_ID, nowMs: TEST_NOW_MS,
+  };
   const TEST_AUTHORITATIVE_OBSERVED_SOURCE = Object.freeze({
     state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
     source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
@@ -574,39 +482,14 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
     [TEST_SOURCE_REPLICA_ID, TEST_AUTHORITATIVE_OBSERVED_SOURCE],
     [TEST_TARGET_REPLICA_ID, TEST_AUTHORITATIVE_STALE_TARGET],
   ]));
-  const operationRow = {
-    operation_id: TEST_OPERATION_ID,
-    type: OperationType.REPLACE,
-    partition_id: TEST_PARTITION_ID,
-    replica_id: TEST_TARGET_REPLICA_ID,
-    source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-    target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+  const operationRow = priorityReplaceOperationRow(TEST_IDS, {
     status: ReplicaStatus.CREATING,
-    workflow_step: WORKFLOW_STEP.CREATING,
-    created_at: TEST_NOW_MS,
-    updated_at: TEST_NOW_MS,
-    completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
-    error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
-    entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-    entity_id: TEST_PARTITION_ID,
-    steps_history: JSON.stringify([
-      {
-        step: WORKFLOW_STEP.PENDING,
-        timestamp: TEST_NOW_MS,
-        sourceReplicaId: TEST_SOURCE_REPLICA_ID,
-      },
-      {
-        step: WORKFLOW_STEP.SENDING,
-        timestamp: TEST_NOW_MS,
-        previousStep: WORKFLOW_STEP.PENDING,
-      },
-      {
-        step: WORKFLOW_STEP.CREATING,
-        timestamp: TEST_NOW_MS,
-        previousStep: WORKFLOW_STEP.SENDING,
-      },
-    ]),
-  };
+    workflowStep: WORKFLOW_STEP.CREATING,
+    laterSteps: [
+      [WORKFLOW_STEP.SENDING, WORKFLOW_STEP.PENDING],
+      [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING],
+    ],
+  });
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
@@ -615,28 +498,8 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
-      services: [
-        {
-          service_id: TEST_SOURCE_REPLICA_ID,
-          replica_id: TEST_SOURCE_REPLICA_ID,
-          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
-          raft_role: RAFT_ROLE.FOLLOWER,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_SOURCE_ADDRESS,
-        },
-        {
-          service_id: TEST_TARGET_REPLICA_ID,
-          replica_id: TEST_TARGET_REPLICA_ID,
-          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
-          partition_id: TEST_PARTITION_ID,
-          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
-          raft_role: RAFT_ROLE.FOLLOWER,
-          status: ReplicaStatus.ACTIVE,
-          address: TEST_TARGET_ADDRESS,
-        },
-      ],
+      services: replaceWorldServiceRows(
+        TEST_PARTITION_ID, TEST_SOURCE_REPLICA_ID, TEST_TARGET_REPLICA_ID),
       replicaOperations: [operationRow],
     },
   });

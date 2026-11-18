@@ -253,7 +253,7 @@ test('selectSeedNodeAddressCandidate falls over to a later live candidate', asyn
   });
 });
 
-test('selectSeedNodeAddressCandidate keeps first candidate when none answer', async (t) => {
+test('selectSeedNodeAddressCandidate keeps the configured order when none is ready', async (t) => {
   const {probe, probedAddresses} = createRecordingProbe([]);
   const selection = await selectSeedNodeAddressCandidate({
     candidates: [CANDIDATE_A, CANDIDATE_B],
@@ -262,10 +262,10 @@ test('selectSeedNodeAddressCandidate keeps first candidate when none answer', as
   t.same(
     probedAddresses,
     [CANDIDATE_A, CANDIDATE_B],
-    'all candidates were probed before falling back',
+    'all candidates were probed before none was found ready',
   );
   t.same(selection, {
-    state: SEED_CANDIDATE_SELECTION_STATE.UNPROBED_FALLBACK,
+    state: SEED_CANDIDATE_SELECTION_STATE.NO_CANDIDATE_READY,
     seedNodeAddress: CANDIDATE_A,
     seedNodeAddresses: [CANDIDATE_A, CANDIDATE_B],
   });
@@ -295,7 +295,7 @@ test('resolveStartupJoinDecision selects a reachable fresh-join candidate', asyn
   );
 });
 
-test('resolveStartupJoinDecision keeps first candidate when none probe reachable', async (t) => {
+test('resolveStartupJoinDecision keeps the configured order when none probe ready', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), TMP_PREFIX));
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 

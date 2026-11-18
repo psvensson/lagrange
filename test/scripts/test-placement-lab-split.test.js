@@ -10,7 +10,7 @@ import {test} from 'node:test';
 
 import {
   controllerHeadroom, formatLabController, formatLabDecision, formatLabSkipped, placeLabLanes,
-  placementMachines, planLabSplit, runLabTest,
+  placeTestFiles, placementMachines, planLabSplit, runLabTest,
 } from '../../scripts/lab/probe.js';
 import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
 
@@ -94,6 +94,39 @@ test('a split spreads a changed set over the free lab hosts by capacity, never a
     assert.deepEqual(tooLong.filter((one) => one.machine.controller)
       .flatMap((one) => one.lanes.flatMap((lane) => lane.files)), [CHANGED_COSTS[0].file]);
   });
+
+// The ordinary lane is priced on each host at the count its placement shell
+// will run it with (placedOrdinaryLaneJobs, from the facts discovery read
+// there), so a host whose lane is raised takes the larger share it will
+// actually finish. A host the thermal gate cannot see, or whose memory is
+// unknown, keeps the lane's own count; every other lane keeps its own.
+test('a split prices the ordinary lane at the count each host runs it with', () => {
+  const GIB = 1024 * 1024;
+  const {fleet, state} = fakeInventory();
+  const measured = fleet.map((entry) => (entry.controller ? entry :
+    {...entry, capability: {...entry.capability, thermal: 'measured'}}));
+  assert.deepEqual(placementMachines(measured, state).map((machine) => machine.thermal),
+    ['measured', 'measured'], 'discovery\'s thermal fact reaches the planner');
+  const host = (name, extra) => lab(name, 1, {cores: 12, memKiB: 16 * GIB, ...extra});
+  const raised = host('raised', {thermal: 'measured'});
+  const blind = host('blind', {thermal: 'unmeasurable'});
+  const unknown = host('unknown', {thermal: 'measured', memKiB: null});
+  const ordinary = Array.from({length: 120}, (_, index) =>
+    ({file: `o-${index}`, ms: 20 * SECOND, jobs: 4, lane: LANE.ORDINARY}));
+  const shares = (machines, costs) => Object.fromEntries(placeTestFiles(costs, machines)
+    .map((shard) => [shard.machine.name, shard.files.length]));
+  const ordinaryShares = shares([raised, blind, unknown], ordinary);
+  assert.equal(ordinaryShares.raised, 60, `eight workers take twice four's share: ${
+    JSON.stringify(ordinaryShares)}`);
+  assert.equal(ordinaryShares.blind, 30, 'no thermal source: the lane\'s own four');
+  assert.equal(ordinaryShares.unknown, 30, 'unknown memory: the lane\'s own four');
+  const exclusive = ordinary.map((cost) => ({...cost, jobs: 1, lane: LANE.EXCLUSIVE}));
+  assert.deepEqual(shares([raised, blind], exclusive), {raised: 60, blind: 60},
+    'a serial lane is never raised');
+  // A lane-less cost (a caller that never named a lane) keeps the old pricing.
+  const unnamed = ordinary.map(({lane: _lane, ...cost}) => cost);
+  assert.deepEqual(shares([raised, blind], unnamed), {raised: 60, blind: 60});
+});
 
 // The five lab hosts of 2026-10-05, all usable: on the combined-head run a
 // cool controller took 449 of 2072 files while these five were ready.

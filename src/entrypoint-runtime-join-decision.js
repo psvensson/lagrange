@@ -3,7 +3,6 @@ import {
   RejoinHintsPersistenceService,
   persistBootstrapRejoinHints,
   probeRecoverablePeerAddress,
-  readPersistedLocalClusterId,
   resolveAutoRejoinStartupDecision,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -32,7 +31,6 @@ const AUTO_REJOIN_PROBE_WAIT = Object.freeze({
   ABORT_TIMEOUT_ERROR_NAME: 'TimeoutError',
   RESPONSE_RECEIVED: false,
 });
-
 
 const STARTUP_JOIN_DECISION_SOURCE = Object.freeze({
   EXPLICIT: 'explicit',
@@ -84,7 +82,7 @@ const UNKNOWN_EXPLICIT_SEED_DECISION_STATE_ERROR_PREFIX =
 const SEED_CANDIDATE_SELECTION_STATE = Object.freeze({
   SINGLE_CANDIDATE: 'single_candidate',
   PROBED_REACHABLE: 'probed_reachable',
-  UNPROBED_FALLBACK: 'unprobed_fallback',
+  NO_CANDIDATE_READY: 'no_candidate_ready',
 });
 
 /**
@@ -115,9 +113,10 @@ function mergeSeedNodeAddressCandidates(...candidateGroups) {
  * A single candidate is returned verbatim without probing: during cluster
  * formation the seed may not be up yet, and ContactSeedPhase's retry loop is
  * the liveness mechanism. With multiple candidates the same reachability
- * probe used by durable rejoin picks the first live one; when none answers,
- * the first candidate is kept (formation semantics — the retry loop keeps
- * trying, it does not fail closed).
+ * probe used by durable rejoin picks the first READY one and leads with it.
+ * NO_CANDIDATE_READY keeps the configured order: no candidate is chosen, the
+ * contact phase cycles all of them under its retry budget and answers the
+ * typed SEED_CONTACT_UNAVAILABLE (retryable) when none answers.
  * @param {Object} options
  * @param {string[]} options.candidates
  * @param {Function} options.probePeerAddress
@@ -136,19 +135,12 @@ async function selectSeedNodeAddressCandidate(options) {
     candidates,
     options.probePeerAddress,
   );
-  const selectedCandidate = reachableCandidate === null ?
-    candidates[0] :
-    reachableCandidate;
-  return {
-    state: reachableCandidate === null ?
-      SEED_CANDIDATE_SELECTION_STATE.UNPROBED_FALLBACK :
-      SEED_CANDIDATE_SELECTION_STATE.PROBED_REACHABLE,
-    seedNodeAddress: selectedCandidate,
-    seedNodeAddresses: [
-      selectedCandidate,
-      ...candidates.filter((candidate) => candidate !== selectedCandidate),
-    ],
-  };
+  return reachableCandidate === null ?
+    {state: SEED_CANDIDATE_SELECTION_STATE.NO_CANDIDATE_READY,
+      seedNodeAddress: candidates[0], seedNodeAddresses: [...candidates]} :
+    {state: SEED_CANDIDATE_SELECTION_STATE.PROBED_REACHABLE,
+      seedNodeAddress: reachableCandidate, seedNodeAddresses: [reachableCandidate,
+        ...candidates.filter((candidate) => candidate !== reachableCandidate)]};
 }
 
 /**
@@ -195,10 +187,20 @@ async function persistJoinSeedRejoinHints(options) {
   }
 }
 
+// One peer readiness probe outcome. `/bootstrap/ready` is the probe every node
+// serves; only READY is reachable. A 404 is PROBE_NOT_SERVED: `/health` never
+// stands in, since it answers 200 while the peer is still initializing.
+const PEER_PROBE_OUTCOME = Object.freeze({
+  READY: 'ready',
+  NOT_READY: 'not_ready',
+  PROBE_NOT_SERVED: 'probe_not_served',
+  UNREACHABLE: 'unreachable',
+});
+
 /**
  * Probe one persisted peer address for auto-rejoin.
  * @param {string} peerAddress
- * @return {Promise<boolean>}
+ * @return {Promise<boolean>} True only for a READY probe outcome.
  */
 async function probeAutoRejoinPeerAddress(peerAddress) {
   const normalizedPeerAddress = String(peerAddress || '');
@@ -212,31 +214,17 @@ async function probeAutoRejoinPeerAddress(peerAddress) {
       normalizedPeerAddress :
       `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${normalizedPeerAddress}`;
 
-  const bootstrapReadyProbe = await probeAutoRejoinPeerPath(
-    baseUrl,
-    ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH,
-  );
-  if (bootstrapReadyProbe.ready === true) {
-    return true;
-  }
-  if (bootstrapReadyProbe.legacyFallback !== true) {
-    return false;
-  }
-
-  const healthProbe = await probeAutoRejoinPeerPath(
-    baseUrl,
-    ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH,
-  );
-  return healthProbe.ready === true;
+  return await probeAutoRejoinPeerReadiness(baseUrl) ===
+    PEER_PROBE_OUTCOME.READY;
 }
 
 /**
- * Probe one peer path used by auto-rejoin peer selection.
+ * Probe the peer's bootstrap readiness path.
  * @param {string} baseUrl
- * @param {string} path
- * @return {Promise<Object>}
+ * @return {Promise<string>} A PEER_PROBE_OUTCOME.
  */
-async function probeAutoRejoinPeerPath(baseUrl, path) {
+async function probeAutoRejoinPeerReadiness(baseUrl) {
+  const path = ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH;
   try {
     const response = await fetch(
       `${baseUrl}${path}`,
@@ -247,10 +235,9 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
         ),
       },
     );
-    return {
-      ready: response.ok,
-      legacyFallback: response.status === HTTP_STATUS.NOT_FOUND,
-    };
+    if (response.ok) return PEER_PROBE_OUTCOME.READY;
+    return response.status === HTTP_STATUS.NOT_FOUND ?
+      PEER_PROBE_OUTCOME.PROBE_NOT_SERVED : PEER_PROBE_OUTCOME.NOT_READY;
   } catch (error) {
     if (error?.name === AUTO_REJOIN_PROBE_WAIT.ABORT_TIMEOUT_ERROR_NAME) {
       reportWaitBoundSpent(null, {
@@ -265,10 +252,7 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
         },
       });
     }
-    return {
-      ready: false,
-      legacyFallback: false,
-    };
+    return PEER_PROBE_OUTCOME.UNREACHABLE;
   }
 }
 
@@ -316,6 +300,19 @@ function resolveExplicitSeedDecisionState(snapshot) {
 }
 
 /**
+ * Refuse startup with the membership owner's typed outcome, unchanged.
+ * @param {Object} decision A FAIL auto-rejoin decision.
+ */
+function refuseStartup(decision) {
+  const membershipOwnerOutcome = Object.freeze({...decision.membershipOwnerOutcome});
+  throw Object.assign(new Error(decision.error), {
+    code: membershipOwnerOutcome.outcomeType,
+    reason: membershipOwnerOutcome.reasonCode,
+    membershipOwnerOutcome,
+  });
+}
+
+/**
  * Build the startup decision when an operator-provided seed is available.
  * @param {Object} options
  * @param {Object} options.autoRejoinDecision
@@ -332,7 +329,7 @@ function buildExplicitSeedStartupDecision(options) {
 
   switch (state) {
   case EXPLICIT_SEED_DECISION_STATE.IDENTITY_MISMATCH:
-    throw new Error(autoRejoinDecision.error);
+    return refuseStartup(autoRejoinDecision);
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_PROBED_PEER:
     return {
       seedNodeAddress: snapshot.peerAddress,
@@ -394,15 +391,11 @@ async function resolveStartupJoinDecision(options) {
       probeAutoRejoinPeerAddress;
   const nodeId = options.config.get(CONFIG_KEY.NODE_ID);
   const {nodeHttpAddress} = resolveRuntimeAddresses(options.config);
-  const expectedClusterId = await readPersistedLocalClusterId(
-    options.dataDirectoryManager.getDataDir(),
-  );
   const autoRejoinDecision = await resolveAutoRejoinStartupDecision({
     dataDir: options.dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: nodeHttpAddress,
     probePeerAddress,
-    expectedClusterId,
     forceNewCluster:
       normalizeForceNewClusterEnv(options.env[FORCE_NEW_CLUSTER_ENV]),
   });
@@ -441,15 +434,7 @@ async function resolveStartupJoinDecision(options) {
     });
   }
   if (autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.FAIL) {
-    // Preserve the membership owner's refusal through the public startup
-    // boundary. This is still the same FAIL decision, never recovery authority
-    // or an original-allocation classification supplied by this adapter.
-    const membershipOwnerOutcome = Object.freeze({...autoRejoinDecision.membershipOwnerOutcome});
-    throw Object.assign(new Error(autoRejoinDecision.error), {
-      code: membershipOwnerOutcome.outcomeType,
-      reason: membershipOwnerOutcome.reasonCode,
-      membershipOwnerOutcome,
-    });
+    refuseStartup(autoRejoinDecision);
   }
   if (autoRejoinDecision.mode !== STARTUP_JOIN_DECISION_MODE.JOIN) {
     return {

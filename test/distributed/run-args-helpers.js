@@ -5,7 +5,7 @@ export function createDistributedRunArgHelpers({CLI}) {
    * @returns {{config: string, scenario: string|null,
    *   output: string, verbose: boolean, fastLocal: boolean|null,
    *   deterministicDebug: boolean|null, certify: string|null,
-   *   certifyRunDir: string|null}}
+   *   certifyRunDir: string|null, profileNode: string|null}}
    *   (`--certify SHA`: request a certification verdict for that commit)
    */
   function parseArgs(argv) {
@@ -20,6 +20,7 @@ export function createDistributedRunArgHelpers({CLI}) {
     let contract = null;
     let certify = null;
     let certifyRunDir = null;
+    let profileNode = null;
 
     for (let i = 0; i < argv.length; i++) {
       const arg = argv[i];
@@ -50,6 +51,8 @@ export function createDistributedRunArgHelpers({CLI}) {
         certify = i + 1 < argv.length ? argv[++i] : '';
       } else if (arg === CLI.ARG_CERTIFY_RUN_DIR && i + 1 < argv.length) {
         certifyRunDir = argv[++i];
+      } else if (arg === CLI.ARG_PROFILE_NODE && i + 1 < argv.length) {
+        profileNode = argv[++i];
       }
     }
 
@@ -65,6 +68,7 @@ export function createDistributedRunArgHelpers({CLI}) {
       contract,
       certify,
       certifyRunDir,
+      profileNode,
     };
   }
 

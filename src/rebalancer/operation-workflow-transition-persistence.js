@@ -6,6 +6,7 @@ import {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
+  replaceCompletionStepMetadataOf,
 } from './operation-workflow-replace-owner.js';
 import {
   admitCreateTerminalFailure,
@@ -32,12 +33,13 @@ import {
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
+import {presentOperationOf} from
+  './replica-operation-repository-operation-visibility.js';
 
 const {
-  ControlPlaneReadinessService,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   FAILURE_LOG_LEVEL,
   METRICS_LOG_TAG,
-  OPERATION_METADATA_KEY,
   OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -50,8 +52,6 @@ const {
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
-  'priorityDeferredClaimExpectedStep';
 const NO_CONCURRENT_CREATE_ADMISSION_WINNER = false;
 
 // completeOperation/failOperation report their typed transition outcome
@@ -95,9 +95,9 @@ async function observeConcurrentCreateAdmissionWinner(
   ) {
     return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
   }
-  const authoritativeOperation =
+  const authoritativeOperation = presentOperationOf(
     await owner.repository
-      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+      .queryReplicaOperationPersistenceAuthorityObservation(operation));
   if (
     !authoritativeOperation ||
     owner.repository.isOperationTerminal(authoritativeOperation) ||
@@ -138,35 +138,15 @@ class OperationWorkflowTransitionPersistence
         const previousStep = operation.workflowStep;
         const transitionReason = OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
         const now = Date.now();
-        const readinessDecisionDimension =
-          this.resolveOperationReadinessDecisionDimension(operation);
-        const targetNodeId = operation.targetNodeId;
-        const targetReadiness = targetNodeId ?
-          this.controlPlaneReadinessService.getNodeReadinessSync(
-            targetNodeId,
-            {
-              decisionDimension: readinessDecisionDimension,
-            },
-          ) :
-          null;
-        const readinessSnapshot =
-          ControlPlaneReadinessService.compactSnapshotSummary(
-            targetReadiness,
-            readinessDecisionDimension,
-          );
         const persistedStatus =
           WORKFLOW_STEP_TO_STATUS[step] || operation.status;
-        const stepEntry = {
+        const stepEntry = this.buildOperationTransitionStepEntry(
+          operation,
           step,
-          timestamp: now,
+          transitionReason,
           previousStep,
-          reason: transitionReason,
-          ownerKey: operation.operationId,
-        };
-        if (readinessSnapshot) {
-          stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
-            readinessSnapshot;
-        }
+          now,
+        );
         const projectedOperation = {
           ...operation,
           workflowStep: step,
@@ -184,18 +164,6 @@ class OperationWorkflowTransitionPersistence
           nextOperation.updatedAt = now;
           nextOperation.status = persistedStatus;
           nextOperation.stepsHistory = projectedOperation.stepsHistory;
-          if (
-            typeof projectedOperation[
-              PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD
-            ] === 'string'
-          ) {
-            nextOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
-              projectedOperation[
-                PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD
-              ];
-          } else {
-            delete nextOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
-          }
         };
 
         this.ensureOperationWorkflow(operation);
@@ -209,6 +177,9 @@ class OperationWorkflowTransitionPersistence
           return operation;
         }
 
+        // The workflow record shows SENDING only once the claim committed.
+        const restoreCommittedWorkflowRecord =
+          this.captureCommittedWorkflowRecord(operation.operationId);
         await this.operationWorkflowCoordinator.transitionStep(
           operation.operationId,
           {nextStep: step, reason: transitionReason},
@@ -231,33 +202,35 @@ class OperationWorkflowTransitionPersistence
               timeoutBudget: mutationBudget,
             });
         } catch (error) {
-          if (!this.shouldUsePriorityDispatchDeferredLocalClaim(
-            operation,
-            error,
-          )) {
-            throw error;
-          }
-          projectedOperation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD] =
-            previousStep;
-          this.repository.applyLocalPriorityOperationProgressRow(
-            projectedOperation,
-          );
-          commitProjectedState(operation);
-          return operation;
+          restoreCommittedWorkflowRecord();
+          throw error;
         }
 
         if (!transitionCommitted) {
-          const authoritativeOperation =
-            await this.repository.queryAuthoritativeOperationById(
-              operation.operationId,
-              {
-              },
-            );
+          // The claim CAS missed: only the owner's row says whether another
+          // claim won. An unavailable read restores the projection and
+          // throws its typed retryable error (the claim is retried); an
+          // absent or unclaimed row is "not claimed".
+          let authoritativeOperation;
+          try {
+            authoritativeOperation =
+              await this.repository.queryAuthoritativeOperationById(
+                operation.operationId,
+                {
+                  authoritativeReadMode:
+                    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+                },
+              );
+          } catch (error) {
+            restoreCommittedWorkflowRecord();
+            throw error;
+          }
           if (
             !authoritativeOperation ||
             !this.repository.isOperationLocallyOwned(authoritativeOperation) ||
             authoritativeOperation.workflowStep === WORKFLOW_STEP.PENDING
           ) {
+            restoreCommittedWorkflowRecord();
             return null;
           }
           this.operationWorkflowCoordinator.markTransitionCommitted(
@@ -284,6 +257,7 @@ class OperationWorkflowTransitionPersistence
           partitionId: operation.partitionId,
           ingress: OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CLAIM_CAS,
         });
+        this.logOperationStepReadinessEvidence(operation);
 
         this.emitter.emit(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, {
           operation,
@@ -379,10 +353,13 @@ class OperationWorkflowTransitionPersistence
   /**
    * Complete an operation successfully.
    * @param {Object} operation
+   * @param {Object} [options] - {stepMetadata}: recorded on the completion
+   *   step entry (a partition REPLACE completing with its target dead adds
+   *   its degraded group and owed repair itself).
    * @return {Promise<Object>} Typed transition outcome
    *   ({committed, disposition}) of the terminal persist.
    */
-  async completeOperation(operation) {
+  async completeOperation(operation, options = {}) {
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
@@ -399,11 +376,14 @@ class OperationWorkflowTransitionPersistence
     // R-1a (quest replace-source-removal-owner): every success edge of a
     // partition REPLACE ends here, and none completes while its source is
     // still a committed voter on the witness replica.
+    let replaceStepMetadata = null;
     if (isPartitionReplace(operation)) {
       const decision = await decideReplaceCompletion(this, operation);
       if (decision.verdict !== REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
         return buildReplaceCompletionRefusal(decision);
       }
+      replaceStepMetadata =
+        replaceCompletionStepMetadataOf(this, operation, decision);
     }
     const previousStep = operation.workflowStep;
     const stepEntry = this.buildOperationTransitionStepEntry(
@@ -413,6 +393,8 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
+    applyFailureStepMetadata(stepEntry, {stepMetadata: {
+      ...(options.stepMetadata || {}), ...(replaceStepMetadata || {})}});
     const projectedOperation = {
       ...operation,
       workflowStep: finalStep,
@@ -497,6 +479,7 @@ class OperationWorkflowTransitionPersistence
 
     this.stats.operationsCompleted++;
 
+    this.logOperationStepReadinessEvidence(operation);
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
       operationId: operation.operationId,
       type: operation.type,
@@ -753,6 +736,7 @@ class OperationWorkflowTransitionPersistence
         this.logger.error.bind(this.logger);
 
     logMethod(logMessage, logPayload);
+    this.logOperationStepReadinessEvidence(operation);
 
     this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {
       operation,

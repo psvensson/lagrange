@@ -1,4 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {buildUnavailableOperationVisibility} from
+  '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
 export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
   registerCase,
   dependencies,
@@ -363,11 +365,8 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
     async () => TEST_EMPTY_VALUE;
       coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
-    async () => Object.freeze({
-      operation: TEST_EMPTY_VALUE,
-      deferredOutcome: Object.freeze({
-        state: TEST_DEFERRED_VISIBILITY_STATE,
-      }),
+    async () => buildUnavailableOperationVisibility({
+      state: TEST_DEFERRED_VISIBILITY_STATE,
     });
       coordinator.workflowOwner.claimPendingDispatchOperation = async () => {
         throw buildRetryableTransitionFailure();
@@ -505,11 +504,8 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
 
     coordinator.initialize();
     coordinator.workflowOwner.repository.getOperationByIdVisibilityObservation =
-    async () => Object.freeze({
-      operation: TEST_EMPTY_VALUE,
-      deferredOutcome: Object.freeze({
-        state: TEST_DEFERRED_VISIBILITY_STATE,
-      }),
+    async () => buildUnavailableOperationVisibility({
+      state: TEST_DEFERRED_VISIBILITY_STATE,
     });
     coordinator.workflowOwner.claimPendingDispatchOperation =
     async (dispatchOperation) => {

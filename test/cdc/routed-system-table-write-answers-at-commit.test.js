@@ -24,7 +24,7 @@ import {sourceFiles, walk} from '../test-helpers/source-tree-walk.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SYSTEM_TABLE_NAME} from
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -174,6 +174,12 @@ test('(b2) a later HLC satisfies the position; a deletion position is ' +
   service.markShuttingDown();
 
   // A second projection still holds the row as it was before the deletion.
+  // Its cache is current for the services source (as a cache that received
+  // the source's ranges, or listed its image, is: CDC Stage 3 cell); the
+  // deletion arrives as an event and the row's absence satisfies it. On a
+  // cache whose cell is not current the same absence proves nothing (the row
+  // may never have arrived) and the wait holds until the cell is current
+  // (design note S3.7).
   const other = createService();
   other.cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT',
     serviceRow({updated_at_hlc: OLDER_HLC}));
@@ -183,9 +189,14 @@ test('(b2) a later HLC satisfies the position; a deletion position is ' +
     'the pre-deletion row is still present: the deletion is not projected');
   other.cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'DELETE',
     serviceRow({updated_at_hlc: COMMIT_HLC}));
+  t.equal(await within(waiting, 50), PENDING,
+    'absent on a cache whose services cell is not current: not yet proof of the deletion');
+  other.cache.sourceOrder.recordListedPosition({
+    sourcePartition: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+    tableName: SYSTEM_TABLE_NAME.SERVICES, incarnation: '1:1:b2', appliedIndex: 7});
   const removed = await within(waiting, PROMPT_MS);
   t.equal(removed?.value?.outcome, 'reached',
-    'the row\'s absence satisfies the deletion position');
+    'the row\'s absence on a current cache satisfies the deletion position');
   other.service.markShuttingDown();
 });
 

@@ -57,6 +57,8 @@ import {
   createMockControlPlaneReadinessService,
   createTestRebalancer,
 } from '../rebalancer/test-helpers.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 const SEED_NODE_ID = 'seed-node';
 const JOINER_NODE_ID = 'joiner-node';
@@ -101,14 +103,14 @@ async function yieldTurns(turns) {
 
 // The publications table the coordinator reads and persists through; a
 // persisted row is a committed row of the cache.
-function startPublicationOwner(cache) {
+function startPublicationOwner(cache, nodeId = SEED_NODE_ID) {
   return new MembershipPublicationCoordinator({
-    nodeId: SEED_NODE_ID,
+    nodeId,
     systemTableCache: cache,
     logger: QUIET_LOGGER,
     now: () => NOW_MS,
     resolveIsControlPlanePublicationsWriteLeader: () => true,
-    controlPlanePublicationsOwner: {
+    controlPlanePublicationsOwner: publicationsOwnerOverRows({
       async listPublicationsFromCache() {
         return cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
       },
@@ -116,13 +118,20 @@ function startPublicationOwner(cache) {
         return cache.get(TABLES.CONTROL_PLANE_PUBLICATIONS, publicationId) ||
           null;
       },
-      async upsertPublication(row) {
+      async storeRow(row) {
         cache.applySystemTableChange(
           TABLES.CONTROL_PLANE_PUBLICATIONS, CDC_OPERATIONS.UPSERT, row);
         return {success: true};
       },
-    },
+    }),
   });
+}
+
+// A node acknowledges only for itself: each acknowledgement is made by that
+// node's own coordinator over the one publications table.
+function acknowledgeAs(cache, nodeId) {
+  return startPublicationOwner(cache, nodeId)
+    .acknowledgeMembershipPublicationForNode(nodeId);
 }
 
 // The seed's replica dispatch service, listening to its nodes cache: a READY
@@ -246,7 +255,7 @@ test('a membership candidate is pending, not published, until its ' +
 
   // The real publication condition: the member acknowledges it through the
   // owner's per-node acknowledgement path, which selects the candidate.
-  await coordinator.acknowledgeMembershipPublicationForNode(SEED_NODE_ID);
+  await acknowledgeAs(cache, SEED_NODE_ID);
   assert.deepEqual(ownerReads(cache),
     {published: [SEED_NODE_ID], pending: null},
     'acknowledged, it is published membership and no longer pending');
@@ -258,10 +267,10 @@ test('a membership candidate is pending, not published, until its ' +
     published: [SEED_NODE_ID],
     pending: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
   }, 'the joiner is in the pending candidate, not in published membership');
-  await coordinator.acknowledgeMembershipPublicationForNode(SEED_NODE_ID);
+  await acknowledgeAs(cache, SEED_NODE_ID);
   assert.deepEqual(ownerReads(cache).published, [SEED_NODE_ID],
     'with one acknowledgement outstanding it is still not published');
-  await coordinator.acknowledgeMembershipPublicationForNode(JOINER_NODE_ID);
+  await acknowledgeAs(cache, JOINER_NODE_ID);
   assert.deepEqual(ownerReads(cache), {
     published: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
     pending: null,
@@ -290,7 +299,7 @@ async function retractFailedJoiner(coordinator) {
 // candidate that node must acknowledge.
 async function acknowledgeLatest(coordinator, cache, nodeIds) {
   for (const nodeId of nodeIds) {
-    await coordinator.acknowledgeMembershipPublicationForNode(nodeId);
+    await acknowledgeAs(cache, nodeId);
   }
 }
 
@@ -732,6 +741,10 @@ const NOT_READERS = Object.freeze({
   'src/control-plane/publication-active-gate-handoff-contract-constants.js':
     'producer (handoff target)',
   'src/control-plane/publication-active-gate-handoff-contract-decision.js':
+    'producer (handoff target)',
+  // Classifies the handoff's own node lists into the decision's coverage
+  // state; it reads no publication row.
+  'src/control-plane/publication-active-gate-handoff-contract-decision-table.js':
     'producer (handoff target)',
   'src/control-plane/publication-active-gate-handoff-contract-evidence.js':
     'producer (handoff target)',

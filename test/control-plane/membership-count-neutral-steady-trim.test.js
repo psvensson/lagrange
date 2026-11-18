@@ -4,6 +4,8 @@ import {
   deriveMembershipPublicationCandidate,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {buildMembershipPublicationTargetSnapshot} from '../../src/control-plane/membership-publication-target-selection.js';
+import {publicationsOwnerOverRows} from
+  './publication-owner-test-support.js';
 
 // The steady-trim that drops a durably non-serving node from PUBLISHED membership is
 // gated on the GLOBAL priorityRecoverySpreadGapPending flag (plus the
@@ -323,15 +325,15 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
     const coordinator = new MembershipPublicationCoordinator({
       nodeId: NODE_A,
       resolveIsControlPlanePublicationsWriteLeader: () => true,
-      controlPlanePublicationsOwner: {
+      controlPlanePublicationsOwner: publicationsOwnerOverRows({
         async listPublications() {
           return {rows: [durableRow]};
         },
-        async upsertPublication(row) {
+        async storeRow(row) {
           upserts.push(row);
           durableRow = {...durableRow, ...row};
         },
-      },
+      }),
       systemTableCache: {
         getAll(tableName) {
           if (tableName === 'nodes') {

@@ -680,7 +680,12 @@ class StorageAdmissionService {
    * @private
    */
   resolveDeniedDecisionType(blockingReasons) {
-    if (blockingReasons.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED)) {
+    // An accounting read that did not answer is an unknown total: the
+    // denial holds retryably, never as a definite capacity refusal.
+    if (
+      blockingReasons.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED) ||
+      blockingReasons.includes(STORAGE_ADMISSION_REASON.CAPACITY_ACCOUNTING_UNAVAILABLE)
+    ) {
       return STORAGE_ADMISSION_DECISION_TYPE.DEFERRED;
     }
     return STORAGE_ADMISSION_DECISION_TYPE.BLOCKED;

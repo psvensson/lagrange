@@ -298,6 +298,8 @@ const JOINING_ERROR_MSG = Object.freeze({
     `replica_owner_conflict: replica ${replicaId} owned by ${existingNodeId}, ` +
     `joining node ${joiningNodeId} is not authorized`,
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
+  CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED:
+    'control-plane message was not acknowledged',
   CONTROL_PLANE_SERVICE_REQUIRED: 'Control plane service must be initialized',
   LIFECYCLE_READY_TRANSITION_FAILED:
     'Join finalization requires the canonical lifecycle to reach READY',

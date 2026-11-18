@@ -1078,7 +1078,6 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
 
 export {
   TIDB_CASE_EXECUTORS,
-  TIDB_DATABASE_BY_CASE,
   TIDB_EXECUTED_CASE_IDS,
   buildObservedFaultEvidence,
   createSemanticGateStage,

@@ -14,7 +14,6 @@ import {
   readAuthoritativeEntityServiceRows,
 } from './entity-service-row-read.js';
 
-const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 
 const {
@@ -62,11 +61,12 @@ function isEntityOperationObservationValid(observation, entityType, entityId) {
   const deferred = observation.deferredOutcome;
   switch (observation.state) {
   case INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT:
-    return observation.operationCount > 0;
+    return observation.operationCount > 0 && deferred === null;
   case INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY:
     return observation.operationCount === 0 && deferred === null;
   case INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED:
-    return observation.operationCount === 0 && deferred !== null;
+    // Its operations, if any, are the projection fallback.
+    return deferred !== null;
   default:
     return false;
   }
@@ -82,13 +82,13 @@ class RebalanceCoordinatorOperationReadMethods {
    * @return {Promise<Object|null>} Operation or null if not found.
    * @private
    */
-  async queryOperationById(operationId) {
-    return this.repository.queryOperationById(operationId);
+  async queryOperationProjectionById(operationId) {
+    return this.repository.queryOperationProjectionById(operationId);
   }
 
   /**
    * Resolve one operation's visibility from the authoritative owner path,
-   * BYPASSING the cache-first read. Unlike queryOperationById (cache-first, so
+   * BYPASSING the cache-first read. Unlike queryOperationProjectionById (cache-first, so
    * it returns a leadership-handoff-frozen ghost verbatim), this issues the
    * strict owner-RPC read so a bookkeeping-lag ghost resolves to its true
    * terminal state.
@@ -105,11 +105,14 @@ class RebalanceCoordinatorOperationReadMethods {
   }
 
   /**
-   * Query incomplete operations using SQL engine.
+   * This node's incomplete operations as the operation-ledger owner answers
+   * them: one named observation (incomplete-operation-list-observation.js).
+   * A read the local router pressure governor pauses is DEFERRED, never the
+   * cache projection.
    * @readModel COORDINATOR_TIMEOUT_QUERY — READ_MODEL_SOURCE.RECOVERY_SQL
    * @param {Object} [options={}]
    * @param {string} [options.visibilityReadMode]
-   * @return {Promise<Array<Object>>} Array of incomplete operations.
+   * @return {Promise<Object>} PRESENT / EMPTY / DEFERRED observation.
    * @private
    */
   async queryIncompleteOperations(options = {}) {
@@ -122,7 +125,7 @@ class RebalanceCoordinatorOperationReadMethods {
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT &&
       this.shouldPauseAdmissionReadForLocalRouterPressure(options)
     ) {
-      return this.queryCachedIncompleteOperations();
+      return this.repository.buildLocalRouterPressureIncompleteOperationObservation();
     }
     return this.repository.queryIncompleteOperations({
       visibilityReadMode,
@@ -130,12 +133,8 @@ class RebalanceCoordinatorOperationReadMethods {
   }
 
   /**
-   * Normalize coordinator-facing incomplete-operation visibility reads to one
-   * named repository contract.
-   *
-   * Boolean adapters stay local here so hot rebalancer callers can move
-   * incrementally without reopening the repository boolean bag.
-   *
+   * The owner read mode a coordinator caller requested; the default is the
+   * owner-preferred read.
    * @param {Object} [options={}]
    * @return {string}
    * @private
@@ -143,21 +142,11 @@ class RebalanceCoordinatorOperationReadMethods {
   resolveIncompleteOperationVisibilityReadMode(options = {}) {
     if (
       options?.visibilityReadMode ===
-      REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY
-    ) {
-      return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY;
-    }
-    if (
-      options?.visibilityReadMode ===
-      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED
-    ) {
-      return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED;
-    }
-    if (
+      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED ||
       options?.visibilityReadMode ===
       REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT
     ) {
-      return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT;
+      return options.visibilityReadMode;
     }
     return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK;
   }
@@ -171,15 +160,7 @@ class RebalanceCoordinatorOperationReadMethods {
    * @private
    */
   async queryCachedIncompleteOperations() {
-    if (
-      typeof this.repository?.queryCachedIncompleteOperations ===
-        LOCAL_STR_FUNCTION
-    ) {
-      return this.repository.queryCachedIncompleteOperations();
-    }
-    return this.repository.queryIncompleteOperations({
-      visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY,
-    });
+    return this.repository.queryCachedIncompleteOperations();
   }
 
   /**
@@ -192,34 +173,6 @@ class RebalanceCoordinatorOperationReadMethods {
    */
   async queryShutdownIncompleteOperations() {
     return this.queryCachedIncompleteOperations();
-  }
-
-  /**
-   * Resolve the canonical incomplete-operation observation state from the
-   * repository owner. Empty and deferred observations must stay distinct so
-   * admission logic does not collapse a pressured owner read into true zero.
-   *
-   * @param {Array<Object>} [operations=[]]
-   * @return {Object}
-   * @private
-   */
-  getIncompleteOperationObservation(operations = []) {
-    if (
-      typeof this.repository?.resolveIncompleteOperationObservation ===
-      LOCAL_STR_FUNCTION
-    ) {
-      return this.repository.resolveIncompleteOperationObservation(operations);
-    }
-    const operationCount = Array.isArray(operations) ? operations.length : 0;
-    return Object.freeze({
-      state:
-        operationCount > 0 ?
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
-      operationCount,
-      deferredOutcome: null,
-      retryAfterMs: null,
-    });
   }
 
   /**
@@ -306,19 +259,6 @@ class RebalanceCoordinatorOperationReadMethods {
   }
 
   /**
-   * @param {Object|null} observation
-   * @return {boolean}
-   * @private
-   */
-  shouldBlockOperationAdmissionOnIncompleteOperationObservation(
-    observation = null,
-  ) {
-    return (
-      observation?.state === INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED
-    );
-  }
-
-  /**
    * Check for existing in-flight operation for entity/node combination.
    * Prevents duplicate operations (deduplication).
    * @readModel COORDINATOR_OPERATION_DEDUP —
@@ -327,7 +267,9 @@ class RebalanceCoordinatorOperationReadMethods {
    * @param {string} targetNodeId - Target node ID.
    * @param {string} entityType - Entity type (partition/message_group).
    * @param {string} entityId - Entity ID.
-   * @return {Promise<Object|null>} Existing operation or null.
+   * @param {Object} move
+   * @return {Promise<Object|null>} Existing operation, or null when the owner
+   *   answered with none; an unanswered read throws the typed unavailability.
    * @private
    */
   async queryExistingInFlightOperation(
@@ -336,7 +278,6 @@ class RebalanceCoordinatorOperationReadMethods {
     entityType,
     entityId,
     move,
-    options = {},
   ) {
     return this.repository.queryExistingInFlightOperation(
       partitionId,
@@ -345,7 +286,6 @@ class RebalanceCoordinatorOperationReadMethods {
       entityId,
       move,
       this.operationMatchesMoveIntent.bind(this),
-      options,
     );
   }
 

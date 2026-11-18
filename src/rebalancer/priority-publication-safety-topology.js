@@ -50,7 +50,23 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
         await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
       }
-      if (STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus)) {
+      let sourceAbsentOrRemoved =
+        STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus);
+      if (
+        !sourceAbsentOrRemoved &&
+        responseStatus === ReplicaOperationResponseStatus.COMPLETED &&
+        operation?.type === OperationType.REMOVE
+      ) {
+        const stoppingReplicaObservation =
+          await this.observeStoppingReplicaProgress(
+            operation.replicaId,
+            operation.partitionId,
+            operation.targetNodeId,
+          );
+        sourceAbsentOrRemoved =
+          this.isStoppingReplicaRemovalObserved(stoppingReplicaObservation);
+      }
+      if (sourceAbsentOrRemoved) {
         if (
           operation?.type === OperationType.REPLACE &&
           operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&

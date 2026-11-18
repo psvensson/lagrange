@@ -359,6 +359,7 @@ function compactEligibilitySnapshot(snapshot, decisionDimension = null) {
 
 export {
   buildProjectionReadinessContract,
+  collectReasonCodes,
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,

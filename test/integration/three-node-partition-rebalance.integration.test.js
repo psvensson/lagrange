@@ -138,7 +138,6 @@ function createMockRebalanceCoordinator(operations) {
 function insertReadyNode(cache, nodeId) {
   const now = Date.now();
   cache.applySystemTableChange('nodes', 'INSERT', {
-    id: nodeId,
     node_id: nodeId,
     status: 'active',
     cpu_usage_percent: 10,
@@ -160,7 +159,6 @@ function insertReadyNode(cache, nodeId) {
 function insertActiveReplica(cache, serviceId, nodeId, partitionId) {
   const now = Date.now();
   cache.applySystemTableChange('services', 'INSERT', {
-    id: serviceId,
     service_id: serviceId,
     service_type: 'partition',
     node_id: nodeId,

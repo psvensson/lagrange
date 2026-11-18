@@ -31,6 +31,7 @@
 // Order is controlled by held answers and virtual-clock steps; no wall clock
 // is waited on.
 
+import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -158,6 +159,7 @@ function assertCatchupTerminal(box) {
 
 function catchupNodes(owner) {
   return track(owner.service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [TABLES.NODES],
   }));
 }

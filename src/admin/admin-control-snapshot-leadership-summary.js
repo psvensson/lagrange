@@ -28,6 +28,8 @@ import {
   uniqueSorted,
 } from './admin-helpers.js';
 import {AdminControlSnapshotMembershipPublicationReconcile} from './admin-control-snapshot-membership-publication-reconcile.js';
+import {classifySystemPartition} from
+  '../bootstrap/system-partition-classification.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -72,13 +74,6 @@ const PARTITION_LEADER_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
 const PARTITION_LEADER_AUTHORITY_INTEGER_STATE_UNAVAILABLE = 'unavailable';
 const PARTITION_LEADER_AUTHORITY_LEADER_STATE_AVAILABLE = 'available';
 const PARTITION_LEADER_AUTHORITY_LEADER_STATE_UNAVAILABLE = 'unavailable';
-const ADMIN_PRIORITY_RECOVERY_PARTITION_IDS = Object.freeze(new Set([
-  'control_plane_publications-p1',
-  'replica_operations-p1',
-  'sql_transaction_participants-p1',
-  'sql_transactions-p1',
-  'sql_write_operations-p1',
-]));
 const ADMIN_POST_PUBLICATION_TOPOLOGY_PARTITION_IDS = Object.freeze(new Set([
   'message_groups-p1',
   'node_endpoints-p1',
@@ -241,7 +236,9 @@ function isPostPublicationTopologyReplicaOperation(record) {
 function isPostPublicationDiscountableReplicaOperation(record) {
   const partitionId = String(record?.partitionId || '').trim();
   return (
-    ADMIN_PRIORITY_RECOVERY_PARTITION_IDS.has(partitionId) ||
+    // Priority recovery's partitions are the classification owner's
+    // priority control-plane class (never a hand list here).
+    classifySystemPartition({partitionId}).priorityControlPlane ||
     isPostPublicationTopologyReplicaOperation(record)
   );
 }

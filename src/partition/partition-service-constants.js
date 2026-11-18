@@ -337,6 +337,12 @@ const PARTITION_SERVICE_TYPE = Object.freeze({
 const PARTITION_SERVICE_CDC = Object.freeze({
   HANDSHAKE_STATUS_OK: 'ok',
   HANDSHAKE_STATUS_ALREADY_SUBSCRIBED: 'already_subscribed',
+  // A partition's delivery lane has one propagation subscriber: a second,
+  // different one is refused with this status (its holder is named).
+  HANDSHAKE_STATUS_PROPAGATION_HELD: 'propagation_subscriber_held',
+  // The role a subscription declares: the partition's one propagation
+  // subscriber (the replica's CDC propagation to its message groups).
+  SUBSCRIBER_ROLE_PROPAGATION: 'propagation',
   SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
   REPLAY_REASON_BUFFERED_REMAINING: 'buffered_events_remaining',
 });
@@ -506,6 +512,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   CDC_SUBSCRIBER_REMOVED: 'CDC subscriber removed',
   CDC_SUBSCRIPTION_HANDSHAKE_ACK:
     'CDC subscription handshake acknowledged',
+  CDC_PROPAGATION_SUBSCRIBER_REFUSED:
+    'CDC propagation subscriber refused: the partition already holds one',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
   INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
   REBALANCER_DEPENDENCIES_APPLIED:
@@ -578,9 +586,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_PARAM_DELETE_MISMATCH:
     'Column/param count mismatch in parameterized DELETE',
   CDC_DELIVERY_FAILED: 'Failed to deliver CDC event',
-  CDC_SUBSCRIPTION_FAILED: 'Failed to subscribe CDC listener',
-  CDC_INVALID_SUBSCRIBER:
-    'CDC subscriber must be a function or object with handleCDCEvent',
+  CDC_INVALID_SUBSCRIBER: 'CDC subscriber must be a function',
   PARTITION_SIZE_FAILED: 'Failed to calculate partition size',
   PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',
   SPLIT_REPLICATION_ROUTING_FAILED:

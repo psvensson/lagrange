@@ -61,6 +61,88 @@ function buildRecentPeerLivenessEvidence(
   });
 }
 
+// A socket is judged wedged only after a sustained ACK-timeout streak: the
+// quarantine threshold several times over, and never fewer than this many.
+const WEDGED_SOCKET_STREAK_THRESHOLD_MULTIPLE = 3;
+const WEDGED_SOCKET_MINIMUM_STREAK = 6;
+
+/**
+ * An ACK frame (in time or late) arrived on this outbound socket: the socket
+ * returns acknowledgements, so its ACK-timeout streak and the silence the
+ * streak measured both end here.
+ * @param {Object} connection - The outbound connection record owning the socket.
+ * @param {number} nowMs - Router clock.
+ * @return {void}
+ */
+function recordOutboundSocketAcknowledgement(connection, nowMs) {
+  connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+  connection.ackTimeoutStreakStartedAt = null;
+  connection.lastAckAt = nowMs;
+  connection.lastAckTimeoutAt = null;
+}
+
+/**
+ * A delivery on this outbound socket spent its ACK bound. The first timeout
+ * of a streak stamps when the streak began; any ACK on the socket clears it.
+ * @param {Object} connection - The outbound connection record owning the socket.
+ * @param {number} nowMs - Router clock.
+ * @return {{ackTimeoutStreak: number, streakStartedAt: number, lastAckAt: number}}
+ */
+function recordOutboundSocketAckTimeout(connection, nowMs) {
+  const streak = (connection.ackTimeoutStreak || 0) + 1;
+  connection.ackTimeoutStreak = streak;
+  if (streak === 1 || !Number.isFinite(connection.ackTimeoutStreakStartedAt)) {
+    connection.ackTimeoutStreakStartedAt = nowMs;
+  }
+  connection.lastAckTimeoutAt = nowMs;
+  return {
+    ackTimeoutStreak: streak,
+    streakStartedAt: connection.ackTimeoutStreakStartedAt,
+    lastAckAt: connection.lastAckAt || 0,
+  };
+}
+
+/**
+ * The least time an ACK-timeout streak on one socket must span before it is
+ * evidence against that socket: one keepalive round (interval plus its PONG
+ * bound), so a burst of short-bound timeouts on an idle socket cannot outrun
+ * the keepalive that would have shown the peer alive.
+ * @param {Object} router - {pingIntervalMs, pingTimeoutMs}.
+ * @return {number} Milliseconds.
+ */
+function resolveQuarantineMinimumStreakSpanMs(router) {
+  return router.pingIntervalMs + router.pingTimeoutMs;
+}
+
+/**
+ * Socket-specific death evidence for the ACK-timeout quarantine (CL-007).
+ * Wedged means: THIS outbound socket has returned no acknowledgement at all,
+ * late ones included, for a full liveness window during which deliveries on
+ * it kept spending their ACK bound. The silence is measured from the later of
+ * the socket's last ACK and the start of the current timeout streak, so an
+ * idle socket's old lastAckAt, a burst of short-bound timeouts, or ACKs that
+ * were merely late (each one ends the streak) can never satisfy it.
+ * @param {Object} evidence - From recordOutboundSocketAckTimeout.
+ * @param {Object} policy - {nowMs, livenessWindowMs, quarantineThreshold}.
+ * @return {{wedged: boolean, socketSilentForMs: number}}
+ */
+function resolveOutboundSocketWedged(evidence, policy) {
+  const socketSilentForMs = policy.nowMs -
+    Math.max(evidence.lastAckAt, evidence.streakStartedAt);
+  const sustainedStreak = Math.max(
+    policy.quarantineThreshold * WEDGED_SOCKET_STREAK_THRESHOLD_MULTIPLE,
+    WEDGED_SOCKET_MINIMUM_STREAK,
+  );
+  return Object.freeze({
+    socketSilentForMs,
+    wedged:
+      Number.isFinite(policy.livenessWindowMs) &&
+      policy.livenessWindowMs > TRANSPORT_NUM.ZERO &&
+      evidence.ackTimeoutStreak >= sustainedStreak &&
+      socketSilentForMs >= policy.livenessWindowMs,
+  });
+}
+
 function getRouterPeerLivenessEvidence(
   router, nodeId, nowMs = router.timeSource.now()) {
   return buildRecentPeerLivenessEvidence(
@@ -146,4 +228,8 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
 
 export {
   buildRecentPeerLivenessEvidence,
+  recordOutboundSocketAckTimeout,
+  recordOutboundSocketAcknowledgement,
+  resolveOutboundSocketWedged,
+  resolveQuarantineMinimumStreakSpanMs,
 };

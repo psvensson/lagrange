@@ -12,6 +12,17 @@ import {
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
 } from './constants.js';
+import {
+  DISK_FLUSH_LATENCY_UNAVAILABLE,
+  ResourceRateTracker,
+  containerSampleFields,
+  containerUnavailableFields,
+  processSampleFields,
+  processUnavailableFields,
+  unavailable,
+} from './run-health/resource-sample-contract.js';
+import {SAMPLE_UNAVAILABLE_REASON} from './run-health/resource-sample-vocabulary.js';
+import {writeClusterNodeHealth} from './run-health/node-health-harness-collection.js';
 
 const NEWLINE = '\n';
 const STREAM_FLAGS_TRUNCATE = 'w';
@@ -744,6 +755,18 @@ function diffTopologySnapshots(previousSnapshot, currentSnapshot) {
   return events;
 }
 
+// One resource sample's identity, stamped now; the collectors fill the rest.
+function newResourceSample(node) {
+  return {
+    timestamp: Date.now(),
+    nodeId: node?.id || null,
+    containerId: node?.containerId || null,
+    // The address peers reach the node at: the key a link baseline's
+    // hosts are matched by.
+    nodeAddress: node?.ip || null,
+  };
+}
+
 class PlaybackRecorder {
   constructor(options = {}) {
     this._outputDir = options.outputDir || OUTPUT.DEFAULT_DIR;
@@ -774,6 +797,7 @@ class PlaybackRecorder {
 
     this._eventsCount = 0;
     this._samplesCount = 0;
+    this._resourceRateTracker = new ResourceRateTracker();
     this._snapshotsCount = 0;
     this._previousSnapshot = null;
     this._warnings = [];
@@ -882,6 +906,13 @@ class PlaybackRecorder {
       await this._awaitCapture('_resourceCapturePromise');
       await this._collectTopologySnapshot();
       await this._collectResourceSamples();
+      // The nodes' own health buffers, read once while they still answer.
+      await writeClusterNodeHealth({
+        nodes: this._cluster?.getNodes?.() ?? [],
+        scenarioDir: this._scenarioDir,
+        sinceMs: this._startedAt,
+      }).catch((error) => this._captureWarning(
+        'node-health-collection-failed', normalizeCaptureErrorMessage(error)));
     }
     if (this._shutdownStartedAt === null) {
       this._shutdownStartedAt = Date.now();
@@ -1169,14 +1200,12 @@ class PlaybackRecorder {
       if (this._shutdownStartedAt !== null) {
         return;
       }
-      const sample = {
-        timestamp: Date.now(),
-        nodeId: node?.id || null,
-        containerId: node?.containerId || null,
-      };
+      const sample = newResourceSample(node);
 
       await this._appendContainerResourceSample(node, sample);
       await this._appendProcessResourceSample(node, sample);
+      sample.rates = this._resourceRateTracker.ratesOf(sample);
+      sample.diskFlushLatency = DISK_FLUSH_LATENCY_UNAVAILABLE;
 
       this._appendNdjson(this._samplesStream, sample);
       this._samplesCount++;
@@ -1191,19 +1220,18 @@ class PlaybackRecorder {
         WARNING_CODE_STATS_API_MISSING + '-' + nodeId,
         'Docker provider does not expose getContainerStats',
       );
-      sample.containerStatsError = 'container stats API unavailable';
+      Object.assign(sample, containerUnavailableFields(
+        SAMPLE_UNAVAILABLE_REASON.CONTAINER_STATS_API_MISSING,
+        'container stats API unavailable'));
       return;
     }
     try {
-      const stats = await provider.getContainerStats(node.containerId);
-      sample.cpuPercent = stats.cpuPercent;
-      sample.containerMemoryWorkingSetBytes = stats.memoryUsageBytes;
-      sample.containerMemoryLimitBytes = stats.memoryLimitBytes;
-      sample.rxBytes = stats.rxBytes;
-      sample.txBytes = stats.txBytes;
+      Object.assign(sample, containerSampleFields(
+        await provider.getContainerStats(node.containerId)));
     } catch (error) {
       const errorMessage = normalizeCaptureErrorMessage(error);
-      sample.containerStatsError = errorMessage;
+      Object.assign(sample, containerUnavailableFields(
+        SAMPLE_UNAVAILABLE_REASON.CONTAINER_STATS_CAPTURE_FAILED, errorMessage));
       this._captureWarning(
         WARNING_CODE_STATS_CAPTURE_FAILED + '-' + nodeId,
         'Failed to capture container stats for node ' + nodeId +
@@ -1219,23 +1247,19 @@ class PlaybackRecorder {
         WARNING_CODE_PROCESS_DIAGNOSTICS_API_MISSING + '-' + nodeId,
         'Node handle does not expose process resource diagnostics',
       );
-      sample.processDiagnosticsError =
-        'process resource diagnostics API unavailable';
+      Object.assign(sample, processUnavailableFields(
+        {unavailable: unavailable(SAMPLE_UNAVAILABLE_REASON.PROCESS_DIAGNOSTICS_API_MISSING)},
+        'process resource diagnostics API unavailable'));
       return;
     }
     try {
       const diagnostics = await node.getProcessResourceDiagnostics({
         timeoutMs: PLAYBACK.resourceDiagnosticsTimeoutMs,
       });
-      sample.processCapturedAt = diagnostics.capturedAt;
-      sample.processRssBytes = diagnostics.process.rssBytes;
-      sample.processHeapUsedBytes = diagnostics.process.heapUsedBytes;
-      sample.processHeapTotalBytes = diagnostics.process.heapTotalBytes;
-      sample.processExternalBytes = diagnostics.process.externalBytes;
-      sample.processArrayBuffersBytes = diagnostics.process.arrayBuffersBytes;
+      Object.assign(sample, processSampleFields(diagnostics));
     } catch (error) {
       const errorMessage = normalizeCaptureErrorMessage(error);
-      sample.processDiagnosticsError = errorMessage;
+      Object.assign(sample, processUnavailableFields(error, errorMessage));
       this._captureWarning(
         WARNING_CODE_PROCESS_DIAGNOSTICS_CAPTURE_FAILED + '-' + nodeId,
         'Failed to capture process diagnostics for node ' + nodeId +

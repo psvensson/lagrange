@@ -1,33 +1,17 @@
 #!/usr/bin/env node
 import {runQuestEvidenceHarness} from './harness-runtime.js';
-import {questState, readLog, verdictOf} from '../solve/store.js';
-import {VERDICT} from '../solve/schema.js';
+import {
+  CHECK_VERIFICATION_FLAG,
+  exitWithQuestVerificationCheck,
+} from './quest-verification-check.js';
 
 const QUEST_ID = 'cache-replica-incarnation-coherence';
 const OUTPUT_FILE = `solve/quests/${QUEST_ID}/evidence/receipt.json`;
-const CHECK_VERIFICATION_FLAG = '--check-verification';
-const VERIFIER_PREFIX = 'subagent:';
 
 const TEST_FILE = 'test/cache/cache-replica-incarnation-coherence.test.js';
 
-function checkVerification() {
-  const state = questState(readLog(process.cwd(), QUEST_ID));
-  const last = state.lastVerification;
-  const approved = state.attempts.length > 0 && last !== null &&
-    state.verificationIsCurrent &&
-    verdictOf(last) === VERDICT.APPROVE &&
-    String(last.verifier || '').startsWith(VERIFIER_PREFIX);
-  process.stdout.write(`${JSON.stringify({
-    approved,
-    verifier: last?.verifier ?? null,
-    current: state.verificationIsCurrent,
-    attempts: state.attempts.length,
-  })}\n`);
-  process.exit(approved ? 0 : 1);
-}
-
 if (process.argv.includes(CHECK_VERIFICATION_FLAG)) {
-  checkVerification();
+  exitWithQuestVerificationCheck(QUEST_ID);
 }
 
 const receipts = Object.freeze([

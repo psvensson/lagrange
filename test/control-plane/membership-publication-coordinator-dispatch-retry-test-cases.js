@@ -2,6 +2,8 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const DISPATCH_RETRY_SOURCE_NODE_ID = 'node-source';
 const DISPATCH_RETRY_TARGET_NODE_ID = 'node-target';
@@ -68,7 +70,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         replicaOperationRepository: {
           async queryIncompleteOperations(options) {
             authoritativeQueryOptions.push(options);
-            return [{
+            return buildAnsweredIncompleteOperationListObservation([{
               operationId: 'op-priority-retry-1',
               partitionId: 'replica_operations-p1',
               entityType: 'partition',
@@ -79,7 +81,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
               status: 'pending',
               workflowStep: 'PENDING',
               stepsHistory: [],
-            }];
+            }]);
           },
         },
       });
@@ -165,7 +167,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
         },
         async queryIncompleteOperations(options) {
           authoritativeQueryOptions.push(options);
-          return [{
+          return buildAnsweredIncompleteOperationListObservation([{
             operationId: authoritativeOperationId,
             partitionId: DISPATCH_RETRY_CREATING_PARTITION_ID,
             entityType: 'partition',
@@ -177,7 +179,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
             status: 'pending',
             workflowStep: 'PENDING',
             stepsHistory: [],
-          }];
+          }]);
         },
       },
     });
@@ -249,7 +251,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
           },
           async queryIncompleteOperations(options) {
             authoritativeQueryOptions.push(options);
-            return [{
+            return buildAnsweredIncompleteOperationListObservation([{
               operationId: 'op-priority-retry-target-owner',
               partitionId: 'replica_operations-p1',
               entityType: 'partition',
@@ -260,7 +262,7 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
               status: 'pending',
               workflowStep: 'PENDING',
               stepsHistory: [],
-            }];
+            }]);
           },
         },
       });

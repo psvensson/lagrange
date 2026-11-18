@@ -6,7 +6,7 @@ import {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
 } from '../cache/cache-constants.js';
 import {CDC_OPERATION, COLUMN} from '../constants/index.js';
-import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {CDC_ERROR_CODE, CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {applyAuthoritativeCacheMutation} from './cdc-terminal-gate.js';
 import {canonicalizeSystemTableRow} from
   '../control-plane/system-row-normalizers.js';
@@ -29,6 +29,17 @@ const CACHE_ABSENCE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 
+// The one cache owner of authoritative repair, sweep, mutation snapshots and
+// observation receipts is the writable SystemTableCache (cacheMutationTarget).
+// The read view (systemTableCache) is a projection of that same cache, never a
+// second owner. Unbound is a typed refusal, not an empty answer.
+function requireCacheMutationTarget(service) {
+  const cache = service.cacheMutationTarget;
+  if (cache) return cache;
+  throw Object.assign(new Error(CDC_ERROR_CODE.CACHE_OWNER_UNBOUND),
+    {code: CDC_ERROR_CODE.CACHE_OWNER_UNBOUND, nodeId: service.nodeId});
+}
+
 function resolveCacheVisibilityRepairReadAuthority(expectPresent) {
   return expectPresent ?
     CACHE_REPAIR_READ_AUTHORITY :
@@ -48,9 +59,6 @@ function resolveAuthoritativeCacheRepairMutationMode(
 }
 
 function cacheRepairSatisfiedAfterApply(options) {
-  if (typeof options.cacheMutationTarget.get !== 'function') {
-    return false;
-  }
   const resultingRow = options.cacheMutationTarget.get(
     options.tableName,
     options.key,
@@ -72,14 +80,8 @@ function authoritativeReadRowsAreValid(queryResult) {
 }
 
 function captureAuthoritativeCacheSweepSnapshot(service, tableName) {
-  const cache =
-    typeof service.cacheMutationTarget?.captureTableMutationSnapshot ===
-      'function' ?
-      service.cacheMutationTarget :
-      service.systemTableCache;
-  return typeof cache?.captureTableMutationSnapshot === 'function' ?
-    cache.captureTableMutationSnapshot(tableName) :
-    null;
+  return requireCacheMutationTarget(service)
+    .captureTableMutationSnapshot(tableName);
 }
 
 function authoritativeCacheSweepInputsValid(
@@ -89,10 +91,6 @@ function authoritativeCacheSweepInputsValid(
   options,
 ) {
   return Boolean(
-    service.cacheMutationTarget &&
-    typeof service.cacheMutationTarget.reconcileAgainstAuthoritativeTruth ===
-      'function' &&
-    typeof service.getPrimaryKeyField === 'function' &&
     Array.isArray(authoritativeRows) &&
     options?.mutationSnapshot?.tableName === tableName &&
     Array.isArray(options.mutationSnapshot.entries) &&
@@ -129,13 +127,8 @@ function applyAuthoritativeCacheRepairRow(
   key,
   options = {},
 ) {
-  if (
-    !service.cacheMutationTarget ||
-    typeof service.cacheMutationTarget.applySystemTableChange !==
-      'function' ||
-    !row ||
-    typeof row !== 'object'
-  ) {
+  const cache = requireCacheMutationTarget(service);
+  if (!row || typeof row !== 'object') {
     return false;
   }
   const canonicalRow = canonicalizeSystemTableRow(tableName, row);
@@ -143,10 +136,7 @@ function applyAuthoritativeCacheRepairRow(
     operation,
     options.mutationMode,
   );
-  const currentRow =
-    typeof service.cacheMutationTarget.get === 'function' ?
-      service.cacheMutationTarget.get(tableName, key) :
-      null;
+  const currentRow = cache.get(tableName, key);
   const currentRowSatisfiesRepair =
     doesCachedRowSatisfyAuthoritativeRepair({
       tableName,
@@ -175,14 +165,14 @@ function applyAuthoritativeCacheRepairRow(
     options.originHlc ? {[COLUMN.UPDATED_AT_HLC]: options.originHlc} : null,
     canonicalRow,
   );
-  service.cacheMutationTarget.applySystemTableChange(
+  cache.applySystemTableChange(
     tableName,
     operation,
     repairRow,
     mutationOptions,
   );
   return cacheRepairSatisfiedAfterApply({
-    cacheMutationTarget: service.cacheMutationTarget,
+    cacheMutationTarget: cache,
     tableName,
     operation,
     authoritativeRow: canonicalRow,
@@ -208,6 +198,7 @@ function applyAuthoritativeCacheSweepRows(
   authoritativeRows,
   options,
 ) {
+  const cache = requireCacheMutationTarget(service);
   if (!authoritativeCacheSweepInputsValid(
     service,
     tableName,
@@ -224,7 +215,7 @@ function applyAuthoritativeCacheSweepRows(
   if (!canonicalRows) {
     return 0;
   }
-  const result = service.cacheMutationTarget.reconcileAgainstAuthoritativeTruth(
+  const result = cache.reconcileAgainstAuthoritativeTruth(
     {[tableName]: canonicalRows},
     {
       evictOlderThanMs: options?.readStartedAtMs,
@@ -244,18 +235,8 @@ function captureCacheRecordBeforeAbsenceRepair(
   if (expectPresent) {
     return undefined;
   }
-  const cache =
-    typeof service.cacheMutationTarget?.captureRecordMutationSnapshot ===
-      'function' ?
-      service.cacheMutationTarget :
-      service.systemTableCache;
-  if (typeof cache?.captureRecordMutationSnapshot === 'function') {
-    return cache.captureRecordMutationSnapshot(tableName, key);
-  }
-  return Object.freeze({
-    record: service.getCacheRecord(tableName, key),
-    mutationRevision: null,
-  });
+  return requireCacheMutationTarget(service)
+    .captureRecordMutationSnapshot(tableName, key);
 }
 
 function cacheRecordChangedDuringAuthoritativeAbsenceRead(
@@ -326,5 +307,6 @@ export {
   cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
+  requireCacheMutationTarget,
   resolveCacheVisibilityRepairReadAuthority,
 };

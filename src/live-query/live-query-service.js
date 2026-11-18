@@ -1,33 +1,21 @@
 /**
- * Live Query Service - Core service for real-time streaming queries.
- * Parses LIVE SELECT statements, extracts partition keys, and compiles predicates.
+ * Live query SQL helpers: parse LIVE SELECT statements, extract partition
+ * keys and compile predicates.
  * Requirements: 33.1, 33.4, 33.16
  */
 
-import {v4 as uuidv4} from 'uuid';
-import {LoggingService} from '../logging/logging-service.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-representation.js';
-import {TABLES} from '../constants/index.js';
-import {extractReferencedTables} from './live-query-sql-renderer.js';
 import {
   LIVE_QUERY_AST_TYPE,
-  LIVE_QUERY_CONFIG_KEY,
-  LIVE_QUERY_CURSOR,
-  LIVE_QUERY_DEFAULTS,
   LIVE_QUERY_DEFAULT_VALUE,
   LIVE_QUERY_ERROR_MSG,
-  LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATOR,
   LIVE_QUERY_REGEX,
   LIVE_QUERY_REGEX_FLAG,
   LIVE_QUERY_REGEX_REPLACE,
   LIVE_QUERY_SQL,
-  LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const OP_IS = 'IS';
 const OP_IS_NOT = 'IS NOT';
 
@@ -383,228 +371,6 @@ function parseLiveSelect(sql) {
   };
 }
 
-function resolveLiveQueryPrimaryTable(tables, parsedQuery) {
-  if (tables.length > 0) {
-    return tables[0];
-  }
-  return parsedQuery?.from?.name || null;
-}
-
-function resolveLiveQueryTtlMs(config) {
-  return config.get(LIVE_QUERY_CONFIG_KEY.DEFAULT_TTL_MS) ||
-    LIVE_QUERY_DEFAULTS.DEFAULT_TTL_MS;
-}
-
-/**
- * LiveQueryService manages a single live query subscription.
- */
-class LiveQueryService {
-  /**
-   * Create a new LiveQueryService.
-   * @param {Object} options - Configuration options.
-   * @param {Object} options.parsedQuery - Parsed SELECT query AST.
-   * @param {Object} options.client - Client connection.
-   * @param {Object} options.systemCache - System table cache.
-   * @param {string} options.nodeId - Node ID.
-   */
-  constructor(options = {}) {
-    this.queryId = uuidv4();
-    this.parsedQuery = options.parsedQuery ?? null;
-    this.client = options.client ?? null;
-    this.systemCache = options.systemCache ?? null;
-    this.nodeId = options.nodeId || LIVE_QUERY_DEFAULT_VALUE.UNKNOWN;
-
-    // Extract table names from query
-    this.tables = extractReferencedTables(this.parsedQuery);
-    this.table = resolveLiveQueryPrimaryTable(this.tables, this.parsedQuery);
-
-    // Compile predicate from WHERE clause
-    this.params = options.params || [];
-    this.whereClause = this.parsedQuery?.where ?? null;
-    this.predicate = compilePredicate(this.whereClause, this.params);
-
-    // Partition key value (extracted lazily)
-    this.partitionKeyValue = null;
-    this.partitionKeyColumn = null;
-
-    // Subscribed partitions
-    this.subscribedPartitions = new Set();
-
-    // Lifecycle management
-    this.config = ConfigurationManager.getInstance();
-    this.ttlMs = resolveLiveQueryTtlMs(this.config);
-    this.lastRenewal = Date.now();
-    this.lastSeenHLC = null;
-    this.createdAt = Date.now();
-
-    // Status
-    this.active = false;
-    this.cleanedUp = false;
-
-    // Logging
-    this.logger = this.initLogger();
-  }
-
-  /**
-   * Initialize logger.
-   * @return {Object} Logger instance.
-   * @private
-   */
-  initLogger() {
-    try {
-      const loggingService = LoggingService.getInstance();
-      if (loggingService.isInitialized()) {
-        return loggingService.forSubsystem(LIVE_QUERY_SUBSYSTEM.LIVE_QUERY_SERVICE);
-      }
-    } catch {
-      // Logging not available
-    }
-    return console;
-  }
-
-  /**
-   * Get the partition key column for the table.
-   * @return {string|null} Partition key column name.
-   */
-  getPartitionKeyColumn() {
-    if (this.partitionKeyColumn) {
-      return this.partitionKeyColumn;
-    }
-
-    if (!this.systemCache || !this.table) {
-      return null;
-    }
-
-    try {
-      const tableInfo = this.systemCache.get(TABLES.TABLES, this.table) ||
-        this.systemCache.find(TABLES.TABLES, (t) =>
-          t.table_name === this.table || t.tableName === this.table,
-        );
-
-      if (tableInfo) {
-        const keyColumns = resolveDeclaredPrimaryKeyColumns(tableInfo);
-        this.partitionKeyColumn = keyColumns[0] || null;
-        return this.partitionKeyColumn;
-      }
-    } catch {
-      // Cache not available
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract partition key value from WHERE clause.
-   * @return {*} Partition key value or null.
-   */
-  extractPartitionKeyValue() {
-    if (this.partitionKeyValue !== null) {
-      return this.partitionKeyValue;
-    }
-
-    const keyColumn = this.getPartitionKeyColumn();
-    this.partitionKeyValue = extractPartitionKeyValue(this.whereClause, keyColumn);
-    return this.partitionKeyValue;
-  }
-
-  /**
-   * Evaluate if a row matches the predicate.
-   * @param {Object} row - Row data.
-   * @return {boolean} True if row matches.
-   */
-  evaluatePredicate(row) {
-    return this.predicate(row);
-  }
-
-  /**
-   * Renew the subscription lease.
-   * @param {string} cursor - Last seen HLC timestamp.
-   * @return {Object} Renewal result with new expiry.
-   */
-  renew(cursor) {
-    this.lastRenewal = Date.now();
-    if (cursor) {
-      this.lastSeenHLC = cursor;
-    }
-
-    this.logger.debug(LIVE_QUERY_LOG_MSG.RENEWED, {
-      queryId: this.queryId,
-      cursor,
-    });
-
-    return {
-      queryId: this.queryId,
-      expiresAt: this.lastRenewal + this.ttlMs,
-      renewBefore: this.lastRenewal + Math.floor(this.ttlMs * LOCAL_NUM_ZERO_POINT_SEVEN),
-    };
-  }
-
-  /**
-   * Check if the subscription has expired.
-   * @return {boolean} True if expired.
-   */
-  isExpired() {
-    return Date.now() > this.lastRenewal + this.ttlMs;
-  }
-
-  /**
-   * Get query metadata for monitoring.
-   * @return {Object} Query metadata.
-   */
-  getMetadata() {
-    return {
-      queryId: this.queryId,
-      table: this.table,
-      partitionKeyValue: this.partitionKeyValue,
-      subscribedPartitions: Array.from(this.subscribedPartitions),
-      ttlMs: this.ttlMs,
-      lastRenewal: this.lastRenewal,
-      lastSeenHLC: this.lastSeenHLC,
-      createdAt: this.createdAt,
-      active: this.active,
-    };
-  }
-
-  /**
-   * Get canonical query signature for grouping.
-   * @return {string} Query signature.
-   */
-  getQuerySignature() {
-    return `${this.table}${LIVE_QUERY_CURSOR.SEPARATOR}` +
-      `${canonicalizePredicate(this.whereClause)}`;
-  }
-
-  /**
-   * Mark the query as active.
-   */
-  activate() {
-    this.active = true;
-  }
-
-  /**
-   * Mark the query as inactive and clean up.
-   */
-  deactivate() {
-    this.active = false;
-  }
-
-  /**
-   * Clean up resources.
-   */
-  cleanup() {
-    if (this.cleanedUp) return;
-
-    this.cleanedUp = true;
-    this.active = false;
-    this.subscribedPartitions.clear();
-
-    this.logger.debug(LIVE_QUERY_LOG_MSG.CLEANED_UP, {
-      queryId: this.queryId,
-      table: this.table,
-    });
-  }
-}
-
 const COMPLEX_NODE_TYPES = new Set([
   'function', 'aggr_func', 'aggregate', 'subquery', 'case', 'cast',
 ]);
@@ -635,7 +401,6 @@ function isComplexWhereNode(node) {
 const evaluateWhereExpression = evaluateExpression;
 
 export {
-  LiveQueryService,
   compilePredicate,
   extractPartitionKeyValue,
   canonicalizePredicate,

@@ -166,6 +166,8 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
   host.clearDeferredSafetyBlockState = () => {};
   host.releaseReservationForOperation = async (operation) =>
     recorded.reservationReleases.push(operation.operationId);
+  // The readiness evidence line is a diagnostic of the full owner.
+  host.logOperationStepReadinessEvidence = () => {};
   host.buildOperationTransitionStepEntry = (
     _operation, step, reason, previousStep, now,
   ) => ({step, reason, previousStep, timestamp: now});

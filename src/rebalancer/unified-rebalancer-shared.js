@@ -13,7 +13,6 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   classifySystemPartition,
   getPartitionRowFromCache,
-  isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot} from '../bootstrap/traffic-readiness-utils.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
@@ -179,7 +178,10 @@ const DEFAULT_MESSAGE_GROUP_POLICY = REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP;
 const SQL_BUDGET = Object.freeze({
   SELECT_REBALANCE_BUDGET:
     'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
-  SELECT_IN_FLIGHT_COUNT: `SELECT COUNT(*) AS total_count FROM replica_operations
+  // Keyed rows, counted by the reader: the authoritative row reader merges
+  // partition row sets by primary key, so an aggregate row (no key) never
+  // survives it and a COUNT(*) read never answers.
+  SELECT_IN_FLIGHT_OPERATION_IDS: `SELECT operation_id FROM replica_operations
      WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
      AND NOT (${REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE})`,
 });
@@ -190,8 +192,11 @@ const PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS = Object.freeze({
   bypassEmptyQueryDelay: true,
 });
 
+// The budget reads prefer this node's replica and ask the owner when the
+// table is not hosted here: "not hosted" is not a failed read.
 const REBALANCER_BUDGET_READ_OPTIONS = Object.freeze({
-  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
 });
@@ -340,7 +345,6 @@ export const UNIFIED_REBALANCER_SHARED = {
   hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReadySnapshot,
   isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
   isPriorityRecoveryEmergencyPartition,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,

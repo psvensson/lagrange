@@ -373,7 +373,7 @@ function isTerminalStep(step) {
 function evolveWorld(world) {
   if (world.concurrentOperationOpen) {
     world.concurrentOperationOpen = false;
-    world.cache.upsert('replica_operations', {...CONCURRENT_OPERATION_ROW,
+    world.coordinator.testReplicaOperationLedger.commit({...CONCURRENT_OPERATION_ROW,
       status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
       completed_at: Date.now()});
     world.readiness.publish(PEER_NODE_C);
@@ -452,7 +452,7 @@ const PHASE_DRIVERS = Object.freeze({
   [REPLACE_OWNER_PHASE.ACTIVE_DEFERRING]: async (world, operation) => {
     // Remove safety defers behind a concurrent operation on the partition
     // (CL-043 serialization), owned by another node.
-    world.cache.upsert('replica_operations', CONCURRENT_OPERATION_ROW);
+    world.coordinator.testReplicaOperationLedger.commit(CONCURRENT_OPERATION_ROW);
     world.concurrentOperationOpen = true;
     await execute(world, operation);
   },

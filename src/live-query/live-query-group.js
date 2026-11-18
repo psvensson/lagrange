@@ -42,10 +42,9 @@ import {
   isComplexQuery,
   projectSingleColumn,
   recordInitialFrontiers,
-  renewClientSubscription,
-  resolveEffectiveRows,
   resolveExecutionSQL,
   resolveGroupSql,
+  resolveRowIdentity,
   resolveTableInfo,
   resolveWhereInfo,
   shouldSkipBufferedEvent,
@@ -183,32 +182,6 @@ class QueryGroup extends EventEmitter {
     });
 
     return this.clients.size === 0;
-  }
-
-  /**
-   * Renew a client's subscription.
-   * @param {string} clientId - Client ID.
-   * @param {string} cursor - Last seen HLC timestamp.
-   * @return {Object|null} Renewal result or null if client not found.
-   */
-  renewClient(clientId, cursor) {
-    const subscription = this.clients.get(clientId);
-    if (!subscription) return null;
-    this.lastActivityAt = Date.now();
-    const renewal = renewClientSubscription(subscription, cursor);
-    return {
-      queryId: this.queryId,
-      ...renewal,
-    };
-  }
-
-  /**
-   * Check if a client subscription has expired.
-   * @param {Object} subscription - Client subscription.
-   * @return {boolean} True if expired.
-   */
-  isSubscriptionExpired(subscription) {
-    return Date.now() > subscription.lastRenewal + subscription.ttlMs;
   }
 
   /**
@@ -410,11 +383,9 @@ class QueryGroup extends EventEmitter {
     this.handleCDCEvent(change, partitionId);
   }
 
-  _fanOutResult(result, change) {
+  _fanOutResult(result) {
     this.lastActivityAt = Date.now();
-    const hlcTimestamp = change.hlc_timestamp || change.hlcTimestamp;
     fanOutToClients(this.clients, result, {
-      hlcTimestamp,
       logger: this.logger,
       queryId: this.queryId,
     });
@@ -429,6 +400,7 @@ class QueryGroup extends EventEmitter {
    * @return {Promise<Object|null>} Evaluated result or null.
    */
   async handleCDCEvent(change, partitionId = null) {
+    if (this.failure) return null;
     const eventVersion = extractEventVersion(change);
     if (!checkAndAdvanceFrontier(
       this.partitionFrontiers, partitionId, eventVersion, this.compareVersions,
@@ -442,10 +414,19 @@ class QueryGroup extends EventEmitter {
       return null;
     }
 
-    // Tier 1: Incremental delta evaluation
-    const result = this.evaluateChange(change);
+    // Tier 1: Incremental delta evaluation. A change that cannot be
+    // evaluated ends the subscription with its named error.
+    let result;
+    try {
+      result = this.evaluateChange(change);
+    } catch (error) {
+      this.failure = error;
+      this._fanOutResult({type: LIVE_QUERY_EVENT.ERROR, queryId: this.queryId,
+        error: error.message});
+      return null;
+    }
     if (result) {
-      this._fanOutResult(result, change);
+      this._fanOutResult(result);
     }
     return result;
   }
@@ -499,54 +480,35 @@ class QueryGroup extends EventEmitter {
   }
 
   /**
-   * Resolve primary key identity for a row.
+   * A row's identity: its table's declared primary key, every column of it.
    * @param {Object} row - Row data.
    * @return {*} Primary key value.
+   * @throws {LiveQueryRowKeyError} When the row does not carry its key.
    */
   getRowPrimaryKey(row) {
-    if (!row) return null;
-    const pkCol = this.getPartitionKeyColumn() || 'id';
-    return row[pkCol] ?? row.id ?? row.rowid ?? null;
+    return resolveRowIdentity(row, this.table,
+      resolveDeclaredPrimaryKeyColumns(this.getTableInfo()));
   }
 
   /**
-   * Execute the initial snapshot query and record baseline frontiers.
+   * Execute the snapshot query: hold its rows as the result set and record
+   * the baseline frontiers the stream continues from.
    * @param {Object} [options]
-   * @return {Promise<Array>} Projected snapshot rows.
+   * @return {Promise<{rows: Array, count: number}>} Projected snapshot rows.
    */
   async executeInitialQuery(options = {}) {
-    if (!this.sqlQueryEngine) {
-      this.lastResultSet = [];
-      return [];
-    }
     const sql = this._resolveExecutionSQL();
     const result = await executeSnapshotQuery(this.sqlQueryEngine, sql, this.params);
     const rawRows = result.rows ?? result.results ?? [];
     const projectedRows = rawRows.map((r) => this.projectRow(r));
     this.lastResultSet = projectedRows;
 
-    storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
+    // Only the incremental path holds rows; a re-executed result is replaced.
+    if (!this.isComplex) {
+      storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
+    }
     recordInitialFrontiers(this, options, result.appliedIndex);
-    return projectedRows;
-  }
-
-  /**
-   * Initialize subscriptions and execute initial snapshot with frontier handoff.
-   * @param {Object} params
-   * @param {Function} params.subscribeToPartition
-   * @param {Function} [params.unsubscribeFromPartition]
-   * @param {Object} [params.options]
-   * @return {Promise<Array>} Snapshot rows.
-   */
-  async initialize({subscribeToPartition, unsubscribeFromPartition, options = {}}) {
-    this.startHydration();
-    await this.updatePartitionSubscriptions(
-      subscribeToPartition, unsubscribeFromPartition, options,
-    );
-    const rows = await this.executeInitialQuery(options);
-    this.drainBufferedEvents();
-    this.active = true;
-    return rows;
+    return {rows: projectedRows, count: result.count ?? projectedRows.length};
   }
 
   /**
@@ -574,7 +536,6 @@ class QueryGroup extends EventEmitter {
       const rawRows = result.rows ?? result.results ?? [];
       const newRows = rawRows.map((r) => this.projectRow(r));
       this.lastResultSet = newRows;
-      storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
 
       const resetNotification = buildResetNotification({
         queryId: this.queryId,
@@ -636,43 +597,43 @@ class QueryGroup extends EventEmitter {
     const pk = this.getRowPrimaryKey(newRow);
     const matched = this.predicate(newRow);
     if (matched) {
-      if (pk != null) this.resultSet.set(pk, newRow);
+      this.resultSet.set(pk, newRow);
       return this._makeInsertEvent(newRow, hlc, useDeltaFormat);
     }
-    if (pk != null) this.resultSet.delete(pk);
+    this.resultSet.delete(pk);
     return null;
   }
 
-  _evaluateDelete(oldRow, hlc, useDeltaFormat) {
-    if (!oldRow) return null;
-    const pk = this.getRowPrimaryKey(oldRow);
-    const storedRow = pk != null ? this.resultSet.get(pk) : null;
-    const effectiveRow = storedRow ? {...storedRow, ...oldRow} : oldRow;
+  _evaluateDelete(deletedRow, hlc, useDeltaFormat) {
+    if (!deletedRow) return null;
+    const pk = this.getRowPrimaryKey(deletedRow);
+    const storedRow = this.resultSet.get(pk);
+    const effectiveRow = storedRow ? {...storedRow, ...deletedRow} : deletedRow;
     const matched = storedRow != null || this.predicate(effectiveRow);
-    if (pk != null) this.resultSet.delete(pk);
+    this.resultSet.delete(pk);
     if (matched) {
       return this._makeDeleteEvent(effectiveRow, hlc, useDeltaFormat);
     }
     return null;
   }
 
-  _evaluateUpdate(oldRow, newRow, hlc, useDeltaFormat) {
-    const pk = this.getRowPrimaryKey(newRow) ?? this.getRowPrimaryKey(oldRow);
-    const storedRow = pk != null ? this.resultSet.get(pk) : null;
-    const {effectiveOld, effectiveNew} = resolveEffectiveRows(storedRow, oldRow, newRow);
+  // An UPDATE names only the row it leaves: membership before it is the result set's.
+  _evaluateUpdate(newRow, hlc, useDeltaFormat) {
+    const pk = this.getRowPrimaryKey(newRow);
+    const heldRow = this.resultSet.get(pk) ?? null;
+    const effectiveNew = heldRow ? {...heldRow, ...newRow} : newRow;
+    const wasMember = heldRow !== null;
+    const isMember = Boolean(effectiveNew && this.predicate(effectiveNew));
+    updateStoredRowState(this.resultSet, pk, isMember, effectiveNew);
 
-    const oldMatched = storedRow != null || Boolean(effectiveOld && this.predicate(effectiveOld));
-    const newMatched = Boolean(effectiveNew && this.predicate(effectiveNew));
-    updateStoredRowState(this.resultSet, pk, newMatched, effectiveNew);
-
-    if (!oldMatched && newMatched) {
+    if (!wasMember && isMember) {
       return this._makeInsertEvent(effectiveNew, hlc, useDeltaFormat);
     }
-    if (oldMatched && !newMatched) {
-      return this._makeDeleteEvent(effectiveOld, hlc, useDeltaFormat);
+    if (wasMember && !isMember) {
+      return this._makeDeleteEvent(heldRow, hlc, useDeltaFormat);
     }
-    if (oldMatched && newMatched) {
-      return this._makeUpdateEvent(effectiveOld, effectiveNew, hlc, useDeltaFormat);
+    if (wasMember && isMember) {
+      return this._makeUpdateEvent(heldRow, effectiveNew, hlc, useDeltaFormat);
     }
     return null;
   }
@@ -684,17 +645,17 @@ class QueryGroup extends EventEmitter {
    * @return {Object|null} Event to send to clients or null.
    */
   evaluateChange(change, options = {}) {
-    const {operation, data: newRow, old_data: oldRow} = change;
-    const hlc = change.hlc_timestamp || change.hlcTimestamp;
+    const {operation, data: row} = change; // the row the change is about
+    const hlc = change.hlc_timestamp;
     const useDeltaFormat = options.deltaFormat ?? this.deltaFormat ?? false;
 
     switch (operation?.toUpperCase()) {
     case LIVE_QUERY_OPERATION.INSERT:
-      return this._evaluateInsert(newRow, hlc, useDeltaFormat);
+      return this._evaluateInsert(row, hlc, useDeltaFormat);
     case LIVE_QUERY_OPERATION.UPDATE:
-      return this._evaluateUpdate(oldRow, newRow, hlc, useDeltaFormat);
+      return this._evaluateUpdate(row, hlc, useDeltaFormat);
     case LIVE_QUERY_OPERATION.DELETE:
-      return this._evaluateDelete(oldRow, hlc, useDeltaFormat);
+      return this._evaluateDelete(row, hlc, useDeltaFormat);
     default:
       return null;
     }

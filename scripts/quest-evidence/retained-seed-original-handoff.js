@@ -12,13 +12,13 @@ import fs from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {runQuestEvidenceHarness} from './harness-runtime.js';
-import {questState, readLog, verdictOf} from '../solve/store.js';
-import {VERDICT} from '../solve/schema.js';
+import {
+  CHECK_VERIFICATION_FLAG,
+  exitWithQuestVerificationCheck,
+} from './quest-verification-check.js';
 
 const QUEST_ID = 'retained-seed-original-handoff';
 const OUTPUT_FILE = `solve/quests/${QUEST_ID}/evidence/receipt.json`;
-const CHECK_VERIFICATION_FLAG = '--check-verification';
-const VERIFIER_PREFIX = 'subagent:';
 const SHARED_CACHE_ENV = 'RETAINED_SEED_SHARED_CACHE_DIR';
 const SHARED_CACHE_PREFIX = 'retained-seed-evidence-cache-';
 const EXIT_EVENT = 'exit';
@@ -40,19 +40,7 @@ const PROTECTION_WITNESSES = Object.freeze([
   'test/bootstrap/seed-retained-effects.integration.test.js',
 ]);
 
-function checkVerification() {
-  const state = questState(readLog(process.cwd(), QUEST_ID));
-  const last = state.lastVerification;
-  const approved = state.attempts.length > 0 && last !== null &&
-    state.verificationIsCurrent &&
-    verdictOf(last) === VERDICT.APPROVE &&
-    String(last.verifier || '').startsWith(VERIFIER_PREFIX);
-  process.stdout.write(`${JSON.stringify({approved, verifier: last?.verifier ?? null,
-    current: state.verificationIsCurrent, attempts: state.attempts.length})}\n`);
-  process.exit(approved ? 0 : 1);
-}
-
-if (process.argv.includes(CHECK_VERIFICATION_FLAG)) checkVerification();
+if (process.argv.includes(CHECK_VERIFICATION_FLAG)) exitWithQuestVerificationCheck(QUEST_ID);
 
 const sharedCacheDir = fs.mkdtempSync(path.join(tmpdir(), SHARED_CACHE_PREFIX));
 process.env[SHARED_CACHE_ENV] = sharedCacheDir;

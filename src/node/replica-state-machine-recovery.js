@@ -787,6 +787,7 @@ function recoveryTimeoutStartedAt(stateMachine, state, stateEnteredAt) {
 }
 
 export {
+  REMOVAL_AUTHORITY_KIND,
   bindAuthoritativeRemovalAuthority,
   completeDurableRemovalWithAuthority,
   durableRowVersion,

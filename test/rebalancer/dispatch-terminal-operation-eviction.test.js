@@ -17,8 +17,14 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import {ensureDispatchReservationOrSkip} from '../../src/rebalancer/operation-workflow-dispatch-reservation-gate.js';
 import {
   STALE_DISPATCH_EPOCH_PREFIX,
+  STALE_DISPATCH_TERMINAL_UNSETTLED,
   ensureDispatchMembershipEpochOrSkip,
 } from '../../src/rebalancer/operation-workflow-dispatch-epoch-gate.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from '../../src/rebalancer/replica-operation-update-disposition.js';
+import {REBALANCER_SKIP_REASON} from
+  '../../src/rebalancer/rebalancer-constants.js';
 import {STORAGE_RESERVATION_AUTHORITY_ERROR} from '../../src/rebalancer/storage-reservation-authority.js';
 import {
   buildStorageIncreasingOperation,
@@ -128,6 +134,62 @@ test('stale epoch in epoch gate marks terminal, updates cache progress row and c
     );
     t.ok(progressRowApplied, 'progress row was applied to cache');
     t.equal(retriesCleared, true, 'coordinator terminal retries were cleared');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('stale epoch whose terminal write is refused seeds nothing, keeps retries and is not reported terminal', async (t) => {
+  initializeConfig();
+  const {coordinator} = createEpochCoordinator({
+    currentEpoch: PLANNING_EPOCH + 1,
+  });
+  const operation = buildEpochBoundAddOperation(PLANNING_EPOCH, {
+    operationId: 'epoch-stale-unsettled-terminal-test',
+    type: OperationType.ADD,
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+
+  let progressRowApplied = null;
+  coordinator.repository.applyLocalPriorityOperationProgressRow = (op) => {
+    progressRowApplied = op;
+    return true;
+  };
+  let retriesCleared = false;
+  coordinator.workflowOwner.clearTerminalOperationRetryState = () => {
+    retriesCleared = true;
+  };
+  // The terminal write was refused: the durable row is still PENDING and the
+  // operation object was not made terminal.
+  coordinator.workflowOwner.failOperation = async () => Object.freeze({
+    committed: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+  });
+
+  try {
+    const result = await ensureDispatchMembershipEpochOrSkip(
+      coordinator.workflowOwner,
+      operation,
+    );
+    t.equal(result.skipped, true, 'an unsettled terminal is a typed skip');
+    t.equal(
+      result.reason,
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      'the skip names the pending retry of the terminal write',
+    );
+    t.not(result.terminal, true, 'an uncommitted terminal is not reported terminal');
+    t.equal(result.error, STALE_DISPATCH_TERMINAL_UNSETTLED,
+      'the error names the unsettled terminal write');
+    t.notOk(
+      String(result.error).startsWith(STALE_DISPATCH_EPOCH_PREFIX),
+      'the error does not carry the prefix the dispatch service reads as a settled terminal',
+    );
+    t.equal(progressRowApplied, null,
+      'no uncommitted row is seeded into the local cache');
+    t.equal(retriesCleared, false,
+      'the operation keeps its retry owners while its row is still live');
+    t.equal(operation.workflowStep, WORKFLOW_STEP.PENDING,
+      'the operation is still at its durable step');
   } finally {
     await coordinator.shutdown();
   }

@@ -90,6 +90,7 @@
 //   (EFFECT_METHODS). An effect issued through a method outside that list is
 //   seen only by the in-flight lanes' seam counts.
 
+import {CDC_CATCHUP_TRIGGER} from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -111,6 +112,11 @@ import {
   MEMBERSHIP_PUBLICATION_STATUS,
 } from '../../src/control-plane/membership-publication-row-contract.js';
 import {
+  PUBLICATION_WRITE_OUTCOME,
+  PUBLICATION_WRITE_UNKNOWN_REASON,
+  isPublicationWriteSettled,
+} from '../../src/control-plane/owners/control-plane-publication-change.js';
+import {
   isRetryableControlPlaneError,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {SeedCleanupHandler} from
@@ -125,6 +131,8 @@ import {
   INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
+import {relistSourceTable} from '../../src/cdc/cdc-integration-service-source-relist.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {buildControlPlaneReadAuthority} from
@@ -278,14 +286,22 @@ function track(operation) {
   return box;
 }
 
+// The publication admission answers a typed outcome and never throws for a
+// failed write. These witnesses are about the answer the writer gave the
+// write, so an outcome that is not settled surfaces that answer here.
 function startPublication(composed, persistOptions = undefined) {
-  return track(composed.coordinator.persistPublicationRow({
+  return track(composed.coordinator.admitPublicationRow({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,
     status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
     published_active_node_ids: [NODE_ID],
-  }, persistOptions));
+  }, persistOptions).then((written) => {
+    if (!isPublicationWriteSettled(written)) {
+      throw written.error;
+    }
+    return written.row;
+  }));
 }
 
 async function untilWriteInFlight(composed) {
@@ -368,11 +384,13 @@ test('(i) shutdown wins before the membership side continues: the released ' +
 
 // Re-derived for answers at commit (quest
 // replica-admission-from-committed-operation, attempt 2): an accepted write
-// has committed and answered at its commit before shutdown; the persist
-// loop's read-back that follows is what shutdown overtakes - refused
-// terminal and not routed - and the committed write is never re-issued.
-test('(ii-a) the write committed immediately before shutdown wins: the ' +
-  'read-back that follows is refused terminal, the write is not re-issued',
+// has committed and answered at its commit before shutdown. Until 2026-11-11
+// the persist loop read the row back after it and shutdown overtook that
+// read; the insert-only admission needs no read-back (its answer names the
+// affected row), so the committed write is answered committed and is never
+// re-issued.
+test('(ii-a) the write committed immediately before shutdown wins: it is ' +
+  'answered from its own commit, nothing is read back or re-issued',
 async () => {
   const composed = composeSeedWriters();
   const box = startPublication(composed);
@@ -382,10 +400,20 @@ async () => {
   await composed.shutDownSqlQueryEngine();
   await yieldTurns(SETTLE_TURNS);
 
-  assertTerminalAfterShutdown(composed, box);
-  assert.equal(box.outcome.error.writeOutcome,
-    CDC_CONSTANTS.CDC_SHUT_DOWN_WRITE_OUTCOME?.NOT_ROUTED,
-    'the overtaken step is the read-back, refused before it was routed');
+  // The admission is an insert that never replaces: its own answer (one
+  // affected row) is the confirmation, so no read-back follows for shutdown
+  // to overtake. The committed write is reported committed.
+  assert.notEqual(box.outcome, null,
+    'the write settles without any clock moving');
+  assert.equal(box.outcome.value?.publication_id, PUBLICATION_ID,
+    'the write that committed before shutdown is answered committed');
+  assert.deepEqual(composed.retrySleepsAfterShutdown, [],
+    'no retry delay is armed after shutdown began');
+  assert.equal(composed.timeSource.pendingTimerCount(), 0,
+    'the CDC service holds no timer after shutdown');
+  assert.equal(composed.engine.writesAfterShutdown, 0,
+    'the write is not re-issued to an engine after shutdown began');
+  assertOwnerQuiescent(composed);
   await box.done;
 });
 
@@ -493,27 +521,32 @@ test('(vi) a write that arrives after shutdown began is refused before any ' +
 // no longer runs inside a write and holds no retry delay (its in-budget
 // retry, confirmCacheVisibilityHoleWithinBudget, is deleted).
 
-// The persist loop: a failed answer does not prove the row is absent, so it
-// reads the durable row back, except through a torn-down writer.
-function persistThroughCommittingOwner(failure) {
+// The publication admission: a failed answer does not prove the row is
+// absent, so the owner reads the durable row, except through a torn-down
+// writer (nothing can be read back or re-sent through it).
+function admitThroughCommittingGateway(failure) {
   const table = new Map();
-  const counts = {upserts: 0, reads: 0};
-  const owner = {
-    async getPublication(publicationId) {
-      counts.reads += 1;
-      return table.get(publicationId) || null;
+  const counts = {inserts: 0, reads: 0};
+  const owner = new ControlPlanePublicationsOwner({
+    controlPlaneWriteRetryTimeoutMs: 0,
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_table, _sql, params) {
+        counts.reads += 1;
+        return {success: true,
+          rows: [table.get(params[0])].filter(Boolean)};
+      },
+      async insertSystemTableRow(_table, row) {
+        counts.inserts += 1;
+        table.set(row.publication_id, {...row});
+        throw failure;
+      },
     },
-    async upsertPublication(row) {
-      counts.upserts += 1;
-      table.set(row.publication_id, {...row});
-      throw failure;
-    },
-  };
+  });
   const coordinator = new MembershipPublicationCoordinator({
     nodeId: NODE_ID, controlPlanePublicationsOwner: owner,
     logger: QUIET_LOGGER,
   });
-  const box = track(coordinator.persistPublicationRow({
+  const box = track(coordinator.admitPublicationRow({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,
@@ -523,31 +556,35 @@ function persistThroughCommittingOwner(failure) {
   return {box, counts};
 }
 
-test('the publication persist loop reads a failed write back, except ' +
-  'through a torn-down writer', async () => {
+test('a publication write answered by a torn-down writer is UNKNOWN: ' +
+  'nothing is read back or re-sent through it', async () => {
   const service = new CDCIntegrationService({nodeId: NODE_ID});
   service.markShuttingDown();
   const shutDown = await service.executeSQL(
-    'INSERT OR REPLACE INTO control_plane_publications (publication_id) ' +
+    'INSERT OR IGNORE INTO control_plane_publications (publication_id) ' +
       'VALUES (?)', [PUBLICATION_ID]).then(() => null, (error) => error);
-  const throughTornDown = persistThroughCommittingOwner(shutDown);
+  const throughTornDown = admitThroughCommittingGateway(shutDown);
   await throughTornDown.box.done;
-  assert.ok(throughTornDown.box.outcome.error,
+  const written = throughTornDown.box.outcome.value;
+  assert.equal(written.outcome, PUBLICATION_WRITE_OUTCOME.UNKNOWN,
     'a write answered shut down is not read back into a success');
-  assert.deepEqual(throughTornDown.counts, {upserts: 1, reads: 1},
-    'nothing is read back or re-attempted through a torn-down writer ' +
-    '(the one read is the loop\'s pre-write read)');
+  assert.equal(written.reason,
+    PUBLICATION_WRITE_UNKNOWN_REASON.WRITER_SHUT_DOWN);
+  assert.deepEqual(throughTornDown.counts, {inserts: 1, reads: 0},
+    'nothing is read back or re-attempted through a torn-down writer');
 });
 
-test('an ordinary failure while the service is live is still read back: ' +
-  'a committed publication answered failed is a success', async () => {
-  const committedThenFailed = persistThroughCommittingOwner(
-    new Error(CDC_CONSTANTS.CDC_ERROR_MSG.UPSERT_FAILED));
+test('an ordinary failure while the service is live is resolved by the ' +
+  'durable read: a committed publication answered failed is COMMITTED',
+async () => {
+  const committedThenFailed = admitThroughCommittingGateway(
+    new Error(CDC_CONSTANTS.CDC_ERROR_MSG.INSERT_FAILED));
   await committedThenFailed.box.done;
-  assert.ok(committedThenFailed.box.outcome.value,
-    'the durable read-back finds the committed row');
-  assert.deepEqual(committedThenFailed.counts, {upserts: 1, reads: 2},
-    'one write, the pre-write read and the durable read-back');
+  assert.equal(committedThenFailed.box.outcome.value.outcome,
+    PUBLICATION_WRITE_OUTCOME.COMMITTED,
+    'the durable read finds the committed row');
+  assert.deepEqual(committedThenFailed.counts, {inserts: 1, reads: 1},
+    'one write and the durable read that resolves it');
 });
 
 // Semantic leg: after the mark, the owner's primitives arm nothing.
@@ -610,7 +647,9 @@ test('catch-up: the mark lands while it sleeps between deferred reads: no ' +
   const composed = composeSeedWriters();
   const reads = deferAuthoritativeReads(composed);
   const box = track(composed.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({tables: [...CATCHUP_TABLES]}));
+    .hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: [...CATCHUP_TABLES]}));
   for (let turn = 0; turn < SETTLE_TURNS &&
     composed.timeSource.pendingTimerCount() === 0; turn += 1) {
     await yieldTurns(1);
@@ -640,7 +679,7 @@ test('catch-up: started after the mark, it reads nothing and settles at once',
     const reads = deferAuthoritativeReads(composed);
     await composed.shutDownSqlQueryEngine();
     const box = track(composed.cdcIntegrationService
-      .hydrateCdcPropagatedTablesFromAuthority());
+      .hydrateCdcPropagatedTablesFromAuthority({trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP}));
     await yieldTurns(SETTLE_TURNS);
 
     assert.equal(reads.afterMark, 0, 'no authoritative read after the mark');
@@ -666,7 +705,9 @@ const REAL_CLOCK_LANES = [
   {name: 'the catch-up sleep', async drive(composed) {
     deferAuthoritativeReads(composed);
     return track(composed.cdcIntegrationService
-      .hydrateCdcPropagatedTablesFromAuthority({tables: [...CATCHUP_TABLES]}));
+      .hydrateCdcPropagatedTablesFromAuthority({
+        trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+        tables: [...CATCHUP_TABLES]}));
   }},
 ];
 
@@ -957,7 +998,9 @@ test('in flight (S1): the catch-up\'s owner-RPC read is in flight at the ' +
   const held = heldAnswers();
   const composed = composeReadFlow({ownerRpc: () => held.hold()});
   const catchup = track(composed.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}));
+    .hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: ['nodes']}));
   await untilQueued(held);
   composed.cdcIntegrationService.markShuttingDown();
   held.answer({success: false, errorCode: 'TABLE_NOT_FOUND',
@@ -972,7 +1015,9 @@ test('in flight (K5): the catch-up\'s read is in flight at the mark and ' +
   const held = heldAnswers();
   const composed = composeReadFlow({ownerRpc: () => held.hold()});
   const catchup = track(composed.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}));
+    .hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: ['nodes']}));
   await untilQueued(held);
   composed.cdcIntegrationService.markShuttingDown();
   held.answer({success: true, rows: [{...IN_FLIGHT_ROW}]});
@@ -994,7 +1039,9 @@ test('in flight (S2): the catch-up\'s local read is in flight at the mark ' +
     },
   });
   const catchup = track(composed.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}));
+    .hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: ['nodes']}));
   await untilQueued(held);
   composed.cdcIntegrationService.markShuttingDown();
   held.answer({success: false, error: 'local replica not ready', rows: []});
@@ -1177,7 +1224,9 @@ test('routing: with only the gate answering terminal, no read, repair ' +
   const settle = (operation) => operation.then((value) => ({value}),
     (error) => ({error}));
   const catchup = await settle(
-    service.hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}));
+    service.hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: ['nodes']}));
   const refreshed = await settle(
     service.refreshAuthoritativeCacheRow('nodes', IN_FLIGHT_ROW.node_id));
   const repaired = await settle(service.repairCacheVisibilityHole(
@@ -1275,7 +1324,9 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
   // owner-RPC answer that may take the SQL fallback.
   rpcAnswers.push({success: false, errorCode: 'TABLE_NOT_FOUND',
     error: 'Table not found: nodes'});
-  await settle(service.hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}));
+  await settle(service.hydrateCdcPropagatedTablesFromAuthority({
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+    tables: ['nodes']}));
   rpcAnswers.push({success: false, deferRetry: true, retryAfterMs: 1,
     error: 'deferred'});
   await settle(service.refreshAuthoritativeCacheRow('nodes', 'other-node'));
@@ -1321,7 +1372,9 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
   });
   wireGate(noLocalQuery.cdcIntegrationService);
   await settle(noLocalQuery.cdcIntegrationService
-    .hydrateCdcPropagatedTablesFromAuthority({tables: ['nodes']}),
+    .hydrateCdcPropagatedTablesFromAuthority({
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+      tables: ['nodes']}),
   noLocalQuery.timeSource);
   const fanOut = composeReadFlow({
     onSeam,
@@ -1358,6 +1411,21 @@ test('routing: every read, reseed, repair apply and submission is gated in ' +
     authoritativeObservedAtMs: Date.now(),
     mutationSnapshot: service.captureAuthoritativeCacheSweepSnapshot('nodes'),
   });
+  // The positioned re-list of a source table (CDC Stage 3): its page read
+  // through the owner-RPC path, answered with a one-page leader image.
+  const nodesPartition = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
+  rpcAnswers.push({success: true, rows: [{...IN_FLIGHT_ROW}],
+    readAuthorityWitness: {state: 'observed', partitionId: nodesPartition,
+      role: RAFT_ROLE.LEADER, servingNodeId: 'peer-node', servingReplicaId: 'nodes-r1',
+      observedAtMs: 1},
+    sourceImage: {sourcePartition: nodesPartition, incarnation: '1:1:relist',
+      appliedIndex: 1},
+    imagePage: {imageId: 'relist-image', page: 0, last: true, rowCount: 1, byteCount: 1}});
+  // The cell owes a list (as a new group member's node marks it).
+  service.cacheMutationTarget.sourceOrder.requireListed(nodesPartition,
+    SYSTEM_TABLE_NAME.NODES);
+  await settle(relistSourceTable(service, {sourcePartition: nodesPartition,
+    tableName: SYSTEM_TABLE_NAME.NODES}));
   await yieldTurns(SETTLE_TURNS);
 
   for (const exercised of ['ownerRpcReads', 'overlayReseeds', 'localReads',

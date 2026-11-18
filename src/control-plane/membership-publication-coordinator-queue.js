@@ -1,6 +1,8 @@
 import {
   NUM,
 } from '../constants/index.js';
+import {OWNER_KEY_QUEUED_CONTEXT_STATE} from
+  '../workflow/reconcile-queue-constants.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
 } from './membership-publication-row-contract.js';
@@ -104,7 +106,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   REPLICA_OPERATION_ROWS: 'replicaOperationRows',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SERVICE_ROWS: 'serviceRows',
-  SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT = Symbol(
   'membership-publication-reconcile-context-absent',
@@ -184,23 +185,11 @@ function buildCriticalConvergenceQueueOutcome({
 }
 
 function buildCriticalConvergenceQueueEvidence(reconcileQueue, ownerKey) {
-  const ownerAlreadyPending =
-    typeof reconcileQueue?.has === 'function' ?
-      reconcileQueue.has(ownerKey) :
-      reconcileQueue?.pending instanceof Map &&
-        reconcileQueue.pending.has(ownerKey);
-  const pendingSize = Number.isFinite(reconcileQueue?.size) ?
-    reconcileQueue.size :
-    (
-      reconcileQueue?.pending instanceof Map ?
-        reconcileQueue.pending.size :
-        0
-    );
   return Object.freeze({
-    queueStopped: reconcileQueue?.stopped === true,
-    ownerAlreadyPending,
+    queueStopped: reconcileQueue.stopped === true,
+    ownerAlreadyPending: reconcileQueue.has(ownerKey),
     queueAtBound:
-      pendingSize >= CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
+      reconcileQueue.size >= CONTROL_PLANE_CRITICAL_CONVERGENCE_QUEUE_BOUND,
   });
 }
 
@@ -348,16 +337,6 @@ function filterMembershipPublicationHandoffContext(
     );
   }
   return filteredHandoff;
-}
-
-function resolveMembershipPublicationReconcileFlag(previousValue, nextValue) {
-  if (previousValue === false || nextValue === false) {
-    return false;
-  }
-  if (nextValue === true || previousValue === true) {
-    return true;
-  }
-  return nextValue ?? previousValue;
 }
 
 function resolvePublicationRowEpoch(row) {
@@ -513,16 +492,16 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
     ),
     excludedNodeIds,
   );
+  // A handoff is a snapshot of the rows it was derived from. Only the newest
+  // enqueue's handoff is current: a later wake that carries none (recovery
+  // progress, a READY publication) runs against current rows, never against
+  // a handoff an earlier enqueue captured.
   const publicationActiveGateHandoff =
     filterMembershipPublicationHandoffContext(
       nextContext[
         MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
           .PUBLICATION_ACTIVE_GATE_HANDOFF
-      ] ??
-        previousContext[
-          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-            .PUBLICATION_ACTIVE_GATE_HANDOFF
-        ],
+      ],
       excludedNodeIds,
     );
   const mergedContext = {
@@ -530,24 +509,17 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
     ...nextContext,
     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.LATEST_PUBLICATION_ROW]:
       selectLatestPublicationRow(previousContext, nextContext),
-    [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-      .SKIP_PUBLICATION_WRITE_READBACK]:
-      resolveMembershipPublicationReconcileFlag(
-        previousContext[
-          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-            .SKIP_PUBLICATION_WRITE_READBACK
-        ],
-        nextContext[
-          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
-            .SKIP_PUBLICATION_WRITE_READBACK
-        ],
-      ),
   };
   if (publicationActiveGateHandoff) {
     mergedContext[
       MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
         .PUBLICATION_ACTIVE_GATE_HANDOFF
     ] = publicationActiveGateHandoff;
+  } else {
+    delete mergedContext[
+      MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
+        .PUBLICATION_ACTIVE_GATE_HANDOFF
+    ];
   }
   if (excludedNodeIds.length > 0) {
     mergedContext[
@@ -589,36 +561,21 @@ function resolveQueuedMembershipPublicationReconcileContext(
   reconcileQueue,
   ownerKey,
 ) {
-  const pendingEntry =
-    reconcileQueue?.pending instanceof Map ?
-      reconcileQueue.pending.get(ownerKey) :
-      null;
-  if (pendingEntry) {
-    return pendingEntry.context;
-  }
-  const retryEntry =
-    reconcileQueue?.retryWorkItems instanceof Map ?
-      reconcileQueue.retryWorkItems.get(ownerKey) :
-      null;
-  if (retryEntry) {
-    return retryEntry.context;
-  }
-  return MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
+  const queued = reconcileQueue.readQueuedContext(ownerKey);
+  return queued.state === OWNER_KEY_QUEUED_CONTEXT_STATE.QUEUED ?
+    queued.context :
+    MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_ABSENT;
 }
 
 class MembershipPublicationCoordinatorQueue extends
   MembershipPublicationCoordinatorReconcile {
   constructor(options = {}) {
     super(options);
-    if (
-      typeof this.reconcileQueue?.configureRetryPolicy === 'function'
-    ) {
-      this.reconcileQueue.configureRetryPolicy({
-        isRetryableError: isRetryableControlPlaneError,
-        getRetryAfterMs: resolveCriticalConvergenceQueueRetryAfterMs,
-        getFailureReason: resolveCriticalConvergenceQueueFailureReason,
-      });
-    }
+    this.reconcileQueue.configureRetryPolicy({
+      isRetryableError: isRetryableControlPlaneError,
+      getRetryAfterMs: resolveCriticalConvergenceQueueRetryAfterMs,
+      getFailureReason: resolveCriticalConvergenceQueueFailureReason,
+    });
   }
 
   enqueueClusterMembershipReconcile(

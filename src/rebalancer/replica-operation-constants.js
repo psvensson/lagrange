@@ -19,6 +19,10 @@ const ReplicaOperationMessageType = Object.freeze({
   // read amendment 1, section 3.1).
   READ_COMMITTED_MEMBERSHIP: MESSAGE_TYPE.READ_COMMITTED_MEMBERSHIP,
   CLAIM_FAILED_CREATE_CLEANUP: MESSAGE_TYPE.CLAIM_FAILED_CREATE_CLEANUP,
+  // The REPLACE owner's cancellation of its source's removal when the
+  // operation retains the source (D2 target death), answered by the source
+  // node's removal owner (node/replica-removal-cancel-contract.js).
+  CANCEL_REPLICA_REMOVAL: MESSAGE_TYPE.CANCEL_REPLICA_REMOVAL,
 });
 
 const ReplicaOperationReason = Object.freeze({
@@ -93,6 +97,10 @@ const ReplicaOperationField = Object.freeze({
   // A committed-membership read's purpose when it is not a bootstrap read
   // (COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT only).
   READ_PURPOSE: 'readPurpose',
+  // CANCEL_REPLICA_REMOVAL: the exact replica generation the cancel names
+  // (its services row's created_at) and the removal owner's typed answer.
+  REPLICA_GENERATION: 'replicaGeneration',
+  REMOVAL_CANCELLATION: 'removalCancellation',
 });
 
 const ReplicaOperationResponseStatus = Object.freeze({

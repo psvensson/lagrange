@@ -271,6 +271,7 @@ export class ConnectionManager {
           this.onQueryResult(message);
         }
         break;
+      case ADMIN_MESSAGE_TYPE.LIVE_QUERY_SUBSCRIBED:
       case ADMIN_MESSAGE_TYPE.LIVE_QUERY_EVENT:
         if (this.onLiveQueryEvent) {
           this.onLiveQueryEvent(message);
@@ -483,7 +484,6 @@ export class ConnectionManager {
       type: ADMIN_MESSAGE_TYPE.LIVE_QUERY_UNSUBSCRIBE,
       subscriptionId,
     }));
-
     return true;
   }
 

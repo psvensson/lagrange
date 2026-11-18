@@ -2,8 +2,9 @@
 // transient duration field. No event schema, source clock or private grant is
 // serialized here. Local handlers continue to receive ordinary data objects.
 import {isRecord, serializeJsonData} from '../utils/canonical-json-data.js';
+import {ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE} from
+  './transport-router-invariant-error-codes.js';
 
-const INVALID_DELIVERY_ENCODING = 'router_delivery_encoding_invalid';
 // Every positive finite IEEE-754 number's JSON representation fits this slot
 // (at most 24 characters). Spare bytes are private workspace, not a wire
 // padding overhead or a duration/payload cap.
@@ -24,7 +25,8 @@ const writeBuffer = Function.call.bind(Buffer.prototype.write);
 const bufferView = Function.call.bind(Buffer.prototype.subarray);
 
 function invalidEncoding() {
-  return Object.assign(new Error(INVALID_DELIVERY_ENCODING), {code: INVALID_DELIVERY_ENCODING});
+  return Object.assign(new Error(ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE),
+    {code: ROUTER_DELIVERY_ENCODING_INVALID_ERROR_CODE});
 }
 
 function durationPayload(lifetime, payload, field) {

@@ -1,6 +1,19 @@
 // Admission of work that can add durable CDC debt. The ledger supplies the
 // count; preflight and committed application ask the same predicate. Committed
 // pressure is consumed without SQL effects so later acknowledgements can drain.
+//
+// Determinism: the predicate reads only the replicated ledger count and the
+// committed command's own bytes (its class: committedCdcAdmissionClassOf), so
+// the leader's preflight and every replica's apply decide from the same
+// inputs. The leader's preflight is conservative (owed only grows by apply);
+// the apply decision is the authoritative one.
+//
+// Retirement reserve (dead-recipient measure 1, owner ruling 2026-11-11): an
+// ORDINARY write is admitted while owed + required <= OWED_MAX_EVENTS; a
+// RECIPIENT_RETIREMENT write also within the next OWED_RETIREMENT_RESERVE_EVENTS
+// (ADMITTED_FROM_RESERVE, logged by the leader's preflight). Past the reserve
+// it is refused CDC_RETIREMENT_RESERVE_EXHAUSTED (the named state
+// RESERVE_EXHAUSTED; retryable, cleared only by acknowledgements draining).
 import {ERRORS} from '../constants/errors.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {PARTITION_SPLIT_MIRROR_ORIGIN} from './partition-constants.js';
@@ -15,9 +28,18 @@ import {decisionMatchesPreparedRow, operationsOf} from './partition-participant-
 import {readParticipantTransactionRow} from './partition-participant-transaction-store.js';
 import {PROPOSAL_QUEUE_ADMISSION_CLASS} from './proposal-queue-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
+import {CDC_ADMISSION_CLASS_FIELD, PARTITION_CDC_ADMISSION_CLASS as ADMISSION_CLASS} from
+  './partition-cdc-admission-class.js';
 
-const PARTITION_CDC_ADMISSION_STATE = Object.freeze({ADMITTED: 'admitted', REFUSED: 'refused'});
+const PARTITION_CDC_ADMISSION_STATE = Object.freeze({ADMITTED: 'admitted',
+  ADMITTED_FROM_RESERVE: 'admitted-from-reserve', REFUSED: 'refused'});
 const ADMITTED = Object.freeze({state: PARTITION_CDC_ADMISSION_STATE.ADMITTED});
+const PARTITION_CDC_ADMISSION_LOG_MSG = Object.freeze({
+  RESERVE_USED: 'CDC owed capacity reached: a recipient-retirement write was admitted ' +
+    'from the retirement reserve',
+  RESERVE_EXHAUSTED: 'CDC retirement reserve exhausted: a recipient-retirement write was ' +
+    'refused until acknowledgements drain',
+});
 
 const CAPACITY_REFUSAL = Object.freeze({
   TEMPORARY: Object.freeze({failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_CAPACITY,
@@ -25,6 +47,9 @@ const CAPACITY_REFUSAL = Object.freeze({
   UNSATISFIABLE: Object.freeze({
     failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_DEMAND_EXCEEDS_CAPACITY,
     error: ERRORS.WRITE_CDC_DEMAND_EXCEEDS_CAPACITY, deferRetry: false}),
+  RESERVE_EXHAUSTED: Object.freeze({
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_RETIREMENT_RESERVE_EXHAUSTED,
+    error: ERRORS.WRITE_CDC_RETIREMENT_RESERVE_EXHAUSTED, deferRetry: true}),
 });
 
 const DRAIN_CLASS = Object.freeze({ACKNOWLEDGEMENT: 'cdc-acknowledgement',
@@ -54,16 +79,61 @@ function capacityRefusal(service, command, refusal) {
     entryId: command.entryId, partitionId: service.partitionId}};
 }
 
+/**
+ * The one decode of a committed command's CDC admission class (every replica,
+ * the same bytes): RECIPIENT_RETIREMENT only for a committed SQL write entry
+ * carrying exactly that value; ORDINARY otherwise - an entry without the field
+ * is ordinary by the format's definition (partition-cdc-admission-class.js),
+ * and a participant transaction command carries no class.
+ * @param {Object} command - A committed command.
+ * @return {string} A PARTITION_CDC_ADMISSION_CLASS value.
+ */
+function committedCdcAdmissionClassOf(command) {
+  return isCommittedSqlCommandType(command?.type) &&
+    command[CDC_ADMISSION_CLASS_FIELD] === ADMISSION_CLASS.RECIPIENT_RETIREMENT ?
+    ADMISSION_CLASS.RECIPIENT_RETIREMENT : ADMISSION_CLASS.ORDINARY;
+}
+
+function capacityOf(admissionClass) {
+  return admissionClass === ADMISSION_CLASS.RECIPIENT_RETIREMENT ?
+    BOUND.OWED_MAX_EVENTS + BOUND.OWED_RETIREMENT_RESERVE_EVENTS : BOUND.OWED_MAX_EVENTS;
+}
+
 /** The same conservative ledger budget before proposal and before data effects. */
 function admitCdcOwedWork(service, command) {
   const required = requiredCdcSlots(service, command);
   if (required === 0) return ADMITTED;
-  if (required > BOUND.OWED_MAX_EVENTS) {
+  const admissionClass = committedCdcAdmissionClassOf(command);
+  const capacity = capacityOf(admissionClass);
+  if (required > capacity) {
     return capacityRefusal(service, command, CAPACITY_REFUSAL.UNSATISFIABLE);
   }
   const {owed} = countCdcObligations(service.db);
-  return owed + required <= BOUND.OWED_MAX_EVENTS ? ADMITTED :
-    capacityRefusal(service, command, CAPACITY_REFUSAL.TEMPORARY);
+  if (owed + required <= BOUND.OWED_MAX_EVENTS) return ADMITTED;
+  if (admissionClass !== ADMISSION_CLASS.RECIPIENT_RETIREMENT) {
+    return capacityRefusal(service, command, CAPACITY_REFUSAL.TEMPORARY);
+  }
+  const reserve = Object.freeze({owed, required, tableName: service.tableName,
+    admissionClass, reserveEvents: BOUND.OWED_RETIREMENT_RESERVE_EVENTS});
+  return owed + required <= capacity ?
+    Object.freeze({state: PARTITION_CDC_ADMISSION_STATE.ADMITTED_FROM_RESERVE, reserve}) :
+    {...capacityRefusal(service, command, CAPACITY_REFUSAL.RESERVE_EXHAUSTED), reserve};
+}
+
+/**
+ * Log the leader's use or exhaustion of the retirement reserve (preflight
+ * only, so one line per write, not one per replica).
+ * @param {Object} service - The partition.
+ * @param {Object} command - The write.
+ * @param {Object} admission - admitCdcOwedWork's answer.
+ */
+function logCdcRetirementReserve(service, command, admission) {
+  if (admission.reserve === undefined) return;
+  const used = admission.state === PARTITION_CDC_ADMISSION_STATE.ADMITTED_FROM_RESERVE;
+  service.logger?.[used ? 'info' : 'warn']?.(used ?
+    PARTITION_CDC_ADMISSION_LOG_MSG.RESERVE_USED : PARTITION_CDC_ADMISSION_LOG_MSG.RESERVE_EXHAUSTED,
+  {partitionId: service.partitionId, entryId: command.entryId, ...admission.reserve,
+    owedMaxEvents: BOUND.OWED_MAX_EVENTS});
 }
 
 /** Consume pressure without settling the entry identity or blocking Raft apply. */
@@ -87,6 +157,6 @@ function cdcDrainAdmissionClass(service, command) {
     PROPOSAL_QUEUE_ADMISSION_CLASS.ORDINARY;
 }
 
-export {PARTITION_CDC_ADMISSION_STATE, PARTITION_DRAIN_CAPACITIES, admitCdcOwedWork,
-  cdcDrainAdmissionClass,
-  settleCdcOwedRefusal};
+export {PARTITION_CDC_ADMISSION_LOG_MSG, PARTITION_CDC_ADMISSION_STATE,
+  PARTITION_DRAIN_CAPACITIES, admitCdcOwedWork, cdcDrainAdmissionClass,
+  committedCdcAdmissionClassOf, logCdcRetirementReserve, settleCdcOwedRefusal};

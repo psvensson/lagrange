@@ -89,6 +89,8 @@ import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
 } from './replace-witness-fixture.js';
+import {REPLICA_REMOVAL_CANCEL_ANSWER} from
+  '../../src/node/replica-removal-cancel-contract.js';
 
 const {REMOVE_SAFETY_EVALUATION_CLASSIFICATION} =
   OPERATION_WORKFLOW_OWNER_SHARED;
@@ -110,8 +112,16 @@ const DELIVERY_INITIATED = 'initiated';
 const ENTITY_PARTITION = 'partition';
 const SPREAD_REASON = 'spread_replicas';
 
+// Every services row carries its generation (created_at) and the instant
+// it entered its state, as the replica handler writes them: the
+// authoritative observation's lifecycle precondition needs both, and the D2
+// cancel names the source by its generation.
+const REPLICA_ROW_CREATED_AT = 1_794_000_000_000;
+
 function replicaRow(replicaId, nodeId, role, status = ReplicaStatus.ACTIVE) {
   return {
+    created_at: REPLICA_ROW_CREATED_AT,
+    state_entered_at: REPLICA_ROW_CREATED_AT,
     service_id: replicaId,
     replica_id: replicaId,
     service_type: ENTITY_PARTITION,
@@ -501,14 +511,14 @@ async function driveToTargetVoterReady(t, world, seed) {
     targetRow(world, ReplicaStatus.ACTIVE, ROLE_FOLLOWER));
 }
 
-// SYNCING -> the owner's reconcile -> the real remove-safety SAFE answer ->
+// SYNCING -> the owner's PROGRESS reconcile -> the real remove-safety SAFE answer ->
 // the STOPPING compare-and-swap with the removal intent.
 async function driveToStopping(t, world) {
   const classifications = observeRemoveSafety(world);
   const syncing = await persisted(world);
   syncing.workflowStep = WORKFLOW_STEP.SYNCING;
   syncing.status = ReplicaStatus.SYNCING;
-  await world.coordinator.reconcileSyncingOperation(syncing);
+  await world.coordinator.reconcileOperationProgress(syncing);
   t.ok(classifications.length > 0 && classifications.every((classification) =>
     classification === REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE),
   `the real remove-safety evaluation answered SAFE (${
@@ -633,7 +643,7 @@ test('W1: the R1 state blocks a second operation on its partition only',
       const syncing = await persisted(world);
       syncing.workflowStep = WORKFLOW_STEP.SYNCING;
       syncing.status = ReplicaStatus.SYNCING;
-      await coordinator.reconcileSyncingOperation(syncing);
+      await coordinator.reconcileOperationProgress(syncing);
       coordinator.systemTableCache.upsert('services', replicaRow(
         operation.replicaId, NODE_B, ROLE_LEARNER));
       const r1 = await persisted(world);
@@ -885,36 +895,107 @@ test('W3: owner-driven REPLACE with a not-yet-counted target (the grace) - ' +
   });
 });
 
-test('W7: D2 target death at STOPPING - terminal FAILED, the source ' +
-  'retained, the planner woken by the event and planning resumes',
-async (t) => {
+// W7 (D2, CANCEL_REPLICA_REMOVAL 2026-11-11): the REPLACE records that it
+// retained its source only after the source's node answers the cancel of
+// the source's removal (operation-workflow-replace-source-cancellation.js).
+// Unanswered (UNAVAILABLE) it waits at STOPPING and records nothing; on
+// CANCELLED or NOT_IN_PROGRESS it fails with the source retained; on
+// ALREADY_REMOVED it never says retained - it completes from the committed
+// absence and records the degraded group and its repair.
+async function stoppingWithDeadTarget(t, label) {
   const seed = [
     seedRow(1, NODE_A, ROLE_LEADER),
     seedRow(2, NODE_A, ROLE_FOLLOWER),
     seedRow(3, NODE_A, ROLE_FOLLOWER),
   ];
   const world = await createWorld({seed});
-  const {coordinator, owner} = world;
   const planner = bindPlannerWakes(world);
+  await driveToTargetVoterReady(t, world, seed);
+  await driveToStopping(t, world);
+  await assertEveryAdmissionRefuses(t, world, 'STOPPING');
+  world.coordinator.systemTableCache.upsert('services',
+    targetRow(world, ReplicaStatus.FAILED, ROLE_FOLLOWER));
+  await assertEveryAdmissionRefuses(t, world,
+    `STOPPING (target dead, not yet decided; ${label})`);
+  // Unanswered first: the owner asks and waits, recording nothing.
+  world.witness.cancelAnswer = REPLICA_REMOVAL_CANCEL_ANSWER.UNAVAILABLE;
+  await world.owner.runReplaceStoppingOwner(await persisted(world));
+  const waiting = await persisted(world);
+  t.equal(waiting.workflowStep, WORKFLOW_STEP.STOPPING,
+    `${label}: an unanswered cancel keeps the REPLACE at STOPPING`);
+  t.equal(world.witness.cancels.length, 1, `${label}: the source node was asked`);
+  const asked = world.witness.cancels[0];
+  t.equal(asked?.[ReplicaOperationField.REPLICA_ID], SOURCE_REPLICA_ID,
+    `${label}: the cancel names the source replica`);
+  t.equal(asked?.[ReplicaOperationField.REPLICA_GENERATION],
+    REPLICA_ROW_CREATED_AT, `${label}: the cancel names the source generation`);
+  t.notOk(JSON.stringify(waiting.stepsHistory).includes('replaceTargetDeath'),
+    `${label}: nothing is recorded while the cancel is unanswered`);
+  await assertEveryAdmissionRefuses(t, world,
+    `STOPPING (cancel unanswered; ${label})`);
+  return {world, planner};
+}
+
+function targetDeathRecordOf(operation) {
+  return [...(operation.stepsHistory || [])].reverse()
+    .find((step) => step?.replaceTargetDeath)?.replaceTargetDeath ?? null;
+}
+
+for (const answer of [REPLICA_REMOVAL_CANCEL_ANSWER.CANCELLED,
+  REPLICA_REMOVAL_CANCEL_ANSWER.NOT_IN_PROGRESS]) {
+  test(`W7: D2 target death at STOPPING, the source answers ${answer} - ` +
+    'terminal FAILED, the source retained, the planner woken by the event ' +
+    'and planning resumes', async (t) => {
+    const {world, planner} = await stoppingWithDeadTarget(t, answer);
+    const {coordinator, owner} = world;
+    try {
+      world.witness.cancelAnswer = answer;
+      const wakesBeforeTerminal = planner.wakes.length;
+      await owner.runReplaceStoppingOwner(await persisted(world));
+      const terminal = await persisted(world);
+      t.equal(terminal.workflowStep, WORKFLOW_STEP.FAILED,
+        'D2: the STOPPING owner failed the REPLACE');
+      t.ok(coordinator.isOperationTerminal(terminal), 'terminal by its status');
+      t.equal(targetDeathRecordOf(terminal)?.sourceRemoval?.answer, answer,
+        'the terminal records the source node\'s answer');
+      t.equal(targetDeathRecordOf(terminal)?.degraded, undefined,
+        'a retained source is no degraded group');
+      t.ok(servicesOf(coordinator).some((row) =>
+        row.replica_id === SOURCE_REPLICA_ID &&
+        row.status === ReplicaStatus.ACTIVE), 'the source is retained');
+      await assertPlanningResumes(t, world,
+        planner.wakes.slice(wakesBeforeTerminal), 'FAILED');
+    } finally {
+      await planner.release();
+    }
+  });
+}
+
+test('W7: D2 target death at STOPPING, the source answers ALREADY_REMOVED - ' +
+  'never retained: completes from the committed absence with the degraded ' +
+  'group and its repair recorded', async (t) => {
+  const {world, planner} = await stoppingWithDeadTarget(t,
+    REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED);
+  const {coordinator, owner} = world;
   try {
-    await driveToTargetVoterReady(t, world, seed);
-    await driveToStopping(t, world);
-    await assertEveryAdmissionRefuses(t, world, 'STOPPING');
-    coordinator.systemTableCache.upsert('services',
-      targetRow(world, ReplicaStatus.FAILED, ROLE_FOLLOWER));
-    await assertEveryAdmissionRefuses(t, world,
-      'STOPPING (target dead, not yet decided)');
-    const wakesBeforeTerminal = planner.wakes.length;
+    // The source's RemoveNode committed: its configuration no longer names
+    // it, and its node answers the cancel ALREADY_REMOVED.
+    world.witness.commitRemoval();
+    world.witness.cancelAnswer = REPLICA_REMOVAL_CANCEL_ANSWER.ALREADY_REMOVED;
     await owner.runReplaceStoppingOwner(await persisted(world));
     const terminal = await persisted(world);
-    t.equal(terminal.workflowStep, WORKFLOW_STEP.FAILED,
-      'D2: the STOPPING owner failed the REPLACE');
     t.ok(coordinator.isOperationTerminal(terminal), 'terminal by its status');
-    t.ok(servicesOf(coordinator).some((row) =>
-      row.replica_id === SOURCE_REPLICA_ID &&
-      row.status === ReplicaStatus.ACTIVE), 'the source is retained');
-    await assertPlanningResumes(t, world,
-      planner.wakes.slice(wakesBeforeTerminal), 'FAILED');
+    t.not(terminal.workflowStep, WORKFLOW_STEP.FAILED,
+      'a removed source is never reported as a retained-source failure');
+    const record = targetDeathRecordOf(terminal);
+    t.not(record?.sourceRemoval?.answer, REPLICA_REMOVAL_CANCEL_ANSWER.CANCELLED,
+      'never recorded as retained');
+    t.equal(record?.degraded?.removedSourceReplicaId, SOURCE_REPLICA_ID,
+      'the degraded record names the removed source');
+    t.equal(record?.degraded?.deadTargetReplicaId, world.operation.replicaId,
+      'and the dead target');
+    t.equal(record?.degraded?.repair, 'durability_repair_add',
+      'and the repair it owes');
   } finally {
     await planner.release();
   }

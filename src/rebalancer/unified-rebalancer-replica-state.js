@@ -77,15 +77,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   async isNodeReady(nodeId) {
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
-    const readinessOptions = {
-      decisionDimension: readinessDecisionDimension,
-    };
-    if (this.isFormationLivenessDependencyPartition()) {
-      readinessOptions.allowStaleOnCacheChange = false;
-    }
     const readiness = this.resolveNodeReadinessSyncSnapshot(
       nodeId,
-      readinessOptions,
+      this.buildPlanningReadinessReadOptions(readinessDecisionDimension),
     );
     const explicitFormationRecoveryEligibility =
       this.isFormationLivenessDependencyPartition() &&
@@ -238,12 +232,15 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
 
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
-    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+    const readiness = this.resolveNodeReadinessSyncSnapshot(
       nodeId,
-      {
-        decisionDimension: readinessDecisionDimension,
-      },
+      this.buildPlanningReadinessReadOptions(readinessDecisionDimension),
     );
+    if (this.notePlanningTargetReadiness(nodeId, readiness)) {
+      // Not a final no: the target is skipped for this pass and the
+      // publication that answers its read wakes the entity.
+      return READINESS_SKIP_DETAIL.READINESS_DEFERRED;
+    }
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
     ) {

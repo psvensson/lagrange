@@ -84,8 +84,13 @@ function admissionOfPortAnswer(answered) {
   let outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED;
   if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_OK) {
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED;
-  } else if (portOutcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-      answered.retryable === true && answered.recoveryRequired === false) {
+  } else if ((portOutcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+      answered.retryable === true && answered.recoveryRequired === false) ||
+      (portOutcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED &&
+        answered.reason ===
+          RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LIVE_QUORUM)) {
+    // A removal that waits on a live quorum is deferred: its proposer
+    // re-drives it when the leader's live set changes.
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED;
   } else if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED &&
       answered.reason === RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER) {

@@ -301,7 +301,49 @@ class RouterConnectionAuthorityOwner {
       connectionInfo.address = normalizedCandidateAddress;
     }
   }
-  resolveIncomingConnectionAdoption(nodeId, bootIncarnation = 0) {
+  /**
+   * The dialer's own clock reading stamped on its IDENTIFY frame. It orders
+   * the dials of ONE dialer boot against each other and is never compared
+   * with this node's clock.
+   * @param {Object} message - IDENTIFY frame.
+   * @return {number|null} The stamp, or null when the frame carries none.
+   */
+  readDialerIdentifiedAt(message) {
+    const timestamp = message?.timestamp;
+    return numberIsFinite(timestamp) && timestamp > TRANSPORT_NUM.ZERO ?
+      timestamp : null;
+  }
+  /**
+   * Whether an incoming dial supersedes the existing primary because the
+   * SAME dialer boot dialed both and identified this one later. A dialer
+   * sends IDENTIFY only on the socket it holds current, so a later IDENTIFY
+   * from the same boot states that the dialer has abandoned its earlier
+   * socket (ACK-timeout quarantine keeps that socket open for a grace while
+   * it re-dials). Keeping the abandoned socket would refuse every re-dial as
+   * a duplicate until the abandoned socket finally closes. Ordering by the
+   * dialer's stamp keeps an out-of-order arrival of an OLDER dial from
+   * displacing a newer one; a frame without a stamp never supersedes. The
+   * boot must be KNOWN to be the same: an unknown incarnation (0) on either
+   * side never supersedes, since two unknowns may be two different boots.
+   * @param {Object|null} existing - Current primary record for the node.
+   * @param {Object|null} incoming - The identifying incoming record.
+   * @param {number} incomingIncarnation - Known incoming boot incarnation.
+   * @param {number} existingIncarnation - Known existing boot incarnation.
+   * @return {boolean} True when the incoming dial replaces the existing one.
+   */
+  isLaterDialFromSameDialerBoot(
+    existing, incoming, incomingIncarnation, existingIncarnation) {
+    return booleanConstructor(existing) && booleanConstructor(incoming) &&
+      existing !== incoming &&
+      existing.isIncoming === true &&
+      existing.state === ConnectionState.CONNECTED &&
+      incomingIncarnation > TRANSPORT_NUM.ZERO &&
+      incomingIncarnation === existingIncarnation &&
+      numberIsFinite(existing.dialerIdentifiedAt) &&
+      numberIsFinite(incoming.dialerIdentifiedAt) &&
+      incoming.dialerIdentifiedAt > existing.dialerIdentifiedAt;
+  }
+  resolveIncomingConnectionAdoption(nodeId, bootIncarnation = 0, incoming = null) {
     const existing = mapPrototypeGet(this.router.nodeConnections, nodeId) ||
       null;
     const isSelfConnection =
@@ -339,6 +381,8 @@ class RouterConnectionAuthorityOwner {
       !existing ||
       !existingConnected ||
       incomingOwnsNewerBoot ||
+      this.isLaterDialFromSameDialerBoot(
+        existing, incoming, incomingIncarnation, existingIncarnation) ||
       (preferIncomingConnection && !existingPreferredIncomingConnection);
     return {
       state: shouldAdoptIncomingConnection ?

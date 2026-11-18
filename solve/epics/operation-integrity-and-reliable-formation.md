@@ -94,39 +94,61 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (10 November 2026)
+## Current integration summary (11 November 2026)
 
-- **Governing rules and source:** rule-set revision 5, inspected at
-  `947fbe658ebb2efe993900b672ded51d5610dbcb`. This is the retained implementation
-  candidate, not an accepted service baseline. The planning change is isolated
-  on `work/canonical-authority-epic-20261110`; the candidate worktree is preserved.
-- **Integration responsibility:** the current Codex session owns this planning
-  installation and its validation. Runtime writer assignments and outstanding
-  external jobs have not been reconfirmed. No runtime work, reviewer or lab job
-  is dispatched by this plan; the execution integration owner must claim the
-  role here and reconcile active writers before admitting work.
-- **Observed blockers:** the retained candidate's local five-process formation
-  failed with `node_ready_lease_incomplete`; four joining nodes did not complete
-  the required spread, shutdown needed forced stops, and coverage lost witnesses.
-  Q8 owns causal isolation, Q9 resource diagnosis and Q10 evidence custody.
-  Their exact causes remain unresolved. Q7's mixed-age routing counterexample
-  is a source hypothesis, not an executed failure.
-- **Service status:** the existing
+- **Owner request, 11 November 2026 (queued, not started):** "when things work, please do the comparative systems analysis". Read as: once the sealed acceptance holds (three consecutive green lab formations), run the comparative measurement of Lagrange against the other systems under the epic developer-journey-and-measured-comparisons. Interpretation is the integration owner's; confirm scope with the owner before starting.
+
+- **Governing rules and source:** rule-set revision 5. Committed head
+  `103f132c13268321445369d3b4c1183ca2c39c66` on
+  `work/canonical-authority-epic-20261110`; the overnight working tree
+  (lab candidate fingerprint `5c46e7f33270d58c`) is preserved as local branch
+  `snapshot/night-20261111-5c46e7f3` (`67fdf0ce4`). Nothing from it is accepted.
+- **Integration responsibility:** the Claude Code session of 11 November owns
+  integration, review coordination and landing for this epic's formation work.
+  One writer per interaction; the writer assignments are listed below.
+- **Latest physical witness:** candidate `5c46e7f33270d58c` on tv-dator,
+  adam-laptop and adams-gamla: run 1 pass (147 s), run 2 pass (317 s), run 3
+  fail at the 601 s bound. The streak is not three; the
   [formation receipt](../quests/fresh-formation-user-table-routability/evidence/receipt.json)
-  still fails. It is unchanged. The broader aggregate probe has no receipt and
-  is explicitly unmeasured. Neither the plan nor earlier focused successes
-  establish service, release or comparative acceptance.
-- **Current unit:** P0 planning structure installed and validated. Q1-Q16 below
-  are open, unsealed proposals with append-only registration findings. No source attempt, seal,
-  pass receipt or implementation approval is created here.
-- **Next action:** the execution integration owner maps shared interactions and
-  active writers, then each admitted owner prepares its actual red measurement
-  and complete transition record before `start`. Apply Q1 discipline immediately;
-  Q3 can provide a small early repair while Q8/Q9 diagnosis and Q11 inventory
-  proceed. Preserve valid repairs and acquire missing proof instead of rewriting
-  correct code. Record refuted hypotheses as refuted. Prioritize the newly
-  identified Q13-Q15 authority/identity repairs; Q16 owns ingress admission.
-  Preserve Q6 policy currency when reconciling the divergent WIP.
+  still fails. Full compressed node logs are retained under
+  `test-output/fresh-formation-wave4/5c46e7f33270d58c/.playback/`.
+- **Causal account (quest log, 11 November findings):**
+  1. Plan shape is a race. When the first planning pass sees a ready joiner the
+     priority partitions spread by REPLACE, and a REPLACE always transfers
+     leadership to its target (sealed rule BR11 of `replace-source-removal-owner`),
+     moving planner and operation ownership onto joiners. Runs that spread by
+     ADD then REMOVE move no leader and finish the priority phase in 70 s;
+     REPLACE-shaped runs take 172-286 s with ACK-timeout storms, heartbeat
+     failures and unplanned elections on the joiner-seed link.
+  2. CDC push delivery is one event per wave behind one node-wide slot with
+     head-of-line blocking. Measured 24-68 s behind commit under seed load, and
+     one head event stuck about 150 s in run 3. Cache freshness is bounded only
+     by periodic authority sweeps.
+  3. The background priority-spread release fence counts a 70 s wall-clock
+     window from a cache read model that excludes REPLACE source-removal rows;
+     passing runs beat it by 61 s and 3.8 s.
+  4. Scenario predicate g accepted a stale follower as its authority oracle in
+     run 3 (harness fidelity finding; the predicate is sealed and unchanged).
+- **Independent review of the overnight candidate:** rejected as composed
+  (quest log verification, 11 November). Blocking: error classifier regressions
+  (unknown-outcome answer vetoed by a linked cause; coordinator timeouts made
+  terminal) and the 400 ms deferred catch-up. The 400 ms catch-up is reverted to
+  the committed cadence. Sound at cause and retained: removal of the local-only
+  SENDING claim, one-way raft-direct frames, `requireComplete`, late-ACK
+  liveness, retained-recovery ordering, cohort preservation.
+- **Active work (one writer each, shared checkout, disjoint files):**
+  classifier and query budget repairs; rebalancer workflow repairs including
+  the remaining owner-local-ahead-of-durable steps; REPLACE leadership rule and
+  deterministic plan shape (supersedes BR11; owner confirmation required before
+  landing); transport quarantine evidence and causal observability. A staged
+  CDC delivery design note (batch shipping, recipient isolation, start
+  position, freshness contract) is in preparation before any delivery change.
+- **Next action:** review each writer's result independently, run the affected
+  unit cones and static gates, then one instrumented lab run before any
+  repeat batch. A red run stops the batch and is diagnosed from its first
+  divergence. Comparative measurements consume only actual product evidence, as
+  recorded in the
+  [comparison epic](developer-journey-and-measured-comparisons.md#current-summary).
 
 The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.

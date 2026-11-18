@@ -36,7 +36,7 @@ const REPLICA_OPERATION_IDENTITY_FIELDS = Object.freeze([
   'target_node_id',
 ]);
 
-function areCompatibleReplicaOperationRows(left, right) {
+function haveSameReplicaOperationIdentity(left, right) {
   if (
     !left?.operation_id ||
     !right?.operation_id ||
@@ -89,7 +89,7 @@ function shouldPreferRuntimeTargetProgressRow(
     contextRow &&
     !isTerminalReplicaOperationRecord(refreshedRow) &&
     service.isRuntimeTargetProgressWakeOperation(contextRow, context) &&
-    areCompatibleReplicaOperationRows(refreshedRow, contextRow) &&
+    haveSameReplicaOperationIdentity(refreshedRow, contextRow) &&
     isReplicaOperationRowAhead(contextRow, refreshedRow),
   );
 }
@@ -172,7 +172,12 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       typeof this.getReplicaOperationRow === 'function'
     ) {
       const refreshedRow = await this.getReplicaOperationRow(operationId);
-      if (isTerminalReplicaOperationRecord(refreshedRow)) {
+      // R10: the wake-up row is a hint. A durable row that is terminal or
+      // already past it (an echo of SENDING read after the owner wrote
+      // STOPPING) is the authority, so a stale step is never re-dispatched.
+      if (isTerminalReplicaOperationRecord(refreshedRow) ||
+          (haveSameReplicaOperationIdentity(refreshedRow, contextRow) &&
+            isReplicaOperationRowAhead(refreshedRow, contextRow))) {
         return refreshedRow;
       }
     }
@@ -354,38 +359,6 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         this.readinessPlanningSnapshotPendingTokenByOwnerKey.delete(nodeId);
       }
     }
-  },
-
-  /**
-   * Enqueue a local READY-node dispatch rediscovery trigger that bypasses the
-   * heartbeat watermark. Publication updates can reveal or advance recovery
-   * work without changing the node row itself.
-   * @param {string} reason - Reconcile reason for the trigger.
-   * @param {Object} [context] - Additional retry context.
-   * @return {boolean} True when a retry was enqueued.
-   * @private
-   */
-  enqueueLocalReadyNodeDispatchRetry(reason, context = {}) {
-    const nodeId = this.nodeId;
-    const readyForDispatchRetry =
-      typeof this.isNodeReadyForDispatchRetry === 'function' ?
-        this.isNodeReadyForDispatchRetry(nodeId) :
-        this.isNodeReady(nodeId);
-    if (!nodeId || !readyForDispatchRetry) {
-      return false;
-    }
-    const retryContext =
-      context && typeof context === 'object' ? context : {};
-    this.nodeReadyRetryQueue.enqueue(
-      nodeId,
-      reason,
-      {
-        ...retryContext,
-        source: reason,
-        [READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK]: true,
-      },
-    );
-    return true;
   },
 
   /**

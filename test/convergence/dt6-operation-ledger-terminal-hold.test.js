@@ -4,6 +4,8 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {stubAnsweredIncompleteOperationsRead} from
+  '../rebalancer/incomplete-operations-read-stub.js';
 
 // Quest movielens-operation-ledger-terminal-hold — deterministic reproduction
 // of the Wave-4 live overlap. The locally created replica_operations REPLACE
@@ -94,7 +96,7 @@ t.test(
       );
       timeSource.advance(STEP_TIMEOUT_MS + 1);
 
-      const staleOperation = await coordinator.queryOperationById(
+      const staleOperation = await coordinator.queryOperationProjectionById(
         selfMove.operationId,
       );
       t.ok(
@@ -123,7 +125,7 @@ t.test(
           );
         }
         return {
-          operation: await coordinator.queryOperationById(operationId),
+          operation: await coordinator.queryOperationProjectionById(operationId),
           deferredOutcome: null,
         };
       };
@@ -198,14 +200,14 @@ t.test(
       oldRow.workflow_step = WORKFLOW_STEP.REMOVED;
       oldRow.updated_at = timeSource.now();
       oldRow.completed_at = timeSource.now();
-      const oldTerminalOperation = await coordinator.queryOperationById(
+      const oldTerminalOperation = await coordinator.queryOperationProjectionById(
         oldSelfMove.operationId,
       );
 
       // Model the local/cache visibility gap that makes the synchronous holder
       // accounting necessary: the newer row is not yet visible to the async
       // incomplete-operation scan.
-      coordinator.queryIncompleteOperations = async () => [];
+      stubAnsweredIncompleteOperationsRead(coordinator, () => []);
 
       let oldReadCount = 0;
       let releaseDelayedOldRead;
@@ -233,7 +235,7 @@ t.test(
           };
         }
         return {
-          operation: await coordinator.queryOperationById(operationId),
+          operation: await coordinator.queryOperationProjectionById(operationId),
           deferredOutcome: null,
         };
       };
@@ -325,7 +327,7 @@ t.test(
       // decision); driving it directly keeps the priority-ledger
       // visibility sweep out of the arrangement.
       timeSource.advance(STEP_TIMEOUT_MS * 10);
-      const staleOperation = await coordinator.queryOperationById(
+      const staleOperation = await coordinator.queryOperationProjectionById(
         selfMove.operationId,
       );
       await owner.reconcileTimeoutOperation(staleOperation, timeSource.now());

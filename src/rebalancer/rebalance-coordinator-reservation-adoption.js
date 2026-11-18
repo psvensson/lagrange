@@ -99,7 +99,6 @@ async function observeAuthoritativeOperationObservationForReservation(
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
         allowOwnerPersistedTransitionDeferredVisibility: false,
-        requireAbsenceConfirmation: true,
         timeoutBudget: options.timeoutBudget,
       },
     );

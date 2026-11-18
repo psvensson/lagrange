@@ -69,7 +69,8 @@ async function failActualStartup() {
         node: {id: 'process-custody-review'},
         storage: {dataDir},
       },
-      environment: {NODE_ID: 'process-custody-review'},
+      environment: {NODE_ID: 'process-custody-review',
+        LAGRANGE_FORMATION_TARGET_NODE_COUNT: '1'},
     });
   } catch (error) {
     rejected = error;

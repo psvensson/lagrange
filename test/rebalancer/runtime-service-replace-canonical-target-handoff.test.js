@@ -295,7 +295,7 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
       executorOutcomeEmitter: coordinator.executorOutcomeEmitter,
     }));
   }
-  handlerByNodeId.get(SOURCE_NODE_ID).registerExistingReplica({
+  handlerByNodeId.get(SOURCE_NODE_ID).localReplicas.set(SOURCE_REPLICA_ID, {
     replicaId: SOURCE_REPLICA_ID,
     entityId: ENTITY_ID,
     status: ReplicaStatus.ACTIVE,
@@ -312,6 +312,9 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
   });
   rebalancer.logger = QUIET_LOGGER;
   rebalancer.initialize();
+  // The global budget's owner answers an empty ledger (this test is not
+  // about the budget read, whose failure now holds the pass).
+  rebalancer.getGlobalInFlightOperationCount = async () => 0;
   rebalancer.setLeader(true);
 
   try {

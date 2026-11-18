@@ -609,6 +609,11 @@ function buildPublicationActiveGateHandoffEmptyReconcileTarget(
   });
 }
 
+// The reconcile target: published membership, the pending candidate's members
+// (a reconcile for a missing node never retracts them; the target never
+// acknowledges for one that has not acknowledged the candidate itself), and
+// every expected or pending-reconcile node that is not itself waiting. The
+// cluster recovery gate removes no node from the target.
 function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
   handoffContract,
   targetEvidence = null,
@@ -616,32 +621,20 @@ function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
   const pendingRecoveryNodeIdSet = new Set(
     handoffContract.pendingRecoveryNodeIds,
   );
-  const expectedTargetNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList([
-      ...handoffContract.expectedNodeIds,
-      ...collectPublicationActiveGateHandoffTargetEvidenceNodeIds(
-        targetEvidence,
-      ),
-    ]);
-  const selectedPendingReconcileNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
+  const reconcileTargetNodeIds = [
+    ...handoffContract.expectedNodeIds,
+    ...collectPublicationActiveGateHandoffTargetEvidenceNodeIds(
+      targetEvidence,
+    ),
+    ...normalizePublicationActiveGateHandoffNodeIdList(
       handoffContract.pendingReconcileNodeIds,
-    ).filter((nodeId) => !pendingRecoveryNodeIdSet.has(nodeId));
-  const expectedReconcileTargetNodeIds = expectedTargetNodeIds.filter(
-    (nodeId) => !pendingRecoveryNodeIdSet.has(nodeId),
-  );
-  const selectedReconcileTargetNodeIds =
-    expectedReconcileTargetNodeIds.length > 0 ?
-      expectedReconcileTargetNodeIds :
-      selectedPendingReconcileNodeIds;
-  // The pending candidate's members stay in the target (a reconcile for a
-  // missing node never retracts them); the target never acknowledges for one
-  // that has not acknowledged the candidate itself.
+    ),
+  ].filter((nodeId) => !pendingRecoveryNodeIdSet.has(nodeId));
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...handoffContract.publishedActiveNodeIds,
     ...(Array.isArray(handoffContract.pendingCandidateNodeIds) ?
       handoffContract.pendingCandidateNodeIds : []),
-    ...selectedReconcileTargetNodeIds,
+    ...reconcileTargetNodeIds,
   ]);
 }
 
@@ -686,30 +679,12 @@ function buildPublicationActiveGateHandoffReconcileTarget(
   });
 }
 
+// WAIT_OWNER_RECOVERY is the named state. A wait for the cluster recovery
+// gate names no node, so no node list or count decides it.
 function hasPublicationActiveGateOwnerRecoveryWaitSignal(value = null) {
-  const handoffRecord =
-    isPublicationActiveGateHandoffRecord(value) ?
-      value :
-      PUBLICATION_ACTIVE_GATE_HANDOFF_ABSENT_RECORD;
-  const pendingRecoveryNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
-      handoffRecord?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_NODE_IDS
-      ],
-    );
-  const normalizedPendingRecoveryCount =
-    normalizePublicationActiveGateHandoffDebtCount(
-      handoffRecord?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_RECOVERY_COUNT
-      ],
-      pendingRecoveryNodeIds,
-    );
-  return handoffRecord?.nextAction ===
-    PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY &&
-    (
-      normalizedPendingRecoveryCount > 0 ||
-      pendingRecoveryNodeIds.length > 0
-    );
+  return isPublicationActiveGateHandoffRecord(value) &&
+    value.nextAction ===
+      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY;
 }
 
 export {

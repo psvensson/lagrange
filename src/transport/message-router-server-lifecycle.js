@@ -1,5 +1,8 @@
 import https from 'node:https';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {
+  attachRouterPeerTrafficReporter,
+} from './message-router-peer-traffic-diagnostics.js';
 
 const AUTH_REJECTED_EVENT = 'authenticationRejected';
 const HTTP_UNAUTHORIZED_CODE = 401;
@@ -14,6 +17,28 @@ const {
   WebSocketServer,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+// A repeated initialize of an initialized router starts only what a
+// server-starting call still lacks: the server, then the self-connection. A
+// server it started is closed again when the self-connection fails.
+async function completeInitializedRouter(router, shouldStartServer) {
+  let startedServerNow = false;
+  if (shouldStartServer && !router.server) {
+    await router.startServer();
+    startedServerNow = true;
+  }
+  if (shouldStartServer && !router.hasSelfConnection()) {
+    try {
+      await router.connectToSelf();
+    } catch (error) {
+      if (startedServerNow && router.server) {
+        await new Promise((resolve) => router.server.close(resolve));
+        router.server = null;
+      }
+      throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
+    }
+  }
+}
 
 /**
  * Server and self-connection lifecycle for the message router: initialize,
@@ -33,22 +58,7 @@ class MessageRouterServerLifecycle {
   async initialize(options = {}) {
     const shouldStartServer = options.startServer === true && this.wsPort;
     if (this.initialized) {
-      let startedServerNow = false;
-      if (shouldStartServer && !this.server) {
-        await this.startServer();
-        startedServerNow = true;
-      }
-      if (shouldStartServer && !this.hasSelfConnection()) {
-        try {
-          await this.connectToSelf();
-        } catch (error) {
-          if (startedServerNow && this.server) {
-            await new Promise((resolve) => this.server.close(resolve));
-            this.server = null;
-          }
-          throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
-        }
-      }
+      await completeInitializedRouter(this, shouldStartServer);
       return;
     }
     this.isShuttingDown = false;
@@ -75,6 +85,7 @@ class MessageRouterServerLifecycle {
       }
     }
     this.initialized = true;
+    this.detachPeerTrafficReporter ??= attachRouterPeerTrafficReporter(this);
     this.emit(TRANSPORT_EVENT.INITIALIZED, {
       routerId: this.routerId,
       nodeId: this.nodeId,
@@ -205,9 +216,7 @@ class MessageRouterServerLifecycle {
     }
     const environment = this.inProcessConnectionEnvironment;
     if (environment.hasEndpoint(portKey)) {
-      const err = new Error(
-        `listen EADDRINUSE: address already in use 127.0.0.1:${portKey}`,
-      );
+      const err = new Error(ROUTER_ERROR_MSG.addressInUse(portKey));
       err.code = MESSAGE_ROUTER_LITERAL.STRING_EADDRINUSE;
       throw err;
     }

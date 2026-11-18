@@ -43,6 +43,8 @@ const FOUNDATION_TABLES = [SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
   SYSTEM_TABLE_NAME.TABLES, SYSTEM_TABLE_NAME.PARTITIONS];
 const LEDGER = '_cdc_obligations';
 const PROGRESS = '_cdc_obligation_progress';
+// The committed entry that minted the ledger's incarnation (CDC Stage 3).
+const LEDGER_MINT = Object.freeze({index: 1, term: 1, entryId: 'seed-retained-ledger-birth'});
 const OUTCOMES = '_partition_statement_outcomes';
 const GENERATION = '_partition_write_generation';
 const PARTICIPANTS = '_participant_transactions';
@@ -479,7 +481,7 @@ test('lazy ledger absence and pending SQL-to-ACK dependencies preserve every obl
     assert.equal(cdcObligationLedgerExists(f.db), false);
     const result = expect(f, STATE.ACCEPTED);
     assert.deepEqual(result.obligations, {exists: false, rows: [], progress: null});
-    ensureCdcObligationLedger(f.db);
+    ensureCdcObligationLedger(f.db, LEDGER_MINT);
     assert.equal(expect(f, STATE.ACCEPTED).obligations.exists, true);
   });
   for (const commit of [2, 3]) {
@@ -808,7 +810,7 @@ test('each empty internal owner must have its complete schema before absence is 
       await t.test(tableName, (t) => {
         const f = fixture(t);
         retain(f, [origin(f)]);
-        if (tableName === LEDGER) ensureCdcObligationLedger(f.db);
+        if (tableName === LEDGER) ensureCdcObligationLedger(f.db, LEDGER_MINT);
         const accepted = expect(f, STATE.ACCEPTED);
         const image = tableImage(f.db, tableName);
         assert.equal(image.rows.length, 0, 'empty-owner case must not rely on decoding a row');
@@ -855,7 +857,7 @@ test('internal owner indexes and effect surfaces remain required even without ro
     await t.test(`missing ${indexName}`, (t) => {
       const f = fixture(t);
       retain(f, [origin(f)]);
-      if (tableName === LEDGER) ensureCdcObligationLedger(f.db);
+      if (tableName === LEDGER) ensureCdcObligationLedger(f.db, LEDGER_MINT);
       const accepted = expect(f, STATE.ACCEPTED);
       const {sql} = f.db.prepare('SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?')
         .get('index', indexName);
@@ -871,7 +873,7 @@ test('internal owner indexes and effect surfaces remain required even without ro
     await t.test(`unowned trigger on ${tableName}`, (t) => {
       const f = fixture(t);
       retain(f, [origin(f)]);
-      if (tableName === LEDGER) ensureCdcObligationLedger(f.db);
+      if (tableName === LEDGER) ensureCdcObligationLedger(f.db, LEDGER_MINT);
       const accepted = expect(f, STATE.ACCEPTED);
       f.db.exec(`CREATE TRIGGER retained_injected_trigger AFTER INSERT ON ${tableName} ` +
         'BEGIN SELECT 1; END');

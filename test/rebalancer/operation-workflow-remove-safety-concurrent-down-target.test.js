@@ -82,7 +82,20 @@ function buildSyncingConcurrentOp({targetNodeId, stepEnteredAgoMs = null}) {
   return op;
 }
 
-function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
+// The ledger owner's entity answer remove safety consumes: PRESENT for a
+// non-empty list, EMPTY for none.
+function answeredEntityObservation(operations) {
+  return Object.freeze({
+    state: operations.length > 0 ? 'present' : 'empty',
+    complete: true,
+    operationCount: operations.length,
+    operations: Object.freeze([...operations]),
+    deferredOutcome: null,
+    retryAfterMs: null,
+  });
+}
+
+function buildPeerRemoveCoordinator({pingNode}) {
   const coordinator = createTestCoordinator({
     nodeId: 'seed-node',
     enableTimeouts: false,
@@ -126,11 +139,10 @@ function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
   });
 
   coordinator.initialize();
-  coordinator.repository.getOperationsByEntity = async () => [concurrentOp];
   return coordinator;
 }
 
-async function evaluatePeerRemove(coordinator) {
+async function evaluatePeerRemove(coordinator, concurrentOp) {
   const operation = await coordinator.createOperation({
     type: OperationType.REMOVE,
     partitionId: CRITICAL_PARTITION_ID,
@@ -144,6 +156,11 @@ async function evaluatePeerRemove(coordinator) {
     // fenced at creation, never reaching the gate under test.
     moveReason: MOVE_REASON.REPLICA_FAILED,
   });
+  // The exact seam the gate reads (workflowOwner.repository ===
+  // coordinator.repository), answered once the peer REMOVE exists so its
+  // creation admission reads the real ledger, as it always has.
+  coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => answeredEntityObservation([concurrentOp]);
   return coordinator.workflowOwner.evaluateRemoveSafety(operation);
 }
 
@@ -164,12 +181,12 @@ function withConfig(fn) {
 
 test('CL-044 — a fresh concurrent op SYNCING to a DOWN target must not block a peer remove',
   withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({targetNodeId: 'down-node'}),
-      {pingNode: async (nodeId) => nodeId !== 'down-node'},
-    );
+    const concurrentOp = buildSyncingConcurrentOp({targetNodeId: 'down-node'});
+    const coordinator = buildPeerRemoveCoordinator({
+      pingNode: async (nodeId) => nodeId !== 'down-node',
+    });
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.notMatch(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,
@@ -182,12 +199,10 @@ test('CL-044 — a fresh concurrent op SYNCING to a DOWN target must not block a
 
 test('CL-044 — a fresh concurrent op SYNCING to a CONTACTABLE target must still block (safety preserved)',
   withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({targetNodeId: 'node-b'}),
-      {pingNode: async () => true},
-    );
+    const concurrentOp = buildSyncingConcurrentOp({targetNodeId: 'node-b'});
+    const coordinator = buildPeerRemoveCoordinator({pingNode: async () => true});
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.match(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,
@@ -200,15 +215,13 @@ test('CL-044 — a fresh concurrent op SYNCING to a CONTACTABLE target must stil
 
 test('CL-044 — staleness clock reads time-in-step: a wedged op past its step timeout is retired even with a fresh updatedAt',
   withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({
-        targetNodeId: 'node-b',
-        stepEnteredAgoMs: PAST_ANY_STEP_TIMEOUT_MS,
-      }),
-      {pingNode: async () => true},
-    );
+    const concurrentOp = buildSyncingConcurrentOp({
+      targetNodeId: 'node-b',
+      stepEnteredAgoMs: PAST_ANY_STEP_TIMEOUT_MS,
+    });
+    const coordinator = buildPeerRemoveCoordinator({pingNode: async () => true});
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.notMatch(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,
@@ -221,15 +234,13 @@ test('CL-044 — staleness clock reads time-in-step: a wedged op past its step t
 
 test('CL-044 — staleness clock: an op recently in-step (fresh) still blocks',
   withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({
-        targetNodeId: 'node-b',
-        stepEnteredAgoMs: 10 * 1000,
-      }),
-      {pingNode: async () => true},
-    );
+    const concurrentOp = buildSyncingConcurrentOp({
+      targetNodeId: 'node-b',
+      stepEnteredAgoMs: 10 * 1000,
+    });
+    const coordinator = buildPeerRemoveCoordinator({pingNode: async () => true});
     try {
-      const evaluation = await evaluatePeerRemove(coordinator);
+      const evaluation = await evaluatePeerRemove(coordinator, concurrentOp);
       t.match(
         String(evaluation?.error ?? ''),
         CONCURRENT_OP_ERROR,

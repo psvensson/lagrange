@@ -4,7 +4,8 @@
 // A partition's leadership is handed on through one operation of its
 // consensus port, transferLeadership, asked only by the partition's one
 // issuer (PartitionService.requestLeadershipTransfer), which the replica
-// handler's two STEP_DOWN_REPLICA branches ask. The retired demotion path -
+// handler's two STEP_DOWN_REPLICA branches ask, and the removal subject's
+// own hand-off (partition-service-removal-subject-handoff.js, B2). The retired demotion path -
 // the tracked demotion helper, the handler's raft.change / provider gates,
 // the immediate-election control - is gone, not kept as a quieter
 // alternative. The one port a partition can be handed, the rs-raft operation
@@ -83,8 +84,10 @@ test('W5: the port operation has one partition issuer and one caller of it',
       'only the partition issuer asks the port to transfer leadership');
     assert.deepEqual(filesMatching(
       new RegExp(`\\.${PARTITION_ISSUER}\\(`, 'u')),
-    ['src/node/replica-handler-leader-handoff-methods.js'],
-    'only the replica handler\'s handoff asks the partition issuer');
+    ['src/node/replica-handler-leader-handoff-methods.js',
+      'src/partition/partition-service-removal-subject-handoff.js'],
+    'only the replica handler\'s STEP_DOWN handoff and the removal ' +
+    'subject\'s own hand-off (B2) ask the partition issuer');
   });
 
 test('W5: the one port a partition can be handed implements the operation',

@@ -311,6 +311,10 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       operation =
         await this.rebalanceCoordinator.createOperation(operationRequest);
     } catch (error) {
+      // A transient admission re-entry is skipped for this pass and woken
+      // by the event the admission owner names for it, never left to the
+      // backed-off cadence alone.
+      this.armOperationCreationAdmissionWake(error, move);
       return buildCoordinatorCreationErrorResult(this, error, move);
     }
 

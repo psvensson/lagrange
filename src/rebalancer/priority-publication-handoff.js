@@ -5,36 +5,19 @@ import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
 import {
-  REPLACE_HANDOFF_DECISION,
   beginReplaceHandoffAttempt,
-  decideReplaceNamedHandoff,
   recordReplaceHandoffAnswer,
 } from './operation-workflow-replace-handoff-attempt.js';
-import {isPartitionReplace} from './operation-workflow-replace-owner.js';
 import {
   isDeferredVisibilitySnapshot,
 } from './operation-workflow-replace-owner-state.js';
-import {
-  readReplaceWitnessMembership,
-  replaceReplicaIdsOf,
-} from './operation-workflow-replace-witness.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
   ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationReason,
   resolveOperationHandlerType,
 } = SHARED;
-
-// The publication waits the leader-safety snapshot still decides for a
-// REPLACE (they gate on the publication partition, not on leadership).
-const REPLACE_PUBLICATION_WAIT_STATES = Object.freeze(new Set([
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
-    .PUBLICATION_STATUS_UNAVAILABLE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_PUBLICATION_PUBLISHED,
-]));
 
 const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
@@ -63,18 +46,22 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
   }
 
   /**
-   * Leader/source removal safety. This decides whether a removal is SAFE, so
-   * it reads the AUTHORITATIVE planning contract, never the AVAILABLE one.
-   * When the remove-safety owner has already resolved that authoritative
-   * snapshot for this evaluation it supplies it through
+   * The control-plane publication partition's publication waits before a
+   * REPLACE of it removes its source: the publication status must be read
+   * and PUBLISHED. It reads the AUTHORITATIVE planning contract, never the
+   * AVAILABLE one. When the remove-safety owner has already resolved that
+   * authoritative snapshot for this evaluation it supplies it through
    * options.readAuthoritativePlanningSnapshot, so one evaluation performs one
-   * owner read; a focused or standalone caller that supplies nothing resolves
-   * it here instead.
+   * owner read; a focused or standalone caller that supplies nothing
+   * resolves it here instead. Leadership is not decided here: every
+   * partition removal passes the removal leadership gate
+   * (operation-workflow-removal-leadership-gate.js); the CL-043
+   * completed-election authorization stays deleted (R09, BR11).
    * @param {Object} operation
    * @param {Object} sourceReplicaRow
    * @param {Object} replacementReplicaRow
    * @param {Object} [options]
-   * @return {Promise<Object|null>}
+   * @return {Promise<Object|null>} A publication deferral, or null.
    */
   async evaluatePriorityPublicationLeaderRemoveSafety(
     operation,
@@ -97,32 +84,6 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
         options,
       );
 
-    if (
-      safetySnapshot.state ===
-      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.NOT_APPLICABLE
-    ) {
-      return null;
-    }
-
-    if (
-      isPartitionReplace(operation) &&
-      !REPLACE_PUBLICATION_WAIT_STATES.has(safetySnapshot.state)
-    ) {
-      return this.evaluateReplaceNamedHandoffSafety(operation);
-    }
-
-    if (
-      safetySnapshot.state ===
-      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE
-    ) {
-      return this.buildSafeRemoveSafetyEvaluation();
-    }
-
-    // R09 (BR11, amendment-1 step 7): the CL-043 completed-election
-    // authorization is deleted. Every operation this gate decides is a
-    // partition REPLACE, whose leadership is decided above by a fresh read
-    // of its target (lead === t); on the publication-wait path it falls
-    // through to, only the publication waits below apply.
     if (
       safetySnapshot.state ===
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.PUBLICATION_STATUS_UNAVAILABLE
@@ -153,73 +114,19 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
           safetySnapshot.publicationStatus,
       );
     }
-
-    // Only a partition REPLACE reaches here (every other operation is
-    // NOT_APPLICABLE above), and its leadership is decided by the named
-    // handoff; the per-leg answers are deleted (fix-f1, section 9).
-    return this.evaluateReplaceNamedHandoffSafety(operation);
+    return null;
   }
 
   /**
-   * A REPLACE's leadership gate (amendment-1 step 2): the witness's fresh
-   * leader decides, and the only handoff is a named-target attempt to the
-   * REPLACE's own target. Superseded for REPLACE (R09): the completed
-   * election evidence (CL-043, BR11) and the row-observed ownership wait
-   * (BR3).
-   * @param {Object} operation
-   * @return {Promise<Object>} A remove-safety evaluation.
-   */
-  async evaluateReplaceNamedHandoffSafety(operation) {
-    const replicaIds = replaceReplicaIdsOf(this, operation);
-    const witness = await readReplaceWitnessMembership(this, operation);
-    const decision = decideReplaceNamedHandoff(
-      this, operation, witness, replicaIds);
-    if (decision.state === REPLACE_HANDOFF_DECISION.LEADERSHIP_SAFE) {
-      return this.buildSafeRemoveSafetyEvaluation();
-    }
-    if (decision.state === REPLACE_HANDOFF_DECISION.TARGET_NOT_FOUND) {
-      return this.buildFailedRemoveSafetyEvaluation(
-        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          operation.partitionId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
-          replicaIds.targetReplicaId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND,
-      );
-    }
-    const pendingMessage =
-      OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-      operation.partitionId +
-      OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
-      replicaIds.sourceReplicaId +
-      OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL;
-    if (decision.state !== REPLACE_HANDOFF_DECISION.ISSUE) {
-      return this.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation, pendingMessage);
-    }
-    return this.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
-      pendingMessage,
-      {
-        handoffRequest: Object.freeze({
-          dispatchNodeId: operation.targetNodeId,
-          messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-          requestReason: ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-          requestReplicaId: replicaIds.targetReplicaId,
-          // The attempt opens when the request actually leaves (dispatch).
-          replaceAttempt: true,
-        }),
-      },
-    );
-  }
-
-  /**
-   * F-b / TC5: a REPLACE's handoff leaves only while the operation is still
-   * the non-terminal one that decided it (live and cached), in a source
-   * removal phase. Otherwise nothing is sent and no attempt opens.
+   * F-b / TC5: a removal's leadership handoff leaves only while the
+   * operation is still the non-terminal one that decided it (live and
+   * cached), in its removal dispatch phase (a REPLACE's source removal, a
+   * REMOVE's initial dispatch). Otherwise nothing is sent and no attempt
+   * opens.
    * @param {Object} operation
    * @return {boolean}
    */
-  isReplaceHandoffStillOwned(operation) {
+  isRemovalHandoffStillOwned(operation) {
     if (isDeferredVisibilitySnapshot(operation)) {
       // BR12: a deferred-visibility snapshot issues no handoff.
       return false;
@@ -230,25 +137,28 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       cachedRow.completed_at !== null && cachedRow.completed_at !== undefined;
     return !this.repository.isOperationTerminal(operation) &&
       !cachedTerminal &&
-      this.repository.isReplaceRemoveDispatchPhase(operation);
+      (this.repository.isReplaceRemoveDispatchPhase(operation) ||
+        this.isRemoveInitialDispatchPhase(operation));
   }
 
   /**
-   * A REPLACE's named-target attempt (F-b): it opens only when the request
-   * leaves under the still-owning operation, and its answer - a delivery
-   * failure is a refusal - is applied to the attempt it names.
+   * A removal's named-target attempt (F-b): it opens only when the request
+   * leaves under the still-owning operation, naming its one transferee, and
+   * its answer - a delivery failure is a refusal - is applied to the
+   * attempt it names.
    * @param {Object} operation
    * @param {Object} handoffRequest
    * @param {string} target
    * @param {Object} request
    * @return {Promise<Object|null>}
    */
-  async dispatchReplaceHandoffAttempt(
+  async dispatchRemovalHandoffAttempt(
     operation, handoffRequest, target, request) {
-    if (!this.isReplaceHandoffStillOwned(operation)) {
+    if (!this.isRemovalHandoffStillOwned(operation)) {
       return null;
     }
-    const attemptSeq = beginReplaceHandoffAttempt(this, operation.operationId);
+    const attemptSeq = beginReplaceHandoffAttempt(this, operation.operationId,
+      handoffRequest.requestReplicaId);
     let response = null;
     try {
       // The STEP_DOWN answer is the target's; an undelivered request has none.
@@ -297,13 +207,13 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     if (handoffRequest.requestReason) {
       request[ReplicaOperationField.REASON] = handoffRequest.requestReason;
     }
-    // Every remove-safety handoff is a REPLACE's named-target attempt; the
-    // non-attempt dispatch and its evidence recording are deleted (fix-f1,
-    // section 9).
-    if (handoffRequest.replaceAttempt !== true) {
+    // Every remove-safety handoff is the removal leadership gate's
+    // named-target attempt; the non-attempt dispatch and its evidence
+    // recording are deleted (fix-f1, section 9).
+    if (handoffRequest.leadershipHandoffAttempt !== true) {
       return null;
     }
-    return this.dispatchReplaceHandoffAttempt(
+    return this.dispatchRemovalHandoffAttempt(
       operation, handoffRequest, target, request);
   }
 
@@ -311,10 +221,11 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     _operation,
     removeSafetyEvaluation,
   ) {
-    // E11: a REPLACE's answered attempt is followed by one fresh decision
-    // (the leader may already be the target, e.g. ALREADY_LEADER); an
+    // E11: an answered attempt is followed by one fresh decision (the
+    // leader may already be the transferee, e.g. ALREADY_LEADER); an
     // unresolved attempt then waits for its resolution.
-    return removeSafetyEvaluation?.handoffRequest?.replaceAttempt === true;
+    return removeSafetyEvaluation?.handoffRequest?.leadershipHandoffAttempt ===
+      true;
   }
 
   // Priority BUDGET ADMISSION evidence, not a removal decision: AVAILABLE.

@@ -55,8 +55,16 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   most one acknowledgement entry per second per partition, and the events a
 //   crash can make the consumer see twice are those acknowledged within the
 //   last second (at most ACK_BATCH_MAX_EVENTS of them).
-// - DRIVE_PAGE_ROWS: how many owed rows one drive visits before yielding; each
-//   ledger read hydrates only the current row, in log order.
+// - DRIVE_PAGE_ROWS: how many owed rows one recipient's drive ships before
+//   it yields (its continuation is the lane's retry timer).
+// - SHIP_MAX_EVENTS / SHIP_MAX_BYTES (range shipping): one delivery ships the
+//   owed rows after the scan cursor as one vector of at most this many rows
+//   and this many event_json bytes. A scheduling bound, never an admission
+//   cap: it refuses nothing, and a vector always holds at least one row, so a
+//   row above SHIP_MAX_BYTES ships alone. Both are this owner's existing
+//   acknowledgement batch bounds, so acknowledging one vector needs at most
+//   one flush; the byte bound is far below every carrier limit the vector
+//   crosses (the rs-raft append message, the router WebSocket payload).
 // - RETAINED_DELIVERED_MAX (decision D1): delivered rows are reclaimed only
 //   below the lowest owed row, so a row the lane leaves owed (a provisional
 //   coverage, a batch that commits after a later one) keeps every delivered
@@ -68,12 +76,36 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   reclaims at most this many rows, so its transaction stays bounded; it
 //   exceeds what one command can add (ACK_BATCH_MAX_EVENTS) plus the retained
 //   bound, so a backlog shrinks with every acknowledgement.
+// - OWED_MAX_EVENTS: durable owed-work capacity of ordinary writes; no new
+//   per-event payload or fan-out cap.
+// - OWED_RETIREMENT_RESERVE_EVENTS (dead-recipient measure 1, owner ruling
+//   2026-11-11): owed rows admitted above OWED_MAX_EVENTS only for a
+//   retirement-class write (partition-cdc-owed-admission.js), so the cap can
+//   never refuse the lifecycle write that retires the recipient pinning it.
+//   One acknowledgement batch (ACK_BATCH_MAX_EVENTS) drains the whole
+//   reserve, and it covers the lifecycle rows of a node's retirement (its
+//   nodes row and the services rows of the replicas it hosts) several times
+//   over; the ledger's worst case grows by one batch (6 %).
+// - RELIST_LAG_ROWS (dead-recipient measure 3, S3.11): a recipient more than
+//   this many owed rows behind what it holds the frontier at, one of whose
+//   deliveries ended without a committed receipt, is released as MUST_RELIST;
+//   a re-list hold is released at the same lag, or after
+//   RELIST_HOLD_DEADLINE_MS. Half the capacity, so owed rows stay under
+//   OWED_MAX_EVENTS: a slow recipient costs a re-list, never a refused write.
+const ACK_BATCH_MAX_EVENTS = NUM.TWO_HUNDRED_FIFTY_SIX;
+const ACK_BATCH_MAX_BYTES = NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB;
+const OWED_MAX_EVENTS = NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX;
 const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
-  // Durable owed-work capacity; no new per-event payload or fan-out cap.
-  OWED_MAX_EVENTS: NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
-  ACK_BATCH_MAX_EVENTS: NUM.TWO_HUNDRED_FIFTY_SIX,
+  OWED_MAX_EVENTS,
+  OWED_RETIREMENT_RESERVE_EVENTS: ACK_BATCH_MAX_EVENTS,
+  RELIST_LAG_ROWS: OWED_MAX_EVENTS / NUM.TWO,
+  // ends-on: the hold's recipient confirms a range, or the hold is released
+  RELIST_HOLD_DEADLINE_MS: TIME_MS.MINUTE * NUM.TWO,
+  ACK_BATCH_MAX_EVENTS,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,
-  ACK_BATCH_MAX_BYTES: NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB,
+  ACK_BATCH_MAX_BYTES,
+  SHIP_MAX_EVENTS: ACK_BATCH_MAX_EVENTS,
+  SHIP_MAX_BYTES: ACK_BATCH_MAX_BYTES,
   // ends-on: the pending acknowledgements are proposed as one CDC_DELIVERED
   // committed command
   ACK_FLUSH_DEADLINE_MS: TIME_MS.SECOND,
@@ -107,6 +139,18 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
 const PARTITION_CDC_OBLIGATION_TABLE = '_cdc_obligations';
 const PARTITION_CDC_OBLIGATION_PROGRESS_TABLE = '_cdc_obligation_progress';
 const PARTITION_CDC_OBLIGATION_PROGRESS_SCOPE = 'ledger';
+// The ledger's incarnation (CDC Stage 3): the identity of the position space
+// its rows live in. A source position {logIndex, ordinal} is comparable only
+// within one incarnation; a log rebuilt from fresh storage reuses indexes but
+// mints another incarnation. Written once, inside the application transaction
+// of the first committed entry that records an obligation under this build,
+// from that entry's own identity, so every replica holds the same value and a
+// snapshot install carries it.
+const PARTITION_CDC_LEDGER_INCARNATION_TABLE = '_cdc_ledger_incarnation';
+// The ledger's newest recorded event, kept as one row beside the ledger (CDC
+// Stage 3): the position probe shipped to a recipient below it when nothing is
+// owed after its cursor. Decision D1's reclamation is unchanged.
+const PARTITION_CDC_LEDGER_NEWEST_TABLE = '_cdc_ledger_newest';
 const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   SELECT_ALL:
     'SELECT event_key, log_index, term, ordinal, entry_id, event_json, delivered, ' +
@@ -164,6 +208,65 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   COUNT_BY_FLAG:
     'SELECT delivered, COUNT(*) AS count ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} GROUP BY delivered`,
+  // The newest recorded event (CDC Stage 3 position probe): one row, replaced
+  // by every recording in the same application transaction, so it survives
+  // decision D1's reclamation of the ledger row it copies.
+  CREATE_NEWEST_TABLE: `
+      CREATE TABLE IF NOT EXISTS ${PARTITION_CDC_LEDGER_NEWEST_TABLE} (
+        scope TEXT PRIMARY KEY,
+        event_key TEXT NOT NULL,
+        log_index INTEGER NOT NULL,
+        term INTEGER NOT NULL,
+        ordinal INTEGER NOT NULL,
+        entry_id TEXT NOT NULL,
+        event_json TEXT NOT NULL
+      )
+    `,
+  UPSERT_NEWEST:
+    `INSERT INTO ${PARTITION_CDC_LEDGER_NEWEST_TABLE} ` +
+    '(scope, event_key, log_index, term, ordinal, entry_id, event_json) ' +
+    'VALUES (@scope, @eventKey, @logIndex, @term, @ordinal, @entryId, @eventJson) ' +
+    'ON CONFLICT (scope) DO UPDATE SET event_key = excluded.event_key, ' +
+    'log_index = excluded.log_index, term = excluded.term, ordinal = excluded.ordinal, ' +
+    'entry_id = excluded.entry_id, event_json = excluded.event_json',
+  NEWEST_TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' ' +
+    `AND name = '${PARTITION_CDC_LEDGER_NEWEST_TABLE}'`,
+  SELECT_NEWEST:
+    'SELECT event_key, log_index, term, ordinal, entry_id, event_json ' +
+    `FROM ${PARTITION_CDC_LEDGER_NEWEST_TABLE} WHERE scope = ?`,
+  // The retained row immediately before a position, owed or delivered: the
+  // predecessor a shipped range names (CDC Stage 3).
+  SELECT_PREDECESSOR:
+    'SELECT log_index, ordinal ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE ` +
+    '(log_index < @logIndex OR (log_index = @logIndex AND ordinal < @ordinal)) ' +
+    'ORDER BY log_index DESC, ordinal DESC LIMIT 1',
+  // The owed rows after a position, counted up to a bound (a recipient's
+  // row lag, CDC Stage 3 re-list bound).
+  COUNT_OWED_AFTER:
+    'SELECT COUNT(*) AS count FROM (SELECT 1 ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +
+    'AND (log_index > @logIndex OR (log_index = @logIndex AND ordinal > @ordinal)) ' +
+    'LIMIT @limit)',
+  CREATE_INCARNATION_TABLE: `
+      CREATE TABLE IF NOT EXISTS ${PARTITION_CDC_LEDGER_INCARNATION_TABLE} (
+        scope TEXT PRIMARY KEY,
+        incarnation TEXT NOT NULL,
+        minted_index INTEGER NOT NULL,
+        minted_term INTEGER NOT NULL
+      )
+    `,
+  // The first mint wins: a later entry never replaces the incarnation.
+  INSERT_INCARNATION:
+    `INSERT OR IGNORE INTO ${PARTITION_CDC_LEDGER_INCARNATION_TABLE} ` +
+    '(scope, incarnation, minted_index, minted_term) ' +
+    'VALUES (@scope, @incarnation, @index, @term)',
+  INCARNATION_TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' ' +
+    `AND name = '${PARTITION_CDC_LEDGER_INCARNATION_TABLE}'`,
+  SELECT_INCARNATION:
+    `SELECT incarnation FROM ${PARTITION_CDC_LEDGER_INCARNATION_TABLE} WHERE scope = ?`,
   // The lowest owed row: everything below it is delivered.
   SELECT_OWED_HEAD:
     'SELECT log_index, ordinal ' +
@@ -234,11 +337,12 @@ const PARTITION_CDC_OBLIGATION_EVENT_FIELD = Object.freeze({
 });
 
 // The typed answers of this owner. The first two are the admission owner's
-// refusals before a CDC_DELIVERED command is proposed; the next three are
+// refusals before a CDC_DELIVERED command is proposed; the next four are
 // what its application answers when it is consumed without a write (a
-// command naming another partition, an event the ledger never recorded, or an
-// event filed under another entry than the one that owes it: each a bug path,
-// refused alike on every replica and raised as an alarm); the last two are
+// command naming another partition, compacted identity evidence, an event the
+// ledger does not retain at that position, or another event at that position:
+// refused alike on every replica and raised as an alarm; the delivery owner
+// resolves each, partition-cdc-acknowledgement-refusal.js); the last two are
 // the delivery owner's flush outcomes when no proposer is composed or the
 // batch was proposed by a replica that no longer leads.
 const PARTITION_CDC_OBLIGATION_FAILURE_CODE = Object.freeze({
@@ -247,7 +351,6 @@ const PARTITION_CDC_OBLIGATION_FAILURE_CODE = Object.freeze({
   IDENTITY_MISMATCH: 'cdc_acknowledgement_identity_mismatch',
   IDENTITY_COMPACTED: 'cdc_acknowledgement_identity_compacted',
   UNKNOWN_EVENT: 'cdc_acknowledgement_unknown_event',
-  ENTRY_MISMATCH: 'cdc_acknowledgement_entry_mismatch',
   POSITION_MISMATCH: 'cdc_acknowledgement_position_mismatch',
   PROPOSER_UNAVAILABLE: 'cdc_acknowledgement_proposer_unavailable',
   NOT_LEADER: 'cdc_acknowledgement_not_leader',
@@ -275,12 +378,65 @@ const PARTITION_CDC_OBLIGATION_DRIVE_STATE = Object.freeze({
   SHUTDOWN: 'shutdown',
   JOINED_IN_FLIGHT: 'joined_in_flight',
   NO_SUBSCRIBERS: 'no_subscribers',
+  // The leader owes rows of a propagated table and has no propagation
+  // subscriber: a named, logged condition, never silent accumulation. A
+  // deferred attachment registered on the partition is woken by it.
+  NO_PROPAGATION_SUBSCRIBER: 'no_propagation_subscriber',
   NO_LEDGER: 'no_ledger',
   DRAINED: 'drained',
   PAGE_YIELDED: 'page_yielded',
   PROVISIONAL: 'provisional',
   HELD_BY_SUBSCRIBER: 'held_by_subscriber',
   ACKNOWLEDGEMENT_BACKPRESSURE: 'acknowledgement_backpressure',
+});
+
+// The lane's named progress state of one recipient (a subscriber, or one
+// target group of its propagation). Transitions, what each state pins and
+// what releases it: partition-cdc-recipient-progress.js (design note S3.11).
+// MUST_RELIST and DETACHED hold nothing; every other state holds the frontier.
+const PARTITION_CDC_RECIPIENT_STATE = Object.freeze({
+  NEVER_SHIPPED: 'never_shipped',
+  CONFIRMED: 'confirmed',
+  SUBSCRIBER_UNCONFIRMED: 'subscriber_unconfirmed',
+  POSITION_GAP: 'position_gap',
+  MUST_RELIST: 'must_relist',
+  RELIST_OFFERED: 'relist_offered',
+  DETACHED: 'detached',
+});
+
+const PARTITION_CDC_RECIPIENT_DETACH_REASON = Object.freeze({
+  LIFECYCLE: 'lifecycle',
+});
+
+// Why a recipient was released to MUST_RELIST.
+const PARTITION_CDC_RECIPIENT_RELEASE = Object.freeze({
+  LAG_WITHOUT_RECEIPT: 'lag_without_receipt',
+  OFFER_UNANSWERED: 'relist_offer_unanswered',
+  HOLD_LAG_EXCEEDED: 'relist_hold_lag_exceeded',
+  HOLD_EXPIRED: 'relist_hold_expired',
+});
+
+// What one recipient's drive pass ended as.
+const PARTITION_CDC_RECIPIENT_PASS = Object.freeze({
+  DRAINED: 'drained',
+  HELD: 'held',
+  PROVISIONAL: 'provisional',
+  PAGE_YIELDED: 'page_yielded',
+  CLEANUP_PENDING: 'cleanup_pending',
+  FAILED: 'failed',
+  STOPPED: 'stopped',
+});
+
+// Why an idle recipient is not started by a wake. Each is a named wait woken
+// by the event that clears it: RUNNING (its own drive runs again), CLEANUP
+// (its delivery's actual local cleanup), BACKOFF (its own due time, on the
+// lane's retry timer) and CAUGHT_UP (the next committed row). A recipient
+// behind the owed tail with none of these is started; nothing else may hold it.
+const PARTITION_CDC_RECIPIENT_WAIT = Object.freeze({
+  RUNNING: 'running',
+  CLEANUP: 'cleanup',
+  BACKOFF: 'backoff',
+  CAUGHT_UP: 'caught_up',
 });
 
 // What one flush of the acknowledgement batch ended as.
@@ -304,6 +460,8 @@ const PARTITION_CDC_OBLIGATION_REASON = Object.freeze({
   SUBSCRIPTION_HANDSHAKE: 'subscription_handshake',
   DELIVERY_RETRY: 'delivery_retry',
   AFTER_FLUSH: 'after_flush',
+  // The sender's cache changed a recipient-domain table (CDC Stage 3).
+  RECIPIENT_DOMAIN_CHANGED: 'recipient_domain_changed',
   BATCH_EVENTS_BOUND: 'batch_events_bound',
   BATCH_BYTES_BOUND: 'batch_bytes_bound',
   FLUSH_DEADLINE: 'flush_deadline',
@@ -313,6 +471,9 @@ const PARTITION_CDC_OBLIGATION_LOG_MSG = Object.freeze({
   RECORDED: 'CDC obligations recorded with the committed decision',
   DELIVERY_HELD: 'CDC obligation delivery held by a subscriber; retry scheduled',
   DRIVE_FAILED: 'CDC obligation drive failed',
+  OWED_WITHOUT_PROPAGATION_SUBSCRIBER:
+    'CDC obligations owed on a propagated table with no propagation subscriber',
+  DELIVERY_BACKPRESSURED: 'CDC obligation delivery backpressured',
   ACKNOWLEDGEMENTS_PROPOSED: 'CDC acknowledgement batch proposed',
   ACKNOWLEDGEMENTS_REFUSED: 'CDC acknowledgement batch refused',
   ACKNOWLEDGEMENTS_OUTCOME_UNKNOWN:
@@ -347,4 +508,11 @@ export {
   PARTITION_CDC_OBLIGATION_SQL,
   PARTITION_CDC_OBLIGATION_STANDING,
   PARTITION_CDC_OBLIGATION_TABLE,
+  PARTITION_CDC_LEDGER_INCARNATION_TABLE,
+  PARTITION_CDC_LEDGER_NEWEST_TABLE,
+  PARTITION_CDC_RECIPIENT_DETACH_REASON,
+  PARTITION_CDC_RECIPIENT_PASS,
+  PARTITION_CDC_RECIPIENT_RELEASE,
+  PARTITION_CDC_RECIPIENT_STATE,
+  PARTITION_CDC_RECIPIENT_WAIT,
 };

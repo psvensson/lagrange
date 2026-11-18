@@ -25,6 +25,7 @@ import {
   createMockControlPlaneReadinessService,
 } from './test-helpers.js';
 import {PriorityPublicationSafetyTopology} from '../../src/rebalancer/priority-publication-safety-topology.js';
+import {createLeadershipGroup} from './removal-leadership-group-fixture.js';
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION =
   OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
@@ -51,11 +52,24 @@ function replicaRow(replicaId, nodeId) {
 /**
  * Build a minimal context stub driving evaluateRemoveSafety. Rows is the
  * authoritative replica-row set for the partition; minReplicaCount is the
- * policy floor. Every context method the evaluator touches is stubbed.
+ * policy floor. Every context method the evaluator touches is stubbed. The
+ * removal leadership gate reads a group whose third replica leads (these
+ * tests are about the floors, so the removed replica never leads).
  */
 function buildContext({rows, minReplicaCount}) {
+  const partitionId = rows?.[0]?.partition_id ?? USER_PARTITION_ID;
+  const group = createLeadershipGroup({
+    partitionId,
+    members: ['r1', 'r2', 'r3'].map((suffix, index) => ({
+      replicaId: `${partitionId}-${suffix}`,
+      nodeId: ['node-a', 'node-b', 'node-c'][index],
+    })),
+    leaderReplicaId: `${partitionId}-r3`,
+  });
   return {
     nodeId: 'owner-node',
+    messageRouter: group.router(),
+    getCachedCriticalReplicaRows: () => group.rows(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       readNodeRows: () => ['node-a', 'node-b', 'node-c'].map((nodeId) => ({
         node_id: nodeId, status: 'active', ready_lease_expires_at: Date.now() + 60000,
@@ -64,7 +78,11 @@ function buildContext({rows, minReplicaCount}) {
     repository: {
       isReplaceRemovePhase: () => false,
       isReplaceRemoveDispatchPhase: () => false,
-      getOperationsByEntity: async () => [],
+      // The ledger owner answers: no operation of the entity is in flight.
+      getOperationsByEntityAuthoritativeObservation: async () => ({
+        state: 'empty', complete: true, operationCount: 0, operations: [],
+        deferredOutcome: null, retryAfterMs: null,
+      }),
       isOperationTerminal: () => false,
       getReplaceSourceReplicaId: () => null,
       getReplaceTargetReplicaId: () => null,
@@ -81,7 +99,6 @@ function buildContext({rows, minReplicaCount}) {
       PriorityPublicationSafetyTopology.prototype.isVoterReadyFloorCountableReplica,
     isOperationReplicaRow: (row, op) =>
       row.replica_id === op.replicaId || row.service_id === op.replicaId,
-    isReplaceSourceLeaderHandoffRequiredPartition: () => false,
     getCriticalMinReplicaCount: async () => minReplicaCount,
     evaluatePriorityRecoveryCompletionRemoveSafety: async () => null,
     // Priority-tier methods throw if reached: the universal tier must not
@@ -319,3 +336,42 @@ test(
     t.end();
   },
 );
+
+// A plain REMOVE re-sent at STOPPING whose first delivery never took effect
+// (its subject's row still serves) starts a fresh removal: it passes the
+// same floors as a first send. Before, every STOPPING re-send was SAFE
+// without evaluation. A re-send whose effect already took (row retiring or
+// absent) repeats it and stays SAFE; an unreadable row is a named wait.
+function stoppingResend(lifecycle) {
+  const context = buildContext({
+    rows: [
+      replicaRow('custom-p1-r1', 'node-a'),
+      replicaRow('custom-p1-r2', 'node-b'),
+      replicaRow('custom-p1-r3', 'node-c'),
+    ],
+    minReplicaCount: 3,
+  });
+  context.isRemoveInitialDispatchPhase = () => false;
+  context.observeStoppingReplicaProgress = async () => lifecycle;
+  return evaluateRemoveSafety(context, {
+    ...removeOperation(USER_PARTITION_ID, 'custom-p1-r1'),
+    workflowStep: 'STOPPING', targetNodeId: 'node-a'});
+}
+
+test('a plain REMOVE re-sent at STOPPING is evaluated when its first ' +
+  'delivery never took effect', async (t) => {
+  const {DEFER, SAFE} = REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
+  t.same({
+    fresh: (await stoppingResend({state: 'observed',
+      lifecycleStatus: 'active'})).classification,
+    removing: (await stoppingResend({state: 'observed',
+      lifecycleStatus: 'removing'})).classification,
+    absent: (await stoppingResend({state: 'absent',
+      lifecycleStatus: null})).classification,
+    unread: (await stoppingResend({state: 'unavailable',
+      lifecycleStatus: null})).classification,
+  }, {fresh: DEFER, removing: SAFE, absent: SAFE, unread: DEFER},
+  'a fresh removal below the floor defers; a repeated effect is safe; an ' +
+  'unreadable subject waits');
+  t.end();
+});

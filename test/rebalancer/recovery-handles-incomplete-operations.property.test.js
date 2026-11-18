@@ -1,15 +1,23 @@
 /**
- * Property Test: Recovery Handles Incomplete Operations
+ * Property Test: Restart Handles Incomplete Operations
  *
- * Property 8: For any operation found in SENDING or CREATING state after node
- * recovery, the RebalanceCoordinator SHALL mark it as FAILED. For operations
- * in SYNCING state, the coordinator SHALL check actual replica status and
- * reconcile.
+ * Property 8 (revised with the deletion of the startup restart routine): the
+ * production restart path is the coordinator timer tick (checkTimeouts, then
+ * the level-triggered orphan sweep reconcileOrphanedOperations). For any
+ * incomplete operation within its step budget, that tick SHALL NOT fail it
+ * merely for being incomplete: a pre-effect row is re-driven or timed out by
+ * its owner, an in-flight effect is left to its owner. For a SYNCING
+ * operation whose replica has reached an actionable truth, the tick SHALL
+ * apply that truth (ACTIVE -> ACTIVE, FAILED -> FAILED).
+ *
+ * The former clauses "PENDING/SENDING/CREATING/STOPPING are marked FAILED",
+ * "a SYNCING row with a missing replica is failed", the recoveryCompleted
+ * event and the recovery result/error shape pinned the deleted destructive
+ * routine and are retired.
  *
  * Validates: Requirements 7.2, 7.3
  *
- * Feature: simplified-rebalancing-architecture, Property 8: Recovery Handles
- * Incomplete Operations
+ * Feature: simplified-rebalancing-architecture, Property 8
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -26,6 +34,15 @@ import {
   createMockMessageRouter,
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {REBALANCE_COORDINATOR_EVENT} from
+  '../../src/rebalancer/rebalancer-constants.js';
+
+// The production restart path (rebalance-coordinator-lifecycle.js
+// startTimeoutChecking): step-budget sweep, then orphan sweep.
+async function runRestartTimerTick(coordinator) {
+  await coordinator.checkTimeouts();
+  await coordinator.reconcileOrphanedOperations();
+}
 
 /**
  * Create a mock operation row for the SQL engine.
@@ -210,6 +227,7 @@ function createRecoveryTestCoordinator(options = {}) {
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
   }));
+  coordinator.initialize();
 
   /**
    * Get an operation from the tracked store.
@@ -223,8 +241,8 @@ function createRecoveryTestCoordinator(options = {}) {
   return {coordinator, getTrackedOperation, trackedOperations};
 }
 
-test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
-  const failureRecoveryCases = [
+test('Property 8: Restart Handles Incomplete Operations', async (t) => {
+  const retainedCases = [
     {workflowStep: 'PENDING', status: ReplicaStatus.PENDING},
     {workflowStep: 'SENDING', status: ReplicaStatus.PENDING},
     {workflowStep: 'CREATING', status: ReplicaStatus.CREATING},
@@ -234,9 +252,10 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       type: OperationType.REMOVE,
     },
   ];
-  for (const recoveryCase of failureRecoveryCases) {
+  for (const retainedCase of retainedCases) {
     await t.test(
-      `operations in ${recoveryCase.workflowStep} state are marked FAILED`,
+      `operations in ${retainedCase.workflowStep} state are not failed ` +
+      'for being incomplete',
       async (t) => {
         await fc.assert(
           fc.asyncProperty(
@@ -247,15 +266,22 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
               replicaId: fc.uuid(),
             }),
             async (params) => {
-              const opRow = createOperationRow({...params, ...recoveryCase});
+              const now = Date.now();
+              const opRow = createOperationRow({
+                ...params,
+                ...retainedCase,
+                stepsHistory: JSON.stringify([
+                  {step: retainedCase.workflowStep, timestamp: now},
+                ]),
+              });
               const {coordinator, getTrackedOperation} =
                 createRecoveryTestCoordinator({operations: [opRow]});
               try {
-                const result = await coordinator.handleRecovery();
+                await runRestartTimerTick(coordinator);
                 const operation = getTrackedOperation(params.operationId);
-                return operation?.status === ReplicaStatus.FAILED &&
-                  operation.workflow_step === 'FAILED' &&
-                  result.markedFailed === 1;
+                return operation !== null &&
+                  operation.status !== ReplicaStatus.FAILED &&
+                  operation.workflow_step !== 'FAILED';
               } finally {
                 await coordinator.shutdown();
               }
@@ -264,8 +290,8 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
           {numRuns: 10},
         );
         t.pass(
-          `Operations in ${recoveryCase.workflowStep} state are marked ` +
-          'FAILED during recovery',
+          `Operations in ${retainedCase.workflowStep} state are not failed ` +
+          'by the restart tick',
         );
       },
     );
@@ -300,13 +326,12 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
           });
 
           try {
-            const result = await coordinator.handleRecovery();
+            await runRestartTimerTick(coordinator);
 
             const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.ACTIVE &&
-              operation.workflow_step === 'ACTIVE' &&
-              result.reconciled === 1;
+              operation.workflow_step === 'ACTIVE';
           } finally {
             await coordinator.shutdown();
           }
@@ -315,7 +340,7 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('SYNCING operations with ACTIVE replica are completed during recovery');
+    t.pass('SYNCING operations with ACTIVE replica are completed by the restart tick');
   });
 
   await t.test('SYNCING operations with FAILED replica are failed', async (t) => {
@@ -347,13 +372,12 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
           });
 
           try {
-            const result = await coordinator.handleRecovery();
+            await runRestartTimerTick(coordinator);
 
             const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.reconciled === 1;
+              operation.workflow_step === 'FAILED';
           } finally {
             await coordinator.shutdown();
           }
@@ -362,10 +386,11 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('SYNCING operations with FAILED replica are failed during recovery');
+    t.pass('SYNCING operations with FAILED replica are failed by the restart tick');
   });
 
-  await t.test('SYNCING operations with missing replica are failed', async (t) => {
+  await t.test('SYNCING operations with a not-yet-visible replica are left ' +
+    'to their owner within the step budget', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
@@ -375,10 +400,12 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
           replicaId: fc.uuid(),
         }),
         async (params) => {
+          const now = Date.now();
           const opRow = createOperationRow({
             ...params,
             workflowStep: 'SYNCING',
             status: ReplicaStatus.SYNCING,
+            stepsHistory: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
           });
 
           const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
@@ -387,13 +414,12 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
           });
 
           try {
-            const result = await coordinator.handleRecovery();
+            await runRestartTimerTick(coordinator);
 
             const operation = getTrackedOperation(params.operationId);
             return operation !== null &&
-              operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.reconciled === 1;
+              operation.status === ReplicaStatus.SYNCING &&
+              operation.workflow_step === 'SYNCING';
           } finally {
             await coordinator.shutdown();
           }
@@ -402,10 +428,10 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('SYNCING operations with missing replica are failed during recovery');
+    t.pass('a fresh SYNCING row is not failed for an absent replica read');
   });
 
-  await t.test('multiple incomplete operations are all processed', async (t) => {
+  await t.test('multiple incomplete operations are all retained', async (t) => {
     const operations = [
       createOperationRow({
         operationId: 'op-1',
@@ -416,11 +442,13 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
         operationId: 'op-2',
         workflowStep: 'SENDING',
         status: ReplicaStatus.PENDING,
+        stepsHistory: JSON.stringify([{step: 'SENDING', timestamp: Date.now()}]),
       }),
       createOperationRow({
         operationId: 'op-3',
         workflowStep: 'CREATING',
         status: ReplicaStatus.CREATING,
+        stepsHistory: JSON.stringify([{step: 'CREATING', timestamp: Date.now()}]),
       }),
     ];
 
@@ -429,87 +457,33 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
     });
 
     try {
-      const result = await coordinator.handleRecovery();
-
-      t.equal(result.totalIncomplete, 3, 'All 3 incomplete operations found');
-      t.equal(result.markedFailed, 3, 'All 3 operations marked as failed');
+      await runRestartTimerTick(coordinator);
 
       for (const opRow of operations) {
         const op = getTrackedOperation(opRow.operation_id);
-        t.equal(op.status, ReplicaStatus.FAILED,
-          `Operation ${opRow.operation_id} is failed`);
+        t.not(op.status, ReplicaStatus.FAILED,
+          `Operation ${opRow.operation_id} is not failed`);
+        t.equal(op.error_message, null,
+          `Operation ${opRow.operation_id} carries no failure message`);
       }
     } finally {
       await coordinator.shutdown();
     }
   });
 
-  await t.test('recovery emits recoveryCompleted event', async (t) => {
-    const opRow = createOperationRow({
-      operationId: 'test-op',
-      workflowStep: 'PENDING',
-      status: ReplicaStatus.PENDING,
-    });
-
-    const {coordinator} = createRecoveryTestCoordinator({
-      operations: [opRow],
-    });
-
-    let eventEmitted = false;
-    let eventResult = null;
-
-    coordinator.on('recoveryCompleted', (result) => {
-      eventEmitted = true;
-      eventResult = result;
-    });
-
-    try {
-      await coordinator.handleRecovery();
-
-      t.ok(eventEmitted, 'recoveryCompleted event was emitted');
-      t.equal(eventResult.totalIncomplete, 1, 'Event contains correct count');
-      t.equal(eventResult.markedFailed, 1, 'Event contains correct failed count');
-    } finally {
-      await coordinator.shutdown();
-    }
+  await t.test('no restart-completion event exists', async (t) => {
+    t.notOk('RECOVERY_COMPLETED' in REBALANCE_COORDINATOR_EVENT,
+      'the deleted restart routine\'s completion event is not re-added');
   });
 
-  await t.test('recovery with no incomplete operations succeeds', async (t) => {
-    const {coordinator} = createRecoveryTestCoordinator({
+  await t.test('the restart tick over an empty store resolves', async (t) => {
+    const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
       operations: [],
     });
 
     try {
-      const result = await coordinator.handleRecovery();
-
-      t.equal(result.totalIncomplete, 0, 'No incomplete operations found');
-      t.equal(result.markedFailed, 0, 'No operations marked as failed');
-      t.equal(result.reconciled, 0, 'No operations reconciled');
-      t.equal(result.errors.length, 0, 'No errors');
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
-
-  await t.test('error message includes recovery context', async (t) => {
-    const opRow = createOperationRow({
-      operationId: 'test-op',
-      workflowStep: 'CREATING',
-      status: ReplicaStatus.CREATING,
-    });
-
-    const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
-      operations: [opRow],
-    });
-
-    try {
-      await coordinator.handleRecovery();
-
-      const operation = getTrackedOperation('test-op');
-      t.ok(operation.error_message.includes('recovery'),
-        'Error message mentions recovery');
-      t.ok(operation.error_message.includes('incomplete'),
-        'Error message mentions incomplete');
+      await runRestartTimerTick(coordinator);
+      t.equal(trackedOperations.size, 0, 'no operation is created by a restart');
     } finally {
       await coordinator.shutdown();
     }

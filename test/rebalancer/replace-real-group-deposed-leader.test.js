@@ -36,9 +36,17 @@ import {
   settleTurns,
 } from './replace-real-group-harness.js';
 
+// The premise of both cells is a target that leads and is then deposed. A
+// REPLACE moves leadership to its target only when its source leads (BR11 as
+// superseded 2026-11-11: a third leader is retained), so the source leads at
+// creation and the named handoff puts the target in the lead. Before the
+// supersession these cells opened with a third replica leading and relied on
+// the handoff away from it.
+const TARGET_LEADS_WORLD = Object.freeze({sourceLeads: true});
+
 test('deposed leader: R-1a completes from an isolated ex-leader while the ' +
   'committed configuration (new leader) holds the re-admitted source', async (t) => {
-  const world = await openReplaceWorld({sourceLeads: false});
+  const world = await openReplaceWorld(TARGET_LEADS_WORLD);
   try {
     world.currentEdge = 'deposed-leader';
     const group = world.group;
@@ -118,7 +126,7 @@ test('deposed leader: R-1a completes from an isolated ex-leader while the ' +
 // steps: the owner's read runs before t's runtime drains it).
 test('deposed leader, stall shape: the higher-term heartbeat is queued but ' +
   'not yet processed when R-1a reads t', async (t) => {
-  const world = await openReplaceWorld({sourceLeads: false});
+  const world = await openReplaceWorld(TARGET_LEADS_WORLD);
   try {
     const group = world.group;
     await driveToIntent(world);

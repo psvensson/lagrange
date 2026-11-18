@@ -15,15 +15,19 @@
 // refusal) or whose outcome is unknown keeps the session PREPARING with its
 // sealed command, so the coordinator's retry re-proposes the same bytes.
 import {
+  PARTICIPANT_STORE_CONNECTION_STATE as CONNECTION_STATE,
+  PARTICIPANT_TRANSACTION_CUSTODY as CUSTODY,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
 import {
   isParticipantSessionPrepared,
   isPartitionReserved,
+  participantStoreConnectionStateOf,
   readPreparedParticipantIds,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
+import {notifyRemovalServingDrain} from './partition-service-removal-drain-wake.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -299,7 +303,8 @@ function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
 
 function reconcilePreparedParticipantRowKeys(service) {
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
-  if (!preparedMap || preparedMap.size === 0 || service?.db?.open !== true) return;
+  if (!preparedMap || preparedMap.size === 0 ||
+      participantStoreConnectionStateOf(service?.db) === CONNECTION_STATE.CLOSED) return;
   const durablePrepared = new Set(readPreparedParticipantIds(service.db));
   for (const participantId of [...preparedMap.keys()]) {
     if (!durablePrepared.has(participantId)) {
@@ -393,13 +398,33 @@ function hasParticipantSession(service) {
 }
 
 /**
- * Whether the current participant owner holds the partition: volatile
- * staging on this leader, or a durable PREPARED reservation.
+ * The participant owner's custody of the partition: ACTIVE (volatile staging
+ * on this leader, or a durable PREPARED reservation), IDLE (neither, both
+ * read), or UNAVAILABLE when the lifecycle owner released the connection and
+ * no volatile session holds it: the durable reservation cannot be read
+ * through a released connection, so a closed connection is never answered
+ * as settled - a named answer, never a read through a released connection.
+ * @param {Object} service - The partition.
+ * @return {string} A PARTICIPANT_TRANSACTION_CUSTODY.
+ */
+function participantTransactionCustodyOf(service) {
+  if (hasParticipantSession(service)) {
+    return CUSTODY.ACTIVE;
+  }
+  if (participantStoreConnectionStateOf(service.db) === CONNECTION_STATE.CLOSED) {
+    return CUSTODY.UNAVAILABLE;
+  }
+  return isPartitionReserved(service.db) ? CUSTODY.ACTIVE : CUSTODY.IDLE;
+}
+
+/**
+ * Whether the current participant owner holds the partition (custody
+ * ACTIVE).
  * @param {Object} service - The partition.
  * @return {boolean} Whether TX1 has nonterminal work here.
  */
 function participantTransactionActive(service) {
-  return hasParticipantSession(service) || isPartitionReserved(service.db);
+  return participantTransactionCustodyOf(service) === CUSTODY.ACTIVE;
 }
 
 /**
@@ -411,6 +436,7 @@ function endParticipantSession(service, session) {
   const sessions = SESSIONS.get(service);
   if (sessions?.get(session.identity.participantId) === session) {
     sessions.delete(session.identity.participantId);
+    notifyRemovalServingDrain(service);
   }
 }
 
@@ -428,6 +454,7 @@ function discardParticipantSessions(service) {
   service.logger.info(LOG_MSG.SESSIONS_DISCARDED, {
     partitionId: service.partitionId, sessionCount: sessions.size});
   sessions.clear();
+  notifyRemovalServingDrain(service);
   reconcilePreparedParticipantRowKeys(service);
 }
 
@@ -451,6 +478,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
     }
   }
   if (discarded > 0) {
+    notifyRemovalServingDrain(service);
     reconcilePreparedParticipantRowKeys(service);
   }
   return discarded;
@@ -517,6 +545,7 @@ export {
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
+  participantTransactionCustodyOf,
   recordCommittedParticipantRowKeys,
   stagePreparedParticipantRowKeys,
   sweepParticipantTransactionHolds,

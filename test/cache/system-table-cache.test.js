@@ -9,6 +9,8 @@ import {
   SYSTEM_TABLES,
   CDC_OPERATIONS,
 } from '../../src/cache/system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -86,7 +88,7 @@ test('SystemTableCache - get returns undefined for non-existent key', async (t) 
 
 test('SystemTableCache - get returns cloned record', async (t) => {
   const cache = new SystemTableCache();
-  const nodeData = {id: 'node-1', address: '127.0.0.1:8080', status: 'active'};
+  const nodeData = {node_id: 'node-1', address: '127.0.0.1:8080', status: 'active'};
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, nodeData);
 
@@ -105,7 +107,7 @@ test('SystemTableCache - has returns correct boolean', async (t) => {
   t.equal(cache.has('nodes', 'node-1'), false, 'Should return false initially');
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
   });
 
@@ -116,18 +118,18 @@ test('SystemTableCache - getAll returns all records', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
+    node_id: 'node-2',
     address: '127.0.0.1:8081',
   });
 
   const results = cache.getAll('nodes');
   t.equal(results.length, 2, 'Should return 2 records');
-  t.ok(results.some((r) => r.id === 'node-1'), 'Should include node-1');
-  t.ok(results.some((r) => r.id === 'node-2'), 'Should include node-2');
+  t.ok(results.some((r) => r.node_id === 'node-1'), 'Should include node-1');
+  t.ok(results.some((r) => r.node_id === 'node-2'), 'Should include node-2');
 });
 
 test('SystemTableCache - control plane publications is a valid cached table', async (t) => {
@@ -153,15 +155,15 @@ test('SystemTableCache - find returns first matching record', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
+    node_id: 'node-2',
     status: 'inactive',
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-3',
+    node_id: 'node-3',
     status: 'active',
   });
 
@@ -174,7 +176,7 @@ test('SystemTableCache - find returns undefined when no match', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
 
@@ -186,15 +188,15 @@ test('SystemTableCache - filter returns all matching records', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
+    node_id: 'node-2',
     status: 'inactive',
   });
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-3',
+    node_id: 'node-3',
     status: 'active',
   });
 
@@ -209,19 +211,19 @@ test('SystemTableCache - count returns correct number', async (t) => {
   t.equal(cache.count('nodes'), 0, 'Should be 0 initially');
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
   t.equal(cache.count('nodes'), 1, 'Should be 1 after insert');
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
+    node_id: 'node-2',
   });
   t.equal(cache.count('nodes'), 2, 'Should be 2 after second insert');
 });
 
 test('SystemTableCache - applySystemTableChange INSERT', async (t) => {
   const cache = new SystemTableCache();
-  const data = {id: 'node-1', address: '127.0.0.1:8080', status: 'active'};
+  const data = {node_id: 'node-1', address: '127.0.0.1:8080', status: 'active'};
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, data);
 
@@ -233,13 +235,13 @@ test('SystemTableCache - applySystemTableChange UPDATE', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
     status: 'active',
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'inactive',
   });
 
@@ -444,14 +446,14 @@ test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
   });
 
   t.equal(cache.has('nodes', 'node-1'), true, 'Should exist before delete');
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.DELETE, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
 
   t.equal(cache.has('nodes', 'node-1'), false, 'Should not exist after delete');
@@ -649,7 +651,7 @@ test('SystemTableCache - validates CDC operation', async (t) => {
   const cache = new SystemTableCache();
 
   t.throws(
-    () => cache.applySystemTableChange('nodes', 'INVALID', {id: 'node-1'}),
+    () => cache.applySystemTableChange('nodes', 'INVALID', {node_id: 'node-1'}),
     /Invalid CDC operation/,
     'Should throw for invalid operation',
   );
@@ -682,7 +684,8 @@ test('SystemTableCache - works with all system tables', async (t) => {
   const cache = new SystemTableCache();
 
   for (const tableName of SYSTEM_TABLES) {
-    const data = {id: `${tableName}-1`, name: `Test ${tableName}`};
+    const data = {[getSystemCachePrimaryKeyField(tableName)]: `${tableName}-1`,
+      name: `Test ${tableName}`};
     cache.applySystemTableChange(tableName, CDC_OPERATIONS.INSERT, data);
 
     const result = cache.get(tableName, `${tableName}-1`);
@@ -700,7 +703,7 @@ test('SystemTableCache - onCacheChange registers listener', async (t) => {
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
   });
 
@@ -710,7 +713,7 @@ test('SystemTableCache - onCacheChange registers listener', async (t) => {
   t.equal(events.length, 1, 'Should receive one event');
   t.equal(events[0].tableName, 'nodes', 'Should have correct table name');
   t.equal(events[0].operation, 'INSERT', 'Should have correct operation');
-  t.equal(events[0].record.id, 'node-1', 'Should have correct record');
+  t.equal(events[0].record.node_id, 'node-1', 'Should have correct record');
 });
 
 test('SystemTableCache - onCacheChange throws for non-function', async (t) => {
@@ -735,7 +738,7 @@ test('SystemTableCache - offCacheChange removes listener', async (t) => {
   cache.offCacheChange(listener);
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -758,7 +761,7 @@ test('SystemTableCache - listener errors do not break cache', async (t) => {
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -775,7 +778,7 @@ test('SystemTableCache - notifications are non-blocking', async (t) => {
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
 
   // Listener should not be called synchronously
@@ -790,11 +793,11 @@ test('SystemTableCache - getAllData returns all tables', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
   });
   cache.applySystemTableChange('partitions', CDC_OPERATIONS.INSERT, {
-    id: 'p-1',
+    partition_id: 'p-1',
     table_id: 't-1',
   });
 
@@ -804,14 +807,14 @@ test('SystemTableCache - getAllData returns all tables', async (t) => {
   t.ok(Array.isArray(data.partitions), 'partitions should be an array');
   t.equal(data.nodes.length, 1, 'nodes should have 1 record');
   t.equal(data.partitions.length, 1, 'partitions should have 1 record');
-  t.equal(data.nodes[0].id, 'node-1', 'Should contain correct node data');
+  t.equal(data.nodes[0].node_id, 'node-1', 'Should contain correct node data');
 });
 
 test('SystemTableCache - getAllData returns cloned data', async (t) => {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
 
@@ -827,7 +830,7 @@ test('SystemTableCache - notifies on UPDATE', async (t) => {
   const events = [];
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
 
@@ -836,7 +839,7 @@ test('SystemTableCache - notifies on UPDATE', async (t) => {
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'inactive',
   });
 
@@ -852,7 +855,7 @@ test('SystemTableCache - notifies on DELETE', async (t) => {
   const events = [];
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     status: 'active',
   });
 
@@ -861,14 +864,14 @@ test('SystemTableCache - notifies on DELETE', async (t) => {
   });
 
   cache.applySystemTableChange('nodes', CDC_OPERATIONS.DELETE, {
-    id: 'node-1',
+    node_id: 'node-1',
   });
 
   await new Promise((resolve) => setImmediate(resolve));
 
   t.equal(events.length, 1, 'Should receive one event');
   t.equal(events[0].operation, 'DELETE', 'Should have DELETE operation');
-  t.equal(events[0].record.id, 'node-1', 'Should have deleted record');
+  t.equal(events[0].record.node_id, 'node-1', 'Should have deleted record');
 });
 
 
@@ -1058,22 +1061,24 @@ test('SystemTableCache - getReadyNodes returns empty when no ready nodes', async
   t.same(readyNodes, [], 'Should return empty array');
 });
 
-test('SystemTableCache - getReadyNodes rejects missing node_id', async (t) => {
-  const cache = new SystemTableCache();
-  const now = Date.now();
+test('SystemTableCache - a nodes row without node_id never enters the cache',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const now = Date.now();
 
-  cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
-    connection_state: 'ready',
-    ready_lease_expires_at: now + 1000,
+    // No other field stands in for the declared key (no `id` fallback), so
+    // a keyless row is refused at entry and readers never see one.
+    t.throws(
+      () => cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+        id: 'node-1',
+        connection_state: 'ready',
+        ready_lease_expires_at: now + 1000,
+      }),
+      /primary key field "node_id"/,
+      'a row keyed only by id is refused',
+    );
+    t.same(cache.getReadyNodes(), [], 'no keyless row reaches the readers');
   });
-
-  t.throws(
-    () => cache.getReadyNodes(),
-    /node_id/,
-    'Should reject nodes without node_id',
-  );
-});
 
 
 // ============================================================================

@@ -28,10 +28,21 @@ import {
   reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
+  countVoterLivenessTick,
+  createVoterLiveness,
+  liveVotersOf,
+  recordTransferAttempt,
+  recordVoterAnswer,
+  sampleVoterLiveness,
+  voterLivenessFactsOf,
+} from './raft-rs-voter-liveness.js';
+import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
 } from './raft-rs-leadership-transfer.js';
+import {removedLeaderAtApply, removedLeaderAtDrainEnd} from
+  './raft-rs-removed-leader-step-down.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
@@ -1168,6 +1179,9 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
+    removedLeaderAtApply({peerId: group.peerId, confState: applied.value,
+      observe: () => readGroupObservation(group, expectedGeneration),
+      stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive)});
     return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
@@ -1377,7 +1391,8 @@ function drainReady(group, expectedGeneration, startCycles = 0) {
       return settledTurn(hasReady.result);
     }
     if (!hasReady.value) {
-      announce(group, expectedGeneration);
+      // A removed leader that stepped down here left a Ready: drained now.
+      if (announce(group, expectedGeneration)) continue;
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
 
@@ -1428,12 +1443,22 @@ function semanticLeaderIdentity(group, lead) {
 function announce(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
-    return;
+    return false;
   }
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
+  // Sampled first: the observation recorded below carries this liveness.
+  const livenessChanged = sampleVoterLiveness(group.voterLiveness, now,
+    tuningOf(group.timing).electionTick,
+    (status) => ROLE[status.raftState] === ROLE_LEADER);
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  if (livenessChanged) {
+    group.emit(RUNTIME_EVENT.VOTER_LIVENESS_CHANGED);
+  }
+  const steppedDown = removedLeaderAtDrainEnd({peerId: group.peerId, observed,
+    stepDown: (primitive) => invokeCoreAt(group, expectedGeneration, primitive),
+    queueTransfer: (transfer) => queueRemovedLeaderTransfer(group, transfer)});
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
@@ -1457,6 +1482,26 @@ function announce(group, expectedGeneration) {
   if (settlement !== null) {
     group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
   }
+  return steppedDown;
+}
+
+// The voters this group's leader counts live (raft-rs-voter-liveness.js).
+function groupLiveVoters(group, status) {
+  return liveVotersOf(group.voterLiveness, status,
+    tuningOf(group.timing).electionTick);
+}
+
+// A removed leader's transfer (raft-rs-removed-leader-step-down.js): the
+// group's next queued turn, one at a time.
+function queueRemovedLeaderTransfer(group, transfer) {
+  if (group.removedLeaderStepDownQueued === true) return;
+  group.removedLeaderStepDownQueued = true;
+  enqueue(group, () => continueTurn(
+    perform(group, {type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP, transfer}),
+    (answer) => {
+      group.removedLeaderStepDownQueued = false;
+      return settledTurn(answer);
+    }));
 }
 
 function announceAppliedProgress(group, expectedGeneration, observed) {
@@ -1483,7 +1528,8 @@ function refusedConfChange(group, expectedGeneration, change) {
   }
   return confChangeProposalRefusal({status: status.value,
     confState: conf.value, change,
-    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead)});
+    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead),
+    liveVoters: groupLiveVoters(group, status.value)});
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
@@ -1529,6 +1575,8 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,
+    voterLiveness: voterLivenessFactsOf(group.voterLiveness, status.value,
+      tuningOf(group.timing).electionTick),
     lifecycleIncarnation: group.lifecycleIncarnation,
     runtimeHealth, runtimeGeneration}};
 }
@@ -1754,6 +1802,9 @@ function transferLeadership(group, expectedGeneration, command) {
   if (!stepped.ok) {
     return settledTurn(stepped.result);
   }
+  if (decision.accepted.reason === RUNTIME_REASON.TRANSFER_REQUESTED) {
+    recordTransferAttempt(group.voterLiveness, observed.value.status, decision.transferee);
+  }
   return continueTurn(drainReady(group, expectedGeneration), (drained) =>
     settledTurn(drained.outcome === CORE_OK ? decision.accepted : drained));
 }
@@ -1869,6 +1920,9 @@ function performCommand(group, command, expectedGeneration) {
   if (refused !== null) {
     return settledTurn(refused);
   }
+  if (command.type === TICK_COMMAND) {
+    countVoterLivenessTick(group.voterLiveness);
+  }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
   return settlePrimitiveInvocation(group, command, expectedGeneration, invoked);
@@ -1935,7 +1989,7 @@ function stepOneInbound(group, expectedGeneration, envelope) {
       return {done: true, result: stepped.result};
     }
     recordInboundStepRefusal(group, envelope, stepped.result);
-  }
+  } else recordVoterAnswer(group.voterLiveness, envelope.message);
   return {done: false, ready: drainReady(group, expectedGeneration)};
 }
 
@@ -2226,6 +2280,7 @@ function createRuntimeDispatcher(request) {
     membershipGenerationIndex: 0n,
     membershipGenerationKnown: true,
     gateOpen: false,
+    voterLiveness: createVoterLiveness(),
     timing: request.timing,
     timers: request.timers,
     store,

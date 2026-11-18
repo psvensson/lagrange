@@ -26,10 +26,7 @@ import {
   CDC_SOURCE,
   CDC_SUBSYSTEM,
 } from './cdc-constants.js';
-import {
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
-  resolveNodeWebSocketAddress,
-} from
+import {NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE} from
   '../transport/node-address-resolution.js';
 import {resolveTimeSource} from '../time/time-source.js';
 
@@ -67,6 +64,12 @@ const CONSTRUCTOR_ERROR_NODE_ID =
   'CDCEventHandler requires nodeId';
 const CONSTRUCTOR_ERROR_EVENT_CONTEXT =
   'CDCEventHandler requires eventContext';
+// The event context's address port (the CDC integration service's
+// createEventHandlerContext supplies it); a context without it is refused.
+const CONSTRUCTOR_ERROR_ADDRESS_PORT = Object.freeze({
+  code: 'CDC_EVENT_HANDLER_ADDRESS_PORT_REQUIRED',
+  message: 'CDCEventHandler requires eventContext.resolveNodeWebSocketAddress',
+});
 const CDC_EVENT_HANDLER_ERROR = Object.freeze({
   MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS:
     'Missing canonical node_endpoints websocket address',
@@ -122,6 +125,10 @@ class CDCEventHandler {
     }
     if (!options.eventContext) {
       throw new Error(CONSTRUCTOR_ERROR_EVENT_CONTEXT);
+    }
+    if (!(options.eventContext.resolveNodeWebSocketAddress instanceof Function)) {
+      throw Object.assign(new Error(CONSTRUCTOR_ERROR_ADDRESS_PORT.message),
+        {code: CONSTRUCTOR_ERROR_ADDRESS_PORT.code});
     }
 
     this.nodeId = options.nodeId;
@@ -555,16 +562,7 @@ class CDCEventHandler {
     }
 
     const wsAddressResolution =
-      (typeof this.eventContext.resolveNodeWebSocketAddress ===
-        'function' ?
-        this.eventContext.resolveNodeWebSocketAddress(
-          targetNodeId,
-        ) :
-        resolveNodeWebSocketAddress({
-          targetNodeId,
-          systemTableCache: this.eventContext?._service?.systemTableCache ||
-            null,
-        }));
+      this.eventContext.resolveNodeWebSocketAddress(targetNodeId);
     if (wsAddressResolution.state !==
         NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED) {
       this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
@@ -643,25 +641,7 @@ class CDCEventHandler {
     if (!messageRouter || !targetNodeId) {
       return null;
     }
-
-    if (typeof messageRouter.getConnectionState === 'function') {
-      return messageRouter.getConnectionState(targetNodeId);
-    }
-
-    const connectionEntry = messageRouter.nodeConnections?.get(targetNodeId);
-    if (typeof connectionEntry === 'string') {
-      return connectionEntry;
-    }
-    if (connectionEntry === true) {
-      return STATE.CONNECTED;
-    }
-    if (connectionEntry && typeof connectionEntry === 'object') {
-      const state = connectionEntry.state;
-      if (typeof state === 'string') {
-        return state;
-      }
-    }
-    return null;
+    return messageRouter.getConnectionState(targetNodeId);
   }
 
   /**
@@ -719,4 +699,4 @@ class CDCEventHandler {
   }
 }
 
-export {CDCEventHandler};
+export {CDCEventHandler, CONSTRUCTOR_ERROR_ADDRESS_PORT};

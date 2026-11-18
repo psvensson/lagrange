@@ -1008,7 +1008,7 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
       url: '/readyz',
     });
     t.equal(readyResponse.statusCode, 503,
-      'readyz should still fail closed when async diagnostics reads fail',
+      'readyz should fail closed while the recovery health is unavailable',
     );
     const readyBody = JSON.parse(readyResponse.body);
     t.equal(readyBody.publishedControlPlaneEpoch, 33,
@@ -1017,8 +1017,8 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
     t.equal(readyBody.publishedControlPlaneStatus, 'PUBLISHED',
       'readyz should still expose publication status from synchronous diagnostics',
     );
-    t.equal(asyncReadCount, 1,
-      'priority recovery gate should attempt exactly one async diagnostics read',
+    t.equal(asyncReadCount, 0,
+      'a probe reads the lifecycle: it performs no async diagnostics read',
     );
     t.ok(syncReadCount >= 1,
       'readiness response diagnostics should use the synchronous accessor',
@@ -1027,7 +1027,7 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
     await api.shutdown();
   });
 
-test('BootstrapAPI - readiness probes bound async diagnostics and fall back to sync',
+test('BootstrapAPI - readiness probes answer from the lifecycle without awaiting async diagnostics',
   async (t) => {
     initializeTestEnvironment();
 
@@ -1089,7 +1089,7 @@ test('BootstrapAPI - readiness probes bound async diagnostics and fall back to s
     );
     t.ok(
       readyElapsedMs < 650,
-      'readyz should use bounded async diagnostics before falling back',
+      'readyz should not wait on slow async diagnostics',
     );
 
     const bootstrapReadyStartedAt = Date.now();
@@ -1105,12 +1105,12 @@ test('BootstrapAPI - readiness probes bound async diagnostics and fall back to s
     );
     t.ok(
       bootstrapReadyElapsedMs < 650,
-      'bootstrap readiness probe should use bounded async diagnostics before fallback',
+      'bootstrap readiness probe should not wait on slow async diagnostics',
     );
-    t.ok(asyncReadCount >= 2,
-      'probe handlers should still attempt async diagnostics reads');
+    t.equal(asyncReadCount, 0,
+      'probe handlers read the lifecycle and start no async diagnostics read');
     t.ok(syncReadCount >= 2,
-      'probe handlers should fall back to synchronous diagnostics snapshots');
+      'probe handlers answer from the synchronous diagnostics accessor');
 
     await api.shutdown();
   });

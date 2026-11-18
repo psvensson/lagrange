@@ -97,7 +97,6 @@ function buildReadyLeaseOwnerWriteEvidence(nodeRow, observedAtMs) {
   const originHlc = firstStringField(
     nodeRow,
     COLUMN.UPDATED_AT_HLC,
-    'updatedAtHlc',
   );
   const timestamp = HLCTimestamp.tryFromString(originHlc);
   if (!timestamp) {
@@ -169,8 +168,6 @@ function buildReadyLeaseAgeWitness(
   const nodeId = firstStringField(
     nodeRow,
     COLUMN.NODE_ID,
-    'nodeId',
-    'id',
   ) || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN;
   const ownerWrite = buildReadyLeaseOwnerWriteEvidence(
     nodeRow,
@@ -184,14 +181,13 @@ function buildReadyLeaseAgeWitness(
     connectionState: connectionState || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN,
     snapshotObservedAtMs: observedAtMs,
     heartbeat: buildReadyLeaseTimestampEvidence(
-      nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? nodeRow?.lastHeartbeat,
+      nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? null,
       observedAtMs,
       READY_LEASE_AGE_WITNESS_FIELD.AT_MS,
       READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.LAST_HEARTBEAT,
     ),
     readyLease: buildReadyLeaseTimestampEvidence(
-      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
-        nodeRow?.readyLeaseExpiresAt,
+      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? null,
       observedAtMs,
       READY_LEASE_AGE_WITNESS_FIELD.EXPIRES_AT_MS,
       READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.READY_LEASE_EXPIRY,
@@ -424,14 +420,12 @@ class AdminControlSnapshotControlPlaneDiagnostics
       this.nowFn();
     for (const nodeRow of Array.isArray(nodeRows) ? nodeRows : []) {
       const status = String(
-        firstStringField(nodeRow, COLUMN.STATUS, 'status') || '',
+        firstStringField(nodeRow, COLUMN.STATUS) || '',
       ).toLowerCase();
       const connectionState = String(
         firstStringField(
           nodeRow,
           COLUMN.CONNECTION_STATE,
-          'connection_state',
-          'connectionState',
         ) || '',
       ).toLowerCase();
       const considerForStaleness =

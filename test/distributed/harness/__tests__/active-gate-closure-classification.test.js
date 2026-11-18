@@ -165,7 +165,8 @@ const ACTIVE_GATE_OWNER_RECOVERY_QUEUE_PENDING_WRITES =
   ACTIVE_GATE_EXPECTED_NODE_COUNT;
 const ACTIVE_GATE_OWNER_RECOVERY_QUEUE_PENDING_WRITE_GROWTH_COUNT =
   ACTIVE_GATE_ZERO;
-const ACTIVE_GATE_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED = 'write_deferred';
+const ACTIVE_GATE_HANDOFF_OUTCOME_STATE_TARGET_BLOCKED = 'target_blocked';
+const ACTIVE_GATE_OWNER_RECOVERY_WAIT_AWAITING = 'awaiting_recovery_progress';
 const ACTIVE_GATE_TOPOLOGY_READINESS_CLASS_SNAPSHOT_TIMEOUT =
   'snapshot_timeout';
 const ACTIVE_GATE_TOPOLOGY_READINESS_SOURCE_SELECTED_SNAPSHOT_ERROR =
@@ -644,11 +645,13 @@ test(ACTIVE_GATE_OWNER_RECOVERY_COMPLETE_COVERAGE_TEST_NAME,
         pendingRecoveryCount: ACTIVE_GATE_EXPECTED_NODE_COUNT,
         pendingReconcileNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
         pendingReconcileCount: ACTIVE_GATE_ZERO,
+        // The owner's named recovery wait: it queues nothing for itself.
         membershipPublicationHandoffOutcome: {
-          state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+          state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_TARGET_BLOCKED,
           reasonCode:
             PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-          enqueued: ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED,
+          enqueued: false,
+          ownerRecoveryWait: ACTIVE_GATE_OWNER_RECOVERY_WAIT_AWAITING,
           retryAfterMs: ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
         },
       },
@@ -817,11 +820,13 @@ test(ACTIVE_GATE_STARTUP_OWNER_RECOVERY_PARTIAL_COVERAGE_TEST_NAME,
           ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_PENDING_COUNT,
         pendingReconcileNodeIds: ACTIVE_GATE_EMPTY_NODE_IDS,
         pendingReconcileCount: ACTIVE_GATE_ZERO,
+        // The owner's named recovery wait: it queues nothing for itself.
         membershipPublicationHandoffOutcome: {
-          state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_WRITE_DEFERRED,
+          state: ACTIVE_GATE_HANDOFF_OUTCOME_STATE_TARGET_BLOCKED,
           reasonCode:
             PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-          enqueued: ACTIVE_GATE_HANDOFF_OUTCOME_ENQUEUED,
+          enqueued: false,
+          ownerRecoveryWait: ACTIVE_GATE_OWNER_RECOVERY_WAIT_AWAITING,
           retryAfterMs: ACTIVE_GATE_SELECTED_SNAPSHOT_TIMEOUT_MS,
         },
       },

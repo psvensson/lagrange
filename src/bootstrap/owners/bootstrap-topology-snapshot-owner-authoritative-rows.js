@@ -453,16 +453,13 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
       return [];
     }
 
-    const partitionRows =
-      typeof systemTableCache.filter === 'function' ?
-        systemTableCache.filter(TABLES.PARTITIONS, (row) => {
-          const rowTableName =
-            row?.[COLUMN.TABLE_NAME] || row?.table_name || row?.tableName;
-          const rowTableId =
-            row?.[COLUMN.TABLE_ID] || row?.table_id || row?.tableId;
-          return rowTableName === tableName || rowTableId === tableName;
-        }) :
-        [];
+    const partitionRows = systemTableCache.filter(TABLES.PARTITIONS, (row) => {
+      const rowTableName =
+        row?.table_name || row?.tableName;
+      const rowTableId =
+        row?.[COLUMN.TABLE_ID] || row?.table_id || row?.tableId;
+      return rowTableName === tableName || rowTableId === tableName;
+    });
     const partitionIds = [...new Set(partitionRows
       .map((row) =>
         row?.[COLUMN.PARTITION_ID] || row?.partition_id || row?.partitionId,

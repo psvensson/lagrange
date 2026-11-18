@@ -348,7 +348,7 @@ function resolveCompositeKeyPartitions(
   if (collected.contradiction) {
     return formatCompositeResolutionResult(isDirectCall, {
       partitionIds: [],
-      predicateShape: PREDICATE_SHAPE.POINT,
+      predicateShape: PREDICATE_SHAPE.CONTRADICTION,
     });
   }
   if (!collected.allEquals) {

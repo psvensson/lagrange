@@ -13,7 +13,19 @@ import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
 import {cdcCommitWaitIdentity, isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {MESSAGE_GROUP_CDC_FORWARD_MODE} from
   '../../src/message-group/message-group-forwarding-owner-constants.js';
-import {GROUP_ID, NODE_ID, pump, recipientFixture} from './message-group-native-custody-fixture.js';
+import {GROUP_ID, NODE_ID, pump, recipientFixture as nativeRecipientFixture} from
+  './message-group-native-custody-fixture.js';
+import {positionRecipients, withSourceRange} from '../test-helpers/cdc-source-range-fixture.js';
+
+
+// CDC Stage 3: every recipient node starts from a known position of the
+// synthetic source (a list of it at its start), and every durable vector
+// travels with its source range.
+async function recipientFixture(...args) {
+  const f = await nativeRecipientFixture(...args);
+  positionRecipients(f.services, 'mixed-config-source');
+  return f;
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -73,7 +85,7 @@ async function measuredApply(f, service, events) {
   let settled = false;
   let result;
   let failure;
-  const operation = service.applyCDCBatch(events).then((answer) => {
+  const operation = service.applyCDCBatch(events, withSourceRange(events)).then((answer) => {
     result = answer;
     settled = true;
   }, (error) => {

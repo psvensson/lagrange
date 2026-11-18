@@ -37,10 +37,34 @@ import {COMMITTED_MEMBERSHIP_REFUSAL} from
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+/**
+ * The node hosting the replica a removal takes out: a REPLACE's source node;
+ * a plain REMOVE is dispatched to (and names) its replica's node as its
+ * target node.
+ * @param {Object} operation
+ * @return {string|null}
+ */
+function removalSubjectNodeIdOf(operation) {
+  const nodeId = operation?.type === OperationType.REMOVE ?
+    operation?.targetNodeId : operation?.sourceNodeId;
+  return typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : null;
+}
+
+// The replica a removal takes out of its group (the subject) and the
+// REPLACE's target: a REPLACE's source and target; a plain REMOVE's replica,
+// with no target. The removal leadership gate reads the same seam for both.
 function replaceReplicaIdsOf(owner, operation) {
+  if (operation?.type === OperationType.REMOVE) {
+    return {
+      sourceReplicaId: typeof operation.replicaId === 'string' &&
+        operation.replicaId.length > 0 ? operation.replicaId : null,
+      targetReplicaId: null,
+    };
+  }
   const sourceReplicaId =
     owner.repository.getReplaceSourceReplicaId(operation) || null;
   const targetReplicaId =
@@ -62,8 +86,9 @@ function unavailableWitness(reason, delivery = null) {
 }
 
 function buildReplaceWitnessRequest(operation, messageType, replicaIds,
-  readReplicaId) {
+  readReplicaId, fields = null) {
   return {
+    ...(fields || {}),
     [ReplicaOperationField.TYPE]: messageType,
     [ReplicaOperationField.OPERATION_ID]: operation.operationId,
     [ReplicaOperationField.OPERATION_TYPE]: operation.type,
@@ -156,10 +181,12 @@ function classifyReplaceWitnessError(error) {
  * @param {Object} operation
  * @param {string} messageType
  * @param {Object} [member] - {replicaId, nodeId}; defaults to t.
+ * @param {Object} [fields] - The message's own fields beyond the witness
+ *   request's (CANCEL_REPLICA_REMOVAL's replica generation).
  * @return {Promise<Object>} {outcome, response?, reason?}.
  */
 async function deliverToReplaceWitness(owner, operation, messageType,
-  member = null) {
+  member = null, fields = null) {
   const destination = replaceWitnessDestination(owner, operation, member);
   if (destination === null) {
     return unavailableWitnessDelivery();
@@ -171,7 +198,7 @@ async function deliverToReplaceWitness(owner, operation, messageType,
     return classifyReplaceWitnessResponse(await owner.messageRouter.deliver(
       `${targetNodeId}/service/${handlerType}`,
       buildReplaceWitnessRequest(operation, messageType, replicaIds,
-        readReplicaId),
+        readReplicaId, fields),
       {
         targetNodeId,
         deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
@@ -238,5 +265,6 @@ export {
   deliveryUnavailableReason,
   replaceAnswerStatus,
   readReplaceWitnessMembership,
+  removalSubjectNodeIdOf,
   replaceReplicaIdsOf,
 };

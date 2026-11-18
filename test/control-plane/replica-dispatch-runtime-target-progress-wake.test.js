@@ -2,6 +2,9 @@ import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixtu
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  buildAbsentOperationVisibility,
+} from '../../src/rebalancer/replica-operation-repository-operation-visibility.js';
+import {
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
@@ -26,9 +29,6 @@ import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
-import {
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-} from '../../src/rebalancer/replica-operation-repository.js';
 import {
   createMockControlPlaneReadinessService,
   createTestCoordinator,
@@ -266,7 +266,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const completedOperation =
-        await sourceCoordinator.repository.queryOperationById(
+        await sourceCoordinator.repository.queryOperationProjectionById(
           operationRow.operation_id,
         );
       t.equal(
@@ -415,7 +415,7 @@ test(
             releaseOwnerTurn = resolve;
           });
           const sendingOperation =
-            await sourceCoordinator.repository.queryOperationById(
+            await sourceCoordinator.repository.queryOperationProjectionById(
               operationRow.operation_id,
             );
           await sourceCoordinator.workflowOwner.updateStep(
@@ -440,7 +440,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const completedOperation =
-        await sourceCoordinator.repository.queryOperationById(
+        await sourceCoordinator.repository.queryOperationProjectionById(
           operationRow.operation_id,
         );
       t.equal(
@@ -810,7 +810,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const completedOperation =
-        await sourceCoordinator.repository.queryOperationById(operationId);
+        await sourceCoordinator.repository.queryOperationProjectionById(operationId);
       t.equal(
         completedOperation?.workflowStep,
         WORKFLOW_STEP.ACTIVE,
@@ -923,12 +923,7 @@ test(
       async (...args) => {
         targetVisibilityReadCount++;
         if (targetVisibilityReadCount === 1) {
-          return {
-            state: INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
-            operation: null,
-            deferredOutcome: null,
-            retryAfterMs: null,
-          };
+          return buildAbsentOperationVisibility();
         }
         return readTargetVisibility(...args);
       };
@@ -953,7 +948,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const completedOperation =
-        await sourceCoordinator.repository.queryOperationById(OPERATION_ID);
+        await sourceCoordinator.repository.queryOperationProjectionById(OPERATION_ID);
       t.equal(
         targetDeliveries.length,
         1,
@@ -1045,7 +1040,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const retainedOperation =
-        await sourceCoordinator.repository.queryOperationById(
+        await sourceCoordinator.repository.queryOperationProjectionById(
           siblingOperationId,
         );
       t.equal(
@@ -1190,7 +1185,7 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       const retainedOperation =
-        await sourceCoordinator.repository.queryOperationById(
+        await sourceCoordinator.repository.queryOperationProjectionById(
           operationRow.operation_id,
         );
       t.equal(
@@ -1390,7 +1385,7 @@ test(
       }
 
       const progressedOperation =
-        await sourceCoordinator.repository.queryOperationById(operationId);
+        await sourceCoordinator.repository.queryOperationProjectionById(operationId);
       t.equal(
         progressedOperation?.workflowStep,
         WORKFLOW_STEP.ACTIVE,

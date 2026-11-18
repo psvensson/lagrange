@@ -3,7 +3,7 @@
  * Requests and recovery use one session FIFO; statement callbacks hold it
  * through participant enlistment, execution and durable write outcome.
  */
-import {QUERY_ERROR_CODE, QUERY_ERROR_MSG, QUERY_OPERATION} from
+import {QUERY_AST_TYPE, QUERY_ERROR_CODE, QUERY_ERROR_MSG} from
   '../query-constants.js';
 import {admitExpectedTransaction, STATEMENT_ADMISSION} from
   '../sql-query-engine-statement-admission.js';
@@ -100,7 +100,7 @@ const distributedTransactionStatementMethods = {
       const tx = this.transactionsBySession.get(sessionId);
       if (!tx) return executeRead(null);
       if (this.isTransactionBudgetExceeded(tx)) {
-        return {success: false, operation: QUERY_OPERATION.SELECT,
+        return {success: false, operation: QUERY_AST_TYPE.SELECT,
           errorCode: QUERY_ERROR_CODE.TIMEOUT, error: QUERY_ERROR_MSG.QUERY_TIMEOUT};
       }
       return executeRead({identity: statementTransactionIdentityOf(tx),

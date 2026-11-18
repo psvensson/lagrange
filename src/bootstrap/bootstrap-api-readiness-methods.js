@@ -2,6 +2,49 @@ import {
   BOOTSTRAP_API_PROBE_SCOPE,
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
+import {TABLES} from '../constants/index.js';
+import {ReadOnlySystemTableCache} from '../cache/read-only-system-table-cache.js';
+import {SystemTableCache} from '../cache/system-table-cache.js';
+
+// The leader-readiness status is a pure function of these cache tables
+// (leader-readiness-gate.js reads no other source), and every lifecycle
+// evaluation reads it. One status per table content: the cache's mutation
+// versions prove that no apply landed since the status was computed.
+const LEADER_READINESS_SOURCE_TABLES = Object.freeze([
+  TABLES.PARTITIONS,
+  TABLES.MESSAGE_GROUPS,
+  TABLES.SERVICES,
+]);
+const MISSING_SERVICE_LEADERS_METHOD = 'getMissingServiceLeaders';
+
+/**
+ * The identity of the leader-readiness source content, or null when the
+ * content has no version to compare: a cache that is not the system table
+ * cache (a test double states no mutation versions), or an instance whose
+ * missing-leader read was replaced (the status then no longer derives from
+ * the cache tables alone).
+ * @param {Object} api
+ * @return {{cache: Object, versions: Array<number>}|null}
+ */
+function readLeaderReadinessSourceIdentity(api) {
+  const cache = api.getSystemTableCache();
+  const versioned = cache instanceof ReadOnlySystemTableCache ||
+    cache instanceof SystemTableCache;
+  if (!versioned || Object.hasOwn(api, MISSING_SERVICE_LEADERS_METHOD)) {
+    return null;
+  }
+  return {
+    cache,
+    versions: LEADER_READINESS_SOURCE_TABLES.map((tableName) =>
+      cache.getTableMutationVersion(tableName)),
+  };
+}
+
+function isSameLeaderReadinessSource(memo, identity) {
+  return memo.cache === identity.cache &&
+    memo.versions.every((version, index) =>
+      version === identity.versions[index]);
+}
 
 const bootstrapApiReadinessMethods = {
   /**
@@ -84,7 +127,8 @@ const bootstrapApiReadinessMethods = {
   },
 
   /**
-   * Evaluate readiness owner after updating dependency signals.
+   * Evaluate the lifecycle and describe it with the startup authority. A
+   * read: the lifecycle derives its dependencies from their owners.
    * @return {Object} Current readiness snapshot.
    */
   evaluateReadinessSnapshot() {
@@ -183,8 +227,19 @@ const bootstrapApiReadinessMethods = {
    * @return {Object}
    */
   getLeaderReadinessStatusForProbe() {
-    return this.serviceLeaderReadinessOwner
+    const identity = readLeaderReadinessSourceIdentity(this);
+    if (identity === null) {
+      return this.serviceLeaderReadinessOwner
+        .getLeaderReadinessStatusForProbe();
+    }
+    const memo = this.leaderReadinessStatusMemo;
+    if (memo && isSameLeaderReadinessSource(memo, identity)) {
+      return memo.status;
+    }
+    const status = this.serviceLeaderReadinessOwner
       .getLeaderReadinessStatusForProbe();
+    this.leaderReadinessStatusMemo = {...identity, status};
+    return status;
   },
 
   /**
@@ -230,7 +285,7 @@ const bootstrapApiReadinessMethods = {
    */
   async getBootstrapJoinAdmissionSnapshot() {
     return this.resolveReadinessSnapshotForScope(
-      await this.bootstrapReadinessOwner.evaluateReadinessSnapshotForProbe(),
+      this.bootstrapReadinessOwner.evaluateReadinessSnapshot(),
       BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     );
   },

@@ -59,6 +59,10 @@ function shouldReturnDeferredDispatchOwnerProgressResult(result) {
 import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
   recoverMessageGroupVoterFromRecipient, issueMessageGroupSuccessorFromRecipient} from
   './operation-workflow-message-group-native-read.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
@@ -314,7 +318,18 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    const operation = visibilityObservation?.operation || null;
+    // The owner's local durable rows (owner-preferred, local SQL fallback):
+    // observed progress must move during control-plane recovery, when the
+    // strict owner-RPC lane is what is unavailable; its step writes are
+    // compare-and-set. No answer at all keeps the observed-progress retry
+    // armed (it is not cleared on a read that answered nothing).
+    if (
+      readOperationVisibilityState(visibilityObservation) ===
+      OPERATION_VISIBILITY_STATE.UNAVAILABLE
+    ) {
+      return false;
+    }
+    const operation = visibilityObservation.operation;
     const routeEvidence =
       this.buildObservedProgressOperationRouteEvidence(operation);
     const routeAction =

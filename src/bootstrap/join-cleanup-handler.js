@@ -97,6 +97,17 @@ function readSupersededBootIncarnation(error) {
     Number.isSafeInteger(error.knownIncarnation) ? error.knownIncarnation : 0;
 }
 
+// The join's failure result. `code` carries a typed refusal (e.g. the
+// cluster-identity refusal of join-cluster-identity.js) to the startup.
+function buildJoinFailureResult(nodeId, duration, error, phase) {
+  return {success: false, nodeId, duration, error: error.message,
+    code: error?.code ?? null, phase,
+    retryable: resolveJoinFailureRetryable(error),
+    supersededBootIncarnation: readSupersededBootIncarnation(error),
+    retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+      Math.max(0, Math.floor(error.retryAfterMs)) : 0};
+}
+
 /**
  * Handles failure cleanup and resource teardown for a joining node.
  */
@@ -153,18 +164,7 @@ class JoinCleanupHandler {
         this.delegates.getLifecycleStateMachine(),
         logger,
       );
-      return {
-        success: false,
-        nodeId: this.nodeId,
-        duration,
-        error: error.message,
-        phase: failedPhase,
-        retryable: resolveJoinFailureRetryable(error),
-        supersededBootIncarnation: readSupersededBootIncarnation(error),
-        retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
-          Math.max(0, Math.floor(error.retryAfterMs)) :
-          0,
-      };
+      return buildJoinFailureResult(this.nodeId, duration, error, failedPhase);
     }
 
     // Execute structured reverse-order cleanup before generic cleanup
@@ -193,18 +193,7 @@ class JoinCleanupHandler {
       error: error.message,
     });
 
-    return {
-      success: false,
-      nodeId: this.nodeId,
-      duration,
-      error: error.message,
-      phase: failedPhase,
-      retryable: resolveJoinFailureRetryable(error),
-      supersededBootIncarnation: readSupersededBootIncarnation(error),
-      retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
-        Math.max(0, Math.floor(error.retryAfterMs)) :
-        0,
-    };
+    return buildJoinFailureResult(this.nodeId, duration, error, failedPhase);
   }
 
   /**

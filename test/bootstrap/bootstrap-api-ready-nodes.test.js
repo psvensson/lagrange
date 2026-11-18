@@ -15,9 +15,12 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
+  answerKnownClusterIdentity,
   createCanonicalReadinessService,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+
+answerKnownClusterIdentity();
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 

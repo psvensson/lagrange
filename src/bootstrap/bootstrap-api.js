@@ -406,7 +406,6 @@ class BootstrapAPI {
         delegates: {
           getSeedNodeId: () => this.seedNodeId,
           getSeedNodeAddress: () => this.seedNodeAddress,
-          getClusterId: () => this.getClusterId(),
           getSystemTableCache: () => this.getSystemTableCache(),
           getLogger: () => this.logger,
           getCdcIntegrationService: () => this.getCdcIntegrationService(),
@@ -459,7 +458,7 @@ class BootstrapAPI {
         delegates: {
           getLogger: () => this.logger,
           getSeedNodeId: () => this.seedNodeId,
-          getClusterId: () => this.getClusterId(),
+          readClusterIdentity: () => this.readClusterIdentity(),
           getSeedNodeAddress: () => this.seedNodeAddress,
           getSeedNodeWsAddress: () => this.seedNodeWsAddress,
           getWsPort: () => this.wsPort,

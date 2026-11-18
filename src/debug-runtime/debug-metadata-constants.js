@@ -26,6 +26,7 @@ const DEBUG_SESSION_FIELD = Object.freeze({
 const DEBUG_BREAKPOINT_FIELD = Object.freeze({
   BREAKPOINT_ID: 'breakpoint_id',
   SESSION_ID: 'session_id',
+  TENANT_ID: 'tenant_id',
   MODULE_REF: 'module_ref',
   SOURCE_FILE_URL: 'source_file_url',
   LINE_NUMBER: 'line_number',

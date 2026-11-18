@@ -295,6 +295,8 @@ async function bootExampleNode(dataDir, options = {}) {
     },
     dataDirectoryManager,
     dataDirectoryProcessOwner,
+    // A single-node example cluster, declared explicitly (no default).
+    formationTargetNodeCount: 1,
     membershipOwnerOutcome: startupDecision.membershipOwnerOutcome,
     nodeAddress,
     nodeId: EXAMPLE_NODE.NODE_ID,

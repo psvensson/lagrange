@@ -34,7 +34,7 @@ const CACHE_ERROR_MSG = Object.freeze({
   EPOCH_MISSING_ASSIGNMENTS: 'Epoch must have an assignments object',
   LISTENER_REQUIRED: 'Listener must be a function',
   primaryKeyMissing: (pkField) =>
-    `CDC data must include primary key field "${pkField}" or "id"`,
+    `CDC data must include primary key field "${pkField}"`,
   invalidTableName: (tableName, tables) =>
     `Invalid system table name: ${tableName}. Valid tables are: ${tables.join(', ')}`,
   invalidCdcOperation: (operation, operations) =>
@@ -70,6 +70,12 @@ const SYSTEM_TABLE_CACHE_MUTATION_MODE = Object.freeze({
     'authoritative_absence_reconciliation',
   AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION:
     'authoritative_service_lifecycle_reconciliation',
+  // The swap of a complete leader image into a gapped source cell
+  // (system-table-cache-source-image.js): an UPSERT replaces the row and a
+  // DELETE removes it, with no HLC merge, no tombstone fence and no
+  // tombstone left; the image is the table at its applied index and the
+  // source-order cell gates what may follow it.
+  SOURCE_IMAGE_REPLACEMENT: 'source_image_replacement',
 });
 
 const SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES = Object.freeze([

@@ -8,6 +8,7 @@ import {
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {buildReplicaInventorySnapshot} from
   '../../src/rebalancer/replica-inventory.js';
+import {stubAvailableNodes} from '../rebalancer/available-node-plan-stub.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic self-stabilization Φ-prover for the priority-recovery
@@ -127,10 +128,10 @@ function makeRebalancer(world) {
 
   // --- environment projections (stubbed to the modelled world) ---
   rb.isCriticalSystemPartition = () => true;
-  rb.getAvailableNodes = () =>
+  stubAvailableNodes(rb, () =>
     [...world.nodes.entries()]
       .filter(([, n]) => n.serveReady)
-      .map(([nodeId, n]) => ({node_id: nodeId, address: n.address}));
+      .map(([nodeId, n]) => ({node_id: nodeId, address: n.address})));
   rb.isNodeProcessAlive = (nodeId) =>
     world.nodes.get(nodeId)?.processAlive === true;
   const inFlightOpRows = () =>

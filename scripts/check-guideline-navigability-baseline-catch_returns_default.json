@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.238Z",
-  "rawViolationCount": 386,
+  "generatedAt": "2026-11-11T10:41:43.233Z",
+  "rawViolationCount": 384,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -149,7 +149,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 169,
+      "line": 188,
       "column": 6,
       "functionName": "resolveLoadLaneQueryTargetTableName",
       "kind": "catch_returns_default",
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-cluster-view-owner.js",
-      "line": 110,
+      "line": 148,
       "column": 6,
       "functionName": "getStartupAuthorityReadyNodeIds",
       "kind": "catch_returns_default",
@@ -518,7 +518,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-row-merge.js",
-      "line": 297,
+      "line": 531,
       "column": 4,
       "functionName": "tryParseHLCTimestamp",
       "kind": "catch_returns_default",
@@ -734,7 +734,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js",
-      "line": 511,
+      "line": 535,
       "column": 4,
       "functionName": "publishAuthoritativeObservation",
       "kind": "catch_returns_default",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 409,
+      "line": 416,
       "column": 4,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "catch_returns_default",
@@ -1157,7 +1157,7 @@
     },
     {
       "filePath": "src/diagnostics/resource-diagnostics-sampler.js",
-      "line": 504,
+      "line": 512,
       "column": 6,
       "functionName": "readProcessWriteBytes",
       "kind": "catch_returns_default",
@@ -1175,7 +1175,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 84,
+      "line": 85,
       "column": 4,
       "functionName": "connectLogsTablePersistence",
       "kind": "catch_returns_default",
@@ -1184,7 +1184,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 169,
+      "line": 170,
       "column": 4,
       "functionName": "startDynamicConfigWiring",
       "kind": "catch_returns_default",
@@ -1193,7 +1193,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-shutdown-lifecycle.js",
-      "line": 432,
+      "line": 440,
       "column": 6,
       "functionName": "resolveContext",
       "kind": "catch_returns_default",
@@ -1256,7 +1256,7 @@
     },
     {
       "filePath": "src/message-group/message-group-cdc-committed-acceptance.js",
-      "line": 57,
+      "line": 51,
       "column": 4,
       "functionName": "parentWaitIsLive",
       "kind": "catch_returns_default",
@@ -1283,7 +1283,7 @@
     },
     {
       "filePath": "src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
-      "line": 234,
+      "line": 229,
       "column": 8,
       "functionName": "tryDurableCdcForwardTarget",
       "kind": "catch_returns_default",
@@ -1535,7 +1535,7 @@
     },
     {
       "filePath": "src/partition/managed-source-replication-start-delivery.js",
-      "line": 88,
+      "line": 87,
       "column": 4,
       "functionName": "forwardSourceReplicationStart",
       "kind": "catch_returns_default",
@@ -1583,15 +1583,6 @@
       "line": 173,
       "column": 6,
       "functionName": "parseSchemaIfJson",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-cdc-obligation-delivery.js",
-      "line": 523,
-      "column": 4,
-      "functionName": "driveOneObligation",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1922,7 +1913,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 263,
+      "line": 262,
       "column": 14,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -1931,7 +1922,7 @@
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 336,
+      "line": 335,
       "column": 6,
       "functionName": "refreshRoutingMetadataOverlay",
       "kind": "catch_returns_default",
@@ -1967,7 +1958,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 78,
+      "line": 79,
       "column": 4,
       "functionName": "resolvePartitionDb",
       "kind": "catch_returns_default",
@@ -1976,7 +1967,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 271,
+      "line": 272,
       "column": 4,
       "functionName": "tryResolveCanonicalPkTuples",
       "kind": "catch_returns_default",
@@ -1985,7 +1976,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 544,
+      "line": 545,
       "column": 4,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "catch_returns_default",
@@ -2021,7 +2012,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 237,
+      "line": 293,
       "column": 6,
       "functionName": "executeQuery",
       "kind": "catch_returns_default",
@@ -2030,7 +2021,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 505,
+      "line": 558,
       "column": 6,
       "functionName": "executeExplainDistributed",
       "kind": "catch_returns_default",
@@ -2102,7 +2093,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 506,
+      "line": 517,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "catch_returns_default",
@@ -2192,7 +2183,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1168,
+      "line": 1194,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2201,7 +2192,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1192,
+      "line": 1218,
       "column": 4,
       "functionName": "applyEntryDurablyOrFailure",
       "kind": "catch_returns_default",
@@ -2210,7 +2201,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1336,
+      "line": 1362,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2219,7 +2210,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1396,
+      "line": 1422,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2444,7 +2435,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 120,
+      "line": 121,
       "column": 4,
       "functionName": "readHandoffStepBound",
       "kind": "catch_returns_default",
@@ -2480,7 +2471,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
-      "line": 634,
+      "line": 633,
       "column": 6,
       "functionName": "confirmCommittedTransitionPersistence",
       "kind": "catch_returns_default",
@@ -2507,7 +2498,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 527,
+      "line": 525,
       "column": 6,
       "functionName": "shouldReconcileOrphanedOperation",
       "kind": "catch_returns_default",
@@ -2516,7 +2507,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 295,
+      "line": 292,
       "column": 4,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "catch_returns_default",
@@ -2543,18 +2534,9 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 58,
+      "line": 57,
       "column": 6,
       "functionName": "normalizeOperationWorkflowTransitionStepsHistory",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
-      "line": 431,
-      "column": 6,
-      "functionName": "updateStep",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2579,7 +2561,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 521,
+      "line": 528,
       "column": 8,
       "functionName": "isOperationLedgerQuorumSpreadAuthoritativelyConfirmed",
       "kind": "catch_returns_default",
@@ -2597,7 +2579,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 306,
+      "line": 307,
       "column": 6,
       "functionName": "resolveProvisioningLedgerInterlockDeferral",
       "kind": "catch_returns_default",
@@ -3254,7 +3236,7 @@
     },
     {
       "filePath": "src/transport/message-router-ack-delivery.js",
-      "line": 148,
+      "line": 224,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -3263,7 +3245,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-authority.js",
-      "line": 360,
+      "line": 401,
       "column": 6,
       "functionName": "resolveNodeAddressForDelivery",
       "kind": "catch_returns_default",
@@ -3290,7 +3272,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-behaviors.js",
-      "line": 270,
+      "line": 292,
       "column": 4,
       "functionName": "tryDeliverRaftDirect",
       "kind": "catch_returns_default",
@@ -3299,7 +3281,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-behaviors.js",
-      "line": 477,
+      "line": 503,
       "column": 4,
       "functionName": "completeRemoteDelivery",
       "kind": "catch_returns_default",
@@ -3308,7 +3290,7 @@
     },
     {
       "filePath": "src/transport/message-router-pending-response-ledger.js",
-      "line": 382,
+      "line": 389,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -3317,7 +3299,7 @@
     },
     {
       "filePath": "src/transport/message-router-pending-response-ledger.js",
-      "line": 504,
+      "line": 511,
       "column": 8,
       "functionName": "handleAcknowledgment",
       "kind": "catch_returns_default",

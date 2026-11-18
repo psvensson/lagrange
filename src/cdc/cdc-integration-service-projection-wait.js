@@ -5,8 +5,10 @@
  * {tableName, key, originHlc}; a consumer that needs its own node's
  * SystemTableCache to reflect that write waits for that position here. There
  * is no timer: the wait ends when the cache row for the key carries the
- * write's origin HLC or a later one (for a deletion: the row is absent or
- * carries a later origin), when the owner shuts down, or when the waiting
+ * write's origin HLC or a later one (for a deletion: the row is absent on a
+ * cache whose source position is current - CDC Stage 3: absence on a gapped
+ * or position-unknown cache proves nothing - or carries a later origin), when
+ * the owner shuts down, or when the waiting
  * client disconnects (typed). A write is never answered from this
  * projection. Each wait logs its start and end, and getProjectionWaitDiagnostics
  * counts the waits in progress: with no timer, those are what makes a wait
@@ -16,6 +18,10 @@
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {CDC_LOG_MSG} from './cdc-constants.js';
+import {SOURCE_POSITION_STATE, SystemTableCacheSourceOrder} from
+  '../cache/system-table-cache-cdc-observation.js';
+import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
+import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 
 const PROJECTION_WAIT_OUTCOME = Object.freeze({
   REACHED: 'reached',
@@ -67,11 +73,26 @@ function originOrder(row, positionHlc) {
  * @param {Object} position - {tableName, key, originHlc, deleted?}.
  * @return {boolean}
  */
-function projectionReached(cache, position) {
+// Whether this node's cache is current for a propagated table's source (CDC
+// Stage 3 position cell): an absence proves a deletion only on a current
+// cache. A gapped or position-unknown cache may simply never have received
+// the row. Unpositioned tables and caches without a source-order owner have
+// no cell and are judged as before. A read-model fact: it grants nothing.
+function sourceCurrent(service, tableName) {
+  const sourceOrder = service.cacheMutationTarget?.sourceOrder;
+  const sourcePartition = INITIAL_PARTITION_IDS[tableName];
+  if (!(sourceOrder instanceof SystemTableCacheSourceOrder) ||
+      !CDC_PROPAGATED_TABLES.includes(tableName) || typeof sourcePartition !== 'string') {
+    return true;
+  }
+  return sourceOrder.positionOf(sourcePartition).state === SOURCE_POSITION_STATE.CURRENT;
+}
+
+function projectionReached(cache, position, current = true) {
   const row = cache.get(position.tableName, position.key) ?? null;
   if (position.deleted === true) {
     const order = row === null ? null : originOrder(row, position.originHlc);
-    return row === null || (order !== null && order > ORDER_SAME);
+    return (row === null && current) || (order !== null && order > ORDER_SAME);
   }
   const order = row === null ? null : originOrder(row, position.originHlc);
   return order !== null && order >= ORDER_SAME;
@@ -139,7 +160,9 @@ class CDCIntegrationServiceProjectionWait {
     }
     const reached = Object.freeze({outcome: PROJECTION_WAIT_OUTCOME.REACHED,
       position});
-    if (projectionReached(cache, position)) return reached;
+    const isReached = () => projectionReached(cache, position,
+      sourceCurrent(this, position.tableName));
+    if (isReached()) return reached;
     if (options.abortSignal?.aborted === true) {
       throw projectionWaitError(PROJECTION_WAIT_OUTCOME.CLIENT_DISCONNECTED);
     }
@@ -149,10 +172,12 @@ class CDCIntegrationServiceProjectionWait {
       let stopHolding = null;
       let listener = null;
       let onAbort = null;
+      let stopCurrent = null;
       const finish = (outcome, settle) => {
         if (settled) return;
         settled = true;
         cache.offCacheChange?.(listener);
+        stopCurrent?.();
         options.abortSignal?.removeEventListener(ABORT_EVENT, onAbort);
         stopHolding?.();
         closeProjectionWaiter(this, waiter, outcome);
@@ -161,12 +186,17 @@ class CDCIntegrationServiceProjectionWait {
       const end = (outcome) => finish(outcome,
         () => reject(projectionWaitError(outcome)));
       listener = (changedTable) => {
-        if (changedTable !== position.tableName ||
-            !projectionReached(cache, position)) return;
+        if (changedTable !== position.tableName || !isReached()) return;
         finish(PROJECTION_WAIT_OUTCOME.REACHED, () => resolve(reached));
       };
       onAbort = () => end(PROJECTION_WAIT_OUTCOME.CLIENT_DISCONNECTED);
       cache.onCacheChange(listener);
+      // A deletion awaiting a current cache is woken by the source position
+      // becoming current (an image install that changed no row included).
+      const sourceOrder = this.cacheMutationTarget?.sourceOrder;
+      if (sourceOrder instanceof SystemTableCacheSourceOrder) {
+        stopCurrent = sourceOrder.onCurrent(() => listener(position.tableName));
+      }
       options.abortSignal?.addEventListener(ABORT_EVENT, onAbort);
       stopHolding = this.holdUntilShutdown(
         () => end(PROJECTION_WAIT_OUTCOME.SHUTDOWN));

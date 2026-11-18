@@ -39,6 +39,83 @@ export const RESOURCE_CLASS_JOBS = Object.freeze({
 // never raised.
 export const LANE_JOBS_CAP_ENV = 'LAGRANGE_LANE_JOBS_CAP';
 
+// The ordinary lane's workers on a placed lab host, handed to the classified
+// runner in this one env beside the cap. Only the placement shell sets it,
+// computed on the host at run time by the shell placedOrdinaryLaneJobsShell
+// generates; a local or unplaced run never has it and keeps the lane's own
+// count. The planner prices a host with placedOrdinaryLaneJobs, the same rule.
+export const PLACED_ORDINARY_LANE_JOBS_ENV = 'LAGRANGE_PLACED_ORDINARY_LANE_JOBS';
+// The most workers a placed host's ordinary lane is ever raised to.
+export const PLACED_ORDINARY_LANE_JOBS_MAX = 8;
+// Two of every three processors, so the host keeps a third for the thermal
+// gate's relief, the ssh relay and the tests' own child processes.
+const PLACED_ORDINARY_CORES_NUMERATOR = 2;
+const PLACED_ORDINARY_CORES_DENOMINATOR = 3;
+// At most one ordinary worker per whole GiB of the host's total memory.
+const KIB_PER_GIB = 1024 * 1024;
+// What the lab probe calls a host whose thermal gate has a source to read.
+export const THERMAL_SOURCE_MEASURED = 'measured';
+// Never below the lane's own count: lowering is the cap's work alone.
+const PLACED_ORDINARY_BASE_JOBS = RESOURCE_CLASS_JOBS[RESOURCE_CLASS_ORDINARY];
+
+function isWholeNumber(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+/**
+ * The ordinary lane's workers on a placed lab host, from what the host says
+ * of itself at run time: two thirds of its processors, never fewer than the
+ * lane's own count nor more than PLACED_ORDINARY_LANE_JOBS_MAX, at most one
+ * per whole GiB of total memory, and always within the host's lane cap (its
+ * processors less one). No raise where total memory cannot be read, nor where
+ * the thermal gate has nothing to read - a raised lane must be one the gate
+ * can hold. Null when the processors are unknown: the shell then sets nothing.
+ * @param {{cores: number|null, memKiB: number|null, thermal: string|null}} host
+ * @return {number|null}
+ */
+export function placedOrdinaryLaneJobs({cores, memKiB, thermal}) {
+  if (!isWholeNumber(cores) || cores === 0) return null;
+  const cap = cores > 1 ? cores - 1 : 1;
+  let jobs = PLACED_ORDINARY_BASE_JOBS;
+  if (isWholeNumber(memKiB) && thermal === THERMAL_SOURCE_MEASURED) {
+    const byCores = Math.min(PLACED_ORDINARY_LANE_JOBS_MAX, Math.floor(
+      (cores * PLACED_ORDINARY_CORES_NUMERATOR) / PLACED_ORDINARY_CORES_DENOMINATOR));
+    jobs = Math.max(PLACED_ORDINARY_BASE_JOBS,
+      Math.min(byCores, Math.floor(memKiB / KIB_PER_GIB)));
+  }
+  return Math.min(jobs, cap);
+}
+
+/**
+ * The same rule as POSIX shell arithmetic, for the placement shell to run on
+ * the host. It reads the shell variables `cores`, `mem_kib` and `thermal`
+ * (the lab probe's own facts, computed there) and exports
+ * PLACED_ORDINARY_LANE_JOBS_ENV, or leaves it unset when `cores` is unknown.
+ * @return {string[]} the lines, in order
+ */
+export function placedOrdinaryLaneJobsShell() {
+  const env = PLACED_ORDINARY_LANE_JOBS_ENV;
+  const base = PLACED_ORDINARY_BASE_JOBS;
+  return [
+    `unset ${env}`,
+    'case "$cores" in ""|*[!0-9]*|0) ;; *)',
+    `  ordinary=${base}`,
+    `  case "$mem_kib" in ""|*[!0-9]*) ;; *) if [ "$thermal" = ${THERMAL_SOURCE_MEASURED} ]; then`,
+    `    ordinary=$((cores * ${PLACED_ORDINARY_CORES_NUMERATOR} / ` +
+      `${PLACED_ORDINARY_CORES_DENOMINATOR}))`,
+    `    [ "$ordinary" -le ${PLACED_ORDINARY_LANE_JOBS_MAX} ] || ` +
+      `ordinary=${PLACED_ORDINARY_LANE_JOBS_MAX}`,
+    `    [ "$ordinary" -le $((mem_kib / ${KIB_PER_GIB})) ] || ` +
+      `ordinary=$((mem_kib / ${KIB_PER_GIB}))`,
+    `    [ "$ordinary" -ge ${base} ] || ordinary=${base}`,
+    '  fi;; esac',
+    '  [ "$ordinary" -le $((cores - 1)) ] || ordinary=$((cores - 1))',
+    '  [ "$ordinary" -ge 1 ] || ordinary=1',
+    `  export ${env}="$ordinary";;`,
+    'esac',
+  ];
+}
+
 export const RESOURCE_CLASS_MANIFEST_ID = 'test-resource-classification';
 export const RESOURCE_CLASS_MANIFEST_PATH = 'test/shards/resource-classes.json';
 

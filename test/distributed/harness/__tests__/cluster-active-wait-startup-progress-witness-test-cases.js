@@ -894,7 +894,6 @@ export function registerClusterActiveWaitStartupProgressWitnessTests(context) {
       const STARTUP_SNAPSHOT_REPAIR_OWNER_PENDING =
         'owner_reconcile_pending';
       const STARTUP_SNAPSHOT_REPAIR_WAIT_RECOVERY = 'wait_owner_recovery';
-      const STARTUP_SNAPSHOT_REPAIR_WRITE_DEFERRED = 'write_deferred';
       const STARTUP_SNAPSHOT_REPAIR_NODE_IDS = Object.freeze([
         'seed-1',
         'joiner-1',
@@ -1059,10 +1058,12 @@ export function registerClusterActiveWaitStartupProgressWitnessTests(context) {
             publishedActiveNodeIds:
               STARTUP_SNAPSHOT_REPAIR_PUBLISHED_NODE_IDS,
           },
+          // The owner's named recovery wait: it queues nothing for itself.
           selectedMembershipPublicationHandoffOutcome: {
-            state: STARTUP_SNAPSHOT_REPAIR_WRITE_DEFERRED,
+            state: 'target_blocked',
             reasonCode: STARTUP_SNAPSHOT_REPAIR_OWNER_PENDING,
-            enqueued: true,
+            enqueued: false,
+            ownerRecoveryWait: 'awaiting_recovery_progress',
             retryAfterMs: STARTUP_SNAPSHOT_REPAIR_RETRY_AFTER_MS,
           },
           selectedPublishedActiveNodeIds:

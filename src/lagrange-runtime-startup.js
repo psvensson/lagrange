@@ -10,10 +10,8 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {reserveBootIncarnation} from './bootstrap/boot-incarnation-owner.js';
-import {
-  readPersistedLocalClusterId,
-  readPersistedLocalNodeId,
-} from './bootstrap/rejoin-hints.js';
+import {readPersistedLocalNodeId} from './bootstrap/rejoin-hints.js';
+import {readLocalClusterIdentity} from './bootstrap/local-cluster-identity.js';
 import {readSeedStartupStorageAdmission} from './bootstrap/seed-startup-storage-admission.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
@@ -99,10 +97,12 @@ async function startJoinNode(options) {
     advertisedNodeWsAddress,
   } = resolveRuntimeAddresses(config);
 
-  const persistedClusterId = await awaitStartupAcquisition(
-    readPersistedLocalClusterId(dataDirectoryManager.getDataDir()),
+  // The id this node durably holds (its CONFIG row, else its hints record):
+  // presented at join and compared with the cluster's answer.
+  const persistedClusterId = (await awaitStartupAcquisition(
+    readLocalClusterIdentity(dataDirectoryManager.getDataDir()),
     options.signal,
-  );
+  )).heldValue;
   const bootIncarnation = await awaitStartupAcquisition(
     reserveBootIncarnation(dataDirectoryManager.getDataDir()),
     options.signal,
@@ -430,6 +430,7 @@ async function startSeedNode(options) {
     bootIncarnation,
     startupServicesAdmission,
     membershipOwnerOutcome: options.membershipOwnerOutcome,
+    formationTargetNodeCount: config.get(CONFIG_KEY.FORMATION_TARGET_NODE_COUNT),
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
   await awaitStartupAcquisition(

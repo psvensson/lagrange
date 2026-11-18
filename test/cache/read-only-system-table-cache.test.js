@@ -28,12 +28,12 @@ beforeEach(() => {
   underlyingCache = new SystemTableCache();
   // Pre-populate with test data
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-1',
+    node_id: 'node-1',
     address: '127.0.0.1:8080',
     status: 'active',
   });
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-2',
+    node_id: 'node-2',
     address: '127.0.0.1:8081',
     status: 'inactive',
   });
@@ -56,7 +56,7 @@ test('ReadOnlySystemTableCache - get works correctly', async (t) => {
   const readOnly = new ReadOnlySystemTableCache(underlyingCache);
 
   const result = readOnly.get('nodes', 'node-1');
-  t.equal(result.id, 'node-1', 'Should return correct record');
+  t.equal(result.node_id, 'node-1', 'Should return correct record');
   t.equal(result.address, '127.0.0.1:8080', 'Should have correct address');
 });
 
@@ -126,7 +126,7 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'should forward getAppliedSchemaVersion to underlying cache',
   );
   const snapshot = readOnly.captureRecordMutationSnapshot('nodes', 'node-1');
-  t.equal(snapshot.record.id, 'node-1',
+  t.equal(snapshot.record.node_id, 'node-1',
     'should forward the record side of a key-scoped mutation snapshot');
   t.equal(typeof snapshot.mutationRevision, 'number',
     'should forward the key-scoped mutation revision');
@@ -147,7 +147,7 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'should match underlying cache mutation version',
   );
   t.equal(
-    readOnly.getShared('nodes', 'node-1')?.id,
+    readOnly.getShared('nodes', 'node-1')?.node_id,
     'node-1',
     'should forward getShared to underlying cache',
   );
@@ -173,7 +173,7 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'proxy should forward getTableMutationVersion',
   );
   t.equal(
-    proxiedReadOnly.getShared('nodes', 'node-1')?.id,
+    proxiedReadOnly.getShared('nodes', 'node-1')?.node_id,
     'node-1',
     'proxy should forward getShared',
   );
@@ -198,7 +198,7 @@ test('createReadOnlyCache - blocks applySystemTableChange', async (t) => {
   const readOnly = createReadOnlyCache(underlyingCache);
 
   t.throws(
-    () => readOnly.applySystemTableChange('nodes', 'INSERT', {id: 'new'}),
+    () => readOnly.applySystemTableChange('nodes', 'INSERT', {node_id: 'new'}),
     /Cache write violation/,
     'Should throw on write attempt',
   );
@@ -241,7 +241,7 @@ test('createReadOnlyCache - allows read operations', async (t) => {
   const record = readOnly.get('nodes', 'node-1');
   t.ok(record, 'get should work');
 
-  const found = readOnly.find('nodes', (r) => r.id === 'node-1');
+  const found = readOnly.find('nodes', (r) => r.node_id === 'node-1');
   t.ok(found, 'find should work');
 
   const filtered = readOnly.filter('nodes', () => true);
@@ -265,7 +265,7 @@ test('createReadOnlyCache - reflects underlying cache changes', async (t) => {
 
   // Modify underlying cache (simulating CDC handler)
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
-    id: 'node-3',
+    node_id: 'node-3',
     address: '127.0.0.1:8082',
   });
 

@@ -30,6 +30,24 @@ runs. A safe refusal is not proof of availability: after a fault clears, the
 claimed journey must resume useful service. Use existing proof owners and
 append-only evidence records; do not introduce a parallel certification path.
 
+Comparative-system measurements must execute the actual declared products
+through their native public interfaces. No mock client, fake product, emulated
+store, scripted product response, substituted clock or generated result may be
+used, created or promoted as measurement evidence. This applies to semantic
+prerequisites, dataset reset, durability/restart, state validation, performance
+samples and derived comparison claims. A declared workload or expected dataset
+is an input; its expected answers are never observations of the system.
+
+Harness tests using doubles remain tests of the harness and cannot discharge a
+native-product or comparative-measurement receipt. A test name, passing receipt,
+source digest or deployment-shaped object does not establish real execution.
+Comparison admission must retain the actual source/artifact, physical host and
+process identities, endpoint, workload, original product responses, independent
+state observations and measured window for the same deployment. Validate the
+retained bytes and bindings through the existing evidence owners. Missing,
+unavailable, failed or non-native evidence leaves the comparison unaccepted;
+never fill a result from a model, another system, a prior run or a fallback.
+
 ## Documentation-Only Changes
 
 Documentation-only planning, roadmap and policy changes require the relevant

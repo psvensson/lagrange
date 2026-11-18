@@ -446,7 +446,8 @@ test('TX1 alpha: removal keeps malformed and colliding QUERY with the participan
     }, {
       prepareApply: null,
       prepared: 'PREPARED',
-      fence: {activeServingRequestCount: 0, participantTransactionActive: true},
+      fence: {state: 'fenced', activeServingRequestCount: 0,
+        participantTransactionActive: true},
       partial: IDENTITY_REQUIRED,
       collision: IDENTITY_REQUIRED,
       heldCurrent: {success: true, rows: []},

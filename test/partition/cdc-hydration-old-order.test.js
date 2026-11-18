@@ -49,9 +49,13 @@ test('W-D4a negative: today\'s order (image read, 600 events acknowledged by the
       lateEvents: late.events.length,
     }, {
       committedAbove: LATER_EVENTS,
-      missingAbove: LATER_EVENTS,
+      // CDC Stage 3: a subscriber below the ledger's newest row with nothing
+      // owed is shipped that row (the position probe); a positioned recipient
+      // answers it with a gap and lists. This positionless subscriber still
+      // misses every other event above its read.
+      missingAbove: LATER_EVENTS - 1,
       deletedRowInView: true,
-      lateEvents: 0,
+      lateEvents: 1,
     });
   } finally {
     await shutdownAll(leader);

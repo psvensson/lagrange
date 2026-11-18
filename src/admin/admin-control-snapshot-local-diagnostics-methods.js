@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
@@ -115,7 +116,6 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     ADMIN_ERROR_MESSAGE,
     ADMIN_OPERATIONAL_DIAGNOSTICS,
     CDC_TELEMETRY_MODE,
-    COLUMN,
     PARTITION_STATE_UNKNOWN,
     SERVICE_TYPE_PARTITION,
     SQL_DIAGNOSTICS_REPLICA_COUNT,

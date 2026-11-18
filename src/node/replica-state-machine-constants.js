@@ -107,6 +107,9 @@ const REPLICA_STATE_MACHINE_REASON = Object.freeze({
   RECOVERY_REGISTRATION: 'recovery_registration',
   RECOVERY_INCOMPLETE: 'Node recovery - incomplete operation',
   RECOVERY_COMPLETE_REMOVAL: 'Node recovery - completing removal',
+  // The one REMOVING -> ACTIVE edge: the removal owner cancelled a removal
+  // its operation retains (replica-state-machine-removal-cancellation.js).
+  REMOVAL_CANCELLED: 'removal_cancelled',
 });
 
 const REPLICA_STATE_MACHINE_LOG_MSG = Object.freeze({

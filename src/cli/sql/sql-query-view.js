@@ -18,7 +18,8 @@ import {LiveStreamPanel} from './live-stream-panel.js';
 import {
   SQL_QUERY_VIEW_COMPATIBILITY_METHODS,
 } from './sql-query-view-compatibility-methods.js';
-import {SQL_QUERY_VIEW_LIVE_METHODS} from './sql-query-view-live-methods.js';
+import {LIVE_QUERY_STATUS, SQL_QUERY_VIEW_LIVE_METHODS} from
+  './sql-query-view-live-methods.js';
 
 const LOCAL_STR_SELECT = 'select';
 const LOCAL_STR_INSERT = 'insert';
@@ -26,16 +27,7 @@ const LOCAL_STR_UPDATE = 'update';
 const LOCAL_STR_DELETE = 'delete';
 const LOCAL_STR_LIVE_SELECT = 'live_select';
 const LOCAL_STR_OTHER = 'other';
-const LOCAL_STR_ACTIVE = 'active';
-const LOCAL_STR_PAUSED = 'paused';
-const LOCAL_STR_EXPIRED = 'expired';
-const LOCAL_STR_CANCELLED = 'cancelled';
 const LOCAL_NUM_ONE_HUNDRED = 100;
-const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
-const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
-const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
-const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
-const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
 const LOCAL_STR_READ_ONLY_MODE_ONLY_SELECT_QUERIES_ARE_A = 'Read-only mode: Only SELECT queries are allowed';
 const LOCAL_STR_READ_ONLY_VIOLATION = 'READ_ONLY_VIOLATION';
 const LOCAL_STR_QUERY_REJECTED = 'query:rejected';
@@ -80,16 +72,6 @@ export const QUERY_TYPE = {
   DELETE: LOCAL_STR_DELETE,
   LIVE_SELECT: LOCAL_STR_LIVE_SELECT,
   OTHER: LOCAL_STR_OTHER,
-};
-
-/**
- * Live query subscription status
- */
-export const LIVE_QUERY_STATUS = {
-  ACTIVE: LOCAL_STR_ACTIVE,
-  PAUSED: LOCAL_STR_PAUSED,
-  EXPIRED: LOCAL_STR_EXPIRED,
-  CANCELLED: LOCAL_STR_CANCELLED,
 };
 
 /**
@@ -185,18 +167,8 @@ export class SQLQueryView {
         this.handleLiveQueryEvent(msg);
     }
 
-    // Wire up live query manager events
     if (this.liveQueryManager && this.eventBus) {
-      this.eventBus.on(LOCAL_STR_LIVEQUERY_INITIALIZED, (data) =>
-        this.handleLiveQueryInitialized(data));
-      this.eventBus.on(LOCAL_STR_LIVEQUERY_EVENT, (data) =>
-        this.handleLiveQueryStreamEvent(data));
-      this.eventBus.on(LOCAL_STR_LIVEQUERY_EXPIRED, (data) =>
-        this.handleLiveQueryExpired(data));
-      this.eventBus.on(LOCAL_STR_LIVEQUERY_PAUSED, (data) =>
-        this.handleLiveQueryPaused(data));
-      this.eventBus.on(LOCAL_STR_LIVEQUERY_RESUMED, (data) =>
-        this.handleLiveQueryResumed(data));
+      this.wireLiveQueryListeners();
     }
   }
 

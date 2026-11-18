@@ -859,7 +859,7 @@ test('logs live query mode', async (t) => {
     t.same(cancelled, ['lq_0']);
   });
 
-  t.test('applies snapshot rows from live query snapshot events', async (t) => {
+  t.test('applies snapshot rows from live query results', async (t) => {
     const {EventBus} = await import('../../../src/cli/core/event-bus.js');
     const bus = new EventBus();
     const mockLiveQueryManager = {
@@ -874,10 +874,10 @@ test('logs live query mode', async (t) => {
     });
 
     view.fetchLogs();
-    bus.emit('livequery:event', {
+    bus.emit('livequery:result', {
       subscriptionId: 'lq_snapshot',
-      eventType: 'SNAPSHOT',
-      data: [
+      eventType: 'snapshot',
+      rows: [
         {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
         {log_id: 'l2', level: 'ERROR', message: 'second', timestamp: 90},
       ],
@@ -902,10 +902,10 @@ test('logs live query mode', async (t) => {
     });
 
     view.fetchLogs();
-    bus.emit('livequery:event', {
+    bus.emit('livequery:result', {
       subscriptionId: 'lq_event_test',
-      eventType: 'SNAPSHOT',
-      data: [
+      eventType: 'snapshot',
+      rows: [
         {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
       ],
     });
@@ -918,5 +918,34 @@ test('logs live query mode', async (t) => {
 
     t.equal(view.data.length, 2, 'should add new log entry');
     t.equal(view.filteredData[0].log_id, 'l3');
+  });
+
+  t.test('applies a live delete from data and snapshot from rows', async (t) => {
+    const {EventBus} = await import('../../../src/cli/core/event-bus.js');
+    const bus = new EventBus();
+    const view = new LogsView({
+      connectionManager: {},
+      liveQueryManager: {subscribe: () => 'lq_delete', cancel: () => true},
+      eventBus: bus,
+      liveQueryEnabled: true,
+    });
+
+    view.fetchLogs();
+    bus.emit('livequery:result', {
+      subscriptionId: 'lq_delete',
+      eventType: 'snapshot',
+      rows: [
+        {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
+        {log_id: 'l2', level: 'INFO', message: 'second', timestamp: 90},
+      ],
+    });
+    t.equal(view.data.length, 2, 'snapshot applied from rows');
+
+    bus.emit('livequery:event', {
+      subscriptionId: 'lq_delete',
+      eventType: 'delete',
+      data: {log_id: 'l1', level: 'INFO', message: 'first', timestamp: 100},
+    });
+    t.same(view.data.map((log) => log.log_id), ['l2'], 'deleted row named by data');
   });
 });

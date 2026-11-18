@@ -29,6 +29,7 @@ import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
   './replica-create-lifecycle-close.js';
+import {readCurrentBootRow} from './replica-create-admission-current-boot.js';
 
 const CREATE_ADMISSION_STATE = Object.freeze({
   ADMITTED: 'ADMITTED',
@@ -54,8 +55,6 @@ const READ_REPLICA_ADMISSIONS_SQL =
 const READ_TARGET_ADMISSIONS_SQL =
   'SELECT * FROM replica_operations WHERE target_node_id = ? ' +
   'AND entity_type = ? AND create_admission_state IS NOT NULL';
-const READ_CURRENT_BOOT_SQL =
-  'SELECT node_id, boot_incarnation FROM nodes WHERE node_id = ?';
 const CRITICAL_OPTIONS = Object.freeze({
   authoritativeReadMode:
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -463,12 +462,8 @@ class ReplicaCreateAdmissionOwner {
   }
 
   async requireCurrentBootIncarnation() {
-    const observation = await readAuthoritativeControlPlaneRows(
-      this.gateway, SYSTEM_TABLE_NAME.NODES, READ_CURRENT_BOOT_SQL,
-      [this.nodeId], CRITICAL_OPTIONS).catch(() => null);
-    const row = observation?.success === true &&
-      Array.isArray(observation.rows) && observation.rows.length === 1 ?
-      observation.rows[0] : null;
+    const {row, readCause} = await readCurrentBootRow(
+      this.gateway, this.nodeId, CRITICAL_OPTIONS);
     const bootIncarnation = nullableSafeInteger(row?.boot_incarnation);
     if (row?.node_id !== this.nodeId || bootIncarnation !== this.ownerIncarnation) {
       const error = admissionError(CREATE_ADMISSION_ERROR_CODE.DEFERRED,
@@ -476,6 +471,9 @@ class ReplicaCreateAdmissionOwner {
       error.bootAuthorityUnavailable = true;
       error.bootIncarnationSuperseded = row?.node_id === this.nodeId &&
         bootIncarnation !== null && bootIncarnation !== this.ownerIncarnation;
+      if (readCause !== undefined) {
+        error.cause = readCause;
+      }
       throw error;
     }
     return row;

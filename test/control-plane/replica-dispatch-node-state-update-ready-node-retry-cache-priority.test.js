@@ -31,6 +31,8 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {buildAnsweredIncompleteOperationListObservation} from
+  '../../src/rebalancer/incomplete-operation-list-observation.js';
 
 const READY_RETRY_TARGET_NODE_ID = 'node-2';
 const READY_RETRY_SOURCE_NODE_ID = 'node-1';
@@ -211,7 +213,7 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
         repository: {
           async queryIncompleteOperations() {
             authoritativeQueryCount += 1;
-            return [];
+            return buildAnsweredIncompleteOperationListObservation([]);
           },
         },
       },
@@ -353,7 +355,7 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
       repository: {
         async queryIncompleteOperations() {
           authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
-          return [
+          return buildAnsweredIncompleteOperationListObservation([
             missingAuthoritativeOperation,
             {
               operationId: READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
@@ -365,7 +367,7 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
               workflowStep: WORKFLOW_STEP.PENDING,
               stepsHistory: [],
             },
-          ];
+          ]);
         },
       },
     },
@@ -490,7 +492,7 @@ test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, async (t) => {
       repository: {
         async queryIncompleteOperations() {
           authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
-          return [blockedAuthoritativeOperation];
+          return buildAnsweredIncompleteOperationListObservation([blockedAuthoritativeOperation]);
         },
       },
     },
@@ -608,7 +610,7 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, async (t) => {
       repository: {
         async queryIncompleteOperations() {
           authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
-          return [];
+          return buildAnsweredIncompleteOperationListObservation([]);
         },
       },
     },

@@ -251,7 +251,7 @@ function createRuntimeServiceIngress(coordinator, entityId) {
 }
 
 function readStoredOperation(coordinator, operationId) {
-  return coordinator.repository.queryOperationById(operationId);
+  return coordinator.repository.queryOperationProjectionById(operationId);
 }
 
 function isPendingOperation(operation) {

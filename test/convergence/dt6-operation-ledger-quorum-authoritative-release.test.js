@@ -17,6 +17,8 @@ const DEPENDENT_PARTITION_ID =
   `${SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS}-p1`;
 const QUORUM_CONCENTRATED_REASON =
   'operation_ledger_quorum_concentrated';
+import {stubAnsweredIncompleteOperationsRead} from
+  '../rebalancer/incomplete-operations-read-stub.js';
 const NODE_IDS = Object.freeze([
   'node-0',
   'node-1',
@@ -106,7 +108,7 @@ async function runDependentAdmission({
     cacheData: buildCacheData(localPlacements),
     controlPlaneSystemTableGateway: gateway,
   });
-  coordinator.queryIncompleteOperations = async () => [];
+  stubAnsweredIncompleteOperationsRead(coordinator, () => []);
   coordinator.queryShutdownIncompleteOperations = async () => [];
   let verdict = 'ADMITTED';
   try {

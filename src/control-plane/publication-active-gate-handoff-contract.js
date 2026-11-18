@@ -26,10 +26,13 @@ import {
 import {
   buildPublicationActiveGateCrossOwnerHandoffContract,
   buildPublicationActiveGateOwnerOutcomeContract,
-  decidePublicationActiveGateHandoff,
   resolvePublicationActiveGateOwnerOutcomeFreshness,
   resolvePublicationActiveGateOwnerOutcomeState,
 } from './publication-active-gate-handoff-contract-decision.js';
+import {decidePublicationActiveGateHandoff} from
+  './publication-active-gate-handoff-contract-decision-table.js';
+import {resolvePublicationActiveGateHandoffRecoveryEvidence} from
+  './publication-active-gate-handoff-contract-recovery-evidence.js';
 import {
   buildPublicationActiveGateCatchupFence,
 } from './publication-active-gate-handoff-contract-fence.js';
@@ -41,8 +44,6 @@ import {
   resolvePublicationActiveGateHandoffExpectedNodeIds,
   resolvePublicationActiveGateHandoffMissingPublishedNodeIds,
   resolvePublicationActiveGateHandoffPendingCandidateNodeIds,
-  resolvePublicationActiveGateHandoffPendingReconcileNodeIds,
-  resolvePublicationActiveGateHandoffPendingRecoveryNodeIds,
   resolvePublicationActiveGateHandoffPublishedActiveNodeIds,
   resolvePublicationActiveGateHandoffReconcileRequirement,
 } from './publication-active-gate-handoff-contract-evidence.js';
@@ -220,25 +221,9 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
       publishedActiveNodeIds,
       publicationConvergence: options.publicationConvergence,
     });
-  const pendingRecoveryNodeIds =
-    Array.isArray(options.pendingRecoveryNodeIds) ?
-      normalizePublicationActiveGateHandoffNodeIdList(
-        options.pendingRecoveryNodeIds,
-      ) :
-      resolvePublicationActiveGateHandoffPendingRecoveryNodeIds(
-        expectedNodeIds,
-        options.readinessByNodeId,
-        options.publicationConvergence,
-      );
-  const pendingReconcileNodeIds =
-    Array.isArray(options.pendingReconcileNodeIds) ?
-      normalizePublicationActiveGateHandoffNodeIdList(
-        options.pendingReconcileNodeIds,
-      ) :
-      resolvePublicationActiveGateHandoffPendingReconcileNodeIds({
-        missingPublishedNodeIds,
-        pendingRecoveryNodeIds,
-      });
+  const {recoveryGate, pendingRecoveryNodeIds, pendingReconcileNodeIds} =
+    resolvePublicationActiveGateHandoffRecoveryEvidence(
+      options, expectedNodeIds, missingPublishedNodeIds);
   const reconcileRequirement =
     resolvePublicationActiveGateHandoffReconcileRequirement(
       options.publicationConvergence,
@@ -261,6 +246,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingReconcileNodeIds,
     ownerAckCompletionPendingNodeIds,
     reconcileRequirement,
+    recoveryGate,
   });
   const activeGateCatchupFence = buildPublicationActiveGateCatchupFence({
     ...options,
@@ -352,6 +338,7 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     pendingCandidateAcknowledgedNodeIds,
     missingPublishedNodeIds,
     missingPublishedCount: missingPublishedNodeIds.length,
+    recoveryGate,
     pendingRecoveryNodeIds,
     pendingRecoveryCount: pendingRecoveryNodeIds.length,
     pendingReconcileNodeIds,
@@ -411,6 +398,7 @@ function normalizePublicationActiveGateHandoffContract(value) {
     expectedNodeIds: value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EXPECTED_NODE_IDS],
     pendingRecoveryNodeIds: value.pendingRecoveryNodeIds,
     pendingReconcileNodeIds: value.pendingReconcileNodeIds,
+    recoveryGate: value.recoveryGate,
     retryAfterMs: value.retryAfterMs,
     snapshotCoverage: activeGateCatchupFence?.snapshotCoverage,
     nodeRows: normalizePublicationActiveGateHandoffNodeIdList(
@@ -457,6 +445,7 @@ function buildPublicationActiveGateOwnerOutcomeEnvelope(value = null) {
       expectedNodeIds: normalizedContract?.expectedNodeIds,
       pendingReconcileNodeIds: normalizedContract?.pendingReconcileNodeIds,
       pendingRecoveryNodeIds: normalizedContract?.pendingRecoveryNodeIds,
+      recoveryGate: normalizedContract?.recoveryGate,
       activeGateCatchupFence: normalizedContract?.activeGateCatchupFence,
       retryAfterMs,
       crossOwnerHandoffContract:
@@ -500,6 +489,7 @@ function projectPublicationActiveGateHandoffToOwnerCohort(
     publishedActiveNodeCount: contract.publishedActiveNodeCount,
     missingPublishedNodeIds: contract.missingPublishedNodeIds,
     missingPublishedCount: contract.missingPublishedCount,
+    recoveryGate: contract.recoveryGate,
     pendingRecoveryNodeIds: contract.pendingRecoveryNodeIds,
     pendingRecoveryCount: contract.pendingRecoveryCount,
     pendingReconcileNodeIds: contract.pendingReconcileNodeIds,

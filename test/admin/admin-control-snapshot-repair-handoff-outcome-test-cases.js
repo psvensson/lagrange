@@ -21,6 +21,8 @@ import {
 import {
   registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases,
 } from './admin-control-snapshot-repair-handoff-replay-outcome-test-cases.js';
+import {publicationsOwnerOverRows} from
+  '../control-plane/publication-owner-test-support.js';
 
 const TEST_DEFER_INLINE_OWNER_COMMAND_FIELD = 'deferInlineOwnerCommand';
 const TEST_DEFERRED_SKIP_PUBLICATION_WRITE_READBACK = true;
@@ -924,7 +926,7 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
   async (t) => {
     let publicationReadbackAttempts = 0;
     const upsertedRows = [];
-    const publicationOwner = {
+    const publicationOwner = publicationsOwnerOverRows({
       async listPublications() {
         return [
           {
@@ -954,11 +956,11 @@ test('AdminControlSnapshot handoff reconcile defers when publication readback is
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READBACK_FAILURE,
         );
       },
-      async upsertPublication(row) {
+      async storeRow(row) {
         upsertedRows.push(row);
         return row;
       },
-    };
+    });
     const membershipPublicationService =
       new MembershipPublicationCoordinator({
         nodeId: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_LOCAL_NODE_ID,

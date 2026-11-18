@@ -8,6 +8,11 @@ import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
 import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
+import {
+  OPERATION_VISIBILITY_STATE,
+  presentOperationOf,
+  readOperationVisibilityState,
+} from './replica-operation-repository-operation-visibility.js';
 
 // A terminal write that is also a step CAS (a REPLACE FAILED admitted
 // against its durable step, quest replace-source-removal-owner): both guards,
@@ -376,8 +381,12 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     ) {
       const terminalTransition = options.terminalTransition === true;
       const resultOptions = options.resultOptions || {};
-      const authoritativeOperation =
-        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
+      const authorityObservation =
+        await this.queryReplicaOperationPersistenceAuthorityObservation(
+          operation,
+        );
+      const authorityState = readOperationVisibilityState(authorityObservation);
+      const authoritativeOperation = authorityObservation.operation;
       const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
         operation,
         authoritativeOperation,
@@ -416,7 +425,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       // update' 144ms after the row's own insert-CDC). Retrying the
       // UPDATE no-ops forever and the operation never durably leaves
       // its step; re-insert the owner's copy instead of looping.
-      if (!authoritativeOperation) {
+      // Only a read that ANSWERED without the row is divergence; an
+      // unavailable read is refused here and retried by the caller.
+      if (authorityState === OPERATION_VISIBILITY_STATE.ABSENT) {
         this.logger.error(
           REBALANCE_COORDINATOR_LOG_MSG.OPERATION_ROW_DIVERGENCE_REINSERT,
           {
@@ -477,8 +488,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // terminal, null otherwise (idempotent replay, lagging non-terminal row,
     // or missing row — the zero-change divergence arm re-inserts).
     async queryConflictingTerminalAuthorityOperation(operation) {
-      const authoritativeOperation =
-        await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
+      const authoritativeOperation = presentOperationOf(
+        await this.queryReplicaOperationPersistenceAuthorityObservation(
+          operation,
+        ),
+      );
       if (!authoritativeOperation) {
         return null;
       }
@@ -514,15 +528,25 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       ) {
         return false;
       }
-      const authoritativeOperation =
-        await this.queryAuthoritativeOperationById(operation.operationId, {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-        });
+      // A pre-check only: the UPDATE's own expected-step CAS is the
+      // authority. Nothing is rejected without a PRESENT local owner row
+      // (an ABSENT or UNAVAILABLE read leaves the decision to the CAS).
+      const observation =
+        await this.queryAuthoritativeOperationVisibilityObservation(
+          operation.operationId,
+          {
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          },
+        );
       if (
-        !authoritativeOperation ||
-        authoritativeOperation.workflowStep === expectedWorkflowStep
+        readOperationVisibilityState(observation) !==
+        OPERATION_VISIBILITY_STATE.PRESENT
       ) {
+        return false;
+      }
+      const authoritativeOperation = observation.operation;
+      if (authoritativeOperation.workflowStep === expectedWorkflowStep) {
         return false;
       }
       if (

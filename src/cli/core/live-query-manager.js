@@ -1,40 +1,45 @@
 const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_NUM_ONE_HUNDRED0 = 1000;
 const LOCAL_STR_LIVEQUERY_SUBSCRIBED = 'livequery:subscribed';
-const LOCAL_STR_LIVE_QUERY_INITIAL = 'live_query_initial';
-const LOCAL_STR_LIVEQUERY_INITIALIZED = 'livequery:initialized';
+const LOCAL_STR_LIVE_QUERY_SUBSCRIBED = 'live_query_subscribed';
 const LOCAL_STR_LIVE_QUERY_EVENT = 'live_query_event';
 const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
-const LOCAL_STR_LIVE_QUERY_EXPIRED = 'live_query_expired';
-const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
-const LOCAL_STR_LIVE_QUERY_RENEWED = 'live_query_renewed';
-const LOCAL_STR_LIVEQUERY_RENEWED = 'livequery:renewed';
+const LOCAL_STR_LIVEQUERY_RESULT = 'livequery:result';
+const LOCAL_STR_LIVEQUERY_ERROR = 'livequery:error';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_ERROR_EVENT_TYPE = 'error';
+// The event types whose `rows` is a whole result that replaces the shown
+// one: the first result (snapshot) and the re-executed one (reset).
+const LOCAL_RESULT_EVENT_TYPES = new Set(['snapshot', 'reset']);
+// The row fields of a change event: the row it is about, and the row before
+// an update.
+const LOCAL_CHANGE_ROW_FIELDS = Object.freeze(['data', 'oldData']);
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
 const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
 const LOCAL_STR_CANCELLED = 'cancelled';
 const LOCAL_STR_LIVEQUERY_CANCELLED = 'livequery:cancelled';
-const LOCAL_STR_EXPIRED = 'expired';
-const LOCAL_STR_RENEWING = 'renewing';
-const LOCAL_STR_LIVEQUERY_RENEWING = 'livequery:renewing';
 
 /**
  * LiveQueryManager - Manages live query subscriptions
  *
  * Handles LIVE SELECT subscriptions that stream matching changes in real-time.
- * Supports subscribe, pause, resume, cancel, and renew operations.
+ * Supports subscribe, pause, resume and cancel operations.
  *
  * Requirements: 32.1, 32.7, 32.9, 32.10, 32.11
  */
 
 /**
- * @typedef {'pending'|'active'|'paused'|'expired'|'cancelled'|'renewing'} SubscriptionStatus
+ * @typedef {'pending'|'active'|'paused'|'cancelled'|'failed'}
+ *   SubscriptionStatus - pending until the server's live_query_subscribed;
+ *   failed once an error event names what failed.
  */
 
 /**
  * @typedef {Object} LiveQueryEvent
- * @property {'INSERT'|'UPDATE'|'DELETE'} eventType - Type of change
- * @property {Object} data - Row data
+ * @property {string} eventType - Type of change (insert/update/delete)
+ * @property {Object} data - The row the change is about
+ * @property {Object} [oldData] - The row before an update (update only)
  * @property {number} timestamp - Event timestamp
  */
 
@@ -49,7 +54,6 @@ const LOCAL_STR_LIVEQUERY_RENEWING = 'livequery:renewing';
  * @property {number} createdAt - Creation timestamp
  * @property {number|null} lastEventAt - Last event timestamp
  * @property {boolean} paused - Whether subscription is paused
- * @property {Object[]} [initialResults] - Initial query results
  */
 
 export class LiveQueryManager {
@@ -106,7 +110,6 @@ export class LiveQueryManager {
       createdAt: Date.now(),
       lastEventAt: null,
       paused: false,
-      initialResults: null,
     };
 
     this.subscriptions.set(subscriptionId, subscription);
@@ -122,77 +125,68 @@ export class LiveQueryManager {
   }
 
   /**
-   * Handle incoming live query event from server
+   * Handle one live-query message from the server: the subscribe
+   * acknowledgement or an event.
    * @param {Object} message - Server message
    */
   handleLiveQueryEvent(message) {
-    const {subscriptionId, eventType, data, partitions, type} = message;
-    const subscription = this.subscriptions.get(subscriptionId);
-
+    const subscription = this.subscriptions.get(message.subscriptionId);
     if (!subscription) {
       return;
     }
 
-    const nextSubscriptionStatus =
-      type === 'live_query_initial' || type === 'live_query_renewed' ?
-        'active' :
-        type === 'live_query_expired' ?
-          'expired' :
-          subscription.status;
-    subscription.status = nextSubscriptionStatus;
-
-    switch (type) {
-    case LOCAL_STR_LIVE_QUERY_INITIAL:
-      // Initial results received
-      subscription.partitions = partitions || [];
-      subscription.initialResults = data;
-      this.emitEvent(LOCAL_STR_LIVEQUERY_INITIALIZED, {
-        subscriptionId,
-        data,
-        partitions,
-      });
+    switch (message.type) {
+    case LOCAL_STR_LIVE_QUERY_SUBSCRIBED:
+      subscription.status = LOCAL_STR_ACTIVE;
+      subscription.partitions = message.partitions;
       break;
     case LOCAL_STR_LIVE_QUERY_EVENT:
-      // CDC event received
-      // Requirements: 32.7 - Don't add events when paused
-      if (!subscription.paused) {
-        const event = {
-          eventType,
-          data,
-          timestamp: Date.now(),
-        };
-
-        subscription.events.push(event);
-        subscription.lastEventAt = Date.now();
-
-        // Trim events if exceeding max
-        if (subscription.events.length > this.maxEventsPerSubscription) {
-          subscription.events.shift();
-        }
-
-        // Update event rate
-        // Requirements: 32.10
-        this.updateEventRate(subscription);
-
-        this.emitEvent(LOCAL_STR_LIVEQUERY_EVENT, {
-          subscriptionId,
-          eventType,
-          data,
-          timestamp: event.timestamp,
-        });
-      }
-      break;
-    case LOCAL_STR_LIVE_QUERY_EXPIRED:
-      // Subscription expired
-      this.emitEvent(LOCAL_STR_LIVEQUERY_EXPIRED, {subscriptionId});
-      break;
-    case LOCAL_STR_LIVE_QUERY_RENEWED:
-      // Subscription renewed
-      this.emitEvent(LOCAL_STR_LIVEQUERY_RENEWED, {subscriptionId});
+      this.applyLiveQueryEvent(subscription, message);
       break;
     default:
       break;
     }
+  }
+
+  /**
+   * Apply one live_query_event. An error ends the subscription and names
+   * what failed; a snapshot or reset replaces the result (livequery:result,
+   * the one rule every view consumes); any other event is a change
+   * (livequery:event). A paused subscription takes neither results nor
+   * changes (Requirements: 32.7).
+   * @param {LiveQuerySubscription} subscription
+   * @param {Object} message - The live_query_event message
+   */
+  applyLiveQueryEvent(subscription, message) {
+    const subscriptionId = subscription.id;
+    const {eventType} = message;
+    if (eventType === LOCAL_STR_ERROR_EVENT_TYPE) {
+      subscription.status = LOCAL_STR_FAILED;
+      this.emitEvent(LOCAL_STR_LIVEQUERY_ERROR,
+        {subscriptionId, error: message.error, errorCode: message.errorCode});
+      return;
+    }
+    if (subscription.paused) {
+      return;
+    }
+    if (LOCAL_RESULT_EVENT_TYPES.has(eventType)) {
+      this.emitEvent(LOCAL_STR_LIVEQUERY_RESULT,
+        {subscriptionId, eventType, rows: message.rows});
+      return;
+    }
+
+    const event = {eventType, timestamp: Date.now()};
+    for (const field of LOCAL_CHANGE_ROW_FIELDS) {
+      event[field] = message[field];
+    }
+    subscription.events.push(event);
+    subscription.lastEventAt = event.timestamp;
+    if (subscription.events.length > this.maxEventsPerSubscription) {
+      subscription.events.shift();
+    }
+    // Requirements: 32.10
+    this.updateEventRate(subscription);
+    this.emitEvent(LOCAL_STR_LIVEQUERY_EVENT, {subscriptionId, ...event});
   }
 
   /**
@@ -273,33 +267,6 @@ export class LiveQueryManager {
     subscription.status = LOCAL_STR_CANCELLED;
     this.subscriptions.delete(subscriptionId);
     this.emitEvent(LOCAL_STR_LIVEQUERY_CANCELLED, {subscriptionId});
-    return true;
-  }
-
-  /**
-   * Renew an expired live query subscription
-   * @param {string} subscriptionId - Subscription ID
-   * @return {boolean} True if renewal initiated
-   */
-  renew(subscriptionId) {
-    const subscription = this.subscriptions.get(subscriptionId);
-
-    if (!subscription) {
-      return false;
-    }
-
-    if (subscription.status !== LOCAL_STR_EXPIRED) {
-      return false;
-    }
-
-    subscription.status = LOCAL_STR_RENEWING;
-
-    // Re-subscribe with same SQL
-    if (this.connectionManager) {
-      this.connectionManager.subscribeLiveQuery(subscriptionId, subscription.sql);
-    }
-
-    this.emitEvent(LOCAL_STR_LIVEQUERY_RENEWING, {subscriptionId});
     return true;
   }
 

@@ -6,6 +6,7 @@ import {
 import {ERRORS} from '../constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../partition/partition-write-kernel.js';
+import {registerSourceRelister} from './cdc-integration-service-source-relist.js';
 
 const {
   CDCEventHandler,
@@ -46,6 +47,7 @@ class CDCIntegrationServiceLifecycleMethods {
    */
   setCacheMutationTarget(cache) {
     this.cacheMutationTarget = cache;
+    if (this.initialized) registerSourceRelister(this);
   }
 
   /**
@@ -128,6 +130,9 @@ class CDCIntegrationServiceLifecycleMethods {
     }
     this.initialized = true;
     this.ensureEventHandler();
+    // This service lists a source table again when its cache owes a list
+    // (CDC Stage 3 position gap).
+    registerSourceRelister(this);
     this.logger.info(CDC_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       hasSqlQueryEngine: !!this.sqlQueryEngine,

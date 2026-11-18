@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignAdminServiceDiscoveryTableReadinessMethods(
@@ -8,7 +9,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
     ADMIN_CACHE_DUMP,
     ADMIN_SERVICE_DISCOVERY_LITERAL,
     CANONICAL_LEADER_ROUTING_GAP_STATE,
-    COLUMN,
     DISCOVERY_ROUTING_SNAPSHOT_FIELD,
     LEADER_RAFT_ROLE,
     SERVICE_TYPE_PARTITION,
@@ -97,7 +97,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
         }
         const rowTableName = firstStringField(
           tableRow,
-          COLUMN.TABLE_NAME,
           'table_name',
           'tableName',
           'name',
@@ -119,7 +118,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
     isDiscoveryMatchingTableRow(tableRow, tableName, tableId) {
       const rowTableName = firstStringField(
         tableRow,
-        COLUMN.TABLE_NAME,
         'table_name',
         'tableName',
         'name',
@@ -152,7 +150,6 @@ function assignAdminServiceDiscoveryTableReadinessMethods(
         ADMIN_CACHE_DUMP.EMPTY) {
         const rowTableName = firstStringField(
           partitionRow,
-          COLUMN.TABLE_NAME,
           'table_name',
           'tableName',
           'name',

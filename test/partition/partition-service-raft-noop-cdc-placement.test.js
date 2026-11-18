@@ -179,12 +179,17 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     await partition.initialize();
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
     await resumeFixtureParticipantAdmission(partition);
-    await partition.subscribeToCDCWithHandshake((event) => {
-      cache.applySystemTableChange(
-        event.tableName,
-        event.operation,
-        event.data,
-      );
+    // The durable subscriber contract hands the subscriber a vector.
+    let appliedToCache = 0;
+    await partition.subscribeToCDCWithHandshake((events) => {
+      for (const event of events) {
+        appliedToCache += 1;
+        cache.applySystemTableChange(
+          event.tableName,
+          event.operation,
+          event.data,
+        );
+      }
     });
     partition.controllablePort.setProposeHandler(async (entry) => {
       partition.controllablePort.commit(entry);
@@ -204,6 +209,7 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
 
     t.equal(result.success, true);
     t.equal(result.changes, 0, 'the local state-machine update is a no-op');
+    t.equal(appliedToCache, 0, 'a no-op apply delivers no CDC event to the subscriber');
     t.equal(
       cache.get(TABLES.SERVICES, targetReplicaId)?.status,
       'active',

@@ -10,7 +10,9 @@
  * Inputs: the witness read (READ_REPLICA_MEMBERSHIP, the port's
  * committed-membership read with WITNESS purpose) of t - or, when t is gone
  * (failure detector FAILED, or row REMOVED; D2), of the surviving members,
- * source first; the leader each answer names; the partition's cached rows as
+ * source first; for a plain REMOVE (no target; the removal leadership gate)
+ * the group's members, the removed replica first; the leader each answer
+ * names; the partition's cached rows as
  * a route to that leader's node only (the answer's own leader role is the
  * check).
  * Canonical output: the leader's own answer (its replica leads in its own
@@ -50,6 +52,7 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   readReplaceWitnessMembership,
+  removalSubjectNodeIdOf,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
 import {
@@ -113,12 +116,24 @@ function survivingMembersOf(owner, operation) {
       members.push({replicaId, nodeId});
     }
   };
-  add(sourceReplicaId, operation?.sourceNodeId);
+  // A REPLACE whose target is gone asks its source first (D2); a plain
+  // REMOVE asks the replicas that stay first and its own replica last (the
+  // one being drained, possibly dead).
+  const subjectFirst = targetReplicaId !== null;
+  if (subjectFirst) {
+    add(sourceReplicaId, removalSubjectNodeIdOf(operation));
+  } else {
+    seen.add(sourceReplicaId);
+  }
   const rows = typeof owner.getCachedCriticalReplicaRows ===
     OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
     owner.getCachedCriticalReplicaRows(operation?.partitionId) : [];
   for (const row of Array.isArray(rows) ? rows : []) {
     add(row?.replica_id || row?.service_id, row?.node_id);
+  }
+  if (!subjectFirst) {
+    seen.delete(sourceReplicaId);
+    add(sourceReplicaId, removalSubjectNodeIdOf(operation));
   }
   return members;
 }
@@ -157,17 +172,24 @@ function isLeaderAnswer(observation) {
     observation.leaderReplicaId === observation.replicaId;
 }
 
-// The node a named replica is routed to: the REPLACE's own source and target
-// nodes, else the partition's cached replica rows (a route, never an
-// answer).
+/**
+ * The node a named replica is routed to: the removal's own subject and
+ * target nodes, else the partition's cached replica rows (a route, never an
+ * answer).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} replicaId
+ * @return {Object|null} {replicaId, nodeId} or null.
+ */
 function memberRouteOf(owner, operation, replicaId) {
   const {sourceReplicaId, targetReplicaId} =
     replaceReplicaIdsOf(owner, operation);
-  if (replicaId === targetReplicaId) {
+  if (targetReplicaId !== null && replicaId === targetReplicaId) {
     return {replicaId, nodeId: operation.targetNodeId};
   }
   if (replicaId === sourceReplicaId) {
-    return {replicaId, nodeId: operation.sourceNodeId};
+    const nodeId = removalSubjectNodeIdOf(operation);
+    return nodeId === null ? null : {replicaId, nodeId};
   }
   const rows = typeof owner.getCachedCriticalReplicaRows ===
     OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
@@ -178,12 +200,14 @@ function memberRouteOf(owner, operation, replicaId) {
     {replicaId, nodeId: row.node_id} : null;
 }
 
-// The first answer of the addressees: t, or - t gone - the surviving
-// members, source first.
+// The first answer of the addressees: t, or - t gone, or a plain REMOVE,
+// which has no target - the group's members (survivingMembersOf's order).
 async function readFirstAnswer(owner, operation) {
-  const first = await readReplaceWitnessMembership(owner, operation);
-  if (isAnswered(first) || !isReplaceTargetGone(owner, operation)) {
-    return first;
+  if (replaceReplicaIdsOf(owner, operation).targetReplicaId !== null) {
+    const first = await readReplaceWitnessMembership(owner, operation);
+    if (isAnswered(first) || !isReplaceTargetGone(owner, operation)) {
+      return first;
+    }
   }
   for (const member of survivingMembersOf(owner, operation)) {
     const observation =
@@ -217,16 +241,23 @@ function voterSetsOf(leaderAnswer) {
   return outgoing.length > 0 ? [incoming, outgoing] : [incoming];
 }
 
-async function voterConfirms(owner, operation, leaderAnswer, replicaId) {
+// One voter's own answer: the leader's for itself, the witness read of any
+// other voter, or null when the voter has no identity or no route here.
+async function readVoterAnswer(owner, operation, leaderAnswer, replicaId) {
   if (typeof replicaId !== 'string' || replicaId.length === 0) {
-    return false;
+    return null;
   }
   if (replicaId === leaderAnswer.replicaId) {
-    return true;
+    return leaderAnswer;
   }
   const route = memberRouteOf(owner, operation, replicaId);
-  return route !== null && confirmsLeaderAnswer(
-    await readReplaceWitnessMembership(owner, operation, route), leaderAnswer);
+  return route === null ? null :
+    readReplaceWitnessMembership(owner, operation, route);
+}
+
+function voterAnswerConfirms(answer, leaderAnswer) {
+  return answer === leaderAnswer ||
+    (answer !== null && confirmsLeaderAnswer(answer, leaderAnswer));
 }
 
 function isMajorityOf(voterSet, confirmed) {
@@ -235,21 +266,34 @@ function isMajorityOf(voterSet, confirmed) {
       voterSet.length / 2;
 }
 
-// The leader's answer, or the typed WAIT when it is not current.
-async function currentLeaderAnswer(owner, operation, leaderAnswer) {
+// The leader's answer, or the typed WAIT when it is not current, with the
+// voters' own answers that confirmed it (the leader's included).
+async function corroborateLeaderAnswer(owner, operation, leaderAnswer) {
+  const confirmingVoterAnswers = new Map();
   if (Number(leaderAnswer.appliedIndex) !== Number(leaderAnswer.commitIndex)) {
-    return authorityUnavailable(
-      REPLACE_COMPLETION_AUTHORITY_WAIT.APPLIED_BEHIND_COMMIT);
+    return {
+      authority: authorityUnavailable(
+        REPLACE_COMPLETION_AUTHORITY_WAIT.APPLIED_BEHIND_COMMIT),
+      confirmingVoterAnswers,
+    };
   }
   const voterSets = voterSetsOf(leaderAnswer);
   const confirmed = new Map();
   for (const replicaId of new Set(voterSets.flat())) {
-    confirmed.set(replicaId,
-      await voterConfirms(owner, operation, leaderAnswer, replicaId));
+    const answer =
+      await readVoterAnswer(owner, operation, leaderAnswer, replicaId);
+    const confirms = voterAnswerConfirms(answer, leaderAnswer);
+    confirmed.set(replicaId, confirms);
+    if (confirms) {
+      confirmingVoterAnswers.set(replicaId, answer);
+    }
   }
-  return voterSets.every((voterSet) => isMajorityOf(voterSet, confirmed)) ?
-    leaderAnswer :
-    authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NOT_CORROBORATED);
+  return {
+    authority: voterSets.every((voterSet) => isMajorityOf(voterSet, confirmed)) ?
+      leaderAnswer :
+      authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NOT_CORROBORATED),
+    confirmingVoterAnswers,
+  };
 }
 
 // The leader's own answer, reached from the first answering addressee with
@@ -289,9 +333,28 @@ async function readLeaderAnswer(owner, operation) {
  *   UNAVAILABLE with a REPLACE_COMPLETION_AUTHORITY_WAIT reason.
  */
 async function readReplaceCompletionAuthority(owner, operation) {
+  return (await readReplaceCorroboratedConfiguration(owner, operation))
+    .authority;
+}
+
+/**
+ * The completion authority together with the evidence that made it current:
+ * each voter's own answer that confirmed the leader's term and identity. One
+ * read, one algorithm; readReplaceCompletionAuthority is its verdict alone.
+ * A consumer that needs to know WHICH committed voters answered at the
+ * leader's term (the remove-safety floor) reads this, never rows.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<{authority: Object, confirmingVoterAnswers: Map}>} The
+ *   authority (as readReplaceCompletionAuthority) and, by replica identity,
+ *   the confirming voters' frozen observations (empty when the leader's
+ *   answer could not be read or is applied behind its commit index).
+ */
+async function readReplaceCorroboratedConfiguration(owner, operation) {
   const answer = await readLeaderAnswer(owner, operation);
   return isAnswered(answer) ?
-    currentLeaderAnswer(owner, operation, answer) : answer;
+    corroborateLeaderAnswer(owner, operation, answer) :
+    {authority: answer, confirmingVoterAnswers: new Map()};
 }
 
 /**
@@ -324,7 +387,9 @@ function replaceRetirementRouteOf(owner, operation, observation) {
 
 export {
   isReplaceTargetGone,
+  memberRouteOf,
   observedReplaceTargetStatus,
   readReplaceCompletionAuthority,
+  readReplaceCorroboratedConfiguration,
   replaceRetirementRouteOf,
 };

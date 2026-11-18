@@ -4,7 +4,6 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {isFailedCreateRemoveToken} from
   '../rebalancer/failed-create-cleanup-token.js';
@@ -12,75 +11,50 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
 import {
-  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {REPLICA_CONSENSUS_EXIT_REASON} from
+  './replica-removal-consensus-exit.js';
 import {
-  REPLICA_CONSENSUS_EXIT_REASON,
-  awaitReplicaConsensusExit,
-} from './replica-removal-consensus-exit.js';
+  awaitRemovalConsensusExit,
+  leaveConsensus,
+  requireRemovalParticipantCustodySettled,
+  requireRemovalTeardownAuthority,
+} from './replica-removal-participation.js';
+import {
+  beginRemovalExecution,
+  endRemovalExecution,
+  runRemovalCancellationCheckpoint,
+} from './replica-removal-cancellation.js';
+import {REPLICA_REMOVAL_CANCEL_ANSWER} from
+  './replica-removal-cancel-contract.js';
 import {
   REPLICA_LEADER_CLEAR_DEFERRED,
   REPLICA_REMOVAL_COMPLETION_DEFERRED,
   buildFailedRemovalOutcome,
   removalRowDeleteDeferred,
+  replicaAbsentNotByOperationError,
   retryableRemovalDebtError,
 } from './replica-removal-debt-errors.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
+import {REMOVAL_AUTHORITY_KIND} from './replica-state-machine-recovery.js';
+import {REMOVAL_SERVING_NOT_HOSTED, REMOVAL_SERVING_STATE} from
+  '../partition/partition-service-removal-serving-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
   DURABLE_REMOVE_CLEANUP_COMPLETE: 'durable_remove_cleanup_complete',
 });
-const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
-  wait: 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
-  awaited: 'retiring replica\'s applied configuration no longer names it ' +
-    '(removal committed) or its group unavailable',
+// Why a removal deferred before its durable retiring row (logged with the
+// deferral): its REMOVING write did not become durable, or its replica's
+// connection was released by something other than this removal.
+const REMOVAL_DEFERRAL_CAUSE = Object.freeze({
+  RETIRING_ROW_NOT_DURABLE: 'retiring_row_not_durable',
+  SERVING_CLOSED_OUTSIDE_REMOVAL: 'serving_closed_outside_removal',
 });
-
-/**
- * Log one consensus-exit outcome: the backstop elapsing is a spent wait
- * and an alarm, never a normal exit (owner decision 2026-10-04): one
- * wait_bound_spent ERROR with the wait's last witness read and what the
- * handler last observed of the retiring replica. The removal proceeds as
- * before so a missed event never wedges the node. Every other exit is the
- * ordinary info line.
- * @param {Object} handler - The ReplicaHandler.
- * @param {Object} exit - Frozen {reason} from awaitReplicaConsensusExit.
- * @param {Object} context - {operationId, replicaId, partitionId,
- *   startedAtMs}.
- * @return {void}
- */
-function logReplicaRemovalConsensusExit(handler, exit, context) {
-  const {operationId, replicaId, partitionId, startedAtMs} = context;
-  if (exit.reason !== REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP) {
-    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
-      operationId,
-      replicaId,
-      partitionId,
-      nodeId: handler.nodeId,
-      reason: exit.reason,
-    });
-    return;
-  }
-  reportWaitBoundSpent(handler.logger, {
-    ...REMOVAL_CONSENSUS_EXIT_WAIT,
-    boundMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
-    elapsedMs: Date.now() - startedAtMs,
-    lastObserved: () => ({
-      exitReason: exit.reason,
-      // The wait's last witness read: why no exit event came.
-      lastObservation: exit.lastObservation ?? null,
-      trackedRaftRole: handler.getTrackedReplicaRole?.(replicaId) ?? null,
-      lifecycleState: handler.getTrackedReplicaLifecycleState(replicaId),
-    }),
-    scope: {nodeId: handler.nodeId, operationId, partitionId, replicaId},
-  });
-}
-
 async function bindAuthoritativeRemovingGenerationOrThrow(
   handler,
   replicaId,
@@ -223,36 +197,6 @@ async function runRemovalEffectsOrThrow(
   return true;
 }
 
-/**
- * When the retiring replica leaves consensus. A replica of a group retired
- * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
- * leaves at once: its whole group ends at the durable workflow transition,
- * nobody proposes a conf change for it, and nothing commits in it again.
- * Every other removal keeps participating until its own removal applies
- * (ruling F2).
- * @param {Object} handler
- * @param {Object} request
- * @param {Object|null} service
- * @return {Promise<Object>} Frozen {reason}.
- */
-function leaveConsensus(handler, request, service) {
-  const {operationId, partitionId, replicaId} = request;
-  if (request.groupRetirement?.retire === true) {
-    const exit = Object.freeze({
-      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
-    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
-      operationId, replicaId, partitionId, nodeId: handler.nodeId,
-      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
-    });
-    return Promise.resolve(exit);
-  }
-  return handler.awaitReplicaRemovalConsensusExit(service, {
-    operationId,
-    replicaId,
-    partitionId,
-  });
-}
-
 async function performReplicaRemoval(handler, request, service, lifecycle,
   execution) {
   const {operationId, partitionId, replicaId} = request;
@@ -262,7 +206,28 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   const reason = request.groupRetirement?.retire === true ?
     GROUP_RETIREMENT_REASON : request.reason;
   handler.throwIfShuttingDown();
-  await handler.waitForReplicaServingDrain(service);
+  const serving = await handler.waitForReplicaServingDrain(service);
+  // A released connection proves nothing about participant custody (its
+  // durable PREPARED reservation is read from the file at the irreversible
+  // boundary below). Released before this removal's retiring row is durable
+  // (node shutdown, a failed initialization), the removal does not cross
+  // its point of no return: shutdown ends it, otherwise it defers before any
+  // durable row, the replica keeping its status.
+  if (serving.state === REMOVAL_SERVING_STATE.CLOSED &&
+      execution.retiringRowDurable !== true) {
+    handler.throwIfShuttingDown();
+    handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
+      partitionId, service, removalLifecycleSnapshot: lifecycle,
+      cause: REMOVAL_DEFERRAL_CAUSE.SERVING_CLOSED_OUTSIDE_REMOVAL});
+    return false;
+  }
+  // A cancellation asked before the retiring row is settled here.
+  const cancelled = await runRemovalCancellationCheckpoint(handler,
+    execution.removal, {retiringRowDurable: execution.retiringRowDurable});
+  if (cancelled?.answer === REPLICA_REMOVAL_CANCEL_ANSWER.CANCELLED ||
+      cancelled?.answer === REPLICA_REMOVAL_CANCEL_ANSWER.NOT_IN_PROGRESS) {
+    return false;
+  }
   const retiringRow = await handler.publishReplicaRetiringRow({
     operationId,
     replicaId,
@@ -274,12 +239,22 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
-      partitionId, service, removalLifecycleSnapshot: lifecycle});
+      partitionId, service, removalLifecycleSnapshot: lifecycle,
+      cause: REMOVAL_DEFERRAL_CAUSE.RETIRING_ROW_NOT_DURABLE});
     return false;
   }
   execution.retiringRowDurable = true;
-  await leaveConsensus(handler, request, service);
+  const exit = await leaveConsensus(handler, request, service,
+    execution.removal);
   handler.throwIfShuttingDown();
+  if (exit.reason === REPLICA_CONSENSUS_EXIT_REASON.CANCELLED) {
+    return false;
+  }
+  // Nothing local retires without exact evidence (2026-11-11): its applied
+  // removal, its group's retirement, or no consensus record to retire; and
+  // nothing irreversible while participant custody is held or unknown.
+  await requireRemovalTeardownAuthority(handler, request, exit);
+  requireRemovalParticipantCustodySettled(handler, request, service);
   const authority = await settleCanonicalLeaderClearOrThrow(
     handler,
     replicaId,
@@ -336,7 +311,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         );
         throw error;
       }
-      return execution.serviceRowRemoved && guard.requireAbsent();
+      return execution.serviceRowRemoved && await guard.requireComplete();
     },
     () => {
       if (!execution.cleanupError) handler.localServices.delete(replicaId);
@@ -345,6 +320,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         partitionId,
         status: ReplicaStatus.REMOVED,
         service: execution.cleanupError ? service : null,
+        removedByOperationId: execution.cleanupError ? null : operationId,
       });
     },
     {
@@ -477,7 +453,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      */
     fenceReplicaServingAdmissionForRemoval(replicaId, replica = null) {
       const service = replica?.service || this.getTrackedService(replicaId);
-      service?.fenceServingAdmissionForRemoval?.();
+      if (service) service.fenceServingAdmissionForRemoval();
       return service || null;
     }
 
@@ -485,11 +461,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * Let transactions admitted before the removal fence finish under their
      * existing owner before deleting the routable service row or runtime.
      * @param {Object|null} service
-     * @return {Promise<void>}
+     * @return {Promise<Object>} A named REMOVAL_SERVING_STATE answer.
      * @private
      */
     async waitForReplicaServingDrain(service) {
-      await service?.waitForRemovalServingDrain?.();
+      return service ? service.waitForRemovalServingDrain() :
+        REMOVAL_SERVING_NOT_HOSTED;
     }
 
     /**
@@ -586,13 +563,17 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * owner re-dispatches it; the in-progress record is cleared and the
      * local status is the durable one again. Nothing waits and nothing
      * retires: the port stays live and the replica a full participant (the
-     * serving fence raised at acceptance stays, being irreversible).
+     * serving fence raised at acceptance stays, being irreversible). A
+     * removal whose replica's connection was released by something other
+     * than this removal (it holds no durable retiring row yet) defers the
+     * same way: nothing proves no PREPARED participant is held there.
      * @param {Object} context - {operationId, replicaId, partitionId,
-     *   service, removalLifecycleSnapshot}.
+     *   service, removalLifecycleSnapshot, cause}: cause is a
+     *   REMOVAL_DEFERRAL_CAUSE.
      * @private
      */
     deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
-      partitionId, service, removalLifecycleSnapshot}) {
+      partitionId, service, removalLifecycleSnapshot, cause}) {
       if (operationId) {
         this.inProgressOperations.delete(operationId);
       }
@@ -608,34 +589,22 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         replicaId,
         partitionId,
         nodeId: this.nodeId,
+        cause,
       });
     }
     /**
      * Keep the retiring replica participating until its own applied
-     * configuration no longer names it, the group is unavailable to it, the
-     * bounded backstop elapses, or the node shuts down
-     * (replica-removal-consensus-exit.js).
+     * configuration no longer names it, its removal is cancelled, or the
+     * node shuts down; a spent round is reported once and waited again
+     * (replica-removal-participation.js).
      * @param {Object|null} service - The tracked partition service.
-     * @param {Object} context - {operationId, replicaId, partitionId}.
+     * @param {Object} context - {operationId, replicaId, partitionId,
+     *   removal}.
      * @return {Promise<Object>} Frozen {reason}.
      * @private
      */
-    async awaitReplicaRemovalConsensusExit(service, {operationId, replicaId,
-      partitionId}) {
-      this.removalConsensusExitRelease ??= new AbortController();
-      const startedAtMs = Date.now();
-      const exit = await awaitReplicaConsensusExit(service, {
-        replicaId,
-        backstopMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
-        signal: this.removalConsensusExitRelease.signal,
-      });
-      logReplicaRemovalConsensusExit(this, exit, {
-        operationId,
-        replicaId,
-        partitionId,
-        startedAtMs,
-      });
-      return exit;
+    awaitReplicaRemovalConsensusExit(service, context) {
+      return awaitRemovalConsensusExit(this, service, context);
     }
     /**
      * Read one tracked replica lifecycle state from the shared state machine.
@@ -663,12 +632,15 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * only that exact cleanup token may remove artifacts and release the row.
      * Genuinely rowless startup candidates are owned separately by the
      * cleanup-tombstone sweep and never enter through a synthetic generation.
+     * R14: the REMOVE of the operation that completed this removal, its row
+     * ABSENT, is satisfied; generic absence alone still fails closed.
      * @param {string} replicaId
      * @param {string} partitionId
+     * @param {string|null} operationId - The duplicate REMOVE's operation.
      * @return {Promise<boolean>} True when stale cleanup work ran.
      * @private
      */
-    async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
+    async reconcileRemovedReplicaCleanup(replicaId, partitionId, operationId) {
       const trackedService = this.getTrackedService(replicaId);
       const lifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
@@ -678,7 +650,18 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           partitionId,
           nodeId: this.nodeId,
         });
-      if (authority?.kind !== ReplicaStatus.REMOVING ||
+      const local = this.getLocalReplica(replicaId);
+      if (authority?.kind === REMOVAL_AUTHORITY_KIND.ABSENT &&
+          local?.status === ReplicaStatus.REMOVED) {
+        if (operationId && local.removedByOperationId === operationId) {
+          return false;
+        }
+        // Removed here and absent durably, but not by this operation:
+        // nothing will change the answer, so it is final and typed (never a
+        // deferral); the coordinator's durable effect check decides it.
+        throw replicaAbsentNotByOperationError(replicaId, operationId);
+      }
+      if (authority?.kind !== REMOVAL_AUTHORITY_KIND.REMOVING ||
           trackedStatus && ![
             ReplicaStatus.REMOVING,
             ReplicaStatus.REMOVED,
@@ -688,6 +671,10 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           `Replica removal lacks exact durable authority for ${replicaId}`,
         );
       }
+      // A REMOVING generation's cleanup deletes the replica's storage: not
+      // while participant custody is held or unknown.
+      requireRemovalParticipantCustodySettled(this, {partitionId, replicaId},
+        trackedService);
       const removingAuthority = await settleCanonicalLeaderClearOrThrow(
         this,
         replicaId,
@@ -717,12 +704,9 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         },
         () => {
           this.localServices.delete(replicaId);
-          this.setLocalReplica(replicaId, {
-            replicaId,
-            partitionId,
-            status: ReplicaStatus.REMOVED,
-            service: null,
-          });
+          this.setLocalReplica(replicaId, {replicaId, partitionId,
+            status: ReplicaStatus.REMOVED, service: null,
+            removedByOperationId: null});
         },
         {
           partitionId,
@@ -752,6 +736,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         retiringRowDurable:
           removalLifecycleSnapshot.retiringRowDurable === true,
         serviceRowRemoved: false,
+        // Its release and a cancellation asked of it while it runs.
+        removal: beginRemovalExecution(this, request),
       };
       try {
         const completed = await performReplicaRemoval(
@@ -776,6 +762,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           error,
         );
         throw error;
+      } finally {
+        endRemovalExecution(this, execution.removal);
       }
     }
   }

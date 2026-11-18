@@ -23,6 +23,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {stubAvailableNodes} from './available-node-plan-stub.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -395,7 +396,7 @@ test(
       },
     ];
     rebalancer.getCurrentReplicas = () => currentReplicas;
-    rebalancer.getAvailableNodes = () => [];
+    stubAvailableNodes(rebalancer, () => []);
 
     // Production Frankfurt shape after the first successful surplus drain:
     // the operation-creation owner still sees a required ledger cure, while

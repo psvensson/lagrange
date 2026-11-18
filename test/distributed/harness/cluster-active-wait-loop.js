@@ -1,4 +1,6 @@
 import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
+import {isOwnerRecoveryWaitProgress} from
+  './membership-publication-owner-recovery-wait-progress.js';
 import {
   LIFECYCLE_REASON,
 } from '../../../src/bootstrap/lifecycle-controller-constants.js';
@@ -222,8 +224,6 @@ const STARTUP_SNAPSHOT_REPAIR_HANDOFF_REASON_OWNER_RECONCILE =
   'owner_reconcile_pending';
 const STARTUP_SNAPSHOT_REPAIR_HANDOFF_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
-const STARTUP_SNAPSHOT_REPAIR_HANDOFF_OUTCOME_WRITE_DEFERRED =
-  'write_deferred';
 const STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS = ZERO;
 const ACTIVE_GATE_SNAPSHOT_REPAIR_STARTUP_READINESS_MODES = Object.freeze([
   CLUSTER_READINESS_MODE_STARTUP,
@@ -1060,30 +1060,22 @@ function hasStartupSnapshotRepairOwnerHandoff(progressSnapshot) {
   );
 }
 
+// The owner's named recovery wait (membership-publication-owner-recovery-
+// wait-progress.js): read from its state, never from `enqueued`.
 function hasStartupSnapshotRepairHandoffOutcome(progressSnapshot) {
-  return (
-    progressSnapshot?.membershipPublicationHandoffOutcomeState ===
-      STARTUP_SNAPSHOT_REPAIR_HANDOFF_OUTCOME_WRITE_DEFERRED &&
-    progressSnapshot?.membershipPublicationHandoffOutcomeReasonCode ===
-      STARTUP_SNAPSHOT_REPAIR_HANDOFF_REASON_OWNER_RECONCILE &&
-    progressSnapshot?.membershipPublicationHandoffOutcomeEnqueued === true &&
-    normalizeStartupSnapshotRepairDurationMs(
-      progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
-    ) > STARTUP_SNAPSHOT_REPAIR_NO_EXTENSION_MS
-  );
+  return isOwnerRecoveryWaitProgress(progressSnapshot);
 }
 
+// The owner queues nothing for itself while it waits, so a bounded owner
+// queue is one whose pending writes are not growing.
 function hasStartupSnapshotRepairBoundedOwnerQueue(progressSnapshot) {
   const queueDepth = progressSnapshot?.selectedControlPlaneOwnerQueueDepth;
-  const pendingWrites = Number.isFinite(queueDepth?.pendingWrites) ?
-    Math.max(ZERO, Math.floor(queueDepth.pendingWrites)) :
-    ZERO;
   const pendingWriteGrowthCount = Number.isFinite(
     queueDepth?.pendingWriteGrowthCount,
   ) ?
     Math.max(ZERO, Math.floor(queueDepth.pendingWriteGrowthCount)) :
     ZERO;
-  return pendingWrites > ZERO && pendingWriteGrowthCount === ZERO;
+  return pendingWriteGrowthCount === ZERO;
 }
 
 function selectActiveGateSnapshotRepairContinuation({

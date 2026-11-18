@@ -9,10 +9,8 @@ import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-invent
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
 import {createMockCache, createNodeEndpoint, initializeTestEnvironment} from './unified-rebalancer-test-support.js';
 
-const {REPLICA_OPERATION_VISIBILITY_READ_MODE, REBALANCER_SKIP_REASON} =
-  REBALANCE_COORDINATOR_SHARED;
+const {REBALANCER_SKIP_REASON} = REBALANCE_COORDINATOR_SHARED;
 const ENTITY = {entityType: SERVICE_TYPE.PARTITION, entityId: 'replica_operations-p1'};
-const REQUIRED = {visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED};
 const EMPTY = Object.freeze({state: 'empty', operations: [], operationCount: 0,
   deferredOutcome: null, retryAfterMs: null});
 const DEFERRED = Object.freeze({state: 'deferred', operations: [], operationCount: 0,
@@ -73,14 +71,16 @@ for (const retained of [false, true]) {
     const observation = await f.coordinator.getEntityAuthoritativeOperationObservation(
       ENTITY.entityType, ENTITY.entityId);
     t.ok(repository.deferredOutcome, 'the actual repository reports unavailable authority');
-    t.equal(observation.state, retained ? 'present' : 'deferred');
+    t.equal(observation.state, 'deferred',
+      'an unanswered read is DEFERRED whatever its projection retains');
+    t.equal(observation.complete, false, 'its retained rows are a projection');
     for (const key of ['completionState', 'reasonCode', 'retryAfterMs', 'entityType', 'entityId']) {
       t.equal(observation.deferredOutcome?.[key], repository.deferredOutcome[key],
         `${key} survives the coordinator`);
     }
     t.equal(observation.operationCount, retained ? 1 : 0);
-    await t.rejects(f.coordinator.getOperationsByEntity(
-      ENTITY.entityType, ENTITY.entityId, REQUIRED), REFUSAL,
+    await t.rejects(f.coordinator.getAuthoritativeOperationsByEntity(
+      ENTITY.entityType, ENTITY.entityId), REFUSAL,
     'strict Array extraction cannot discharge deferred visibility');
     const blocker = await f.rebalancer.revalidateCriticalSystemTopologySettlingBlocker(null);
     t.equal(blocker?.reason, 'unavailable', 'actual topology consumer keeps the refusal');
@@ -90,8 +90,8 @@ for (const retained of [false, true]) {
       ENTITY.entityType, ENTITY.entityId);
     t.equal(recovered.deferredOutcome, null);
     t.equal(recovered.state, retained ? 'present' : 'empty');
-    t.equal((await f.coordinator.getOperationsByEntity(
-      ENTITY.entityType, ENTITY.entityId, REQUIRED)).length, retained ? 1 : 0);
+    t.equal((await f.coordinator.getAuthoritativeOperationsByEntity(
+      ENTITY.entityType, ENTITY.entityId)).length, retained ? 1 : 0);
     if (!retained) {
       t.equal(await f.rebalancer.revalidateCriticalSystemTopologySettlingBlocker(null), null,
         'the next real owner attempt releases refusal after the finite fault ends');
@@ -102,7 +102,7 @@ for (const retained of [false, true]) {
 test('required facade refuses incomplete contracts without ordinary-cache substitution', async (t) => {
   const {coordinator} = fixture(t);
   let cacheReads = 0;
-  coordinator.repository.getOperationsByEntity = async () => {
+  coordinator.repository.getOperationsByEntityProjection = async () => {
     cacheReads++; return [];
   };
   let pressureClassifications = 0;
@@ -125,35 +125,39 @@ test('required facade refuses incomplete contracts without ordinary-cache substi
     {...EMPTY, retryAfterMs: undefined}, {...DEFERRED, retryAfterMs: 999}];
   for (const observation of invalid) {
     coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () => observation;
-    await t.rejects(coordinator.getOperationsByEntity(ENTITY.entityType, ENTITY.entityId, REQUIRED),
-      REFUSAL, `invalid envelope ${JSON.stringify(observation)}`);
+    await t.rejects(coordinator.getAuthoritativeOperationsByEntity(
+      ENTITY.entityType, ENTITY.entityId),
+    REFUSAL, `invalid envelope ${JSON.stringify(observation)}`);
     await t.rejects(coordinator.getEntityRecoveryOperationObservation(
       ENTITY.entityType, ENTITY.entityId),
     REFUSAL, 'malformed contracts cannot acquire bounded-pressure permission');
   }
   coordinator.repository.getOperationsByEntityAuthoritativeObservation = undefined;
-  await t.rejects(coordinator.getOperationsByEntity(
-    ENTITY.entityType, ENTITY.entityId, REQUIRED), REFUSAL);
+  await t.rejects(coordinator.getAuthoritativeOperationsByEntity(
+    ENTITY.entityType, ENTITY.entityId), REFUSAL);
   coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () => {
     throw Object.assign(new Error('lost answer'), {
       reasonCode: 'owner_transport_lost', retryAfterMs: 37,
     });
   };
-  await t.rejects(coordinator.getOperationsByEntity(ENTITY.entityType, ENTITY.entityId, REQUIRED),
-    {...REFUSAL, reasonCode: 'owner_transport_lost', retryAfterMs: 37});
+  await t.rejects(coordinator.getAuthoritativeOperationsByEntity(
+    ENTITY.entityType, ENTITY.entityId),
+  {...REFUSAL, reasonCode: 'owner_transport_lost', retryAfterMs: 37});
   t.equal(pressureClassifications, 0, 'invalid contracts never reach pressure classification');
   t.equal(cacheReads, 0, 'required reads never invoke the ordinary reader');
   coordinator.repository.getOperationsByEntityAuthoritativeObservation = async () => EMPTY;
   t.equal(await coordinator.getEntityAuthoritativeOperationObservation(
     ENTITY.entityType, ENTITY.entityId),
   EMPTY, 'valid envelopes are passed through by identity');
-  t.same(await coordinator.getOperationsByEntity(ENTITY.entityType, ENTITY.entityId, REQUIRED), []);
+  t.same(await coordinator.getAuthoritativeOperationsByEntity(
+    ENTITY.entityType, ENTITY.entityId), []);
 });
 
 test('critical topology refuses missing or malformed required facade answers', async (t) => {
   const {coordinator, rebalancer} = fixture(t);
   for (const answer of [undefined, null, {}, {operations: []}]) {
-    coordinator.getOperationsByEntity = answer === undefined ? undefined : async () => answer;
+    coordinator.getAuthoritativeOperationsByEntity =
+      answer === undefined ? undefined : async () => answer;
     t.equal((await rebalancer.revalidateCriticalSystemTopologySettlingBlocker(null))?.reason,
       'unavailable');
   }
@@ -210,8 +214,8 @@ test('malformed gateway members cannot turn into empty or bounded recovery permi
     f.setResult({success: true, rows});
     const expected = {...REFUSAL,
       reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED};
-    await t.rejects(f.coordinator.getOperationsByEntity(
-      ENTITY.entityType, ENTITY.entityId, REQUIRED), expected);
+    await t.rejects(f.coordinator.getAuthoritativeOperationsByEntity(
+      ENTITY.entityType, ENTITY.entityId), expected);
     await t.rejects(f.coordinator.getEntityRecoveryOperationObservation(
       ENTITY.entityType, ENTITY.entityId), expected);
     await t.rejects(f.coordinator.getEntityAllocatedOperationReplicaIds(ENTITY), expected);

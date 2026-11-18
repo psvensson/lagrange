@@ -2,7 +2,17 @@ import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {deliveryTransportOf,
+import {
+  enterSyncSection,
+  exitSyncSection,
+} from '../diagnostics/event-loop-gap-watchdog.js';
+import {
+  FRAME_CLASS,
+  ROUTER_SYNC_SECTION,
+  classifyRouterFrame,
+} from './message-router-peer-traffic-diagnostics.js';
+import {TRANSPORT_ACKNOWLEDGEMENT,
+  deliveryTransportOf,
   buildDeliveryEnvelope,
   buildHandlerFailedError,
   classifyThrownDeliveryError,
@@ -42,6 +52,19 @@ function answeredDelivery(messageId, correlationId, answer, queueWaitMs) {
   return {
     result: {messageId, correlationId, acknowledged: true},
     answer: answer ?? null,
+    queueWaitMs,
+  };
+}
+
+// The ACK arrived and no answer followed: the answer waiter's failure is the
+// outcome, through the owner's thrown-error conversion so its router code
+// survives (a connection closed after the ACK is the router's deferral, never
+// DELIVERED; a remote handler throw is handler_failed, finding F-A), with the
+// acknowledgement the router already holds.
+function unansweredDelivery(messageId, correlationId, error, queueWaitMs) {
+  return {
+    result: {...classifyThrownDeliveryError(error,
+      {acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED}), messageId, correlationId},
     queueWaitMs,
   };
 }
@@ -91,6 +114,9 @@ export async function deliverLocal(
     };
     const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
     assertDeliveryOpen(options);
+    // The target router is this router and it accepts the message here: the
+    // ACK wait ends and the handler's time is the answer wait.
+    options.deliveryLifetime.recordAcknowledgement(TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED);
     let result;
     try {
       result = await Promise.resolve(handler(envelope, delivery, localDelivery));
@@ -213,11 +239,15 @@ export async function deliver(
     if (lifetime.ownsShutdown(error)) {
       return buildDeliveryEnvelope({
         messageId, correlationId, acknowledged: false, error: error.message,
+        acknowledgement: lifetime.acknowledgement(),
       });
     }
     return buildDeliveryEnvelope(router.buildDeferredDeliveryFailure(
       messageId, correlationId, error.message, {
         errorCode: error.code,
+        // The lifetime holds this delivery's acknowledgement; the error's
+        // stamp is the moment it was spent, which a later fact advances.
+        acknowledgement: lifetime.acknowledgement(),
         recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs: router.resolveReconnectRetryAfterMs(
           router.nodeConnections.get(targetNodeId) || null,
@@ -256,6 +286,7 @@ export function tryDeliverRaftDirect(
     sourceNodeId: router.nodeId,
     payload,
     timestamp: router.timeSource.now(),
+    oneWay: true,
   };
   router.logger.debug(ROUTER_LOG_MSG.RAFT_DIRECT_DELIVERY, {
     messageId,
@@ -263,10 +294,16 @@ export function tryDeliverRaftDirect(
     targetNodeId,
   });
   try {
-    const encoded = JSON.stringify(message);
+    const encoded = encodeRouterFrame(message);
     assertDeliveryOpen(options);
     connection.ws.send(encoded);
-    return {messageId, acknowledged: true};
+    router.peerTrafficDiagnostics.recordSent(
+      targetNodeId, Buffer.byteLength(encoded), FRAME_CLASS.RAFT);
+    // A one-way frame asks for no ACK: handing it to the socket completes the
+    // hop, and the acknowledgement state says no ACK was requested.
+    options.deliveryLifetime?.recordAcknowledgement(TRANSPORT_ACKNOWLEDGEMENT.NOT_REQUESTED);
+    return {messageId, acknowledged: true,
+      acknowledgement: TRANSPORT_ACKNOWLEDGEMENT.NOT_REQUESTED};
   } catch (_sendError) {
     return null;
   }
@@ -467,6 +504,10 @@ async function completeRemoteDelivery(router, {
       queueWaitMs,
     };
   }
+  // The ACK step is delivered: whichever producer returned it (the ledger's
+  // ACK handler, or a reconnect that sent on a new socket), the lifetime's
+  // ACK expiry ends here and only the answer wait remains.
+  options.deliveryLifetime.recordAcknowledgement(TRANSPORT_ACKNOWLEDGEMENT.ACKNOWLEDGED);
   router.armPendingResponseTimeout(
     messageId, options.deliveryLifetime.remainingMs(), pending,
   );
@@ -475,14 +516,7 @@ async function completeRemoteDelivery(router, {
     serviceResult = await responsePromise;
     assertDeliveryOpen(options);
   } catch (error) {
-    // No answer arrived after the ACK: the waiter's failure is the outcome,
-    // through the owner's thrown-error conversion so its router code survives
-    // (a connection closed after the ACK is the router's deferral, never
-    // DELIVERED; a remote handler throw is handler_failed, finding F-A).
-    return {
-      result: {...classifyThrownDeliveryError(error), messageId, correlationId},
-      queueWaitMs,
-    };
+    return unansweredDelivery(messageId, correlationId, error, queueWaitMs);
   }
   return answeredDelivery(messageId, correlationId, serviceResult, queueWaitMs);
 }
@@ -504,6 +538,10 @@ export async function resolveRecoverableDeliveryError(
   if (!error || router.isShuttingDown) {
     return null;
   }
+  // Every failure this resolves to states the acknowledgement this delivery's
+  // lifetime recorded (a frame that left before the close is unacknowledged,
+  // never "unestablished"); without a lifetime the outcome owner states it.
+  const acknowledgement = options?.deliveryLifetime?.acknowledgement();
   const retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
     Math.max(TRANSPORT_NUM.ZERO, Math.floor(error.retryAfterMs)) :
     router.resolveReconnectRetryAfterMs(
@@ -519,7 +557,8 @@ export async function resolveRecoverableDeliveryError(
       correlationId,
     );
     if (reconnectInProgress) {
-      return reconnectInProgress;
+      return acknowledgement === undefined ? reconnectInProgress :
+        {...reconnectInProgress, acknowledgement};
     }
     const reconnectAddress =
       router.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] || null;
@@ -545,6 +584,7 @@ export async function resolveRecoverableDeliveryError(
             errorCode:
               reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
             recoverableBeforeSend: reconnectError?.recoverableBeforeSend === true,
+            acknowledgement,
             retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
               reconnectError.retryAfterMs :
               retryAfterMs,
@@ -553,17 +593,15 @@ export async function resolveRecoverableDeliveryError(
       }
     }
   }
-  if (
-    error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
-    error.message === ROUTER_ERROR_MSG.connectionClosed(targetNodeId)
-  ) {
+  if (error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE) {
     return router.buildDeferredDeliveryFailure(
       messageId,
       correlationId,
       error.message,
       {
-        errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
         recoverableBeforeSend: error.recoverableBeforeSend === true,
+        acknowledgement,
         retryAfterMs,
       },
     );
@@ -571,10 +609,32 @@ export async function resolveRecoverableDeliveryError(
   return null;
 }
 
-export function sendRaw(router, ws, message) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+function encodeRouterFrame(message) {
+  const encodeToken = enterSyncSection(ROUTER_SYNC_SECTION.FRAME_ENCODE);
+  try {
+    return JSON.stringify(message);
+  } finally {
+    exitSyncSection(ROUTER_SYNC_SECTION.FRAME_ENCODE, encodeToken);
   }
+}
+
+/**
+ * Send one router frame on an open socket.
+ * @param {Object} router - The message router.
+ * @param {WebSocket} ws - The socket.
+ * @param {Object} message - The frame.
+ * @return {number} Encoded bytes handed to the socket; 0 when it is not open.
+ */
+export function sendRaw(router, ws, message) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return 0;
+  }
+  const encoded = encodeRouterFrame(message);
+  ws.send(encoded);
+  const bytes = Buffer.byteLength(encoded);
+  router.peerTrafficDiagnostics.recordSentOnSocket(
+    ws, bytes, classifyRouterFrame(message));
+  return bytes;
 }
 
 export function isRegistered(router, address) {

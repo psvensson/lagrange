@@ -31,6 +31,10 @@ import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
 import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
 import {CDC_ERROR_CODE, CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {
+  captureAuthoritativeCacheSweepSnapshot,
+  requireCacheMutationTarget,
+} from './cdc-integration-service-cache-visibility-authority.js';
 import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
@@ -77,7 +81,32 @@ function reportCatchupTableRetriesSpent(service, spent) {
   });
 }
 
+// Which timed or one-shot compensation ran this catch-up (CDC Stage 3
+// deletion evidence, design note S3.5): each run that actually changed cache
+// rows is counted and logged, so a formation can show these compensations
+// repair nothing before they are deleted.
+const CDC_CATCHUP_TRIGGER = Object.freeze({
+  JOIN_CATCHUP: 'join_catchup',
+  PUBLICATIONS_SWEEP: 'publications_sweep',
+  PROPAGATED_SWEEP_FAST: 'propagated_sweep_fast',
+  PROPAGATED_SWEEP: 'propagated_sweep',
+});
+const CATCHUP_TRIGGERS = new Set(Object.values(CDC_CATCHUP_TRIGGER));
+
+// A catch-up names the compensation that ran it: an unnamed run would be
+// counted under no trigger, so it is refused before any read is issued.
+const CDC_CATCHUP_REFUSAL = Object.freeze({
+  TRIGGER_REQUIRED: 'cdc_catchup_trigger_required',
+});
+
+function refuseUnnamedCatchup(trigger) {
+  if (CATCHUP_TRIGGERS.has(trigger)) return;
+  throw Object.assign(new Error(CDC_CATCHUP_REFUSAL.TRIGGER_REQUIRED),
+    {code: CDC_CATCHUP_REFUSAL.TRIGGER_REQUIRED, trigger});
+}
+
 const CATCHUP_LOG_MSG = Object.freeze({
+  REPAIRED: 'CDC catch-up repaired cache rows (a compensation found a difference)',
   SUMMARY: 'CDC catch-up hydration completed',
   TABLE_FAILED: 'CDC catch-up hydration table read failed',
 });
@@ -107,16 +136,8 @@ function completeObservationAdvances(service, tableName, readResult) {
   if (!readIsFromWitnessedLeader(tableName, readResult)) {
     return true;
   }
-  const cache =
-    typeof service.cacheMutationTarget?.getLastAuthoritativeObservedAtMs ===
-      'function' ?
-      service.cacheMutationTarget :
-      service.systemTableCache;
-  if (typeof cache?.getLastAuthoritativeObservedAtMs !== 'function') {
-    return true;
-  }
-  const currentObservedAtMs =
-    cache.getLastAuthoritativeObservedAtMs(tableName);
+  const currentObservedAtMs = requireCacheMutationTarget(service)
+    .getLastAuthoritativeObservedAtMs(tableName);
   const incomingObservedAtMs = Math.floor(
     Number(readResult.readAuthorityWitness.observedAtMs),
   );
@@ -151,6 +172,27 @@ function authoritativeReadFailure(readResult) {
 }
 
 /**
+ * Count one catch-up run per trigger, and the runs that changed cache rows.
+ * @param {Object} service - The CDC integration service.
+ * @param {string} trigger - A CDC_CATCHUP_TRIGGER.
+ * @param {Object} summary - The run's summary.
+ */
+function recordCatchupRepairs(service, trigger, summary) {
+  service.catchupRepairCounts ??= new Map();
+  const counts = service.catchupRepairCounts.get(trigger) ??
+    {runs: 0, repairingRuns: 0, rowsApplied: 0, rowsSwept: 0};
+  counts.runs += 1;
+  if (summary.rowsApplied + summary.rowsSwept > 0) {
+    counts.repairingRuns += 1;
+    counts.rowsApplied += summary.rowsApplied;
+    counts.rowsSwept += summary.rowsSwept;
+    service.logger?.warn?.(CATCHUP_LOG_MSG.REPAIRED, {nodeId: service.nodeId, trigger,
+      rowsApplied: summary.rowsApplied, rowsSwept: summary.rowsSwept, ...counts});
+  }
+  service.catchupRepairCounts.set(trigger, counts);
+}
+
+/**
  * Re-read every CDC-propagated system table from the authoritative owner
  * path and apply the rows into the local cache.
  *
@@ -162,7 +204,9 @@ function authoritativeReadFailure(readResult) {
  * @param {Object} service - CDCIntegrationService instance (provides
  *   executeAuthoritativeSystemTableRead, applyAuthoritativeCacheRepair,
  *   getPrimaryKeyField, logger, delayUntilShutdown, isShuttingDown).
- * @param {Object} [options]
+ * @param {Object} options
+ * @param {string} options.trigger - The CDC_CATCHUP_TRIGGER that runs this
+ *   catch-up; a missing or unknown one throws CDC_CATCHUP_REFUSAL.
  * @param {string[]} [options.tables] - Override the table set (tests).
  * @param {number} [options.maxAttemptsPerTable]
  * @return {Promise<{tablesAttempted: number, tablesHydrated: number,
@@ -170,7 +214,8 @@ function authoritativeReadFailure(readResult) {
  *   CDC_ERROR_CODE.SHUT_DOWN when the owner was terminal: the tables not
  *   caught up are in tablesFailed and none was read after terminal.
  */
-async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
+async function hydrateCdcPropagatedTablesFromAuthority(service, options) {
+  refuseUnnamedCatchup(options?.trigger);
   const tables = Array.isArray(options.tables) && options.tables.length > 0 ?
     options.tables :
     CDC_PROPAGATED_TABLES;
@@ -243,9 +288,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
       let readResult = null;
       const mutationSnapshot =
-        typeof service.captureAuthoritativeCacheSweepSnapshot === 'function' ?
-          service.captureAuthoritativeCacheSweepSnapshot(tableName) :
-          null;
+        captureAuthoritativeCacheSweepSnapshot(service, tableName);
       const readStartedAtMs = now();
       firstReadStartedAtMs ??= readStartedAtMs;
       try {
@@ -311,8 +354,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
         // owner-RPC lane can also be served by a lagging owner follower, while a
         // local-replica read can be stale or empty; neither may authorize removal
         // of live cache rows. (Race-guarded against writes newer than the read.)
-        if (readFromLeader &&
-            typeof service.applyAuthoritativeCacheSweep === 'function') {
+        if (readFromLeader) {
           summary.rowsSwept += service.applyAuthoritativeCacheSweep(
             tableName,
             rows,
@@ -335,19 +377,10 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
             partitionId: readResult.readAuthorityWitness.partitionId ?? null,
             causeId: 'cdc-authoritative-catchup',
           };
-          service.systemTableCache?.recordAuthoritativeObservation?.(
+          requireCacheMutationTarget(service).recordAuthoritativeObservation(
             tableName,
             observationReceipt,
           );
-          if (
-            service.cacheMutationTarget &&
-            service.cacheMutationTarget !== service.systemTableCache
-          ) {
-            service.cacheMutationTarget.recordAuthoritativeObservation?.(
-              tableName,
-              observationReceipt,
-            );
-          }
         }
         // The apply gate refused these rows if the owner turned terminal
         // while the read was in flight: the table is not hydrated then.
@@ -403,6 +436,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   if (isTerminal()) {
     summary.code = CDC_ERROR_CODE.SHUT_DOWN;
   }
+  recordCatchupRepairs(service, options.trigger, summary);
   service.logger?.info?.(CATCHUP_LOG_MSG.SUMMARY, {
     tablesAttempted: summary.tablesAttempted,
     tablesHydrated: summary.tablesHydrated,
@@ -415,5 +449,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
 }
 
 export {
+  CDC_CATCHUP_REFUSAL,
+  CDC_CATCHUP_TRIGGER,
   hydrateCdcPropagatedTablesFromAuthority,
 };

@@ -40,6 +40,12 @@ const TEST_RESET_LANE_QUERY_TWO = 'SELECT 2';
 const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
 const TEST_FIRST_CONNECTION_COUNT = 1;
 const TEST_QUERY_RESULT_COUNT = 1;
+const TEST_CONCURRENT_SHORT_TIMEOUT_MS = 50;
+const TEST_CONCURRENT_LONG_TIMEOUT_MS = 500;
+const TEST_CONCURRENT_REPLY_DELAY_MS = 120;
+const TEST_CONCURRENT_SHORT_QUERY = 'SELECT short';
+const TEST_CONCURRENT_LONG_QUERY = 'SELECT long';
+const TEST_WS_READY_STATE_OPEN = 1;
 
 async function withTestAdminWebSocketNode(onConnection, options, callback) {
   const server = new WebSocketServer({
@@ -678,6 +684,69 @@ test('Unit: NodeHandle.queryWithTimeout single-flights concurrent cold connectio
         snapshotConnectionCount,
         2,
         'query after remote socket close must open a fresh WebSocket instead of reusing a resolved readyPromise',
+      );
+    },
+  );
+});
+
+test('Unit: NodeHandle._sendAdminRequest does not reset multiplexed lane socket ' +
+  'when shorter timeout query times out with concurrent query in flight',
+async () => {
+  let activeSocket = null;
+  await withTestAdminWebSocketNode(
+    (socket) => {
+      activeSocket = socket;
+      socket.on('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        if (parsed.sql === TEST_CONCURRENT_SHORT_QUERY) {
+          // Intentionally do not reply to short query, letting it time out
+        } else if (parsed.sql === TEST_CONCURRENT_LONG_QUERY) {
+          setTimeout(() => {
+            if (activeSocket && activeSocket.readyState === TEST_WS_READY_STATE_OPEN) {
+              activeSocket.send(JSON.stringify({
+                type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+                queryId: parsed.queryId,
+                results: [TEST_RESET_LANE_ROW],
+                count: TEST_QUERY_RESULT_COUNT,
+              }));
+            }
+          }, TEST_CONCURRENT_REPLY_DELAY_MS);
+        }
+      });
+    },
+    {},
+    async (node) => {
+      const shortPromise = node.queryWithTimeout(
+        TEST_CONCURRENT_SHORT_QUERY,
+        [],
+        {
+          lane: TEST_SNAPSHOT_LANE,
+          timeoutMs: TEST_CONCURRENT_SHORT_TIMEOUT_MS,
+        },
+      );
+      const longPromise = node.queryWithTimeout(
+        TEST_CONCURRENT_LONG_QUERY,
+        [],
+        {
+          lane: TEST_SNAPSHOT_LANE,
+          timeoutMs: TEST_CONCURRENT_LONG_TIMEOUT_MS,
+        },
+      );
+
+      await assert.rejects(
+        shortPromise,
+        (err) => {
+          assert.match(String(err?.message), /timeout|timed out/i);
+          return true;
+        },
+        'shorter timeout query must reject due to timeout',
+      );
+
+      const longResult = await longPromise;
+      assert.deepStrictEqual(
+        longResult.rows,
+        [TEST_RESET_LANE_ROW],
+        'longer-timeout query must not be reset and must resolve normally',
       );
     },
   );

@@ -348,6 +348,13 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
   ]),
 );
 
+// Where a normalized operation record's target node id came from.
+const REPLICA_OPERATION_TARGET_NODE_SOURCE = Object.freeze({
+  OPERATION_ROW: 'operation_row',
+  PEER_ADDRESS: 'peer_address',
+  UNAVAILABLE: 'unavailable',
+});
+
 /**
  * Metadata keys stored in operation stepsHistory entries.
  *
@@ -355,7 +362,6 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
  */
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
-  READINESS_SNAPSHOT: 'readinessSnapshot',
   REPLICA_IDS: 'replicaIds',
   PEER_ADDRESSES: 'peerAddresses',
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
@@ -752,6 +758,7 @@ function isReplaceRemoveDispatchPhase(operation) {
 
 export {
   readOperationRecordWorkflowStep,
+  REPLICA_OPERATION_TARGET_NODE_SOURCE,
   ReplicaStatus,
   TERMINAL_STATUSES,
   TERMINAL_STATUS_SQL_CLAUSE,

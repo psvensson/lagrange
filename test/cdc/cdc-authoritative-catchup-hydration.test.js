@@ -13,6 +13,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  CDC_CATCHUP_TRIGGER,
   hydrateCdcPropagatedTablesFromAuthority,
 } from '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import {
@@ -24,6 +25,7 @@ import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
+import {CDC_ERROR_CODE} from '../../src/cdc/cdc-constants.js';
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 
 class AuthoritativeCatchupCacheRepairHost {}
@@ -39,6 +41,8 @@ function createServiceStub({readResults}) {
     applied,
     reads,
     sleeps,
+    // The one cache owner of snapshots and observations: the real writable cache.
+    cacheMutationTarget: new SystemTableCache(),
     // The owner's retry-delay primitive; the stub records each delay.
     delayUntilShutdown: async (delayMs) => {
       sleeps.push(delayMs);
@@ -89,13 +93,35 @@ function createLeaderCatchupService(cache, rows, observedAtMs) {
 function hydrateServicesFromLeader(cache, rows, observedAtMs, options = {}) {
   return hydrateCdcPropagatedTablesFromAuthority(
     createLeaderCatchupService(cache, rows, observedAtMs),
-    {tables: [TABLES.SERVICES], maxAttemptsPerTable: 1, ...options},
+    {trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP, tables: [TABLES.SERVICES],
+      maxAttemptsPerTable: 1, ...options},
   );
 }
 
+test('the writable cache is the one required cache owner: repair, sweep snapshot and ' +
+  'absence snapshot refuse typed (CACHE_OWNER_UNBOUND) when it is not bound, ' +
+  'even with a read view present', async (t) => {
+  const service = new AuthoritativeCatchupCacheRepairHost();
+  service.systemTableCache = new SystemTableCache();
+  service.cacheMutationTarget = null;
+  service.getPrimaryKeyField = () => 'service_id';
+  const unbound = {code: CDC_ERROR_CODE.CACHE_OWNER_UNBOUND};
+  t.throws(() => service.applyAuthoritativeCacheRepair(TABLES.SERVICES,
+    CDC_OPERATION.UPSERT, {service_id: 's-1'}, 's-1'), unbound);
+  t.throws(() => service.captureAuthoritativeCacheSweepSnapshot(TABLES.SERVICES), unbound);
+  await t.rejects(service.repairCacheVisibilityHole(TABLES.SERVICES, 's-1', false),
+    unbound);
+});
+
 test('authoritative DELETE repair requires observable post-apply proof', (t) => {
   const service = new AuthoritativeCatchupCacheRepairHost();
-  service.cacheMutationTarget = {applySystemTableChange() {}};
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
+    {service_id: 'unobservable-delete'});
+  // The real cache with its apply made a no-op: the DELETE is issued but never
+  // becomes observable, so the repair cannot report verified absence.
+  cache.applySystemTableChange = () => {};
+  service.cacheMutationTarget = cache;
 
   t.equal(
     service.applyAuthoritativeCacheRepair(
@@ -152,6 +178,7 @@ test(
     });
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: [TABLES.NODES],
       maxAttemptsPerTable: 1,
     });
@@ -241,6 +268,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     });
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['control_plane_publications', 'nodes'],
     });
 
@@ -271,6 +299,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       });
 
       const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+        trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
         tables: ['control_plane_publications', 'services'],
         maxAttemptsPerTable: 3,
       });
@@ -296,6 +325,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     });
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['control_plane_publications', 'services'],
     });
 
@@ -310,6 +340,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       },
     });
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['services'],
     });
     t.equal(summary.rowsApplied, 1, 'keyless row skipped');
@@ -327,7 +358,8 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
           services: [
             {
               success: true,
-              rows: [{id: 'svc-1'}],
+              // The declared key of a services row (no other field stands in).
+              rows: [{service_id: 'svc-1'}],
               source: 'owner_rpc_lane',
               readAuthorityWitness: {
                 state: 'observed',
@@ -385,6 +417,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       };
 
       const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+        trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
         tables: ['services', 'message_groups', 'partitions', 'tables', 'nodes'],
         maxAttemptsPerTable: 1,
         now: () => 5000,
@@ -392,7 +425,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
       t.same(sweeps.map((s) => s.tableName), ['services'],
         'sweep runs only for the leader-witnessed owner read');
-      t.same(sweeps[0].rows, [{id: 'svc-1'}], 'sweep gets the authoritative rows');
+      t.same(sweeps[0].rows, [{service_id: 'svc-1'}], 'sweep gets the authoritative rows');
       t.equal(sweeps[0].options.readStartedAtMs, 5000,
         'sweep gets the read-start time');
       t.equal(sweeps[0].options.authoritativeObservedAtMs, 5100,
@@ -490,6 +523,7 @@ test('CL-014: a successful non-array row set fails closed', async (t) => {
   });
 
   const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: [TABLES.SERVICES],
     maxAttemptsPerTable: 1,
   });
@@ -588,6 +622,7 @@ test(
     };
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: [TABLES.SERVICES],
       maxAttemptsPerTable: 1,
     });
@@ -631,6 +666,7 @@ test(
     };
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: [TABLES.SERVICES],
       maxAttemptsPerTable: 1,
     });
@@ -683,6 +719,7 @@ test(
     });
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: [TABLES.SERVICES],
       maxAttemptsPerTable: 1,
     });
@@ -839,7 +876,9 @@ test(
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(
       service,
-      {tables: [TABLES.SERVICES], maxAttemptsPerTable: 1},
+      {
+        trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
+        tables: [TABLES.SERVICES], maxAttemptsPerTable: 1},
     );
 
     t.equal(cache.has(TABLES.SERVICES, durableRow.service_id), false,
@@ -884,7 +923,7 @@ test(
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(
       service,
-      {
+      {trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
         tables: [TABLES.SERVICES],
         maxAttemptsPerTable: 1,
         now: () => 100,
@@ -912,6 +951,7 @@ test('catch-up retries spent on a deferred table log one wait_bound_spent ' +
   service.logger = capture.logger;
 
   const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+    trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
     tables: ['nodes', 'services'],
     maxAttemptsPerTable: 2,
   });
@@ -942,6 +982,7 @@ test('a table whose catch-up retries are spent again with the same failure ' +
     });
     service.logger = capture.logger;
     await hydrateCdcPropagatedTablesFromAuthority(service, {
+      trigger: CDC_CATCHUP_TRIGGER.JOIN_CATCHUP,
       tables: ['nodes'],
       maxAttemptsPerTable: 2,
     });

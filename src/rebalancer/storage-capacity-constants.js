@@ -223,6 +223,10 @@ const STORAGE_CAPACITY_ERROR_MSG = Object.freeze({
     'absolute bytes takes precedence',
   ACCOUNTING_SOURCE_REQUIRED:
     'StorageCapacityAccountingService requires systemTableCache or sqlQueryEngine',
+  // A capacity source table the owner did not answer: the total is unknown,
+  // never zero (retryable).
+  ACCOUNTING_READ_UNAVAILABLE:
+    'Storage capacity accounting read unavailable for table ',
 });
 
 export {

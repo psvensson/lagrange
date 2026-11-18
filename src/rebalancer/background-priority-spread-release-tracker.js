@@ -1,8 +1,55 @@
 const BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE = Object.freeze({
+  // The durable release condition holds and its dwell is still running.
   STABILIZING: 'stabilizing',
+  // The durable release condition was observed NOT to hold: dwell rearmed.
+  CONDITION_NOT_HELD: 'condition_not_held',
+  // An input of the durable release condition could not be read: the fence
+  // holds (unavailability never counts as clear) but the dwell is NOT
+  // restarted: an unknown is no evidence that the condition stopped holding.
+  // A lease that lapses before its refresh lands answers STALE for a moment;
+  // restarting a 70 s window on each such moment would let ordinary load
+  // keep the fence closed (R12). A real change during the unknown span is
+  // still seen: an in-flight transition reads NOT_HELD, and one that started
+  // and drained inside the span is a newly drained operation id.
+  CONDITION_UNAVAILABLE: 'condition_unavailable',
 });
 
+/**
+ * What one evaluation observed about the durable condition the stability
+ * dwell stands for (no non-terminal fence-holding transition, and every
+ * required member node serve-eligible). The observer
+ * (background-priority-spread-release-condition.js) reads the inputs; this
+ * tracker owns only the dwell law: the clock runs from the first HELD
+ * observation, a NOT_HELD observation or a newly drained fence-holding
+ * operation rearms it, an UNAVAILABLE one holds it without rearming, and
+ * only a HELD observation can release.
+ */
+const BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE = Object.freeze({
+  HELD: 'held',
+  NOT_HELD: 'not_held',
+  UNAVAILABLE: 'unavailable',
+});
+
+// What each condition observation means for the dwell. An observation that
+// states neither HELD nor NOT_HELD (absent included) is the named
+// CONDITION_UNAVAILABLE hold, never an implied HELD.
+const RELEASE_STATE_BY_CONDITION_STATE = Object.freeze({
+  [BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE.HELD]:
+    BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
+  [BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE.NOT_HELD]:
+    BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.CONDITION_NOT_HELD,
+});
+
+function resolveReleaseStateForCondition(releaseConditionState) {
+  return Object.hasOwn(RELEASE_STATE_BY_CONDITION_STATE, releaseConditionState) ?
+    RELEASE_STATE_BY_CONDITION_STATE[releaseConditionState] :
+    BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.CONDITION_UNAVAILABLE;
+}
+
 const EMPTY_WAKE_KEY_LENGTH = 0;
+// The tracker field holding the ids of the drained fence-holding operations
+// it has seen (a Set); absent until the first sample baselines it.
+const DRAINED_OPERATION_IDS_FIELD = 'drainedFenceHoldingOperationIds';
 
 const releaseScopeByReadinessOwner = new WeakMap();
 
@@ -101,6 +148,13 @@ function mergeReleaseTrackers(left, right) {
     Number.isFinite(right.clearObservedAtMs) ?
       Math.max(left.clearObservedAtMs, right.clearObservedAtMs) :
       null;
+  left.conditionHeldSinceMs =
+    Number.isFinite(left.conditionHeldSinceMs) &&
+    Number.isFinite(right.conditionHeldSinceMs) ?
+      Math.max(left.conditionHeldSinceMs, right.conditionHeldSinceMs) :
+      null;
+  // Two baselines are no baseline: the next sample re-adopts.
+  delete left[DRAINED_OPERATION_IDS_FIELD];
   return left;
 }
 
@@ -172,6 +226,9 @@ function observeBackgroundPrioritySpreadBlocked(options = {}) {
   tracker.lastBlockedObservedAtMs =
     normalizeObservedAt(options.observedAt);
   tracker.clearObservedAtMs = null;
+  tracker.conditionHeldSinceMs = null;
+  // A blocked observation restarts everything, the drain baseline included.
+  delete tracker[DRAINED_OPERATION_IDS_FIELD];
   scope.tracker = tracker;
 }
 
@@ -180,47 +237,69 @@ function isBackgroundPrioritySpreadReleaseActive(options = {}) {
   return scope?.tracker?.active === true;
 }
 
-function observeActiveBackgroundPrioritySpreadReleaseBlocked(options = {}) {
+/**
+ * Observe the drained fence-holding operations (the ids of every retained
+ * terminal priority control-plane or founding transition). A transition that
+ * started and drained entirely between two evaluations is still a change, so
+ * an id the tracker has not seen before rearms the dwell at THIS
+ * observation's instant. Drains are identified by operation id, never by a
+ * remote completion timestamp: no fast transition stamped earlier than
+ * another is invisible, and no future-stamped row can tie or flip the
+ * answer. The first sample after activation only baselines: the dwell has
+ * not started before the first HELD observation, so nothing earlier counts.
+ * @param {Object} options
+ * @param {Object} options.readinessOwner
+ * @param {Array<string>} options.drainedOperationIds
+ * @param {number} options.observedAt
+ * @return {Array<string>} the newly drained ids that rearmed the dwell
+ */
+function observeActiveBackgroundPrioritySpreadTransitionDrains(options = {}) {
   const scope = getReleaseScope(options.readinessOwner);
   const tracker = scope?.tracker;
   if (!tracker || tracker.active !== true) {
-    return false;
+    return [];
   }
-  tracker.lastBlockedObservedAtMs =
-    normalizeObservedAt(options.observedAt);
-  tracker.clearObservedAtMs = null;
-  return true;
+  const drainedOperationIds = new Set(options.drainedOperationIds);
+  const seen = tracker[DRAINED_OPERATION_IDS_FIELD];
+  tracker[DRAINED_OPERATION_IDS_FIELD] = drainedOperationIds;
+  if (!(seen instanceof Set)) {
+    return [];
+  }
+  const newlyDrained = [...drainedOperationIds]
+    .filter((operationId) => !seen.has(operationId));
+  if (newlyDrained.length > 0) {
+    tracker.lastBlockedObservedAtMs = normalizeObservedAt(options.observedAt);
+    tracker.clearObservedAtMs = null;
+    tracker.conditionHeldSinceMs = null;
+  }
+  return newlyDrained;
 }
 
-function observeActiveBackgroundPrioritySpreadOperationDrain(options = {}) {
-  const scope = getReleaseScope(options.readinessOwner);
-  const tracker = scope?.tracker;
-  if (
-    !tracker ||
-    tracker.active !== true ||
-    !Number.isFinite(options.drainedAt)
-  ) {
-    return false;
-  }
-  const drainedAtMs = Math.floor(options.drainedAt);
-  const lastBlockedObservedAtMs =
-    Number.isFinite(tracker.lastBlockedObservedAtMs) ?
-      tracker.lastBlockedObservedAtMs :
-      Number.NEGATIVE_INFINITY;
-  const clearObservedAtMs = Number.isFinite(tracker.clearObservedAtMs) ?
-    tracker.clearObservedAtMs :
-    Number.NEGATIVE_INFINITY;
-  if (
-    drainedAtMs <= lastBlockedObservedAtMs ||
-    drainedAtMs <= clearObservedAtMs
-  ) {
-    return false;
-  }
-  tracker.lastBlockedObservedAtMs = drainedAtMs;
-  tracker.clearObservedAtMs = drainedAtMs;
-  return true;
+function buildStableReleaseHold(tracker, releaseState, requiredStableMs,
+  stableElapsedMs) {
+  return Object.freeze({
+    state: releaseState,
+    requiredStableMs,
+    stableElapsedMs,
+    stableRemainingMs: Math.max(0, requiredStableMs - stableElapsedMs),
+    clearObservedAtMs: Number.isFinite(tracker.clearObservedAtMs) ?
+      tracker.clearObservedAtMs : null,
+    lastBlockedObservedAtMs: tracker.lastBlockedObservedAtMs,
+    blockedPartitions: Object.freeze([]),
+  });
 }
 
+/**
+ * Advance the dwell for one evaluation that observed no priority spread
+ * blocker. `options.releaseConditionState` is that evaluation's observation
+ * of the durable release condition. The dwell clock runs only from the
+ * first HELD observation; a NOT_HELD observation rearms it; an UNAVAILABLE
+ * observation holds the fence without rearming it (CONDITION_UNAVAILABLE)
+ * and can never release it; a newly drained fence-holding transition rearms
+ * it at the observing instant (it never back-dates the clock).
+ * @param {Object} options
+ * @return {Object|null} the hold, or null when inactive or released
+ */
 function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
   const scope = getReleaseScope(options.readinessOwner);
   const tracker = scope?.tracker;
@@ -231,9 +310,26 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
     Math.max(0, Math.floor(options.requiredStableMs)) :
     0;
   const observedAt = normalizeObservedAt(options.observedAt);
-  if (!Number.isFinite(tracker.clearObservedAtMs)) {
-    tracker.clearObservedAtMs = observedAt;
+  const releaseState =
+    resolveReleaseStateForCondition(options.releaseConditionState);
+  if (releaseState === BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.CONDITION_NOT_HELD) {
+    tracker.lastBlockedObservedAtMs = observedAt;
+    tracker.clearObservedAtMs = null;
+    tracker.conditionHeldSinceMs = null;
+    return buildStableReleaseHold(tracker, releaseState, requiredStableMs, 0);
   }
+  if (releaseState ===
+      BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.CONDITION_UNAVAILABLE) {
+    return buildStableReleaseHold(tracker, releaseState, requiredStableMs,
+      Number.isFinite(tracker.clearObservedAtMs) ?
+        Math.max(0, observedAt - tracker.clearObservedAtMs) : 0);
+  }
+  if (!Number.isFinite(tracker.conditionHeldSinceMs)) {
+    tracker.conditionHeldSinceMs = observedAt;
+  }
+  tracker.clearObservedAtMs = Number.isFinite(tracker.clearObservedAtMs) ?
+    Math.max(tracker.clearObservedAtMs, tracker.conditionHeldSinceMs) :
+    observedAt;
   const stableElapsedMs = Math.max(
     0,
     observedAt - tracker.clearObservedAtMs,
@@ -243,22 +339,16 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
     notifyBackgroundPrioritySpreadStableRelease(scope);
     return null;
   }
-  return Object.freeze({
-    state: BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
-    requiredStableMs,
-    stableElapsedMs,
-    stableRemainingMs: requiredStableMs - stableElapsedMs,
-    clearObservedAtMs: tracker.clearObservedAtMs,
-    lastBlockedObservedAtMs: tracker.lastBlockedObservedAtMs,
-    blockedPartitions: Object.freeze([]),
-  });
+  return buildStableReleaseHold(tracker, releaseState, requiredStableMs,
+    stableElapsedMs);
 }
 
 export {
+  BACKGROUND_PRIORITY_SPREAD_RELEASE_CONDITION_STATE,
+  BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE,
   isBackgroundPrioritySpreadReleaseActive,
   isBackgroundPrioritySpreadReleaseOwner,
-  observeActiveBackgroundPrioritySpreadReleaseBlocked,
-  observeActiveBackgroundPrioritySpreadOperationDrain,
+  observeActiveBackgroundPrioritySpreadTransitionDrains,
   observeBackgroundPrioritySpreadBlocked,
   registerBackgroundPrioritySpreadReleaseWake,
   resolveBackgroundPrioritySpreadStableRelease,

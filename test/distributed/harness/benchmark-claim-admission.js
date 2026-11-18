@@ -1023,7 +1023,6 @@ export {
   REASON_PREFIX,
   SUFFICIENCY_RULE,
   admitClaim,
-  awardedProofIds,
   campaignOutcomeOfCells,
   checkSemanticGate,
   gateBindingHolds,

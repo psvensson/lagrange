@@ -31,6 +31,16 @@ import {
   formatCertificationPreflight,
   runCertificationPreflight,
 } from './certification-preflight.js';
+import {
+  LINK_BASELINE_PHASE,
+  formatLinkBaselinePhase,
+  measureLinkBaseline,
+  publishLinkBaseline,
+  recordLinkBaselinePhase,
+} from './link-baseline.js';
+import {
+  LINK_BASELINE_ENV,
+} from '../../test/distributed/harness/run-health/run-health-constants.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -74,6 +84,8 @@ const HARNESS_ARG = Object.freeze({
 // of its own, so this is the harness's stated one.
 const HARNESS_BUDGET_MS = 30 * 60 * 1000;
 const HARNESS_PURPOSE = 'formation:';
+// The run's link baseline file, beside its generated config.
+const LINK_BASELINE_FILE_SUFFIX = '.link-baseline.json';
 const HARNESS_REFUSAL = Object.freeze({
   PREFIX: 'harness: node ',
   BUSY: ' busy, ',
@@ -422,6 +434,8 @@ export async function runHarness({
   // Injectable pre-flight host observer and evidence root (tests).
   observeHost,
   evidenceRoot,
+  // Injectable pairwise link measurement (tests): ({nodes}) => phase.
+  measureLinks = measureLinkBaseline,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -433,7 +447,7 @@ export async function runHarness({
   if (certify !== null) {
     return runCertificationHarness({nodes, scenario, baseConfig, nodesPerHost,
       verbose, extraArgs, dryRun, hold, environment, observeMachine, certify,
-      readCommitIdentity, write, quest, observeHost, evidenceRoot});
+      readCommitIdentity, write, quest, observeHost, evidenceRoot, measureLinks});
   }
   const absoluteBase = resolve(baseConfig);
   const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
@@ -468,7 +482,8 @@ export async function runHarness({
       verbose,
       extraArgs,
     });
-    await runFormation(args, nodes, environment);
+    await runFormationWithLinkBaseline(args, nodes, environment,
+      {configPath, measureLinks, write});
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
     await releaseHolds(holds);
@@ -482,6 +497,33 @@ async function openTunnels(nodes, ports, tunnels) {
     process.stdout.write(
       `tunnel ${nodes[index].name} -> ${LOOPBACK_HOST}:${ports[index]} ready\n`,
     );
+  }
+}
+
+// The formation between its two link baselines (link-baseline.js): pairwise
+// round-trip and bounded throughput between the hosts before and after the
+// run, recorded beside the config and named to the runner. Evidence only: a
+// baseline that cannot be measured is recorded as unavailable, the run's
+// outcome is the runner's alone, and its error is rethrown unchanged.
+async function runFormationWithLinkBaseline(args, nodes, environment, {configPath,
+  measureLinks, write}) {
+  const path = `${configPath}${LINK_BASELINE_FILE_SUFFIX}`;
+  const record = async (phase) => {
+    const baseline = await recordLinkBaselinePhase({path, phase, nodes, measure: measureLinks});
+    write(`link baseline ${phase}: ${path}\n${formatLinkBaselinePhase(baseline[phase])}\n`);
+  };
+  // Neither phase may fail or mask the run: a baseline error is reported.
+  const reportFailure = (error) =>
+    write(`link baseline could not be recorded: ${error.message}\n`);
+  await record(LINK_BASELINE_PHASE.PRE_RUN).catch(reportFailure);
+  try {
+    await runFormation(args, nodes, {...environment, [LINK_BASELINE_ENV]: path});
+  } finally {
+    await record(LINK_BASELINE_PHASE.POST_RUN).then(async () => {
+      for (const scenarioDir of await publishLinkBaseline(path)) {
+        write(`run health updated with the post-run baseline: ${scenarioDir}\n`);
+      }
+    }).catch(reportFailure);
   }
 }
 
@@ -569,7 +611,8 @@ async function runCertificationHarness(options) {
     const tunnels = [];
     try {
       await openTunnels(nodes, ports, tunnels);
-      await runFormation(args, nodes, environment);
+      await runFormationWithLinkBaseline(args, nodes, environment,
+        {configPath, measureLinks: options.measureLinks, write});
     } finally {
       await Promise.all(tunnels.map(stopTunnel));
       await releaseHolds(holds);

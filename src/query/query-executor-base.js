@@ -119,6 +119,8 @@ class QueryExecutorBase {
       Math.floor(options.noHandlerAddressQuarantineMs) :
       this.noServiceWarnThrottleMs;
     this.temporarilyUnroutableAddressesByPartition = new Map();
+    // partitionId -> end instants of its address quarantines (retry points).
+    this.addressQuarantineRetryDueAtMsByPartition = new Map();
     this.sessionPartitionAddresses = new Map();
     this.retainedCanonicalLeaderNodeIdsByPartition = new Map();
   }

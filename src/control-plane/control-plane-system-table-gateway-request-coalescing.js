@@ -1,3 +1,5 @@
+import {CDC_ADMISSION_CLASS_ERROR, CDC_ADMISSION_INTENT_FIELD, cdcAdmissionClassOfIntent} from
+  '../partition/partition-cdc-admission-class.js';
 import {
   CONTROL_PLANE_DEFERRED_MUTATION_FAILURE_SENTINEL,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -15,6 +17,15 @@ import {
   normalizePositiveInteger,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
+
+
+// The coalescing-key part of a write's CDC admission class: none for an
+// ordinary write (its keys are unchanged), the class for any other.
+function admissionClassKeyOf(options) {
+  if (options?.[CDC_ADMISSION_INTENT_FIELD] === undefined) return {};
+  return {admissionClass: cdcAdmissionClassOfIntent(options).admissionClass ??
+    CDC_ADMISSION_CLASS_ERROR.REFUSED};
+}
 
 const GATEWAY_IDLE_NOT_REACHED = 'control_plane_gateway_current_work_not_idle';
 const GATEWAY_IDLE_STRANDED =
@@ -203,6 +214,7 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           routingReadinessDimension:
             options?.routingReadinessDimension ||
             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          ...admissionClassKeyOf(options),
         }),
         mergePolicy,
       };
@@ -223,17 +235,21 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           routingReadinessDimension:
             options?.routingReadinessDimension ||
             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          ...admissionClassKeyOf(options),
         }),
         mergePolicy,
       };
     }
+    // A retirement write and an ordinary one never replace each other: each
+    // keeps its own CDC admission class.
+    const classKey = admissionClassKeyOf(options).admissionClass;
     return {
       requestKey:
         `control-plane:mutation:${
           mutation?.tableName ||
           CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
         }:` +
-        `${explicitKey}`,
+        `${explicitKey}${classKey === undefined ? '' : `:${classKey}`}`,
       mergePolicy,
     };
   },

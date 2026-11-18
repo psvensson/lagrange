@@ -20,6 +20,7 @@ export const seed_storage: (a: number, b: number, c: number) => void;
 export const set_conf_state: (a: number, b: number, c: number) => void;
 export const status: (a: number, b: number) => void;
 export const step: (a: number, b: number, c: number) => void;
+export const step_down_removed_leader: (a: number, b: number) => void;
 export const take_ready: (a: number, b: number) => void;
 export const tick: (a: number, b: number) => void;
 export const wasm_start: () => void;

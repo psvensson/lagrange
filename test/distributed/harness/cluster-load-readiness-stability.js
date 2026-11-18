@@ -1,3 +1,5 @@
+import {isOwnerRecoveryWaitProgress} from
+  './membership-publication-owner-recovery-wait-progress.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {
   buildPriorityRecoveryActiveGateSnapshot,
@@ -67,8 +69,6 @@ const LOAD_READINESS_ACTIVE_GATE_COHORT_NEXT_ACTION_WAIT_OWNER_RECOVERY =
   'wait_owner_recovery';
 const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON =
   'owner_reconcile_pending';
-const LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_DEFERRED =
-  'write_deferred';
 const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_MODE = 'repair_deferred';
 const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_STATE = 'deferred_refresh';
 const LOAD_READINESS_OWNER_RECOVERY_SNAPSHOT_CONTRACT_STATE = 'deferred';
@@ -163,7 +163,6 @@ function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
     pendingRecoveryNodeIds.every((nodeId) =>
       selectedPublishedActiveNodeIdSet.has(nodeId),
     );
-  const pendingWrites = normalizeNonNegativeCount(queueDepth?.pendingWrites);
   return (
     progressSnapshot?.activeGateOwnerCohortState ===
       LOAD_READINESS_ACTIVE_GATE_COHORT_STATE_PENDING &&
@@ -179,23 +178,13 @@ function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
     normalizeNonNegativeCount(
       progressSnapshot?.activeGateOwnerCohortMissingPublishedCount,
     ) === ZERO_COUNT &&
-    pendingWrites >= Math.max(
-      pendingRecoveryCount,
-      pendingRecoveryNodeIds.length,
-    ) &&
     normalizeNonNegativeCount(
       progressSnapshot?.activeGateOwnerCohortPendingReconcileCount,
     ) === ZERO_COUNT &&
     normalizeNonNegativeCount(queueDepth?.pendingWriteGrowthCount) ===
       ZERO_COUNT &&
-    progressSnapshot?.membershipPublicationHandoffOutcomeState ===
-      LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_HANDOFF_DEFERRED &&
-    progressSnapshot?.membershipPublicationHandoffOutcomeReasonCode ===
-      LOAD_READINESS_ACTIVE_GATE_OWNER_RECOVERY_REASON &&
-    progressSnapshot?.membershipPublicationHandoffOutcomeEnqueued === true &&
-    normalizePositiveDurationMs(
-      progressSnapshot?.membershipPublicationHandoffOutcomeRetryAfterMs,
-    ) > ZERO_COUNT
+    // The owner's named recovery wait; it queues nothing for itself.
+    isOwnerRecoveryWaitProgress(progressSnapshot)
   );
 }
 

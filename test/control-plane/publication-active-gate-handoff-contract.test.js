@@ -1,8 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  CONTROL_PLANE_READINESS_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
   OWNER_OUTCOME_FRESHNESS,
   OWNER_OUTCOME_STATE,
 } from '../../src/control-plane/owner-outcome-contract.js';
@@ -1139,39 +1136,6 @@ test('publication active-gate selector prefers drained explicit handoff over sta
       false,
       'drained explicit handoff should not schedule another membership publication reconcile',
     );
-  });
-
-test('publication active-gate handoff keeps recovery-pending nodes out of reconcile',
-  async (t) => {
-    const contract = buildPublicationActiveGateHandoffContract({
-      snapshotCoverage: {
-        nodeIds: [TEST_NODE_1, TEST_NODE_2],
-      },
-      publicationConvergence: {
-        publicationEpoch: TEST_PUBLICATION_EPOCH,
-        publishedActiveNodeIds: [TEST_NODE_1],
-        missingPublishedNodeIds: [TEST_NODE_2],
-      },
-      readinessByNodeId: {
-        [TEST_NODE_2]: {
-          reasonCodes: [
-            CONTROL_PLANE_READINESS_REASON
-              .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-          ],
-        },
-      },
-    });
-
-    t.match(contract, {
-      pendingRecoveryNodeIds: [TEST_NODE_2],
-      pendingReconcileNodeIds: [],
-      runtimePromotionAllowed: false,
-      state: PUBLICATION_ACTIVE_GATE_HANDOFF_STATE.PENDING,
-      reasonCode:
-        PUBLICATION_ACTIVE_GATE_HANDOFF_REASON.OWNER_RECONCILE_PENDING,
-      nextAction:
-        PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION.WAIT_OWNER_RECOVERY,
-    });
   });
 
 test('publication active-gate handoff projection preserves the owner cohort surface',
