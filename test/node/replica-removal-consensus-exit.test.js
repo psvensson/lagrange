@@ -194,3 +194,61 @@ test('generic REMOVE in a two-voter group: the removed follower acks its ' +
   t.equal(applied(), true,
     'the remaining voter keeps quorum (a write through it commits)');
 });
+
+// WP-A run 1 (node 5d44): the ledger REMOVE of replica_operations-p1-r1
+// completed at 04:41:10.754; the same operation was re-delivered 72 ms
+// later, its authority bind found the row deleted (ABSENT), and the handler
+// answered ERROR "lacks exact durable authority" - the coordinator failed an
+// operation whose replica was physically removed (control_plane_publications
+// -p1-r2 the same, in WP-A and the pre-gate).
+test('a REMOVE re-delivered after its removal completed is answered ' +
+  'COMPLETED; another operation is never answered from that record',
+async (t) => {
+  const world = openWorld(t);
+  const {cluster, cache, source, peerIds} = world;
+  t.equal(world.elected, true, 'setup: the other voter leads');
+  const removeOutcomes = () => source.outcomes.filter(([type]) =>
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED ||
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED).map(([type]) => type);
+
+  t.equal((await source.removeRequest('op-ledger-remove')).status,
+    ReplicaOperationResponseStatus.INITIATED);
+  await nextTurns();
+  await retirePartitionRaftPeer({raft: cluster.node(LEADER),
+    partitionId: PARTITION_ID, replicaId: LEADER}, SOURCE);
+  for (let round = 0; round < EXIT_ROUNDS && removeOutcomes().length === 0;
+    round += 1) {
+    cluster.settle(() => false, {rounds: 10});
+    await nextTurns();
+  }
+  t.same(removeOutcomes(), [EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED],
+    'setup: the removal completed');
+  t.same(world.committedVoters(), [peerIds[LEADER]],
+    'setup: RemoveNode(source) committed');
+  t.equal(cache.get('services', SOURCE) ?? null, null,
+    'setup: its services row is deleted');
+
+  const redelivered = await source.removeRequest('op-ledger-remove');
+  t.equal(redelivered.status, ReplicaOperationResponseStatus.COMPLETED,
+    `the same operation re-delivered after completion is COMPLETED (${
+      redelivered.error ?? ''})`);
+  t.same(removeOutcomes(), [EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED],
+    'the redelivery reports nothing new: no failure outcome');
+  t.equal(source.handler.replicaStateMachine.getState(SOURCE), null,
+    'nothing is tracked again');
+
+  const other = await source.removeRequest('op-other-remove');
+  t.not(other.status, ReplicaOperationResponseStatus.COMPLETED,
+    'another operation is not answered COMPLETED from the stale record');
+
+  // A newer generation of the same replica id is tracked again: the record
+  // of the old generation's removal answers nothing for it.
+  source.handler.replicaStateMachine.registerReplicaSnapshot(SOURCE, {
+    partitionId: PARTITION_ID, nodeId: NODE_OF[SOURCE], state: 'creating',
+    serviceId: SOURCE, serviceType: 'partition', replicaIdentity: SOURCE,
+    createdAt: 2, durableVersionColumn: 'state_entered_at',
+    durableVersion: 2, authoritativeSnapshot: true});
+  const newerGeneration = await source.removeRequest('op-ledger-remove');
+  t.not(newerGeneration.status, ReplicaOperationResponseStatus.COMPLETED,
+    'a tracked newer generation is never answered from the old record');
+});

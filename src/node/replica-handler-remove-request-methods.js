@@ -547,7 +547,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         mayUseLocalRemovalShortcut,
       )) {
         try {
-          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
+          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId,
+            operationId);
         } catch (error) {
           if (request?.[ReplicaOperationField.GROUP_RETIREMENT]) {
             return this.answerRemovedGroupMember(request, error);
