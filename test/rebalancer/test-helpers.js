@@ -1,3 +1,4 @@
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {buildStorageAdmissionResult} from '../../src/rebalancer/storage-admission-result.js';
 import {STORAGE_ADMISSION_DECISION_TYPE} from '../../src/rebalancer/storage-admission-constants.js';
 import {projectNodeLivenessSemantics} from '../../src/control-plane/node-liveness-semantic-projection.js';
@@ -1188,18 +1189,37 @@ function createTestCoordinator(options = {}) {
     }
   };
   if (!autoProgressCreatedOperations) {
-    const baseCreateOperation = coordinator.createOperation.bind(coordinator);
-    coordinator.createOperation = async (move = {}) => {
-      const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
-        move :
-        {
-          ...move,
-          emitOperationCreated: false,
-        };
-      return baseCreateOperation(normalizedMove);
-    };
+    withInertFreshCreateArm(coordinator);
   }
   return coordinator;
+}
+
+/**
+ * A fixture coordinator persists a fresh create at its durable PENDING step
+ * without arming its progress: the owner's create arm is inert while
+ * createOperationRecordInternal runs. The reuse rearm of an existing
+ * in-flight row (maybeRearmReusedPendingOperation) stays live, also when the
+ * create's own persistence collision reuses a row. The scope is the create's
+ * call chain, so a concurrent create's reuse rearm is not silenced.
+ * @param {RebalanceCoordinator} coordinator - Fixture coordinator.
+ */
+function withInertFreshCreateArm(coordinator) {
+  const freshCreateScope = new AsyncLocalStorage();
+  const arm = coordinator.armCoordinatorCreatedOperationProgress
+    .bind(coordinator);
+  const createRecord = coordinator.createOperationRecordInternal
+    .bind(coordinator);
+  const rearmReused = coordinator.maybeRearmReusedPendingOperation
+    .bind(coordinator);
+  coordinator.createOperationRecordInternal = (context) =>
+    freshCreateScope.run(true, () => createRecord(context));
+  coordinator.maybeRearmReusedPendingOperation = (operation) =>
+    freshCreateScope.run(false, () => rearmReused(operation));
+  coordinator.armCoordinatorCreatedOperationProgress =
+    async (operation, armContext) =>
+      freshCreateScope.getStore() === true ?
+        false :
+        arm(operation, armContext);
 }
 
 /**

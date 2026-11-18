@@ -203,7 +203,6 @@ async function createTargetSlotAuthorityFixture({heldCount, publishHeldRows = fa
         nodeId: TARGET_NODE_ID,
         replicaId: `${CONTENDER_PARTITION_ID}-r2`,
         enforceConcurrentOperationBudget: true,
-        emitOperationCreated: false,
       }),
     };
   } catch (error) {

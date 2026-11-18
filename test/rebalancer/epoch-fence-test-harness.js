@@ -164,7 +164,6 @@ function buildEpochBoundAddMove(epoch, overrides = {}) {
     entityId: TEST_PARTITION_ID,
     nodeId: TEST_TARGET_NODE_ID,
     membershipPublicationEpoch: epoch,
-    emitOperationCreated: false,
     ...overrides,
   };
 }

@@ -126,7 +126,6 @@ function buildMove(targetNodeId, overrides = {}) {
     sourceNodeId: 'source-node',
     replicaId: SOURCE_REPLICA_ID,
     enforceConcurrentOperationBudget: true,
-    emitOperationCreated: false,
     ...overrides,
   };
 }

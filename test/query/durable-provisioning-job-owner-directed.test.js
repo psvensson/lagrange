@@ -20,11 +20,25 @@ import {TableCreationService} from
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  COMMITTED_MEMBERSHIP_STAMP_KIND,
+} from '../../src/raft/raft-committed-membership-constants.js';
+import {
+  isBootstrapTopologyDispatchDeferred,
+} from '../../src/rebalancer/replica-status.js';
+import {
+  isCoordinatorOwnedOperationType,
+} from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+} from '../../src/rebalancer/replica-operation-step-policy.js';
+import {
   createMockMessageRouter,
   createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
 const TABLE_NAME = 'w9_directed_provisioning_probe';
+// ReplicaDispatchService's dispatch cause (REPLICA_DISPATCH_SERVICE_LITERAL).
+const REPLICA_OPERATION_DISPATCH_CAUSE = 'replica_operation_dispatch';
 const NODE_IDS = Object.freeze(['node-a', 'node-b', 'node-c']);
 
 function createAst() {
@@ -60,7 +74,17 @@ function applyDirectedInsert(rows, tableRows, mutation) {
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
 
-function applyDirectedUpdate(rows, mutation) {
+// SQL UPDATE ... WHERE semantics for a replica_operations row: every stated
+// predicate column must equal the durable value (a null predicate is IS NULL).
+function replicaOperationWhereMatches(current, whereClause) {
+  return Object.entries(whereClause).every(([column, expected]) =>
+    expected === undefined ||
+      (expected === null ?
+        current[column] === null || current[column] === undefined :
+        current[column] === expected));
+}
+
+function applyDirectedUpdate(rows, mutation, replicaOperationWrites) {
   const {tableName} = mutation;
   const identity = mutation.whereClause?.job_id ||
     mutation.whereClause?.operation_id;
@@ -78,6 +102,16 @@ function applyDirectedUpdate(rows, mutation) {
       return {success: true, affectedRows: 0};
     }
   }
+  if (tableName === TABLES.REPLICA_OPERATIONS) {
+    const applied = replicaOperationWhereMatches(current, mutation.whereClause);
+    replicaOperationWrites.push({
+      operationId: identity,
+      applied,
+      fromStep: current.workflow_step,
+      toStep: mutation.data?.workflow_step ?? current.workflow_step,
+    });
+    if (!applied) return {success: true, affectedRows: 0};
+  }
   rows.set(key, {...current, ...mutation.data});
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
@@ -85,6 +119,7 @@ function applyDirectedUpdate(rows, mutation) {
 function createDurableGateway(t, serviceRows) {
   const rows = new Map();
   const writes = [];
+  const replicaOperationWrites = [];
   const reservationReadRows = [];
   const reservationDatabase = new Database(':memory:');
   reservationDatabase.exec(generateCreateTableSQL(STORAGE_RESERVATIONS_SCHEMA));
@@ -167,10 +202,15 @@ function createDurableGateway(t, serviceRows) {
     return {success: true, rows: candidates};
   }
 
-  return {
+  const gateway = {
     rows,
     writes,
+    replicaOperationWrites,
     reservationReadRows,
+    // The applied replica_operations change feed (the CDC fan-out a node's
+    // replica dispatch service replays). A runtime that models that lane
+    // subscribes here; null means no live dispatch lane.
+    onReplicaOperationApplied: null,
     readStoredReservation(reservationId) {
       return reservationDatabase.prepare(
         'SELECT * FROM storage_reservations WHERE reservation_id = ?',
@@ -184,16 +224,32 @@ function createDurableGateway(t, serviceRows) {
       writes.push(mutation);
       const operation = String(mutation.operation).toUpperCase();
       const tableName = mutation.tableName;
+      let result = null;
       if (operation === 'INSERT') {
-        return applyDirectedInsert(rows, tableRows, mutation);
+        result = applyDirectedInsert(rows, tableRows, mutation);
+      } else if (operation === 'UPDATE') {
+        result = applyDirectedUpdate(rows, mutation, replicaOperationWrites);
+      } else {
+        throw new Error(
+          `Unexpected durable mutation ${operation} ${tableName}`);
       }
-      if (operation === 'UPDATE') {
-        return applyDirectedUpdate(rows, mutation);
+      const identity = mutation.whereClause?.operation_id ||
+        mutation.row?.operation_id;
+      if (
+        tableName === TABLES.REPLICA_OPERATIONS &&
+        result.affectedRows > 0 &&
+        gateway.onReplicaOperationApplied
+      ) {
+        gateway.onReplicaOperationApplied(
+          {...rows.get(`${TABLES.REPLICA_OPERATIONS}:${identity}`)});
       }
-      throw new Error(`Unexpected durable mutation ${operation} ${tableName}`);
+      return result;
     },
     readRows,
     readAuthoritativeRows: readRows,
+    // A committed CREATE TABLE is projected on this node at once: the
+    // directed world has one durable store and no apply lag.
+    async awaitProjectionAt() {},
     async executeQuery(sql, params = []) {
       if (sql.includes('storage_reservations')) {
         return executeReservationSql(sql, params);
@@ -205,6 +261,7 @@ function createDurableGateway(t, serviceRows) {
       return {success: true, rows: []};
     },
   };
+  return gateway;
 }
 
 function createCache(serviceRows) {
@@ -234,6 +291,7 @@ function createRuntime(options) {
     ownerId,
     serviceRows,
     suspendWhenConstrained = false,
+    dispatchLane = false,
   } = options;
   const cache = createCache(serviceRows);
   const messageRouter = createMockMessageRouter();
@@ -243,6 +301,14 @@ function createRuntime(options) {
       operationId: request.operationId,
       replicaId: request.replicaId,
       targetNodeId,
+      // The durable step at the physical CREATE: a dispatch is claimed only
+      // when its owner's PENDING -> SENDING write is durable.
+      durableWorkflowStep: gateway.rows.get(
+        `${TABLES.REPLICA_OPERATIONS}:${request.operationId}`,
+      )?.workflow_step ?? null,
+      // The founding cohort the CREATE carries (the released stamp).
+      cohortReplicaIds: request.replicaIds ?? null,
+      bootstrapMembershipKind: request.bootstrapMembership?.kind ?? null,
     });
     if (!serviceRows.some((row) => row.service_id === request.replicaId)) {
       serviceRows.push({
@@ -326,18 +392,29 @@ function createRuntime(options) {
   // directed world; the coordinator's route observation sees it as live.
   coordinator.observeReplicaOperationMutationRoute = () =>
     ({allowed: true, retryAfterMs: 0});
-  coordinator.persistOperationUpdate = async (operation) => {
-    const key = `${TABLES.REPLICA_OPERATIONS}:${operation.operationId}`;
-    gateway.rows.set(key, {
-      ...gateway.rows.get(key),
-      status: operation.status,
-      workflow_step: operation.workflowStep,
-      steps_history: JSON.stringify(operation.stepsHistory),
-      replica_id: operation.replicaId,
-    });
-    return true;
-  };
   coordinator.initialize();
+  const laneDispatches = new Set();
+  if (dispatchLane) {
+    // This node's replica dispatch lane: the CDC replay of an applied
+    // replica_operations change hands every unheld, claimable row to the
+    // coordinator's dispatch owner (replica-dispatch-replay-health-
+    // readiness.js -> ReplicaDispatchService.dispatchOperationRow), one
+    // event-loop turn after the write, as a CDC delivery arrives.
+    gateway.onReplicaOperationApplied = (row) => {
+      if (
+        !isCoordinatorOwnedOperationType(row.type) ||
+        isBootstrapTopologyDispatchDeferred(row) ||
+        !DISPATCH_PENDING_WORKFLOW_STEPS.has(row.workflow_step)
+      ) {
+        return;
+      }
+      laneDispatches.add(new Promise(setImmediate).then(() =>
+        coordinator.dispatchOperation(
+          coordinator.repository.rowToOperation(row),
+          {cause: REPLICA_OPERATION_DISPATCH_CAUSE},
+        )));
+    };
+  }
 
   const engine = new SQLQueryEngine({
     nodeId: NODE_IDS[0],
@@ -355,6 +432,9 @@ function createRuntime(options) {
   engine.sleep = async (durationMs) => {
     if (suspendWhenConstrained && !capacity.available) return suspendedSleep;
     clock.value += durationMs;
+    // A wait that a live dispatch lane must answer yields one event-loop
+    // turn, as a real timer does, so the lane's dispatch interleaves.
+    if (dispatchLane) await new Promise(setImmediate);
   };
 
   const service = new TableCreationService({
@@ -375,7 +455,7 @@ function createRuntime(options) {
     partitionProvisioner: (context) =>
       engine.provisionInitialTablePartition(context),
   });
-  return {coordinator, engine, service};
+  return {coordinator, engine, service, laneDispatches};
 }
 
 async function runDurableProvisioningDirectedScenario(t) {
@@ -508,12 +588,221 @@ async function runDurableProvisioningDirectedScenario(t) {
   };
 }
 
+// Where a first provisioning attempt dies, named by the coordinator call that
+// fails: before the cohort's dispatch hold is released (every row still
+// held), or after the release and before any inline execution (every row
+// released, unclaimed and undispatched).
+const FIRST_ATTEMPT_INTERRUPT = Object.freeze({
+  NONE: null,
+  BEFORE_HOLD_RELEASE: 'releaseBootstrapTopologyDispatchHold',
+  AFTER_HOLD_RELEASE: 'executeOperation',
+});
+
+function readWorkflowSteps(row) {
+  return JSON.parse(row.steps_history).map((entry) => entry.step);
+}
+
+function readPartitionOperationRows(gateway) {
+  return [...gateway.rows.values()].filter((row) => row.operation_id);
+}
+
+async function runInterruptedFirstAttempt(t, world, interruptAt) {
+  const {capacity, clock, gateway, serviceRows} = world;
+  const firstRuntime = createRuntime({
+    capacity,
+    clock,
+    gateway,
+    ownerId: 'schema-owner-interrupted',
+    serviceRows,
+  });
+  firstRuntime.coordinator[interruptAt] = async () => {
+    throw new Error(
+      'Authoritative replica operation not confirmed: attempt interrupted');
+  };
+  const interrupted = await firstRuntime.service.createTable(createAst(), {
+    timeoutBudget: createTimeoutBudget({
+      configuredBudgetMs: 10,
+      now: () => clock.value,
+    }),
+  });
+  for (let turn = 0; turn < 50; turn += 1) await new Promise(setImmediate);
+  t.equal(interrupted.contractState, OWNER_CONTRACT_STATE.PENDING,
+    'the interrupted attempt leaves the durable job pending');
+  const rows = readPartitionOperationRows(gateway);
+  t.equal(rows.length, NODE_IDS.length);
+  t.ok(rows.every((row) => row.workflow_step === 'PENDING'),
+    'every child row is left PENDING');
+  t.ok(rows.every((row) => isBootstrapTopologyDispatchDeferred(row) ===
+    (interruptAt === FIRST_ATTEMPT_INTERRUPT.BEFORE_HOLD_RELEASE)),
+  'the child rows are held exactly when the attempt died before release');
+  t.equal(capacity.dispatches.length, 0,
+    'the interrupted attempt dispatched nothing');
+  return {firstRuntime, interrupted};
+}
+
+// One provisioning job whose retry (or first run) executes on a node with a
+// live replica dispatch lane: the coordinator's own lanes and the
+// provisioner's inline execution compete for every child row, and the
+// durable rows must show exactly one claimed dispatch each.
+async function runDispatchLaneProvisioningScenario(t, interruptAt) {
+  const world = {
+    clock: {value: 100},
+    capacity: {available: true, deniedNodeIds: new Set(), dispatches: []},
+    serviceRows: [],
+  };
+  world.gateway = createDurableGateway(t, world.serviceRows);
+  const {capacity, clock, gateway, serviceRows} = world;
+  const first = interruptAt === FIRST_ATTEMPT_INTERRUPT.NONE ?
+    null :
+    await runInterruptedFirstAttempt(t, world, interruptAt);
+
+  clock.value = 40000;
+  const laneRuntime = createRuntime({
+    capacity,
+    clock,
+    gateway,
+    ownerId: 'schema-owner-dispatch-lane',
+    serviceRows,
+    dispatchLane: true,
+  });
+  const completed = await laneRuntime.service.createTable(createAst());
+  await Promise.allSettled([...laneRuntime.laneDispatches]);
+  t.equal(completed.contractState, OWNER_CONTRACT_STATE.READY);
+  if (first) {
+    t.equal(completed.jobId, first.interrupted.jobId,
+      'the retry attaches to the durable parent identity');
+  }
+
+  const operations = readPartitionOperationRows(gateway);
+  t.equal(operations.length, NODE_IDS.length);
+  t.ok(operations.every((row) => row.workflow_step === 'ACTIVE'),
+    'every child operation completed');
+  t.ok(operations.every((row) => !isBootstrapTopologyDispatchDeferred(row)),
+    'every child hold was released');
+  const dispatchCounts = new Map();
+  for (const dispatch of capacity.dispatches) {
+    dispatchCounts.set(dispatch.operationId,
+      (dispatchCounts.get(dispatch.operationId) || 0) + 1);
+  }
+  t.same(
+    operations.map((row) => dispatchCounts.get(row.operation_id) || 0),
+    operations.map(() => 1),
+    'each child row is dispatched exactly once across every lane',
+  );
+  t.same(
+    capacity.dispatches.filter((dispatch) =>
+      dispatch.durableWorkflowStep === 'PENDING'),
+    [],
+    'no CREATE is sent for a row whose durable claim is not written',
+  );
+  const cohort = operations.map((row) => row.replica_id).sort();
+  t.same(
+    capacity.dispatches.map((dispatch) => ({
+      cohort: [...(dispatch.cohortReplicaIds ?? [])].sort(),
+      membership: dispatch.bootstrapMembershipKind,
+    })),
+    capacity.dispatches.map(() => ({
+      cohort,
+      membership: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
+    })),
+    'every CREATE carries the complete released cohort stamp: no row is ' +
+      'dispatched while its hold is still in place',
+  );
+  for (const row of operations) {
+    const steps = readWorkflowSteps(row);
+    t.ok(steps.includes('SENDING'),
+      `${row.operation_id} keeps its durable SENDING claim`);
+    t.equal(steps.lastIndexOf('PENDING'), 0,
+      `${row.operation_id} never returns to PENDING once claimed`);
+  }
+  t.same(
+    gateway.replicaOperationWrites.filter((write) =>
+      write.applied && write.fromStep !== 'PENDING' &&
+        write.toStep === 'PENDING'),
+    [],
+    'no writer rewinds a claimed child row to PENDING',
+  );
+  await laneRuntime.coordinator.shutdown();
+  await first?.firstRuntime.coordinator.shutdown();
+}
+
+// Two coordinators (two nodes' owners) race to release the same held row:
+// both observe it held and PENDING, and the release compare-and-set on the
+// observed steps history admits exactly one.
+async function runConcurrentHoldReleaseScenario(t) {
+  const world = {
+    clock: {value: 100},
+    capacity: {available: true, deniedNodeIds: new Set(), dispatches: []},
+    serviceRows: [],
+  };
+  world.gateway = createDurableGateway(t, world.serviceRows);
+  const {firstRuntime} = await runInterruptedFirstAttempt(t, world,
+    FIRST_ATTEMPT_INTERRUPT.BEFORE_HOLD_RELEASE);
+  const [heldRow] = readPartitionOperationRows(world.gateway);
+  const releasers = ['schema-owner-race-a', 'schema-owner-race-b'].map(
+    (ownerId) => createRuntime({...world, ownerId}).coordinator);
+  const stamp = Object.freeze({
+    replicaIds: [heldRow.replica_id],
+    peerAddresses: [`${heldRow.target_node_id}/partition/race`],
+  });
+  const outcomes = await Promise.all(releasers.map((coordinator) =>
+    coordinator.releaseBootstrapTopologyDispatchHold(
+      heldRow.operation_id, stamp)));
+  t.same(outcomes.map((outcome) => outcome.released).sort(), [false, true],
+    'exactly one concurrent releaser wins the held row');
+  const refused = outcomes.find((outcome) => !outcome.released);
+  t.equal(refused?.operation?.workflowStep, 'PENDING',
+    'the refused releaser re-reads the row its rival released');
+  t.equal(refused?.operation?.stepsHistory?.length, 1);
+  t.notOk(isBootstrapTopologyDispatchDeferred(refused?.operation),
+    'the re-read row no longer carries the hold');
+  t.same(
+    world.gateway.replicaOperationWrites.filter((write) =>
+      write.operationId === heldRow.operation_id && write.applied),
+    [{
+      operationId: heldRow.operation_id,
+      applied: true,
+      fromStep: 'PENDING',
+      toStep: 'PENDING',
+    }],
+    'one release write applied; the rival compare-and-set changed nothing',
+  );
+  for (const coordinator of releasers) await coordinator.shutdown();
+  await firstRuntime.coordinator.shutdown();
+}
+
 if (process.env.W9_DIRECTED_REPORT_MODE !== '1') {
   test('directed real-owner chain: capacity pending -> owner recreation -> ' +
     'one terminal job with deterministic duplicate-free replica operations',
   async (t) => {
     const evidence = await runDurableProvisioningDirectedScenario(t);
     t.equal(evidence.fidelity, 'deterministic-directed');
+  });
+
+  test('retry after an attempt died with every child hold released: the ' +
+    'reused unheld rows are claimed and dispatched once by the owner lanes, ' +
+    'never rewound or re-executed by the retrying provisioner',
+  async (t) => {
+    await runDispatchLaneProvisioningScenario(t,
+      FIRST_ATTEMPT_INTERRUPT.AFTER_HOLD_RELEASE);
+  });
+
+  test('retry after an attempt died before releasing the child holds: the ' +
+    'retry releases each held row once and every row is dispatched once',
+  async (t) => {
+    await runDispatchLaneProvisioningScenario(t,
+      FIRST_ATTEMPT_INTERRUPT.BEFORE_HOLD_RELEASE);
+  });
+
+  test('concurrent hold releases of one held row: exactly one applies',
+    async (t) => {
+      await runConcurrentHoldReleaseScenario(t);
+    });
+
+  test('fresh provisioning beside a live dispatch lane: the durable hold is ' +
+    'the one dispatch authority and every row is dispatched once',
+  async (t) => {
+    await runDispatchLaneProvisioningScenario(t, FIRST_ATTEMPT_INTERRUPT.NONE);
   });
 }
 

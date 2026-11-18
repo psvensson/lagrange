@@ -240,7 +240,6 @@ async function runRemove(overrides = {}) {
       replicaId,
       moveReason,
       enforceConcurrentOperationBudget,
-      emitOperationCreated: false,
     });
   } catch (caught) {
     error = caught;

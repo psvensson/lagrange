@@ -13,6 +13,7 @@
  * schema_operations partition produced client-side silence.
  */
 import {test} from '../../src/test-helpers/tap.js';
+import {withBootstrapHoldRelease} from './sql-query-engine-test-support.js';
 import {
   SchemaProvisioningJobOwner,
   isTransientProvisioningError,
@@ -132,9 +133,8 @@ test('the schema-job prologue honors the request deadline', async (t) => {
   t.end();
 });
 
-test('in-flight SENDING/CREATING child operations are not re-persisted or ' +
+test('in-flight SENDING/CREATING child operations are not re-stamped or ' +
   're-dispatched on a schema provisioning retry', async (t) => {
-  const persistedIds = [];
   const executedIds = [];
   const waitedReplicaIds = [];
   const operationsByNode = new Map([
@@ -195,17 +195,14 @@ test('in-flight SENDING/CREATING child operations are not re-persisted or ' +
     },
     waitForRoutablePartitionServiceCount: async () => ['node-a', 'node-b'],
     waitForPartitionLeaderService: async () => ({node_id: 'node-a'}),
-    rebalanceCoordinator: {
+    rebalanceCoordinator: withBootstrapHoldRelease({
       createOperation: async (move) => operationsByNode.get(move.nodeId),
       dispatchOperation: async () => ({success: true}),
-      persistOperationUpdate: async (operation) => {
-        persistedIds.push(operation.operationId);
-      },
       executeOperation: async (operation) => {
         executedIds.push(operation.operationId);
         return {success: true};
       },
-    },
+    }),
   });
 
   await engine.provisionInitialTablePartition({
@@ -217,9 +214,11 @@ test('in-flight SENDING/CREATING child operations are not re-persisted or ' +
   });
 
   t.same(
-    persistedIds,
+    engine.rebalanceCoordinator.bootstrapHoldReleases
+      .filter((release) => release.released)
+      .map((release) => release.operationId),
     ['job-1:operation:node-b'],
-    'only the still-PENDING operation is stamped and persisted',
+    'the coordinator releases (stamps) only the still-held PENDING operation',
   );
   t.equal(
     operationsByNode.get('node-a').updatedAt,

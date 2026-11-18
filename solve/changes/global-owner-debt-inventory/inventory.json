@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7aada355787753f203653118e069c1935408f05f9ad5e5de8a10511ae56ccb8d"
+        "sha256": "5476983e8e9b34b7dacd50c7cdf46d35bb000d767a80e59e5b47c24d9427569c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "cd7017b7bff2d1883366493df1dbd9f762ede120b799a317f29f256046cc87d9"
+        "sha256": "a67bc93672190ff1e84a82180995ee0bbb5b3494d466b9a856f0f69b0ce2a689"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3589953,
-        "sha256": "96112201bca356270ae3d0f4332b81d4d6be86e23a72b9dcd164b6edb5f6b625"
+        "bytes": 3590373,
+        "sha256": "93b35fe09f8ca0d83291118f65406146c46f1691832f7f55f5194fbecf25127c"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "8c91c062f41d76f92113c57c68132a6b2bfab43bcf614e60290d5385e02bdb18"
+        "sha256": "1a16298665bf9087520b0c92584faf37836a97cbd7b5952cc55498bb942c0f28"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "b0d40736887120313fc5dd33f9eda0048aebfda8668bc0a1fd81b4ab9fe9d6d3"
+        "sha256": "7482d348360fb20b1a41dbce00c803dbca75ccd60689dc2393b612902cfffdcb"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "cca33e77444d2ea9a0a3828f17e614c27eab26ce60aaa1b79dd0cf4c13175bcc"
+    "inputDigest": "c8b85216b7854fa1af3ecd001d993eb47213d83539ea6937f7ae662fb360888d"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7aada355787753f203653118e069c1935408f05f9ad5e5de8a10511ae56ccb8d"
+        "sha256": "5476983e8e9b34b7dacd50c7cdf46d35bb000d767a80e59e5b47c24d9427569c"
       },
       "declaredCount": 1688,
       "observedCount": 1688,
@@ -84,7 +84,7 @@
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "cd7017b7bff2d1883366493df1dbd9f762ede120b799a317f29f256046cc87d9"
+        "sha256": "a67bc93672190ff1e84a82180995ee0bbb5b3494d466b9a856f0f69b0ce2a689"
       },
       "declaredCount": 144,
       "observedCount": 144,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "8c91c062f41d76f92113c57c68132a6b2bfab43bcf614e60290d5385e02bdb18"
+          "sha256": "1a16298665bf9087520b0c92584faf37836a97cbd7b5952cc55498bb942c0f28"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "b0d40736887120313fc5dd33f9eda0048aebfda8668bc0a1fd81b4ab9fe9d6d3"
+          "sha256": "7482d348360fb20b1a41dbce00c803dbca75ccd60689dc2393b612902cfffdcb"
         },
         "cloneGroups": 612,
         "duplicatedLines": 21888,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3589953,
-        "sha256": "96112201bca356270ae3d0f4332b81d4d6be86e23a72b9dcd164b6edb5f6b625"
+        "bytes": 3590373,
+        "sha256": "93b35fe09f8ca0d83291118f65406146c46f1691832f7f55f5194fbecf25127c"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "7cf468960d2427042b20ac941f94aae353163f5e2dfd70280f3ccd72ab286d66",
+      "sourceDigest": "58a403454c39001c9c97307c21278d9fd5050f2bd9c1a93096e2254155deb226",
       "moduleCount": 6218,
-      "edgeCount": 35649,
+      "edgeCount": 35656,
       "unresolvedCount": 39
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2363,
     "assignedSignalCount": 2363,
     "uniqueAssignmentCount": 2363,
-    "digest": "523defd8d2f0efe7f600798cb29fb5bc044890fd3f4b20b1cf64dd922f1f72a6"
+    "digest": "4e02c4bb86849bfa2f2aa01a045c81dc361911323fd75917d49275b48b5e525d"
   },
   "signalCounts": {
     "cognitive": 144,
@@ -201,7 +201,7 @@
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1225,
+    "filesWithDebt": 1226,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -254,7 +254,7 @@
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 239,
-      "importOut": 790,
+      "importOut": 791,
       "score": 1420.2,
       "topPaths": [
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
@@ -337,7 +337,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 740,
+      "importIn": 742,
       "importOut": 356,
       "score": 624.8,
       "topPaths": [
@@ -468,9 +468,9 @@
       "ownerAreas": [
         "test/query"
       ],
-      "fileCount": 34,
-      "signalCount": 36,
-      "complexity": 5,
+      "fileCount": 35,
+      "signalCount": 37,
+      "complexity": 6,
       "cognitive": 0,
       "oversizedFiles": 0,
       "duplicatedLines": 2012,
@@ -478,8 +478,8 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 7,
-      "importOut": 293,
-      "score": 221.2,
+      "importOut": 310,
+      "score": 225.2,
       "topPaths": [
         "test/query/deferred-hash.test.js",
         "test/query/sql-query-engine-partition-readiness-waits.test.js",
@@ -609,8 +609,8 @@
         "src/query"
       ],
       "fileCount": 14,
-      "signalCount": 39,
-      "complexity": 33,
+      "signalCount": 38,
+      "complexity": 32,
       "cognitive": 6,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
@@ -618,11 +618,11 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 145,
-      "importOut": 89,
-      "score": 180,
+      "importOut": 87,
+      "score": 176,
       "topPaths": [
-        "src/query/sql-query-engine-provisioning-admission-methods.js",
         "src/query/sql-query-engine-provision-target-methods.js",
+        "src/query/sql-query-engine-provisioning-admission-methods.js",
         "src/query/sql-query-engine-bootstrap-routing-overlay.js",
         "src/query/sql-query-engine-write-failure-methods.js",
         "src/query/sql-query-engine.js"
@@ -3406,16 +3406,16 @@
           "test/cli"
         ],
         "engagementPaths": [
-          "src/query/sql-query-engine-provisioning-admission-methods.js",
           "src/query/sql-query-engine-provision-target-methods.js",
+          "src/query/sql-query-engine-provisioning-admission-methods.js",
           "src/query/sql-query-engine-bootstrap-routing-overlay.js",
           "src/query/sql-query-engine-write-failure-methods.js",
           "src/query/sql-query-engine.js"
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 180,
-          "complexity": 33,
+          "score": 176,
+          "complexity": 32,
           "cognitive": 6,
           "oversizedFiles": 0,
           "duplicatedLines": 0,
@@ -3850,8 +3850,8 @@
           }
         ],
         "baseline": {
-          "score": 221.2,
-          "complexity": 5,
+          "score": 225.2,
+          "complexity": 6,
           "cognitive": 0,
           "oversizedFiles": 0,
           "duplicatedLines": 2012,

@@ -31,6 +31,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   createMockMessageRouter,
   createProvisioningReadyService,
+  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 import {
   committedMembershipPublicationRow,
@@ -228,7 +229,7 @@ function createDeadlineFixture(options = {}) {
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission() {
       return nowMs >= admitAtMs ? ADMIT : HOLD;
     },
@@ -253,7 +254,7 @@ function createDeadlineFixture(options = {}) {
       });
       return {success: true};
     },
-  };
+  });
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache,

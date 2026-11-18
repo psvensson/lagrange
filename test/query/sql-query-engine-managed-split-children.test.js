@@ -51,6 +51,7 @@ import {
   createProvisioningReadyService,
   uniqueNodeIds,
   createAdmittedSplitAdmissionService,
+  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 
@@ -300,7 +301,7 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -348,7 +349,7 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({
@@ -436,7 +437,7 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     contractState: 'ready',
     nextAction: 'proceed',
   });
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -476,7 +477,7 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({
@@ -605,7 +606,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -628,7 +629,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
       }
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -756,7 +757,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       return {
         operationId: 'op-routable-cache-repair',
@@ -767,7 +768,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
     async executeOperation() {
       return {success: true};
     },
-  };
+  });
 
   const cdcIntegrationService = {};
 
@@ -880,7 +881,7 @@ test('SQLQueryEngine - provisionInitialTablePartition starts replica metadata ' 
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       nextReplicaOrdinal += 1;
       return {
@@ -892,7 +893,7 @@ test('SQLQueryEngine - provisionInitialTablePartition starts replica metadata ' 
     async executeOperation() {
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({
@@ -1019,7 +1020,7 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -1041,7 +1042,7 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
       }
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -1164,7 +1165,7 @@ test('SQLQueryEngine - provisionInitialTablePartition tolerates one failed ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
       return {
@@ -1192,7 +1193,7 @@ test('SQLQueryEngine - provisionInitialTablePartition tolerates one failed ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,

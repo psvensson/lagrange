@@ -369,7 +369,6 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             partitionId: PARTITION,
             nodeId: NODE,
             replicaId: `${PARTITION}-r1`,
-            emitOperationCreated: false,
           });
           const baseline = await world.owner.evaluateRemoveSafety(operation);
           assert.match(baseline.error, /below minimum/, 'five voters cannot lose one under minimum five');
@@ -466,7 +465,6 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
             entityId: GROUP,
             nodeId: NODE,
             replicaId: `${GROUP}-r1`,
-            emitOperationCreated: false,
           });
           // Prime policyCache with target 5 first so faults also prove cached policy cannot bypass row observation.
           await world.policyOwner.getMessageGroupPolicy(GROUP);

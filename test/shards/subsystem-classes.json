@@ -28,7 +28,7 @@
   "censusSize": 2665,
   "digest": "fnv1a32-0af21cc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-08dec6c8",
+  "observationDigest": "fnv1a32-2964af77",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14609,6 +14609,15 @@
         "src/runtime/pgwire-protocol-handler.js"
       ]
     },
+    "test/query/schema-provisioning-transient-collision.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
     "test/query/select-no-from.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
@@ -15449,6 +15458,7 @@
         "src/rebalancer/operation-workflow-replace-owner-wake.js",
         "src/rebalancer/operation-workflow-replace-surviving-membership.js",
         "src/rebalancer/operation-workflow-replace-witness.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",

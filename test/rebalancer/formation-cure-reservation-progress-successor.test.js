@@ -162,7 +162,6 @@ test('successor discriminator: terminal settlement wins before retained ' +
         nodeId: TARGET_NODE_ID,
         replicaIntentId: 'successor-terminal-p1-r4',
         operationIntentId: 'successor-terminal-op',
-        emitOperationCreated: true,
       });
     } catch (error) {
       createError = error;
@@ -210,7 +209,6 @@ test('successor discriminator: a continuation older than the shutdown fence ' +
     nodeId: TARGET_NODE_ID,
     replicaIntentId: 'successor-shutdown-p1-r4',
     operationIntentId: operationId,
-    emitOperationCreated: true,
   });
   const creationOutcome = createPromise.then(
     () => 'created',

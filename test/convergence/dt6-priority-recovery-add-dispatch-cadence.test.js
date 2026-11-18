@@ -313,7 +313,7 @@ function buildInitialPublicationRow() {
   };
 }
 
-function buildMove({type, tableId, targetNodeId, emitOperationCreated}) {
+function buildMove({type, tableId, targetNodeId}) {
   const partitionId = partitionIdOf(tableId);
   const move = {
     type,
@@ -323,7 +323,6 @@ function buildMove({type, tableId, targetNodeId, emitOperationCreated}) {
     nodeId: targetNodeId,
     moveReason: MOVE_REASON_SPREAD,
     enforceConcurrentOperationBudget: true,
-    emitOperationCreated,
     membershipPublicationEpoch: INITIAL_PUBLICATION_EPOCH,
   };
   if (type === OperationType.REPLACE) {
@@ -493,6 +492,7 @@ async function runFormationCadenceScenario() {
   const fixture = createTimeoutTestCoordinator({
     timeSource,
     nodeId: SEED_NODE_ID,
+    armCreatedOperations: true,
     pendingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.PENDING_TIMEOUT_MS,
     creatingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS,
     syncingTimeoutMs: REBALANCER_DEFAULT.COORDINATOR.SYNCING_TIMEOUT_MS,
@@ -685,7 +685,6 @@ async function runFormationCadenceScenario() {
           type: OperationType.ADD,
           tableId: sibling.tableId,
           targetNodeId: JOINER_2_NODE_ID,
-          emitOperationCreated: true,
         }),
       );
       sibling.operation = operation;
@@ -744,7 +743,6 @@ async function runFormationCadenceScenario() {
           type: OperationType.REPLACE,
           tableId: LEDGER_TABLE_ID,
           targetNodeId: JOINER_2_NODE_ID,
-          emitOperationCreated: false,
         }),
       ),
     });

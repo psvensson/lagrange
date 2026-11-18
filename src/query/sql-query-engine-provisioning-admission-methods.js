@@ -238,12 +238,6 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     if (!Array.isArray(operations) || operations.length === 0) {
       return;
     }
-    if (
-      !this.rebalanceCoordinator ||
-      typeof this.rebalanceCoordinator.failOperation !== LOCAL_STR_FUNCTION
-    ) {
-      return;
-    }
 
     this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_ABORT_PENDING, {
       partitionId,
@@ -433,10 +427,11 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       controlPlaneMutationWorkClass:
         CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
       // Initial partition provisioning executes these operations inline
-      // below. Keep durable CDC/replay dispatch held until the complete
-      // bootstrap cohort is stamped, then skip the redundant local trigger.
+      // once the complete bootstrap cohort is stamped. The durable hold is
+      // the one dispatch authority until then: the owner's claim refuses a
+      // held row on every lane, and the provisioner's hold release is a
+      // compare-and-set on the durable held row.
       deferDispatchUntilBootstrapTopology: true,
-      emitOperationCreated: false,
       operationIntentId: options.childIntent.operationIntentId,
       replicaIntentId: options.childIntent.replicaIntentId,
       parentWorkflowFenceToken: options.parentWorkflowFenceToken,

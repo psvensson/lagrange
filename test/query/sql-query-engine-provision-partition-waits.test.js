@@ -50,6 +50,7 @@ config.initialize();
 import {
   createMockMessageRouter,
   createProvisioningReadyService,
+  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 
@@ -139,7 +140,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       compositeProbeMoves.push(move);
       const operationCreationAdmission = Object.freeze({
@@ -182,7 +183,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -416,7 +417,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       return {
         operationId: `op-${move.nodeId}`,
@@ -436,7 +437,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -540,7 +541,7 @@ async (t) => {
   };
 
   let replicaOrdinal = 0;
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       replicaOrdinal += 1;
       return {
@@ -552,7 +553,7 @@ async (t) => {
     async executeOperation() {
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -628,7 +629,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       return {
         operationId: `op-${move.nodeId}`,
@@ -639,7 +640,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
     async executeOperation() {
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({
@@ -782,7 +783,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       return {
         operationId: `op-${move.nodeId}`,
@@ -795,7 +796,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
       executedTargetNodeIds.push(targetNodeId);
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -898,7 +899,7 @@ test('SQLQueryEngine - attempt 2: RF3 with 2 eligible nodes completes under_repl
     systemCache: cache,
     controlPlaneReadinessService: readiness,
     messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator: {
+    rebalanceCoordinator: withBootstrapHoldRelease({
       checkProvisioningAdmission: async (move) => ({
         allowed: true,
         decisionType: 'admitted',
@@ -917,7 +918,7 @@ test('SQLQueryEngine - attempt 2: RF3 with 2 eligible nodes completes under_repl
         routable = true;
         return {success: true};
       },
-    },
+    }),
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};

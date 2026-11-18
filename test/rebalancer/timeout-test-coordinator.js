@@ -325,16 +325,13 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
-  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
-  coordinator.createOperation = async (move = {}) => {
-    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
-      move :
-      {
-        ...move,
-        emitOperationCreated: false,
-      };
-    return baseCreateOperation(normalizedMove);
-  };
+  // Every create is armed by the coordinator's workflow owner (the durable
+  // dispatch hold, not a request flag, gates dispatch). A fixture that drives
+  // the timeout owner over an unclaimed PENDING row isolates that owner from
+  // the arm; a test that wants live owner progress asks for it.
+  if (options.armCreatedOperations !== true) {
+    coordinator.armCoordinatorCreatedOperationProgress = async () => false;
+  }
   coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
   coordinator.config.pendingTimeoutMs = options.pendingTimeoutMs || 10;
   coordinator.config.creatingTimeoutMs = options.creatingTimeoutMs || 10;

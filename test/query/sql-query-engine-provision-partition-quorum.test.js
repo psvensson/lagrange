@@ -44,14 +44,15 @@ import {
   createMockMessageRouter,
   createProvisioningReadyService,
   uniqueNodeIds,
+  withBootstrapHoldRelease,
 } from './sql-query-engine-test-support.js';
 
 
 // Mock system cache with services for routing
 
 
-test('SQLQueryEngine - provisionInitialTablePartition suppresses duplicate ' +
-  'coordinator-created dispatch when executing planned replicas inline',
+test('SQLQueryEngine - provisionInitialTablePartition holds planned replicas ' +
+  'durably and executes inline only the rows whose hold it released',
 async (t) => {
   const tableId = 'tbl-inline-provision-dispatch';
   const partitionId = 'tbl-inline-provision-dispatch-p1';
@@ -68,10 +69,9 @@ async (t) => {
     updated_at: 100,
   }];
   const services = [];
-  const createOperationFlags = [];
+  const createOperationRequestFlags = [];
   const createOperationTopologyHoldFlags = [];
-  const executedInlineFlags = [];
-  const persistedTopologyHoldFlags = [];
+  const executedInlineStamps = [];
   let dispatchOperationCalls = 0;
 
   const cache = {
@@ -126,9 +126,10 @@ async (t) => {
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
-      createOperationFlags.push(move.emitOperationCreated === false);
+      createOperationRequestFlags.push(
+        Object.hasOwn(move, 'emitOperationCreated'));
       createOperationTopologyHoldFlags.push(
         move.deferDispatchUntilBootstrapTopology === true,
       );
@@ -136,7 +137,6 @@ async (t) => {
         operationId: `op-${move.nodeId}`,
         replicaId: `${partitionId}-r1`,
         targetNodeId: move.nodeId,
-        emitOperationCreated: move.emitOperationCreated !== false,
         stepsHistory: [{
           [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]:
             move.deferDispatchUntilBootstrapTopology === true,
@@ -144,16 +144,11 @@ async (t) => {
         ...move,
       };
     },
-    async persistOperationUpdate(operation) {
-      persistedTopologyHoldFlags.push(
-        operation.stepsHistory?.[0]?.[
-          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
-        ] === true,
-      );
-    },
     async executeOperation(operation) {
-      executedInlineFlags.push(operation.emitOperationCreated === false);
-      if (operation.emitOperationCreated !== false) {
+      // Only the released row (it carries the cohort stamp) may execute; a
+      // planned copy still awaiting its hold release must never dispatch.
+      executedInlineStamps.push(operation.replicaIds);
+      if (!Array.isArray(operation.replicaIds)) {
         return {
           success: false,
           error: ERRORS.WRITE_CUTOVER_PAUSED,
@@ -181,7 +176,7 @@ async (t) => {
         error: 'inline provisioning must not use dispatchOperation',
       };
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -202,9 +197,9 @@ async (t) => {
   });
 
   t.same(
-    createOperationFlags,
-    [true],
-    'inline provisioning should suppress the coordinator-created dispatch event',
+    createOperationRequestFlags,
+    [false],
+    'the durable hold, not a create request flag, is the dispatch authority',
   );
   t.same(
     createOperationTopologyHoldFlags,
@@ -212,14 +207,18 @@ async (t) => {
     'initial provisioning should persist operations with dispatch held',
   );
   t.same(
-    persistedTopologyHoldFlags,
-    [false],
-    'the topology-stamped update should clear the durable dispatch hold',
+    rebalanceCoordinator.bootstrapHoldReleases.map((release) => ({
+      operationId: release.operationId,
+      replicaIds: release.stamp.replicaIds,
+    })),
+    [{operationId: 'op-node-a', replicaIds: [`${partitionId}-r1`]}],
+    'the provisioner asks the coordinator to release each hold with the ' +
+      'cohort stamp instead of writing its own copy of the row',
   );
   t.same(
-    executedInlineFlags,
-    [true],
-    'inline provisioning should execute replicas with duplicate dispatch suppressed',
+    executedInlineStamps,
+    [[`${partitionId}-r1`]],
+    'inline provisioning executes only the released, stamped row',
   );
   t.equal(
     dispatchOperationCalls,
@@ -295,7 +294,7 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
       },
     };
 
-    const rebalanceCoordinator = {
+    const rebalanceCoordinator = withBootstrapHoldRelease({
       async createOperation(move) {
         createdTargetNodeIds.push(move.nodeId);
         return {
@@ -315,7 +314,7 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
         });
         return {success: true};
       },
-    };
+    });
 
     const engine = new SQLQueryEngine({
       nodeId: localNodeId,
@@ -392,7 +391,7 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
     return error;
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       attemptedTargetNodeIds.push(move.nodeId);
       if (move.nodeId === localNodeId) {
@@ -416,7 +415,7 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -472,7 +471,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async createOperation(move) {
       attemptedTargetNodeIds.push(move.nodeId);
       const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
@@ -491,7 +490,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
     async executeOperation() {
       throw new Error('executeOperation should not be called');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -551,7 +550,7 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -579,7 +578,7 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
     async executeOperation() {
       throw new Error('executeOperation should not be called');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -655,7 +654,7 @@ test('SQLQueryEngine - provisionInitialTablePartition refuses RF2 ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -705,7 +704,7 @@ test('SQLQueryEngine - provisionInitialTablePartition refuses RF2 ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -774,7 +773,7 @@ async (t) => {
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       const allowed = move.nodeId === localNodeId;
@@ -806,7 +805,7 @@ async (t) => {
     async executeOperation() {
       throw new Error('executeOperation should not be called');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -877,7 +876,7 @@ test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -931,7 +930,7 @@ test('SQLQueryEngine - provisionInitialTablePartition completes RF3 ' +
       });
       return {success: true};
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -1013,7 +1012,7 @@ test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -1053,7 +1052,7 @@ test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
     async executeOperation() {
       throw new Error('executeOperation should not be called');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -1117,7 +1116,7 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
       return {
@@ -1157,7 +1156,7 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
     async executeOperation() {
       throw new Error('executeOperation should not be called');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -1211,7 +1210,6 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
   const failedOperationIds = [];
   const admissionReentries = [];
   const dispatchedOperationIds = [];
-  const persistedHoldStates = [];
   let refuseRemainingTargets = true;
 
   const cache = {
@@ -1227,7 +1225,7 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
     },
   };
 
-  const rebalanceCoordinator = {
+  const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       return {
         allowed: true,
@@ -1287,13 +1285,6 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
       operation.status = 'failed';
       operation.workflowStep = 'FAILED';
     },
-    async persistOperationUpdate(operation) {
-      persistedHoldStates.push(
-        operation.stepsHistory[0][
-          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
-        ] === true,
-      );
-    },
     async executeOperation(operation) {
       dispatchedOperationIds.push(operation.operationId);
       services.push({
@@ -1310,7 +1301,7 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
     async dispatchOperation() {
       throw new Error('inline provisioning must own dispatch');
     },
-  };
+  });
 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
@@ -1386,9 +1377,16 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
   );
   t.equal(operationsById.size, 3, 'the completed cohort has one row per child');
   t.same(
-    persistedHoldStates,
-    [false, false, false],
-    'the completed cohort clears each durable bootstrap hold before dispatch',
+    rebalanceCoordinator.bootstrapHoldReleases.map((release) =>
+      release.operationId).sort(),
+    [...operationsById.keys()].sort(),
+    'the completed cohort releases each durable bootstrap hold once, ' +
+      'and the short attempt released none',
+  );
+  t.ok(
+    rebalanceCoordinator.bootstrapHoldReleases.every((release) =>
+      release.stamp.replicaIds.length === operationsById.size),
+    'every hold is released with the complete cohort stamp',
   );
   t.same(
     dispatchedOperationIds.sort(),
