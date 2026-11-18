@@ -86,7 +86,23 @@ product results, and deployment guidance permitting local artifact sources,
 external repair or optional-store success. Historical observations and sealed
 records remain intact; successor work records the correction explicitly.
 
-## Current summary (17 November 2026)
+## Current summary (18 November 2026)
+
+- Root is implementing the operator-approved follow-up review plan on runtime
+  baseline `706ab191723c480342dd13ac3f9ed6ae1b370d81`, under rule-set revision 5.
+  The [repair continuation](../../docs/evidence/review-repairs-2026-11-18/README.md)
+  records the separate SQL, admission and proof-verifier units, their writers,
+  source identities and actual evidence limits.
+- Existing component receipts remain accepted only at their recorded scope.
+  Root must collect native repair proofs and exact combined-candidate gates,
+  then run the existing physical formation pre-gate before this campaign.
+- Optional GCP expiry PR 226 retains its genuine local Bash adoption proof;
+  provider read-back, live resource closure and comparative measurement are
+  separate obligations. This continuation has allocated no cloud resources.
+- Native execution, audits and generators remain on the managed lab. Root owns
+  observation and continuation; no new comparative run is currently queued.
+
+## Retained summary (17 November 2026)
 
 - The operator assigned the current ChatGPT root session to repair the verified
   latest candidate errors and continue this existing GCP comparative campaign.

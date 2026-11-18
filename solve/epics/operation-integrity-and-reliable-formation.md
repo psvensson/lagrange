@@ -111,7 +111,29 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (17 November 2026)
+## Current integration summary (18 November 2026)
+
+- **Owner and authority:** root implements the operator-approved independent
+  review plan under rule-set revision 5. The runtime repair baseline is PR 224
+  at `706ab191723c480342dd13ac3f9ed6ae1b370d81`; isolated integration branch is
+  `work/review-plan-20261118`. Main was observed at
+  `4585c318139c4e81edabb5f0002a4c1f8d5e8d5c`.
+- **Current units:** coordinator SQL expression semantics, target-wide Phase B
+  admission ownership/atomicity, and Q1a subprocess proof classification. The
+  [continuation record](../../docs/evidence/review-repairs-2026-11-18/README.md)
+  names writers, boundaries, proof sequence, original evidence and exclusions.
+  New findings are source-derived until their genuine native witnesses run.
+- **Existing work:** PRs 224-226 retain their scoped component results; Q0/Q1a
+  ancestry and exact-candidate landing remain to be recovered and verified.
+  Q1b PR 227 is separate active work and is not modified by this assignment.
+- **Execution and next action:** source editing/Git inspection occur in isolated
+  cloud worktrees; every project test, probe, audit and generator runs on the
+  managed lab. Root refreshes live capability, collects required baseline and
+  candidate evidence, coordinates independent review, and freezes composition
+  before the existing physical pre-gate. Thermal limits and original failures
+  are preserved. No new integration or comparative acceptance is claimed.
+
+## Retained integration summary (17 November 2026)
 
 - **Integration owner and authority:** the current ChatGPT root session,
   following the operator's 17 November instruction to take over development,
