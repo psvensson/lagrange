@@ -40,7 +40,8 @@ def _pairs_to_record(pairs):
 
 
 def _refuse_constant(_text):
-    raise PortabilityError("invalid_partial_value")
+    # JSON.parse rejects NaN and Infinity as syntax errors, not as JSON values.
+    raise PortabilityError("malformed_partial_wire")
 
 
 def _parse(text):
