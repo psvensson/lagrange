@@ -198,8 +198,11 @@ def evaluate_vectors(vectors):
 
 def main(argv):
     if len(argv) != 2:
-        raise SystemExit("usage: portability-reference.py <vectors.json>")
-    vectors = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+        raise SystemExit("usage: portability-reference.py <vectors.json|->")
+    if argv[1] == "-":
+        vectors = json.load(sys.stdin)
+    else:
+        vectors = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
     print(json.dumps({"results": evaluate_vectors(vectors)}, ensure_ascii=False))
 
 
