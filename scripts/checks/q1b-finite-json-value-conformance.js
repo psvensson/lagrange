@@ -15,6 +15,8 @@ const REFERENCE = path.join(
   ROOT, 'test/service/call-finite-json-portability-reference.py');
 const SOURCE_WITNESS = path.join(
   ROOT, 'test/service/call-finite-json-portability-v1.test.js');
+const PYTHON_LIMIT_WITNESS = path.join(
+  ROOT, 'test/service/call-finite-json-portability-reference-test.py');
 const PYTHON = 'python3';
 const ENCODING = 'utf8';
 const METRIC_FLAG = '--metric';
@@ -24,6 +26,7 @@ const EXPECTED_POSITIVE_COUNT = 18;
 const EXPECTED_REFUSAL_COUNT = 19;
 const OUTPUT_LIMIT_BYTES = 1024 * 1024;
 const PYTHON_TIMEOUT_MS = 15000;
+const EXPECTED_PYTHON_LIMIT_TESTS = 10;
 const REQUIRED_IDS = Object.freeze([
   'negative-zero',
   'safe-positive-integer',
@@ -51,6 +54,15 @@ const EXPECTED_LIMITS = Object.freeze({
   maxStringBytes: 16384,
   maxContributionBytes: 65536,
 });
+const REQUIRED_SOURCE_TESTS = Object.freeze([
+  'source codec reproduces every independently authored canonical encoding',
+  'source codec refuses every independently authored noncanonical wire',
+  'source and standalone Python return matching independently computed results',
+  'Python reference computes novel inputs without using vector expected fields',
+  'enforces default nesting and bounded collection edges',
+  'enforces string UTF-8 and aggregate contribution byte ceilings',
+  'refuses invalid JavaScript values before serialization',
+]);
 
 function referenceResults(vectors) {
   const result = spawnSync(PYTHON, [REFERENCE, '-'], {
@@ -152,13 +164,39 @@ function inverseControls(vectors) {
   }, 0);
 }
 
+function executedSourceWitness(tap) {
+  const summary = {
+    tests: REQUIRED_SOURCE_TESTS.length,
+    suites: 1,
+    pass: REQUIRED_SOURCE_TESTS.length,
+    fail: 0, cancelled: 0, skipped: 0, todo: 0,
+  };
+  return Object.entries(summary).every(([name, count]) =>
+    new RegExp(`^# ${name} ${count}$`, 'm').test(tap)) &&
+    REQUIRED_SOURCE_TESTS.every((name, index) =>
+      tap.includes(`    ok ${index + 1} - ${name}\n`));
+}
+
 function sourceWitnessPasses() {
   if (!fs.existsSync(SOURCE_WITNESS)) return false;
-  const result = spawnSync(process.execPath, ['--test', SOURCE_WITNESS], {
+  const result = spawnSync(process.execPath,
+    ['--test', '--test-reporter=tap', SOURCE_WITNESS], {
+      cwd: ROOT, encoding: ENCODING, timeout: PYTHON_TIMEOUT_MS,
+      maxBuffer: OUTPUT_LIMIT_BYTES,
+    });
+  return !result.error && result.status === 0 &&
+    executedSourceWitness(result.stdout);
+}
+
+function pythonDefaultLimitsPass() {
+  if (!fs.existsSync(PYTHON_LIMIT_WITNESS)) return false;
+  const result = spawnSync(PYTHON, [PYTHON_LIMIT_WITNESS], {
     cwd: ROOT, encoding: ENCODING, timeout: PYTHON_TIMEOUT_MS,
     maxBuffer: OUTPUT_LIMIT_BYTES,
   });
-  return !result.error && result.status === 0;
+  const summary = new RegExp(`^Ran ${EXPECTED_PYTHON_LIMIT_TESTS} tests in `, 'm');
+  return !result.error && result.status === 0 &&
+    summary.test(result.stderr) && /^OK$/m.test(result.stderr);
 }
 
 function measure() {
@@ -175,7 +213,7 @@ function measure() {
   if (inverseFailures !== 0) return inverseFailures;
   // The accepted Quest needs an executed source-bound witness as well as the
   // independent reference. A file's mere presence cannot turn the probe green.
-  return sourceWitnessPasses() ? 0 : 1;
+  return sourceWitnessPasses() && pythonDefaultLimitsPass() ? 0 : 1;
 }
 
 const metric = measure();
