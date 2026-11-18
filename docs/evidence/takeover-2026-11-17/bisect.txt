@@ -1,0 +1,16 @@
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/bootstrap/node-joining-lease-registration.test.js
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/bootstrap/node-joining-service-message-group-activation.test.js
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/bootstrap/node-registration-idempotency.test.js
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/bootstrap/register-node-in-cluster.test.js
+27ad27e5cd fix(bootstrap,rebalancer): enforce coherent boot/storage incarnation continuity and refres <= test/control-plane/heartbeat-storage-budget-preservation.test.js
+0b8d66523f fix(query,control-plane): project TX1 conflict codes to 40001 and prevent ready-lease rene <= test/control-plane/heartbeat-terminal-node-row-endpoint.test.js
+0b8d66523f fix(query,control-plane): project TX1 conflict codes to 40001 and prevent ready-lease rene <= test/control-plane/replica-dispatch-node-state-update.test.js
+11bdbc115f fix(partition,query,bootstrap,raft,transport): canonical tuple/comparison affinity, author <= test/diagnostics/raft-churn-sync-section-attribution.test.js
+8c7d594372 fix(bootstrap,rebalancer): enforce storageIncarnation continuity and production lost-disk  <= test/integration/control-plane-node-terminal-removal.integration.test.js
+da91d62365 fix(query,rebalancer,workflow): preserve in-flight child replica operations and defer retr <= test/integration/public-application-database-transaction-facade.integration.test.js
+29e611157d fix(query,admin,benchmark): operation-scoped deadlines, helper-aware closure, batch settle <= test/integration/public-consumer-contract-ratchet.integration.test.js
+11bdbc115f fix(partition,query,bootstrap,raft,transport): canonical tuple/comparison affinity, author <= test/partition/participant-release-first-prepare-native.test.js
+6da899aaed fix(bootstrap,control-plane,cache): preserve join failure context, fix readiness/cache for <= test/raft/authoritative-row-mutation-helper.test.js
+11bdbc115f fix(partition,query,bootstrap,raft,transport): canonical tuple/comparison affinity, author <= test/transaction/queryable-core-j4-locking-read-journey.test.js
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/transport/node-identity-separation.property.test.js
+4459f4fc55 fix(bootstrap,rebalancer): 4-arg ServicesOwner.updateService, wiped-disk storageIncarnatio <= test/transport/node-registration-creates-endpoint.property.test.js
