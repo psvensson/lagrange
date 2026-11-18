@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 282,
-    "query-sql": 196,
+    "query-sql": 197,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,8 +25,8 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2671,
-  "digest": "fnv1a32-1c37b939",
+  "censusSize": 2672,
+  "digest": "fnv1a32-b96b550a",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-f131dcea",
   "classes": {
@@ -1712,6 +1712,7 @@
     "test/query/sql-scalar-functions.test.js": "query-sql",
     "test/query/sql-semantics-differential-oracle.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
+    "test/query/sql-value-codec.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
     "test/query/streaming-aggregation.property.test.js": "query-sql",

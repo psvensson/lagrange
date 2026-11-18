@@ -122,6 +122,8 @@ documentClass: generated
 - [sql-select-execution-helpers.js](sql-select-execution-helpers.js) - Helper routines for select query execution and wait reporting. (importers: one)
 - [sql-statement-ingress.js](sql-statement-ingress.js) - Client SQL ingress and the system-table write admission. (importers: many)
 - [sql-transaction-control-grammar.js](sql-transaction-control-grammar.js) - The transaction-control statement grammar (BEGIN, START TRANSACTION, COMMIT, END, ROLLBACK, ABORT) the SQL parser... (importers: few)
+- [sql-value-codec-constants.js](sql-value-codec-constants.js) - The names the SQL value codec (src/query/sql-value-codec.js) owns: the storage-class tags of its one typed wire... (importers: few)
+- [sql-value-codec.js](sql-value-codec.js) - The one typed wire encoding of SQL values (coordinator-sqlite-merge design section 2.6, decisions D1 and D3). (importers: one)
 - [sqlite-identifier.js](sqlite-identifier.js) - No leading comment; first export: renderSqliteIdentifier. (importers: few)
 - [strategy-constants.js](strategy-constants.js) - Constants for join/data-movement strategy selection. (importers: few)
 - [strategy-selector.js](strategy-selector.js) - Strategy selector for join and data movement. (importers: few)
