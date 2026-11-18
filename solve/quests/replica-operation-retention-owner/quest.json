@@ -1,0 +1,69 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-operation-retention-owner",
+  "epic": "system-table-retention",
+  "statement": "One retention owner for terminal replica_operations and storage_reservations rows. It retires a row only when the row is terminal, past its horizon and proven unreferenced, with one referenced-predicate per dependency: the terminal-intent collision (OPERATION_INTENT_TERMINAL_COLLISION), the REPLACE successor identity built from the predecessor id, schema-job cohort attachment by (job, node) intent id, ReplicaCleanupTombstoneOwner.isCleanupOperationTerminal, queryTerminalFailedCreateCleanupOperations, message-group membership debt and ACTIVE storage reservations. Deletes are guarded and go through the owner gateway in batches paced under the cache-tombstone bound. Deterministic tests cover a retry after retirement, cleanup release after retirement, tombstone-cap pacing and a joiner hydrating mid-batch; the lab proof is three formations and a churn soak. Size L. Not sealable before the owner rules what a deterministic-intent retry answers once its earlier terminal row has been retired.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-operation-retention-owner/evidence/receipt.json",
+      "requiredReceipts": [
+        "retry-after-retirement-ruling-recorded",
+        "referenced-predicate-per-dependency",
+        "guarded-idempotent-batched-delete",
+        "retry-after-retirement-test",
+        "cleanup-release-after-retirement-test",
+        "tombstone-cap-pacing-test",
+        "joiner-hydrating-mid-batch-test",
+        "lab-three-formations-and-churn-soak",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "deletion-waits-for-formation-and-cdc-stages",
+      "statement": "No row deletion lands before the fresh-formation scenario holds three consecutive lab passes and CDC delivery stages 1-3 (solve/epics/operation-integrity-and-reliable-formation/cdc-delivery-design-note-2026-11-11.md) have landed."
+    },
+    {
+      "id": "retry-answer-needs-a-ruling",
+      "statement": "Retention never changes what a retry answers without an explicit owner ruling recorded in this log before the quest is sealed."
+    },
+    {
+      "id": "one-owner-one-path",
+      "statement": "One retention owner per table and one deletion path (R01, R11). Retention rides an existing reconcile trigger; it adds no timer."
+    },
+    {
+      "id": "terminal-horizon-unreferenced",
+      "statement": "A row is deleted only when it is terminal AND past its per-table horizon AND proven unreferenced by every dependency listed for its table (the seven named in the statement). Age and terminal status alone never authorize a delete."
+    },
+    {
+      "id": "guarded-idempotent-bounded-batches",
+      "statement": "Deletes are guarded and idempotent (R14) and run in bounded batches paced under the cache-tombstone bound (30 s TTL, 1024 tombstones per table), at background priority, so that load slows retention and never breaks correctness (R12)."
+    },
+    {
+      "id": "no-apply-side-time-expiry-for-propagated-tables",
+      "statement": "A propagated table is never expired by time inside apply: that bypasses CDC and leaves every cache stale. Its rows are deleted through the owner gateway so each delete is a replicated mutation with its CDC obligation."
+    },
+    {
+      "id": "history-is-never-capped-by-count",
+      "statement": "Retention removes whole unreferenced rows. It never shortens steps_history: entry 0 is the metadata channel and the history is a strictly-extending transition mirror."
+    },
+    {
+      "id": "late-upsert-cannot-resurrect",
+      "statement": "A late upsert after tombstone expiry can resurrect a cache row until the next authoritative absence sweep. The quest proves a retired row does not come back as a decision input: either the pacing keeps tombstones alive past every in-flight delivery, or the resurrected row is shown to be harmless to each listed dependency."
+    },
+    {
+      "id": "join-core-is-coupled",
+      "statement": "Join, rejoin, rebalance and partitioning changes are assumed coupled: the proof includes a joiner hydrating while a batch runs and a churn soak, not only a quiet cluster."
+    },
+    {
+      "id": "lifetime-declaration-follows-the-code",
+      "statement": "A table moves out of class unbounded in solve/epics/system-table-retention/table-lifetimes.json only in the change that lands its retention owner, and the retained entry names that owner as file:symbol. The declaration is never edited to lower the epic metric ahead of the code."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ]
+}

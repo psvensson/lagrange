@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "note": "One-way: per reason, unexamined constant-looking reads may only fall. Written by hand from the audit; lower it when the audit prints the tightening hint.",
+  "unexaminedByReason": {
+    "base_imported_from_a_package": 2,
+    "base_not_a_resolvable_const": 753,
+    "base_object_not_frozen": 261,
+    "base_value_not_a_plain_object": 66,
+    "injected_bag_name_exported_with_two_values": 76,
+    "injected_bag_name_not_an_exported_constant": 171
+  }
+}

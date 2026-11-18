@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "retention-step-history-observation-removal",
+  "epic": "system-table-retention",
+  "statement": "Stop embedding readinessSnapshot in replica_operations.steps_history. Entry 0 stays the operation's metadata channel and the history stays a strictly-extending transition mirror; the readiness evidence each step used is kept as a log line, not in the durable row. A row-size regression test fixes the bound for a representative multi-step operation so the observation cannot return. Deletes no row. Size S.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/retention-step-history-observation-removal/evidence/receipt.json",
+      "requiredReceipts": [
+        "readiness-snapshot-absent-from-steps-history",
+        "entry-zero-metadata-and-transition-mirror-preserved",
+        "readiness-evidence-log-line",
+        "row-size-regression-test",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "observations-are-not-authority-rows",
+      "statement": "An observation does not belong in a durable authority row (R10): the snapshot is evidence a step read, not a fact the operation owns. Every reader of steps_history is censused before the field is removed; a reader that decides on the embedded snapshot is a finding routed to its owner, not a reason to keep the field."
+    },
+    {
+      "id": "history-is-never-capped-by-count",
+      "statement": "steps_history entry 0 is the metadata channel and the history is a strictly-extending transition mirror: no entry is dropped, truncated or capped by count."
+    },
+    {
+      "id": "measured-before-and-after",
+      "statement": "The baseline is the 2026-11-11 lab measurement (row about 13 KB, steps_history p50 10.6 KB / p90 14.7 KB, about 80 % of each entry the embedded snapshot, about 56 KB through the ledger Raft log and CDC for a 7-step operation). The receipt names the measured size after the change on the same shape of operation."
+    },
+    {
+      "id": "no-row-deletion",
+      "statement": "This quest changes row content only and deletes no row; it is not held by the epic's deletion gate."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ]
+}

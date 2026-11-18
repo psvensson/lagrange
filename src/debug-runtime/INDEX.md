@@ -16,7 +16,7 @@ documentClass: generated
 - [debug-metadata-constants.js](debug-metadata-constants.js) - Constants for debug metadata table names and row fields. (importers: many)
 - [debug-metadata-service-constants.js](debug-metadata-service-constants.js) - Constants for SQL-backed debug metadata service. (importers: many)
 - [debug-metadata-service-policy.js](debug-metadata-service-policy.js) - Role-to-action policy resolver for SQL-backed debug metadata. (importers: one)
-- [debug-metadata-service-row-normalizers.js](debug-metadata-service-row-normalizers.js) - Row normalizers for SQL-backed debug metadata. (importers: one)
+- [debug-metadata-service-row-normalizers.js](debug-metadata-service-row-normalizers.js) - Row normalizers for SQL-backed debug metadata. (importers: few)
 - [debug-metadata-service-value-helpers.js](debug-metadata-service-value-helpers.js) - Scalar helpers and request guards for SQL-backed debug metadata. (importers: one)
 - [debug-metadata-service.js](debug-metadata-service.js) - Debug metadata store: the owner of the debug_* system tables. (importers: few)
 - [debug-runtime-constants.js](debug-runtime-constants.js) - Debug runtime constants for Track B runtime foundation. (importers: many)

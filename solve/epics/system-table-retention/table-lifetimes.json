@@ -1,0 +1,238 @@
+{
+  "schema": "system-table-lifetimes/1",
+  "epic": "system-table-retention",
+  "census": {
+    "date": "2026-11-11",
+    "tree": "HEAD 103f132c1 plus uncommitted work",
+    "note": "Classes come from the read-only census of 2026-11-11 recorded in solve/epics/system-table-retention.md. Change a class only with the landed code or ruling that justifies it."
+  },
+  "systemTables": {
+    "nodes": {
+      "class": "bounded_by_nature",
+      "reason": "One row per cluster node."
+    },
+    "partitions": {
+      "class": "bounded_by_nature",
+      "reason": "One row per partition; rows of a split or merged parent are removed by the split/merge path."
+    },
+    "services": {
+      "class": "retained",
+      "owner": "src/node/replica-cleanup-tombstone-owner.js:ReplicaCleanupTombstoneOwner.release",
+      "reason": "Cleanup tombstones are released by a guarded DELETE through gateway.submitMutation; the model for propagated tables."
+    },
+    "message_groups": {
+      "class": "bounded_by_nature",
+      "reason": "One row per message group."
+    },
+    "replica_operations": {
+      "class": "unbounded",
+      "quest": "replica-operation-retention-owner",
+      "reason": "Propagated; one row per ADD/REMOVE/REPLACE, whole row rewritten per step, never deleted (removeReplicaOperation has no caller). Row size is carried first by retention-step-history-observation-removal."
+    },
+    "indices": {
+      "class": "retained",
+      "owner": "src/index-management/index-service.js:deleteIndexMetadata",
+      "reason": "The index row is deleted when the index is dropped."
+    },
+    "logs": {
+      "class": "unbounded",
+      "quest": "log-retention-owner-wiring",
+      "reason": "Not propagated; LogsTableService bounds only its in-memory queue and LogRetentionService is not imported by anything in src."
+    },
+    "config": {
+      "class": "bounded_by_nature",
+      "reason": "One row per configuration key."
+    },
+    "live_queries": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "contexts": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "code": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "control_plane_publications": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "Propagated; one row per membership epoch and node boot with transition_history JSON; removePublication has no caller."
+    },
+    "tables": {
+      "class": "bounded_by_nature",
+      "reason": "One row per table."
+    },
+    "schema_migrations": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per migration, never deleted."
+    },
+    "schema_migration_partitions": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per migration and partition, never deleted."
+    },
+    "node_endpoints": {
+      "class": "bounded_by_nature",
+      "reason": "One row per node endpoint."
+    },
+    "service_definitions": {
+      "class": "bounded_by_nature",
+      "reason": "One row per service definition."
+    },
+    "service_instances": {
+      "class": "bounded_by_nature",
+      "reason": "One row per service instance; deletion is forbidden, a missing row is CORRUPT_STATE."
+    },
+    "service_bindings": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per binding, never deleted."
+    },
+    "service_endpoints": {
+      "class": "retained",
+      "owner": "src/control-plane/owners/endpoint-metadata-owner-base.js:removeEndpoint",
+      "reason": "Endpoint rows are removed by primary key when the endpoint is withdrawn."
+    },
+    "service_timers": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "service_packages": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per package, never deleted."
+    },
+    "service_revisions": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per revision, never deleted."
+    },
+    "service_installations": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per installation, never deleted."
+    },
+    "service_install_failures": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per failed install, never deleted."
+    },
+    "module_manifests": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per module manifest, never deleted."
+    },
+    "package_registry_mappings": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "package_registry_overrides": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "module_dependency_locks": {
+      "class": "inert",
+      "reason": "No production writer found by the 2026-11-11 census; the owner decides whether to delete the table or name its writer."
+    },
+    "wasm_operations": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "The 24 h window is only a read-side refusal; rows stay."
+    },
+    "sql_transactions": {
+      "class": "unbounded",
+      "quest": "transaction-table-retention",
+      "reason": "Propagated; never deleted; scanned in full every second by the recovery sweep."
+    },
+    "sql_transaction_participants": {
+      "class": "unbounded",
+      "quest": "transaction-table-retention",
+      "reason": "Propagated; never deleted; scanned in full every second by the recovery sweep."
+    },
+    "sql_write_operations": {
+      "class": "unbounded",
+      "quest": "transaction-table-retention",
+      "reason": "Not propagated; write-only."
+    },
+    "schema_operations": {
+      "class": "bounded_by_nature",
+      "reason": "Classed bounded by nature by the 2026-11-11 census; not independently verified."
+    },
+    "debug_sessions": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per debug session, never deleted."
+    },
+    "debug_breakpoints": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per breakpoint, never deleted."
+    },
+    "debug_snapshots": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "One row per debug snapshot, never deleted."
+    },
+    "storage_reservations": {
+      "class": "unbounded",
+      "quest": "replica-operation-retention-owner",
+      "reason": "Propagated; one row per storage-increasing operation; status only moves to released or expired."
+    },
+    "latency_groups": {
+      "class": "bounded_by_nature",
+      "reason": "One row per latency group."
+    },
+    "inter_group_latencies": {
+      "class": "bounded_by_nature",
+      "reason": "One row per latency-group pair."
+    },
+    "service_partition_access": {
+      "class": "bounded_by_nature",
+      "reason": "Classed bounded by nature by the 2026-11-11 census; not independently verified."
+    },
+    "call_cell_reduce_slots": {
+      "class": "retained",
+      "owner": "src/runtime/call-cell-reduce-coordinator.js:reclaimExpiredCoordination",
+      "reason": "Expired slot rows are reclaimed past the retention window."
+    },
+    "call_cell_reduce_results": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "Abandoned empty results are reclaimed; published rows stay."
+    },
+    "call_activation_leases": {
+      "class": "bounded_by_nature",
+      "reason": "Classed bounded by nature by the 2026-11-11 census; not independently verified."
+    },
+    "artifact_payloads": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "Reclaimable UPLOADING rows have no reclaim code."
+    },
+    "artifact_payload_chunks": {
+      "class": "unbounded",
+      "quest": "service-and-artifact-table-retention",
+      "reason": "Chunks of UPLOADING payloads have no reclaim code."
+    }
+  },
+  "partitionInternalTables": {
+    "_cdc_obligations": {
+      "class": "retained",
+      "owner": "src/partition/partition-cdc-obligation-ledger.js:reclaimDeliveredCdcObligations",
+      "reason": "D1 reclamation: position-based delete inside apply; the model for partition-internal tables."
+    },
+    "_partition_statement_outcomes": {
+      "class": "unbounded",
+      "quest": "partition-statement-outcome-retention",
+      "reason": "One row per committed statement in every partition, carried in snapshots; no DELETE exists."
+    },
+    "_participant_transactions": {
+      "class": "unbounded",
+      "quest": "partition-statement-outcome-retention",
+      "reason": "One row per participant transaction in every partition; no retirement."
+    }
+  }
+}

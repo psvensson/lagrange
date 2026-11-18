@@ -173,3 +173,8 @@ locally; it is a demonstration, not a comparative-benchmark campaign.
 - Campaign owners: [`comparative-benchmark-campaign-manifest.js`](../../test/distributed/harness/comparative-benchmark-campaign-manifest.js), [`comparative-benchmark-campaign-runner.js`](../../test/distributed/harness/comparative-benchmark-campaign-runner.js), [`comparative-benchmark-lab-hosts.js`](../../test/distributed/harness/comparative-benchmark-lab-hosts.js), [`comparative-benchmark-workload-call-site.js`](../../test/distributed/harness/comparative-benchmark-workload-call-site.js)
 - Deployment layer: [`real-product-cluster-deployers.js`](../../test/distributed/harness/real-product-cluster-deployers.js) and the `real-product-*` owners beside it
 - Raw observation store: [`data/tidb-comparison/raw-observations.ndjson`](../../data/tidb-comparison/raw-observations.ndjson)
+
+## Benchmark GCP Infrastructure Notes
+- **Pre-built Image**: `lagrange-harness-20260814-620ceb29` (Family: `lagrange-distributed-harness`) is available and automatically detected by `provision-gcp.sh`.
+- **Load Generator Sync**: The remote client VM requires a full repository checkout (`/home/peter/projects/lagrange`) with `npm ci` run before the benchmark runner will succeed.
+- **Troubleshooting**: If `run-comparative-benchmarks.mjs` fails with "fatal: not a git repository", ensure the remote directory is correctly synced from the controller and is a valid git repository.

@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "log-retention-owner-wiring",
+  "epic": "system-table-retention",
+  "statement": "Give the logs table one retention owner. src/logging/log-retention-service.js (7-day horizon) is imported by nothing in src: either wire it as the single owner that deletes logs rows past the horizon at background priority on an existing trigger, or delete it and name the owner that replaces it. Decide and record the pressure work class of the deletes. logs is not propagated, so the deletes carry no CDC cost. Size S to M.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/log-retention-owner-wiring/evidence/receipt.json",
+      "requiredReceipts": [
+        "log-retention-service-wired-or-deleted",
+        "logs-rows-bounded-by-horizon",
+        "background-priority-and-pressure-class-decision",
+        "no-new-timer",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "wired-or-deleted",
+      "statement": "Unwired retention code is wired or deleted, never kept beside its replacement (no-legacy rule). The quest ends with exactly one logs retention implementation reachable from production composition."
+    },
+    {
+      "id": "one-owner-one-path",
+      "statement": "One retention owner per table and one deletion path (R01, R11). Retention rides an existing reconcile trigger; it adds no timer."
+    },
+    {
+      "id": "load-slows-never-breaks",
+      "statement": "Log retention runs at background priority under a decided pressure class and yields under load (R12); a delete batch is bounded and a refused batch is retried by the next trigger, not by a tight loop."
+    },
+    {
+      "id": "horizon-has-an-owner",
+      "statement": "The horizon is one owned constant or configuration value (R06), read by the owner and by its test; the queue bound in LogsTableService stays a separate, in-memory bound."
+    },
+    {
+      "id": "lifetime-declaration-follows-the-code",
+      "statement": "A table moves out of class unbounded in solve/epics/system-table-retention/table-lifetimes.json only in the change that lands its retention owner, and the retained entry names that owner as file:symbol. The declaration is never edited to lower the epic metric ahead of the code."
+    },
+    {
+      "id": "no-health-table",
+      "statement": "Health and observability data is exposed through explicit collection functions, never a table (owner direction 2026-11-11); this quest adds no table."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ changes land only behind an approving verification newer than the last attempt."
+    }
+  ]
+}

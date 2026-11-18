@@ -12,6 +12,7 @@
 #   MACHINE_TYPE    Compute Engine machine type (default: e2-standard-4)
 #   CLUSTER_PREFIX  Instance name prefix (default: lagrange-bench)
 #   SSH_USER        SSH username for benchmark runner (default: $USER)
+#   VM_MAX_RUN_DURATION_SECONDS  Max VM run duration in seconds (default: 3600)
 
 set -euo pipefail
 
@@ -19,6 +20,7 @@ PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)
 ZONE="${ZONE:-us-central1-a}"
 MACHINE_TYPE="${MACHINE_TYPE:-e2-standard-4}"
 CLUSTER_PREFIX="${CLUSTER_PREFIX:-lagrange-bench}"
+VM_MAX_RUN_DURATION_SECONDS="${VM_MAX_RUN_DURATION_SECONDS:-3600}"
 NETWORK_TAG="${CLUSTER_PREFIX}-node"
 FIREWALL_RULE="${CLUSTER_PREFIX}-internal"
 SSH_USER="${SSH_USER:-${USER:-ubuntu}}"
@@ -106,6 +108,8 @@ gcloud compute instances create "${NODES[@]}" \
   --boot-disk-size="50GB" \
   --boot-disk-type="pd-ssd" \
   --tags="${NETWORK_TAG}" \
+  --max-run-duration="${VM_MAX_RUN_DURATION_SECONDS}s" \
+  --instance-termination-action=STOP \
   "${META_ARGS[@]}"
 
 echo "[gcp] Resolving internal and external IP addresses..."
