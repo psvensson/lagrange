@@ -12,6 +12,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {
   resumeFixtureParticipantAdmission,
@@ -353,6 +354,7 @@ async function appliedRow(surface, key) {
 function nodeRow() {
   const now = Date.now();
   return {node_id: JOINER_ID, node_address: 'ws://uo-joiner:1',
+    host_id: LOCAL_MACHINE_HOST_ID,
     cpu_cores: 1, memory_mb: 1, disk_gb: 1, status: 'joining',
     connection_state: 'connected', last_heartbeat: now,
     latency_assignment_state: 'unassigned', created_at: now};

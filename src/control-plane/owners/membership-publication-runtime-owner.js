@@ -63,7 +63,6 @@ class MembershipPublicationRuntimeOwner {
     this.nodeEndpointsOwner =
       systemMetadataOwners.nodeEndpointsOwner ||
       new NodeEndpointsOwner(ownerOptions);
-    this.servicesOwner = systemMetadataOwners.servicesOwner;
     this.serviceEndpointsOwner = systemMetadataOwners.serviceEndpointsOwner;
     this.messageGroupsOwner = systemMetadataOwners.messageGroupsOwner;
     this.controlPlanePublicationsOwner =
@@ -82,7 +81,6 @@ class MembershipPublicationRuntimeOwner {
   syncOwnerDependencies(ownerOptions = this.buildOwnerOptions()) {
     applyOwnerDependencies(this.nodesOwner, ownerOptions);
     applyOwnerDependencies(this.nodeEndpointsOwner, ownerOptions);
-    applyOwnerDependencies(this.servicesOwner, ownerOptions);
     applyOwnerDependencies(this.serviceEndpointsOwner, ownerOptions);
     applyOwnerDependencies(this.messageGroupsOwner, ownerOptions);
     applyOwnerDependencies(this.controlPlanePublicationsOwner, ownerOptions);
@@ -152,20 +150,29 @@ class MembershipPublicationRuntimeOwner {
    * attempt plus one authoritative reread; no retry loop.
    * @param {Object} row - NODES row.
    * @param {number} bootIncarnation - This boot's reserved incarnation.
+   * @param {Object} issueRecord - This boot lifecycle's registration issue
+   *   record (required).
    * @param {Object} [options] - Join-time write options.
    * @return {Promise<Object>} Frozen {outcome, observedRow}.
    */
-  async registerJoinNodeAtIncarnation(row, bootIncarnation, options = {}) {
+  async registerJoinNodeAtIncarnation(row, bootIncarnation, issueRecord,
+    options = {}) {
+    const {nowMs: optionNowMs, ...writeOptions} = options;
+    const nowMs = optionNowMs === undefined ?
+      this.controlPlaneWriteRetryNow?.() :
+      optionNowMs;
     const gateway = this.getControlPlaneSystemTableGateway();
     return writeNodeRegistrationAtIncarnation({
       row,
       bootIncarnation,
+      issueRecord,
+      nowMs,
       observe: () => readAuthoritativeNodeRow(gateway, row[COLUMN.NODE_ID]),
       insert: (stampedRow, identity) => gateway.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES, stampedRow, {...options, ...identity}),
+        SYSTEM_TABLE_NAME.NODES, stampedRow, {...writeOptions, ...identity}),
       advance: (whereClause, stampedRow, identity) =>
         gateway.updateSystemTableRow(SYSTEM_TABLE_NAME.NODES, whereClause,
-          stampedRow, {...options, ...identity}),
+          stampedRow, {...writeOptions, ...identity}),
     });
   }
 

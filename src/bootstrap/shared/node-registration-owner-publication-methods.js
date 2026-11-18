@@ -1,4 +1,3 @@
-import {NodeService} from '../../node/node-service.js';
 import {
   registerBuiltInMetaServiceEndpoints,
 } from './meta-service-definition-registration.js';
@@ -35,7 +34,6 @@ import {
   buildNodeEndpointRegistrationData,
   buildRefusedJoinAdmissionWithdrawal,
   buildRejectedJoinAdmissionMutationAcceptance,
-  resolveServiceUpdateExpectedIdentity,
   withOriginHlcStamp,
 } from './node-registration-owner-row-builder.js';
 import {
@@ -220,7 +218,7 @@ class NodeRegistrationOwnerPublicationMethods {
     return `ep-${this.nodeId}-ws`;
   }
 
-  async registerNodeEndpoint(now, options = {}) {
+  async registerNodeEndpoint(now) {
     const logger = this.delegates.getLogger();
 
     logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERING, {
@@ -231,18 +229,10 @@ class NodeRegistrationOwnerPublicationMethods {
     const endpointId = this.resolveNodeEndpointId();
     const canonicalWsAddress =
       this.resolveCanonicalWsAddress();
-    const bootIncarnation = this.getRegistrationBootIncarnation();
-    const storageIncarnation =
-      Number.isSafeInteger(options?.storageIncarnation) &&
-      options.storageIncarnation > 0 ?
-        options.storageIncarnation :
-        bootIncarnation;
-
     const endpointData = buildNodeEndpointRegistrationData({
       endpointId,
       nodeId: this.nodeId,
       canonicalWsAddress,
-      storageIncarnation,
       now,
     });
 
@@ -347,10 +337,7 @@ class NodeRegistrationOwnerPublicationMethods {
         nodeId: this.nodeId,
         cdcIntegrationService:
           this.delegates.getCdcIntegrationService?.() || null,
-        systemTableCache:
-          this.delegates.getSystemTableCache?.() ||
-          NodeService.getInstance().getSystemTableCache() ||
-          null,
+        systemTableCache: this.getSystemTableCache(),
         messageRouter: this.delegates.getMessageRouter?.() || null,
         controlPlaneSystemTableGateway:
           this.getJoinAdmissionControlPlaneSystemTableGateway(),
@@ -377,8 +364,7 @@ class NodeRegistrationOwnerPublicationMethods {
     // above), the gateway drives CDC through that engine; a direct
     // cdcIntegrationService delegate is never wired on this path.
     const cdcIntegrationService = null;
-    const systemTableCache = this.delegates.getSystemTableCache?.() ||
-      NodeService.getInstance().getSystemTableCache() || null;
+    const systemTableCache = this.getSystemTableCache();
     const messageRouter = this.delegates.getMessageRouter?.() || null;
     const existing = this.joinAdmissionControlPlaneSystemTableGateway;
     if (existing) {
@@ -572,7 +558,7 @@ class NodeRegistrationOwnerPublicationMethods {
     const transition = await applyNodeTerminalTransition({
       gateway: this.getJoinAdmissionControlPlaneSystemTableGateway(),
       nodeId: registeredNodeId,
-      bootIncarnation: this.getRegistrationBootIncarnation(),
+      bootIncarnation: this.delegates.getBootIncarnation(),
       destination: {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
@@ -680,36 +666,6 @@ class NodeRegistrationOwnerPublicationMethods {
         mutationOptions,
       );
     }
-    if (tableName === TABLES.SERVICES) {
-      const serviceId = normalizeString(
-        rowData?.[COLUMN.SERVICE_ID] || rowData?.[COLUMN.REPLICA_ID],
-      );
-      const expectedIdentity = resolveServiceUpdateExpectedIdentity(
-        this.nodeId,
-        rowData,
-        options,
-      );
-      if (
-        serviceId.length > 0 &&
-        hasFunction(membershipPublicationRuntimeOwner?.servicesOwner?.updateService)
-      ) {
-        return membershipPublicationRuntimeOwner.servicesOwner.updateService(
-          serviceId,
-          expectedIdentity,
-          rowData,
-          mutationOptions,
-        );
-      }
-      if (serviceId.length > 0) {
-        return this.updateJoinAdmissionSystemTableRowWithRetry(
-          TABLES.SERVICES,
-          {[COLUMN.SERVICE_ID]: serviceId, ...expectedIdentity},
-          rowData,
-          options,
-        );
-      }
-      return this.upsertJoinServiceRowWithRetry(rowData, options);
-    }
     if (tableName !== TABLES.NODE_ENDPOINTS &&
         tableName !== TABLES.SERVICE_ENDPOINTS) {
       throw new Error(
@@ -741,15 +697,11 @@ class NodeRegistrationOwnerPublicationMethods {
       return;
     }
 
-    let systemTableCache = this.delegates.getSystemTableCache?.();
+    const systemTableCache = this.getSystemTableCache();
     if (!systemTableCache) {
-      systemTableCache = NodeService.getInstance().getSystemTableCache();
-    }
-    if (
-      !systemTableCache ||
-      !hasFunction(systemTableCache.applySystemTableChange)
-    ) {
-      return;
+      throw new Error(
+        NODE_REGISTRATION_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
     }
 
     createBootstrapCacheHydrationApplier(systemTableCache)(

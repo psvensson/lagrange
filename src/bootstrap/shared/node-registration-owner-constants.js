@@ -2,10 +2,8 @@ import {
   CONTROL_PLANE_PHASE_SCOPE,
 } from '../../control-plane/control-plane-system-table-gateway.js';
 import {
-  COLUMN,
   NUM,
   STATE,
-  TABLES,
   TIME_MS,
 } from '../../constants/index.js';
 import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
@@ -38,23 +36,18 @@ const AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS = TIME_MS.SECOND;
 const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the join-admission system-table write is accepted
 const JOIN_ADMISSION_PUBLICATION = Object.freeze({
-  LOST_STORAGE_PARTITION_REPLICA:
-    'lost storage partition replica failure publication',
   META_SERVICE_ENDPOINT:
     'built-in meta service endpoint publication',
   NODE_ENDPOINT: 'node websocket endpoint publication',
   NODE_MEMBERSHIP: 'node membership publication',
 });
-const NODE_STORAGE_LOST_TRIGGER_REASON =
-  'node_storage_lost_on_fresh_registration';
-const SELECT_NODE_PARTITION_SERVICE_ROWS_SQL =
-  `SELECT * FROM ${TABLES.SERVICES} ` +
-  `WHERE ${COLUMN.NODE_ID} = ? AND ${COLUMN.SERVICE_TYPE} = ?`;
-const STORAGE_INCARNATION_FIELD = 'storage_incarnation';
-const STORAGE_INCARNATION_METADATA_KEY = 'storageIncarnation';
 const NODE_REGISTRATION_ERROR = Object.freeze({
   JOIN_ADMISSION_GATEWAY_REQUIRED:
     'Join admission control-plane gateway required for join service registration',
+  SYSTEM_TABLE_CACHE_GETTER_REQUIRED:
+    'NodeRegistrationOwner requires a getSystemTableCache delegate function',
+  SYSTEM_TABLE_CACHE_REQUIRED:
+    'SystemTableCache is required to seed join-time registration rows',
   UNSUPPORTED_PUBLICATION_TABLE:
     'Unsupported join publication table for node registration',
   REGISTRATION_UNRESOLVED:
@@ -102,11 +95,7 @@ export {
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
   NODE_REGISTRATION_ERROR,
-  NODE_STORAGE_LOST_TRIGGER_REASON,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
-  SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
-  STORAGE_INCARNATION_FIELD,
-  STORAGE_INCARNATION_METADATA_KEY,
   hasFunction,
   normalizeString,
 };

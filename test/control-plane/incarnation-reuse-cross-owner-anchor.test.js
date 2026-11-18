@@ -24,6 +24,7 @@ import {resolveNodeWebSocketAddressResult} from
   '../../src/transport/node-address-resolution.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   readAuthoritativeNodeRow,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
@@ -128,6 +129,7 @@ function g1Teardown(durable, g1Port) {
       getNow: () => () => 9000,
       getSleep: () => async () => {},
       getBootIncarnation: () => G1,
+      getSystemTableCache: () => ({applySystemTableChange() {}}),
     },
   });
   registration.getJoinAdmissionWriteRetryTimeoutMs = () => 0;
@@ -311,10 +313,13 @@ test('N7: a reaped boot incarnation is terminal: a late G1 READY is ' +
     'G1 stays reaped: no fenced resurrection');
 
   const registration = await writeNodeRegistrationAtIncarnation({
-    row: registeredNodeRow(NODE_ID, G2, {status: 'joining',
+    row: registeredNodeRow(NODE_ID, G2, {host_id: LOCAL_MACHINE_HOST_ID,
+      status: 'joining',
       connection_state: STATE.CONNECTED, last_heartbeat: 90_000,
       ready_lease_expires_at: null, created_at: 90_000}),
     bootIncarnation: G2,
+    issueRecord: createNodeRegistrationIssueRecord(),
+    nowMs: 90_000,
     observe: () => readAuthoritativeNodeRow(durable, NODE_ID),
     insert: (row) => durable.insertSystemTableRow(TABLES.NODES, row),
     advance: (whereClause, row) => durable.updateSystemTableRow(

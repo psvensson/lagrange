@@ -103,14 +103,17 @@ class QuerySystemStatePhase {
           this.delegates.getNodeStorageBudgetService(),
         getBootIncarnation: () =>
           this.delegates.getBootIncarnation(),
-        raiseBootIncarnationFloor: (knownIncarnation) =>
-          this.delegates.raiseBootIncarnationFloor?.(knownIncarnation),
+        getReplicaStateMachine: () => this.delegates.getReplicaStateMachine(),
+        readLocalReplicaStorageState: (replica) =>
+          this.delegates.readLocalReplicaStorageState(replica),
         getSystemTableCache: () =>
-          this.delegates.getSystemTableCache?.() || null,
+          this.delegates.getSystemTableCache(),
         getJoinLifecycleIntentType: () =>
           this.delegates.getJoinLifecycleIntentType?.() || null,
         getJoinStartupMode: () =>
           this.delegates.getJoinStartupMode?.() || null,
+        getMembershipOwnerOutcome: () =>
+          this.delegates.getMembershipOwnerOutcome?.() || null,
         getClusterIncarnationFence: () =>
           this.delegates.getClusterIncarnationFence?.() || null,
         getDataDir: () =>

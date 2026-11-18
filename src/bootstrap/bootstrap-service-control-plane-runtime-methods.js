@@ -335,7 +335,9 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           .waitForSystemServiceLeadersInCache();
         await this.awaitLocalQueryTransportReadinessForReadySignal();
         const stats = await NodeService.getInstance().getNodeStats();
-        const nodeRow = buildSeedNodeRegistrationRow(this, stats, Date.now());
+        const registrationNowMs = Date.now();
+        const nodeRow =
+          buildSeedNodeRegistrationRow(this, stats, registrationNowMs);
 
         const budgetService = NodeStorageBudgetSetup.create({
           nodeId: this.nodeId,
@@ -345,6 +347,8 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           budgetService,
           nodeRow,
           nodeId: this.nodeId,
+          issueRecord: this.registrationIssueRecord,
+          nowMs: registrationNowMs,
         });
 
         await this.heartbeatService.sendHeartbeat(

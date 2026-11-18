@@ -10,11 +10,6 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../constants/index.js';
-import {ReplicaStatus} from '../../rebalancer/replica-status.js';
-import {
-  classifyControlPlaneMutationResult,
-} from '../../control-plane/control-plane-mutation-outcome-classifier.js';
-import {raiseBootIncarnationFloor} from '../boot-incarnation-owner.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {resolveAutoRejoinStartupDecision} from '../rejoin-hints.js';
@@ -25,21 +20,26 @@ import {
 import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../rejoin-hints-constants.js';
+import {classifyControlPlaneMutationResult} from
+  '../../control-plane/control-plane-mutation-outcome-classifier.js';
 import {
   NODE_INCARNATION_RELATION,
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
   classifyNodeIncarnationRelation,
+  isRegistrationAttemptIndeterminate,
+  matchesIndeterminateAttemptRow,
+  recordNodeRegistrationIssue,
+  requireRegistrationClockReading,
 } from '../../control-plane/owners/node-registration-incarnation-write.js';
+import {requireDeclaredNodeHostId} from '../../topology/node-host-identity.js';
 import {
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
-  JOIN_ADMISSION_PUBLICATION,
   LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   NODE_REGISTRATION_ERROR,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
-  SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
@@ -47,20 +47,18 @@ import {
   buildAuthoritativeRowSourceUnavailableError,
   buildDurableRejoinMembershipResolution,
   buildExistingJoinAdmissionProgressResolution,
-  buildFailedLostStoragePartitionRow,
-  buildLostStorageMutationFailureError,
   canReuseObservedJoinAdmissionNodeRowForAddress,
   collectReusedEndpointEntries,
   filterAuthoritativeMetaEndpointRows,
   filterAuthoritativeNodeEndpointRow,
-  filterAuthoritativePartitionServiceRowsForNode,
-  isDurableRejoinFenceContinuityPresent,
   readObservedBootIncarnation,
-  readObservedStorageIncarnation,
-  resolveHighestObservedNodeIncarnation,
   stampReusedEndpointMembershipIncarnations,
   withOriginHlcStamp,
 } from './node-registration-owner-row-builder.js';
+import {
+  SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
+  failLostStoragePartitionReplicas,
+} from './node-registration-lost-storage-replicas.js';
 
 const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
   'Node boot incarnation advance was not observed on the authoritative row';
@@ -89,7 +87,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    if (!(await this.hasDurableRejoinStorageContinuity())) {
+    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
       return null;
     }
 
@@ -126,24 +124,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    const currentIncarnation = normalizeKnownNodeBootIncarnation(
-      this.getRegistrationBootIncarnation(),
-    );
-    const storageIncarnation = readObservedStorageIncarnation(
-      authoritativeNodeRow,
-      authoritativeEndpointRow,
-    );
-    this.latchedRegistrationBootIncarnation = currentIncarnation;
-    if (storageIncarnation !== null) {
-      this.latchedRegistrationStorageIncarnation = storageIncarnation;
-    }
     return buildDurableRejoinMembershipResolution({
       authoritativeNodeRow,
       authoritativeEndpointRow,
       metaEndpointRows,
       now,
-      currentIncarnation,
-      storageIncarnation,
+      currentIncarnation: this.getRegistrationBootIncarnation(),
       hostId: this.hostId,
     });
   }
@@ -167,34 +153,15 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async resolveExistingJoinAdmissionProgress() {
-    const hasDurableContinuity =
-      await this.hasDurableRejoinStorageContinuity();
-    const latchedBootIncarnation = normalizeKnownNodeBootIncarnation(
-      this.latchedRegistrationBootIncarnation,
-    );
-    const hasLatchedSameBootAttempt = latchedBootIncarnation > 0;
-    if (!hasDurableContinuity && !hasLatchedSameBootAttempt) {
+    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
       return null;
     }
 
     const authoritativeNodeRow =
       await this.readAuthoritativeDurableRejoinNodeRow();
-    const observedBootIncarnation = normalizeKnownNodeBootIncarnation(
-      readObservedBootIncarnation(authoritativeNodeRow),
-    );
-    const sameBootRetry =
-      hasLatchedSameBootAttempt &&
-      observedBootIncarnation === latchedBootIncarnation;
-    if (
-      !this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow) ||
-      (!hasDurableContinuity && !sameBootRetry)
-    ) {
+    if (!this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow)) {
       return null;
     }
-    const currentIncarnation = normalizeKnownNodeBootIncarnation(
-      this.getRegistrationBootIncarnation(),
-    );
-    this.latchedRegistrationBootIncarnation = currentIncarnation;
 
     const authoritativeEndpointOutcome =
       await this.readAuthoritativeNodeEndpointRowOutcome();
@@ -202,32 +169,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const metaEndpointOutcome =
       await this.readAuthoritativeMetaEndpointRowsOutcome();
     this.throwIfAuthoritativeRowsUnavailable(metaEndpointOutcome);
-    const observedStorageIncarnation = readObservedStorageIncarnation(
-      authoritativeNodeRow,
-      authoritativeEndpointOutcome.row,
-    );
-    let storageIncarnation = observedStorageIncarnation;
-    if (storageIncarnation === null) {
-      if (sameBootRetry) {
-        storageIncarnation = this.getRegistrationStorageIncarnation();
-      } else if (
-        !authoritativeEndpointOutcome.row &&
-        observedBootIncarnation === 1
-      ) {
-        storageIncarnation = 1;
-      }
-    }
-    if (storageIncarnation !== null) {
-      this.latchedRegistrationStorageIncarnation = storageIncarnation;
-    }
     return buildExistingJoinAdmissionProgressResolution({
       authoritativeNodeRow,
       authoritativeEndpointRow: authoritativeEndpointOutcome.row,
       metaEndpointRows: metaEndpointOutcome.rows,
       now: this.delegates.getNow()(),
-      currentIncarnation,
-      storageIncarnation,
-      sameBootRetry,
+      currentIncarnation: this.getRegistrationBootIncarnation(),
       hostId: this.hostId,
     });
   }
@@ -249,17 +196,6 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return true;
     }
     return fence.allowed !== true;
-  }
-
-  async hasDurableRejoinStorageContinuity() {
-    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
-      return false;
-    }
-    const fence = await this.resolveClusterIncarnationFence();
-    return isDurableRejoinFenceContinuityPresent(
-      fence,
-      this.getJoinLifecycleIntentType(),
-    );
   }
 
   async resolveClusterIncarnationFence() {
@@ -341,57 +277,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   getRegistrationBootIncarnation() {
-    const latched = normalizeKnownNodeBootIncarnation(
-      this.latchedRegistrationBootIncarnation,
-    );
-    return latched > 0 ? latched : this.delegates.getBootIncarnation();
-  }
-
-  getRegistrationStorageIncarnation() {
-    const latched = normalizeKnownNodeBootIncarnation(
-      this.latchedRegistrationStorageIncarnation,
-    );
-    return latched > 0 ? latched : this.getRegistrationBootIncarnation();
-  }
-
-  async advanceFreshStorageIncarnationFloorFromCluster() {
-    const latched = normalizeKnownNodeBootIncarnation(
-      this.latchedRegistrationBootIncarnation,
-    );
-    if (latched > 0) {
-      return latched;
-    }
-    const currentIncarnation = normalizeKnownNodeBootIncarnation(
-      this.getRegistrationBootIncarnation(),
-    );
-    const nodeOutcome =
-      await this.readAuthoritativeDurableRejoinNodeRowOutcome();
-    this.throwIfAuthoritativeRowsUnavailable(nodeOutcome);
-    const endpointOutcome =
-      await this.readAuthoritativeNodeEndpointRowOutcome();
-    this.throwIfAuthoritativeRowsUnavailable(endpointOutcome);
-
-    const highestObservedIncarnation = resolveHighestObservedNodeIncarnation(
-      nodeOutcome,
-      endpointOutcome,
-    );
-    const nextIncarnation =
-      highestObservedIncarnation > 0 ?
-        Math.max(currentIncarnation, highestObservedIncarnation + 1) :
-        currentIncarnation;
-    this.latchedRegistrationBootIncarnation = nextIncarnation;
-    this.latchedRegistrationStorageIncarnation = nextIncarnation;
-    if (highestObservedIncarnation <= 0) {
-      return nextIncarnation;
-    }
-    if (hasFunction(this.delegates.raiseBootIncarnationFloor)) {
-      await this.delegates.raiseBootIncarnationFloor(nextIncarnation);
-    }
-    const dataDir = normalizeString(this.delegates.getDataDir?.());
-    if (dataDir.length > 0) {
-      await raiseBootIncarnationFloor(dataDir, nextIncarnation);
-    }
-    return nextIncarnation;
+    return this.delegates.getBootIncarnation();
   }
 
   /**
@@ -406,27 +292,27 @@ class NodeRegistrationOwnerDurableRejoinMethods {
    * @return {Promise<Object>} The advanced row.
    */
   async advanceNodeBootIncarnation(observedNodeRow, nextNodeRow) {
+    requireDeclaredNodeHostId(this.hostId);
+    requireDeclaredNodeHostId(nextNodeRow?.[COLUMN.HOST_ID]);
+    requireRegistrationClockReading(this.delegates.getNow?.()?.());
     const nextIncarnation = normalizeKnownNodeBootIncarnation(
       nextNodeRow?.[COLUMN.BOOT_INCARNATION],
     );
-    // The NODES registration classification (D-7): newer -> refused; this
-    // boot already owns the row -> CURRENT, no write (a same-boot re-entry
-    // never re-CASes its own row); absent -> no CAS, the reread decides and
-    // the registration re-entry births the row; older -> one CAS below.
-    const relation = classifyNodeIncarnationRelation(observedNodeRow,
-      nextIncarnation);
-    this.assertNodeBootIncarnationNotStale(
-      normalizeKnownNodeBootIncarnation(
-        readObservedBootIncarnation(observedNodeRow),
-      ),
-      nextIncarnation,
-    );
+    // The NODES registration classification (D-7), bound to this boot
+    // lifecycle's issue record: newer, or this number written by another
+    // life of the node id -> superseded; this lifecycle already owns the row
+    // -> CURRENT, no write (a same-boot re-entry never re-CASes its own
+    // row); absent -> no CAS, the reread decides and the registration
+    // re-entry births the row; older -> one CAS below.
+    const relation = this.classifyLifecycleRegistrationRelation(
+      observedNodeRow, nextIncarnation);
     if (relation === NODE_INCARNATION_RELATION.CURRENT) return nextNodeRow;
     if (relation === NODE_INCARNATION_RELATION.ABSENT) {
       return this.resolveNodeBootIncarnationAdvanceByReadback(
         nextNodeRow, nextIncarnation);
     }
     let result = null;
+    let attemptError = null;
     try {
       result = await this.getMembershipPublicationRuntimeOwner()
         .advanceJoinNodeBootIncarnation(
@@ -438,20 +324,22 @@ class NodeRegistrationOwnerDurableRejoinMethods {
           nextNodeRow,
           this.getJoinTimeUpsertOptions(),
         );
-    } catch (_error) {
+    } catch (error) {
+      attemptError = error;
       result = null;
     }
-    if (
-      result?.success !== false &&
-      Number(result?.partitionResult?.affectedRows) > 0
-    ) {
+    if (classifyControlPlaneMutationResult(result).applied === true) {
+      recordNodeRegistrationIssue(this.registrationIssueRecord, nextIncarnation);
       const originHlc =
         result?.originHlc || result?.partitionResult?.originHlc;
       return withOriginHlcStamp(nextNodeRow, originHlc);
     }
+    const indeterminate =
+      isRegistrationAttemptIndeterminate(result, attemptError);
     return this.resolveNodeBootIncarnationAdvanceByReadback(
       nextNodeRow,
       nextIncarnation,
+      indeterminate,
     );
   }
 
@@ -475,6 +363,10 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   // The NODES registration is monotonic in its own mutation (D-7): a newer
   // incarnation's row is never replaced; a new boot lifecycle supersedes it.
   async registerJoinNodeRow(rowData, mutationOptions) {
+    requireDeclaredNodeHostId(this.hostId);
+    requireDeclaredNodeHostId(rowData?.[COLUMN.HOST_ID]);
+    const nowMs = requireRegistrationClockReading(
+      this.delegates.getNow?.()?.());
     const bootIncarnation = this.getRegistrationBootIncarnation();
     const {
       outcome,
@@ -484,7 +376,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     } = await this
       .getMembershipPublicationRuntimeOwner()
       .registerJoinNodeAtIncarnation(rowData, bootIncarnation,
-        mutationOptions);
+        this.registrationIssueRecord, {...mutationOptions, nowMs});
     if (outcome === NODE_REGISTRATION_OUTCOME.ACCEPTED ||
         outcome === NODE_REGISTRATION_OUTCOME.CURRENT) {
       return {
@@ -494,8 +386,8 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       };
     }
     if (outcome === NODE_REGISTRATION_OUTCOME.REFUSED_STALE) {
-      throw buildSupersededRegistrationError(this.nodeId, bootIncarnation,
-        observedRow);
+      throw this.buildRegistrationSupersededError(
+        observedRow, bootIncarnation, nowMs);
     }
     if (attemptError) throw attemptError;
     const error = new Error(`${NODE_REGISTRATION_ERROR
@@ -505,10 +397,46 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     throw error;
   }
 
-  // A newer incarnation owns the row: this boot lifecycle is superseded.
-  // The failure is retryable only by a NEW lifecycle, which reserves above
-  // the known incarnation (boot-incarnation-owner.js raiseBootIncarnation
-  // Floor); it is never resumed at this incarnation.
+  /**
+   * The registration relation of an observed NODES row to this boot
+   * lifecycle (node-registration-incarnation-write.js): a superseding row
+   * (newer, or this number written by another life of the node id) is
+   * refused here with the typed superseded or twin error.
+   * @param {Object|null} observedNodeRow
+   * @param {number} bootIncarnation
+   * @return {string} ABSENT, OLDER or CURRENT.
+   */
+  classifyLifecycleRegistrationRelation(observedNodeRow, bootIncarnation) {
+    const relation = classifyNodeIncarnationRelation(observedNodeRow,
+      bootIncarnation, this.registrationIssueRecord);
+    if (relation === NODE_INCARNATION_RELATION.NEWER) {
+      throw this.buildRegistrationSupersededError(observedNodeRow,
+        bootIncarnation);
+    }
+    return relation;
+  }
+
+  // This boot lifecycle is superseded. The failure is retryable only by a
+  // NEW lifecycle, which reserves above the known incarnation (the joiner's
+  // reattempt raises the boot incarnation owner's floor from the error's
+  // knownIncarnation); it is never resumed at this incarnation. A live twin
+  // on another host is refused for an operator instead.
+  buildRegistrationSupersededError(
+    observedNodeRow,
+    bootIncarnation,
+    nowMs = this.delegates.getNow?.()?.(),
+  ) {
+    return buildSupersededRegistrationError({
+      nodeId: this.nodeId,
+      receivedIncarnation: bootIncarnation,
+      observedRow: observedNodeRow,
+      declaredHostId: this.hostId,
+      nowMs,
+    });
+  }
+
+  // An endpoint row a newer incarnation owns: this boot lifecycle is
+  // superseded (the node row was already classified for this lifecycle).
   assertNodeBootIncarnationNotStale(knownIncarnation, nextIncarnation) {
     if (knownIncarnation > nextIncarnation) {
       const error = buildStaleNodeIncarnationError({
@@ -524,14 +452,19 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   async resolveNodeBootIncarnationAdvanceByReadback(
     nextNodeRow,
     nextIncarnation,
+    indeterminateAttempt = false,
   ) {
     const observedRow = await this.readAuthoritativeDurableRejoinNodeRow();
-    const knownIncarnation = normalizeKnownNodeBootIncarnation(
-      readObservedBootIncarnation(observedRow),
-    );
-    this.assertNodeBootIncarnationNotStale(knownIncarnation, nextIncarnation);
-    if (knownIncarnation === nextIncarnation) {
-      return withOriginHlcStamp(nextNodeRow, observedRow?.[COLUMN.UPDATED_AT_HLC]);
+    if (indeterminateAttempt &&
+        matchesIndeterminateAttemptRow(
+          nextNodeRow, observedRow, nextIncarnation)) {
+      recordNodeRegistrationIssue(
+        this.registrationIssueRecord, nextIncarnation);
+    }
+    if (this.classifyLifecycleRegistrationRelation(observedRow,
+      nextIncarnation) === NODE_INCARNATION_RELATION.CURRENT) {
+      return withOriginHlcStamp(
+        nextNodeRow, observedRow?.[COLUMN.UPDATED_AT_HLC]);
     }
     const error = new Error(NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED);
     error.deferRetry = true;
@@ -699,64 +632,33 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     return outcome.rows;
   }
 
-  async readAuthoritativePartitionServiceRowsOutcome() {
-    const outcome = await this.readAuthoritativeRows(
-      TABLES.SERVICES,
-      SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
-      [this.nodeId, SERVICE_TYPE.PARTITION],
-    );
-    return {
-      ...outcome,
-      rows: filterAuthoritativePartitionServiceRowsForNode(
-        outcome,
-        this.nodeId,
-      ),
-    };
-  }
-
-  async readExistingPartitionServiceRowsForNode() {
-    const outcome = await this.readAuthoritativePartitionServiceRowsOutcome();
-    this.throwIfAuthoritativeRowsUnavailable(outcome);
-    return outcome.rows;
-  }
-
-  async reconcileLostStoragePartitionReplicas(
-    now = this.delegates.getNow()(),
-  ) {
-    const partitionRows = await this.readExistingPartitionServiceRowsForNode();
-    const reconciledRows = [];
-    for (const row of partitionRows) {
-      const currentStatus = normalizeString(row?.[COLUMN.STATUS]).toLowerCase();
-      if (currentStatus === ReplicaStatus.FAILED) {
-        continue;
-      }
-      const failedRow = buildFailedLostStoragePartitionRow(row, now);
-      const expectedIdentity = {
-        [COLUMN.NODE_ID]: this.nodeId,
-        [COLUMN.SERVICE_TYPE]:
-          normalizeString(row?.[COLUMN.SERVICE_TYPE]) || SERVICE_TYPE.PARTITION,
-      };
-      const updateResult = await this.upsertSystemTableRowWithRetry(
-        TABLES.SERVICES,
-        failedRow,
-        {
-          admissionTarget:
-            JOIN_ADMISSION_PUBLICATION.LOST_STORAGE_PARTITION_REPLICA,
-          expectedIdentity,
-        },
-      );
-      const classification = classifyControlPlaneMutationResult(updateResult);
-      if (classification.applied !== true) {
-        throw buildLostStorageMutationFailureError(failedRow, classification);
-      }
-      const stampedFailedRow = withOriginHlcStamp(
-        withOriginHlcStamp(failedRow, updateResult?.partitionResult?.originHlc),
-        updateResult?.originHlc,
-      );
-      this.seedJoinTimeCacheRow(TABLES.SERVICES, stampedFailedRow);
-      reconciledRows.push(stampedFailedRow);
+  /**
+   * A fresh-storage registration's proven-lost partition replicas go to
+   * FAILED through their lifecycle owner
+   * (node-registration-lost-storage-replicas.js).
+   * @param {number} now
+   * @return {Promise<string[]>} Service ids transitioned to FAILED.
+   */
+  async failLostStoragePartitionReplicas(now) {
+    const fence = await this.resolveClusterIncarnationFence();
+    if (!fence || fence.allowed !== true) {
+      return [];
     }
-    return reconciledRows;
+    return failLostStoragePartitionReplicas({
+      joinLifecycleIntentType: this.getJoinLifecycleIntentType(),
+      nodeId: this.nodeId,
+      now,
+      readRows: () => this.readAuthoritativeRows(
+        TABLES.SERVICES,
+        SELECT_NODE_PARTITION_SERVICE_ROWS_SQL,
+        [this.nodeId, SERVICE_TYPE.PARTITION],
+      ),
+      assertReadable: (outcome) =>
+        this.throwIfAuthoritativeRowsUnavailable(outcome),
+      readStorageState: (replica) =>
+        this.delegates.readLocalReplicaStorageState(replica),
+      getReplicaStateMachine: () => this.delegates.getReplicaStateMachine(),
+    });
   }
 
   resolveCanonicalWsAddress() {

@@ -4,10 +4,19 @@
  * writing this boot's), so the lifecycle owner's READY CAS for this boot can
  * match. Without the advance the READY CAS could never apply.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
+import {buildNodeRegistrationRow} from
+  '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
+import {getSchemaByTableName} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {MembershipPublicationRuntimeOwner} from
   '../../src/control-plane/owners/membership-publication-runtime-owner.js';
 import {
@@ -24,20 +33,37 @@ import {
 import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
-import {NODE_REGISTRATION_OUTCOME} from
-  '../../src/control-plane/owners/node-registration-incarnation-write.js';
-import {ServicesOwner} from
-  '../../src/control-plane/owners/services-owner.js';
+import {
+  NODE_IDENTITY_TWIN_SUSPECTED,
+  NODE_REGISTRATION_CLOCK_REQUIRED,
+  NODE_REGISTRATION_INCARNATION_REQUIRED,
+  NODE_REGISTRATION_ISSUE_RECORD_REQUIRED,
+  NODE_REGISTRATION_OUTCOME,
+  buildSupersededRegistrationError,
+  classifyNodeIncarnationRelation,
+  createNodeRegistrationIssueRecord,
+  recordNodeRegistrationIssue,
+  writeNodeRegistrationAtIncarnation,
+} from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {buildClusterIncarnationFence} from
   '../../src/bootstrap/cluster-incarnation-fence.js';
 import {
-  syncNodeJoiningBootIncarnation,
-} from '../../src/bootstrap/node-joining-delegate-bundles.js';
+  PARTITION_REPLICA_STORAGE_STATE,
+  getPartitionDbPath,
+  readPartitionReplicaStorageState,
+} from '../../src/storage/data-directory-manager.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {NodeStorageBudgetService} from
+  '../../src/rebalancer/node-storage-budget-service.js';
+import {NODE_HOST_ID_ERROR_CODE} from '../../src/topology/node-host-identity.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../../src/raft/raft-committed-membership-constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   COLUMN,
-  ENDPOINT_STATUS,
   NODE_STATE,
   SERVICE_STATUS,
+  SERVICE_TYPE,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
@@ -64,16 +90,18 @@ function previousBootRow(overrides = {}) {
 
 // Durable rows behind a gateway that honors the CAS predicate: the NODES row
 // and the endpoint rows the previous boot published (at its incarnation).
+// An absent initialRow is a cluster that never saw this node id.
 function createDurableNodes(initialRow) {
   const tables = new Map([
-    [TABLES.NODES, new Map([[initialRow[COLUMN.NODE_ID], {...initialRow}]])],
-    [TABLES.NODE_ENDPOINTS, new Map([['ep', {endpoint_id: 'ep',
+    [TABLES.NODES, new Map(initialRow ?
+      [[initialRow[COLUMN.NODE_ID], {...initialRow}]] : [])],
+    [TABLES.NODE_ENDPOINTS, new Map(initialRow ? [['ep', {endpoint_id: 'ep',
       node_id: NODE_ID, address: 'ws://rejoin:8082',
-      boot_incarnation: initialRow[COLUMN.BOOT_INCARNATION]}]])],
-    [TABLES.SERVICE_ENDPOINTS, new Map([['svc-postgres-wire', {
+      boot_incarnation: initialRow[COLUMN.BOOT_INCARNATION]}]] : [])],
+    [TABLES.SERVICE_ENDPOINTS, new Map(initialRow ? [['svc-postgres-wire', {
       endpoint_id: 'svc-postgres-wire', node_id: NODE_ID,
       address: 'rejoin', boot_incarnation: initialRow[COLUMN.BOOT_INCARNATION],
-    }]])],
+    }]] : [])],
   ]);
   const rowsOf = (tableName) => tables.get(tableName) || new Map();
   const gateway = {
@@ -103,7 +131,7 @@ function createDurableNodes(initialRow) {
   };
   return {
     gateway,
-    current: () => rowsOf(TABLES.NODES).get(initialRow[COLUMN.NODE_ID]),
+    current: () => rowsOf(TABLES.NODES).get(NODE_ID),
     endpoints: () => [...rowsOf(TABLES.NODE_ENDPOINTS).values(),
       ...rowsOf(TABLES.SERVICE_ENDPOINTS).values()],
   };
@@ -123,12 +151,18 @@ function createRejoiningOwner(durable, bootIncarnation = THIS_BOOT) {
       getNow: () => () => NOW,
       getNodeCapabilities: () => [],
       getBootIncarnation: () => bootIncarnation,
+      getSystemTableCache: () => ({applySystemTableChange() {}}),
       getJoinLifecycleIntentType: () =>
         MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
       getClusterIncarnationFence: () => ({allowed: true}),
     },
   });
   owner.seedJoinTimeCacheRow = () => {};
+  owner.readAuthoritativeRows = async (tableName) => ({
+    state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+    rows: [],
+    tableName,
+  });
   owner.readAuthoritativeDurableRejoinNodeRow = async () =>
     ({...durable.current()});
   owner.readAuthoritativeNodeEndpointRowOutcome = async () => ({
@@ -231,529 +265,6 @@ test('N4: a repeated same-boot durable-rejoin registration is CURRENT and ' +
     'the durable row is byte-for-byte unchanged');
 });
 
-const TEST_WS_PORT = 8082;
-const TEST_UNAVAILABLE_READ_ROWS = async () => ({
-  success: false,
-  error: 'authoritative_row_source_unavailable',
-});
-
-function createWipedStorageDelegates() {
-  return {
-    getLogger: () => ({info() {}, warn() {}, error() {}}),
-    getNow: () => () => NOW,
-    getSleep: () => async () => {},
-    getNodeCapabilities: () => [],
-    getWsPort: () => TEST_WS_PORT,
-    getWirePort: () => null,
-    getBootIncarnation: () => 1,
-    getNodeStorageBudgetService: () => ({
-      resolveBudgetRow: (nodeRow) => ({
-        budgetRow: {
-          ...nodeRow,
-          storage_budget_bytes: 1024,
-          storage_budget_source: 'test',
-          storage_budget_updated_at: nodeRow[COLUMN.CREATED_AT],
-        },
-        resolution: {
-          isValid: true,
-          budgetBytes: 1024,
-          source: 'test',
-          diskBytes: 1024,
-        },
-      }),
-    }),
-    getCdcIntegrationService: () => ({
-      sqlQueryEngine: {},
-      executeAuthoritativeSystemTableRead: async () => ({
-        success: true,
-        rows: [],
-        source: 'owner_rpc_lane',
-      }),
-    }),
-  };
-}
-
-function stubAuthoritativeViewReads(owner, readRows) {
-  owner.getAuthoritativeControlPlaneView = () => ({
-    canRead: () => true,
-    readRows,
-  });
-}
-
-function buildPublicationOwnerRecorder(calls) {
-  return {
-    registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
-      calls.push({kind: 'node', row, bootIncarnation, options});
-      return {
-        outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED,
-        observedRow: null,
-        error: null,
-      };
-    },
-    writeJoinEndpointAtIncarnation: async (
-      tableName,
-      row,
-      bootIncarnation,
-      options,
-    ) => {
-      calls.push({
-        kind:
-          tableName === TABLES.NODE_ENDPOINTS ?
-            'node_endpoint' :
-            'service_endpoint',
-        tableName,
-        row,
-        bootIncarnation,
-        options,
-      });
-      return {outcome: 'applied', result: {success: true}};
-    },
-  };
-}
-
-async function captureReconcileLostStorageError(owner) {
-  try {
-    await owner.reconcileLostStoragePartitionReplicas(NOW);
-    return null;
-  } catch (error) {
-    return error;
-  }
-}
-
-async function assertWipedStorageReconciliationFailureModes(t, owner) {
-  const unappliedSeededRows = [];
-  const unappliedServicesOwner = new ServicesOwner({
-    controlPlaneSystemTableGateway: {
-      updateSystemTableRow: async () => ({
-        success: true,
-        changes: 0,
-        partitionResult: {affectedRows: 0},
-      }),
-    },
-  });
-  owner.membershipPublicationRuntimeOwner = {
-    ...buildPublicationOwnerRecorder([]),
-    servicesOwner: unappliedServicesOwner,
-  };
-  owner.seedJoinTimeCacheRow = (tableName, row) => {
-    unappliedSeededRows.push({tableName, row});
-  };
-  const unappliedError = await captureReconcileLostStorageError(owner);
-  t.ok(
-    unappliedError,
-    'unapplied ServicesOwner.updateService result must throw',
-  );
-  t.equal(
-    unappliedError?.deferRetry,
-    true,
-    'unapplied ServicesOwner.updateService error is retryable deferred',
-  );
-  t.equal(
-    unappliedSeededRows.some((entry) => entry.tableName === TABLES.SERVICES),
-    false,
-    'local SERVICES cache is never seeded when authoritative update did not apply',
-  );
-
-  stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
-  const unavailableServicesError =
-    await captureReconcileLostStorageError(owner);
-  t.ok(
-    unavailableServicesError,
-    'unavailable authoritative SERVICES read must throw',
-  );
-  t.equal(
-    unavailableServicesError?.authoritativeRowReadState,
-    AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
-    'unavailable SERVICES read surfaces typed UNAVAILABLE read state',
-  );
-}
-
-test(
-  'NodeRegistrationOwner advances wiped-storage bootIncarnation and ' +
-  'storageIncarnation above cluster-observed incarnation when local ' +
-  'boot reservation resets to 1, and updates lost SERVICES rows via ' +
-  '4-argument ServicesOwner.updateService',
-  async (t) => {
-    const publicationCalls = [];
-    const updateWhereCalls = [];
-    const seededRows = [];
-    let currentBootIncarnation = 1;
-    let raisedFloor = null;
-    const servicesOwner = new ServicesOwner({
-      controlPlaneSystemTableGateway: {
-        updateSystemTableRow: async (
-          tableName,
-          whereClause,
-          data,
-          options,
-        ) => {
-          updateWhereCalls.push({tableName, whereClause, data, options});
-          return {
-            success: true,
-            changes: 1,
-            partitionResult: {affectedRows: 1},
-          };
-        },
-      },
-    });
-    const membershipPublicationRuntimeOwner = {
-      ...buildPublicationOwnerRecorder(publicationCalls),
-      servicesOwner,
-    };
-    const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
-      nodeId: NODE_ID,
-      nodeAddress: NODE_ADDRESS,
-      membershipPublicationRuntimeOwner,
-      delegates: {
-        ...createWipedStorageDelegates(),
-        getBootIncarnation: () => currentBootIncarnation,
-        raiseBootIncarnationFloor: async (nextFloor) => {
-          raisedFloor = nextFloor;
-          currentBootIncarnation = nextFloor;
-        },
-        getJoinLifecycleIntentType: () =>
-          MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
-        getClusterIncarnationFence: () =>
-          buildClusterIncarnationFence({durableStateDetected: false}),
-      },
-    });
-    owner.seedJoinTimeCacheRow = (tableName, row) => {
-      seededRows.push({tableName, row});
-    };
-    stubAuthoritativeViewReads(owner, async (tableName) => {
-      if (tableName === TABLES.NODES) {
-        return {
-          success: true,
-          rows: [
-            {
-              [COLUMN.NODE_ID]: NODE_ID,
-              [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
-              [COLUMN.STATUS]: NODE_STATE.ACTIVE,
-              [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-              [COLUMN.BOOT_INCARNATION]: 1,
-              [COLUMN.CREATED_AT]: NOW - 5000,
-              [COLUMN.LAST_HEARTBEAT]: NOW - 1000,
-            },
-          ],
-        };
-      }
-      if (tableName === TABLES.NODE_ENDPOINTS) {
-        return {
-          success: true,
-          rows: [
-            {
-              [COLUMN.ENDPOINT_ID]: `ep-${NODE_ID}-ws`,
-              [COLUMN.NODE_ID]: NODE_ID,
-              [COLUMN.TRANSPORT_TYPE]: 'websocket',
-              [COLUMN.ADDRESS]: `ws://rejoin-host:${TEST_WS_PORT}`,
-              [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-              [COLUMN.BOOT_INCARNATION]: 1,
-              [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
-            },
-          ],
-        };
-      }
-      if (tableName === TABLES.SERVICES) {
-        return {
-          success: true,
-          rows: [
-            {
-              [COLUMN.SERVICE_ID]: 'replica_operations-p1-r2',
-              [COLUMN.REPLICA_ID]: 'replica_operations-p1-r2',
-              [COLUMN.PARTITION_ID]: 'replica_operations-p1-r2',
-              [COLUMN.NODE_ID]: NODE_ID,
-              [COLUMN.SERVICE_TYPE]: 'partition',
-              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-              [COLUMN.RAFT_ROLE]: 'follower',
-            },
-          ],
-        };
-      }
-      return {success: true, rows: []};
-    });
-
-    const result = await owner.registerNodeInCluster();
-
-    t.equal(
-      raisedFloor,
-      2,
-      'complete data-dir wipe resetting local boot to 1 advances floor to 2',
-    );
-    const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
-    t.equal(
-      nodeCalls.length,
-      1,
-      'wiped-storage registration must not reuse prior boot=1 NODES row',
-    );
-    t.equal(
-      nodeCalls[0]?.row?.[COLUMN.BOOT_INCARNATION],
-      2,
-      'fresh NODES row publishes advanced boot_incarnation = 2',
-    );
-    const endpointCalls = publicationCalls.filter(
-      (call) => call.kind === 'node_endpoint',
-    );
-    t.equal(
-      JSON.parse(endpointCalls[0]?.row?.[COLUMN.METADATA] || '{}')
-        .storageIncarnation,
-      2,
-      'fresh NODE_ENDPOINTS row publishes advanced storageIncarnation = 2',
-    );
-    t.equal(
-      updateWhereCalls.length,
-      1,
-      'real ServicesOwner.updateService executes 4-argument updateWhere once',
-    );
-    t.same(
-      updateWhereCalls[0]?.whereClause,
-      {
-        [COLUMN.SERVICE_ID]: 'replica_operations-p1-r2',
-        [COLUMN.NODE_ID]: NODE_ID,
-        [COLUMN.SERVICE_TYPE]: 'partition',
-      },
-      'ServicesOwner.updateService receives expectedIdentity in WHERE clause',
-    );
-    t.equal(
-      updateWhereCalls[0]?.data?.[COLUMN.STATUS],
-      'failed',
-      'ServicesOwner.updateService receives FAILED row data in 3rd argument',
-    );
-    t.equal(
-      result.lostStorageReplicas.length,
-      1,
-      'lostStorageReplicas reports the reconciled replica',
-    );
-    await assertWipedStorageReconciliationFailureModes(t, owner);
-  },
-);
-
-test(
-  'NodeRegistrationOwner preserves latched bootIncarnation and ' +
-  'storageIncarnation across same-process retry after NODES write when ' +
-  'NODE_ENDPOINTS fails transiently on attempt 1, and syncs runtime owners',
-  async (t) => {
-    const clusterStore = {
-      [TABLES.NODES]: [
-        {
-          [COLUMN.NODE_ID]: NODE_ID,
-          [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
-          [COLUMN.STATUS]: NODE_STATE.ACTIVE,
-          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-          [COLUMN.BOOT_INCARNATION]: 1,
-          [COLUMN.CREATED_AT]: NOW - 5000,
-          [COLUMN.LAST_HEARTBEAT]: NOW - 1000,
-        },
-      ],
-      [TABLES.NODE_ENDPOINTS]: [
-        {
-          [COLUMN.ENDPOINT_ID]: `ep-${NODE_ID}-ws`,
-          [COLUMN.NODE_ID]: NODE_ID,
-          [COLUMN.TRANSPORT_TYPE]: 'websocket',
-          [COLUMN.ADDRESS]: `ws://rejoin-host:${TEST_WS_PORT}`,
-          [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-          [COLUMN.BOOT_INCARNATION]: 1,
-          [COLUMN.METADATA]: JSON.stringify({storageIncarnation: 1}),
-        },
-      ],
-      [TABLES.SERVICE_ENDPOINTS]: [],
-      [TABLES.SERVICES]: [
-        {
-          [COLUMN.SERVICE_ID]: 'replica_operations-p1-r2',
-          [COLUMN.REPLICA_ID]: 'replica_operations-p1-r2',
-          [COLUMN.PARTITION_ID]: 'replica_operations-p1-r2',
-          [COLUMN.NODE_ID]: NODE_ID,
-          [COLUMN.SERVICE_TYPE]: 'partition',
-          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-          [COLUMN.RAFT_ROLE]: 'follower',
-        },
-      ],
-    };
-    const runtimeSurface = {
-      bootIncarnation: 1,
-      nodeStatePublicationOwner: {bootIncarnation: 1},
-      heartbeatService: {bootIncarnation: 1},
-      messageRouter: {
-        bootIncarnation: 1,
-        syncedIncarnations: [],
-        syncBootIncarnation(next) {
-          this.bootIncarnation = next;
-          this.syncedIncarnations.push(next);
-          return this.bootIncarnation;
-        },
-      },
-      messageGroupServiceHandler: {
-        replicaCreateAdmissionOwner: {ownerIncarnation: 1},
-      },
-      rebalanceCoordinator: {
-        repository: {membershipOwnerBootIncarnation: 1},
-      },
-    };
-    const floorRaises = [];
-    let endpointAttempts = 0;
-    const nodeWrites = [];
-    const endpointWrites = [];
-    const servicesUpdates = [];
-    const servicesOwner = new ServicesOwner({
-      controlPlaneSystemTableGateway: {
-        updateSystemTableRow: async (tableName, whereClause, data) => {
-          servicesUpdates.push({tableName, whereClause, data});
-          clusterStore[TABLES.SERVICES] = clusterStore[TABLES.SERVICES].map(
-            (row) =>
-              row[COLUMN.SERVICE_ID] === whereClause[COLUMN.SERVICE_ID] ?
-                {...row, ...data} :
-                row,
-          );
-          return {
-            success: true,
-            changes: 1,
-            partitionResult: {affectedRows: 1},
-          };
-        },
-      },
-    });
-    const membershipPublicationRuntimeOwner = {
-      servicesOwner,
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation) => {
-        const stamped = {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation};
-        nodeWrites.push(stamped);
-        clusterStore[TABLES.NODES] = [stamped];
-        return {
-          outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED,
-          observedRow: null,
-          error: null,
-        };
-      },
-      advanceJoinNodeBootIncarnation: async (_whereClause, nextNodeRow) => {
-        clusterStore[TABLES.NODES] = [nextNodeRow];
-        return {success: true, partitionResult: {affectedRows: 1}};
-      },
-      writeJoinEndpointAtIncarnation: async (
-        tableName,
-        row,
-        bootIncarnation,
-      ) => {
-        if (tableName === TABLES.NODE_ENDPOINTS) {
-          endpointAttempts += 1;
-          if (endpointAttempts === 1) {
-            const transientError = new Error('transient_node_endpoint_failure');
-            transientError.deferRetry = true;
-            throw transientError;
-          }
-          const stamped = {
-            ...row,
-            [COLUMN.BOOT_INCARNATION]: bootIncarnation,
-          };
-          endpointWrites.push(stamped);
-          clusterStore[TABLES.NODE_ENDPOINTS] = [stamped];
-          return {outcome: 'applied', result: {success: true}};
-        }
-        const stamped = {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation};
-        clusterStore[TABLES.SERVICE_ENDPOINTS].push(stamped);
-        return {outcome: 'applied', result: {success: true}};
-      },
-    };
-    const owner = new NodeRegistrationOwner({
-      hostId: LOCAL_MACHINE_HOST_ID,
-      nodeId: NODE_ID,
-      nodeAddress: NODE_ADDRESS,
-      membershipPublicationRuntimeOwner,
-      delegates: {
-        ...createWipedStorageDelegates(),
-        getBootIncarnation: () => runtimeSurface.bootIncarnation,
-        raiseBootIncarnationFloor: async (nextFloor) => {
-          floorRaises.push(nextFloor);
-          return syncNodeJoiningBootIncarnation(runtimeSurface, nextFloor);
-        },
-        getJoinLifecycleIntentType: () =>
-          MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
-        getClusterIncarnationFence: () =>
-          buildClusterIncarnationFence({durableStateDetected: false}),
-      },
-    });
-    owner.seedJoinTimeCacheRow = () => {};
-    owner.getJoinAdmissionWriteRetryTimeoutMs = () => 0;
-    stubAuthoritativeViewReads(owner, async (tableName) => ({
-      success: true,
-      rows: (clusterStore[tableName] || []).map((row) => ({...row})),
-    }));
-
-    let attempt1Error = null;
-    try {
-      await owner.registerNodeInCluster();
-    } catch (error) {
-      attempt1Error = error;
-    }
-    t.ok(attempt1Error, 'attempt 1 fails when NODE_ENDPOINTS throws');
-    t.equal(
-      nodeWrites.length,
-      1,
-      'attempt 1 writes NODES at incarnation 2 before endpoint failure',
-    );
-    t.equal(nodeWrites[0]?.[COLUMN.BOOT_INCARNATION], 2);
-
-    const attempt2Result = await owner.registerNodeInCluster();
-    t.same(
-      floorRaises,
-      [2],
-      'same-process retry does not advance the incarnation floor a second time',
-    );
-    t.equal(
-      nodeWrites.length,
-      1,
-      'same-process retry resumes existing join progress without rewriting NODES',
-    );
-    t.equal(
-      attempt2Result.nodeRow[COLUMN.BOOT_INCARNATION],
-      2,
-      'resumed NODES row stays at latched boot_incarnation = 2',
-    );
-    t.equal(
-      endpointWrites[0]?.[COLUMN.BOOT_INCARNATION],
-      2,
-      'NODE_ENDPOINTS row is published at latched boot_incarnation = 2',
-    );
-    t.equal(
-      JSON.parse(endpointWrites[0]?.[COLUMN.METADATA] || '{}')
-        .storageIncarnation,
-      2,
-      'NODE_ENDPOINTS row preserves latched storageIncarnation = 2',
-    );
-    t.equal(
-      servicesUpdates.length,
-      1,
-      'same-process retry still reconciles lost-storage SERVICES rows',
-    );
-    t.equal(
-      runtimeSurface.heartbeatService.bootIncarnation,
-      2,
-      'syncNodeJoiningBootIncarnation updates heartbeatService.bootIncarnation',
-    );
-    t.equal(
-      runtimeSurface.messageRouter.bootIncarnation,
-      2,
-      'syncNodeJoiningBootIncarnation updates messageRouter.bootIncarnation',
-    );
-    t.same(
-      runtimeSurface.messageRouter.syncedIncarnations,
-      [2],
-      'syncNodeJoiningBootIncarnation delegates to messageRouter.syncBootIncarnation',
-    );
-    t.equal(
-      runtimeSurface.messageGroupServiceHandler.replicaCreateAdmissionOwner
-        .ownerIncarnation,
-      2,
-      'syncNodeJoiningBootIncarnation updates messageGroupServiceHandler.replicaCreateAdmissionOwner.ownerIncarnation',
-    );
-    t.equal(
-      runtimeSurface.rebalanceCoordinator.repository
-        .membershipOwnerBootIncarnation,
-      2,
-      'syncNodeJoiningBootIncarnation updates repository.membershipOwnerBootIncarnation',
-    );
-  },
-);
-
 function attachOriginHlcStamping(gateway, {prefix, startCounter = 0}) {
   let hlcCounter = startCounter;
   const baseUpdate = gateway.updateSystemTableRow;
@@ -833,7 +344,7 @@ async function verifyResumedJoinProgressOriginHlc(t) {
   const progressSeeded = new Map();
   const progressOwner = createRejoiningOwner(progressDurable, THIS_BOOT);
   progressOwner.delegates.getJoinLifecycleIntentType = () =>
-    MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION;
+    MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION;
   progressOwner.delegates.getClusterIncarnationFence = () => ({
     allowed: true,
     durableMembershipState: 'present',
@@ -841,7 +352,6 @@ async function verifyResumedJoinProgressOriginHlc(t) {
   progressOwner.seedJoinTimeCacheRow = (tableName, row) => {
     progressSeeded.set(tableName, row);
   };
-  progressOwner.readExistingPartitionServiceRowsForNode = async () => [];
 
   const progressResult = await progressOwner.registerNodeInCluster();
   const expectedProgNodesHlc = `1710000000000-0011-${TABLES.NODES}`;
@@ -884,8 +394,8 @@ async function verifyResumedJoinProgressOriginHlc(t) {
 
 test(
   'durable rejoin and resumed join-admission progress preserve originHlc ' +
-  '(updated_at_hlc) across NODES, NODE_ENDPOINTS, SERVICE_ENDPOINTS, and ' +
-  'SERVICES return values and SystemTableCache seeds',
+  '(updated_at_hlc) across NODES, NODE_ENDPOINTS and SERVICE_ENDPOINTS ' +
+  'return values and SystemTableCache seeds',
   async (t) => {
     await verifyDurableRejoinOriginHlc(t);
 
@@ -912,40 +422,580 @@ test(
       readbackHlc,
       'resolveNodeBootIncarnationAdvanceByReadback preserves observedRow.updated_at_hlc',
     );
-
-    // Lost-storage SERVICES reconciliation path (reconcileLostStoragePartitionReplicas)
-    const servicesHlc = '1710000000000-0100-services';
-    const servicesSeeded = [];
-    progressOwner.seedJoinTimeCacheRow = (tableName, row) => {
-      servicesSeeded.push({tableName, row});
-    };
-    progressOwner.readExistingPartitionServiceRowsForNode = async () => [
-      {
-        [COLUMN.SERVICE_ID]: 'svc-lost-p1',
-        [COLUMN.REPLICA_ID]: 'svc-lost-p1',
-        [COLUMN.PARTITION_ID]: 'svc-lost-p1',
-        [COLUMN.NODE_ID]: NODE_ID,
-        [COLUMN.SERVICE_TYPE]: 'partition',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      },
-    ];
-    progressOwner.upsertSystemTableRowWithRetry = async () => ({
-      success: true,
-      changes: 1,
-      originHlc: servicesHlc,
-      partitionResult: {affectedRows: 1, originHlc: servicesHlc},
-    });
-    const reconciled =
-      await progressOwner.reconcileLostStoragePartitionReplicas(NOW);
-    t.equal(
-      reconciled[0]?.[COLUMN.UPDATED_AT_HLC],
-      servicesHlc,
-      'reconcileLostStoragePartitionReplicas returns HLC-stamped failed SERVICES row',
-    );
-    t.equal(
-      servicesSeeded[0]?.row?.[COLUMN.UPDATED_AT_HLC],
-      servicesHlc,
-      'reconcileLostStoragePartitionReplicas seeds SystemTableCache with HLC-stamped failed SERVICES row',
-    );
   },
 );
+
+// ---------------------------------------------------------------------------
+// R1: one boot lifecycle owns its NODES row. A data directory reserves above
+// every incarnation it issued, so a row at this lifecycle's own number that
+// it never wrote belongs to another storage's life of the node id (a wiped
+// data directory reserved the number again). That row supersedes this
+// lifecycle exactly as a newer row does: no write, no adoption of the earlier
+// life's endpoint rows, and a new lifecycle reserves above it.
+
+// Count every durable write the gateway receives.
+function recordDurableWrites(durable) {
+  const writes = [];
+  const {insertSystemTableRow, updateSystemTableRow} = durable.gateway;
+  durable.gateway.insertSystemTableRow = (tableName, ...rest) => {
+    writes.push({op: 'insert', tableName});
+    return insertSystemTableRow(tableName, ...rest);
+  };
+  durable.gateway.updateSystemTableRow = (tableName, ...rest) => {
+    writes.push({op: 'update', tableName});
+    return updateSystemTableRow(tableName, ...rest);
+  };
+  return writes;
+}
+
+// A lifecycle that starts on a data directory with no durable state. In real
+// startJoinNode, persistJoinSeedRejoinHints runs BEFORE the local cluster
+// incarnation fence is resolved, so durableMembershipState is 'present' even
+// on a wiped joiner while joinLifecycleIntentType stays JOIN_ADMISSION.
+function createFreshStorageOwner(durable, bootIncarnation) {
+  const owner = createRejoiningOwner(durable, bootIncarnation);
+  owner.delegates.getJoinLifecycleIntentType = () =>
+    MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION;
+  owner.delegates.getClusterIncarnationFence = () =>
+    buildClusterIncarnationFence({
+      durableStateDetected: true,
+      localIdentityMatched: true,
+      peerProofRequired: true,
+      peerAddresses: [NODE_ADDRESS],
+    });
+  owner.delegates.getNodeStorageBudgetService = () => ({
+    resolveBudgetRow: (nodeRow) => ({
+      budgetRow: {...nodeRow, storage_budget_bytes: 1024,
+        storage_budget_source: 'test'},
+      resolution: {isValid: true, budgetBytes: 1024, source: 'test'},
+    }),
+  });
+  owner.readAuthoritativeDurableRejoinNodeRow = async () =>
+    (durable.current() ? {...durable.current()} : null);
+  return owner;
+}
+
+function earlierLifeRow(overrides = {}) {
+  return previousBootRow({
+    [COLUMN.BOOT_INCARNATION]: THIS_BOOT,
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    ...overrides,
+  });
+}
+
+test('R1 (main\'s hole): a fresh-storage lifecycle whose existing-progress ' +
+  'path observes an earlier life\'s CONNECTED row at its own number is ' +
+  'superseded, writes nothing and adopts none of that life\'s endpoints',
+async (t) => {
+  const durable = createDurableNodes(earlierLifeRow());
+  const before = JSON.stringify([durable.current(), durable.endpoints()]);
+  const writes = recordDurableWrites(durable);
+  const error = await t.rejects(
+    createFreshStorageOwner(durable, THIS_BOOT).registerNodeInCluster());
+  t.equal(error?.code, STALE_NODE_INCARNATION_CODE,
+    'typed superseded refusal, not CURRENT');
+  t.equal(error?.knownIncarnation, THIS_BOOT,
+    'the join failure carries the superseding incarnation to the reattempt');
+  t.equal(error?.retryable, true, 'retryable by a new lifecycle only');
+  t.same(writes, [], 'no NODES, NODE_ENDPOINTS or SERVICE_ENDPOINTS write');
+  t.equal(JSON.stringify([durable.current(), durable.endpoints()]), before,
+    'the earlier life\'s rows are untouched');
+});
+
+test('R1 (fresh birth): a lifecycle whose birth observes an earlier life\'s ' +
+  'row at its own number is refused by the registration write itself',
+async (t) => {
+  const durable = createDurableNodes(earlierLifeRow({
+    [COLUMN.STATUS]: NODE_STATE.STOPPED,
+  }));
+  const writes = recordDurableWrites(durable);
+  const error = await t.rejects(
+    createFreshStorageOwner(durable, THIS_BOOT).registerNodeInCluster());
+  t.equal(error?.code, STALE_NODE_INCARNATION_CODE);
+  t.equal(error?.knownIncarnation, THIS_BOOT);
+  t.same(writes, [], 'the D-7 write issues neither a birth nor a CAS');
+  t.equal(durable.current()[COLUMN.STATUS], NODE_STATE.STOPPED,
+    'the terminal row of the earlier life stays terminal');
+});
+
+test('R1: the same lifecycle re-entering after its own birth is CURRENT ' +
+  'and issues no second NODES write', async (t) => {
+  const durable = createDurableNodes(null);
+  const writes = recordDurableWrites(durable);
+  const owner = createFreshStorageOwner(durable, THIS_BOOT);
+  owner.delegates.getClusterIncarnationFence = () => ({allowed: true});
+  await owner.registerNodeInCluster();
+  const nodeWrites = () => writes.filter((w) => w.tableName === TABLES.NODES);
+  t.equal(nodeWrites().length, 1, 'the lifecycle births its row once');
+  t.equal(durable.current()[COLUMN.BOOT_INCARNATION], THIS_BOOT);
+
+  // The registration re-enters later in the same boot lifecycle.
+  owner.delegates.getNow = () => () => NOW + 5_000;
+  await owner.registerNodeInCluster();
+  t.equal(nodeWrites().length, 1, 'its own row is CURRENT: no second write');
+});
+
+test('R1: the superseded lifecycle\'s successor reserves above the ' +
+  'superseding incarnation and advances the earlier life\'s row by one CAS',
+async (t) => {
+  const durable = createDurableNodes(earlierLifeRow());
+  const error = await t.rejects(
+    createFreshStorageOwner(durable, THIS_BOOT).registerNodeInCluster());
+  const successor = error.knownIncarnation + 1;
+  const writes = recordDurableWrites(durable);
+  const owner = createFreshStorageOwner(durable, successor);
+  owner.readAuthoritativeRows = async (tableName) =>
+    ({state: AUTHORITATIVE_ROW_READ_STATE.READABLE, rows: [], tableName});
+  await owner.registerNodeInCluster();
+  t.equal(durable.current()[COLUMN.BOOT_INCARNATION], successor,
+    'the new lifecycle owns the row');
+  t.same(writes.filter((w) => w.tableName === TABLES.NODES),
+    [{op: 'update', tableName: TABLES.NODES}],
+    'one CAS from the observed earlier incarnation');
+});
+
+test('O-K1: a superseding row with a valid READY lease that declares another ' +
+  'host is a suspected twin, refused for an operator; the same host or a ' +
+  'lapsed lease is an earlier life, superseded', async (t) => {
+  const liveElsewhere = createDurableNodes(earlierLifeRow({
+    [COLUMN.HOST_ID]: 'other-host',
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: NOW + 10_000,
+  }));
+  const writes = recordDurableWrites(liveElsewhere);
+  const twin = await t.rejects(
+    createFreshStorageOwner(liveElsewhere, THIS_BOOT).registerNodeInCluster());
+  t.equal(twin?.code, NODE_IDENTITY_TWIN_SUSPECTED, 'operator-gated refusal');
+  t.equal(twin?.retryable, false, 'never retried by a new lifecycle');
+  t.equal(twin?.knownIncarnation, undefined,
+    'carries no superseded incarnation: no floor raise');
+  t.equal(twin?.observedHostId, 'other-host', 'preserves observedHostId');
+  t.equal(twin?.declaredHostId, LOCAL_MACHINE_HOST_ID,
+    'preserves declaredHostId');
+  t.equal(twin?.nodeId, NODE_ID, 'preserves nodeId');
+  t.equal(twin?.receivedIncarnation, THIS_BOOT,
+    'preserves receivedIncarnation');
+  const directTwin = buildSupersededRegistrationError({
+    nodeId: NODE_ID,
+    receivedIncarnation: THIS_BOOT,
+    observedRow: liveElsewhere.current(),
+    declaredHostId: LOCAL_MACHINE_HOST_ID,
+    nowMs: NOW,
+  });
+  t.equal('knownIncarnation' in directTwin, false,
+    'direct buildSupersededRegistrationError omits knownIncarnation on twin');
+  t.same(writes, [], 'nothing written');
+
+  for (const [label, overrides] of [
+    ['same host', {[COLUMN.READY_LEASE_EXPIRES_AT]: NOW + 10_000}],
+    ['lapsed lease', {[COLUMN.HOST_ID]: 'other-host',
+      [COLUMN.READY_LEASE_EXPIRES_AT]: NOW - 1}],
+    ['non-active status on other host', {[COLUMN.HOST_ID]: 'other-host',
+      [COLUMN.STATUS]: NODE_STATE.STOPPED,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: NOW + 10_000}],
+  ]) {
+    const durable = createDurableNodes(earlierLifeRow(overrides));
+    const error = await t.rejects(
+      createFreshStorageOwner(durable, THIS_BOOT).registerNodeInCluster());
+    t.equal(error?.code, STALE_NODE_INCARNATION_CODE,
+      `${label}: an earlier life, superseded`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Lost partition-replica storage on a fresh-storage registration: a replica
+// whose row proves prior existence while this data directory holds no
+// database for it goes to FAILED through its lifecycle owner, with the
+// open-time refusal's reason.
+
+function partitionServiceRow(serviceId, status, nodeId = NODE_ID) {
+  return {
+    [COLUMN.SERVICE_ID]: serviceId,
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: `p-${serviceId}`,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.STATUS]: status,
+  };
+}
+
+function attachLostStorageProbe(owner, {rows, presentReplicaIds = []}) {
+  const reads = [];
+  const transitions = [];
+  owner.readAuthoritativeRows = async (tableName, sql, params) => {
+    reads.push({tableName, params});
+    return {state: AUTHORITATIVE_ROW_READ_STATE.READABLE, rows, tableName};
+  };
+  owner.delegates.readLocalReplicaStorageState = ({replicaId}) =>
+    (presentReplicaIds.includes(replicaId) ?
+      PARTITION_REPLICA_STORAGE_STATE.PRESENT :
+      PARTITION_REPLICA_STORAGE_STATE.ABSENT);
+  owner.delegates.getReplicaStateMachine = () => ({
+    transitionAuthoritativeReplicaGeneration: async (row, state, context) => {
+      transitions.push({serviceId: row[COLUMN.SERVICE_ID], state, context});
+      return true;
+    },
+  });
+  return {reads, transitions};
+}
+
+test('S4: a fresh-storage registration fails exactly the partition replicas ' +
+  'whose prior existence is proven while their storage is absent',
+async (t) => {
+  const durable = createDurableNodes(previousBootRow({
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+  }));
+  const owner = createFreshStorageOwner(durable, THIS_BOOT);
+  const {reads, transitions} = attachLostStorageProbe(owner, {
+    rows: [
+      partitionServiceRow('lost-active', ReplicaStatus.ACTIVE),
+      partitionServiceRow('lost-syncing', ReplicaStatus.SYNCING),
+      partitionServiceRow('kept-present', ReplicaStatus.ACTIVE),
+      partitionServiceRow('create-in-flight', ReplicaStatus.PENDING),
+      partitionServiceRow('already-failed', ReplicaStatus.FAILED),
+      partitionServiceRow('other-node', ReplicaStatus.ACTIVE, 'node-other'),
+    ],
+    presentReplicaIds: ['kept-present'],
+  });
+  const result = await owner.registerNodeInCluster();
+  t.same(reads.map((read) => read.tableName), [TABLES.SERVICES],
+    'one authoritative read of the node\'s partition rows');
+  t.same(reads[0].params, [NODE_ID, SERVICE_TYPE.PARTITION]);
+  t.same(transitions.map((tr) => tr.serviceId),
+    ['lost-active', 'lost-syncing'],
+    'only proven-lost replicas: storage present, no prior existence, ' +
+    'already failed and other nodes\' rows are untouched');
+  for (const transition of transitions) {
+    t.equal(transition.state, ReplicaStatus.FAILED);
+    t.equal(transition.context.reason,
+      COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
+      'with the open-time refusal\'s own reason');
+    t.equal(transition.context.timestamp, NOW);
+  }
+  t.same(result.lostStorageReplicas, ['lost-active', 'lost-syncing']);
+});
+
+test('S4: a registration on durable storage never probes or fails replicas',
+  async (t) => {
+    const durable = createDurableNodes(previousBootRow({
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    }));
+    const owner = createFreshStorageOwner(durable, THIS_BOOT);
+    owner.delegates.getJoinLifecycleIntentType = () =>
+      MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY;
+    // Missing node endpoint forces RESTART_REENTRY onto the progress path,
+    // exercising failLostStoragePartitionReplicas on a durable-storage boot.
+    owner.readAuthoritativeNodeEndpointRowOutcome = async () => ({
+      state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+      row: null,
+    });
+    const {reads, transitions} = attachLostStorageProbe(owner, {
+      rows: [partitionServiceRow('lost-active', ReplicaStatus.ACTIVE)],
+    });
+    const result = await owner.registerNodeInCluster();
+    t.same(reads, [], 'no SERVICES read');
+    t.same(transitions, [], 'no lifecycle transition');
+    t.same(result.lostStorageReplicas, []);
+  });
+
+// ---------------------------------------------------------------------------
+// M1 (1A + 1B): unapplied or blind registration attempts never poison
+// issueRecord.issuedAtIncarnation.
+
+test('M1-1A: concurrent twin INSERT race and blind BIRTH over STOPPED row ' +
+  'never poison issuedAtIncarnation', async (t) => {
+  // 1A-i: both twins observe ABSENT; Twin A commits READY on other-host;
+  // Twin B's INSERT fails UNIQUE and its reread sees Twin A -> twin refusal.
+  const twinRow = earlierLifeRow({
+    [COLUMN.HOST_ID]: 'other-host',
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: NOW + 10_000,
+  });
+  let observations = 0;
+  const twinIssueRecord = createNodeRegistrationIssueRecord();
+  const racedTwin = await writeNodeRegistrationAtIncarnation({
+    row: {[COLUMN.NODE_ID]: NODE_ID, [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+      [COLUMN.STATUS]: NODE_STATE.JOINING},
+    bootIncarnation: THIS_BOOT,
+    issueRecord: twinIssueRecord,
+    nowMs: NOW,
+    observe: async () => {
+      observations += 1;
+      return observations === 1 ?
+        {available: true, row: null} :
+        {available: true, row: twinRow};
+    },
+    insert: async () => ({success: false, error: 'UNIQUE constraint failed'}),
+    advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+  });
+  t.equal(racedTwin.outcome, NODE_REGISTRATION_OUTCOME.REFUSED_STALE,
+    'lost INSERT race against Twin A is REFUSED_STALE, never ACCEPTED');
+  t.equal(twinIssueRecord.issuedAtIncarnation, null,
+    'issueRecord stays un-stamped after UNIQUE failure');
+  const twinError = buildSupersededRegistrationError({
+    nodeId: NODE_ID,
+    receivedIncarnation: THIS_BOOT,
+    observedRow: racedTwin.observedRow,
+    declaredHostId: LOCAL_MACHINE_HOST_ID,
+    nowMs: NOW,
+  });
+  t.equal(twinError.code, NODE_IDENTITY_TWIN_SUSPECTED);
+  t.equal('knownIncarnation' in twinError, false);
+
+  // 1A-ii: wiped Life 2 at THIS_BOOT when initial observe() is unavailable
+  // and Life 1's STOPPED row holds THIS_BOOT.
+  const stoppedLife1 = earlierLifeRow({[COLUMN.STATUS]: NODE_STATE.STOPPED});
+  let blindObs = 0;
+  const wipedIssueRecord = createNodeRegistrationIssueRecord();
+  const blindWiped = await writeNodeRegistrationAtIncarnation({
+    row: {[COLUMN.NODE_ID]: NODE_ID, [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+      [COLUMN.STATUS]: NODE_STATE.JOINING},
+    bootIncarnation: THIS_BOOT,
+    issueRecord: wipedIssueRecord,
+    nowMs: NOW,
+    observe: async () => {
+      blindObs += 1;
+      return blindObs === 1 ?
+        {available: false, row: null} :
+        {available: true, row: stoppedLife1};
+    },
+    insert: async () => ({success: false, error: 'UNIQUE constraint failed'}),
+    advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+  });
+  t.equal(blindWiped.outcome, NODE_REGISTRATION_OUTCOME.REFUSED_STALE,
+    'blind BIRTH over Life 1 STOPPED row refuses stale instead of resurrecting');
+  t.equal(wipedIssueRecord.issuedAtIncarnation, null);
+
+  // 1A-iii: concurrent twin CAS race in advanceNodeBootIncarnation.
+  const olderDurable = createDurableNodes(previousBootRow({
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+  }));
+  const casRacedOwner = createFreshStorageOwner(olderDurable, THIS_BOOT);
+  olderDurable.gateway.updateSystemTableRow = async () => ({
+    success: true,
+    partitionResult: {affectedRows: 0},
+  });
+  let rejoinReads = 0;
+  casRacedOwner.readAuthoritativeDurableRejoinNodeRow = async () => {
+    rejoinReads += 1;
+    return rejoinReads === 1 ? {...olderDurable.current()} : twinRow;
+  };
+  const casTwinErr = await t.rejects(casRacedOwner.registerNodeInCluster());
+  t.equal(casTwinErr?.code, NODE_IDENTITY_TWIN_SUSPECTED,
+    'CAS miss in advanceNodeBootIncarnation surfaces concurrent twin refusal');
+  t.equal(casRacedOwner.registrationIssueRecord.issuedAtIncarnation, null);
+});
+
+test('M1-1B: transient observe + insert + reread failure leaves the same ' +
+  'NodeRegistrationOwner unpoisoned for its next retry', async (t) => {
+  const stoppedLife1 = earlierLifeRow({[COLUMN.STATUS]: NODE_STATE.STOPPED});
+  const durable = createDurableNodes(stoppedLife1);
+  let authorityDown = true;
+  durable.gateway.readAuthoritativeRows = async () =>
+    authorityDown ?
+      {success: false, error: 'leader_not_ready'} :
+      {success: true, rows: [{...stoppedLife1}]};
+  durable.gateway.insertSystemTableRow = async () => ({
+    success: false,
+    error: 'No leader available for write',
+  });
+  const owner = createFreshStorageOwner(durable, THIS_BOOT);
+  owner.readAuthoritativeDurableRejoinNodeRow = async () =>
+    (authorityDown ? null : {...stoppedLife1});
+
+  const firstErr = await t.rejects(owner.registerNodeInCluster());
+  t.match(firstErr?.message || '', /No leader available/,
+    'first attempt fails transiently while authority is down');
+  t.equal(owner.registrationIssueRecord.issuedAtIncarnation, null,
+    'transient unapplied attempt leaves issuedAtIncarnation null');
+
+  authorityDown = false;
+  const secondErr = await t.rejects(owner.registerNodeInCluster());
+  t.equal(secondErr?.code, STALE_NODE_INCARNATION_CODE,
+    'retry on the same owner refuses Life 1 STOPPED row as STALE, not CURRENT');
+  t.equal(secondErr?.knownIncarnation, THIS_BOOT);
+});
+
+// ---------------------------------------------------------------------------
+// M3.2 + M4.2 + M4.3: strict parameter/issueRecord validation and T3/T5/storage
+// witnesses.
+
+test('M3.2 + M4.2: issueRecord rejects missing, malformed, Proxy and getter ' +
+  'shapes; clock and declaredHostId are required across D-7 entrypoints',
+async (t) => {
+  const validRecord = createNodeRegistrationIssueRecord();
+  const proxyRecord = new Proxy(createNodeRegistrationIssueRecord(), {});
+  const getterRecord = {};
+  Object.defineProperty(getterRecord, 'issuedAtIncarnation', {
+    get: () => null,
+    set: () => {},
+    enumerable: true,
+  });
+  const frozenRecord = Object.freeze({issuedAtIncarnation: null});
+
+  for (const badRecord of [
+    undefined,
+    null,
+    {},
+    {issuedAtIncarnation: 0},
+    {issuedAtIncarnation: -1},
+    proxyRecord,
+    getterRecord,
+    frozenRecord,
+  ]) {
+    t.throws(
+      () => classifyNodeIncarnationRelation(null, THIS_BOOT, badRecord),
+      {code: NODE_REGISTRATION_ISSUE_RECORD_REQUIRED},
+    );
+    t.throws(
+      () => recordNodeRegistrationIssue(badRecord, THIS_BOOT),
+      {code: NODE_REGISTRATION_ISSUE_RECORD_REQUIRED},
+    );
+  }
+
+  for (const badIncarnation of [0, -1, 1.5, Number.NaN, '1', null]) {
+    t.throws(
+      () => classifyNodeIncarnationRelation(null, badIncarnation, validRecord),
+      {code: NODE_REGISTRATION_INCARNATION_REQUIRED},
+    );
+    t.throws(
+      () => recordNodeRegistrationIssue(validRecord, badIncarnation),
+      {code: NODE_REGISTRATION_INCARNATION_REQUIRED},
+    );
+  }
+
+  await t.rejects(
+    writeNodeRegistrationAtIncarnation({
+      row: {[COLUMN.NODE_ID]: NODE_ID, [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID},
+      bootIncarnation: THIS_BOOT,
+      issueRecord: createNodeRegistrationIssueRecord(),
+      nowMs: undefined,
+      observe: async () => ({available: true, row: null}),
+      insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+      advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+    }),
+    {code: NODE_REGISTRATION_CLOCK_REQUIRED},
+  );
+  await t.rejects(
+    writeNodeRegistrationAtIncarnation({
+      row: {[COLUMN.NODE_ID]: NODE_ID},
+      bootIncarnation: THIS_BOOT,
+      issueRecord: createNodeRegistrationIssueRecord(),
+      nowMs: NOW,
+      observe: async () => ({available: true, row: null}),
+      insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+      advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+    }),
+    {code: NODE_HOST_ID_ERROR_CODE.REQUIRED},
+  );
+  t.throws(
+    () => buildSupersededRegistrationError({
+      nodeId: NODE_ID,
+      receivedIncarnation: THIS_BOOT,
+      observedRow: earlierLifeRow(),
+      declaredHostId: LOCAL_MACHINE_HOST_ID,
+      nowMs: Number.NaN,
+    }),
+    {code: NODE_REGISTRATION_CLOCK_REQUIRED},
+  );
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({});
+  LoggingService.getInstance().initialize({level: 'error'});
+  t.teardown(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+  const budgetService = new NodeStorageBudgetService({
+    nodeId: NODE_ID,
+    cdcIntegrationService: {upsertSystemTableRow: async () => ({success: true})},
+  });
+  budgetService.initialize({
+    nodeId: NODE_ID,
+    cdcIntegrationService: budgetService.cdcIntegrationService,
+  });
+  await t.rejects(
+    budgetService.registerNodeBudget({
+      nodeRow: earlierLifeRow(),
+      issueRecord: createNodeRegistrationIssueRecord(),
+    }),
+    {code: NODE_REGISTRATION_CLOCK_REQUIRED},
+  );
+});
+
+test('M4.3: readPartitionReplicaStorageState, T3 ownerIncarnation seal, and ' +
+  'T5 NODES row schema subset', async (t) => {
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lagrange-storage-state-'));
+  t.teardown(() => fs.rmSync(tmpDir, {recursive: true, force: true}));
+
+  t.equal(
+    readPartitionReplicaStorageState(tmpDir, 'p1', 'rep-missing'),
+    PARTITION_REPLICA_STORAGE_STATE.ABSENT,
+    'ENOENT classifies as ABSENT',
+  );
+  const dbPath = getPartitionDbPath(tmpDir, 'p1', 'rep-present');
+  fs.mkdirSync(path.dirname(dbPath), {recursive: true});
+  fs.writeFileSync(dbPath, '');
+  t.equal(
+    readPartitionReplicaStorageState(tmpDir, 'p1', 'rep-present'),
+    PARTITION_REPLICA_STORAGE_STATE.PRESENT,
+    'existing replica db classifies as PRESENT',
+  );
+  const blockerFile = path.join(tmpDir, 'partitions', 'p-not-dir');
+  fs.mkdirSync(path.dirname(blockerFile), {recursive: true});
+  fs.writeFileSync(blockerFile, 'not-a-directory');
+  t.throws(
+    () => readPartitionReplicaStorageState(tmpDir, 'p-not-dir', 'rep-err'),
+    {code: 'ENOTDIR'},
+    'non-ENOENT filesystem failure rethrows instead of collapsing to ABSENT',
+  );
+
+  // T3: ReplicaStateMachine.ownerIncarnation is non-configurable and read-only.
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({});
+  LoggingService.getInstance().initialize({level: 'error'});
+  t.teardown(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+  const rsm = new ReplicaStateMachine({
+    nodeId: NODE_ID,
+    ownerIncarnation: THIS_BOOT,
+    cdcIntegrationService: {},
+  });
+  const desc = Object.getOwnPropertyDescriptor(rsm, 'ownerIncarnation');
+  t.equal(desc?.value, THIS_BOOT);
+  t.equal(desc?.writable, false);
+  t.equal(desc?.configurable, false);
+  t.throws(() => Object.defineProperty(rsm, 'ownerIncarnation', {value: 99}),
+    TypeError);
+  t.throws(() => {
+    rsm.ownerIncarnation = 99;
+  }, TypeError);
+
+  // T5: buildNodeRegistrationRow keys are a strict subset of NODES schema.
+  const schemaColumns = new Set(
+    getSchemaByTableName(TABLES.NODES).columns.map((column) => column.name),
+  );
+  const rowKeys = Object.keys(buildNodeRegistrationRow({
+    nodeId: NODE_ID,
+    nodeAddress: NODE_ADDRESS,
+    hostId: LOCAL_MACHINE_HOST_ID,
+    nodeCapabilities: [],
+    bootIncarnation: THIS_BOOT,
+    now: NOW,
+  }));
+  t.same(
+    rowKeys.filter((key) => !schemaColumns.has(key)),
+    [],
+    'every buildNodeRegistrationRow column belongs to the NODES schema',
+  );
+  t.equal(rowKeys.includes('storage_incarnation'), false);
+});

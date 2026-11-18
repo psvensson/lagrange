@@ -6,9 +6,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, NUM} from '../../src/constants/index.js';
+import {createNodeRegistrationIssueRecord} from
+  '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {
   STORAGE_BUDGET_SOURCE,
   STORAGE_BUDGET_VALIDATION,
@@ -27,10 +30,21 @@ const TEST_NODE_ID = 'test-node-1';
 const TEST_DISK_GB = 100;
 const TEST_DISK_BYTES = Math.floor(TEST_DISK_GB * NUM.BYTES_PER_GIB);
 
+// One boot lifecycle's registration of the node row: its own issue record
+// (node-registration-incarnation-write.js) and clock.
+function lifecycleRegistration() {
+  return {
+    nodeRow: buildNodeRow(),
+    issueRecord: createNodeRegistrationIssueRecord(),
+    nowMs: Date.now(),
+  };
+}
+
 function buildNodeRow(overrides = {}) {
   return {
     [COLUMN.NODE_ID]: TEST_NODE_ID,
     [COLUMN.NODE_ADDRESS]: 'ws://localhost:3000',
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
     [COLUMN.DISK_GB]: TEST_DISK_GB,
     [COLUMN.STATUS]: NODE_STATE.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: Date.now(),
@@ -304,7 +318,7 @@ test('registerNodeBudget - persists valid budget', async (t) => {
   });
 
   const {result, budgetRow, resolution} =
-    await service.registerNodeBudget({nodeRow: buildNodeRow()});
+    await service.registerNodeBudget(lifecycleRegistration());
 
   assert.equal(result.success, true);
   assert.equal(resolution.isValid, true);
@@ -347,7 +361,7 @@ test('registerNodeBudget - forwards write options to the registration ' +
   });
 
   await service.registerNodeBudget({
-    nodeRow: buildNodeRow(),
+    ...lifecycleRegistration(),
     upsertOptions: {},
   });
 
@@ -376,7 +390,7 @@ test('registerNodeBudget - throws on upsert failure', async (t) => {
   });
 
   await assert.rejects(
-    () => service.registerNodeBudget({nodeRow: buildNodeRow()}),
+    () => service.registerNodeBudget(lifecycleRegistration()),
     {message: 'write failed'},
   );
   teardown();

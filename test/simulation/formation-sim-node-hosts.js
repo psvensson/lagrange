@@ -48,9 +48,6 @@ import {
 } from '../integration/membership-consistency-integration-test-helpers.js';
 import {LEGACY_SIMULATED_NODE_HOST_COMPOSER} from
   './formation-sim-infrastructure-composition.js';
-import {
-  syncNodeJoiningBootIncarnation,
-} from '../../src/bootstrap/node-joining-delegate-bundles.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
@@ -247,7 +244,6 @@ function createSimulatedPublicationRuntimeOwner({
   for (const metadataOwner of [
     runtimeOwner.nodesOwner,
     runtimeOwner.nodeEndpointsOwner,
-    runtimeOwner.servicesOwner,
     runtimeOwner.serviceEndpointsOwner,
     runtimeOwner.messageGroupsOwner,
     runtimeOwner.controlPlanePublicationsOwner,
@@ -314,7 +310,6 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   nodeAddress = `${nodeId}${NODE_ADDRESS_SUFFIX}`,
   bootIncarnation = TEST_BOOT_INCARNATION,
   chargeDispatch = (id, callback) => callback()}) {
-  let currentBootIncarnation = bootIncarnation;
   // This composer builds the node's cache, CDC service and router host, so it
   // declares itself where a scenario tracks composition. Scenarios that do
   // not track it (the legacy formation scenario, which has only this
@@ -340,7 +335,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     createNodePartitionAuthoritySeam(nodeId, cache, now, partitionAuthority);
   const messageRouter = createMessageRouterHost(
     {nodeId, routerId: `${nodeId}${SIM_ROUTER_ID_SUFFIX}`});
-  messageRouter.bootIncarnation = currentBootIncarnation;
+  messageRouter.bootIncarnation = bootIncarnation;
   const cdcIntegrationService = new CDCIntegrationService({
     nodeId, systemTableCache: cache, cacheMutationTarget: cache, sqlQueryEngine,
     partitionServicesProvider, timeSource,
@@ -424,7 +419,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   // scheduled reconcile, which production documents as the sole scheduler for
   // membership reconciliation, and publication work vanished from every node.
   const heartbeatService = assembleHeartbeatService({
-    bootIncarnation: currentBootIncarnation,
+    bootIncarnation,
     nodeId, nodeAddress,
     systemTableCache: cache, cacheMutationTarget: cache, cdcIntegrationService,
     messageRouter, controlPlaneSystemTableGateway, now,
@@ -444,7 +439,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   });
   heartbeatService.logger = QUIET_LOGGER;
   const rebalanceCoordinator = new RebalanceCoordinator({
-    nodeId, bootIncarnation: currentBootIncarnation,
+    nodeId, bootIncarnation,
     systemTableCache: cache, cdcIntegrationService, messageRouter, tablePolicyService,
     sqlQueryEngine, storageAccountingService, storageAdmissionService,
     controlPlaneReadinessService, controlPlaneSystemTableGateway, timeSource,
@@ -456,23 +451,14 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   // the guard raises for an uninitialized coordinator as well as a stopping
   // one. Constructing a collaborator is not composing it.
   rebalanceCoordinator.initialize();
-  const hostRuntime = {
+  return Object.freeze({
     nodeId, timeSource, now, cache, sqlQueryEngine, messageRouter, cdcIntegrationService,
     controlPlaneSystemTableGateway, controlPlaneReadinessService, tablePolicyService,
     storageAccountingService, storageAdmissionService, membershipPublicationService,
-    rebalanceCoordinator, randomSource, heartbeatService,
-    get bootIncarnation() {
-      return currentBootIncarnation;
-    },
-    set bootIncarnation(value) {
-      currentBootIncarnation = value;
-    },
-    syncBootIncarnation: (nextIncarnation) =>
-      syncNodeJoiningBootIncarnation(hostRuntime, nextIncarnation),
+    rebalanceCoordinator, randomSource, heartbeatService, bootIncarnation,
     setTimeoutFn: hostSetTimeout, clearTimeoutFn: hostClearTimeout,
     stopIntervals: () => intervals.clear(),
-  };
-  return Object.freeze(hostRuntime);
+  });
 }
 
 // The virtual network has one-shot timers only, so a repeating interval is a

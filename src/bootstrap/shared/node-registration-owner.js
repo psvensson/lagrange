@@ -21,9 +21,22 @@ import {
   LOG_NODE_REGISTER_ERROR_PREFIX,
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
+  NODE_REGISTRATION_ERROR,
 } from './node-registration-owner-constants.js';
 import {requireDeclaredNodeHostId} from
   '../../topology/node-host-identity.js';
+import {
+  NODE_IDENTITY_TWIN_SUSPECTED,
+  createNodeRegistrationIssueRecord,
+} from '../../control-plane/owners/node-registration-incarnation-write.js';
+import {STALE_NODE_INCARNATION_CODE} from
+  '../../control-plane/control-plane-error-classification.js';
+
+const REGISTRATION_ERROR_RETRY_HINT = Object.freeze({
+  RETRYABLE: 'retryable',
+  NON_RETRYABLE: 'non_retryable',
+  UNSPECIFIED: 'unspecified',
+});
 
 // The error code a registration failure surfaces: the direct `code` when
 // present, else the alternate `errorCode` carrier, else nothing.
@@ -37,6 +50,20 @@ function resolveNodeRegistrationErrorCode(error) {
   return undefined;
 }
 
+// A superseded lifecycle (STALE_NODE_INCARNATION) carries its explicit boolean
+// verdict (`true` when retryable by a new lifecycle, `false` otherwise); any
+// other explicitly non-retryable refusal carries `false`.
+function classifyNodeRegistrationErrorRetryHint(error) {
+  if (error?.code === STALE_NODE_INCARNATION_CODE) {
+    return error.retryable === true ?
+      REGISTRATION_ERROR_RETRY_HINT.RETRYABLE :
+      REGISTRATION_ERROR_RETRY_HINT.NON_RETRYABLE;
+  }
+  return error?.retryable === false ?
+    REGISTRATION_ERROR_RETRY_HINT.NON_RETRYABLE :
+    REGISTRATION_ERROR_RETRY_HINT.UNSPECIFIED;
+}
+
 // Carry the retry hints and diagnostics the joiner needs to classify the
 // failure (retryable, deferred, or terminal) onto the wrapped error.
 function carryNodeRegistrationErrorHints(wrappedError, error) {
@@ -46,13 +73,30 @@ function carryNodeRegistrationErrorHints(wrappedError, error) {
   if (error?.deferRetry === true) {
     wrappedError.deferRetry = true;
   }
-  if (error?.retryable === false) {
-    wrappedError.retryable = false;
+  const retryHint = classifyNodeRegistrationErrorRetryHint(error);
+  if (retryHint !== REGISTRATION_ERROR_RETRY_HINT.UNSPECIFIED) {
+    wrappedError.retryable =
+      retryHint === REGISTRATION_ERROR_RETRY_HINT.RETRYABLE;
   }
   if (error?.publicationDiagnostics &&
     typeof error.publicationDiagnostics === 'object') {
     wrappedError.publicationDiagnostics =
       error.publicationDiagnostics;
+  }
+  // A superseded lifecycle (node-registration-incarnation-write.js) is
+  // retryable by a new lifecycle that reserves above the incarnation that
+  // superseded it: the join failure carries knownIncarnation to the reattempt.
+  // A live twin carries its host identity diagnostics and never raises the
+  // local incarnation floor (no knownIncarnation).
+  if (error?.code === STALE_NODE_INCARNATION_CODE) {
+    wrappedError.knownIncarnation = error.knownIncarnation;
+    wrappedError.nodeId = error.nodeId;
+    wrappedError.receivedIncarnation = error.receivedIncarnation;
+  } else if (error?.code === NODE_IDENTITY_TWIN_SUSPECTED) {
+    wrappedError.nodeId = error.nodeId;
+    wrappedError.receivedIncarnation = error.receivedIncarnation;
+    wrappedError.observedHostId = error.observedHostId;
+    wrappedError.declaredHostId = error.declaredHostId;
   }
 }
 
@@ -81,12 +125,21 @@ class NodeRegistrationOwner {
     this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
+    const {getSystemTableCache} = this.delegates;
+    if (typeof getSystemTableCache !== 'function') {
+      throw new TypeError(
+        NODE_REGISTRATION_ERROR.SYSTEM_TABLE_CACHE_GETTER_REQUIRED,
+      );
+    }
+    this.getSystemTableCache = getSystemTableCache;
     this.authoritativeControlPlaneView = null;
     this.membershipPublicationRuntimeOwner =
       options.membershipPublicationRuntimeOwner || null;
     this.joinAdmissionControlPlaneSystemTableGateway = null;
-    this.latchedRegistrationBootIncarnation = null;
-    this.latchedRegistrationStorageIncarnation = null;
+    // This boot lifecycle's record of the NODES registration write it issued
+    // (node-registration-incarnation-write.js): a row at this incarnation
+    // that this lifecycle never wrote supersedes it.
+    this.registrationIssueRecord = createNodeRegistrationIssueRecord();
   }
 
   async registerNodeInCluster() {
@@ -127,7 +180,6 @@ class NodeRegistrationOwner {
       let budgetRow = existingJoinAdmissionProgress?.nodeRow || null;
       let resolution = existingJoinAdmissionProgress?.resolution || null;
       if (!budgetRow) {
-        await this.advanceFreshStorageIncarnationFloorFromCluster();
         const nodeRow = this.buildNodeRegistrationRow(now);
         const budgetService =
           this.delegates.getNodeStorageBudgetService();
@@ -197,9 +249,7 @@ class NodeRegistrationOwner {
 
       const endpointRow =
         existingJoinAdmissionProgress?.endpointRow ||
-        await this.registerNodeEndpoint(this.delegates.getNow()(), {
-          storageIncarnation: this.getRegistrationStorageIncarnation(),
-        });
+        await this.registerNodeEndpoint(this.delegates.getNow()());
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
         endpointRow,
@@ -218,12 +268,8 @@ class NodeRegistrationOwner {
         );
       }
 
-      const shouldReconcileLostStorage =
-        !existingJoinAdmissionProgress ||
-        existingJoinAdmissionProgress.sameBootRetry === true;
-      const lostStorageReplicas = shouldReconcileLostStorage ?
-        await this.reconcileLostStoragePartitionReplicas(now) :
-        [];
+      const lostStorageReplicas =
+        await this.failLostStoragePartitionReplicas(now);
 
       return {
         nodeRow: budgetRow,
@@ -248,8 +294,7 @@ class NodeRegistrationOwner {
       nodeAddress: this.nodeAddress,
       hostId: this.hostId,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
-      bootIncarnation: this.getRegistrationBootIncarnation(),
-      storageIncarnation: this.getRegistrationStorageIncarnation(),
+      bootIncarnation: this.delegates.getBootIncarnation(),
       now,
     });
   }
