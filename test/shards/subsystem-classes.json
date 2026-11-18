@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 230,
-    "storage-raft": 152,
+    "storage-partition": 231,
+    "storage-raft": 153,
     "test-infrastructure": 166,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-0af21cc5",
+  "censusSize": 2667,
+  "digest": "fnv1a32-ca6d9d7b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-913d591b",
+  "observationDigest": "fnv1a32-2f1f8f81",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1761,6 +1761,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/connection-held-raft-facts.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-power-loss.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-sync.test.js": "storage-raft",
@@ -2511,6 +2512,7 @@
     "test/storage/data-directory-manager.test.js": "storage-partition",
     "test/storage/data-directory-validation.property.test.js": "storage-partition",
     "test/storage/persistent-storage-paths.property.test.js": "storage-partition",
+    "test/storage/sqlite-connection-cache.test.js": "storage-partition",
     "test/storage/sqlite-store.property.test.js": "storage-partition",
     "test/storage/sqlite-store.test.js": "storage-partition",
     "test/test-helpers/managed-timers.test.js": "test-infrastructure",
@@ -15529,6 +15531,17 @@
       "files": [
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-membership-projection.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/connection-held-raft-facts.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-backend/durable-commit-power-loss.test.js": {
