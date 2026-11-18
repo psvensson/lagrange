@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "dfff2c64fab277c44b1acea1931b12912c48462e5024e92a0915218b99efbb55"
+        "sha256": "568da1d77a4b1474d93a40d22353653a8fd387ff1ac09746713c0e589dd16cae"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3586081,
-        "sha256": "050c710080b54c57164d3bb9058821f8efe83a02ac10fed52eca611e90dfe449"
+        "sha256": "cbdfdbed9d406291170e6851b1dd270f66a974f74033a819bb449f693f4bd2fa"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "63719a5e8c7c59d003aff37669da2efbd6b138102e533739a56b18cc781bb991"
+    "inputDigest": "ba86dd3d9bd2e63863ace9b648744dc714475350d6e814b40adfdd00a7525382"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "dfff2c64fab277c44b1acea1931b12912c48462e5024e92a0915218b99efbb55"
+        "sha256": "568da1d77a4b1474d93a40d22353653a8fd387ff1ac09746713c0e589dd16cae"
       },
       "declaredCount": 1692,
       "observedCount": 1692,
@@ -174,14 +174,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3586081,
-        "sha256": "050c710080b54c57164d3bb9058821f8efe83a02ac10fed52eca611e90dfe449"
+        "sha256": "cbdfdbed9d406291170e6851b1dd270f66a974f74033a819bb449f693f4bd2fa"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "662d62b77dda7509e8068b068770dfeb68b2ff98ff8c3abf225350658bd91028",
+      "sourceDigest": "e42e8d20718a27556aa92e85a4fa9dbf8d1d69bbc4d54d63892ec4145d531bc1",
       "moduleCount": 6216,
       "edgeCount": 35596,
       "unresolvedCount": 39
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2367,
     "assignedSignalCount": 2367,
     "uniqueAssignmentCount": 2367,
-    "digest": "9a0b4106c1b2f481140fdaf206070ac0a76e5b10479b6c9649f97fe137c4141c"
+    "digest": "15033d23c8aa128499c0cf7b3f2f6b5fc432eecbecbf5ed7178c3ec480ba2c59"
   },
   "signalCounts": {
     "cognitive": 144,
