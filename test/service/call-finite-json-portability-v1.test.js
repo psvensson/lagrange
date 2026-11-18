@@ -63,6 +63,11 @@ describe('Call Cell finite-JSON Q1b value-only independent portability', () => {
         () => decodeCanonicalPartialValue(vector.wire, {limits: LIMITS}),
         {code: vector.code}, vector.id);
     }
+    for (const digits of [310, 5000]) {
+      assert.throws(
+        () => decodeCanonicalPartialValue('9'.repeat(digits), {limits: LIMITS}),
+        {code: 'invalid_partial_value'}, `${digits}-digit numeric JSON token`);
+    }
   });
 
   it('source and standalone Python return matching independently computed results', () => {
