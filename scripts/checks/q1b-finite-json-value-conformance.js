@@ -20,6 +20,8 @@ const PYTHON_LIMIT_WITNESS = path.join(
 const PYTHON = 'python3';
 const ENCODING = 'utf8';
 const METRIC_FLAG = '--metric';
+const REGEX_MULTILINE_FLAG = 'm';
+const SUCCESS_MESSAGE = 'Q1b value-only reference and negative controls pass\n';
 const EXPECTED_SCHEMA = 'lagrange-portability-finite-json-value-v1';
 const EXPECTED_SCOPE = 'value-only';
 const EXPECTED_POSITIVE_COUNT = 18;
@@ -172,7 +174,7 @@ function executedSourceWitness(tap) {
     fail: 0, cancelled: 0, skipped: 0, todo: 0,
   };
   return Object.entries(summary).every(([name, count]) =>
-    new RegExp(`^# ${name} ${count}$`, 'm').test(tap)) &&
+    new RegExp(`^# ${name} ${count}$`, REGEX_MULTILINE_FLAG).test(tap)) &&
     REQUIRED_SOURCE_TESTS.every((name, index) =>
       tap.includes(`    ok ${index + 1} - ${name}\n`));
 }
@@ -194,7 +196,8 @@ function pythonDefaultLimitsPass() {
     cwd: ROOT, encoding: ENCODING, timeout: PYTHON_TIMEOUT_MS,
     maxBuffer: OUTPUT_LIMIT_BYTES,
   });
-  const summary = new RegExp(`^Ran ${EXPECTED_PYTHON_LIMIT_TESTS} tests in `, 'm');
+  const summary = new RegExp(
+    `^Ran ${EXPECTED_PYTHON_LIMIT_TESTS} tests in `, REGEX_MULTILINE_FLAG);
   return !result.error && result.status === 0 &&
     summary.test(result.stderr) && /^OK$/m.test(result.stderr);
 }
@@ -220,7 +223,7 @@ const metric = measure();
 if (process.argv.includes(METRIC_FLAG)) {
   process.stdout.write(`${metric}\n`);
 } else if (metric === 0) {
-  process.stdout.write('Q1b value-only reference and negative controls pass\n');
+  process.stdout.write(SUCCESS_MESSAGE);
 } else {
   process.stderr.write(`Q1b value conformance deficits: ${metric}\n`);
   process.exitCode = 1;
