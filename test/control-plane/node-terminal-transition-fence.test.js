@@ -96,6 +96,7 @@ function withdrawalOwner(gateway, bootIncarnation) {
       getNow: () => () => 9000,
       getSleep: () => async () => {},
       getBootIncarnation: () => bootIncarnation,
+      getSystemTableCache: () => ({applySystemTableChange() {}}),
     },
   });
   owner.getJoinAdmissionWriteRetryTimeoutMs = () => 0;

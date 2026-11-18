@@ -5,6 +5,7 @@
  * readback of lost / zero-row outcomes. No retries, no hidden queue.
  */
 import {test} from '../../src/test-helpers/tap.js';
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {
   NODE_LIFECYCLE_PUBLICATION_OUTCOME as OUTCOME,
   NodeLifecyclePublication,
@@ -14,6 +15,7 @@ import {NodeReadyLeaseAuthority} from
 import {COLUMN, SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
@@ -242,10 +244,13 @@ async (t) => {
 
   // G2 establishes its connection data through the registration owner.
   const g2Row = {...stoppedG1, node_address: '10.9.9.9:9999',
+    host_id: LOCAL_MACHINE_HOST_ID,
     status: 'joining', connection_state: STATE.CONNECTED,
     last_heartbeat: NOW, boot_incarnation: 4};
   const registration = await writeNodeRegistrationAtIncarnation({
     row: g2Row, bootIncarnation: 4,
+    issueRecord: createNodeRegistrationIssueRecord(),
+    nowMs: NOW,
     observe: async () => ({available: true, row: durable.current()}),
     insert: async () => ({success: false}),
     advance: (whereClause, row) => durable.gateway.updateSystemTableRow(

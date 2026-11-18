@@ -23,6 +23,7 @@ documentClass: generated
 - [message-group-transport-handler.js](message-group-transport-handler.js) - Register the replica's transport handler and record its exact identity. (importers: many)
 - [message-router-setup.js](message-router-setup.js) - MessageRouterSetup - Shared message router creation and configuration. (importers: many)
 - [meta-service-definition-registration.js](meta-service-definition-registration.js) - Shared owner for built-in meta service-definition registration. (importers: many)
+- [node-registration-lost-storage-replicas.js](node-registration-lost-storage-replicas.js) - Lost partition-replica storage on a fresh-storage registration. (importers: one)
 - [node-registration-owner-constants.js](node-registration-owner-constants.js) - No leading comment; first export: AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE. (importers: few)
 - [node-registration-owner-durable-rejoin-methods.js](node-registration-owner-durable-rejoin-methods.js) - Throw the typed deferred error when an authoritative row read was UNAVAILABLE. (importers: one)
 - [node-registration-owner-publication-methods.js](node-registration-owner-publication-methods.js) - No leading comment; first export: createNodeRegistrationPublicationMethods. (importers: one)

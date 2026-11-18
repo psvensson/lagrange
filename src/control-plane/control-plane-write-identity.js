@@ -406,9 +406,35 @@ function isPendingInstanceApplied(answer) {
   return answer?.pendingInstance?.outcome === PENDING_INSTANCE_OUTCOME.APPLIED;
 }
 
+/**
+ * Whether an answer, or any answer linked to it, names its write outcome as
+ * unknown (proposed or delivered with an unconfirmed commit outcome).
+ * @param {*} answer - A write's result or thrown error.
+ * @return {boolean}
+ */
+function isControlPlaneWriteOutcomeUnknown(answer) {
+  return someLinkedAnswer(answer, isWriteOutcomeUnknown);
+}
+
+/**
+ * Whether a thrown error proves its write did not apply (either a committed
+ * statement failure or a pre-proposal refusal, with no unknown outcome).
+ * @param {*} error - A thrown write error.
+ * @return {boolean}
+ */
+function isControlPlaneWriteDefinitivelyUnappliedError(error) {
+  return !isControlPlaneWriteOutcomeUnknown(error) &&
+    someLinkedAnswer(
+      error,
+      (linked) => isCommittedAnswer(linked) || isRefusedBeforeProposal(linked),
+    );
+}
+
 export {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
   controlPlaneWriteIdentity,
+  isControlPlaneWriteDefinitivelyUnappliedError,
+  isControlPlaneWriteOutcomeUnknown,
   isPendingInstanceApplied,
   mintControlPlaneWriteKey,
   releaseControlPlaneWriteIdentities,

@@ -592,47 +592,6 @@ class MessageRouterConnectionLifecycleMethods {
       message;
     this.sendRaw(connectionInfo.ws, outboundIdentify);
   }
-  syncBootIncarnation(nextIncarnation) {
-    const normalized = Number(nextIncarnation);
-    if (
-      !Number.isSafeInteger(normalized) ||
-      normalized <= TRANSPORT_NUM.ZERO
-    ) {
-      return this.bootIncarnation;
-    }
-    if (
-      Number.isSafeInteger(this.bootIncarnation) &&
-      normalized <= this.bootIncarnation
-    ) {
-      return this.bootIncarnation;
-    }
-    this.bootIncarnation = normalized;
-    for (const connectionInfo of this.nodeConnections?.values?.() ?? []) {
-      if (
-        !connectionInfo ||
-        connectionInfo.retired === true ||
-        connectionInfo.state !== ConnectionState.CONNECTED ||
-        !connectionInfo.ws ||
-        !this.isCurrentConnection(connectionInfo)
-      ) {
-        continue;
-      }
-      if (
-        connectionInfo.isSelfConnection &&
-        connectionInfo.nodeId === this.nodeId
-      ) {
-        this.connectionAuthorityOwner?.bindCurrentPrimaryBootIncarnation?.(
-          this.nodeId,
-          connectionInfo,
-          normalized,
-        );
-        this.sendIdentification(connectionInfo);
-      } else {
-        this.sendIdentification(connectionInfo);
-      }
-    }
-    return this.bootIncarnation;
-  }
   getCurrentPrimaryConnectionBootIncarnation(nodeId) {
     return this.connectionAuthorityOwner.getCurrentPrimaryBootIncarnation(
       nodeId,

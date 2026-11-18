@@ -107,12 +107,22 @@ class NodeStorageBudgetSetup {
    *   Initialized budget service (required).
    * @param {Object} options.nodeRow - Node row data (required).
    * @param {string} options.nodeId - Node ID for diagnostics.
+   * @param {Object} options.issueRecord - The registering boot lifecycle's
+   *   registration issue record (required by the NODES registration write).
+   * @param {number} options.nowMs - The registering node's clock.
    * @return {Promise<Object>} Resolution result with
    *   {result, budgetRow, resolution}.
    * @throws {DependencyError} If required dependencies missing.
    */
   static async resolveAndPersist(options) {
-    const {budgetService, nodeRow, nodeId, upsertOptions} = options;
+    const {
+      budgetService,
+      nodeRow,
+      nodeId,
+      upsertOptions,
+      issueRecord,
+      nowMs,
+    } = options;
 
     if (!nodeRow) {
       throw new DependencyError(
@@ -138,8 +148,12 @@ class NodeStorageBudgetSetup {
 
     setupLogger.info(LOG_MSG.RESOLVING, {nodeId});
 
-    const outcome =
-      await budgetService.registerNodeBudget({nodeRow, upsertOptions});
+    const outcome = await budgetService.registerNodeBudget({
+      nodeRow,
+      upsertOptions,
+      issueRecord,
+      nowMs,
+    });
 
     // Startup diagnostics (Req 9.4)
     if (outcome.resolution.isValid) {

@@ -88,7 +88,8 @@ const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
 function buildPublicationOwnerRecorder(publicationCalls) {
   return {
     // The monotonic NODES registration (D-7) at this boot's incarnation.
-    registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+    registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+      options) => {
       publicationCalls.push({kind: 'node',
         row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
       return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -145,6 +146,7 @@ function createDelegates() {
     }),
     getNodeCapabilities: () => TEST_NODE_CAPABILITIES,
     getBootIncarnation: () => TEST_BOOT_INCARNATION,
+    getSystemTableCache: () => ({applySystemTableChange() {}}),
   };
 }
 
@@ -182,7 +184,8 @@ test(
     const publicationCalls = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -279,7 +282,8 @@ test(
     const incarnationAdvances = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -1297,7 +1301,7 @@ test(
         ...createDelegates(),
         getCdcIntegrationService: () => ({sqlQueryEngine: {}}),
         getJoinLifecycleIntentType: () =>
-          MEMBERSHIP_LIFECYCLE_INTENT.FRESH_BOOT_ADMISSION,
+          MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION,
         getClusterIncarnationFence: () =>
           buildClusterIncarnationFence({durableStateDetected: false}),
       },
@@ -1329,6 +1333,61 @@ test(
       publicationCalls.length,
       0,
       'fresh registration must not write NODES without authoritative reads',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner validates getSystemTableCache in constructor and ' +
+  'seeds join-time cache rows through it without feature detection',
+  async (t) => {
+    const {getSystemTableCache: _omitted, ...delegatesWithoutCache} =
+      createDelegates();
+    t.throws(
+      () => new NodeRegistrationOwner({
+        hostId: LOCAL_MACHINE_HOST_ID,
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        delegates: delegatesWithoutCache,
+      }),
+      TypeError,
+      'constructor rejects missing getSystemTableCache delegate',
+    );
+
+    const applied = [];
+    const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      delegates: {
+        ...createDelegates(),
+        getSystemTableCache: () => ({
+          applySystemTableChange(tableName, operation, row) {
+            applied.push({tableName, operation, row});
+          },
+        }),
+      },
+    });
+    owner.seedJoinTimeCacheRow(TABLES.NODES, {[COLUMN.NODE_ID]: TEST_NODE_ID});
+    t.equal(applied.length, 1, 'seeds cache row via validated collaborator');
+    t.equal(applied[0].tableName, TABLES.NODES);
+
+    const nullCacheOwner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      delegates: {
+        ...createDelegates(),
+        getSystemTableCache: () => null,
+      },
+    });
+    t.throws(
+      () => nullCacheOwner.seedJoinTimeCacheRow(
+        TABLES.NODES,
+        {[COLUMN.NODE_ID]: TEST_NODE_ID},
+      ),
+      /SystemTableCache is required/,
+      'unavailable cache throws typed error instead of silently skipping',
     );
   },
 );

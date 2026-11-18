@@ -17,8 +17,10 @@ import {
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
   readAuthoritativeNodeRow,
+  requireRegistrationClockReading,
   writeNodeRegistrationAtIncarnation,
 } from '../control-plane/owners/node-registration-incarnation-write.js';
+import {requireDeclaredNodeHostId} from '../topology/node-host-identity.js';
 import {
   createControlPlaneRuntimeBundle,
 } from '../control-plane/control-plane-runtime-bundle.js';
@@ -218,6 +220,9 @@ class NodeStorageBudgetService {
    * Resolve and persist the node storage budget in the nodes table.
    * @param {Object} options
    * @param {Object} options.nodeRow
+   * @param {Object} options.issueRecord - The registering boot lifecycle's
+   *   registration issue record (required).
+   * @param {number} options.nowMs - The registering node's clock.
    * @return {Promise<Object>}
    */
   async registerNodeBudget(options = {}) {
@@ -230,6 +235,8 @@ class NodeStorageBudgetService {
       nodeRow && typeof nodeRow === 'object',
       NODE_STORAGE_BUDGET_ERROR_MSG.INVALID_NODE_ROW,
     );
+    const declaredHostId = requireDeclaredNodeHostId(nodeRow[COLUMN.HOST_ID]);
+    const nowMs = requireRegistrationClockReading(options.nowMs);
 
     const nodeId = this.nodeId || nodeRow[COLUMN.NODE_ID];
     assertCritical(nodeId, NODE_STORAGE_BUDGET_ERROR_MSG.MISSING_NODE_ID);
@@ -256,6 +263,8 @@ class NodeStorageBudgetService {
     const registration = await writeNodeRegistrationAtIncarnation({
       row: budgetRow,
       bootIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
+      issueRecord: options.issueRecord,
+      nowMs,
       observe: () => readAuthoritativeNodeRow(gateway, nodeId),
       insert: (row, identity) => gateway.insertSystemTableRow(TABLES.NODES,
         row, {...writeOptions, ...identity}),
@@ -263,8 +272,13 @@ class NodeStorageBudgetService {
         TABLES.NODES, whereClause, row, {...writeOptions, ...identity}),
     });
     if (registration.outcome === NODE_REGISTRATION_OUTCOME.REFUSED_STALE) {
-      throw buildSupersededRegistrationError(nodeId,
-        budgetRow[COLUMN.BOOT_INCARNATION], registration.observedRow);
+      throw buildSupersededRegistrationError({
+        nodeId,
+        receivedIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
+        observedRow: registration.observedRow,
+        declaredHostId,
+        nowMs,
+      });
     }
     if (registration.outcome !== NODE_REGISTRATION_OUTCOME.ACCEPTED &&
         registration.outcome !== NODE_REGISTRATION_OUTCOME.CURRENT) {
