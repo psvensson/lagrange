@@ -2264,6 +2264,27 @@
         "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
         "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
       ]
+    },
+    "release-version-fence": {
+      "description": "The support-envelope owner owns the single cluster format revision for a build, and every seed founding declaration, retained-seed startup/rejoin decision, bootstrap join handshake (admitting node and ContactSeedPhase), and in-place rolling upgrade or rollback fails closed when the revision claim is absent, non-numeric, or of another revision, or when an upgrade or rollback envelope is uncertified.",
+      "owners": [
+        "src/bootstrap/owners/support-envelope-owner.js",
+        "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+        "src/bootstrap/owners/bootstrap-request-owner-handler.js",
+        "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/bootstrap/phases/contact-seed-phase.js",
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-original-allocation-startup.js",
+        "src/entrypoint-runtime-join-decision.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ],
+      "tests": [
+        "test/bootstrap/release-version-fence.test.js",
+        "test/bootstrap/support-envelope-owner.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4805,6 +4826,38 @@
         "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js",
         "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
         "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
+      ]
+    },
+    "release-version-fence": {
+      "description": "The support-envelope owner's cluster format revision and certified-envelope authority couple symmetrically with seed original-allocation reopen/rejoin decisions, both sides of bootstrap join admission, and rolling-upgrade/rollback preflight so any absent, malformed, mismatched, or uncertified claim fails closed before state mutation.",
+      "endpoints": [
+        {
+          "id": "cluster-format-revision-and-envelope-authority",
+          "owners": [
+            "src/bootstrap/owners/support-envelope-owner.js"
+          ]
+        },
+        {
+          "id": "seed-reopen-join-and-upgrade-fence-consumers",
+          "owners": [
+            "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+            "src/bootstrap/owners/bootstrap-request-owner-handler.js",
+            "src/bootstrap/owners/rolling-upgrade-owner.js",
+            "src/bootstrap/phases/contact-seed-phase.js",
+            "src/bootstrap/rejoin-hints-constants.js",
+            "src/bootstrap/rejoin-hints-durable-evidence.js",
+            "src/bootstrap/rejoin-hints.js",
+            "src/bootstrap/seed-original-allocation-declaration.js",
+            "src/bootstrap/seed-original-allocation-startup.js",
+            "src/entrypoint-runtime-join-decision.js",
+            "src/raft/raft-rs-replica-lifecycle-owner.js"
+          ]
+        }
+      ],
+      "contract": "release-version-fence",
+      "witnessTests": [
+        "test/bootstrap/release-version-fence.test.js",
+        "test/bootstrap/support-envelope-owner.test.js"
       ]
     }
   }

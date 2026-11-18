@@ -19,6 +19,8 @@ import {VIRGIN_SEED_COMPOSE_REFERENCE_MS, createVirginSeedBootstrapService,
   getUniquePort} from
   '../integration/helpers/cluster-test-helpers.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
@@ -235,6 +237,7 @@ async function unseededJoinResult(nodeId) {
 function createMockHttpPost(nodeId) {
   return async (_url, _data) => ({
     success: true,
+    ...clusterFormatRevisionClaim(),
     seedNodeId: 'seed-node-1',
     seedNodeWsAddress: 'ws://localhost:8080',
     messageGroupAssignment: {

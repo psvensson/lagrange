@@ -38,6 +38,8 @@ import {
   gracefulShutdown,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 /**
  * Create in-process HTTP POST function for BootstrapAPI.
@@ -315,6 +317,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
           const joiningNodeId = '550e8400-e29b-41d4-a716-446655440102';
 
           const response = await httpPost('http://localhost/bootstrap', {
+            ...clusterFormatRevisionClaim(),
             nodeId: joiningNodeId,
             nodeAddress: `ws://localhost:${getUniquePort()}`,
           });
@@ -392,6 +395,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
           const joiningNodeId = '550e8400-e29b-41d4-a716-446655440104';
 
           const response = await httpPost('http://localhost/bootstrap', {
+            ...clusterFormatRevisionClaim(),
             nodeId: joiningNodeId,
             nodeAddress: `ws://localhost:${getUniquePort()}`,
           });
@@ -472,6 +476,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         const joiningNodeId = '550e8400-e29b-41d4-a716-446655440106';
 
         const response = await httpPost('http://localhost/bootstrap', {
+          ...clusterFormatRevisionClaim(),
           nodeId: joiningNodeId,
           nodeAddress: `ws://localhost:${getUniquePort()}`,
         });
@@ -555,6 +560,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         const joiningNodeAddress = `ws://localhost:${getUniquePort()}`;
 
         const response = await httpPost('http://localhost/bootstrap', {
+          ...clusterFormatRevisionClaim(),
           nodeId: joiningNodeId,
           nodeAddress: joiningNodeAddress,
         });

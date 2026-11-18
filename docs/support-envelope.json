@@ -1,4 +1,5 @@
 {
+  "clusterFormatRevision": 1,
   "boundaries": {
     "artifactAbi": "service-cell-v2",
     "protocolBoundary": "node-transport-mtls-v1",
@@ -101,5 +102,5 @@
     "sourceVersion": "0.4.1",
     "targetVersion": "0.5.0"
   },
-  "envelopeDigest": "6369736d8d074672e32d134807f56fea08561e1691421c862b272cdd03f6a1ff"
+  "envelopeDigest": "c877ec94426adf87226bc01f55636d50f38c4d6ddf3af7893d13f39562e674f0"
 }

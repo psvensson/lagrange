@@ -11,6 +11,8 @@ import {BOOTSTRAP_API_PROBE_REASON} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HTTP_STATUS} from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_NAME =
   'BootstrapAPI claims admission before reservation precheck pressure';
@@ -171,6 +173,7 @@ test('BootstrapAPI admits stale startup-incomplete join snapshot after startup c
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_STALE_PHASE_INCOMPLETE_NODE_ID,
           nodeAddress: TEST_STALE_PHASE_INCOMPLETE_NODE_ADDRESS,
         },
@@ -234,6 +237,7 @@ test('BootstrapAPI admits startup-complete readiness budget cascade through the 
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_STALE_CASCADE_NODE_ID,
           nodeAddress: TEST_STALE_CASCADE_NODE_ADDRESS,
         },
@@ -297,6 +301,7 @@ test('BootstrapAPI preserves non-stale join admission blocker after startup comp
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_REAL_BLOCKER_NODE_ID,
           nodeAddress: TEST_REAL_BLOCKER_NODE_ADDRESS,
         },
@@ -372,6 +377,7 @@ test(TEST_NAME, async (t) => {
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: TEST_FIRST_NODE_ID,
         nodeAddress: TEST_FIRST_NODE_ADDRESS,
       },
@@ -395,6 +401,7 @@ test(TEST_NAME, async (t) => {
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: TEST_SECOND_NODE_ID,
         nodeAddress: TEST_SECOND_NODE_ADDRESS,
       },

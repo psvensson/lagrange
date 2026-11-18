@@ -91,6 +91,11 @@ const CONFLICTING_DURABLE_EVIDENCE_ERROR_MESSAGE =
   'durable state. After verifying no cluster member still owns this ' +
   'data, set LAGRANGE_FORCE_NEW_CLUSTER=1 to authorize a fresh ' +
   'cluster bootstrap';
+const FOUNDING_LAYOUT_UNSUPPORTED_ERROR_MESSAGE =
+  'The retained original allocation in this data directory was founded at ' +
+  'another cluster format revision (or before revisions existed); this ' +
+  'build never reopens it. Re-found the cluster on empty data directories ' +
+  '(ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED)';
 const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
   'Failed to persist cluster rejoin hints';
 const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
@@ -415,6 +420,8 @@ async function collectAutoRejoinDecisionContext(options = {}) {
 
   return {
     durableSnapshot, hintsIdentityMatched,
+    foundingLayoutUnsupported: originalSeedAllocation.state ===
+      ORIGINAL_SEED_ALLOCATION_STATE.FOUNDING_LAYOUT_UNSUPPORTED,
     clusterIdMismatch: clusterIdMatch === CLUSTER_ID_MATCH_STATE.MISMATCH,
     hintPeerAddresses, peerAddresses, clusterNodeCount, localNodeRole,
     selectedPeerAddress, preferredPeerAddress, durableStateDetected,
@@ -425,6 +432,11 @@ async function collectAutoRejoinDecisionContext(options = {}) {
 }
 
 function resolveAutoRejoinDecisionState(context = {}) {
+  // The release version fence on the seed's reopen: definitive, and no
+  // operator override reopens a founding of another cluster format revision.
+  if (context.foundingLayoutUnsupported === true) {
+    return AUTO_REJOIN_DECISION_STATE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED;
+  }
   if (context.durableSnapshot.identityMismatch) {
     return AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH;
   }
@@ -499,6 +511,20 @@ function attachMembershipOwnerOutcome(decision, state) {
 
 function buildAutoRejoinStartupDecision(context = {}, state) {
   switch (state) {
+  case AUTO_REJOIN_DECISION_STATE.ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED:
+    return attachMembershipOwnerOutcome({
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      peerAddresses: [],
+      source: REJOIN_SOURCE.NONE,
+      startupMode: STARTUP_JOIN_MODE.SEED,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: FOUNDING_LAYOUT_UNSUPPORTED_ERROR_MESSAGE,
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH:
     return attachMembershipOwnerOutcome({
       state,

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 347,
+    "bootstrap-membership": 348,
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2672,
-  "digest": "fnv1a32-b96b550a",
+  "censusSize": 2673,
+  "digest": "fnv1a32-f89a838c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f131dcea",
+  "observationDigest": "fnv1a32-9bc9ac05",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -274,6 +274,7 @@
     "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
     "test/bootstrap/registered-service-row-raft-role.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
+    "test/bootstrap/release-version-fence.test.js": "bootstrap-membership",
     "test/bootstrap/removed-formation-barrier-and-handoff-census.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
@@ -3000,11 +3001,13 @@
     },
     "test/bootstrap/address-takeover-live-ab.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/constants/index.js"
       ]
     },
     "test/bootstrap/address-takeover-workflow.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/constants/index.js"
       ]
     },
@@ -3076,9 +3079,25 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
+    "test/bootstrap/bootstrap-api-admission-snapshots.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-api-readiness-gating.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
+      ]
+    },
     "test/bootstrap/bootstrap-api-ready-nodes.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-api-rejoin.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/bootstrap-api-replica-owner-conflict.test.js": {
@@ -3088,8 +3107,14 @@
     },
     "test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/timeout-budget.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-api.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/bootstrap-cdc-readiness-gate.test.js": {
@@ -3108,7 +3133,8 @@
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
-        "src/bootstrap/lifecycle-controller-constants.js"
+        "src/bootstrap/lifecycle-controller-constants.js",
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/bootstrap-request-deferral-wait-bound-spent.test.js": {
@@ -3123,6 +3149,7 @@
       "files": [
         "src/bootstrap/bootstrap-constants.js",
         "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/control-plane/timeout-budget.js"
       ]
     },
@@ -3130,7 +3157,13 @@
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
         "src/bootstrap/bootstrap-constants.js",
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/phases/contact-seed-failure-signals.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-response-completeness.property.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/bootstrap-sequence.test.js": {
@@ -3211,6 +3244,11 @@
         "src/bootstrap/pipeline/startup-pipeline-runner.js"
       ]
     },
+    "test/bootstrap/cluster-identity-join-gate.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
+      ]
+    },
     "test/bootstrap/cluster-identity-mint.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -3228,6 +3266,7 @@
     },
     "test/bootstrap/cold-node-authority-reacquisition-pressure.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
@@ -3253,6 +3292,11 @@
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
       ]
     },
+    "test/bootstrap/duplicate-replica-assignment.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
+      ]
+    },
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": {
       "files": [
         "src/bootstrap/cluster-incarnation-fence.js",
@@ -3262,6 +3306,11 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/owners/node-registration-incarnation-write.js",
         "src/control-plane/owners/services-owner.js"
+      ]
+    },
+    "test/bootstrap/fresh-join-multi-peer-contact.test.js": {
+      "files": [
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": {
@@ -3374,12 +3423,14 @@
     },
     "test/bootstrap/management-v1-l4-l3.test.js": {
       "files": [
-        "src/bootstrap/owners/management-v1-constants.js"
+        "src/bootstrap/owners/management-v1-constants.js",
+        "src/bootstrap/owners/support-envelope-owner.js"
       ]
     },
     "test/bootstrap/management-v1-route-authority.test.js": {
       "files": [
         "src/bootstrap/owners/management-v1-constants.js",
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/lagrange-runtime-startup.js"
       ]
     },
@@ -3430,6 +3481,7 @@
     },
     "test/bootstrap/node-bootstrap-consistency.property.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
@@ -3484,6 +3536,7 @@
     },
     "test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -3535,18 +3588,21 @@
     },
     "test/bootstrap/node-joining-service-node-state-update-ingress.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-joining-service-register-service-retries.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-joining-service.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/node/replica-state-machine.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
@@ -3688,6 +3744,16 @@
         "src/bootstrap/bootstrap-api-registration-methods.js"
       ]
     },
+    "test/bootstrap/release-version-fence.test.js": {
+      "files": [
+        "src/bootstrap/owners/management-v1-constants.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
     "test/bootstrap/removed-formation-barrier-and-handoff-census.test.js": {
       "files": [
         "docs/bootstrap-readiness-probes.md",
@@ -3770,6 +3836,7 @@
     },
     "test/bootstrap/return-value-completeness.property.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js",
@@ -9752,6 +9819,7 @@
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
         "src/bootstrap/bootstrap-constants.js",
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/phases/contact-seed-failure-signals.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
@@ -10030,6 +10098,7 @@
     },
     "test/integration/leader-metadata-validation.integration.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
@@ -10361,6 +10430,7 @@
     },
     "test/integration/multi-node-cluster.integration.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
@@ -10400,6 +10470,7 @@
     },
     "test/integration/node-joining-rebalance.integration.test.js": {
       "files": [
+        "src/bootstrap/owners/support-envelope-owner.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",

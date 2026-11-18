@@ -37,6 +37,8 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {SERVICE_STATUS} from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -419,6 +421,7 @@ test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with 
         }
         return {
           success: true,
+          ...clusterFormatRevisionClaim(),
           seedNodeId: 'seed-node-1',
           seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {

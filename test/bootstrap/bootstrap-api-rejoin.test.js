@@ -20,6 +20,14 @@ import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   buildMembershipOwnerOutcome,
 } from '../../src/control-plane/membership-lifecycle-controller.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
+
+// Every joiner carries its build's cluster format revision (the release
+// version fence); these cases exercise the takeover decision behind it.
+const JOINER_FORMAT_CLAIM = Object.freeze({
+  clusterFormatClaim: clusterFormatRevisionClaim(),
+});
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -115,6 +123,7 @@ test('checkForConflicts allows re-registration when ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.equal(
     result, null,
@@ -143,6 +152,7 @@ test('checkForConflicts allows re-registration when ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.equal(
     result, null,
@@ -171,6 +181,7 @@ test('checkForConflicts allows re-registration when ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.equal(
     result, null,
@@ -200,6 +211,7 @@ test('checkForConflicts rejects re-registration when ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     'ws://localhost:9091',
+    JOINER_FORMAT_CLAIM,
   );
   t.ok(
     result !== null,
@@ -242,6 +254,7 @@ test('checkForConflicts rejects re-registration as a terminal conflict ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     'ws://localhost:9091',
+    JOINER_FORMAT_CLAIM,
   );
   t.ok(
     typeof result === 'string' && result.includes('already registered'),
@@ -270,6 +283,7 @@ test('checkForConflicts allows idempotent re-registration when ' +
   const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.equal(
     result,
@@ -310,6 +324,7 @@ test('checkForConflicts admits durable same-address rejoin from owner outcome',
       REJOIN_NODE_ID,
       REJOIN_NODE_ADDRESS,
       {
+        ...JOINER_FORMAT_CLAIM,
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         membershipOwnerOutcome: buildMembershipOwnerOutcome({
           startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -351,6 +366,7 @@ test('checkForConflicts still rejects address conflict ' +
   const result = await api.checkForConflicts(
     newNodeId,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.ok(
     result !== null,
@@ -385,6 +401,7 @@ test('checkForConflicts skips address conflict check ' +
   const result = await api.checkForConflicts(
     newNodeId,
     REJOIN_NODE_ADDRESS,
+    JOINER_FORMAT_CLAIM,
   );
   t.equal(
     result, null,
@@ -429,6 +446,7 @@ test('checkForConflicts allows re-registration when authoritative nodes row is s
     const result = await api.checkForConflicts(
       REJOIN_NODE_ID,
       REJOIN_NODE_ADDRESS,
+      JOINER_FORMAT_CLAIM,
     );
     t.equal(
       result,

@@ -52,4 +52,4 @@ documentClass: generated
 - [service-registration-handoff-owner.js](service-registration-handoff-owner.js) - Whether a register-service request is a MOVE_REPLICA handoff: it carries a MOVE assignment token, or the MOVE... (importers: few)
 - [service-registration-visibility-owner.js](service-registration-visibility-owner.js) - No leading comment; first export: ServiceRegistrationVisibilityOwner. (importers: one)
 - [startup-runtime-handoff-owner.js](startup-runtime-handoff-owner.js) - Track one recovery replay. (importers: many)
-- [support-envelope-owner.js](support-envelope-owner.js) - No leading comment; first export: DEFAULT_ROLLBACK_CUTOFF_PHASE. (importers: few)
+- [support-envelope-owner.js](support-envelope-owner.js) - The one comparison of the fence: only this build's exact integer revision is admitted. (importers: hub)

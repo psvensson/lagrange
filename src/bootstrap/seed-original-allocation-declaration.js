@@ -18,6 +18,8 @@ import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
 import {SYSTEM_TABLE_SCHEMAS, SYSTEM_TABLE_NAME, INITIAL_PARTITION_IDS,
   INITIAL_MESSAGE_GROUP_ID, INITIAL_MESSAGE_GROUP_REPLICA_IDS,
   getInitialReplicaIds} from './system-table-schemas-constants.js';
+import {clusterFormatRevisionClaim, isCurrentClusterFormatDeclaration} from
+  './owners/support-envelope-owner.js';
 
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
@@ -99,7 +101,10 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
     createAttemptToken: randomUUID(),
     membership: seedMemberMembership(member, nodeId),
   }));
-  return deepFreeze({version: STATE.VERSION, allocationId: randomUUID(),
+  // The founding declaration carries this build's cluster format revision:
+  // the retained, write-once fact that this cluster was founded at it.
+  return deepFreeze({version: STATE.VERSION, ...clusterFormatRevisionClaim(),
+    allocationId: randomUUID(),
     nodeId, dataDir: canonicalDataDir, buildDigest, declaredAt: now,
     catalogDigest: catalogDigest(), clusterId: randomUUID(),
     anchorReplicaId: originalSeedAnchor(canonicalDataDir).replicaId, members});
@@ -172,7 +177,8 @@ function isNonEmptyString(value) {
 }
 
 function hasValidAllocationHeaderFields(declaration, nodeId, buildDigest) {
-  return isNonEmptyString(nodeId) && isNonEmptyString(buildDigest) &&
+  return isCurrentClusterFormatDeclaration(declaration) &&
+    isNonEmptyString(nodeId) && isNonEmptyString(buildDigest) &&
     isNonEmptyString(declaration?.allocationId) && isNonEmptyString(declaration?.clusterId) &&
     Number.isSafeInteger(declaration?.declaredAt) && declaration.declaredAt >= 0;
 }

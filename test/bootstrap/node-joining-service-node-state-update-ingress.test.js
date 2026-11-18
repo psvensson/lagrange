@@ -52,6 +52,8 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -89,6 +91,7 @@ test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and
         }
         return {
           success: true,
+          ...clusterFormatRevisionClaim(),
           seedNodeId: 'seed-node-1',
           seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {

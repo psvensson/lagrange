@@ -5,7 +5,7 @@
  * wiped-replica rebuild, and service-artifact upgrade drills under
  * foreground load with zero lost acknowledged writes, verifies
  * OUTSIDE_SUPPORT_ENVELOPE refusal at rolling-upgrade preflight and
- * bootstrap join admission, proves L3 BYOC partition-backed snapshot
+ * bootstrap join admission (keyed on the cluster format revision), proves L3 BYOC partition-backed snapshot
  * export and hydration, and validates the canonical support-envelope
  * record.
  */
@@ -20,6 +20,7 @@ import {
   SUPPORT_ENVELOPE_REASON_CODE,
   SupportEnvelopeOwner,
   buildSupportEnvelopeRecord,
+  clusterFormatRevisionClaim,
   validateSupportEnvelopeRecord,
 } from '../../../src/bootstrap/owners/support-envelope-owner.js';
 import {
@@ -255,11 +256,12 @@ async function executeByocPartitionBackupRestoreProof(envelope) {
   };
 }
 
-async function executeJoinHandshakeAdmissionProof(envelope) {
+// Join admission is keyed on the cluster format revision the joiner's
+// request carries (the release version fence), not on a release version.
+async function executeJoinHandshakeAdmissionProof() {
   const joinOwner = new BootstrapJoinAdmissionOwner({
     delegates: {
       getClusterId: () => 'lagrange-cluster-q12',
-      getReleaseVersion: () => DEFAULT_SOURCE_VERSION,
       getSeedNodeAddress: () => '10.0.0.1:9000',
       getSeedNodeId: () => SEED_NODE_UUID,
       getSystemTableCache: () => ({
@@ -267,19 +269,18 @@ async function executeJoinHandshakeAdmissionProof(envelope) {
         getAll: () => [],
       }),
     },
-    supportEnvelope: envelope,
   });
   const allowedConflict = await joinOwner.checkForConflicts(
     PEER_NODE_UUID,
     '10.0.0.2:9000',
-    {peerVersion: DEFAULT_TARGET_VERSION},
+    {clusterFormatClaim: clusterFormatRevisionClaim()},
   );
   assert.equal(allowedConflict, null);
 
   const refusedConflict = await joinOwner.checkForConflicts(
     PEER_NODE_UUID,
     '10.0.0.2:9000',
-    {peerVersion: '0.9.9'},
+    {clusterFormatClaim: {}},
   );
   assert.equal(
     refusedConflict?.reasonCode,
@@ -318,9 +319,7 @@ async function runSupportedUpgradeAndRecoveryScenario(cluster = null) {
   const byocBackupRestore = await executeByocPartitionBackupRestoreProof(
     certifiedEnvelope,
   );
-  const joinHandshake = await executeJoinHandshakeAdmissionProof(
-    certifiedEnvelope,
-  );
+  const joinHandshake = await executeJoinHandshakeAdmissionProof();
 
   const report = {
     byocBackupRestore,

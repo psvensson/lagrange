@@ -33,6 +33,8 @@ import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 
 function createMockStorageAdmissionService() {
@@ -499,6 +501,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: '550e8400-e29b-41d4-a716-446655440011',
         nodeAddress: `ws://localhost:${getUniquePort()}`,
       },
