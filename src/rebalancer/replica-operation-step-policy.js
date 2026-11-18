@@ -294,6 +294,28 @@ function isIncompleteOperationRowStep(operationType, workflowStep) {
   return INCOMPLETE_OPERATION_UNCONDITIONAL_WORKFLOW_STEPS.has(workflowStep);
 }
 
+// Every step at which isIncompleteOperationRowStep can hold for some type:
+// the row set an owner reads before asking the predicate per row (the
+// placement admission applier's committed census).
+const INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS = Object.freeze([
+  ...INCOMPLETE_OPERATION_UNCONDITIONAL_WORKFLOW_STEPS,
+  WORKFLOW_STEP.ACTIVE,
+]);
+
+// Placement copy capacity (quest replica-placement-admission-owner, design
+// section 2.5 step 7): a copy-making operation occupies its copy source and
+// its target while its durable step is one of these. Promotion steps and the
+// removal phase are outside it; capacity frees only when the durable step
+// leaves it (local progress running ahead of the row never frees it).
+const COPY_PHASE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+    WORKFLOW_STEP.SYNCING,
+  ]),
+);
+
 // Steps whose age counts against the priority-recovery step timeout.
 const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze(
   new Set([
@@ -563,6 +585,7 @@ function doesWorkflowStepOccupySystemTargetNodeSlot(
 }
 
 export {
+  COPY_PHASE_WORKFLOW_STEPS,
   doesWorkflowStepOccupySystemTargetNodeSlot,
   REPLACE_OWNER_PHASE_WORKFLOW_STEPS,
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
@@ -601,6 +624,7 @@ export {
   TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
   isPartitionReplaceOwnerPhase,
+  INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS,
   isIncompleteOperationRowStep,
   isPriorityOutcomeDeferredLocalProgressCovered,
   shouldClearPriorityDeferredClaim,

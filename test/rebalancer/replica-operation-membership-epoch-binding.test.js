@@ -116,6 +116,8 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
   'src/rebalancer/storage-reservation-authority.js',
   'src/control-plane/replica-dispatch-readiness-capture.js',
+  // The placement admission statement validates the epoch it carries.
+  'src/rebalancer/replica-placement-owner-admission-statement.js',
 ]);
 // Encode, SQL-text, schema, and pass-through sites: they mention the field
 // but never interpret its value.
@@ -137,6 +139,9 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   'src/bootstrap/system-table-runtime-schema-definitions.js',
   'src/partition/partition-service-constants.js',
   'src/partition/partition-service-entry-apply-base.js',
+  // The placement admission applier copies the statement's validated epoch
+  // onto the admitted operation record, uninterpreted.
+  'src/partition/partition-placement-admission-decision.js',
 ]);
 
 function initializeEnvironment() {

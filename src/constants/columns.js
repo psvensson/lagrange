@@ -55,6 +55,9 @@ const COLUMN = Object.freeze({
   LAST_LATENCY_CHECK_AT: 'last_latency_check_at',
   LATENCY_ASSIGNMENT_STATE: 'latency_assignment_state',
   HOST_ID: 'host_id',
+  // A placement-admitted copy's copy source (quest
+  // replica-placement-admission-owner): the node source occupancy counts.
+  COPY_SOURCE_NODE_ID: 'copy_source_node_id',
   SERVICE_TYPE: 'service_type',
   RAFT_ROLE: 'raft_role',
   TARGET_NODE_ID: 'target_node_id',

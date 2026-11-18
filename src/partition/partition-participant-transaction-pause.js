@@ -12,6 +12,7 @@ import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} fro
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
+import {PARTITION_SERVICE_EVENT} from './partition-service-constants.js';
 import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
 import {participantReleaseGenerationValid, releaseCensusDefect,
   sameReplicaGeneration} from './partition-participant-release-contract.js';
@@ -279,6 +280,10 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
       membershipGenerationIndex: status.membershipGenerationIndex,
       runtimeGeneration: status.runtimeGeneration,
       lifecycleIncarnation: status.lifecycleIncarnation})}));
+  // The pause lifted: a writer refused CUTOVER_PAUSED waits on this edge
+  // (the placement owner's WRITE_PATH_RELEASED), never on a retry delay.
+  service.emit(PARTITION_SERVICE_EVENT.WRITE_PATH_RELEASED, Object.freeze({
+    partitionId: service.partitionId, releaseId: request.release.releaseId}));
   return OUTCOME.RESUMED;
 }
 

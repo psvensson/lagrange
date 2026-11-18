@@ -49,6 +49,9 @@ import {isPinnedCdcAcknowledgementCommand} from
 import {isPinnedCoordinatorSettlementCommand} from './partition-coordinator-settlement-command.js';
 import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
   './partition-coordinator-settlement-constants.js';
+import {isPinnedPlacementCommand} from './partition-placement-admission-command.js';
+import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_COMMAND_TYPES} from
+  './partition-placement-admission-constants.js';
 
 // Who asks to propose a committed command. Participant commands enter only
 // from their transaction owner; a CDC_DELIVERED only from the CDC delivery
@@ -58,6 +61,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   TRANSACTION_OWNER: 'transaction-owner',
   CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
   COORDINATOR_OWNER: 'coordinator-owner',
+  PLACEMENT_OWNER: 'placement-owner',
 });
 
 // What a refused write is answered with.
@@ -127,7 +131,20 @@ function cdcCommandRefusal(command, origin) {
       PARTITION_CDC_OBLIGATION_MESSAGE.BYTES_INVALID);
 }
 
+// A placement command enters consensus only through the placement request
+// path and only in its pinned form (partition-placement-admission-command.js).
+function placementCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.PLACEMENT_OWNER) {
+    return refused(PLACEMENT_ADMISSION_ERROR.ORIGIN, PLACEMENT_ADMISSION_ERROR.ORIGIN);
+  }
+  return isPinnedPlacementCommand(command) ? ADMITTED :
+    refused(PLACEMENT_ADMISSION_ERROR.BYTES, PLACEMENT_ADMISSION_ERROR.BYTES);
+}
+
 function commandRefusalByKind(command, origin) {
+  if (PLACEMENT_COMMAND_TYPES.includes(command.type)) {
+    return placementCommandRefusal(command, origin);
+  }
   if (command.type === COORDINATOR_SETTLEMENT_TYPE) {
     if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.COORDINATOR_OWNER) {
       return refused(COORDINATOR_SETTLEMENT_ERROR.ORIGIN, COORDINATOR_SETTLEMENT_ERROR.ORIGIN);

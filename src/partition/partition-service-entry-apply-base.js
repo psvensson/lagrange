@@ -34,6 +34,10 @@ import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
 import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
   './partition-coordinator-settlement.js';
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
+import {applyPlacementCommand, requestPlacementAdmission} from
+  './partition-placement-admission.js';
+import {PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
+  './partition-placement-admission-constants.js';
 import {ensureSqlTransactionsDecisionColumns} from
   './partition-coordinator-table-columns.js';
 import {admitsParticipantSessionQueryDuringRemoval,
@@ -392,6 +396,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
     case COORDINATOR_SETTLEMENT_TYPE:
+    case PLACEMENT_ADMIT_TYPE:
       return true;
     default:
       return false;
@@ -424,6 +429,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.handleTransactionMessage(payload);
     case COORDINATOR_SETTLEMENT_TYPE:
       return requestCoordinatorSettlement(this, payload);
+    case PLACEMENT_ADMIT_TYPE:
+      return requestPlacementAdmission(this, payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
@@ -650,6 +657,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     });
     if (commandType === COORDINATOR_SETTLEMENT_TYPE) {
       return applyCoordinatorSettlement(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
+    }
+    if (PLACEMENT_COMMAND_TYPES.includes(commandType)) {
+      // The placement owner's typed admission (and hold release): its owner.
+      return applyPlacementCommand(this, {command, index, term,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     }

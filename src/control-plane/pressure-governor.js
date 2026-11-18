@@ -1,4 +1,6 @@
 import {METRICS_LOG_TAG} from '../constants/index.js';
+import {notifyPressureReleases, splitPressureReleases} from
+  './pressure-governor-release-watch.js';
 const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   DEFAULT: 'default',
   NONE: 'none',
@@ -502,6 +504,7 @@ class PressureGovernor {
     this.admissionWaiters = [];
     this.admissionWaiterSeq = 0;
     this.admissionPollTimer = null;
+    this.releaseWatches = [];
   }
   static getShared(options = {}) {
     const nodeId = normalizeNodeId(options.nodeId);
@@ -693,18 +696,34 @@ class PressureGovernor {
     });
   }
 
+  // PRESSURE_RELEASED (pressure-governor-release-watch.js).
+  watchPressureRelease(request, listener) {
+    const watch = {request, listener};
+    this.releaseWatches.push(watch);
+    this.scheduleAdmissionPoll();
+    return () => {
+      this.releaseWatches = this.releaseWatches.filter((entry) => entry !== watch);
+    };
+  }
+
   scheduleAdmissionPoll() {
-    if (this.admissionPollTimer || this.admissionWaiters.length === 0) {
+    if (this.admissionPollTimer ||
+        (this.admissionWaiters.length === 0 && this.releaseWatches.length === 0)) {
       return;
     }
     // The timer intentionally keeps the process alive: it exists only while
-    // waiters are parked, and every waiter resolves by its bounded deadline.
+    // waiters are parked (each resolves by its bounded deadline) or a release
+    // watch is held (its watcher cancels it when it stops watching).
     // The re-arm is unconditional: a throwing pressure sensor must never
     // strand parked waiters or escape the timer callback as a crash.
     this.admissionPollTimer = setTimeout(() => {
       this.admissionPollTimer = null;
       try {
         this.drainAdmissionWaiters();
+        const {remaining, released} = splitPressureReleases(this.releaseWatches,
+          (request) => this.evaluate(request), PRESSURE_GOVERNOR_ACTION.DEFER);
+        this.releaseWatches = remaining;
+        notifyPressureReleases(released);
       } finally {
         this.scheduleAdmissionPoll();
       }
@@ -750,6 +769,7 @@ class PressureGovernor {
       clearTimeout(this.admissionPollTimer);
       this.admissionPollTimer = null;
     }
+    this.releaseWatches = [];
     const waiters = this.admissionWaiters;
     this.admissionWaiters = [];
     for (const waiter of waiters) {

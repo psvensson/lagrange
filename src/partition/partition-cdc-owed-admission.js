@@ -15,6 +15,8 @@ import {decisionMatchesPreparedRow, operationsOf} from './partition-participant-
 import {readParticipantTransactionRow} from './partition-participant-transaction-store.js';
 import {PROPOSAL_QUEUE_ADMISSION_CLASS} from './proposal-queue-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
+import {placementCommandRowCount} from './partition-placement-admission-command.js';
+import {PLACEMENT_COMMAND_TYPES} from './partition-placement-admission-constants.js';
 
 const PARTITION_CDC_ADMISSION_STATE = Object.freeze({ADMITTED: 'admitted', REFUSED: 'refused'});
 const ADMITTED = Object.freeze({state: PARTITION_CDC_ADMISSION_STATE.ADMITTED});
@@ -42,6 +44,10 @@ function requiredCdcSlots(service, command) {
     if (readParticipantTransactionRow(service.db, command) !== null) return 0;
     // Malformed operations remain the participant validation owner's refusal.
     return operationsOf(command.operationsText)?.length ?? 0;
+  }
+  // A placement command counts the rows it would insert or change.
+  if (PLACEMENT_COMMAND_TYPES.includes(command.type)) {
+    return placementCommandRowCount(command);
   }
   if (!isCommittedSqlCommandType(command.type) ||
       command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||

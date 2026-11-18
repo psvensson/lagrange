@@ -13,6 +13,8 @@ import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
 import {PARTITION_CDC_COMMAND_TYPES} from
   './partition-cdc-obligation-constants.js';
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
+import {PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
+  './partition-placement-admission-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -114,6 +116,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   QUERY: 'QUERY',
   TRANSACTION: 'TRANSACTION',
   COORDINATOR_SETTLEMENT: COORDINATOR_SETTLEMENT_TYPE,
+  PLACEMENT_ADMIT: PLACEMENT_ADMIT_TYPE,
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
   LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
@@ -156,6 +159,7 @@ const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   ...PARTITION_CDC_COMMAND_TYPES,
   COORDINATOR_SETTLEMENT_TYPE,
+  ...PLACEMENT_COMMAND_TYPES,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
@@ -225,6 +229,9 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   SHUTDOWN_STARTED: 'shutdownStarted',
   SHUTDOWN: 'shutdown',
   CONSENSUS_OBSERVED: 'consensusObserved',
+  // The partition's mutation admission reopened (the participant cutover
+  // pause released): a writer that waited on it may propose again.
+  WRITE_PATH_RELEASED: 'writePathReleased',
 });
 
 const PARTITION_SERVICE_REASON = Object.freeze({

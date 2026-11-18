@@ -331,6 +331,79 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   return context.buildSafeRemoveSafetyEvaluation();
 }
 
+// The typed states of the one remove-safety projection input.
+const REMOVE_SAFETY_PROJECTION_STATE = Object.freeze({
+  READY: 'ready',
+  NODE_FLOOR_UNAVAILABLE: 'node_floor_unavailable',
+  REPLICA_IDENTITY_UNAVAILABLE: 'replica_identity_unavailable',
+});
+
+/**
+ * The one derivation of a partition removal's floor inputs, shared by this
+ * evaluator and the placement owner's planning (quest
+ * replica-placement-admission-owner, design section 2.8): the committed node
+ * floor, the readiness it is read under, the voter-ready rows counted by
+ * isVoterReadyFloorCountableReplica, the removed replica's identity and the
+ * rows left after its removal. Answered in the evaluator's order: an
+ * unavailable committed node floor first, then a missing replica identity.
+ * @param {Object} context - The remove-safety owner's context.
+ * @param {Object} operation - The REMOVE or REPLACE.
+ * @param {Array<Object>} criticalReplicaRows - The partition's replica rows.
+ * @return {Promise<Object>} Frozen {state: REMOVE_SAFETY_PROJECTION_STATE,
+ *   ...the inputs when READY}.
+ */
+async function buildRemoveSafetyProjectionInput(context, operation,
+  criticalReplicaRows) {
+  const committedNodeFloor = await readCommittedNodeFloor(context, criticalReplicaRows);
+  if (committedNodeFloor.state !== SERVE_ELIGIBILITY_STATE.READY) {
+    return Object.freeze({
+      state: REMOVE_SAFETY_PROJECTION_STATE.NODE_FLOOR_UNAVAILABLE,
+      committedNodeFloor});
+  }
+  const removeSafetyReadiness = {
+    committedNodeFloor,
+    partitionId: operation.partitionId,
+    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+  };
+  const currentVoterReadyRows = criticalReplicaRows.filter(
+    (row) =>
+      context.isVoterReadyFloorCountableReplica(row, removeSafetyReadiness) &&
+      (operation.type !== OperationType.REMOVE ||
+        row.status === ReplicaStatus.ACTIVE),
+  );
+  const operationReplicaId =
+    operation.type === OperationType.REPLACE ?
+      context.repository.getReplaceSourceReplicaId(operation) :
+      operation.replicaId;
+  if (!operationReplicaId) {
+    return Object.freeze({
+      state: REMOVE_SAFETY_PROJECTION_STATE.REPLICA_IDENTITY_UNAVAILABLE});
+  }
+  return Object.freeze({state: REMOVE_SAFETY_PROJECTION_STATE.READY,
+    committedNodeFloor, removeSafetyReadiness, currentVoterReadyRows,
+    operationReplicaId,
+    projectedVoterReadyRows: currentVoterReadyRows.filter((row) =>
+      !context.isOperationReplicaRow(row, {...operation,
+        replicaId: operationReplicaId}))});
+}
+
+/**
+ * The simple voter-ready floor of a removal: the partition's policy minimum
+ * (the async authoritative policy read) against the projected rows.
+ * @param {Object} context - The remove-safety owner's context.
+ * @param {Object} operation - The REMOVE or REPLACE.
+ * @param {Array<Object>} projectedVoterReadyRows - Rows after the removal.
+ * @return {Promise<Object>} projectQuorumAfterRemoval's SIMPLE_FLOOR answer.
+ */
+async function resolveRemoveSafetySimpleFloor(context, operation,
+  projectedVoterReadyRows) {
+  const minReplicaCount = await context.getCriticalMinReplicaCount(
+    operation.partitionId);
+  return projectQuorumAfterRemoval({projectedVoterReadyRows, minReplicaCount,
+    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR});
+}
+
 /**
  * Evaluate safety validation for REMOVE operations.
  * @param {Object} context - Segment/Class context instance.
@@ -442,40 +515,26 @@ async function evaluateRemoveSafety(context, operation) {
   }
   noteReplaceOwnerObservedReplicaRows(context, operation, criticalReplicaRows);
 
-  const committedNodeFloor = await readCommittedNodeFloor(context, criticalReplicaRows);
-  if (committedNodeFloor.state !== SERVE_ELIGIBILITY_STATE.READY) {
+  const projection = await buildRemoveSafetyProjectionInput(
+    context, operation, criticalReplicaRows);
+  if (projection.state === REMOVE_SAFETY_PROJECTION_STATE.NODE_FLOOR_UNAVAILABLE) {
     return context.buildDeferredRemoveSafetyEvaluation(
       `Partition ${operation.partitionId} committed node authority unavailable: ` +
-        committedNodeFloor.reason,
+        projection.committedNodeFloor.reason,
       operation.type === OperationType.REPLACE ?
         REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
         REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED,
     );
   }
-  const removeSafetyReadiness = {
-    committedNodeFloor,
-    partitionId: operation.partitionId,
-    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  };
-  const currentVoterReadyRows = criticalReplicaRows.filter(
-    (row) =>
-      context.isVoterReadyFloorCountableReplica(row, removeSafetyReadiness) &&
-      (operation.type !== OperationType.REMOVE ||
-        row.status === ReplicaStatus.ACTIVE),
-  );
-
-  const operationReplicaId =
-    operation.type === OperationType.REPLACE ?
-      context.repository.getReplaceSourceReplicaId(operation) :
-      operation.replicaId;
-
-  if (!operationReplicaId) {
+  if (projection.state ===
+      REMOVE_SAFETY_PROJECTION_STATE.REPLICA_IDENTITY_UNAVAILABLE) {
     return context.buildFailedRemoveSafetyEvaluation(
       `Critical partition ${operation.partitionId}` +
         OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE,
     );
   }
+  const {removeSafetyReadiness, currentVoterReadyRows, operationReplicaId,
+    projectedVoterReadyRows} = projection;
 
   const removingVoterReady = currentVoterReadyRows.some((row) =>
     context.isOperationReplicaRow(row, {
@@ -525,19 +584,11 @@ async function evaluateRemoveSafety(context, operation) {
       isReplaceRemoveInitialDispatch: isReplaceRemoveDispatch,
       removeSafetyReadiness,
       currentVoterReadyRows,
-      projectedVoterReadyRows:
-        currentVoterReadyRows.filter(
-          (row) =>
-            !context.isOperationReplicaRow(row, {
-              ...operation,
-              replicaId: operationReplicaId,
-            }),
-        ),
+      projectedVoterReadyRows,
       operationReplicaId,
       replacementReplicaId,
       replacementReplicaRow,
-      projectQuorumAfterRemoval,
-      QUORUM_PROJECTION_SCOPE,
+      resolveRemoveSafetySimpleFloor,
     });
   }
 
@@ -574,31 +625,18 @@ async function evaluateRemoveSafety(context, operation) {
     return priorityRecoveryCompletionEvaluation;
   }
 
-  const minReplicaCount = await context.getCriticalMinReplicaCount(
-    operation.partitionId,
-  );
-  const projectedVoterReadyRows = currentVoterReadyRows.filter(
-    (row) =>
-      !context.isOperationReplicaRow(row, {
-        ...operation,
-        replicaId: operationReplicaId,
-      }),
-  );
   // One voter-ready floor for every removal: the partition's voter-ready
   // rows on READY-lease nodes after the removal, against minReplicaCount.
   // A completion-safe priority recovery may still answer its source-leader
   // handoff first (below); the removal itself always waits for this floor.
-  const simpleFloor = projectQuorumAfterRemoval({
-    projectedVoterReadyRows,
-    minReplicaCount,
-    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
-  });
+  const simpleFloor = await resolveRemoveSafetySimpleFloor(context, operation,
+    projectedVoterReadyRows);
   const deferBelowVoterReadyFloor = () =>
     context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Critical partition ${operation.partitionId}` +
         OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-        ` (${simpleFloor.projectedVoterReadyCount}/${minReplicaCount})`,
+        ` (${simpleFloor.projectedVoterReadyCount}/${simpleFloor.minReplicaCount})`,
     );
   if (!priorityRecoveryCompletionSafe && !simpleFloor.floorSatisfied) {
     return deferBelowVoterReadyFloor();
@@ -656,6 +694,9 @@ async function evaluateRemoveSafety(context, operation) {
 }
 
 export {
+  REMOVE_SAFETY_PROJECTION_STATE,
+  buildRemoveSafetyProjectionInput,
+  resolveRemoveSafetySimpleFloor,
   evaluatePriorityRecoveryCompletionRemoveSafety,
   evaluatePriorityPublishedMembershipRemoveSafety,
   evaluateRemoveSafety,
