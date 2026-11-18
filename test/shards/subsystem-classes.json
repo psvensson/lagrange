@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 282,
-    "query-sql": 195,
+    "query-sql": 196,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2670,
-  "digest": "fnv1a32-bc340e38",
+  "censusSize": 2671,
+  "digest": "fnv1a32-1c37b939",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f336627c",
+  "observationDigest": "fnv1a32-f131dcea",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1710,6 +1710,7 @@
     "test/query/sql-query-pbt.test.js": "query-sql",
     "test/query/sql-request.test.js": "query-sql",
     "test/query/sql-scalar-functions.test.js": "query-sql",
+    "test/query/sql-semantics-differential-oracle.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
@@ -15027,6 +15028,25 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
+    "test/query/sql-semantics-differential-oracle.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-service-table-bootstrap.js",
+        "src/transport/message-router-delivery-encoding.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/query/sql-semantics-oracle/cluster.js",
+        "test/query/sql-semantics-oracle/corpus-generator.js",
+        "test/query/sql-semantics-oracle/golden-divergences.json",
+        "test/query/sql-semantics-oracle/grammar.js",
+        "test/query/sql-semantics-oracle/receipt-groups.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/query/sql-statement-refusals.test.js": {
