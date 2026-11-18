@@ -27,12 +27,14 @@ import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 import {
   RAFT_EVENT,
+  RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 
 const LEADER_ROLE = 'leader';
@@ -433,6 +435,65 @@ class TransferLeadershipDriver {
   }
 }
 
+// Message exchanges a hand-off or an election needs, as a bound.
+const EXCHANGE_BOUND = 8;
+
+/**
+ * RACE_RETURN, the one way a leader can still commit its own removal: a
+ * leader's port refuses a change that removes itself, so `successor` (handed
+ * leadership by `leader`) proposes it; its append reaches `leader` and
+ * `witness` and `successor` is cut off before any acknowledgement returns.
+ * The witness's lease then runs out (a pre-vote request its own election
+ * timer may send is lost), `leader` campaigns and wins with the witness,
+ * and the witness acknowledges `leader`'s first append. That
+ * acknowledgement is left held for `leader`: stepped, it commits `leader`'s
+ * own removal while `leader` leads.
+ * @param {Object} ops - {driver, act(operation), deliverOnly(replicaIds)},
+ *   each awaited: the sync driver's own, or an asynchronous harness's.
+ * @param {Object} shape - {leader, successor, witness}.
+ * @return {Promise<void>}
+ */
+async function returnLeadershipBeforeOwnRemoval({driver, act, deliverOnly},
+  {leader, successor, witness}) {
+  await act(() => turnChainValue(driver.port(leader)
+    .transferLeadership(namedSuccessor(successor))));
+  for (let exchange = 0; exchange < EXCHANGE_BOUND &&
+      driver.status(leader).leaderId !== successor; exchange += 1) {
+    await deliverOnly([successor, leader, witness]);
+  }
+  assert.equal(driver.leads(successor), true,
+    `setup: ${successor} leads after the hand-off`);
+  // The acknowledgements of its first entry move its followers to steady
+  // replication, so the removal's append leaves at once.
+  await deliverOnly([successor]);
+  assert.equal((await act(() => turnChainValue(driver.port(successor)
+    .proposeConfChange({type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: leader})))).outcome, CORE_OK,
+  `setup: ${successor} proposes ${leader}'s removal`);
+  await deliverOnly([leader, witness]);
+  driver.isolate(successor);
+  for (let tick = 0; tick < driver.electionTickOf(witness); tick += 1) {
+    await act(() => turnChainValue(driver.port(witness).tick()));
+  }
+  // Should the witness's own timer have fired, its pre-vote request to the
+  // leader is lost: the leader, standing itself, would grant it.
+  driver.loseInTransit(leader);
+  await act(() => turnChainValue(driver.port(leader).campaign()));
+  for (let exchange = 0; exchange < EXCHANGE_BOUND &&
+      !driver.leads(leader); exchange += 1) {
+    await deliverOnly([witness]);
+    await deliverOnly([leader]);
+  }
+  assert.equal(driver.leads(leader), true,
+    `setup: leadership returned to ${leader}`);
+  const selfId = driver.raftIdAt(leader, leader);
+  assert.equal(driver.status(leader).confState.voters.includes(selfId), true,
+    `setup: ${leader}'s removal is not yet committed at ${leader}`);
+  await deliverOnly([witness]);
+  assert.ok(driver.cluster.replica(leader).inbox.length > 0,
+    `setup: ${witness}'s acknowledgement is held for ${leader}`);
+}
+
 export {
   IN_PROGRESS_REASON,
   TRANSFER_REASON,
@@ -443,4 +504,5 @@ export {
   assertTransferInProgress,
   mostCaughtUp,
   namedSuccessor,
+  returnLeadershipBeforeOwnRemoval,
 };

@@ -25,6 +25,16 @@
 // voters", confchange/changer.rs:181), and a committed entry the core will
 // never apply holds its group on every replay. It is refused here, terminal
 // (REMOVES_LAST_VOTER), and nothing is handed to the core.
+// Nor does the crate refuse a leader's change that removes or demotes the
+// leader itself: it commits, and raft-rs 0.7 keeps the leader leading
+// (post_conf_change, raft.rs:2674-2685), dropping every proposal while its
+// heartbeats hold the remaining voters inside their lease. The binding steps
+// such a leader down when it applies the change anyway (fork fix 5, a race
+// that returned leadership to it before the change committed); here, at
+// proposal, the leader refuses it retryable (REMOVES_LEADER), nothing is
+// handed to the core, and the runtime owner hands leadership to the most
+// caught-up voter in the same turn. The change is the next leader's to make:
+// its proposer re-drives it when leadership or the configuration moves.
 // Excluded: an empty change (the leave) outside a joint configuration. No
 // producer reaches the port with one: the port's normaliser builds exactly
 // one step for every membership operation it accepts.
@@ -48,6 +58,13 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 
+// The steps that take a voter out of the incoming configuration: a removal,
+// and a demotion to learner.
+const TAKES_A_VOTER = Object.freeze(new Set([
+  RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
+  RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+]));
+
 /**
  * Whether the change would leave the incoming configuration without a voter:
  * its steps folded over the core's voters (AddNode adds one, RemoveNode and
@@ -67,12 +84,23 @@ function leavesNoVoter(confState, change) {
   for (const {changeType, nodeId} of steps) {
     if (changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE) {
       voters.add(String(nodeId));
-    } else if (changeType === RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE ||
-        changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE) {
+    } else if (TAKES_A_VOTER.has(changeType)) {
       voters.delete(String(nodeId));
     }
   }
   return voters.size === 0;
+}
+
+/**
+ * Whether the change removes or demotes the replica the core reports as
+ * itself (status.id), the leader whose port was asked.
+ * @param {Object} status - The core's status.
+ * @param {Object} change - The normalized ConfChangeV2 ({changes}).
+ * @return {boolean}
+ */
+function takesLeaderOut(status, change) {
+  return (change?.changes || []).some(({changeType, nodeId}) =>
+    TAKES_A_VOTER.has(changeType) && String(nodeId) === String(status.id));
 }
 
 /**
@@ -88,9 +116,10 @@ function hasPendingConfChange(status) {
  * The answer to a conf-change proposal the core must not be handed, or null
  * when the leader's core takes it. A replica that does not lead answers
  * NOT_LEADER (the crate would forward it where no answer comes back); the
- * leader refuses a change that leaves no voter and defers what it would drop.
- * In a joint configuration the one change the core takes is the leave (a
- * change with no steps); any other waits.
+ * leader refuses a change that leaves no voter, defers what it would drop,
+ * and refuses a change that removes or demotes itself (the caller hands its
+ * leadership on). In a joint configuration the one change the core takes is
+ * the leave (a change with no steps); any other waits.
  * @param {Object} observed
  * @param {Object} observed.status - The core's status.
  * @param {Object} observed.confState - The core's configuration.
@@ -98,8 +127,9 @@ function hasPendingConfChange(status) {
  * @param {Function} observed.leaderReplicaIdOf - (lead) => the leader's
  *   replica identity, or null.
  * @return {Object|null} Frozen CORE_REFUSED NOT_LEADER (retryable),
- *   CORE_REFUSED REMOVES_LAST_VOTER (terminal) or HOST_FAILURE deferral
- *   (retryable), the group usable in each; or null.
+ *   CORE_REFUSED REMOVES_LAST_VOTER (terminal), HOST_FAILURE deferral
+ *   (retryable) or CORE_REFUSED REMOVES_LEADER (retryable), the group usable
+ *   in each; or null.
  */
 function confChangeProposalRefusal({status, confState, change,
   leaderReplicaIdOf}) {
@@ -124,16 +154,25 @@ function confChangeProposalRefusal({status, confState, change,
   }
   const joint = (confState?.votersOutgoing || []).length > 0;
   const leavesJoint = (change?.changes || []).length === 0;
-  if (!hasPendingConfChange(status) && !(joint && !leavesJoint)) {
-    return null;
+  if (hasPendingConfChange(status) || (joint && !leavesJoint)) {
+    return deepFreeze({
+      outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      reason: RUNTIME_REASON.CONF_CHANGE_PENDING,
+      phase: RUNTIME_PHASE.ADMISSION,
+      retryable: true,
+      recoveryRequired: false,
+    });
   }
-  return deepFreeze({
-    outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
-    reason: RUNTIME_REASON.CONF_CHANGE_PENDING,
-    phase: RUNTIME_PHASE.ADMISSION,
-    retryable: true,
-    recoveryRequired: false,
-  });
+  if (takesLeaderOut(status, change)) {
+    return deepFreeze({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LEADER,
+      phase: RUNTIME_PHASE.ADMISSION,
+      retryable: true,
+      recoveryRequired: false,
+    });
+  }
+  return null;
 }
 
 /**

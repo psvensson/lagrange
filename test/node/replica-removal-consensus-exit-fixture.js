@@ -26,6 +26,7 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import {CDC_OPERATION} from '../../src/constants/index.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {REPLICA_HANDLER_LOG_MSG} from
@@ -36,10 +37,18 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
+  redriveAdmissionsOnMembershipChange,
+  retireRaftPeerFromAuthoritativeServiceChange,
+} from '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
+import {
   createLifecycleServiceRow,
   createLifecycleStateStore,
   createPartitionRow,
 } from '../test-helpers/lifecycle-state-store.js';
+import {
+  DELIVERED_TO_PEER,
+  PartitionNodeCluster,
+} from '../raft/raft-rs-backend/partition-node-cluster.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const SERVICES = 'services';
@@ -75,6 +84,54 @@ function partitionServiceRow(partitionId, replicaId, status) {
     status,
     raft_role: 'follower',
     address: `${nodeId}/partition/${replicaId}`,
+  };
+}
+
+/**
+ * A partition whose peers are addressed as production addresses them: each
+ * peer at its node's partition address, the address its services row
+ * carries (partitionServiceRow). The row-driven retirement of a peer matches
+ * the row against that address.
+ * @param {string} partitionId
+ * @param {Array<string>} replicaIds
+ * @return {PartitionNodeCluster}
+ */
+function partitionClusterAtRowAddresses(partitionId, replicaIds) {
+  const addressOf = (replicaId) => partitionServiceRow(partitionId, replicaId,
+    ReplicaStatus.ACTIVE).address;
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds,
+    resolveFor: (_replicaId, peerReplicaId) => addressOf(peerReplicaId),
+    sendFor: (replicaId, address, packet) => {
+      const target = replicaIds.find((peer) => addressOf(peer) === address);
+      cluster.queue(replicaId, cluster.addressOf(target), packet);
+      return DELIVERED_TO_PEER;
+    }});
+  return cluster;
+}
+
+/**
+ * Every replica's row-driven retirement as its partition service runs it:
+ * one long-lived service per replica, with the re-drive the partition
+ * service subscribes at initialization (LEADER, CONF_CHANGE_APPLIED).
+ * @param {Object} options
+ * @param {PartitionNodeCluster} options.cluster
+ * @param {string} options.partitionId
+ * @param {Array<string>} options.replicaIds
+ * @param {Object} options.logger
+ * @return {Function} (row) => the row's update reaches every replica.
+ */
+function rowDrivenRetirements({cluster, partitionId, replicaIds, logger}) {
+  const services = replicaIds.map((replicaId) => {
+    const service = {raft: cluster.node(replicaId), replicaId, partitionId,
+      replicaIds: [...replicaIds], peerAddresses: [], logger};
+    redriveAdmissionsOnMembershipChange(service);
+    return service;
+  });
+  return (row) => {
+    for (const service of services) {
+      retireRaftPeerFromAuthoritativeServiceChange(service,
+        CDC_OPERATION.UPDATE, row);
+    }
   };
 }
 
@@ -244,5 +301,7 @@ export {
   createRemovalSourceHandler,
   durableLifecycleState,
   nextTurns,
+  partitionClusterAtRowAddresses,
   partitionServiceRow,
+  rowDrivenRetirements,
 };

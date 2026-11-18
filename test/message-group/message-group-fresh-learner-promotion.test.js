@@ -54,6 +54,8 @@ function nativePromotionAttempt({progress, commit = 12, term = 7}) {
       return {ok: true};
     },
     drainReady: () => settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}),
+    answerConfChangeRefusal: (_group, _generation, answer) =>
+      settledTurn(answer),
   });
   assert.equal(turn.settled, true, 'a drained proposal settles within the call');
   return {result: turn.result, proposals};

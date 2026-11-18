@@ -158,10 +158,13 @@ function retireRaftPeerFromAuthoritativeServiceChange(
   ) {
     return false;
   }
-  // Its own retiring row: the replica proposes its own RemoveNode through
-  // its own port (round 2 F-1). Conf changes are taken only at the leader's
-  // port, so a leader source removes itself here - nobody else can - and a
-  // follower's copy is refused NOT_LEADER and made again should it lead.
+  // Its own retiring row: the replica asks its own port for its RemoveNode
+  // (round 2 F-1). Conf changes are taken only at the leader's port, and a
+  // leader never removes itself: its port refuses REMOVES_LEADER and hands
+  // leadership to the most caught-up voter in the same turn, whose own copy
+  // of this row (deferred NOT_LEADER, re-driven on its LEADER) proposes the
+  // removal. Either answer is kept and re-driven here should this replica
+  // lead again before the removal commits.
   if (replicaId === partitionService.replicaId) {
     proposePeerRetirement(partitionService, {
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,

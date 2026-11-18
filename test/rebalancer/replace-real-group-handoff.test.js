@@ -182,14 +182,18 @@ test('B13 (RF=1, control order): with the source stepping until its ' +
 });
 
 // V10 (verification round 1): RF=1 on an ordinary partition with the SOURCE
-// leading and no handoff. The removed leader is the group's leader: R-1f
-// routes the RETIRE to it (conf changes are leader-only; the target is a
-// follower), it proposes its own RemoveNode, commits it with the target's
-// ack, leaves on its applied removal and retires; the target then leads the
-// sole-voter group and the leader's answer completes the REPLACE.
-test('RF=1 x ordinary partition x source leads: the removed leader takes ' +
-  'its own RemoveNode through R-1f, retires on its applied removal, and ' +
-  'the target completes the REPLACE', async (t) => {
+// leading and no rebalancer handoff. R-1f routes the RETIRE to the group's
+// leader (conf changes are leader-only; the target is a follower), which is
+// the source. A leader never removes itself (raft-rs would keep it leading
+// while it drops every proposal): its port refuses REMOVES_LEADER and hands
+// leadership to the target in the same turn, R-1f routes the next RETIRE to
+// the target, now the leader, which proposes the source's RemoveNode; the
+// source leaves on its applied removal and retires, and the leader's answer
+// completes the REPLACE.
+test('RF=1 x ordinary partition x source leads: the source refuses its own ' +
+  'RemoveNode and hands leadership to the target, which takes it through ' +
+  'R-1f; the source retires on its applied removal, and the REPLACE ' +
+  'completes', async (t) => {
   const world = await openReplaceWorld({replicaCount: 1,
     partitionId: ORDINARY_PARTITION_ID, sourceLeads: true,
     sourceHandler: true});
@@ -204,9 +208,15 @@ test('RF=1 x ordinary partition x source leads: the removed leader takes ' +
       'the removal intent is durable');
     const outcome = await runToQuiescence(world, {rounds: 30});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
-    t.same([...new Set(world.retirements.map((payload) =>
-      payload[ReplicaOperationField.REPLICA_ID]))], [world.sourceReplicaId],
-    'every RETIRE went to the leader - the source itself - never the follower target');
+    const routes = world.retirementRoutes;
+    t.ok(routes.every((route) => route.replicaId === route.leader),
+      'every RETIRE went to the leader of the moment, never a follower (' +
+      `${routes.map((route) => `${route.replicaId}=${route.leader}`)
+        .join(', ')})`);
+    t.equal(routes[0]?.replicaId, world.sourceReplicaId,
+      'the first RETIRE went to the source, which led');
+    t.ok(routes.some((route) => route.replicaId === world.targetReplicaId),
+      'the target, once leading, took the source\'s RemoveNode');
     t.same(world.group.committedConfiguration().voters,
       [world.group.peerIdOf(world.targetReplicaId)],
       'the committed configuration is the target alone');
