@@ -19,6 +19,10 @@ const PYTHON_LIMIT_WITNESS = path.join(
   ROOT, 'test/service/call-finite-json-portability-reference-test.py');
 const PYTHON = 'python3';
 const ENCODING = 'utf8';
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringIncludes = Function.call.bind(String.prototype.includes);
 const METRIC_FLAG = '--metric';
 const REGEX_MULTILINE_FLAG = 'm';
 const SUCCESS_MESSAGE = 'Q1b value-only reference and negative controls pass\n';
@@ -81,18 +85,18 @@ function referenceResults(vectors) {
 }
 
 function limitsMatch(actual) {
-  return Object.entries(EXPECTED_LIMITS).every(
+  return arrayEvery(Object.entries(EXPECTED_LIMITS),
     ([key, limit]) => actual?.[key] === limit);
 }
 
 function casesCoverDomain(vectors) {
   const ids = [
-    ...vectors.encode.map((item) => item.id),
-    ...vectors.rejectWire.map((item) => item.id),
+    ...arrayMap(vectors.encode, (item) => item.id),
+    ...arrayMap(vectors.rejectWire, (item) => item.id),
   ];
   return new Set(ids).size === ids.length &&
-    REQUIRED_IDS.every((id) => ids.includes(id)) &&
-    new Set(vectors.encode.map((item) => item.wire)).size >=
+    arrayEvery(REQUIRED_IDS, (id) => arrayIncludes(ids, id)) &&
+    new Set(arrayMap(vectors.encode, (item) => item.wire)).size >=
       EXPECTED_POSITIVE_COUNT;
 }
 
@@ -116,10 +120,10 @@ function compare(vectors) {
   if (!results || results.length !==
       vectors.encode.length + vectors.rejectWire.length) return 1;
   const expected = [
-    ...vectors.encode.map((item) => ({
+    ...arrayMap(vectors.encode, (item) => ({
       id: item.id, kind: 'encode', wire: item.wire,
     })),
-    ...vectors.rejectWire.map((item) => ({
+    ...arrayMap(vectors.rejectWire, (item) => ({
       id: item.id, kind: 'decode', error: item.code,
     })),
   ];
@@ -154,7 +158,7 @@ function inverseControls(vectors) {
       copy.defaultLimits.maxDepth = 1;
     },
     (copy) => {
-      copy.encode = copy.encode.map((item) => ({
+      copy.encode = arrayMap(copy.encode, (item) => ({
         ...item, inputJson: 'null', wire: 'null',
       }));
     },
@@ -173,10 +177,10 @@ function executedSourceWitness(tap) {
     pass: REQUIRED_SOURCE_TESTS.length,
     fail: 0, cancelled: 0, skipped: 0, todo: 0,
   };
-  return Object.entries(summary).every(([name, count]) =>
+  return arrayEvery(Object.entries(summary), ([name, count]) =>
     new RegExp(`^# ${name} ${count}$`, REGEX_MULTILINE_FLAG).test(tap)) &&
-    REQUIRED_SOURCE_TESTS.every((name, index) =>
-      tap.includes(`    ok ${index + 1} - ${name}\n`));
+    arrayEvery(REQUIRED_SOURCE_TESTS, (name, index) =>
+      stringIncludes(tap, `    ok ${index + 1} - ${name}\n`));
 }
 
 function sourceWitnessPasses() {
@@ -220,7 +224,7 @@ function measure() {
 }
 
 const metric = measure();
-if (process.argv.includes(METRIC_FLAG)) {
+if (arrayIncludes(process.argv, METRIC_FLAG)) {
   process.stdout.write(`${metric}\n`);
 } else if (metric === 0) {
   process.stdout.write(SUCCESS_MESSAGE);
