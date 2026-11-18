@@ -1,4 +1,7 @@
-import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {
+  isReplaceRemoveDispatchPhase,
+  readOperationRecordWorkflowStep,
+} from './replica-operation-progress.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
@@ -173,32 +176,19 @@ function isRetryableControlPlaneOperationTarget(operation) {
     partitionId: operation.partitionId,
   }).systemTable;
 }
-function isRemovalDispatchOperation(owner, operation) {
+function isRemovalDispatchOperation(operation) {
   return (
     operation.type === OperationType.REMOVE ||
-    owner.repository.isReplaceRemoveDispatchPhase(operation)
+    isReplaceRemoveDispatchPhase(operation)
   );
 }
-function isExplicitlyDeferredParticipantError(errorLike) {
-  if (!errorLike || typeof errorLike !== 'object') {
-    return false;
-  }
-  if (errorLike.deferRetry === true) {
-    return true;
-  }
-  const cause = errorLike.cause;
-  return Boolean(
-    cause && typeof cause === 'object' && cause.deferRetry === true,
-  );
-}
-function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
+function shouldDeferRetryableDispatchFailure(_owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
   return (
     isRetryableControlPlaneOperationTarget(operation) ||
-    isRemovalDispatchOperation(owner, operation) ||
-    isExplicitlyDeferredParticipantError(errorLike)
+    isRemovalDispatchOperation(operation)
   );
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
