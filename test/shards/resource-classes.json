@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2642,
+    "ordinary": 2644,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2668,
-  "digest": "fnv1a32-c9b12662",
+  "censusSize": 2670,
+  "digest": "fnv1a32-20092dea",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -747,6 +747,7 @@
     "test/convergence/dt-placement-affinity-real-kernel.test.js": "ordinary",
     "test/convergence/dt-placement-affinity-sim.test.js": "ordinary",
     "test/convergence/dt-placement-affinity-tier1b-kernel.test.js": "ordinary",
+    "test/convergence/dt-placement-owner-formation-drain.test.js": "ordinary",
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": "ordinary",
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": "ordinary",
     "test/convergence/dt5-pct-search.test.js": "ordinary",
@@ -1974,6 +1975,7 @@
     "test/rebalancer/partition-policy-remove-retry.test.js": "ordinary",
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "ordinary",
     "test/rebalancer/pending-move-tracking.property.test.js": "ordinary",
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "ordinary",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "ordinary",
     "test/rebalancer/planner-single-path-enforcement.test.js": "ordinary",
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "ordinary",

@@ -197,7 +197,10 @@ function simulatedHostIdOf(nodeId) {
 // evaluation instant by it (the removed handoff publication did), and a
 // clock that stands still inside an instant would refuse the second write.
 // It therefore keeps running; no decision of the claim reads a duration
-// from it against a world-clock stamp.
+// from it against a world-clock stamp. A scenario whose claim does (an owner
+// that reads the platform clock against a world-clock lease, as the
+// background placement path's transport readiness does) pins the platform
+// clock to the world clock instead: one clock, as in production.
 function armingSourceFrames() {
   return String(new Error().stack).split(STACK_LINE_SEPARATOR)
     .filter((line) => line.includes(SOURCE_FRAME_MARKER))
@@ -207,7 +210,7 @@ function armingSourceFrames() {
       .replace(/\)$/u, ''));
 }
 
-function createWorldClock() {
+function createWorldClock({platformClockIsWorldClock = false} = {}) {
   const clock = new VirtualTimeSource({startMs: WORLD_START_MS});
   const armed = new Map();
   const dueNow = new Set();
@@ -258,7 +261,11 @@ function createWorldClock() {
     setInterval: globalThis.setInterval,
     clearTimeout: globalThis.clearTimeout,
     clearInterval: globalThis.clearInterval,
+    dateNow: Date.now,
   };
+  if (platformClockIsWorldClock) {
+    Date.now = () => clock.now();
+  }
   const ownerHandles = new WeakSet();
   const armedByOwner = () =>
     String(new Error().stack).includes(SOURCE_FRAME_MARKER);
@@ -293,6 +300,7 @@ function createWorldClock() {
       globalThis.setInterval = platform.setInterval;
       globalThis.clearTimeout = platform.clearTimeout;
       globalThis.clearInterval = platform.clearInterval;
+      Date.now = platform.dateNow;
     },
     // The timers that are armed now: none of them has run unless a cadence
     // step ran it.
@@ -792,14 +800,32 @@ function expireStoppedNodeLease(nodeId, {cache, time, clock}) {
   });
 }
 
+// The placement deciders this world mounts on a starting seed: the planner of
+// every priority partition, each polled by the round driver. A scenario that
+// measures placement as production composes it hands in its own mount.
+function mountPriorityPartitionPlanners({seedHosts}) {
+  return new Map(PRIORITY_TABLE_IDS.map((tableId) =>
+    [INITIAL_PARTITION_IDS[tableId],
+      createPriorityPartitionRebalancer(seedHosts, tableId)]));
+}
+
 /**
  * Build the world: the seed formed alone (its rows as the registration
  * producers write them), no joiner yet.
+ * @param {object} [options]
+ * @param {Function} [options.mountPlacementDeciders] builds the placement
+ *   deciders of a starting seed ({seedHosts, clock, cache}) as a Map keyed
+ *   by entity id
+ * @param {boolean} [options.platformClockIsWorldClock] pin Date.now to the
+ *   world clock for the world's lifetime
  * @return {object} the world
  */
-function createFormationWorld() {
+function createFormationWorld({
+  mountPlacementDeciders = mountPriorityPartitionPlanners,
+  platformClockIsWorldClock = false,
+} = {}) {
   initializeTestEnvironment();
-  const time = createWorldClock();
+  const time = createWorldClock({platformClockIsWorldClock});
   const {clock} = time;
   const cache = new SystemTableCache({
     timeSource: clock,
@@ -928,9 +954,7 @@ function createFormationWorld() {
 
   seedSystemRows(cache, time.now());
   const seed = startNode(SEED_NODE_ID, SEED_FENCE);
-  const seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
-    [INITIAL_PARTITION_IDS[tableId],
-      createPriorityPartitionRebalancer(seed, tableId)]));
+  const seedRebalancers = mountPlacementDeciders({seedHosts: seed, clock, cache});
 
   const world = {
     cache,
@@ -1071,9 +1095,8 @@ function createFormationWorld() {
         storageIncarnation,
       );
       world.seed = nextSeed;
-      world.seedRebalancers = new Map(PRIORITY_TABLE_IDS.map((tableId) =>
-        [INITIAL_PARTITION_IDS[tableId],
-          createPriorityPartitionRebalancer(nextSeed, tableId)]));
+      world.seedRebalancers =
+        mountPlacementDeciders({seedHosts: nextSeed, clock, cache});
       return nextSeed;
     },
     /**

@@ -227,9 +227,13 @@ function mountJoinReadySignal(world, nodeId) {
 /**
  * The world's driver: owner evaluations only.
  * @param {object} world the formation world
+ * @param {object} [options]
+ * @param {boolean} [options.plannerPolling=true] whether a round asks every
+ *   mounted placement decider for a planning check; without it a decider
+ *   plans only when its own production triggers fire
  * @return {object} the driver
  */
-function createRoundDriver(world) {
+function createRoundDriver(world, {plannerPolling = true} = {}) {
   NodeService.getInstance().setSystemCacheProxy(world.cache);
   NodeService.getInstance().getNodeStats = async () => HEARTBEAT_STATS;
   const joiners = new Map();
@@ -360,7 +364,7 @@ function createRoundDriver(world) {
         rebalancer.setLeader(true);
       }
       await driver.membershipDerivation();
-      await driver.planPriorityPartitions();
+      if (plannerPolling) await driver.planPriorityPartitions();
       await driver.readSeedAuthority();
     },
     async joinerArrives(nodeId) {
@@ -549,7 +553,7 @@ function createRoundDriver(world) {
       roundCounter.number += 1;
       await driver.membershipDerivation();
       await driver.readSeedAuthority();
-      await driver.planPriorityPartitions();
+      if (plannerPolling) await driver.planPriorityPartitions();
       await driver.evaluateCoordinators();
       await driver.stepReplicaRuntime();
       await driver.stepRetryCadences();

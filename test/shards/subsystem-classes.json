@@ -8,11 +8,11 @@
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
-    "convergence-topology": 85,
+    "convergence-topology": 86,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 281,
+    "placement-rebalance": 282,
     "query-sql": 195,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2668,
-  "digest": "fnv1a32-a237ffbe",
+  "censusSize": 2670,
+  "digest": "fnv1a32-bc340e38",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6fdfa81b",
+  "observationDigest": "fnv1a32-f336627c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -767,6 +767,7 @@
     "test/convergence/dt-placement-affinity-real-kernel.test.js": "convergence-topology",
     "test/convergence/dt-placement-affinity-sim.test.js": "convergence-topology",
     "test/convergence/dt-placement-affinity-tier1b-kernel.test.js": "convergence-topology",
+    "test/convergence/dt-placement-owner-formation-drain.test.js": "convergence-topology",
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": "convergence-topology",
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": "convergence-topology",
     "test/convergence/dt5-pct-search.test.js": "convergence-topology",
@@ -1994,6 +1995,7 @@
     "test/rebalancer/partition-policy-remove-retry.test.js": "placement-rebalance",
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "placement-rebalance",
@@ -5807,6 +5809,37 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/convergence/dt-placement-owner-formation-drain.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/replica-dispatch-retry-scheduling.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-service-rebalancer-methods.js",
+        "src/rebalancer/background-priority-spread-release-tracker.js",
+        "src/rebalancer/continuation-wake-coordinator.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-observed-progress-retention.js",
+        "src/rebalancer/rebalancer-local-mutation-readiness-wake.js",
+        "src/rebalancer/rebalancer-planning-gate-methods.js",
+        "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+        "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/convergence/formation-joint-admission-world.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": {
@@ -17592,6 +17625,22 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
       ]
     },
     "test/rebalancer/planner-single-path-enforcement.test.js": {
