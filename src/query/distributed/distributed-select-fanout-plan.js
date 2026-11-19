@@ -741,6 +741,11 @@ function buildSelectFanoutPlan(ast, params, partitionCount, options = {}) {
     specs,
   );
   combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
+  if (combineSpec.having && !expressionEvaluable(combineSpec.having)) {
+    const error = new Error('unsupported expression in HAVING');
+    error.code = 'UNSUPPORTED_SQL_FEATURE';
+    throw error;
+  }
   for (const expressionColumn of combineSpec.expressionColumns) {
     expressionColumn.expression = substituteParameterLiterals(
       expressionColumn.expression,
