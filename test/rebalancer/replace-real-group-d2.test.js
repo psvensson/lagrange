@@ -418,8 +418,16 @@ async (t) => {
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
     t.ok(world.retirements.length > issued,
       'the backstop re-drove the lost proposal');
-    t.equal(world.retirements.at(-1).replicaId, newLeader,
-      'the re-drive went to the corroborated new leader');
+    t.equal(world.retirements[issued].replicaId, newLeader,
+      'the first re-drive went to the corroborated post-isolation leader');
+    if (newLeader === world.sourceReplicaId) {
+      t.ok(world.retirements.length > issued + 1,
+        'when the source led, REMOVES_LEADER deferred and handed leadership off');
+      t.not(world.retirements.at(-1).replicaId, world.sourceReplicaId,
+        'the subsequent re-drive targeted a non-source leader after handoff');
+    }
+    t.equal(world.retirements.at(-1).replicaId, world.group.leader(),
+      'the committing re-drive went to the current corroborated leader');
     t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
       'at the write the source is absent');
   } finally {

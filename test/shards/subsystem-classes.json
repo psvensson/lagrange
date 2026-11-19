@@ -28,7 +28,7 @@
   "censusSize": 2688,
   "digest": "fnv1a32-1b69e889",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1c174824",
+  "observationDigest": "fnv1a32-4bed0d13",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -15798,6 +15798,7 @@
         "src/node/replica-handler-runtime-metadata-methods.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-placement-admission-decision.js",
         "src/partition/partition-reopen-options.js",
         "src/partition/partition-replica-admission.js",
         "src/partition/partition-service-core-base.js",

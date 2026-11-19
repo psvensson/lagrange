@@ -153,6 +153,10 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // R3: a message-group replica without a durable record founds its
     // group from the replica set it was created with.
     'src/message-group/message-group-consensus-port.js',
+    // WP-E: a committed PLACEMENT_ADMIT (FOUND) on the ledger partition
+    // stamps the founding GENESIS set from the operations admitted by that
+    // command and carries it into those operations' creation steps.
+    'src/partition/partition-placement-admission-decision.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
     // R4 (raft-rs-only cutover): a WASM service replica runs on its own raft-rs
     // port and, like a message group, founds a group without a durable
@@ -189,6 +193,9 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     // learner-join capability to the replica, which carries it to its port.
     'src/message-group/message-group-learner-join.js',
     'src/message-group/message-group-service-state.js',
+    // WP-E: the committed FOUND applier produces and carries the founding
+    // GENESIS stamp on the admitted operations' creation steps.
+    'src/partition/partition-placement-admission-decision.js',
     // R4: the WASM service replica's genesis founding set (see above).
     'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',

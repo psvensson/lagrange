@@ -1,7 +1,13 @@
 import {EXPR_TYPE, SQL_DEFAULT_COLLATION} from '../parser-constants.js';
+import {PG_EXPR_TYPE} from '../pg/pg-compat-constants.js';
 import {QUERY_AST_NODE, QUERY_AST_TYPE, QUERY_ERROR_CODE} from '../query-constants.js';
+import {renderExpression} from '../sql-statement-renderer.js';
+import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 
 const TYPEOF_STRING = 'string';
+const TYPEOF_OBJECT = 'object';
+const UNCONDITIONAL_WHERE_SQL = '1 = 1';
+const UPDATE_UNIQUENESS_ORDER_LIMIT_SQL = 'ORDER BY target_match DESC LIMIT 2';
 
 const UNARY_MINUS = '-';
 const UNARY_PLUS = '+';
@@ -277,6 +283,104 @@ async function checkInsertColumnSetUniqueness(
   }
 }
 
+function caseExpressionChildren(expr) {
+  const children = [expr.operand];
+  for (const cond of expr.conditions || []) {
+    children.push(cond.when, cond.thenExpression);
+  }
+  children.push(expr.elseExpr);
+  return children;
+}
+
+const EXPRESSION_CHILD_EXTRACTORS = Object.freeze({
+  [QUERY_AST_NODE.BINARY]: (e) => [e.left, e.right],
+  binary_expr: (e) => [e.left, e.right],
+  [QUERY_AST_NODE.UNARY]: (e) => [e.operand || e.expr],
+  unary_expr: (e) => [e.operand || e.expr],
+  [EXPR_TYPE.IN]: (e) => [e.expression, ...(e.values || [])],
+  [EXPR_TYPE.BETWEEN]: (e) => [e.expression, e.low, e.high],
+  [EXPR_TYPE.LIKE]: (e) => [e.expression, e.pattern, e.escape],
+  [EXPR_TYPE.COLLATE]: (e) => [e.expression],
+  [PG_EXPR_TYPE.CAST]: (e) => [e.expression],
+  [EXPR_TYPE.AGGREGATE]: (e) => [e.argument],
+  [PG_EXPR_TYPE.CASE]: caseExpressionChildren,
+  function: (e) => e.args || [],
+  function_call: (e) => e.args || [],
+  FUNCTION_CALL: (e) => e.args || [],
+});
+
+function collectExpressionParameters(expr, params, out = []) {
+  if (!expr || typeof expr !== TYPEOF_OBJECT) {
+    return out;
+  }
+  if (expr.type === QUERY_AST_NODE.PARAMETER) {
+    out.push(extractParameterValue(expr, params));
+    return out;
+  }
+  const extractor = EXPRESSION_CHILD_EXTRACTORS[expr.type];
+  for (const child of (extractor ? extractor(expr) : [])) {
+    collectExpressionParameters(child, params, out);
+  }
+  return out;
+}
+
+function tallyUpdateUniquenessProbeRows(results) {
+  let matchedTargetCount = 0;
+  let externalOwnerCount = 0;
+  for (const res of results) {
+    for (const row of (res?.success && Array.isArray(res.rows) ? res.rows : [])) {
+      if (Number(row?.target_match) === 1) {
+        matchedTargetCount += 1;
+      } else if (Number(row?.value_match) === 1) {
+        externalOwnerCount += 1;
+      }
+    }
+  }
+  return {matchedTargetCount, externalOwnerCount};
+}
+
+async function assertUpdateUniqueAcrossPartitions(
+  coordinator,
+  ast,
+  params,
+  partitionIds,
+  colNames,
+  candidateValues,
+) {
+  const executor = coordinator.queryExecutor;
+  if (!executor) {
+    return;
+  }
+  const valueClause = colNames
+    .map((c) => `${renderSqliteIdentifier(c)} = ?`)
+    .join(WHERE_AND_SEPARATOR);
+  const targetClause = ast.where ? renderExpression(ast.where) : UNCONDITIONAL_WHERE_SQL;
+  const targetParams = ast.where ? collectExpressionParameters(ast.where, params) : [];
+  const checkSql =
+    `SELECT CASE WHEN (${targetClause}) THEN 1 ELSE 0 END AS target_match, ` +
+    `CASE WHEN (${valueClause}) THEN 1 ELSE 0 END AS value_match ` +
+    `FROM ${renderSqliteIdentifier(ast.table)} ` +
+    `WHERE (${targetClause}) OR (${valueClause}) ` +
+    UPDATE_UNIQUENESS_ORDER_LIMIT_SQL;
+  const checkParams = [
+    ...targetParams,
+    ...candidateValues,
+    ...targetParams,
+    ...candidateValues,
+  ];
+  const results = await executor.executeOnPartitions(
+    partitionIds,
+    checkSql,
+    checkParams,
+  );
+  const {matchedTargetCount, externalOwnerCount} =
+    tallyUpdateUniquenessProbeRows(results);
+  if (matchedTargetCount > 1 ||
+      (matchedTargetCount === 1 && externalOwnerCount > 0)) {
+    throwUniqueConstraintViolation(ast.table, colNames);
+  }
+}
+
 async function checkUpdateColumnSetUniqueness(
   coordinator,
   ast,
@@ -284,21 +388,24 @@ async function checkUpdateColumnSetUniqueness(
   partitionIds,
   colNames,
 ) {
-  if (colNames.length !== 1) return;
-  const colName = colNames[0];
   const assignments = ast.assignments || ast.set || [];
-  const assign = assignments.find(
-    (a) => String(a.column).toLowerCase() === String(colName).toLowerCase(),
+  const assigned = colNames.map((colName) =>
+    assignments.find(
+      (a) => String(a.column).toLowerCase() === String(colName).toLowerCase(),
+    ),
   );
-  if (!assign) return;
-  const candidateVal = coordinator.extractKeyValue(assign.value, params);
-  if (candidateVal === null || candidateVal === undefined) return;
-  await assertUniqueAcrossPartitions(
+  if (!assigned.every(Boolean)) return;
+  const candidateValues = assigned.map((a) =>
+    coordinator.extractKeyValue(a.value, params),
+  );
+  if (candidateValues.some((v) => v === null || v === undefined)) return;
+  await assertUpdateUniqueAcrossPartitions(
     coordinator,
-    ast.table,
+    ast,
+    params,
     partitionIds,
-    [colName],
-    [candidateVal],
+    colNames,
+    candidateValues,
   );
 }
 

@@ -286,6 +286,13 @@ function hasPendingBlindBirthIssue(issueRecord, bootIncarnation) {
     verified.indeterminateAtIncarnation === incarnation;
 }
 
+function hasPendingAuthoritativeIssue(issueRecord, bootIncarnation) {
+  const incarnation = requirePositiveBootIncarnation(bootIncarnation);
+  const verified = readVerifiedIssueRecord(issueRecord);
+  return verified.indeterminateMode === ISSUE_INDETERMINATE_MODE.AUTHORITATIVE &&
+    verified.indeterminateAtIncarnation === incarnation;
+}
+
 function matchesIndeterminateAttemptRow(attemptedRow, rereadRow,
   bootIncarnation) {
   return Boolean(attemptedRow) &&
@@ -576,6 +583,9 @@ async function writeNodeRegistrationAtIncarnation(options) {
     if (priorSettled !== null) {
       return settleRegistration(row, priorSettled);
     }
+  } else if (hasPendingAuthoritativeIssue(options.issueRecord, bootIncarnation)) {
+    return settleRegistration(row, await resolveUnappliedRegistration(
+      options, row, bootIncarnation, {applied: false, result: null, error: null}));
   }
   const observedRow = authoritative ? observed.row : null;
   const first = planRegistration(options, row, observedRow, bootIncarnation);

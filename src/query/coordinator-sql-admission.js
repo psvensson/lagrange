@@ -619,17 +619,21 @@ function evaluateCrossPartitionJoinAdmission(ast, partitionIds, resolveTableSche
   const hasSqliteSyntax = holdsSqliteSemantics(ast, scope, true) ||
     compoundOrNestedHoldsSqlite(ast, resolveTableSchema);
   const hasParamLimit = holdsParameterLimit(ast);
-  if (!hasSqliteSyntax && !hasParamLimit) {
+  const hasUnsupportedHaving = Boolean(ast?.having) &&
+    !havingExpressionEvaluable(ast.having);
+  if (!hasSqliteSyntax && !hasParamLimit && !hasUnsupportedHaving) {
     return {decision: COORDINATOR_ADMISSION_DECISION.ADMITTED};
   }
+  const error = hasSqliteSyntax ?
+    REFUSAL_MESSAGE.JOIN_SYNTAX :
+    (hasParamLimit ? REFUSAL_MESSAGE.JOIN_LIMIT_PARAMETER :
+      REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
   return {
     decision: COORDINATOR_ADMISSION_DECISION.REFUSED,
     response: {
       success: false,
       errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
-      error: hasSqliteSyntax ?
-        REFUSAL_MESSAGE.JOIN_SYNTAX :
-        REFUSAL_MESSAGE.JOIN_LIMIT_PARAMETER,
+      error,
       partitions: partitionIds,
     },
   };
@@ -708,6 +712,25 @@ function assertLiveQueryPredicateAdmissible(whereClause, schemas = null) {
   }
 }
 
+function liveQueryClausesHoldSqlite(parsedQuery, scope) {
+  return holdsSqliteSemantics(parsedQuery.where, scope) ||
+    holdsSqliteSemantics(parsedQuery.joins, scope) ||
+    holdsClauseSqliteSemantics(parsedQuery.having, parsedQuery.columns, scope) ||
+    (parsedQuery.groupBy || []).some((term) =>
+      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
+    ) ||
+    (parsedQuery.orderBy || []).some((term) =>
+      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
+    );
+}
+
+function liveQueryColumnsHoldSqlite(parsedQuery, scope) {
+  return (Boolean(parsedQuery.distinct) &&
+      holdsSqliteSemantics(parsedQuery.columns, scope, true)) ||
+    holdsAggregateSqliteSemantics(parsedQuery.columns, scope) ||
+    holdsExplicitSqliteSyntax(parsedQuery.columns);
+}
+
 /**
  * Refuse a live-query AST whose JS predicate/delta/group/order/join evaluation
  * references a non-`BINARY` column or holds `COLLATE` / `LIKE ... ESCAPE`.
@@ -719,22 +742,12 @@ function assertLiveQueryGroupAdmissible(parsedQuery, resolveTableSchema = null) 
   if (holdsParameterLimit(parsedQuery)) {
     throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_LIMIT_PARAMETER);
   }
+  if (parsedQuery.having && !havingExpressionEvaluable(parsedQuery.having)) {
+    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
+  }
   const scope = buildCollationScopeForSelect(parsedQuery, resolveTableSchema);
-  const hasNonBinaryClause =
-    holdsSqliteSemantics(parsedQuery.where, scope) ||
-    holdsSqliteSemantics(parsedQuery.joins, scope) ||
-    holdsClauseSqliteSemantics(parsedQuery.having, parsedQuery.columns, scope) ||
-    (parsedQuery.groupBy || []).some((term) =>
-      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
-    ) ||
-    (parsedQuery.orderBy || []).some((term) =>
-      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
-    );
-  const hasDistinctOrAggregate = (Boolean(parsedQuery.distinct) &&
-      holdsSqliteSemantics(parsedQuery.columns, scope, true)) ||
-    holdsAggregateSqliteSemantics(parsedQuery.columns, scope) ||
-    holdsExplicitSqliteSyntax(parsedQuery.columns);
-  if (hasNonBinaryClause || hasDistinctOrAggregate ||
+  if (liveQueryClausesHoldSqlite(parsedQuery, scope) ||
+      liveQueryColumnsHoldSqlite(parsedQuery, scope) ||
       compoundOrNestedHoldsSqlite(parsedQuery, resolveTableSchema)) {
     throw unsupportedFeatureError(REFUSAL_MESSAGE.LIVE_QUERY_PREDICATE);
   }

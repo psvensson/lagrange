@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   compareRoutingKeys,
@@ -346,6 +347,103 @@ test('Q02: Cross-partition UNIQUE constraint enforcement rejects duplicate candi
   await assert.doesNotReject(
     async () => coordinator.enforceCrossPartitionUniqueConstraints(insertValid, []),
   );
+});
+
+test('Q02: UPDATE uniqueness distinguishes self-update, zero-row stale CAS, competing owner, and multi-row target conflict', async () => {
+  const schema = {
+    columns: [
+      {name: 'node_id', type: 'TEXT', primaryKey: true},
+      {name: 'node_address', type: 'TEXT', notNull: true, unique: true},
+      {name: 'status', type: 'TEXT'},
+    ],
+    primaryKey: ['node_id'],
+    tableConstraints: [],
+  };
+  const ddl = renderTableDefinitionSql('nodes', schema);
+  const db1 = new Database(':memory:');
+  const db2 = new Database(':memory:');
+  try {
+    db1.exec(ddl);
+    db2.exec(ddl);
+    db1.prepare('INSERT INTO nodes (node_id, node_address, status) VALUES (?, ?, ?)')
+      .run('node-1', 'ws://localhost:50553', 'active');
+    db2.prepare('INSERT INTO nodes (node_id, node_address, status) VALUES (?, ?, ?)')
+      .run('node-2', 'ws://localhost:50552', 'active');
+    const dbs = new Map([['nodes-p1', db1], ['nodes-p2', db2]]);
+
+    let probeCallCount = 0;
+    const coordinator = new DistributedWriteCoordinator({
+      getTableInfo: () => ({
+        table_name: 'nodes',
+        schema_definition: JSON.stringify(schema),
+      }),
+      getTablePartitions: () => [
+        {partition_id: 'nodes-p1', table_name: 'nodes'},
+        {partition_id: 'nodes-p2', table_name: 'nodes'},
+      ],
+    });
+    coordinator.queryExecutor = {
+      async executeOnPartitions(partitionIds, sql, params) {
+        probeCallCount += 1;
+        return partitionIds.map((pid) => ({
+          success: true,
+          rows: dbs.get(pid).prepare(sql).all(...params),
+        }));
+      },
+    };
+
+    const parseSql = (sql) => new SQLParser(sql, {dialect: 'sqlite'}).parse();
+
+    // 1. Self-update: the single matched target row already owns the address.
+    await assert.doesNotReject(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE node_id = ?'),
+        ['ws://localhost:50553', 'node-1'],
+      ),
+    );
+
+    // 2. Stale CAS / predicate matches zero rows: even if an existing row owns the address,
+    // zero rows are updated so the precheck must not mask the zero-row CAS outcome.
+    await assert.doesNotReject(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ?, status = ? WHERE node_id = ? AND status = ?'),
+        ['ws://localhost:50553', 'active', 'node-1', 'joining'],
+      ),
+    );
+
+    // 3. Competing owner: 1 target row matches WHERE and another row on nodes-p2 owns the address.
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE node_id = ?'),
+        ['ws://localhost:50552', 'node-1'],
+      ),
+      (err) => err.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+        err.message.includes('UNIQUE constraint failed: nodes.node_address'),
+    );
+
+    // 4. Multiple updated rows across partitions receive the same unique value.
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE status = ?'),
+        ['ws://localhost:50559', 'active'],
+      ),
+      (err) => err.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+        err.message.includes('UNIQUE constraint failed: nodes.node_address'),
+    );
+
+    // 5. Unrelated column update does not probe uniqueness.
+    const callsBeforeUnrelated = probeCallCount;
+    await assert.doesNotReject(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET status = ? WHERE node_id = ?'),
+        ['active', 'node-1'],
+      ),
+    );
+    assert.equal(probeCallCount, callsBeforeUnrelated);
+  } finally {
+    db1.close();
+    db2.close();
+  }
 });
 
 function insertAstExpressionType(ast, rowIdx, colIdx) {

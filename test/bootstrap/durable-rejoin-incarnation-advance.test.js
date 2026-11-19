@@ -947,6 +947,77 @@ test('R2-1 (4A) + R2-2a: cross-call authoritative OLDER advance after lost ' +
     'mismatched node_address on Call 2 clears indeterminate state and refuses');
   t.equal(mismatchedIssue.issuedAtIncarnation, null);
   t.equal(mismatchedIssue.indeterminateMode, null);
+
+  // Continuing read outage across Call 2: an unresolved authoritative advance
+  // must not fall into a blind birth INSERT that clears or overwrites the
+  // pending AUTHORITATIVE issue record before reads recover on Call 3.
+  const outageIssue = createNodeRegistrationIssueRecord();
+  let outageReads = 0;
+  let outageInserts = 0;
+  let outageAdvances = 0;
+  const outageCall1 = await writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord: outageIssue,
+    nowMs: NOW,
+    observe: async () => {
+      outageReads += 1;
+      return outageReads === 1 ?
+        {available: true, row: previousBootRow()} :
+        {available: false, row: null};
+    },
+    insert: async () => {
+      outageInserts += 1;
+      throw Object.assign(new Error('UNIQUE constraint failed: nodes.node_id'),
+        {code: 'SQLITE_CONSTRAINT_UNIQUE'});
+    },
+    advance: async () => {
+      outageAdvances += 1;
+      throw new Error('acknowledgement lost after durable CAS commit');
+    },
+  });
+  t.equal(outageCall1.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED);
+  t.equal(outageIssue.indeterminateMode, ISSUE_INDETERMINATE_MODE.AUTHORITATIVE);
+
+  const outageCall2 = await writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord: outageIssue,
+    nowMs: NOW,
+    observe: async () => ({available: false, row: null}),
+    insert: async () => {
+      outageInserts += 1;
+      throw Object.assign(new Error('UNIQUE constraint failed: nodes.node_id'),
+        {code: 'SQLITE_CONSTRAINT_UNIQUE'});
+    },
+    advance: async () => {
+      outageAdvances += 1;
+      return {success: true, partitionResult: {affectedRows: 0}};
+    },
+  });
+  t.equal(outageCall2.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED,
+    'continuing read outage remains UNRESOLVED without attempting blind birth');
+  t.equal(outageInserts, 0, 'no blind birth INSERT attempted while authoritative issue is pending');
+  t.equal(outageIssue.indeterminateMode, ISSUE_INDETERMINATE_MODE.AUTHORITATIVE,
+    'pending AUTHORITATIVE issue record survives continuing read outage');
+
+  const outageCall3 = await writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord: outageIssue,
+    nowMs: NOW,
+    observe: async () => ({
+      available: true,
+      row: {...attemptedRow, [COLUMN.BOOT_INCARNATION]: THIS_BOOT},
+    }),
+    insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+    advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+  });
+  t.equal(outageCall3.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED,
+    'when reads recover on Call 3, the preserved authoritative attempt settles as ACCEPTED');
+  t.equal(outageIssue.issuedAtIncarnation, THIS_BOOT);
+  t.equal(outageIssue.indeterminateMode, null);
+  t.equal(outageAdvances, 1, 'no second advance CAS was needed');
 });
 
 test('R2-1 (4B): intact DURABLE_REJOIN lost-ACK + unavailable readback ' +

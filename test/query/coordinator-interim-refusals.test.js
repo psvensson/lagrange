@@ -111,11 +111,12 @@ describe('I1b (removed by WP3): a cross-partition join is evaluated by the coord
   const join = (sql) => QueryExecutor.prototype.executeCrossPartitionJoin.call({},
     parse(sql), ['p1'], [], {joinPartitions: new Map()}, null);
 
-  test('COLLATE in ON, COLLATE or ESCAPE elsewhere, and a parameter LIMIT are refused', async () => {
+  test('COLLATE in ON, COLLATE or ESCAPE elsewhere, parameter LIMIT, and unsupported HAVING are refused', async () => {
     for (const sql of ['SELECT t.id FROM t JOIN u ON t.x = u.tk COLLATE NOCASE',
       'SELECT t.id FROM t JOIN u ON t.id = u.k WHERE t.x LIKE \'a!%\' ESCAPE \'!\'',
       'SELECT t.id FROM t JOIN u ON t.id = u.k ORDER BY t.x COLLATE NOCASE',
-      'SELECT t.id FROM t JOIN u ON t.id = u.k LIMIT ?']) {
+      'SELECT t.id FROM t JOIN u ON t.id = u.k LIMIT ?',
+      'SELECT SUM(t.a) AS s FROM t JOIN u ON t.id = u.id HAVING concat(SUM(t.a), \'\') = \'3\'']) {
       const result = await join(sql);
       assert.equal(result.success, false, sql);
       assert.equal(result.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, sql);
@@ -489,5 +490,22 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
         ),
         UNSUPPORTED,
       );
+
+      // JOIN queries also refuse unsupported coordinator-evaluated HAVING expressions.
+      const joinHavingRes = await executor.executeSelect(
+        parse(
+          'SELECT SUM(accounts.id) AS s FROM accounts JOIN accounts AS a2 ' +
+          'ON accounts.id = a2.id HAVING concat(SUM(accounts.id), \'\') = \'3\'',
+        ),
+        ['accounts-p1', 'accounts-p2'],
+        [],
+        {
+          distributedPlan: {
+            tablePlans: {a2: {partitions: ['accounts-p1', 'accounts-p2']}},
+          },
+        },
+      );
+      assert.equal(joinHavingRes.success, false);
+      assert.equal(joinHavingRes.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
     });
 });
