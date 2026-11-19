@@ -1,11 +1,13 @@
 // Actual admin -> NodesOwner -> gateway -> CDC DELETE over SQLite. Only the
 // routed SQL engine/owner-RPC transport is substituted. Cache mutations model
 // committed CDC observations; this does not prove cross-host propagation.
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminOwnerOperations} from '../../src/admin/admin-owner-operations.js';
 import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
-import {NODE_REGISTRATION_OUTCOME, writeNodeRegistrationAtIncarnation} from
+import {NODE_REGISTRATION_OUTCOME, createNodeRegistrationIssueRecord,
+  writeNodeRegistrationAtIncarnation} from
   '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {buildNodeRegistrationRow} from
   '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
@@ -44,7 +46,7 @@ function createFixture(t, beforeDelete = () => {}, afterDelete = () => {}) {
   }
   function registrationRow(bootIncarnation) {
     return buildNodeRegistrationRow({nodeId: NODE_ID, bootIncarnation,
-      nodeAddress: '127.0.0.1:9999', now: bootIncarnation});
+      hostId: LOCAL_MACHINE_HOST_ID, nodeAddress: '127.0.0.1:9999', now: bootIncarnation});
   }
   const original = {...registrationRow(1), status: NODE_STATE.STOPPED};
   db.prepare(`INSERT INTO nodes (${Object.keys(original).join(', ')}) VALUES (` +
@@ -77,7 +79,9 @@ function createFixture(t, beforeDelete = () => {}, afterDelete = () => {}) {
     cdcIntegrationService: service, systemTableCache: cache});
   const owner = new NodesOwner({controlPlaneSystemTableGateway: gateway});
   async function register(bootIncarnation, status) {
+    // Each call is a new boot lifecycle's registration: its own issue record.
     const result = await writeNodeRegistrationAtIncarnation({bootIncarnation,
+      issueRecord: createNodeRegistrationIssueRecord(),
       row: registrationRow(bootIncarnation),
       observe: async () => ({available: true, row: observe()}),
       insert: (row, options) => owner.insertNode(row, options),

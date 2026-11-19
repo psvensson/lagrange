@@ -1,4 +1,5 @@
 // Each invocation is a genuinely new process and uses public runtime acquisition.
+import {hostname} from 'node:os';
 import {startLagrangeRuntime} from '../../src/lagrange-runtime-startup.js';
 import {createRetainedSeedPublicObserver} from './retained-seed-public-observer.js';
 
@@ -19,7 +20,7 @@ try {
       logging: {level: 'error'},
       storage: {dataDir: directory},
     },
-    environment: {NODE_ID: nodeId,
+    environment: {NODE_ID: nodeId, NODE_HOST_ID: hostname(),
       REST_API_PORT: String(ports.restApiPort),
       ADMIN_WS_PORT: String(ports.adminWebSocketPort),
       TRANSPORT_WS_PORT: String(ports.transportWebSocketPort)},

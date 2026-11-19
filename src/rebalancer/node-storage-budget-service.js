@@ -218,6 +218,9 @@ class NodeStorageBudgetService {
    * Resolve and persist the node storage budget in the nodes table.
    * @param {Object} options
    * @param {Object} options.nodeRow
+   * @param {Object} options.issueRecord - The registering boot lifecycle's
+   *   registration issue record (required).
+   * @param {number} options.nowMs - The registering node's clock.
    * @return {Promise<Object>}
    */
   async registerNodeBudget(options = {}) {
@@ -256,6 +259,7 @@ class NodeStorageBudgetService {
     const registration = await writeNodeRegistrationAtIncarnation({
       row: budgetRow,
       bootIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
+      issueRecord: options.issueRecord,
       observe: () => readAuthoritativeNodeRow(gateway, nodeId),
       insert: (row, identity) => gateway.insertSystemTableRow(TABLES.NODES,
         row, {...writeOptions, ...identity}),
@@ -263,8 +267,13 @@ class NodeStorageBudgetService {
         TABLES.NODES, whereClause, row, {...writeOptions, ...identity}),
     });
     if (registration.outcome === NODE_REGISTRATION_OUTCOME.REFUSED_STALE) {
-      throw buildSupersededRegistrationError(nodeId,
-        budgetRow[COLUMN.BOOT_INCARNATION], registration.observedRow);
+      throw buildSupersededRegistrationError({
+        nodeId,
+        receivedIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
+        observedRow: registration.observedRow,
+        declaredHostId: budgetRow[COLUMN.HOST_ID],
+        nowMs: options.nowMs,
+      });
     }
     if (registration.outcome !== NODE_REGISTRATION_OUTCOME.ACCEPTED &&
         registration.outcome !== NODE_REGISTRATION_OUTCOME.CURRENT) {

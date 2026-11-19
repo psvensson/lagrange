@@ -51,6 +51,8 @@ import {
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
+import {createNodeRegistrationIssueRecord} from
+  '../control-plane/owners/node-registration-incarnation-write.js';
 import {
   createRuntimeStartupWiring,
   createWasmServiceNodeDependencies,
@@ -197,6 +199,9 @@ class BootstrapService extends EventEmitter {
         undefined;
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
+    // The declared host identity (topology/node-host-identity.js); the seed's
+    // NODES registration refuses without it.
+    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.wsPort = options.wsPort || null;
     this.config = {...BOOTSTRAP_DEFAULT, ...options.config};
@@ -234,6 +239,10 @@ class BootstrapService extends EventEmitter {
     // threaded into the IDENTIFY frame and node-state publications so
     // receivers fence stale-incarnation (zombie) writers.
     this.bootIncarnation = bootIncarnation;
+    // This boot lifecycle's record of the NODES registration write it issued
+    // (node-registration-incarnation-write.js): a row at this incarnation
+    // that this lifecycle never wrote supersedes it.
+    this.registrationIssueRecord = createNodeRegistrationIssueRecord();
     this.dataDirectoryManager = options.dataDirectoryManager || null;
     this.dataDirectoryProcessOwner = options.dataDirectoryProcessOwner || null;
     this.startupAbortSignal = options.startupAbortSignal || null;

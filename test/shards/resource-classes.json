@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2639,
+    "ordinary": 2642,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2665,
-  "digest": "fnv1a32-5133c45e",
+  "censusSize": 2668,
+  "digest": "fnv1a32-c9b12662",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -204,6 +204,7 @@
     "test/bootstrap/move-replica-assignment-token.test.js": "ordinary",
     "test/bootstrap/no-eslint-disable.test.js": "ordinary",
     "test/bootstrap/node-bootstrap-consistency.property.test.js": "ordinary",
+    "test/bootstrap/node-host-identity-registration.integration.test.js": "ordinary",
     "test/bootstrap/node-incarnation.test.js": "ordinary",
     "test/bootstrap/node-joining-cdc-catchup-wiring.test.js": "ordinary",
     "test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js": "ordinary",
@@ -2514,6 +2515,8 @@
     "test/topology/latency-measurement-service.test.js": "ordinary",
     "test/topology/latency-topology-constants.test.js": "ordinary",
     "test/topology/latency-tree-service.test.js": "ordinary",
+    "test/topology/node-host-identity-start-site-census.test.js": "ordinary",
+    "test/topology/node-host-identity.test.js": "ordinary",
     "test/topology/topology-anti-entropy-reconciler.test.js": "ordinary",
     "test/transaction/cross-partition-rejection.property.test.js": "ordinary",
     "test/transaction/queryable-core-j4-locking-read-journey.test.js": "ordinary",

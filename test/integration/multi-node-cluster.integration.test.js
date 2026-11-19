@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {createMockControlPlaneReadinessService} from '../rebalancer/test-helpers.js';
 /**
  * Multi-node cluster integration tests.
@@ -105,6 +106,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
     const httpPost = createInProcHttpPost(seedApi);
 
     const joiningService = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: existingNodeId,
       nodeAddress: `ws://localhost:${getUniquePort()}`,

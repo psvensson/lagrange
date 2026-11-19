@@ -14,7 +14,7 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import {tmpdir} from 'node:os';
+import {hostname, tmpdir} from 'node:os';
 import {basename, dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
@@ -491,11 +491,10 @@ async function verifyInstalledPackage(packed) {
         `unexpected lagrange-admin --version output: ${adminVersionOutput}`,
       );
     }
-    const dryRunOutput = runChecked(lagrangeBin, [
-      '--dry-run',
-      '--data-dir',
-      join(temporaryRoot, 'data'),
-    ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    // A complete node configuration declares its host: this machine.
+    const dryRunOutput = runChecked(lagrangeBin, ['--dry-run', '--data-dir',
+      join(temporaryRoot, 'data')], {cwd: installDirectory,
+      env: {...process.env, NODE_HOST_ID: hostname()}}, RELEASE_OUTCOME.CLI_FAILED);
     if (!/Dry run completed/u.test(dryRunOutput)) {
       throw new NpmReleaseError(
         RELEASE_OUTCOME.CLI_FAILED,

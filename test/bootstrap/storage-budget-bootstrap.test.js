@@ -9,6 +9,7 @@
  * - Shared setup ownership boundaries remain intact (Req 9.5, 11.1)
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {describe, it, beforeEach} from 'node:test';
 import assert from 'node:assert';
 import {
@@ -27,6 +28,8 @@ import {
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {createNodeRegistrationIssueRecord} from
+  '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
 /**
  * Build a minimal node row for testing.
@@ -162,6 +165,8 @@ describe('NodeStorageBudgetSetup', () => {
           budgetService: service,
           nodeRow,
           nodeId: 'test-node-1',
+          issueRecord: createNodeRegistrationIssueRecord(),
+          nowMs: Date.now(),
         });
 
       assert.strictEqual(outcome.resolution.isValid, true);
@@ -194,6 +199,8 @@ describe('NodeStorageBudgetSetup', () => {
         budgetService: service,
         nodeRow,
         nodeId: 'test-node-1',
+        issueRecord: createNodeRegistrationIssueRecord(),
+        nowMs: Date.now(),
       });
 
       const persisted = upsertCalls[0].rowData;
@@ -239,6 +246,8 @@ describe('Bootstrap pipeline budget integration', () => {
         budgetService: service,
         nodeRow,
         nodeId: 'seed-node',
+        issueRecord: createNodeRegistrationIssueRecord(),
+        nowMs: Date.now(),
       });
 
     assert.strictEqual(outcome.resolution.isValid, true);
@@ -281,6 +290,8 @@ describe('Bootstrap pipeline budget integration', () => {
         budgetService: service,
         nodeRow,
         nodeId: 'joining-node',
+        issueRecord: createNodeRegistrationIssueRecord(),
+        nowMs: Date.now(),
       });
 
     assert.strictEqual(outcome.resolution.isValid, true);
@@ -397,6 +408,8 @@ describe('Startup diagnostics (Req 9.4)', () => {
         budgetService: service,
         nodeRow,
         nodeId: 'diag-node',
+        issueRecord: createNodeRegistrationIssueRecord(),
+        nowMs: Date.now(),
       });
 
     assert.ok(outcome.resolution, 'should have resolution');
@@ -438,6 +451,8 @@ describe('Startup diagnostics (Req 9.4)', () => {
         budgetService: service,
         nodeRow,
         nodeId: 'diag-node-2',
+        issueRecord: createNodeRegistrationIssueRecord(),
+        nowMs: Date.now(),
       });
 
     assert.strictEqual(
@@ -483,6 +498,7 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
     );
 
     const joiner = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-owner-node',
       nodeAddress: 'ws://localhost:9000',

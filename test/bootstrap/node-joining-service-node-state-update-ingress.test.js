@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -64,6 +65,7 @@ test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and
     const debugEvents = [];
     let attempts = 0;
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440103',
       nodeAddress: 'ws://localhost:9090',
@@ -127,6 +129,7 @@ test('NodeJoiningService - resolves control plane target from kernel bootstrap i
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-1',
       nodeAddress: 'ws://localhost:9090',
@@ -168,6 +171,7 @@ test('NodeJoiningService - uses kernel bootstrap ingress when no local target ex
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-2',
       nodeAddress: 'ws://localhost:9091',
@@ -202,6 +206,7 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-3',
     nodeAddress: 'ws://localhost:9092',
@@ -261,6 +266,7 @@ test('NodeJoiningService - accepts canonical message-group leader metadata witho
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-canonical-mg-leader',
       nodeAddress: 'ws://localhost:9090',
@@ -304,6 +310,7 @@ test('NodeJoiningService - falls back to leader-role witness when message-group 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-leader-role-fallback',
       nodeAddress: 'ws://localhost:9090',
@@ -344,6 +351,7 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-local',
       nodeAddress: 'ws://localhost:9093',
@@ -421,6 +429,7 @@ test('NodeJoiningService - resolves ordered control-plane target candidates ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-candidates',
     nodeAddress: 'ws://localhost:9094',
@@ -475,6 +484,7 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-local-follower',
     nodeAddress: 'ws://localhost:90941',
@@ -531,6 +541,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat',
     nodeAddress: 'ws://localhost:909411',
@@ -585,6 +596,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-optimistic-remote',
     nodeAddress: 'ws://localhost:909412',
@@ -641,6 +653,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-local-fallback',
     nodeAddress: 'ws://localhost:909412',
@@ -706,6 +719,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-recovery-fallback',
     nodeAddress: 'ws://localhost:909413',
@@ -828,6 +842,7 @@ test('NodeJoiningService - query transport selection uses initialized local ' +
   t.plan(3);
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-query-transport-relay',
     nodeAddress: 'ws://localhost:90942',
@@ -872,6 +887,7 @@ test('NodeJoiningService - connect websocket phase wires the dedicated query ' +
   t.plan(3);
 
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'joining-node-query-transport-phase-wiring',
     nodeAddress: 'ws://localhost:90943',
@@ -915,6 +931,7 @@ test('NodeJoiningService - excludes disconnected control-plane ingress candidate
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-reconnectable-target',
       nodeAddress: 'ws://localhost:90945',
@@ -961,6 +978,7 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-retry',
       nodeAddress: 'ws://localhost:9095',
@@ -1011,6 +1029,7 @@ test('NodeJoiningService - re-resolves ingress after the only target moves',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-moving-owner',
       nodeAddress: 'ws://localhost:90951',
@@ -1057,6 +1076,7 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-confirmed-ingress',
       nodeAddress: 'ws://localhost:90955',
@@ -1122,6 +1142,7 @@ test('NodeJoiningService - retries CONNECTED NODE_STATE_UPDATE once on the same 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-same-target-retry',
       nodeAddress: 'ws://localhost:909551',
@@ -1181,6 +1202,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on alter
 
     let nowMs = 1000;
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-recovery',
       nodeAddress: 'ws://localhost:909552',
@@ -1279,6 +1301,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on stale
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-no-handler-retry',
       nodeAddress: 'ws://localhost:909553',

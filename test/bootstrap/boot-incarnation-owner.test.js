@@ -33,6 +33,7 @@ import {resolveFailedJoinReattempt} from
   '../../src/entrypoint-runtime-join-startup-policy.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
@@ -153,10 +154,12 @@ function createNodesTable(initialRow = null) {
   };
 }
 
+// Each call is one boot lifecycle's registration: its own issue record.
 function register(table, bootIncarnation, overrides = {}) {
   return writeNodeRegistrationAtIncarnation({
     row: {node_id: NODE_ID, status: 'joining'},
     bootIncarnation,
+    issueRecord: createNodeRegistrationIssueRecord(),
     observe: table.observe,
     insert: table.insert,
     advance: table.advance,
@@ -308,12 +311,30 @@ test('D-7: the NODES registration write has four typed outcomes and never ' +
   t.same(older.writes[0].where, {node_id: NODE_ID, boot_incarnation: 2},
     'the advance is fenced by the exact observed incarnation');
 
-  const same = createNodesTable({node_id: NODE_ID, status: 'stopped',
-    boot_incarnation: 3});
-  t.equal((await register(same, 3)).outcome,
-    NODE_REGISTRATION_OUTCOME.CURRENT, 'same incarnation: current');
-  t.equal(same.writes.length, 0,
+  // CURRENT is this boot lifecycle's own row: the lifecycle that issued the
+  // birth re-registers with no write, and a terminal row of this incarnation
+  // stays terminal.
+  const sameLifecycle = createNodeRegistrationIssueRecord();
+  const same = createNodesTable();
+  t.equal((await register(same, 3, {issueRecord: sameLifecycle})).outcome,
+    NODE_REGISTRATION_OUTCOME.ACCEPTED, 'this lifecycle births its row');
+  same.rows.get(NODE_ID).status = 'stopped';
+  const writesAfterBirth = same.writes.length;
+  t.equal((await register(same, 3, {issueRecord: sameLifecycle})).outcome,
+    NODE_REGISTRATION_OUTCOME.CURRENT, 'same lifecycle, same incarnation: ' +
+    'current');
+  t.equal(same.writes.length, writesAfterBirth,
     'idempotent: no write, a terminal row of this incarnation stays terminal');
+
+  // A row at this number that this lifecycle never wrote belongs to another
+  // storage's life of the node id (a wiped data directory reserved the
+  // number again): it supersedes this lifecycle like a newer row.
+  const foreign = createNodesTable({node_id: NODE_ID, status: 'active',
+    boot_incarnation: 3});
+  t.equal((await register(foreign, 3)).outcome,
+    NODE_REGISTRATION_OUTCOME.REFUSED_STALE,
+    'same incarnation written by another life: refused');
+  t.equal(foreign.writes.length, 0, 'and never written over');
 
   const newer = createNodesTable({node_id: NODE_ID, status: 'active',
     boot_incarnation: 4});

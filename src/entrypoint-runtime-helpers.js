@@ -3,6 +3,7 @@ export {
   parseCommandLineArgs,
   parsePositiveTimeoutMs,
   resolveRuntimeAddresses,
+  resolveRuntimeHostId,
   resolveRolloutControlsFromEnvironment,
 } from './entrypoint-runtime-options.js';
 

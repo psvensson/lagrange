@@ -26,7 +26,10 @@
  * never certification evidence.
  */
 
+import {hostname} from 'node:os';
 import {CLUSTER_STARTUP_GATE_LAYER} from './cluster-startup-gate-layer.js';
+import {requireDeclaredNodeHostId} from
+  '../../../src/topology/node-host-identity.js';
 
 // The cluster's own node -> provider assignment (createCluster uses it).
 const {distributeNodes} = CLUSTER_STARTUP_GATE_LAYER;
@@ -46,6 +49,9 @@ const HOST_IDENTITY_SOURCE = Object.freeze({
   DECLARED_MACHINE_ID: 'declared_machine_id',
   PROVIDER_INTERNAL_ADDRESS: 'provider_internal_address',
 });
+
+// A remote provider whose machine names no host: its node is never started.
+const HOST_NAME_UNDECLARED = 'host_name_undeclared';
 
 const HOST_TOPOLOGY_MISSING = Object.freeze({
   SOURCES_MIXED: 'host_identity_sources_mixed',
@@ -140,6 +146,32 @@ function describeProviderMachine(config, providerIndex) {
   return Object.freeze({hostId: null, label,
     missingReason: HOST_TOPOLOGY_MISSING.UNDECLARED, providerIndex,
     source: null});
+}
+
+/**
+ * The host identity a node placed on one Docker provider declares
+ * (NODE_HOST_ID, owner decision D3 2026-11-17): the provider machine's
+ * declared name, `config.docker.hostInfo[providerIndex].hostName` (the lab
+ * host name the lab harness writes, the instance name the GCP provisioner
+ * writes), or, for the local Docker socket (no `docker.hosts`), the name of
+ * this machine. A remote provider without one refuses the node before it
+ * starts: a name is never derived from an address, an index or a node id.
+ * @param {Object} config The cluster config.
+ * @param {number} providerIndex
+ * @return {string} A valid declared host id.
+ */
+function resolveProviderHostName(config, providerIndex) {
+  const dockerHosts = config?.docker?.hosts;
+  const remote = Array.isArray(dockerHosts) && dockerHosts.length > ZERO;
+  const name = remote ?
+    nonEmptyString(hostInfoList(config)[providerIndex]?.hostName) :
+    hostname();
+  if (name === null) {
+    throw new Error(`${HOST_NAME_UNDECLARED}: Docker provider ` +
+      `${providerIndex} (${dockerHosts[providerIndex]}) declares no ` +
+      'hostInfo.hostName; a node never starts without its host identity');
+  }
+  return requireDeclaredNodeHostId(name);
 }
 
 /**
@@ -368,4 +400,5 @@ export {
   isSpreadUnit,
   requireSpreadUnit,
   resolveConfigHostTopology,
+  resolveProviderHostName,
 };

@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -33,6 +34,7 @@ function initializeTestEnvironment() {
 
 function createSelfHostedService(nodeId = 'join-node-1') {
   const service = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:19090',

@@ -5,6 +5,7 @@
  * existing partition replica is placed on a non-seed node.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
@@ -266,6 +267,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         );
 
         node2JoinService = new NodeJoiningService({
+          hostId: LOCAL_MACHINE_HOST_ID,
           bootIncarnation: 1,
           nodeId: node2Id,
           nodeAddress: `ws://localhost:${node2WsPort}`,
@@ -281,6 +283,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         });
 
         node3JoinService = new NodeJoiningService({
+          hostId: LOCAL_MACHINE_HOST_ID,
           bootIncarnation: 1,
           nodeId: node3Id,
           nodeAddress: `ws://localhost:${node3WsPort}`,

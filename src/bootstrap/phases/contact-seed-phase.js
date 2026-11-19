@@ -272,7 +272,7 @@ class ContactSeedPhase {
       bootstrapError.bootstrapResponse = response;
       throw bootstrapError;
     }
-    await this.delegates.setBootstrapResponse(response);
+    this.delegates.setBootstrapResponse(response);
     this.delegates.setSeedNodeAddress?.(attempt.currentCandidate);
     this.delegates.setSeedNodeId(response.seedNodeId || null);
     if (!this.delegates.getSeedNodeWsAddress() &&

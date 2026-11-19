@@ -22,6 +22,12 @@ import {
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
 } from './node-registration-owner-constants.js';
+import {requireDeclaredNodeHostId} from
+  '../../topology/node-host-identity.js';
+import {createNodeRegistrationIssueRecord} from
+  '../../control-plane/owners/node-registration-incarnation-write.js';
+import {STALE_NODE_INCARNATION_CODE} from
+  '../../control-plane/control-plane-error-classification.js';
 
 // The error code a registration failure surfaces: the direct `code` when
 // present, else the alternate `errorCode` carrier, else nothing.
@@ -52,6 +58,13 @@ function carryNodeRegistrationErrorHints(wrappedError, error) {
     wrappedError.publicationDiagnostics =
       error.publicationDiagnostics;
   }
+  // A superseded lifecycle (node-registration-incarnation-write.js) is
+  // retryable by a new lifecycle that reserves above the incarnation that
+  // superseded it: the join failure carries both to the reattempt.
+  if (error?.code === STALE_NODE_INCARNATION_CODE) {
+    wrappedError.retryable = error.retryable === true;
+    wrappedError.knownIncarnation = error.knownIncarnation;
+  }
 }
 
 // Wrap one registration failure, preserving the code, retry hints, and
@@ -73,14 +86,20 @@ class NodeRegistrationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.nodeAddress = options.nodeAddress;
+    // The declared host identity (topology/node-host-identity.js): every
+    // NODES row this owner writes carries it; without it the node refuses to
+    // register.
+    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.authoritativeControlPlaneView = null;
     this.membershipPublicationRuntimeOwner =
       options.membershipPublicationRuntimeOwner || null;
     this.joinAdmissionControlPlaneSystemTableGateway = null;
-    this.latchedRegistrationBootIncarnation = null;
-    this.latchedRegistrationStorageIncarnation = null;
+    // This boot lifecycle's record of the NODES registration write it issued
+    // (node-registration-incarnation-write.js): a row at this incarnation
+    // that this lifecycle never wrote supersedes it.
+    this.registrationIssueRecord = createNodeRegistrationIssueRecord();
   }
 
   async registerNodeInCluster() {
@@ -94,6 +113,9 @@ class NodeRegistrationOwner {
     const now = this.delegates.getNow()();
 
     try {
+      // Refused before any registration effect: no NODES row is written
+      // without the node's declared host.
+      requireDeclaredNodeHostId(this.hostId);
       const existingMembership =
         await this.resolveExistingDurableRejoinMembership(now);
       if (existingMembership) {
@@ -118,7 +140,6 @@ class NodeRegistrationOwner {
       let budgetRow = existingJoinAdmissionProgress?.nodeRow || null;
       let resolution = existingJoinAdmissionProgress?.resolution || null;
       if (!budgetRow) {
-        await this.advanceFreshStorageIncarnationFloorFromCluster();
         const nodeRow = this.buildNodeRegistrationRow(now);
         const budgetService =
           this.delegates.getNodeStorageBudgetService();
@@ -188,9 +209,7 @@ class NodeRegistrationOwner {
 
       const endpointRow =
         existingJoinAdmissionProgress?.endpointRow ||
-        await this.registerNodeEndpoint(this.delegates.getNow()(), {
-          storageIncarnation: this.getRegistrationStorageIncarnation(),
-        });
+        await this.registerNodeEndpoint(this.delegates.getNow()());
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
         endpointRow,
@@ -209,12 +228,8 @@ class NodeRegistrationOwner {
         );
       }
 
-      const shouldReconcileLostStorage =
-        !existingJoinAdmissionProgress ||
-        existingJoinAdmissionProgress.sameBootRetry === true;
-      const lostStorageReplicas = shouldReconcileLostStorage ?
-        await this.reconcileLostStoragePartitionReplicas(now) :
-        [];
+      const lostStorageReplicas =
+        await this.failLostStoragePartitionReplicas(now);
 
       return {
         nodeRow: budgetRow,
@@ -237,9 +252,9 @@ class NodeRegistrationOwner {
     return buildNodeRegistrationRow({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      hostId: this.hostId,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
-      bootIncarnation: this.getRegistrationBootIncarnation(),
-      storageIncarnation: this.getRegistrationStorageIncarnation(),
+      bootIncarnation: this.delegates.getBootIncarnation(),
       now,
     });
   }

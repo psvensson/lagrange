@@ -33,6 +33,14 @@ For the complete guide on Kubernetes deployment and cloud benchmark automation, 
 - **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
   so the runtime mints one on first boot and restores it from the data
   directory (the durable boot-incarnation store) on restart. Identity rides the PVC.
+- **Host identity.** Every pod declares `NODE_HOST_ID` as the Kubernetes node
+  it is scheduled on (downward API `spec.nodeName`). The runtime requires it
+  and refuses to start without it; replica placement spreads across distinct
+  hosts, never inferring one from a node id. A rescheduled pod re-declares its
+  host at its next start. `NODE_HOST_ID` is reserved: `node.extraEnv` cannot
+  set it. On a rolling upgrade from a chart without host identity, a pod not
+  yet restarted keeps a membership record without a host (`HOST_UNDECLARED`)
+  and is not a placement target until it restarts with the new template.
 - **Ports**: REST `node.restPort` (default 8080), admin WS restPort+1, and
   transport WS restPort+2. Set `admin.websocketPort` or `node.wsPort` to
   override either derived WS port. Admin WS remains pod-local on loopback;
@@ -57,7 +65,7 @@ For the complete guide on Kubernetes deployment and cloud benchmark automation, 
 | `admin.websocketPort` / `node.wsPort` | derived | Optional individual admin/transport WS overrides |
 | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
 | `admin.websocketHost` / `admin.allowInsecureExternalBind` | `127.0.0.1` / `false` | Fixed pod-local admin posture; insecure overrides fail rendering |
-| `node.extraEnv` | `[]` | Extra env (e.g. `PGUSER`, `PGPASSWORD`, see `src/config/config-constants.js`) |
+| `node.extraEnv` | `[]` | Extra env (e.g. `PGUSER`, `PGPASSWORD`, see `src/config/config-constants.js`); `NODE_HOST_ID` and the listener/admin names are reserved |
 | `persistence.size` | `10Gi` | Per-pod volume |
 | `resources` | 1 CPU / 2Gi | Per-pod resources |
 

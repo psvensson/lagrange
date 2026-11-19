@@ -5,6 +5,7 @@
  * completes in < 50ms for a typical cluster.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -229,6 +230,7 @@ test('Cache hydration performance - typical cluster', async (t) => {
 
     // Create joining service
     const joiningService = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId,
       nodeAddress,
@@ -301,6 +303,7 @@ test('Cache hydration performance - large cluster', async (t) => {
 
     // Create joining service
     const joiningService = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId,
       nodeAddress,

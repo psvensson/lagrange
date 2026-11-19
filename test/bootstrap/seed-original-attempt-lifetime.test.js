@@ -3,6 +3,7 @@
 // build measurement, transport and replica services are their real owners.
 // Only pacing is controlled in the abort/shutdown tests. Deferred native
 // construction proves this checkpoint, not registration or useful service.
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -91,7 +92,7 @@ async function fixture(t, overrides = {}, {withRouter = true} = {}) {
       nodeId: NODE_ID, nodeAddress: NODE_ADDRESS});
     const startupServicesAdmission = await readDurableServicesIdentitySnapshot(dataDir);
     const service = new BootstrapService({nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
-      bootIncarnation, nodeService, dataDirectoryManager,
+      hostId: LOCAL_MACHINE_HOST_ID, bootIncarnation, nodeService, dataDirectoryManager,
       dataDirectoryProcessOwner: directoryOwner, startupAbortSignal: controller.signal,
       membershipOwnerOutcome: decision.membershipOwnerOutcome,
       startupServicesAdmission, ...extra});

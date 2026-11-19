@@ -54,7 +54,8 @@
                     "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND",
                     "ADMIN_WS_PORT",
                     "REST_API_PORT",
-                    "TRANSPORT_WS_PORT"
+                    "TRANSPORT_WS_PORT",
+                    "NODE_HOST_ID"
                   ]
                 }
               }

@@ -1,3 +1,4 @@
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createBootstrapCacheHydrationApplier,
@@ -87,7 +88,8 @@ const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
 function buildPublicationOwnerRecorder(publicationCalls) {
   return {
     // The monotonic NODES registration (D-7) at this boot's incarnation.
-    registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+    registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+      options) => {
       publicationCalls.push({kind: 'node',
         row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
       return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -149,6 +151,7 @@ function createDelegates() {
 
 function createFailedJoinWithdrawalOwner(nodeMutationResult) {
   const owner = new NodeRegistrationOwner({
+    hostId: LOCAL_MACHINE_HOST_ID,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     delegates: createDelegates(),
@@ -180,7 +183,8 @@ test(
     const publicationCalls = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -200,6 +204,7 @@ test(
       },
     };
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -276,7 +281,8 @@ test(
     const incarnationAdvances = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -300,6 +306,7 @@ test(
       },
     };
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -386,6 +393,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -449,6 +457,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -504,6 +513,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -552,6 +562,7 @@ test(
   async (t) => {
     const updateCalls = [];
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -628,6 +639,7 @@ test(
   async (t) => {
     const updateCalls = [];
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -976,6 +988,7 @@ test(
   'outcome (unavailable on failure or unreadable source)',
   async (t) => {
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       delegates: {
@@ -1047,6 +1060,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1106,6 +1120,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1153,6 +1168,7 @@ test(
       publicationCalls,
     );
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
@@ -1275,6 +1291,7 @@ test(
   async (t) => {
     const publicationCalls = [];
     const owner = new NodeRegistrationOwner({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner:

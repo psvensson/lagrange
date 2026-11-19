@@ -61,6 +61,7 @@ This command is local-host only:
 
 ```bash
 docker run --rm \
+  -e NODE_HOST_ID="$(hostname)" \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 127.0.0.1:8080:8080 \
@@ -97,6 +98,7 @@ from each node's REST base unless individually overridden. Joiners point
 docker network create lagrange-net
 
 docker run -d --name seed --network lagrange-net \
+  -e NODE_HOST_ID="$(hostname)" \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
@@ -105,6 +107,7 @@ docker run -d --name seed --network lagrange-net \
   psvensson/lagrange:latest
 
 docker run -d --name node2 --network lagrange-net \
+  -e NODE_HOST_ID="$(hostname)" \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
   -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
@@ -116,6 +119,15 @@ docker run -d --name node2 --network lagrange-net \
 
 Leave `NODE_ID` unset: join admission requires a UUID identity, which the
 node mints on first start and restores from its data directory on restart.
+
+Set `NODE_HOST_ID` on every node to the name of the machine it runs on
+(both containers above share one machine, so they declare the same host).
+It is required: a node without it refuses to start. Replica placement
+spreads replicas across distinct hosts and never infers a host from a node
+id, address or provider. On a rolling upgrade from a version without host
+identity, a node that has not yet restarted with `NODE_HOST_ID` set keeps a
+membership record without a host (`HOST_UNDECLARED`) and is not a placement
+target until it restarts with the value set.
 
 The transport listener is plain WebSocket without cryptographic peer
 authentication or encryption. Run a multi-node cluster only on an isolated
@@ -130,6 +142,7 @@ Set via environment variables (`-e`):
 | `SEED_NODE_ADDRESS` | unset | Unset → start as seed; set (`http://host:8080`) → join that cluster |
 | `NODE_ADDRESS` | localhost | Registration address other nodes reach you at (`host:8080`); the localhost default is rejected at join admission |
 | `NODE_ADVERTISED_WS_ADDRESS` | localhost | Advertised transport address (`host:8082`) |
+| `NODE_HOST_ID` | none (required) | Name of the machine the node runs on (Kubernetes node name, VM or host name): 1-253 letters, digits, `.`, `_` or `-`. Replica placement spreads across distinct hosts; a node without it refuses to start |
 | `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
 | `ADMIN_WS_HOST` | `127.0.0.1` | Admin bind host; external binds require the explicit opt-in below |
 | `ADMIN_ALLOW_INSECURE_EXTERNAL_BIND` | `false` | Set `true` only with an external host and a controlled network boundary |

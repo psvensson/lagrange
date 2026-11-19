@@ -26,7 +26,8 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {SEED_NODE_ID, nodeAddressOf} from './formation-joint-admission-world.js';
+import {SEED_NODE_ID, nodeAddressOf, simulatedHostIdOf} from
+  './formation-joint-admission-world.js';
 
 const EVALUATION_STEP_MS = 1;
 const FAR_FUTURE_MS = Number.MAX_SAFE_INTEGER;
@@ -128,6 +129,7 @@ function mountJoinReadySignal(world, nodeId) {
   const sleeps = [];
   const barrierLog = [];
   const service = new NodeJoiningService({
+    hostId: simulatedHostIdOf(nodeId),
     bootIncarnation,
     nodeId,
     nodeAddress: nodeAddressOf(nodeId),
@@ -383,28 +385,16 @@ function createRoundDriver(world) {
       await settleWorld(world);
       nextEvaluationInstant(world);
     },
-    async restartJoiner(
-      nodeId,
-      {
-        wipeDataDir = false,
-        externalServicesCleanup = false,
-        registrationNowMs = null,
-      } = {},
-    ) {
+    async restartJoiner(nodeId, {wipeDataDir = false} = {}) {
       nextEvaluationInstant(world);
       world.stopNode(nodeId, {
         expireLease: true,
         wipeDataDir,
-        externalServicesCleanup,
       });
-      if (externalServicesCleanup) {
-        world.cache.tombstoneStore.clear();
-      }
       await settleWorld(world);
       nextEvaluationInstant(world);
       const hosts = await world.registerJoiner(nodeId, {
         durableStateDetected: !wipeDataDir,
-        registrationNowMs,
       });
       watchBounds(hosts);
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));
