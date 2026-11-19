@@ -3,7 +3,7 @@
 // witness inside `_raft_rs_snapshot.data` (canonical base64 JSON) and removes
 // compacted `_raft_rs_log` rows in a single SYNCED SQLite transaction.
 
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {RAFT_COMPACTION_OUTCOME} from './compaction-policy.js';
 import {
   RAFT_RS_COMMIT_DURABILITY,
@@ -89,7 +89,7 @@ function readCompactedMaxHlcIn(db, groupId) {
   if (!db || !db.open) {
     return null;
   }
-  const statements = sqliteConnectionCache(db);
+  const statements = sqliteConnectionState(db);
   const {present} = statements.statement(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
   if (present === 0) {
     return null;
@@ -99,7 +99,7 @@ function readCompactedMaxHlcIn(db, groupId) {
 }
 
 function deriveSnapshotIndex(db, groupId) {
-  const statements = sqliteConnectionCache(db);
+  const statements = sqliteConnectionState(db);
   const {present} = statements.statement(RAFT_RS_SQL.COUNT_SNAPSHOT_TABLE).get();
   if (present === 0) {
     return 0n;
@@ -121,7 +121,7 @@ function readSnapshotIndexIn(db, groupId) {
   if (!db || !db.open) {
     return 0n;
   }
-  return sqliteConnectionCache(db).committedFact(SNAPSHOT_INDEX_FACT, groupId,
+  return sqliteConnectionState(db).committedFact(SNAPSHOT_INDEX_FACT, groupId,
     () => deriveSnapshotIndex(db, groupId));
 }
 
@@ -132,7 +132,7 @@ function readSnapshotIndexIn(db, groupId) {
  * @param {string} groupId - Raft group identifier.
  */
 function forgetSnapshotIndexIn(db, groupId) {
-  sqliteConnectionCache(db).forgetFact(SNAPSHOT_INDEX_FACT, groupId);
+  sqliteConnectionState(db).forgetFact(SNAPSHOT_INDEX_FACT, groupId);
 }
 
 function parseCandidateHlc(candidate) {
@@ -198,7 +198,7 @@ function extractLogRowHlc(row) {
 function foldCompactedPrefixMaxHlc(db, groupId, exactToIndex, seedMaxHlc) {
   let max = foldCandidateHlc(null, readCompactedMaxHlcIn(db, groupId));
   max = foldCandidateHlc(max, seedMaxHlc);
-  const rows = sqliteConnectionCache(db)
+  const rows = sqliteConnectionState(db)
     .exactStatement(RAFT_RS_SQL.SELECT_LOG_ENTRIES_UP_TO)
     .all(groupId, exactToIndex);
   for (const row of rows) {
@@ -284,7 +284,7 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
         membershipGenerationIndex,
       },
     });
-    const deleted = sqliteConnectionCache(store.db)
+    const deleted = sqliteConnectionState(store.db)
       .statement(RAFT_RS_SQL.DELETE_LOG_UP_TO).run(groupId, exactToIndex);
     return Object.freeze({
       outcome: RAFT_COMPACTION_OUTCOME.COMPACTED,

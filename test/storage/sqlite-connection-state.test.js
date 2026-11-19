@@ -1,5 +1,5 @@
 // The per-connection statement and committed-fact owner
-// (src/storage/sqlite-connection-cache.js), measured on real better-sqlite3
+// (src/storage/sqlite-connection-state.js), measured on real better-sqlite3
 // connections:
 //   - a statement is compiled once per connection, and only once per integer
 //     mode, however often it is asked for;
@@ -14,7 +14,7 @@ import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import {sqliteConnectionCache} from '../../src/storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../../src/storage/sqlite-connection-state.js';
 
 const SELECT_VALUE = 'SELECT value FROM facts WHERE id = ?';
 const SELECT_ALL = 'SELECT * FROM facts WHERE id = ?';
@@ -41,20 +41,20 @@ function countedConnection(t) {
 }
 
 function factValue(db) {
-  return sqliteConnectionCache(db).committedFact(FACT, SUBJECT,
-    () => sqliteConnectionCache(db).statement(SELECT_VALUE).get(SUBJECT).value);
+  return sqliteConnectionState(db).committedFact(FACT, SUBJECT,
+    () => sqliteConnectionState(db).statement(SELECT_VALUE).get(SUBJECT).value);
 }
 
 function writeValue(db, value) {
-  sqliteConnectionCache(db).statement(UPDATE_VALUE).run(value, SUBJECT);
-  sqliteConnectionCache(db).forgetFact(FACT, SUBJECT);
+  sqliteConnectionState(db).statement(UPDATE_VALUE).run(value, SUBJECT);
+  sqliteConnectionState(db).forgetFact(FACT, SUBJECT);
 }
 
 test('a statement is compiled once per connection and per integer mode', (t) => {
   const {db, prepares} = countedConnection(t);
   db.prepare('UPDATE facts SET value = ? WHERE id = ?').run(BIG_VALUE, SUBJECT);
   prepares.length = 0;
-  const cache = sqliteConnectionCache(db);
+  const cache = sqliteConnectionState(db);
   const plain = [];
   const exact = [];
   for (let lookup = 0; lookup < LOOKUPS; lookup += 1) {
@@ -67,10 +67,10 @@ test('a statement is compiled once per connection and per integer mode', (t) => 
     'the connection-mode statement keeps reading numbers');
   assert.equal(exact[LOOKUPS - 1], BIG_VALUE,
     'the exact statement reads the stored integer exactly');
-  assert.equal(sqliteConnectionCache(db), cache, 'one cache per connection');
+  assert.equal(sqliteConnectionState(db), cache, 'one cache per connection');
 
   const other = countedConnection(t);
-  sqliteConnectionCache(other.db).statement(SELECT_VALUE).get(SUBJECT);
+  sqliteConnectionState(other.db).statement(SELECT_VALUE).get(SUBJECT);
   assert.deepEqual(other.prepares, [SELECT_VALUE],
     'another connection compiles its own statement');
 });
@@ -78,7 +78,7 @@ test('a statement is compiled once per connection and per integer mode', (t) => 
 test('a closed connection holds nothing: a request answers as a prepare does',
   (t) => {
     const {db, prepares} = countedConnection(t);
-    const cache = sqliteConnectionCache(db);
+    const cache = sqliteConnectionState(db);
     cache.statement(SELECT_VALUE).get(SUBJECT);
     db.close();
     assert.throws(() => cache.statement(SELECT_VALUE),
@@ -90,7 +90,7 @@ test('a closed connection holds nothing: a request answers as a prepare does',
 
 test('a held statement reads the schema as it is now', (t) => {
   const {db} = countedConnection(t);
-  const cache = sqliteConnectionCache(db);
+  const cache = sqliteConnectionState(db);
   assert.deepEqual(Object.keys(cache.statement(SELECT_ALL).get(SUBJECT)),
     ['id', 'value']);
   db.exec('ALTER TABLE facts ADD COLUMN note TEXT DEFAULT \'added\'');
@@ -107,10 +107,10 @@ test('a committed fact is derived once and follows the write that forgets it',
   (t) => {
     const {db, prepares} = countedConnection(t);
     let derivations = 0;
-    const read = () => sqliteConnectionCache(db).committedFact(FACT, SUBJECT,
+    const read = () => sqliteConnectionState(db).committedFact(FACT, SUBJECT,
       () => {
         derivations += 1;
-        return sqliteConnectionCache(db).statement(SELECT_VALUE).get(SUBJECT).value;
+        return sqliteConnectionState(db).statement(SELECT_VALUE).get(SUBJECT).value;
       });
     for (let lookup = 0; lookup < LOOKUPS; lookup += 1) {
       assert.equal(read(), 1);

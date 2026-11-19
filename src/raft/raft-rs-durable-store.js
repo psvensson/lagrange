@@ -22,7 +22,7 @@
 // application's own writes - keeps NORMAL and may be lost to a power loss;
 // it is recomputed from the synced log on restart.
 
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_COMMIT_DURABILITY,
@@ -192,7 +192,7 @@ function commitDurably(db, work) {
 }
 
 function readDurableRowsIn(db, groupId) {
-  const statements = sqliteConnectionCache(db);
+  const statements = sqliteConnectionState(db);
   const hardStateRow = readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
     statements.exactStatement(RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId));
   const appliedRow = readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
@@ -304,7 +304,7 @@ class RaftRsDurableStore {
   // Create all record tables atomically when none exist yet; partial records
   // stay incomplete so readers fail closed naming the missing table.
   createRecordTables() {
-    const tablePresent = sqliteConnectionCache(this.db).statement(
+    const tablePresent = sqliteConnectionState(this.db).statement(
       RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
     if (RAFT_RS_RECORD_TABLES.some((table) =>
       tablePresent.get(table) !== undefined)) {
@@ -324,7 +324,7 @@ class RaftRsDurableStore {
   // generation 0; an old snapshot stays null because native metadata cannot
   // identify the sender's configuration-only generation.
   addMembershipGenerationColumns() {
-    const statements = sqliteConnectionCache(this.db);
+    const statements = sqliteConnectionState(this.db);
     const tablePresent = statements.statement(
       RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
     const upgrades = [
@@ -470,7 +470,7 @@ class RaftRsDurableStore {
     if (entries.length === 0) {
       return;
     }
-    const statements = sqliteConnectionCache(this.db);
+    const statements = sqliteConnectionState(this.db);
     statements.statement(RAFT_RS_SQL.DELETE_LOG_FROM)
       .run(groupId, toExactInteger(entries[0].index));
     const insert = statements.statement(RAFT_RS_SQL.INSERT_LOG_ENTRY);
@@ -497,7 +497,7 @@ class RaftRsDurableStore {
    */
   putHardState(groupId, hardState) {
     this.admitWrite();
-    sqliteConnectionCache(this.db).statement(RAFT_RS_SQL.UPSERT_HARD_STATE).run(
+    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_HARD_STATE).run(
       groupId,
       toExactInteger(hardState.term),
       toExactInteger(hardState.vote),
@@ -513,7 +513,7 @@ class RaftRsDurableStore {
    */
   putCommitIndex(groupId, commitIndex) {
     this.admitWrite();
-    sqliteConnectionCache(this.db).statement(RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
+    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
       .run(groupId, toExactInteger(commitIndex));
     this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
   }
@@ -533,7 +533,7 @@ class RaftRsDurableStore {
     this.admitWrite();
     const generation = membershipGenerationIndex === null ? null :
       toExactInteger(membershipGenerationIndex);
-    sqliteConnectionCache(this.db).statement(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
+    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
       groupId,
       toExactInteger(appliedIndex),
       ...confStateColumns(confState),
@@ -558,7 +558,7 @@ class RaftRsDurableStore {
   putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
     admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
     this.admitWrite();
-    const upsert = sqliteConnectionCache(this.db)
+    const upsert = sqliteConnectionState(this.db)
       .statement(RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE);
     upsert.run(
       groupId,
@@ -581,7 +581,7 @@ class RaftRsDurableStore {
    */
   putAdmissionIndex(groupId, admissionIndex) {
     this.admitWrite();
-    sqliteConnectionCache(this.db).statement(RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
+    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
       .run(toExactInteger(admissionIndex), groupId);
   }
 
@@ -600,7 +600,7 @@ class RaftRsDurableStore {
       membershipGenerationIndex;
     const exactSnapshotIndex = toExactInteger(snapshotIndex);
     const confState = metadata.confState || emptyConfState();
-    const statements = sqliteConnectionCache(this.db);
+    const statements = sqliteConnectionState(this.db);
     const appliedRow = statements.exactStatement(RAFT_RS_SQL.SELECT_APPLIED_STATE)
       .get(groupId);
     const exactGeneration = exactSnapshotMembershipGeneration({generation,
@@ -654,10 +654,10 @@ class RaftRsDurableStore {
   readProgressRows(groupId) {
     return {
       hardStateRow: readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
-        sqliteConnectionCache(this.db)
+        sqliteConnectionState(this.db)
           .exactStatement(RAFT_RS_SQL.SELECT_HARD_STATE).get(groupId)),
       appliedRow: readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
-        sqliteConnectionCache(this.db)
+        sqliteConnectionState(this.db)
           .exactStatement(RAFT_RS_SQL.SELECT_APPLIED_STATE).get(groupId)),
     };
   }
@@ -687,7 +687,7 @@ class RaftRsDurableStore {
    * @return {Array<Object>} Frozen {index, term, command} records in log order.
    */
   static readCommittedEntriesIn(db, groupId) {
-    const statements = sqliteConnectionCache(db);
+    const statements = sqliteConnectionState(db);
     const {present} = statements.statement(
       RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
     if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
@@ -710,7 +710,7 @@ class RaftRsDurableStore {
    * @return {string|null} The applied index as a decimal string, or null.
    */
   static readAppliedIndexIn(db, groupId) {
-    const statements = sqliteConnectionCache(db);
+    const statements = sqliteConnectionState(db);
     const {present} = statements.statement(RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE)
       .get();
     if (present === 0) {
@@ -743,7 +743,7 @@ class RaftRsDurableStore {
    */
   recordCompatibility() {
     const columns = new Set(readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
-      sqliteConnectionCache(this.db)
+      sqliteConnectionState(this.db)
         .statement(RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS).all())
       .map((row) => row.name));
     if (columns.size === 0) {
@@ -772,7 +772,7 @@ class RaftRsDurableStore {
    * @return {boolean} Whether a record exists.
    */
   static hasDurableRecordIn(db, groupId) {
-    const tablePresent = sqliteConnectionCache(db)
+    const tablePresent = sqliteConnectionState(db)
       .statement(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
     if (!RAFT_RS_RECORD_TABLES.every((table) =>
       tablePresent.get(table) !== undefined)) {

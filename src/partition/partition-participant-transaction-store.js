@@ -12,7 +12,7 @@
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
@@ -101,13 +101,13 @@ function openParticipantTransactionStore(db) {
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
   recordPreparedObservation(
     db,
-    sqliteConnectionCache(db).statement(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
+    sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
       undefined,
   );
 }
 
 function generationRowOf(db) {
-  const row = sqliteConnectionCache(db).statement(SQL.SELECT_GENERATION).get();
+  const row = sqliteConnectionState(db).statement(SQL.SELECT_GENERATION).get();
   if (row === undefined) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
@@ -264,7 +264,7 @@ function validParticipantCensusRow(row) {
  * @param {{index: number, term: number}} position - The origin's position.
  */
 function recordPartitionWriteOrigin(db, {index, term}) {
-  if (sqliteConnectionCache(db).statement(SQL.RECORD_ORIGIN).run(index, term)
+  if (sqliteConnectionState(db).statement(SQL.RECORD_ORIGIN).run(index, term)
     .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.ORIGIN_UPDATE_NOT_ONE_ROW);
   }
@@ -276,7 +276,7 @@ function recordPartitionWriteOrigin(db, {index, term}) {
  * @param {Object} db - The partition's connection.
  */
 function advancePartitionWriteGeneration(db) {
-  if (sqliteConnectionCache(db).statement(SQL.ADVANCE_GENERATION).run()
+  if (sqliteConnectionState(db).statement(SQL.ADVANCE_GENERATION).run()
     .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
@@ -291,7 +291,7 @@ function isPartitionReserved(db) {
   if (canSkipPreparedRead(db)) {
     return false;
   }
-  const reserved = sqliteConnectionCache(db).statement(SQL.SELECT_RESERVATION)
+  const reserved = sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION)
     .get(STATE.PREPARED) !== undefined;
   recordPreparedObservation(db, reserved);
   return reserved;
@@ -308,7 +308,7 @@ function isParticipantSessionPrepared(db, sessionId) {
   if (canSkipPreparedRead(db)) {
     return false;
   }
-  return sqliteConnectionCache(db).statement(SQL.SELECT_SESSION_PREPARED)
+  return sqliteConnectionState(db).statement(SQL.SELECT_SESSION_PREPARED)
     .get(sessionId, STATE.PREPARED) !== undefined;
 }
 
@@ -321,7 +321,7 @@ function readPreparedParticipantIds(db) {
   if (canSkipPreparedRead(db)) {
     return [];
   }
-  const rows = sqliteConnectionCache(db).statement(SQL.SELECT_PREPARED_PARTICIPANTS)
+  const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_PARTICIPANTS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);
   return rows.map((row) => row.participantId);
@@ -334,7 +334,7 @@ function readPreparedParticipantIds(db) {
  * @return {Object|null} The frozen row, in the command's field names.
  */
 function readParticipantTransactionRow(db, {transactionId, participantId}) {
-  const row = sqliteConnectionCache(db).statement(SQL.SELECT_ROW).get(transactionId, participantId);
+  const row = sqliteConnectionState(db).statement(SQL.SELECT_ROW).get(transactionId, participantId);
   if (row === undefined) {
     return null;
   }
@@ -376,7 +376,7 @@ function insertParticipantTransactionRow(db, row) {
       Object.isExtensible(db)) {
     db[PREPARED_STATE_KEY] = PREPARED_OBSERVATION.MAYBE_PREPARED;
   }
-  sqliteConnectionCache(db).statement(SQL.INSERT_ROW).run({
+  sqliteConnectionState(db).statement(SQL.INSERT_ROW).run({
     transactionId: row.transactionId,
     participantId: row.participantId,
     sessionId: textOrNull(row.sessionId),
@@ -409,7 +409,7 @@ function insertParticipantTransactionRow(db, row) {
  *   refusalCause, refusalDetail}.
  */
 function updateParticipantTransactionDecided(db, decided) {
-  const moved = sqliteConnectionCache(db).statement(SQL.UPDATE_DECIDED).run({
+  const moved = sqliteConnectionState(db).statement(SQL.UPDATE_DECIDED).run({
     transactionId: decided.transactionId,
     participantId: decided.participantId,
     state: decided.state,

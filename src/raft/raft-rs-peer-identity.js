@@ -37,7 +37,7 @@
 
 import {createHash} from 'node:crypto';
 
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
   RAFT_RS_NODE_ID_COLUMN,
@@ -116,7 +116,7 @@ function validatedReservation(reservation, identities, peerIds) {
 }
 
 function readRaftRsPeerIdentityReservations(db) {
-  return validatedRaftRsPeerIdentityReservations(sqliteConnectionCache(db)
+  return validatedRaftRsPeerIdentityReservations(sqliteConnectionState(db)
     .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
       replicaIdentity: row.replica_identity,
       peerId: row.raft_peer_id,
@@ -128,7 +128,7 @@ function readRaftRsPeerIdentityReservations(db) {
 function derivePeerIdentityView(db) {
   const byReplicaIdentity = new Map();
   const byPeerId = new Map();
-  for (const row of sqliteConnectionCache(db)
+  for (const row of sqliteConnectionState(db)
     .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all()) {
     const reservation = Object.freeze(row);
     byReplicaIdentity.set(reservation.replica_identity, reservation);
@@ -165,7 +165,7 @@ class RaftRsPeerIdentityRegistry {
   constructor(db) {
     this.db = db;
     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
-    const columns = sqliteConnectionCache(this.db)
+    const columns = sqliteConnectionState(this.db)
       .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
     if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
       // No evidence is fabricated for an older reservation. Null stays unknown.
@@ -186,7 +186,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationFor(replicaIdentity) {
-    return sqliteConnectionCache(this.db)
+    return sqliteConnectionState(this.db)
       .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY).get(replicaIdentity);
   }
 
@@ -196,7 +196,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   reservationOfPeerId(raftPeerId) {
-    return sqliteConnectionCache(this.db)
+    return sqliteConnectionState(this.db)
       .statement(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_PEER_ID).get(raftPeerId);
   }
 
@@ -207,7 +207,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   view() {
-    return sqliteConnectionCache(this.db).committedFact(PEER_IDENTITY_VIEW_FACT,
+    return sqliteConnectionState(this.db).committedFact(PEER_IDENTITY_VIEW_FACT,
       PEER_IDENTITY_VIEW_SUBJECT, () => derivePeerIdentityView(this.db));
   }
 
@@ -216,7 +216,7 @@ class RaftRsPeerIdentityRegistry {
    * @private
    */
   forgetView() {
-    sqliteConnectionCache(this.db).forgetFact(PEER_IDENTITY_VIEW_FACT,
+    sqliteConnectionState(this.db).forgetFact(PEER_IDENTITY_VIEW_FACT,
       PEER_IDENTITY_VIEW_SUBJECT);
   }
 
@@ -261,7 +261,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.collision(
         replicaIdentity, holder.replica_identity, raftPeerId));
     }
-    sqliteConnectionCache(this.db)
+    sqliteConnectionState(this.db)
       .statement(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
       .run(replicaIdentity, raftPeerId);
     this.forgetView();
@@ -301,7 +301,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
     }
     if (row.learner_admission === null) {
-      sqliteConnectionCache(this.db)
+      sqliteConnectionState(this.db)
         .statement(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
         .run(encoded, replicaIdentity);
       this.forgetView();
@@ -323,7 +323,7 @@ class RaftRsPeerIdentityRegistry {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.NODE_ID_CONFLICT);
     }
     if (row.node_id === null) {
-      sqliteConnectionCache(this.db).statement(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
+      sqliteConnectionState(this.db).statement(RAFT_RS_PEER_IDENTITY_SQL.RECORD_NODE_ID)
         .run(nodeId, replicaIdentity);
       this.forgetView();
     }

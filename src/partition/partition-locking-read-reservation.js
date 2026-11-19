@@ -21,7 +21,7 @@ import {
   LOCKING_READ_LOCAL_EXPIRY,
   LOCKING_READ_RESERVATION_OUTCOME,
 } from '../query/sql-locking-read-constants.js';
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
 
 export {
@@ -173,7 +173,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
   const now = Date.now();
   let existing;
   try {
-    existing = sqliteConnectionCache(db).statement(RESERVATION_SQL.SELECT_ROW).get(
+    existing = sqliteConnectionState(db).statement(RESERVATION_SQL.SELECT_ROW).get(
       partitionId,
       tableName,
       rowKey,
@@ -188,7 +188,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
       existing.expires_at > 0 &&
       existing.expires_at <= now) {
     try {
-      sqliteConnectionCache(db).statement(RESERVATION_SQL.DELETE_ROW).run(
+      sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_ROW).run(
         partitionId,
         tableName,
         rowKey,
@@ -214,7 +214,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
 function insertDbReservation(db, record) {
   ensureTableInitialized(db);
   try {
-    sqliteConnectionCache(db).statement(RESERVATION_SQL.UPSERT_ROW).run(
+    sqliteConnectionState(db).statement(RESERVATION_SQL.UPSERT_ROW).run(
       record.partitionId,
       record.tableName,
       record.rowKey,
@@ -516,7 +516,7 @@ export function checkRowReservationConflict({
 function releaseDbTransactionReservations(db, transactionId) {
   try {
     ensureTableInitialized(db);
-    const info = sqliteConnectionCache(db).statement(RESERVATION_SQL.DELETE_BY_TRANSACTION).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_TRANSACTION).run(
       transactionId,
     );
     return info.changes;
@@ -590,7 +590,7 @@ export function releaseTransactionReservations(transactionId, options = {}) {
 function releaseDbSessionReservations(db, sessionId) {
   try {
     ensureTableInitialized(db);
-    const info = sqliteConnectionCache(db).statement(RESERVATION_SQL.DELETE_BY_SESSION).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_SESSION).run(
       sessionId,
     );
     return info.changes;
@@ -664,7 +664,7 @@ export function sweepExpiredReservations(db) {
   if (!db || db.open === false) return 0;
   try {
     ensureTableInitialized(db);
-    const info = sqliteConnectionCache(db).statement(RESERVATION_SQL.DELETE_EXPIRED).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_EXPIRED).run(
       Date.now(),
     );
     return info.changes;
@@ -720,7 +720,7 @@ export function clearAllReservations() {
     if (store && store.open !== false) {
       try {
         ensureTableInitialized(store);
-        sqliteConnectionCache(store).statement(RESERVATION_SQL.DELETE_ALL).run();
+        sqliteConnectionState(store).statement(RESERVATION_SQL.DELETE_ALL).run();
       } catch (_err) {
         INITIALIZED_DBS.delete(store);
       }
