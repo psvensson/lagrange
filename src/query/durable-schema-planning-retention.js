@@ -16,12 +16,31 @@ function getInitialPlanningStepEntry(operation) {
   return initialStepEntry;
 }
 
+const FOUNDING_INTENT_SEPARATOR = ':';
+
 function isDurableSchemaPlanningOperation(schemaJobId, operation) {
   const targetNodeId = String(
     operation?.targetNodeId || operation?.nodeId || '',
   ).trim();
   if (!targetNodeId) {
     return false;
+  }
+  const initialStepEntry = getInitialPlanningStepEntry(operation);
+  if (
+    initialStepEntry?.[
+      OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+    ] !== true
+  ) {
+    return false;
+  }
+  const placementAdmission =
+    initialStepEntry?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
+  const foundingIntentId = placementAdmission?.foundingIntentId;
+  if (typeof foundingIntentId === 'string' && foundingIntentId.length > 0) {
+    return (
+      foundingIntentId === schemaJobId ||
+      foundingIntentId.startsWith(`${schemaJobId}${FOUNDING_INTENT_SEPARATOR}`)
+    );
   }
   const deterministicIntent = buildSchemaProvisioningChildIntent(
     schemaJobId,
@@ -30,12 +49,7 @@ function isDurableSchemaPlanningOperation(schemaJobId, operation) {
   if (operation?.operationId !== deterministicIntent.operationIntentId) {
     return false;
   }
-  if (operation?.replicaId !== deterministicIntent.replicaIntentId) {
-    return false;
-  }
-  return getInitialPlanningStepEntry(operation)?.[
-    OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
-  ] === true;
+  return operation?.replicaId === deterministicIntent.replicaIntentId;
 }
 
 function shouldRetainDurableSchemaPlanningOperations(context, operations) {

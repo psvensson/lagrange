@@ -466,10 +466,19 @@ class MembershipPublicationCoordinatorReconcile extends
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
+      const latestPublished = planningSnapshot.latestPublishedPublicationRow;
+      const prioritySummary = latestPublished?.priorityPartitionSummary ?? null;
+      const prioritySummarySatisfied = prioritySummary?.satisfied === true;
       if (
         missingCount <= 0 &&
         ownerAckCompletionPendingNodeIds.length === 0
       ) {
+        if (!prioritySummarySatisfied) {
+          await this.reconcileClusterMembership({
+            ...planningSnapshot,
+            reconcileAuthoritativeMembershipPublication: true,
+          });
+        }
         await this.refreshDeferredPublicationsCacheFromAuthority();
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,

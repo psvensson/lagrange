@@ -69,6 +69,9 @@ function normalizeOperationId(operation) {
 }
 
 function isPendingOperationLedgerSelfMove(operation) {
+  if (operation?.stepsHistory?.[0]?.placementAdmission) {
+    return false;
+  }
   return (
     operation?.workflowStep === WORKFLOW_STEP.PENDING &&
     isDisruptiveOperationLedgerSelfMove(

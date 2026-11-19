@@ -9,9 +9,7 @@
     "convergence": 90000,
     "quietWindow": 3000,
     "scenarioDefault": 120000,
-    "bootstrapReadyStableWindowMs": 1000,
-    "joiningHttpTimeoutMs": 60000,
-    "joiningLeadershipWaitTimeoutMs": 240000
+    "bootstrapReadyStableWindowMs": 1000
   },
   "convergence": {
     "targetVoterCount": 3,

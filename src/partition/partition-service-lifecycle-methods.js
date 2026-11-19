@@ -88,6 +88,17 @@ class PartitionServiceLifecycleMethods {
    * @return {Promise<void>}
    */
   async quiesceRebalancing() {
+    if (this.replicaPlacementOwnerAttachment) {
+      this.replicaPlacementOwnerAttachment.detach();
+      this.replicaPlacementOwnerAttachment = null;
+    }
+    if (this.rebalanceCoordinator) {
+      const unregisterFn =
+        this.rebalanceCoordinator.unregisterLedgerPartitionService;
+      if (typeof unregisterFn === PARTITION_SERVICE_TYPE.FUNCTION) {
+        unregisterFn.call(this.rebalanceCoordinator, this);
+      }
+    }
     if (
       this.rebalancerLeadershipSink &&
       typeof this.rebalancerLeadershipSink.setLeader ===

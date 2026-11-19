@@ -1,4 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
+import {attachReplicaPlacementOwner} from './replica-placement-owner.js';
 import {isBootstrapTopologyDispatchDeferred} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {
@@ -80,6 +82,57 @@ function buildBootstrapTopologyHoldReleaseOutcome(released, operation) {
 }
 
 const operationCreationSupportMethods = {
+  bindReplicaPlacementOwnerFactory(factory) {
+    if (typeof factory !== LOCAL_STR_FUNCTION) {
+      return;
+    }
+    this.replicaPlacementOwnerFactory = factory;
+    this.placementAdmissionEnabled = true;
+  },
+
+  registerLedgerPartitionService(partitionService) {
+    if (!partitionService || partitionService.partitionId !== LEDGER_PARTITION_ID) {
+      return;
+    }
+    if (!(this.ledgerPartitionServices instanceof Set)) {
+      this.ledgerPartitionServices = new Set();
+    }
+    this.ledgerPartitionServices.add(partitionService);
+    this.placementAdmissionEnabled = true;
+  },
+
+  unregisterLedgerPartitionService(partitionService) {
+    if (this.ledgerPartitionServices instanceof Set) {
+      this.ledgerPartitionServices.delete(partitionService);
+    }
+  },
+
+  attachLedgerReplicaPlacementOwner(ledgerPartitionService) {
+    if (!ledgerPartitionService ||
+        ledgerPartitionService.partitionId !== LEDGER_PARTITION_ID) {
+      return null;
+    }
+    const readiness = this.controlPlaneReadinessService;
+    const nodeAuthority = readiness ? readiness.serveEligibilityOwner : null;
+    if (!nodeAuthority || !this.systemTableCache) {
+      return null;
+    }
+    this.registerLedgerPartitionService(ledgerPartitionService);
+    if (this.replicaPlacementOwnerFactory) {
+      return this.replicaPlacementOwnerFactory(ledgerPartitionService);
+    }
+    return attachReplicaPlacementOwner({
+      nodeId: this.nodeId,
+      ledgerPartitionService,
+      nodeAuthority,
+      systemTableCache: this.systemTableCache,
+      workflowOwner: this.workflowOwner || null,
+      storageAccountingService: this.storageAccountingService || null,
+      now: () => ledgerPartitionService.timeSource.now(),
+      logger: ledgerPartitionService.logger,
+    });
+  },
+
   /**
    * Release the bootstrap-topology dispatch hold of one deterministic
    * founding-cohort ADD and stamp its cohort topology, as ONE compare-and-set

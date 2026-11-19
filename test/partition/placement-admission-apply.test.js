@@ -35,8 +35,10 @@ import {OperationType} from '../../src/rebalancer/replica-operation-progress.js'
 import {
   applyCommitted, awaitProposal, beginMessage, clearFixtureSingletons,
   decisionCommandOf, durableAppliedIndex, identityOf, isPrepareCommand,
-  prepareMessage, queryMessage, resetFixtureSingletons, send, settleTicks, track,
+  prepareMessage, queryMessage, resetFixtureSingletons, send, settleTicks,
+  temporaryDbPath, track,
 } from '../test-helpers/participant-transaction-fixture.js';
+import fs from 'node:fs';
 import {
   LEDGER_PARTITION_ID, NODE, admitOnLeader, commitLedgerStatement, foundingStatement,
   ledgerRows, onLedgerLeader, placementStatement, stepLedgerRow, watchEntryCommitted,
@@ -187,6 +189,108 @@ test('F5: the same entryId committed twice replays the first answer, never a sec
   assert.deepEqual(ledgerRows(leader), before);
   committed.stop();
 }));
+
+test('F5b: retained placement outcomes written by the preceding representation (NULL ' +
+  'last_insert_rowid) replay across reopen, advance durable applied progress across ' +
+  'a duplicate followed by a healthy command, and reject command collisions', async () => {
+  const {directory, dbPath} = temporaryDbPath('f5b-pre-fingerprint');
+  try {
+    let firstCommand = null;
+    let firstAnswer = null;
+    await onLedgerLeader(async (leader1, proposed1) => {
+      const first = await admitOnLeader(leader1, proposed1, 'f5b-pre-fp-1',
+        placementStatement({partitionId: 'tables-p1', target: NODE.B}));
+      firstCommand = first.command;
+      firstAnswer = first.answer;
+      // Convert the outcome row to the preceding 0970ab012f65 representation
+      // (last_insert_rowid = NULL, changes = NULL).
+      leader1.db.prepare(
+        'UPDATE _partition_statement_outcomes SET last_insert_rowid = NULL, changes = NULL ' +
+        'WHERE entry_key = ?',
+      ).run('entry:f5b-pre-fp-1');
+      assert.equal(outcomeRecordOf(leader1, firstCommand).lastInsertRowid, null);
+    }, {dbPath});
+
+    // Reopen on the same file-backed SQLite database with fresh owners.
+    await onLedgerLeader(async (leader2, proposed2) => {
+      assert.equal(outcomeRecordOf(leader2, firstCommand).lastInsertRowid, null);
+      const collidedBody = placementStatement({partitionId: 'indices-p1', target: NODE.C});
+      // Even before backfilling, a colliding command with a different body is refused
+      // against the retained ADMITTED row in replica_operations.
+      const collidedBefore = await requestPlacementAdmission(leader2, {
+        entryId: 'f5b-pre-fp-1',
+        body: collidedBody,
+      });
+      assert.equal(collidedBefore.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
+
+      // Request replay of the identical command X succeeds and backfills fingerprint.
+      const replayed = await requestPlacementAdmission(leader2, {
+        entryId: 'f5b-pre-fp-1',
+        body: firstCommand.body,
+      });
+      assert.equal(proposed2.length, 0);
+      assert.deepEqual(resultOf(replayed), resultOf(firstAnswer));
+      assert.equal(
+        Number.isSafeInteger(outcomeRecordOf(leader2, firstCommand).lastInsertRowid),
+        true,
+      );
+
+      // Reset to pre-fingerprint NULL to test committed duplicate in the log followed
+      // by a healthy new command in the same apply slice.
+      leader2.db.prepare(
+        'UPDATE _partition_statement_outcomes SET last_insert_rowid = NULL, changes = NULL ' +
+        'WHERE entry_key = ?',
+      ).run('entry:f5b-pre-fp-1');
+      const appliedBefore = durableAppliedIndex(leader2);
+      const healthyCommand = buildPlacementCommand(leader2, {
+        type: 'PLACEMENT_ADMIT',
+        entryId: 'f5b-pre-fp-2',
+        body: collidedBody,
+      });
+      leader2.controllablePort.commitBatches([firstCommand, healthyCommand], [2]);
+      assert.equal(durableAppliedIndex(leader2), appliedBefore + 2);
+      assert.equal(ledgerRows(leader2).length, 2);
+      assert.equal(
+        Number.isSafeInteger(outcomeRecordOf(leader2, firstCommand).lastInsertRowid),
+        true,
+      );
+
+      // Also verify pre-fingerprint RELEASED outcome replay and collision rejection:
+      const releaseCmd = buildPlacementCommand(leader2, {
+        type: 'PLACEMENT_RELEASE_HOLD',
+        entryId: 'f5b-pre-fp-release',
+        body: {operationId: 'pl-tables-p1-3-0'},
+      });
+      leader2.db.prepare(
+        'INSERT INTO _partition_statement_outcomes ' +
+        '(entry_key, outcome, log_index, term, changes, last_insert_rowid, owner_result_text) ' +
+        'VALUES (?, ?, ?, ?, NULL, NULL, ?)',
+      ).run(
+        'entry:f5b-pre-fp-release',
+        'applied',
+        99,
+        1,
+        JSON.stringify({outcome: 'RELEASED', operationIds: ['pl-tables-p1-3-0']}),
+      );
+      const collidedRelease = buildPlacementCommand(leader2, {
+        type: 'PLACEMENT_RELEASE_HOLD',
+        entryId: 'f5b-pre-fp-release',
+        body: {operationId: 'pl-other-p1-3-0'},
+      });
+      assert.equal(
+        applyCommitted(leader2, collidedRelease),
+        PLACEMENT_ADMISSION_ERROR.BYTES,
+      );
+      assert.equal(applyCommitted(leader2, releaseCmd), null);
+      assert.equal(
+        Number.isSafeInteger(outcomeRecordOf(leader2, releaseCmd).lastInsertRowid),
+        true,
+      );
+    }, {dbPath});
+  } finally {
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
 
 test('F4: a FAILED move re-planned with membership unchanged is admitted under a new id',
   () => onLedgerLeader(async (leader, proposed) => {

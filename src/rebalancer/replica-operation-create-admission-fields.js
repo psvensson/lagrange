@@ -10,6 +10,9 @@ const REPLICA_CREATE_ADMISSION_OPERATION_FIELDS = Object.freeze([
 ]);
 
 function operationCarriesReplicaCreateAdmission(operation) {
+  if (operation?.stepsHistory?.[0]?.placementAdmission) {
+    return true;
+  }
   return REPLICA_CREATE_ADMISSION_OPERATION_FIELDS.some((field) =>
     operation?.[field] !== null && operation?.[field] !== undefined,
   );

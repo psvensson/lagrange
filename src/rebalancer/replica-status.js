@@ -149,38 +149,36 @@ function createOperation(params) {
  * @param {number} now - The creation time (ms since epoch).
  * @return {Operation} A new Operation object.
  */
+function resolvePositiveSafeInteger(value) {
+  const num = Number(value);
+  return Number.isSafeInteger(num) && num > 0 ? num : null;
+}
+
 function createOperationAt(params, now) {
   const initialStep = WORKFLOW_STEP.PENDING;
   const initialHistory = {step: initialStep, timestamp: now};
-
-  if (params.type === OperationType.REPLACE &&
-      params.sourceReplicaId) {
+  const replaceSourceReplicaId =
+    params.type === OperationType.REPLACE && params.sourceReplicaId ?
+      params.sourceReplicaId :
+      null;
+  if (replaceSourceReplicaId) {
     initialHistory[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] =
-      params.sourceReplicaId;
+      replaceSourceReplicaId;
   }
-  const targetNodeBootIncarnation = Number(params.targetNodeBootIncarnation);
-  const hasTargetNodeBootIncarnation =
-    Number.isSafeInteger(targetNodeBootIncarnation) &&
-    targetNodeBootIncarnation > 0;
-  if (hasTargetNodeBootIncarnation) {
-    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-      targetNodeBootIncarnation;
+  const bootInc = resolvePositiveSafeInteger(params.targetNodeBootIncarnation);
+  if (bootInc !== null) {
+    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] = bootInc;
   }
-  const targetNodeStorageIncarnation = Number(
-    params.targetNodeStorageIncarnation,
-  );
-  const hasTargetNodeStorageIncarnation =
-    Number.isSafeInteger(targetNodeStorageIncarnation) &&
-    targetNodeStorageIncarnation > 0;
-  if (hasTargetNodeStorageIncarnation) {
-    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-      targetNodeStorageIncarnation;
+  const storageInc = resolvePositiveSafeInteger(params.targetNodeStorageIncarnation);
+  if (storageInc !== null) {
+    initialHistory[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] = storageInc;
   }
   const operation = {
     operationId: params.operationId,
     type: params.type,
     partitionId: params.partitionId,
     replicaId: params.replicaId || null,
+    sourceReplicaId: replaceSourceReplicaId,
     sourceNodeId: params.sourceNodeId,
     targetNodeId: params.targetNodeId,
     status: WORKFLOW_STEP_TO_STATUS[initialStep],
@@ -191,17 +189,12 @@ function createOperationAt(params, now) {
     errorMessage: null,
     stepsHistory: [initialHistory],
   };
-  if (hasTargetNodeBootIncarnation) {
-    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-      targetNodeBootIncarnation;
+  if (bootInc !== null) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] = bootInc;
   }
-  if (hasTargetNodeStorageIncarnation) {
-    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-      targetNodeStorageIncarnation;
+  if (storageInc !== null) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] = storageInc;
   }
-  // The planning membership epoch rides the operation record top-level so
-  // the dispatch-time epoch gate can fence stale ADD/REPLACE execution
-  // (audit finding 7); it is no longer duplicated into stepsHistory.
   if (isBoundMembershipPublicationEpoch(params.membershipPublicationEpoch)) {
     operation.membershipPublicationEpoch = params.membershipPublicationEpoch;
   }

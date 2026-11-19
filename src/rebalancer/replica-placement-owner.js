@@ -29,6 +29,10 @@ import {
   buildPlacementAdmissionStatement, resolveSourceCapacityForClass,
 } from './replica-placement-owner-admission-statement.js';
 import {
+  deleteUnresolvedPlacementAttempt, persistUnresolvedPlacementAttempt,
+  reconcilePlacementAttempts,
+} from './replica-placement-owner-attempts.js';
+import {
   PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY, PLACEMENT_DISPATCH_HOLD,
   PLACEMENT_OUTCOME, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
 } from './replica-placement-owner-constants.js';
@@ -309,6 +313,7 @@ class ReplicaPlacementOwner {
       bodyText: JSON.stringify(body),
     });
     this.uncertainEntryIds.set(attemptKey, attempt);
+    persistUnresolvedPlacementAttempt(this.ledgerPartitionService?.db, attempt);
     return attempt;
   }
 
@@ -463,6 +468,7 @@ class ReplicaPlacementOwner {
       const answer = await submitFn({entryId, body});
       if (!isWriteOutcomeUnknown(answer) && answer?.committed === true) {
         this.uncertainEntryIds.delete(attemptKey);
+        deleteUnresolvedPlacementAttempt(this.ledgerPartitionService?.db, attemptKey);
       }
       this.recordSeenOperationSignatures();
       return answer;
@@ -481,14 +487,28 @@ class ReplicaPlacementOwner {
     return this.submitPlacementAttempt(attempt, this.releasePlacementHold);
   }
 
-  submitCandidateAdmission(candidate, buildStatement) {
+  async submitCandidateAdmission(candidate, buildStatement) {
+    const intentKey = moveIntentKeyOf(candidate.partitionId, candidate.move);
+    const attemptKey = `${ENTRY_KIND_ADMIT}:${candidate.partitionId}`;
+    const hadRetained = this.uncertainEntryIds.get(attemptKey)?.intentKey === intentKey;
     const attempt = this.resolveAttempt(
       ENTRY_KIND_ADMIT,
       candidate.partitionId,
-      moveIntentKeyOf(candidate.partitionId, candidate.move),
+      intentKey,
       buildStatement,
     );
-    return this.submitPlacementAttempt(attempt, this.admitPlacement);
+    const answer = await this.submitPlacementAttempt(attempt, this.admitPlacement);
+    if (hadRetained && answer?.committed === true &&
+        answer?.[PLACEMENT_RESULT_FIELD]?.outcome === PLACEMENT_OUTCOME.REFUSED) {
+      const fresh = this.resolveAttempt(
+        ENTRY_KIND_ADMIT,
+        candidate.partitionId,
+        intentKey,
+        buildStatement,
+      );
+      return this.submitPlacementAttempt(fresh, this.admitPlacement);
+    }
+    return answer;
   }
 
   submitAdmission(statement) {
@@ -504,15 +524,11 @@ class ReplicaPlacementOwner {
       await cdcDelivery.driveCdcObligations(PLACEMENT_TRIGGER.LEADERSHIP_START);
     }
     const refreshed = readPlacementCensus(this.ledgerPartitionService.db);
-    for (const [attemptKey, attempt] of this.uncertainEntryIds.entries()) {
-      const settledInLedger = refreshed.some((row) =>
-        row.admission?.entryId === attempt.entryId ||
-        (attemptKey === `${ENTRY_KIND_RELEASE}:${row.operationId}` &&
-          row.dispatchHold !== PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE));
-      if (settledInLedger) {
-        this.uncertainEntryIds.delete(attemptKey);
-      }
-    }
+    reconcilePlacementAttempts(
+      this.ledgerPartitionService.db,
+      this.uncertainEntryIds,
+      refreshed,
+    );
     return refreshed.length > 0 || census.length > 0 ? refreshed : census;
   }
 
@@ -737,31 +753,19 @@ class ReplicaPlacementOwner {
     const storageExcludedTargets = this.readStorageExcludedTargets(nodeInput, nowMs);
     const {ordered, inputsByPartition, repairWaitingSourceNodeIds} =
       this.preparePassOrderedCandidates(
-        nodeInput,
-        busyPartitions,
-        saturatedTargets,
-        storageExcludedTargets,
-      );
+        nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets);
     const admitted = await this.admitOrderedCandidates({
-      ordered,
-      inputsByPartition,
-      repairWaitingSourceNodeIds,
-      nodeInput,
-      busyPartitions,
-      occupancy,
-      saturatedTargets,
-      storageExcludedTargets,
+      ordered, inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
+      busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,
       resyncOnly,
       incompleteCount: census.filter((r) => r.incomplete).length,
       copyCount: occupancy.copies.length,
       ledgerIncomplete: census.some((r) =>
-        r.incomplete &&
-        r.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+        r.incomplete && r.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
         r.entityId === LEDGER_PARTITION_ID),
     });
     this.lastPassSnapshot = Object.freeze({
-      state: SERVE_ELIGIBILITY_STATE.READY,
-      admitted: Object.freeze(admitted),
+      state: SERVE_ELIGIBILITY_STATE.READY, admitted: Object.freeze(admitted),
     });
   }
 }
@@ -778,8 +782,7 @@ function attachReplicaPlacementOwner(options = {}) {
   }
   ledgerPartitionService.setRebalancerLeadershipSink(owner);
   return Object.freeze({
-    owner,
-    ledgerPartitionService,
+    owner, ledgerPartitionService,
     detach() {
       if (ledgerPartitionService.rebalancerLeadershipSink === owner) {
         ledgerPartitionService.setRebalancerLeadershipSink(null);
@@ -791,6 +794,5 @@ function attachReplicaPlacementOwner(options = {}) {
 
 export {
   REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
-  attachReplicaPlacementOwner,
-  createReplicaPlacementOwner,
+  attachReplicaPlacementOwner, createReplicaPlacementOwner,
 };

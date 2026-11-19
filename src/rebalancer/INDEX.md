@@ -211,6 +211,7 @@ documentClass: generated
 - [replica-operation-update-disposition.js](replica-operation-update-disposition.js) - Typed disposition for replica_operation UPDATE persistence. (importers: many)
 - [replica-placement-cure-policy.js](replica-placement-cure-policy.js) - Single owner of the replica-placement CURE-TYPING relation (quest cure-typing-single-owner-table; epic... (importers: many)
 - [replica-placement-owner-admission-statement.js](replica-placement-owner-admission-statement.js) - The admission statement: the one canonical body of a PLACEMENT_ADMIT command (quest... (importers: few)
+- [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts. (importers: one)
 - [replica-placement-owner-constants.js](replica-placement-owner-constants.js) - The vocabulary of the one replica placement owner (quest replica-placement-admission-owner, design sections 2.5-2.7... (importers: many)
 - [replica-placement-owner-deficits.js](replica-placement-owner-deficits.js) - The placement deficit model of the one replica placement owner (quest replica-placement-admission-owner, design... (importers: few)
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: few)

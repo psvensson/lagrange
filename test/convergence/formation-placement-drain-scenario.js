@@ -49,9 +49,6 @@
 import Database from 'better-sqlite3';
 import {EventEmitter} from 'node:events';
 import {
-  ControlPlaneSetup,
-} from '../../src/bootstrap/shared/control-plane-setup.js';
-import {
   INITIAL_MESSAGE_GROUP_ID,
   REPLICA_OPERATIONS_SCHEMA,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -70,18 +67,15 @@ import {
 } from '../../src/constants/index.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {
-  PLACEMENT_ADMIT_TYPE,
-  PLACEMENT_RELEASE_HOLD_TYPE,
-} from '../../src/partition/partition-placement-admission-constants.js';
-import {
-  buildPlacementCommand,
-} from '../../src/partition/partition-placement-admission-command.js';
-import {
   LEDGER_PARTITION_ID,
 } from '../../src/partition/partition-placement-admission-decision.js';
 import {
   applyPlacementCommand,
 } from '../../src/partition/partition-placement-admission.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
+import {applyCommandThroughApplicationOwner} from '../test-helpers/controllable-consensus-port.js';
 import {
   PARTITION_CDC_EVENT_BUILD_STATE,
 } from '../../src/partition/partition-cdc-generator.js';
@@ -94,7 +88,30 @@ import {
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {
   openParticipantTransactionStore,
+  recordPartitionWriteOrigin,
 } from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  PARTICIPANT_CUTOVER_OUTCOME,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {
+  runtimeBuildProvenance,
+} from '../../src/diagnostics/runtime-build-provenance.js';
+import {
+  readParticipantReleaseFacts,
+  resumeParticipantCutoverAdmission,
+} from '../../src/partition/partition-participant-transaction-pause.js';
+import {
+  releaseIdentityOf,
+} from '../../src/partition/partition-participant-release-contract.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+} from '../../src/raft/raft-committed-membership-constants.js';
+import {
+  deriveRaftRsPeerId,
+} from '../../src/raft/raft-rs-peer-identity.js';
+import {
+  raftRsConfStateKey,
+} from '../../src/raft/raft-rs-conf-state-key.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -223,6 +240,7 @@ function getOrCreateSimulatedLedgerStore(cache) {
   }
   createCommittedStatementOutcomeTable(db);
   openParticipantTransactionStore(db);
+  recordPartitionWriteOrigin(db, {index: 1, term: 1});
   ensureCdcObligationLedger(db);
   const columns = REPLICA_OPERATIONS_SCHEMA.columns.map((c) => c.name);
   const placeholders = columns.map(() => '?').join(', ');
@@ -243,7 +261,7 @@ function getOrCreateSimulatedLedgerStore(cache) {
   }
   const store = {
     db,
-    logIndex: 0,
+    logIndex: 1,
     applyingPlacementCommand: false,
   };
   cache.onCacheApplyChange((tableName, operation, row) => {
@@ -262,26 +280,69 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
   const store = getOrCreateSimulatedLedgerStore(cache);
   const {db} = store;
   const emitter = new EventEmitter();
-  const resolvedWrites = new Map();
+  const pendingOutcomes = new Map();
+  const commitWaiters = new Map();
+
+  const replicaId = `${LEDGER_PARTITION_ID}-r1`;
+  const peerId = deriveRaftRsPeerId(replicaId);
+  const confState = Object.freeze({
+    voters: [peerId],
+    votersOutgoing: [],
+    learners: [],
+    learnersNext: [],
+  });
+  const configurationKey = raftRsConfStateKey(confState);
+  const identities = Object.freeze({[peerId]: replicaId});
 
   const service = Object.assign(emitter, {
     partitionId: LEDGER_PARTITION_ID,
     tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
-    replicaId: `${LEDGER_PARTITION_ID}-r1`,
+    replicaId,
+    replicaIds: [
+      replicaId,
+      `${LEDGER_PARTITION_ID}-r2`,
+      `${LEDGER_PARTITION_ID}-r3`,
+    ],
     nodeId: seedHosts.nodeId,
     db,
+    initialized: true,
+    proposalQueue: {size: 0},
+    pendingWriteOutcomes: pendingOutcomes,
     systemTableCache: cache,
-    timeSource: {now: seedHosts.now},
+    rebalanceCoordinator: seedHosts.rebalanceCoordinator,
+    timeSource: {
+      now: seedHosts.now,
+      setTimeout: (fn, ms) => seedHosts.setTimeoutFn(fn, ms),
+    },
     hlcClock: {now: () => `${seedHosts.now()}:0:${seedHosts.nodeId}`},
     logger: QUIET_LOGGER,
     cdcPipelineMetrics: {increment() {}},
-    isLeader: true,
+    isLeader: false,
     isShutdown: false,
+    hasKnownRemoteLeaderWitness: () => false,
     trackPendingCDCEvent() {},
     cdcDelivery: {
       driveCdcObligations: async () => {},
     },
     getCommittedEntryKey: (command) => committedStatementEntryKey(command),
+    getPendingCommittedWriteOutcome: (entryId) =>
+      pendingOutcomes.get(entryId) ?? null,
+    setPendingCommittedWriteOutcome: (entryId, promise) => {
+      pendingOutcomes.set(entryId, promise);
+      promise.finally(() => {
+        if (pendingOutcomes.get(entryId) === promise) {
+          pendingOutcomes.delete(entryId);
+        }
+      }).catch(() => {});
+    },
+    waitForCommittedWrite: (entryId) => {
+      const {promise, resolve, reject} = Promise.withResolvers();
+      commitWaiters.set(entryId, {resolve, reject});
+      return promise;
+    },
+    markCommittedWriteProposal: () => true,
+    recordWritePhaseDuration: () => {},
+    applyWriteSideEffectPlan: async () => {},
     syncCDCGeneratorDependencies: () => ({
       buildEvent: ({type, tableName, data, whereClause, entryId, timestamp}) => ({
         state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
@@ -300,84 +361,132 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
       }),
     }),
     resolveCommittedWrite: (entryId, answer) => {
-      resolvedWrites.set(entryId, answer);
+      const waiter = commitWaiters.get(entryId);
+      commitWaiters.delete(entryId);
+      waiter?.resolve(answer);
     },
-    rejectCommittedWrite: (_entryId, error) => {
-      throw error;
+    rejectCommittedWrite: (entryId, error) => {
+      const waiter = commitWaiters.get(entryId);
+      commitWaiters.delete(entryId);
+      waiter?.reject(error);
+    },
+    raft: {
+      readStatus: () => ({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        role: service.isLeader ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+        term: 1,
+        leaderId: replicaId,
+        leaderAddress: seedHosts.nodeId,
+        configurationKey,
+        membershipGenerationIndex: 1,
+        appliedIndex: store.logIndex,
+        commitIndex: store.logIndex,
+        lastIndex: store.logIndex,
+        runtimeGeneration: 1,
+        lifecycleIncarnation: 1,
+        confChangePending: false,
+        peers: [],
+      }),
+      readCommittedMembership: async () => ({
+        kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
+        ...confState,
+        identities,
+        appliedIndex: store.logIndex,
+        commitIndex: store.logIndex,
+        configurationKey,
+        membershipGenerationIndex: 1,
+        term: 1,
+        leaderId: replicaId,
+        gateOpen: true,
+      }),
+      propose: (entry) => {
+        store.logIndex += 1;
+        store.applyingPlacementCommand = true;
+        try {
+          applyCommandThroughApplicationOwner({
+            database: db,
+            groupId: LEDGER_PARTITION_ID,
+            index: store.logIndex,
+            term: 1,
+            command: entry,
+            applyCommittedEntry: (committed) =>
+              applyPlacementCommand(service, {
+                command: committed.command,
+                index: committed.index,
+                term: committed.term,
+                afterCommit: (fn) => committed.effects.afterCommit.push(fn),
+                afterRollback: (fn) => committed.effects.afterRollback.push(fn),
+              }),
+          });
+        } finally {
+          store.applyingPlacementCommand = false;
+        }
+        return settledTurn(Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK}));
+      },
     },
     rebalancerLeadershipSink: null,
-    setRebalancerLeadershipSink(sink) {
-      this.rebalancerLeadershipSink =
-        sink && typeof sink.setLeader === 'function' ? sink : null;
+    replicaPlacementOwnerAttachment: null,
+    resolveRebalancerLeadership() {
+      return Boolean(this.isLeader && !this.isShutdown);
     },
+    driveRebalancerLeadershipSink:
+      PartitionService.prototype.driveRebalancerLeadershipSink,
+    setRebalancerLeadershipSink:
+      PartitionService.prototype.setRebalancerLeadershipSink,
+    ensureReplicaPlacementOwnerAttached:
+      PartitionService.prototype.ensureReplicaPlacementOwnerAttached,
     close: () => {},
   });
 
-  const executePlacementCommand = (type, {entryId, body}) => {
-    const command = buildPlacementCommand(service, {type, entryId, body});
-    store.logIndex += 1;
-    const afterCommitEffects = [];
-    const afterRollbackEffects = [];
-    try {
-      db.transaction(() => {
-        applyPlacementCommand(service, {
-          command,
-          index: store.logIndex,
-          term: 1,
-          afterCommit: (effect) => afterCommitEffects.push(effect),
-          afterRollback: (effect) => afterRollbackEffects.push(effect),
-        });
-      })();
-    } catch (error) {
-      for (const effect of afterRollbackEffects) effect();
-      throw error;
-    }
-    store.applyingPlacementCommand = true;
-    try {
-      for (const effect of afterCommitEffects) effect();
-    } finally {
-      store.applyingPlacementCommand = false;
-    }
-    const answer = resolvedWrites.get(command.entryId);
-    resolvedWrites.delete(command.entryId);
-    return answer;
-  };
-
-  const admitPlacement = (payload) =>
-    executePlacementCommand(PLACEMENT_ADMIT_TYPE, payload);
-  const releasePlacementHold = (payload) =>
-    executePlacementCommand(PLACEMENT_RELEASE_HOLD_TYPE, payload);
-
-  return {service, admitPlacement, releasePlacementHold};
+  return {service};
 }
 
 /**
  * Mount the placement decider of a starting seed as this tree's production
- * composition builds it: one ReplicaPlacementOwner on replica_operations-p1.
+ * composition builds it: one ReplicaPlacementOwner attached by
+ * PartitionService.prototype.ensureReplicaPlacementOwnerAttached on
+ * replica_operations-p1, using the real requestPlacementAdmission /
+ * requestPlacementHoldRelease -> write kernel -> proposal codec ->
+ * RaftRsApplicationTransactionOwner path.
  * @param {object} mount
  * @param {object} mount.seedHosts the seed's real owners
  * @param {object} mount.clock the world clock
  * @param {object} mount.cache the durable row store
  * @return {Map<string, object>} the deciders by entity id
  */
-function mountPlacementDeciders({seedHosts, cache}) {
-  const {service, admitPlacement, releasePlacementHold} =
-    createSimulatedLedgerPartitionService({seedHosts, cache});
-  service.admitPlacement = admitPlacement;
-  service.releasePlacementHold = releasePlacementHold;
-  const attachment = ControlPlaneSetup.attachReplicaPlacementOwner({
-    nodeId: seedHosts.nodeId,
-    ledgerPartitionService: service,
-    controlPlaneReadinessService: seedHosts.controlPlaneReadinessService,
-    rebalanceCoordinator: seedHosts.rebalanceCoordinator,
-    systemTableCache: seedHosts.cache,
-    storageAccountingService: seedHosts.storageAccountingService,
-    now: seedHosts.now,
-    logger: QUIET_LOGGER,
+async function resumeSimulatedLedgerCutoverAdmission(service) {
+  const handler = {
+    nodeId: service.nodeId,
+    ownerIncarnation: 1,
+    shuttingDown: false,
+    localServices: new Map([[service.replicaId, service]]),
+  };
+  const facts = await readParticipantReleaseFacts(handler, service);
+  if (facts.outcome !== PARTICIPANT_CUTOVER_OUTCOME.OBSERVED) {
+    throw new Error(`Simulated ledger facts unavailable: ${JSON.stringify(facts)}`);
+  }
+  const release = releaseIdentityOf({
+    partitionId: service.partitionId,
+    targetBuildDigest: facts.buildDigest,
+    configurationKey: facts.membership.configurationKey,
+    membershipGenerationIndex: facts.membership.membershipGenerationIndex,
   });
+  const outcome = await resumeParticipantCutoverAdmission(handler, service, {
+    release,
+    census: [facts],
+  });
+  if (outcome !== PARTICIPANT_CUTOVER_OUTCOME.RESUMED) {
+    throw new Error(`Simulated ledger cutover release refused: ${outcome}`);
+  }
+}
+
+function mountPlacementDeciders({seedHosts, cache}) {
+  const {service} = createSimulatedLedgerPartitionService({seedHosts, cache});
+  service.ensureReplicaPlacementOwnerAttached();
+  service.isLeader = true;
+  void resumeSimulatedLedgerCutoverAdmission(service);
+  const attachment = service.replicaPlacementOwnerAttachment;
   const {owner} = attachment;
-  owner.admitPlacement = admitPlacement;
-  owner.releasePlacementHold = releasePlacementHold;
   owner.shutdown = () => {
     attachment.detach();
     service.close();
@@ -565,19 +674,7 @@ function createStepTracker(world, driver, afterStep) {
   };
   for (const [method, step] of Object.entries(DRIVER_STEP_METHODS)) {
     const original = driver[method].bind(driver);
-    driver[method] = (...args) => tracker.within(step, async () => {
-      const result = await original(...args);
-      if (method === 'membershipDerivation' && !isSpreadPublished(world)) {
-        for (const hosts of world.hostsById.values()) {
-          if (!world.upNodeIds.has(hosts.nodeId)) continue;
-          hosts.membershipPublicationService.enqueueClusterMembershipReconcile(
-            STEP.MEMBERSHIP_TICK,
-          );
-        }
-        await driver.settle();
-      }
-      return result;
-    });
+    driver[method] = (...args) => tracker.within(step, () => original(...args));
   }
   return tracker;
 }
@@ -957,6 +1054,7 @@ function retryOutcome(world, ledger, injected) {
  * @return {Promise<object>} the report
  */
 async function runPlacementDrain(order, options = {}) {
+  await runtimeBuildProvenance();
   const world = createFormationWorld({
     mountPlacementDeciders,
     platformClockIsWorldClock: true,

@@ -23,9 +23,15 @@ import {
 } from '../../src/partition/partition-transaction-determinism.js';
 import {
   discardParticipantSessions,
-  recordCommittedAutocommitRowKeys,
+  inspectRetainedPreparedObligations,
   resetParticipantRowKeyHistory,
 } from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  PARTICIPANT_TRANSACTION_FAILURE_CODE,
+} from '../../src/partition/partition-participant-transaction-constants.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
 import {cruise} from 'dependency-cruiser';
 import depcruiseConfig from '../../dependency-cruiser.config.cjs';
 import {
@@ -33,7 +39,6 @@ import {
   operationsOf,
 } from '../../src/partition/partition-participant-transaction-bytes.js';
 import {
-  advancePartitionWriteGeneration,
   readPartitionWriteGeneration,
 } from '../../src/partition/partition-participant-transaction-store.js';
 import {
@@ -47,6 +52,7 @@ import {
   ROW,
   ROW_2,
   TABLE,
+  V3,
   applyProposal,
   awaitProposal,
   beginMessage,
@@ -54,6 +60,7 @@ import {
   commitDecision,
   commitMessage,
   commitOrdinaryWrite,
+  decisionCommandOf,
   durableAppliedIndex,
   generationOf,
   identityOf,
@@ -73,6 +80,7 @@ import {
   send,
   shutdownAll,
   startLeader,
+  startReplica,
   temporaryDbPath,
 } from '../test-helpers/participant-transaction-fixture.js';
 
@@ -556,22 +564,43 @@ test('Durable PREPARED transactions survive file-backed SQLite reopen with fresh
     discardParticipantSessions(leader3);
     resetParticipantRowKeyHistory(leader3);
 
-    for (let i = 0; i < 1100; i += 1) {
-      advancePartitionWriteGeneration(leader3.db);
-      const gen = readPartitionWriteGeneration(leader3.db);
-      recordCommittedAutocommitRowKeys(
-        leader3,
-        {sql: INSERT_SQL, params: [`evict-k-${i}`, 'v']},
-        gen,
+    // Finding 6b: Generate > 1,024 history pressure through actual committed writes on leader3
+    // while txRecB remains durably PREPARED, then close and reopen from disk with fresh owners
+    // (leader4) before committing txRecB:
+    const genBeforePressure = readPartitionWriteGeneration(leader3.db);
+    const evictWriteCmds = [];
+    for (let i = 0; i < 1030; i += 1) {
+      const txEvict = identityOf(
+        (i + 100).toString(16).padStart(32, '0'),
+        {sessionId: `evict-sess-${i}`},
       );
+      const prepEvict = prepareCommandOf(
+        txEvict,
+        [operationOf({id: `evict-k-${i}`, value: 'v'})],
+        genBeforePressure + i,
+      );
+      evictWriteCmds.push(prepEvict, commitDecision(txEvict, prepEvict));
     }
+    leader3.controllablePort.commitBatches(evictWriteCmds, [evictWriteCmds.length]);
+    assert.equal(readPartitionWriteGeneration(leader3.db), genBeforePressure + 1030);
+    await shutdownAll(leader3);
+    leader3 = null;
 
-    // 5. Commit txRecB on leader3 after second reopen, rollback recovery, leadership change, and history eviction:
+    const started4 = await startLeader({dbPath, releaseAdmission: false});
+    leader3 = started4.leader;
+    leader3.concurrencyGranularity = 'row-key';
+    leader3.conflictSettleWaitMs = 50;
+    discardParticipantSessions(leader3);
+    resetParticipantRowKeyHistory(leader3);
+
+    // 5. Commit txRecB on reopened leader4 after > 1,024 committed writes and disk reopen:
     leader3.controllablePort.commitBatches([commitBCmd], [1]);
     assert.equal(rowCount(leader3, 'rec-k1'), 1);
     assert.equal(rowCount(leader3, 'rec-k2'), 1);
+    const finalDecisions = readDurablePartitionSnapshot(leader3.db).decisions.filter((d) =>
+      [txRecA.participantId, txRecB.participantId].includes(d.participant_id));
     assert.deepEqual(
-      readDurablePartitionSnapshot(leader3.db).decisions.map((d) => d.state),
+      finalDecisions.map((d) => d.state),
       ['COMMITTED', 'COMMITTED'],
     );
     // Once all retained PREPARED obligations have settled, cutover admission resumes cleanly:
@@ -724,6 +753,13 @@ test('Native three-replica rs-raft participant group converges on disjoint PREPA
     },
     budgetMs: 8000,
   });
+  const gateway = createTransactionPersistenceGateway();
+  const engine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    logger: QUIET_LOGGER,
+    controlPlaneSystemTableGateway: gateway,
+    autoStartDistributedTransactionRecovery: false,
+  });
   try {
     for (const service of group.services) {
       service.concurrencyGranularity = 'row-key';
@@ -733,25 +769,79 @@ test('Native three-replica rs-raft participant group converges on disjoint PREPA
     await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
     const [leader, follower2, follower3] = group.services;
 
-    const tx1 = identityOf('a'.repeat(32), {partitionId, sessionId: '3r-sess-1'});
-    const tx2 = identityOf('b'.repeat(32), {partitionId, sessionId: '3r-sess-2'});
-    assert.equal((await send(leader, beginMessage(tx1))).success, true);
-    assert.equal((await send(leader, beginMessage(tx2))).success, true);
-    assert.equal(
-      (await send(leader, queryMessage(tx1, INSERT_SQL, ['3r-k1', 'uq-1@example.test']))).success,
-      true,
+    // Finding 6a: Connect the real SQLQueryEngine + DistributedTransactionCoordinator
+    // (via deliverTransactionOperation) to the 3-replica native rs-raft participant leader:
+    engine.queryExecutor.executeOnPartition = async (
+      _pid,
+      _sql,
+      _params,
+      _isWrite,
+      _isRead,
+      _useCache,
+      executionOptions,
+    ) => {
+      const req = executionOptions.buildRequest();
+      const res = await send(leader, req);
+      if (executionOptions.isSuccessfulResponse({payload: res})) {
+        return {success: true, ...executionOptions.buildSuccessResult()};
+      }
+      return res;
+    };
+    const coordinator = engine.transactionCoordinator;
+    const origPrepare = coordinator.prepareParticipant.bind(coordinator);
+    let preparedCount = 0;
+    const bothPreparedGate = Promise.withResolvers();
+    const releaseCommitPhase = Promise.withResolvers();
+    coordinator.prepareParticipant = async (sessionId, pid, identity) => {
+      const evidence = await origPrepare(sessionId, pid, identity);
+      preparedCount += 1;
+      if (preparedCount === 2) {
+        bothPreparedGate.resolve();
+      }
+      await releaseCommitPhase.promise;
+      return evidence;
+    };
+
+    const sess1 = '3r-coord-sess-1';
+    const sess2 = '3r-coord-sess-2';
+    const begun1 = await coordinator.begin(sess1);
+    const begun2 = await coordinator.begin(sess2);
+    assert.equal(begun1.success, true);
+    assert.equal(begun2.success, true);
+
+    await coordinator.executeWriteStatement(
+      sess1,
+      {operationId: '3r-op-1', sql: INSERT_SQL, partitionIds: [partitionId]},
+      async () => {
+        const tx1 = identityOf(begun1.transactionId, {
+          partitionId,
+          sessionId: sess1,
+          transactionEpoch: coordinator.getTransaction(sess1).transactionEpoch,
+        });
+        const staged = await send(leader, queryMessage(tx1, INSERT_SQL, ['3r-k1', 'uq-1@example.test']));
+        assert.equal(staged.success, true);
+        return {success: true, affectedRows: 1};
+      },
     );
-    assert.equal(
-      (await send(leader, queryMessage(tx2, INSERT_SQL, ['3r-k2', 'uq-2@example.test']))).success,
-      true,
+    await coordinator.executeWriteStatement(
+      sess2,
+      {operationId: '3r-op-2', sql: INSERT_SQL, partitionIds: [partitionId]},
+      async () => {
+        const tx2 = identityOf(begun2.transactionId, {
+          partitionId,
+          sessionId: sess2,
+          transactionEpoch: coordinator.getTransaction(sess2).transactionEpoch,
+        });
+        const staged = await send(leader, queryMessage(tx2, INSERT_SQL, ['3r-k2', 'uq-2@example.test']));
+        assert.equal(staged.success, true);
+        return {success: true, affectedRows: 1};
+      },
     );
 
-    const [prep1, prep2] = await Promise.all([
-      send(leader, prepareMessage(tx1)),
-      send(leader, prepareMessage(tx2)),
-    ]);
-    assert.equal(prep1.success, true);
-    assert.equal(prep2.success, true);
+    // Drive both concurrent transactions through real DistributedTransactionCoordinator.commit():
+    const commit1Promise = coordinator.commit(sess1);
+    const commit2Promise = coordinator.commit(sess2);
+    await bothPreparedGate.promise;
 
     // Wait for all 3 replicas to durably hold both PREPARED obligations before either decision:
     const bothPreparedOnAll = await group.waitFor(() =>
@@ -764,11 +854,9 @@ test('Native three-replica rs-raft participant group converges on disjoint PREPA
     // Give the 3 replicas different disposable local state (wipe follower3's volatile history):
     resetParticipantRowKeyHistory(follower3);
 
-    // Concurrently commit both prepared transactions through real 3-replica rs-raft consensus:
-    const [commit1, commit2] = await Promise.all([
-      send(leader, commitMessage(tx1, prep1.preparedDigest)),
-      send(leader, commitMessage(tx2, prep2.preparedDigest)),
-    ]);
+    // Release both coordinator commit phases to persist decisions and commit on the 3-replica group:
+    releaseCommitPhase.resolve();
+    const [commit1, commit2] = await Promise.all([commit1Promise, commit2Promise]);
     assert.equal(commit1.success, true);
     assert.equal(commit2.success, true);
 
@@ -786,22 +874,54 @@ test('Native three-replica rs-raft participant group converges on disjoint PREPA
     assert.deepEqual(snapFollower3, snapLeader);
     assert.equal(snapLeader.userRows.length, 2);
 
-    // Secondary UNIQUE conflict on the 3-replica group cannot obtain two PREPARE acks:
-    const tx3 = identityOf('c'.repeat(32), {partitionId, sessionId: '3r-sess-3'});
-    const tx4 = identityOf('d'.repeat(32), {partitionId, sessionId: '3r-sess-4'});
-    assert.equal((await send(leader, beginMessage(tx3))).success, true);
-    assert.equal((await send(leader, beginMessage(tx4))).success, true);
-    assert.equal(
-      (await send(leader, queryMessage(tx3, INSERT_SQL, ['3r-k3', 'shared-3r@example.test']))).success,
-      true,
+    // Secondary UNIQUE conflict on the 3-replica group driven through the coordinator
+    // cannot obtain two PREPARE acks:
+    coordinator.prepareParticipant = origPrepare;
+    const sess3 = '3r-coord-sess-3';
+    const sess4 = '3r-coord-sess-4';
+    const begun3 = await coordinator.begin(sess3);
+    const begun4 = await coordinator.begin(sess4);
+    await coordinator.executeWriteStatement(
+      sess3,
+      {operationId: '3r-op-3', sql: INSERT_SQL, partitionIds: [partitionId]},
+      async () => {
+        const tx3 = identityOf(begun3.transactionId, {
+          partitionId,
+          sessionId: sess3,
+          transactionEpoch: coordinator.getTransaction(sess3).transactionEpoch,
+        });
+        const staged = await send(leader, queryMessage(tx3, INSERT_SQL, ['3r-k3', 'shared-3r@example.test']));
+        assert.equal(staged.success, true);
+        return {success: true, affectedRows: 1};
+      },
     );
-    const dupStage = await send(
-      leader,
-      queryMessage(tx4, INSERT_SQL, ['3r-k4', 'shared-3r@example.test']),
+    await assert.rejects(
+      () =>
+        coordinator.executeWriteStatement(
+          sess4,
+          {operationId: '3r-op-4', sql: INSERT_SQL, partitionIds: [partitionId]},
+          async () => {
+            const tx4 = identityOf(begun4.transactionId, {
+              partitionId,
+              sessionId: sess4,
+              transactionEpoch: coordinator.getTransaction(sess4).transactionEpoch,
+            });
+            const dupStage = await send(
+              leader,
+              queryMessage(tx4, INSERT_SQL, ['3r-k4', 'shared-3r@example.test']),
+            );
+            assert.equal(dupStage.success, false);
+            assert.equal(dupStage.failureCode, 'participant_transaction_already_active');
+            throw new Error(dupStage.failureCode);
+          },
+        ),
+      /participant_transaction_already_active/u,
     );
-    assert.equal(dupStage.success, false);
-    assert.equal(dupStage.failureCode, 'participant_transaction_already_active');
+    const commit3 = await coordinator.commit(sess3);
+    assert.equal(commit3.success, true);
   } finally {
+    await engine.shutdown();
+    gateway.db.close();
     await group.dispose();
     clearFixtureSingletons();
   }
@@ -846,14 +966,64 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     leader2.concurrencyGranularity = 'row-key';
     leader2.conflictSettleWaitMs = 50;
 
-    // 1. Committing the first historical PREPARED transaction succeeds, while
-    // the contradictory second historical PREPARED transaction is deterministically
-    // settled as STATE.REFUSED with commit_base_moved:
+    // 1. Finding 5: Contradictory historical PREPARED rows remain retained in STATE.PREPARED
+    // and are surfaced through inspectRetainedPreparedObligations; COMMIT on either contradicted
+    // row is refused with HISTORICAL_PREPARED_CONTRADICTION while retaining STATE.PREPARED
+    // until an explicit ROLLBACK resolves one of the conflicting obligations:
+    const initialInspection = inspectRetainedPreparedObligations(leader2);
+    assert.equal(initialInspection.healthy, false);
+    assert.deepEqual(
+      [...initialInspection.contradictoryParticipantIds].sort(),
+      [txHist1.participantId, txHist2.participantId].sort(),
+    );
+
+    const refusedCommitPromise = send(
+      leader2,
+      commitMessage(txHist1, prepHist1.preparedDigest),
+    );
+    await awaitProposal(
+      started2.proposed,
+      (entry) => entry.transactionId === txHist1.transactionId && isDecisionCommand(entry),
+    );
     const decisions = [
       commitDecision(txHist1, prepHist1),
       commitDecision(txHist2, prepHist2),
     ];
     leader2.controllablePort.commitBatches(decisions, [2]);
+    const refusedAfterApply = await refusedCommitPromise;
+    assert.equal(refusedAfterApply.success, false);
+    assert.equal(
+      refusedAfterApply.failureCode,
+      PARTICIPANT_TRANSACTION_FAILURE_CODE.HISTORICAL_PREPARED_CONTRADICTION,
+    );
+
+    const snapWhileContradicted = readDurablePartitionSnapshot(leader2.db);
+    assert.deepEqual(
+      snapWhileContradicted.decisions.map((d) => ({
+        state: d.state,
+        refusalCause: d.refusal_cause,
+      })),
+      [
+        {state: 'PREPARED', refusalCause: null},
+        {state: 'PREPARED', refusalCause: null},
+      ],
+    );
+    assert.deepEqual(snapWhileContradicted.userRows, []);
+
+    // Explicit ROLLBACK of txHist2 resolves the contradiction, allowing txHist1 to commit:
+    const rollbackHist2 = decisionCommandOf(
+      txHist2,
+      V3.DECISION.ROLLBACK,
+      prepHist2.preparedDigest,
+    );
+    leader2.controllablePort.commitBatches(
+      [rollbackHist2, commitDecision(txHist1, prepHist1)],
+      [1, 1],
+    );
+    const postRollbackInspection = inspectRetainedPreparedObligations(leader2);
+    assert.equal(postRollbackInspection.healthy, true);
+    assert.deepEqual(postRollbackInspection.contradictoryParticipantIds, []);
+
     const snap = readDurablePartitionSnapshot(leader2.db);
     assert.deepEqual(
       snap.decisions.map((d) => ({
@@ -862,7 +1032,7 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
       })),
       [
         {state: 'COMMITTED', refusalCause: null},
-        {state: 'REFUSED', refusalCause: 'commit_base_moved'},
+        {state: 'ROLLED_BACK', refusalCause: null},
       ],
     );
     assert.deepEqual(snap.userRows, [
@@ -948,6 +1118,130 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     ]);
   } finally {
     await shutdownAll(leader1, leader2);
+    clearFixtureSingletons();
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
+test('P2 (Finding 1): staging leader, session-less followers ([1, 1] and [2]), and reopened replica agree on PREPARE outcome after an ordinary write advances generation following an earlier participant commit', async () => {
+  resetFixtureSingletons();
+  const {directory, dbPath} = temporaryDbPath();
+  let leader = null;
+  let followerSep = null;
+  let followerBatch = null;
+  let reopened = null;
+  try {
+    const started = await startLeader({dbPath});
+    leader = started.leader;
+    const proposed = started.proposed;
+    followerSep = await startReplica('tx1-v3-r2');
+    followerBatch = await startReplica('tx1-v3-r3');
+    for (const svc of [leader, followerSep, followerBatch]) {
+      svc.concurrencyGranularity = 'row-key';
+      svc.conflictSettleWaitMs = 50;
+    }
+
+    // 1. Seed row y ('row-y') and commit an earlier participant transaction C on key x ('row-x'):
+    const seedWriteY = {
+      type: PARTITION_SERVICE_OPERATION.QUERY,
+      entryId: 'f1-seed-y',
+      sql: INSERT_SQL,
+      params: ['row-y', 'v-initial'],
+      timestamp: '1000:0:node-1',
+      proposedBy: leader.replicaId,
+      proposedAt: 1000,
+    };
+    const txC = identityOf('1'.repeat(32), {sessionId: 'f1-sess-c'});
+    const prepC = prepareCommandOf(txC, [operationOf({id: 'row-x', value: 'v-c'})], 1);
+    const commitC = commitDecision(txC, prepC);
+    for (const svc of [leader, followerSep, followerBatch]) {
+      svc.controllablePort.commitBatches([seedWriteY, prepC, commitC], [1, 1, 1]);
+    }
+    const genN = generationOf(leader);
+    assert.equal(genN, 2);
+
+    // 2. On the leader, transaction A stages an UPDATE on row-y:
+    const updateSql = `UPDATE ${TABLE} SET value = ? WHERE id = ?`;
+    const txA = identityOf('2'.repeat(32), {sessionId: 'f1-sess-a'});
+    assert.equal((await send(leader, beginMessage(txA))).success, true);
+    assert.equal(
+      (await send(leader, queryMessage(txA, updateSql, ['v-from-A', 'row-y']))).success,
+      true,
+    );
+
+    // 3. Ordinary write W(y) is proposed, and PREPARE(A) seals at generation N before W(y) applies:
+    const prepAPromise = send(leader, prepareMessage(txA));
+    const prepACmd = await awaitProposal(
+      proposed,
+      (entry) => entry.transactionId === txA.transactionId && isPrepareCommand(entry),
+    );
+    assert.equal(
+      prepACmd.validationText,
+      prepareCommandOf(txA, [operationOf({id: 'row-y', value: 'v-from-A'})], genN).validationText,
+    );
+    const ordinaryWriteY = {
+      type: PARTITION_SERVICE_OPERATION.QUERY,
+      entryId: 'f1-ordinary-w-y',
+      sql: updateSql,
+      params: ['v-from-W', 'row-y'],
+      timestamp: '1010:0:node-1',
+      proposedBy: leader.replicaId,
+      proposedAt: 1010,
+    };
+
+    // 4. Apply [W(y), PREPARE(A)] on the staging leader (which retains A's local session),
+    // on followerSep ([1, 1] with volatile history cleared between W(y) and PREPARE(A)),
+    // and on followerBatch ([2] with no local session and cleared volatile history):
+    leader.controllablePort.commitBatches([ordinaryWriteY], [1]);
+    // Checkpoint WAL and copy disk image after W(y) applied at N+1, before PREPARE(A) applies:
+    leader.db.pragma('wal_checkpoint(TRUNCATE)');
+    fs.copyFileSync(dbPath, `${dbPath}.reopen`);
+    leader.controllablePort.commitBatches([prepACmd], [1]);
+    const prepAResult = await prepAPromise;
+    assert.equal(prepAResult.success, false);
+    assert.equal(prepAResult.failureCode, 'participant_transaction_prepare_refused');
+
+    followerSep.controllablePort.commitBatches([ordinaryWriteY], [1]);
+    discardParticipantSessions(followerSep);
+    resetParticipantRowKeyHistory(followerSep);
+    followerSep.controllablePort.commitBatches([prepACmd], [1]);
+
+    discardParticipantSessions(followerBatch);
+    resetParticipantRowKeyHistory(followerBatch);
+    followerBatch.controllablePort.commitBatches([ordinaryWriteY, prepACmd], [2]);
+
+    const startedReopen = await startLeader({
+      dbPath: `${dbPath}.reopen`,
+      generationOrigin: false,
+      releaseAdmission: false,
+    });
+    reopened = startedReopen.leader;
+    reopened.concurrencyGranularity = 'row-key';
+    reopened.conflictSettleWaitMs = 50;
+    discardParticipantSessions(reopened);
+    resetParticipantRowKeyHistory(reopened);
+    reopened.controllablePort.commitBatches([prepACmd], [1]);
+
+    const snapLeader = readDurablePartitionSnapshot(leader.db);
+    const snapFollowerSep = readDurablePartitionSnapshot(followerSep.db);
+    const snapFollowerBatch = readDurablePartitionSnapshot(followerBatch.db);
+    const snapReopened = readDurablePartitionSnapshot(reopened.db);
+    assert.deepEqual(snapFollowerSep, snapLeader);
+    assert.deepEqual(snapFollowerBatch, snapLeader);
+    assert.deepEqual(snapReopened, snapLeader);
+    assert.deepEqual(
+      snapLeader.decisions.map((d) => ({
+        participantId: d.participant_id,
+        state: d.state,
+        refusalCause: d.refusal_cause,
+      })),
+      [
+        {participantId: txC.participantId, state: 'COMMITTED', refusalCause: null},
+        {participantId: txA.participantId, state: 'REFUSED', refusalCause: 'conflict'},
+      ],
+    );
+  } finally {
+    await shutdownAll(leader, followerSep, followerBatch, reopened);
     clearFixtureSingletons();
     fs.rmSync(directory, {recursive: true, force: true});
   }

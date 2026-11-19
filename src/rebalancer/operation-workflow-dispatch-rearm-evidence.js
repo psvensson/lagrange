@@ -192,7 +192,7 @@ function shouldDeferRetryableDispatchFailure(_owner, operation, errorLike) {
   );
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
-  if (!operation) {
+  if (!operation || isBootstrapTopologyDispatchDeferred(operation)) {
     return false;
   }
   const workflowStep = readOperationRecordWorkflowStep(operation);

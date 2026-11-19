@@ -469,17 +469,21 @@ function createRoundDriver(world, {plannerPolling = true} = {}) {
       return world.seed.controlPlaneReadinessService
         .getStartupAuthoritySnapshotSync(SEED_NODE_ID, world.clock.now());
     },
-    // One membership derivation on the seed: the heartbeat's scheduled
-    // reconcile tick and the owner-membership driver's tick, each once.
+    // One membership derivation across up nodes: the heartbeat's scheduled
+    // reconcile tick and the owner-membership driver's tick, each once
+    // (only the current control_plane_publications-p1 leader performs work).
     async membershipDerivation() {
       nextEvaluationInstant(world);
       countStamp(STAMP_CADENCES.MEMBERSHIP_TICK);
-      await world.seed.heartbeatService
-        .runScheduledMembershipPublicationReconcileTick();
-      await settleWorld(world);
-      await world.seed.membershipPublicationService
-        .driveOwnerMembershipReconcile();
-      await settleWorld(world);
+      for (const hosts of world.hostsById.values()) {
+        if (!world.upNodeIds.has(hosts.nodeId)) continue;
+        await hosts.heartbeatService
+          .runScheduledMembershipPublicationReconcileTick();
+        await settleWorld(world);
+        await hosts.membershipPublicationService
+          .driveOwnerMembershipReconcile();
+        await settleWorld(world);
+      }
     },
     // One planning check of every priority partition's planner on the seed.
     async planPriorityPartitions() {

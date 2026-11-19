@@ -1,6 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {isTrafficReady} from '../bootstrap/traffic-readiness-utils.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+import {LEDGER_PARTITION_ID} from './partition-placement-admission-decision.js';
 
 const {
   EntityType,
@@ -196,6 +198,24 @@ class PartitionServiceRebalancerMethods {
    *   setters, leadership updates) keeps the unconditional re-apply.
    * @private
    */
+  ensureReplicaPlacementOwnerAttached() {
+    if (
+      this.partitionId !== LEDGER_PARTITION_ID ||
+      this.isShutdown ||
+      this.replicaPlacementOwnerAttachment ||
+      this.rebalancerLeadershipSink ||
+      !this.systemTableCache ||
+      !this.rebalanceCoordinator
+    ) {
+      return;
+    }
+    if (!this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner) {
+      return;
+    }
+    this.replicaPlacementOwnerAttachment =
+      this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner(this);
+  }
+
   maybeInitializeRebalancer(options = {}) {
     const readinessTransitionOnly = options.readinessTransitionOnly === true;
     const backgroundReady = this.isBackgroundWorkReady();
@@ -204,6 +224,8 @@ class PartitionServiceRebalancerMethods {
     const trafficReady = isPartitionTrafficReady(this);
     const wasTrafficReady = this._lastTrafficReady === true;
     this._lastTrafficReady = trafficReady;
+    this.ensureReplicaPlacementOwnerAttached();
+    this.driveRebalancerLeadershipSink();
     if (this.rebalancer) {
       // Edge-gate (readiness-transition path only): the shared metadata-
       // publication readiness state is a single node-wide object that ~every
@@ -241,6 +263,12 @@ class PartitionServiceRebalancerMethods {
         trafficReady,
         wasTrafficReady,
       });
+      return;
+    }
+    if (
+      this.rebalanceCoordinator?.placementAdmissionEnabled === true &&
+      classifySystemPartition({partitionId: this.partitionId}).systemTable === true
+    ) {
       return;
     }
     if (!backgroundReady || !this.isLeader) {

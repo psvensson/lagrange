@@ -91,6 +91,7 @@ import {
   canAdvanceCommittedValidationText,
   clearPreparedParticipantRowKeys,
   extractOperationsRowKeyFootprint,
+  inspectRetainedPreparedObligations,
   isPartitionReservedForPrepare,
   recordCommittedParticipantRowKeys,
   resetParticipantRowKeyHistory,
@@ -445,10 +446,27 @@ function runCommittedOperations(service, committed, operations) {
   return {results, events};
 }
 
+function refuseHistoricalPreparedContradiction(service, committed, row, inspection) {
+  service.logger.error(LOG_MSG.HISTORICAL_PREPARED_CONTRADICTION, {
+    partitionId: service.partitionId,
+    participantId: row.participantId,
+    contradictoryParticipantIds: inspection.contradictoryParticipantIds,
+  });
+  return alarmRefusal(service, committed, CODE.HISTORICAL_PREPARED_CONTRADICTION, {
+    ...participantOutcomeOf(row),
+    refusalCause: CAUSE.HISTORICAL_PREPARED_CONTRADICTION,
+    contradictoryParticipantIds: inspection.contradictoryParticipantIds,
+  });
+}
+
 // The COMMIT of a PREPARED row (design 6.1): re-check g, run the operations in
 // order with their outcomes, move the row to COMMITTED, advance g once when an
 // operation applied (a zero-operation COMMIT moves no g, W19).
 function commitPrepared(service, committed, row) {
+  const inspection = inspectRetainedPreparedObligations(service);
+  if (inspection.contradictoryParticipantIds.includes(row.participantId)) {
+    return refuseHistoricalPreparedContradiction(service, committed, row, inspection);
+  }
   const operations = operationsOf(row.operationsText);
   if (operations === null) {
     return refuseCommit(service, committed, {cause: CAUSE.COMMIT_STATEMENT_FAILED,

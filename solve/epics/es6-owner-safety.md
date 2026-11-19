@@ -16,7 +16,8 @@ doneWhen:
       - proposal-attempt-replay
       - runtime-contracts-and-owner-navigation
       - independent-verification
-quests: []
+quests:
+  - replica-placement-admission-owner
 authorizes:
   - src/partition
   - src/query
@@ -53,9 +54,17 @@ implementation and integration with its existing candidate work.
 - **State:** packages P1 (`committed-batch-recovery-witness`), P2
   (`durable-prepared-conflict-authority`), P3 (`production-construction-and-binding`),
   P4 (`proposal-attempt-replay`), and P5 (`runtime-contracts-and-owner-navigation`)
-  are implemented in ES6 JavaScript, verified through the classified test runner,
-  and recorded in [receipt.json](es6-owner-safety/evidence/receipt.json) with
-  independent subagent verification (`independent-verification`).
+  are implemented in ES6 JavaScript, including the post-review durable generation
+  footprint ledger (`_partition_write_generation_history`), retained historical
+  `PREPARED` contradiction inspection (`inspectRetainedPreparedObligations` /
+  `HISTORICAL_PREPARED_CONTRADICTION`), pre-fingerprint placement outcome replay,
+  durable unresolved placement attempt persistence (`_placement_owner_unresolved_attempts`)
+  and late `REFUSED` recovery on `LEADERSHIP_START`, automatic production attachment
+  via `PartitionService.prototype.ensureReplicaPlacementOwnerAttached()`, and the
+  real `requestPlacementAdmission` / `requestPlacementHoldRelease` formation drain
+  witness. All packages are verified through the classified test runner and recorded
+  in [receipt.json](es6-owner-safety/evidence/receipt.json) with exact source and
+  test digests and independent subagent verification (`independent-verification`).
 - **Remaining physical/service gates:** the placement Quest
   ([`replica-placement-admission-owner`](../quests/replica-placement-admission-owner/quest.json))
   retains its physical lab drain (`lab-drain-mechanism-and-metrics-product-defaults`)

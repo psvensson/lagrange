@@ -332,6 +332,9 @@ class RebalanceCoordinatorLifecycle {
     };
     this.recentOperationIntents = new Map();
     this.replicaOperationTransitionQueue = Promise.resolve();
+    this.ledgerPartitionServices = new Set();
+    this.replicaPlacementOwnerFactory = null;
+    this.placementAdmissionEnabled = false;
 
     this.executorOutcomeEmitter =
       options.executorOutcomeEmitter ||

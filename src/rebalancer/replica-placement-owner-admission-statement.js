@@ -346,10 +346,41 @@ function buildFoundingAdmissionStatement(founding) {
   });
 }
 
+const RUNTIME_SERVICE_FIELDS = Object.freeze([
+  'serviceId', 'sourceNodeId', 'formationLatchEpoch', 'positions', 'move',
+]);
+
+function buildRuntimeServiceAdmissionStatement(input) {
+  const record = copyStrictOwnDataRecord(input);
+  const move = moveOf(record?.move);
+  if (!hasExactFields(record, RUNTIME_SERVICE_FIELDS) || move === null) {
+    return requireStatement(null);
+  }
+  return requireStatement({
+    transitionKind: KIND.RUNTIME_SERVICE,
+    entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    entityId: record.serviceId,
+    partitionId: record.serviceId,
+    placementClass: PLACEMENT_CLASS.SYSTEM,
+    repair: false,
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
+    kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
+    kSrcForClass: PLACEMENT_COPY_CAPACITY.K_SRC,
+    dispatchHold: null,
+    formationLatchEpoch: record.formationLatchEpoch,
+    foundingIntentId: null,
+    sourceNodeId: record.sourceNodeId,
+    membershipPublicationEpoch: null,
+    positions: record.positions,
+    moves: [move],
+  });
+}
+
 export {
   PLACEMENT_STATEMENT_VALIDITY,
   buildFoundingAdmissionStatement,
   buildPlacementAdmissionStatement,
+  buildRuntimeServiceAdmissionStatement,
   canonicalPlacementStatement,
   resolveSourceCapacityForClass,
 };

@@ -943,3 +943,124 @@ test('P3 & P4: ControlPlaneSetup.attachReplicaPlacementOwner binds the real Part
     clearFixtureSingletons();
   }
 });
+
+test('P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state', async () => {
+  resetFixtureSingletons();
+  try {
+    const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+    const nodeAuthority = {
+      subscribe: () => () => {},
+      scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({
+        state: 'ready',
+        epoch: {publicationEpoch: 8},
+        nodeRows: threeNodes,
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 8},
+      }),
+    };
+    const cache = createSimpleSystemCache(
+      [seededPartitionRow('tables-p1')],
+      [...seededServiceRows('tables-p1')],
+    );
+
+    await onLedgerLeader(async (leader, proposed) => {
+      // 1. Finding 4: Production attachment via rebalanceCoordinator + leader.maybeInitializeRebalancer()
+      // (test never calls ControlPlaneSetup.attachReplicaPlacementOwner directly):
+      const coordinator = {
+        nodeId: 'n1',
+        systemTableCache: cache,
+        controlPlaneReadinessService: {
+          serveEligibilityOwner: nodeAuthority,
+        },
+        workflowOwner: null,
+        storageAccountingService: null,
+        attachLedgerReplicaPlacementOwner(service) {
+          return ControlPlaneSetup.attachReplicaPlacementOwner({
+            nodeId: this.nodeId,
+            ledgerPartitionService: service,
+            controlPlaneReadinessService: this.controlPlaneReadinessService,
+            rebalanceCoordinator: this,
+            systemTableCache: this.systemTableCache,
+            storageAccountingService: this.storageAccountingService,
+            now: () => NOW_MS,
+            logger: service.logger,
+          });
+        },
+      };
+      // Intercept the first proposal so it records the proposed command and rejects
+      // (producing OUTCOME_UNKNOWN while remaining UNSETTLED in _partition_statement_outcomes):
+      leader.controllablePort.setProposeHandler(async (entry) => {
+        proposed.push(entry);
+        throw new Error('simulated proposal drop');
+      });
+      leader.setRebalanceCoordinator(coordinator);
+      const attachment1 = leader.replicaPlacementOwnerAttachment;
+      assert.ok(attachment1?.owner, 'PartitionService automatically attached ReplicaPlacementOwner');
+      assert.equal(leader.rebalancerLeadershipSink, attachment1.owner);
+      await attachment1.owner.awaitCurrentWorkIdle();
+      assert.equal(proposed.length, 1);
+      const firstAttemptCmd = proposed[0];
+      const firstEntryId = firstAttemptCmd.entryId;
+
+      // 2. Finding 3b: Owner 1 detaches/shuts down while firstEntryId is still UNSETTLED in _partition_statement_outcomes.
+      // Reconstruct a fresh Owner 2 on the same SQLite database; it must recover firstEntryId and body from
+      // _placement_owner_unresolved_attempts and replay the exact same entryId and canonical bodyText!
+      attachment1.detach();
+      leader.replicaPlacementOwnerAttachment = null;
+
+      leader.maybeInitializeRebalancer();
+      const attachment2 = leader.replicaPlacementOwnerAttachment;
+      assert.ok(attachment2?.owner && attachment2.owner !== attachment1.owner);
+      await attachment2.owner.awaitCurrentWorkIdle();
+      assert.equal(proposed.length, 2);
+      const replayedCmd = proposed[1];
+      assert.equal(replayedCmd.entryId, firstEntryId);
+      assert.equal(replayedCmd.bodyText, firstAttemptCmd.bodyText);
+
+      // 3. Finding 3a: Owner 2 loses leadership while firstEntryId is still uncertain.
+      // While Owner 2 is inactive, firstEntryId commits in the Raft log as REFUSED
+      // (because an external/busy row temporarily occupied tables-p1), and then that blocking
+      // condition clears before Owner 2 regains leadership.
+      // When Owner 2 regains leadership, its LEADERSHIP_START pass must reconcile the settled
+      // REFUSED outcome from _partition_statement_outcomes, allocate a fresh entryId, and admit
+      // tables-p1 in that same LEADERSHIP_START pass without any extra wake or timer!
+      leader.isLeader = false;
+      leader.updateRebalancerLeadership();
+      assert.equal(attachment2.owner.isLeader, false);
+
+      // Plant a temporary busy row on tables-p1 so firstAttemptCmd commits as REFUSED (PARTITION_BUSY),
+      // then mark that temporary row terminal (FAILED) so the blocking condition is cleared:
+      leader.db.prepare(
+        `INSERT INTO replica_operations (
+          operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
+          status, workflow_step, created_at, updated_at, completed_at, steps_history,
+          entity_type, entity_id
+        ) VALUES (?, 'ADD', 'tables-p1', 'temp-r9', 'n1', 'n2', 'pending', 'PENDING', 1, 1, NULL, '[]', 'partition', 'tables-p1')`,
+      ).run('temp-busy-op');
+      assert.equal(applyCommitted(leader, firstAttemptCmd), null);
+      leader.db.prepare(
+        'UPDATE replica_operations SET status = \'failed\', workflow_step = \'FAILED\', ' +
+        'completed_at = 2 WHERE operation_id = \'temp-busy-op\'',
+      ).run();
+
+      // Now proposals commit synchronously when Owner 2 regains leadership:
+      leader.controllablePort.setProposeHandler(async (entry) => {
+        proposed.push(entry);
+        assert.equal(applyCommitted(leader, entry), null);
+      });
+      leader.isLeader = true;
+      leader.updateRebalancerLeadership();
+      await attachment2.owner.awaitCurrentWorkIdle();
+
+      assert.equal(proposed.length, 3);
+      const freshCmd = proposed[2];
+      assert.notEqual(freshCmd.entryId, firstEntryId);
+      const admittedRows = ledgerRows(leader).filter((r) => r.operation_id !== 'temp-busy-op');
+      assert.equal(admittedRows.length, 1);
+      assert.equal(admittedRows[0].partition_id, 'tables-p1');
+      attachment2.detach();
+    }, {systemTableCache: cache});
+  } finally {
+    clearFixtureSingletons();
+  }
+});

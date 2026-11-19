@@ -78,6 +78,7 @@ const PARTICIPANT_TRANSACTION_REFUSAL_CAUSE = Object.freeze({
   ROWID_CEILING: 'rowid_ceiling',
   COMMIT_BASE_MOVED: 'commit_base_moved',
   COMMIT_STATEMENT_FAILED: 'commit_statement_failed',
+  HISTORICAL_PREPARED_CONTRADICTION: 'historical_prepared_contradiction',
 });
 
 // The participant's typed answers (design 4: participant_transaction_*). A
@@ -97,6 +98,8 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
   RESERVED: 'participant_transaction_reserved',
   NOT_PREPARED: 'participant_transaction_not_prepared',
   COMMIT_REFUSED: 'participant_transaction_commit_refused',
+  HISTORICAL_PREPARED_CONTRADICTION:
+    'participant_transaction_historical_prepared_contradiction',
   DECISION_BINDING_REQUIRED:
     'participant_transaction_decision_binding_required',
   DECISION_DIGEST_MISMATCH: 'participant_transaction_decision_digest_mismatch',
@@ -298,6 +301,26 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
     'SELECT COUNT(*) AS count FROM _partition_statement_outcomes ' +
     'WHERE entry_key LIKE \'entry:%\' AND outcome = \'APPLIED\' ' +
     'AND owner_result_text IS NULL AND log_index > ? AND log_index < ?',
+  GENERATION_HISTORY_TABLE: '_partition_write_generation_history',
+  CREATE_GENERATION_HISTORY_TABLE: `
+      CREATE TABLE IF NOT EXISTS _partition_write_generation_history (
+        generation INTEGER PRIMARY KEY NOT NULL,
+        scoped INTEGER NOT NULL,
+        row_keys_text TEXT NOT NULL
+      )
+    `,
+  DELETE_ALL_GENERATION_HISTORY:
+    'DELETE FROM _partition_write_generation_history',
+  INSERT_GENERATION_HISTORY:
+    'INSERT INTO _partition_write_generation_history ' +
+    '(generation, scoped, row_keys_text) VALUES (?, ?, ?) ' +
+    'ON CONFLICT(generation) DO UPDATE SET ' +
+    'scoped = excluded.scoped, row_keys_text = excluded.row_keys_text',
+  SELECT_GENERATION_HISTORY_RANGE:
+    'SELECT generation, scoped, row_keys_text ' +
+    'FROM _partition_write_generation_history ' +
+    'WHERE generation > ? AND generation <= ? ' +
+    'ORDER BY generation ASC',
   // A generation table created by an earlier increment-3 build lacks the
   // origin columns; they are added at open, as the outcome table's are.
   GENERATION_TABLE_COLUMNS: 'PRAGMA table_info(_partition_write_generation)',
@@ -382,6 +405,8 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
     'transaction reserves the partition',
   ADDED_COORDINATOR_COLUMN: 'Added a coordinator decision-record column to ' +
     'a transaction system table',
+  HISTORICAL_PREPARED_CONTRADICTION: 'Contradictory durable PREPARED ' +
+    'participant transactions retained for explicit incident disposition',
 });
 
 // The origin columns of the generation table, each with the DDL that adds

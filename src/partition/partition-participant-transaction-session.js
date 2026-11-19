@@ -1,6 +1,6 @@
-// Public entry: openParticipantSession, checkAndRecordSessionRowKey, isPartitionReservedForPrepare, canAdvanceCommittedValidationText, stagePreparedParticipantRowKeys, recordCommittedParticipantRowKeys, recordCommittedAutocommitRowKeys, discardParticipantSessions, resetParticipantRowKeyHistory, sweepParticipantTransactionHolds.
+// Public entry: openParticipantSession, checkAndRecordSessionRowKey, isPartitionReservedForPrepare, canAdvanceCommittedValidationText, inspectRetainedPreparedObligations, stagePreparedParticipantRowKeys, recordCommittedParticipantRowKeys, recordCommittedAutocommitRowKeys, discardParticipantSessions, resetParticipantRowKeyHistory, sweepParticipantTransactionHolds.
 // Required collaborators: partition-participant-transaction-store.js and partition-write-footprint-contract.js.
-// Durable authority / commit point: _participant_transactions and _partition_write_generation in SQLite.
+// Durable authority / commit point: _participant_transactions, _partition_write_generation and _partition_write_generation_history in SQLite.
 // Permitted post-commit work: volatile staging session lifecycle, hold sweep reporting, and settlement waiter notifications.
 // Recovery / wake entry: hydrateDurablePreparedAndCommittedState on reopen and resetParticipantRowKeyHistory on afterRollback.
 // Representative production tests: test/query/scenario-a-transaction-coordination-fast-path.test.js, test/partition/partition-participant-transaction-apply.test.js.
@@ -10,9 +10,11 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {operationsOf, validationTextOf} from './partition-participant-transaction-bytes.js';
 import {
-  isParticipantSessionPrepared, isPartitionReserved, readCommittedParticipantRows,
-  readDurablePrepareGeneration, readPartitionWriteGeneration, readPartitionWriteOrigin,
+  isParticipantSessionPrepared, isPartitionReserved,
+  readDurablePrepareGeneration, readPartitionWriteGeneration,
+  readPartitionWriteGenerationHistoryRange, readPartitionWriteOrigin,
   readPreparedParticipantIds, readPreparedParticipantRows, readTableFootprintMetadata,
+  recordPartitionWriteGenerationFootprint,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
@@ -268,24 +270,31 @@ function resolveExactValidationBaseGeneration(service, validationText) {
   return null;
 }
 
+function applyHydratedGenerationRow(row, expectedGen, scopedGens, committedGenMap) {
+  const gen = Number(row.generation);
+  if (gen !== expectedGen || Number(row.scoped) !== 1) return false;
+  const keys = JSON.parse(row.row_keys_text);
+  if (!Array.isArray(keys) || keys.length === 0) return false;
+  scopedGens.add(gen);
+  for (const rk of keys) {
+    if ((committedGenMap.get(rk) ?? 0) < gen) committedGenMap.set(rk, gen);
+  }
+  return true;
+}
+
 function hydrateCommittedHistoryFromStore(service, minGen, currentGen) {
-  const committedRows = readCommittedParticipantRows(service.db)
-    .map((row) => ({row, ops: operationsOf(row.operationsText)}))
-    .filter(({ops}) => Array.isArray(ops) && ops.length > 0);
   const delta = currentGen - minGen;
-  if (delta <= 0 || committedRows.length < delta) return;
-  const recent = committedRows.slice(committedRows.length - delta);
+  if (delta <= 0 || service?.db?.open !== true) return false;
+  const rows = readPartitionWriteGenerationHistoryRange(service.db, minGen, currentGen);
+  if (rows.length !== delta) return false;
   const scopedGens = perServiceSet(SCOPED_COMMIT_GENERATIONS, service);
   const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
-  for (let idx = 0; idx < recent.length; idx += 1) {
-    const gen = minGen + idx + 1;
-    const opsFp = extractOperationsRowKeyFootprint(service, recent[idx].ops);
-    if (!opsFp.scoped || opsFp.hasUnscopedWrite || opsFp.rowKeys.size === 0) continue;
-    scopedGens.add(gen);
-    for (const rk of opsFp.rowKeys) {
-      if ((committedGenMap.get(rk) ?? 0) < gen) committedGenMap.set(rk, gen);
+  for (let idx = 0; idx < rows.length; idx += 1) {
+    if (!applyHydratedGenerationRow(rows[idx], minGen + idx + 1, scopedGens, committedGenMap)) {
+      return false;
     }
   }
+  return true;
 }
 
 function getOrBuildPreparedEntry(service, preparedMap, row) {
@@ -485,19 +494,28 @@ function clearPreparedParticipantRowKeys(service, participantId) {
   notifyRowKeySettlementWaiters(service);
 }
 
+function isScopedPreparedEntry(entry) {
+  return Boolean(entry && !entry.hasUnscopedWrite && entry.rowKeys.size > 0);
+}
+
 function recordCommittedParticipantRowKeys(service, participantId, generation) {
   if (!service || !participantId) return;
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
   const entry = preparedMap?.get(participantId);
   preparedMap?.delete(participantId);
-  if (!entry || entry.hasUnscopedWrite || entry.rowKeys.size === 0) {
-    pruneRetainedRowKeyHistory(service);
-    notifyRowKeySettlementWaiters(service);
-    return;
+  const scoped = isScopedPreparedEntry(entry);
+  if (service.db?.open === true) {
+    recordPartitionWriteGenerationFootprint(
+      service.db,
+      generation,
+      scoped ? {scoped: true, hasUnscopedWrite: false, rowKeys: entry.rowKeys} : null,
+    );
   }
-  perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
-  const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
-  for (const rk of entry.rowKeys) committedGenMap.set(rk, generation);
+  if (scoped) {
+    perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
+    const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
+    for (const rk of entry.rowKeys) committedGenMap.set(rk, generation);
+  }
   pruneRetainedRowKeyHistory(service);
   notifyRowKeySettlementWaiters(service);
 }
@@ -543,45 +561,48 @@ function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
   return true;
 }
 
-function findEvictedPreparedBaseGeneration(service, validationText, tailFloorGen, originIndex) {
-  for (const entry of PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.values() ?? []) {
-    const expectedValidation = validationTextOf(
-      entry.generationBase, service.partitionId, originIndex);
-    if (!entry.hasUnscopedWrite &&
-        (entry.validatedThroughGeneration ?? 0) >= tailFloorGen &&
-        validationText === expectedValidation) {
-      return entry.generationBase;
-    }
+function recordConflictingPair(contradictoryIds, contradictions, left, right) {
+  if (!isPreparedEntryConflicting(left.fp, right.fp.rowKeys, right.fp.hasUnscopedWrite)) {
+    return;
   }
-  return null;
+  contradictoryIds.add(left.participantId);
+  contradictoryIds.add(right.participantId);
+  contradictions.push(Object.freeze({
+    leftParticipantId: left.participantId,
+    rightParticipantId: right.participantId,
+  }));
 }
 
-function resolveCarriedScopedBaseGeneration(service, validationText, currentGen, originIndex) {
-  const scopedGens = SCOPED_COMMIT_GENERATIONS.get(service);
-  let gen = currentGen;
-  if (scopedGens) {
-    for (; gen > 0 && scopedGens.has(gen); gen -= 1) {
-      const candidateBase = gen - 1;
-      if (validationText === validationTextOf(candidateBase, service.partitionId, originIndex)) {
-        return candidateBase;
-      }
+function inspectRetainedPreparedObligations(service) {
+  if (service?.db?.open !== true) {
+    return Object.freeze({healthy: true, preparedCount: 0,
+      contradictoryParticipantIds: Object.freeze([]), contradictions: Object.freeze([])});
+  }
+  const durableRows = readPreparedParticipantRows(service.db);
+  const footprints = durableRows.map((row) => ({
+    participantId: row.participantId,
+    fp: extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText)),
+  }));
+  const contradictoryIds = new Set();
+  const contradictions = [];
+  for (let i = 0; i < footprints.length; i += 1) {
+    for (let j = i + 1; j < footprints.length; j += 1) {
+      recordConflictingPair(contradictoryIds, contradictions, footprints[i], footprints[j]);
     }
   }
-  return findEvictedPreparedBaseGeneration(service, validationText, gen, originIndex);
+  return Object.freeze({
+    healthy: contradictions.length === 0,
+    preparedCount: durableRows.length,
+    contradictoryParticipantIds: Object.freeze([...contradictoryIds]),
+    contradictions: Object.freeze(contradictions),
+  });
 }
 
-function resolveCommittedAdvancementBase(service, validationText, currentGen, originIndex) {
-  const baseGen = resolveCarriedScopedBaseGeneration(
-    service, validationText, currentGen, originIndex);
-  if (baseGen !== null) return baseGen;
-  const exactBase = resolveExactValidationBaseGeneration(service, validationText);
-  if (exactBase === null || exactBase >= currentGen ||
-      areIntermediateGenerationsScoped(service, exactBase, currentGen)) {
-    return null;
-  }
-  hydrateCommittedHistoryFromStore(service, exactBase, currentGen);
-  return resolveCarriedScopedBaseGeneration(
-    service, validationText, currentGen, originIndex);
+function isRowTouchedInGeneration(row, expectedGen, operationsFootprint) {
+  if (Number(row.generation) !== expectedGen || Number(row.scoped) !== 1) return true;
+  const keys = JSON.parse(row.row_keys_text);
+  if (!Array.isArray(keys) || keys.length === 0) return true;
+  return keys.some((rk) => operationsFootprint.rowKeys.has(rk));
 }
 
 function canAdvanceCommittedValidationText(service, validationText, operationsFootprint) {
@@ -590,15 +611,17 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
     return false;
   }
   hydrateDurablePreparedAndCommittedState(service);
-  const origin = readPartitionWriteOrigin(service.db);
-  if (origin === null) return false;
+  const baseGen = resolveExactValidationBaseGeneration(service, validationText);
   const currentGen = readPartitionWriteGeneration(service.db);
-  const baseGen = resolveCommittedAdvancementBase(
-    service, validationText, currentGen, origin.originIndex);
-  if (baseGen === null) return false;
-  const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
-  for (const rk of operationsFootprint.rowKeys) {
-    if ((committedGenMap?.get(rk) ?? 0) > baseGen) return false;
+  if (baseGen === null || baseGen < 0 || baseGen > currentGen) return false;
+  if (baseGen === currentGen) return true;
+  const rows = readPartitionWriteGenerationHistoryRange(service.db, baseGen, currentGen);
+  if (rows.length !== currentGen - baseGen) return false;
+  hydrateCommittedHistoryFromStore(service, baseGen, currentGen);
+  for (let idx = 0; idx < rows.length; idx += 1) {
+    if (isRowTouchedInGeneration(rows[idx], baseGen + idx + 1, operationsFootprint)) {
+      return false;
+    }
   }
   return true;
 }
@@ -608,6 +631,9 @@ function recordCommittedAutocommitRowKeys(service, command, generation) {
   const operationsFootprint = extractOperationsRowKeyFootprint(service, [
     {sql: command.sql, params: Array.isArray(command.params) ? command.params : []},
   ]);
+  if (service.db?.open === true) {
+    recordPartitionWriteGenerationFootprint(service.db, generation, operationsFootprint);
+  }
   if (!operationsFootprint.scoped || operationsFootprint.hasUnscopedWrite ||
       operationsFootprint.rowKeys.size === 0) {
     pruneRetainedRowKeyHistory(service);
@@ -742,12 +768,6 @@ function reportHeldPreparedRows(service, nowMs, holdTimeoutMs) {
   }
 }
 
-/**
- * Discard expired staging sessions and report PREPARED rows held past holdTimeoutMs.
- * @param {any} service - The partition service.
- * @param {number} nowMs - Current clock time in ms.
- * @return {number} Discarded session count.
- */
 function sweepParticipantTransactionHolds(service, nowMs) {
   if (service.db?.open !== true) return 0;
   const holdTimeoutMs = service.preparedStateHoldTimeoutMs;
@@ -761,27 +781,16 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 }
 
 export {
-  canAdmitConcurrentParticipantSession,
-  canAdvanceCommittedValidationText,
-  canAdvanceRowKeySessionGeneration,
-  checkAndRecordSessionRowKey,
-  clearPreparedParticipantRowKeys,
-  discardParticipantSessions,
-  endParticipantSession,
-  extractOperationsRowKeyFootprint,
-  findParticipantSession,
-  getRetainedRowKeyHistoryStats,
-  hasParticipantSession,
-  isPartitionReservedForPrepare,
-  isRowKeyConcurrencyEnabled,
-  openParticipantSession,
-  participantRoutingSessionCollision,
-  participantTransactionActive,
-  recordCommittedAutocommitRowKeys,
-  recordCommittedParticipantRowKeys,
-  resetParticipantRowKeyHistory,
-  revertSessionRowKeyCheck,
-  stagePreparedParticipantRowKeys,
-  sweepParticipantTransactionHolds,
-  waitForConflictingRowKeyHolderToSettle,
+  canAdmitConcurrentParticipantSession, canAdvanceCommittedValidationText,
+  canAdvanceRowKeySessionGeneration, checkAndRecordSessionRowKey,
+  clearPreparedParticipantRowKeys, discardParticipantSessions,
+  endParticipantSession, extractOperationsRowKeyFootprint,
+  findParticipantSession, getRetainedRowKeyHistoryStats,
+  hasParticipantSession, inspectRetainedPreparedObligations,
+  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
+  openParticipantSession, participantRoutingSessionCollision,
+  participantTransactionActive, recordCommittedAutocommitRowKeys,
+  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
+  revertSessionRowKeyCheck, stagePreparedParticipantRowKeys,
+  sweepParticipantTransactionHolds, waitForConflictingRowKeyHolderToSettle,
 };

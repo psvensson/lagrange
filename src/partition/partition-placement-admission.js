@@ -60,9 +60,68 @@ function commandFingerprintOf(command) {
     .slice(0, FINGERPRINT_HEX_LENGTH), HEX_RADIX);
 }
 
-function isSameCommandReplay(recorded, command) {
-  return Number.isSafeInteger(recorded.lastInsertRowid) &&
-    recorded.lastInsertRowid === commandFingerprintOf(command);
+const SELECT_ADMITTED_OPERATION_SQL =
+  'SELECT type, target_node_id, source_node_id, partition_id, entity_type, ' +
+  'entity_id, copy_source_node_id FROM replica_operations WHERE operation_id = ?';
+const BACKFILL_FINGERPRINT_SQL =
+  'UPDATE _partition_statement_outcomes SET last_insert_rowid = ? ' +
+  'WHERE entry_key = ? AND last_insert_rowid IS NULL';
+
+function matchesAdmittedRow(row, statement, move) {
+  if (!row || row.type !== move.type || row.target_node_id !== move.targetNodeId ||
+      row.source_node_id !== statement.sourceNodeId ||
+      row.partition_id !== statement.partitionId ||
+      row.entity_type !== statement.entityType || row.entity_id !== statement.entityId) {
+    return false;
+  }
+  return (row.copy_source_node_id ?? null) === (move.copySourceNodeId ?? null);
+}
+
+function matchesPreFingerprintAdmittedResult(service, result, command) {
+  if (command.type !== PLACEMENT_ADMIT_TYPE || !Array.isArray(result.operationIds) ||
+      !Array.isArray(command.body?.moves) ||
+      result.operationIds.length !== command.body.moves.length) {
+    return false;
+  }
+  const selectOp = service.db.prepare(SELECT_ADMITTED_OPERATION_SQL);
+  for (let idx = 0; idx < result.operationIds.length; idx += 1) {
+    const opId = result.operationIds[idx];
+    if (typeof opId !== 'string' || !opId.startsWith(`pl-${command.body.partitionId}-`)) {
+      return false;
+    }
+    const row = selectOp.get(opId);
+    if (row && !matchesAdmittedRow(row, command.body, command.body.moves[idx])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isPreFingerprintCommandReplay(service, recorded, command, entryKey) {
+  const result = retainedResult(recorded);
+  let matches = false;
+  if (result.outcome === PLACEMENT_OUTCOME.ADMITTED) {
+    matches = matchesPreFingerprintAdmittedResult(service, result, command);
+  } else if (result.outcome === PLACEMENT_OUTCOME.RELEASED) {
+    matches = command.type === PLACEMENT_RELEASE_HOLD_TYPE &&
+      Array.isArray(result.operationIds) &&
+      result.operationIds.length === 1 &&
+      command.body?.operationId === result.operationIds[0];
+  } else {
+    matches = result.outcome === PLACEMENT_OUTCOME.REFUSED;
+  }
+  if (matches && service.db?.open === true) {
+    service.db.prepare(BACKFILL_FINGERPRINT_SQL).run(commandFingerprintOf(command), entryKey);
+  }
+  return matches;
+}
+
+function isSameCommandReplay(service, recorded, command, entryKey) {
+  if (Number.isSafeInteger(recorded.lastInsertRowid)) {
+    return recorded.lastInsertRowid === commandFingerprintOf(command);
+  }
+  if (recorded.lastInsertRowid !== null) return false;
+  return isPreFingerprintCommandReplay(service, recorded, command, entryKey);
 }
 
 function refusal(service, failureCode) {
@@ -109,10 +168,10 @@ function proposePlacementCommand(service, command) {
   if (!admission.admitted) {
     return committedCommandRefusalResult(admission, service.partitionId);
   }
-  const recorded = readCommittedStatementOutcome(service,
-    service.getCommittedEntryKey(command));
+  const entryKey = service.getCommittedEntryKey(command);
+  const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    return isSameCommandReplay(recorded, command) ?
+    return isSameCommandReplay(service, recorded, command, entryKey) ?
       recordedAnswer(service, recorded) : refusal(service, ERROR.BYTES);
   }
   const fingerprint = commandFingerprintOf(command);
@@ -237,7 +296,7 @@ function applyPlacementCommand(service, committed) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    if (!isSameCommandReplay(recorded, command)) throw new Error(ERROR.BYTES);
+    if (!isSameCommandReplay(service, recorded, command, entryKey)) throw new Error(ERROR.BYTES);
     const answer = recordedAnswer(service, recorded);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;

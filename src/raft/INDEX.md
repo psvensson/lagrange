@@ -35,7 +35,7 @@ documentClass: generated
 - [raft-rs-committed-peer-address.js](raft-rs-committed-peer-address.js) - The one address of a configured raft peer: its unified address on the node its admission committed (an admission or... (importers: many)
 - [raft-rs-conf-change-admission.js](raft-rs-conf-change-admission.js) - When the core takes a configuration-change proposal, read from the core's own numbers (verification V2; round 2 F-1,... (importers: few)
 - [raft-rs-conf-change-refusal-answer.js](raft-rs-conf-change-refusal-answer.js) - The leader's port's answer to a configuration-change proposal the core must not be handed, decided in the proposal's... (importers: one)
-- [raft-rs-conf-state-key.js](raft-rs-conf-state-key.js) - The canonical, role-aware key of one applied ConfState. (importers: many)
+- [raft-rs-conf-state-key.js](raft-rs-conf-state-key.js) - The canonical, role-aware key of one applied ConfState. (importers: hub)
 - [raft-rs-core-constants.js](raft-rs-core-constants.js) - What the raft-rs-wasm binding must expose for phase 1, what it must never expose, and the names of the files that... (importers: many)
 - [raft-rs-durable-store-constants.js](raft-rs-durable-store-constants.js) - The durable Raft record of the raft-rs-wasm backend, as SQL. (importers: hub)
 - [raft-rs-durable-store.js](raft-rs-durable-store.js) - The durable Raft record of one replica's raft-rs groups, in that replica's own SQLite database. (importers: hub)

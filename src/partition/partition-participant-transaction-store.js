@@ -114,6 +114,7 @@ function openParticipantTransactionStore(db) {
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_STATE_INDEX);
   db.exec(SQL.CREATE_GENERATION_TABLE);
+  db.exec(SQL.CREATE_GENERATION_HISTORY_TABLE);
   const present = new Set(db.prepare(SQL.GENERATION_TABLE_COLUMNS).all()
     .map((column) => column.name));
   for (const [column, addColumn] of Object.entries(ORIGIN_COLUMNS)) {
@@ -291,6 +292,31 @@ function recordPartitionWriteOrigin(db, {index, term}) {
     .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.ORIGIN_UPDATE_NOT_ONE_ROW);
   }
+  sqliteConnectionState(db).statement(SQL.DELETE_ALL_GENERATION_HISTORY).run();
+}
+
+function recordPartitionWriteGenerationFootprint(db, generation, footprint = null) {
+  const scoped = Boolean(
+    footprint &&
+    footprint.scoped === true &&
+    footprint.hasUnscopedWrite !== true,
+  );
+  const keys = scoped && footprint.rowKeys ? [...footprint.rowKeys] : [];
+  const isScopedValid = scoped && keys.length > ZERO;
+  sqliteConnectionState(db).statement(SQL.INSERT_GENERATION_HISTORY).run(
+    generation,
+    isScopedValid ? ONE_ROW : ZERO,
+    isScopedValid ? JSON.stringify(keys) : EMPTY_JSON_ARRAY_TEXT,
+  );
+}
+
+function readPartitionWriteGenerationHistoryRange(db, fromGen, toGen) {
+  if (!db || db.open === false || toGen <= fromGen) {
+    return [];
+  }
+  return sqliteConnectionState(db)
+    .statement(SQL.SELECT_GENERATION_HISTORY_RANGE)
+    .all(fromGen, toGen);
 }
 
 /**
@@ -303,6 +329,7 @@ function advancePartitionWriteGeneration(db) {
     .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
+  recordPartitionWriteGenerationFootprint(db, readPartitionWriteGeneration(db), null);
 }
 
 /**
@@ -651,11 +678,13 @@ export {
   readPreparedParticipantIds,
   readPreparedParticipantRows,
   readPartitionWriteGeneration,
+  readPartitionWriteGenerationHistoryRange,
   readPartitionWriteOrigin,
   readPartitionWriteOriginHistory,
   readPartitionWriteOriginIn,
   readParticipantTransactionCensusIn,
   readTableFootprintMetadata,
+  recordPartitionWriteGenerationFootprint,
   recordPartitionWriteOrigin,
   updateParticipantTransactionDecided,
 };

@@ -412,6 +412,19 @@ class ControlPlaneSetup {
     if (!rebalanceCoordinator.transactionCoordinator) {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
+    rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
+      (ledgerPartitionService) =>
+        ControlPlaneSetup.attachReplicaPlacementOwner({
+          nodeId,
+          ledgerPartitionService,
+          controlPlaneReadinessService,
+          rebalanceCoordinator,
+          systemTableCache,
+          storageAccountingService,
+          now: () => ledgerPartitionService.timeSource.now(),
+          logger: ledgerPartitionService.logger,
+        }),
+    );
 
     const systemMetadataOwners = createSystemMetadataOwners({
       controlPlaneSystemTableGateway,
@@ -619,6 +632,12 @@ class ControlPlaneSetup {
   static attachReplicaPlacementOwner(options = {}) {
     const readiness = options.controlPlaneReadinessService;
     const coordinator = options.rebalanceCoordinator;
+    if (
+      coordinator?.ledgerPartitionServices instanceof Set &&
+      options.ledgerPartitionService
+    ) {
+      coordinator.registerLedgerPartitionService(options.ledgerPartitionService);
+    }
     return attachReplicaPlacementOwner({
       nodeId: options.nodeId,
       ledgerPartitionService: options.ledgerPartitionService,
