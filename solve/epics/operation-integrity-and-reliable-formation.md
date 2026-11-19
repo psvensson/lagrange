@@ -148,6 +148,19 @@ The dated E0-E9 material below is retained context, not another current summary.
 Original observations and accepted bounded repairs keep their original scope.
 Use the linked Quest logs and applicable evidence to determine current state.
 
+### ES6 owner safety pilot (19 November 2026)
+
+The approved [ES6 owner safety epic](es6-owner-safety.md) coordinates the bounded
+participant batching/recovery, durable reservation, production construction and
+proposal replay repairs within the existing 0.4.1 correction allocation. The
+local client owns implementation; existing TX1 and placement Quests retain their
+semantic and acceptance authority. The plan explicitly replaces the earlier
+type-checking prescription with runtime JavaScript witnesses for this pilot,
+preserving historical seals and receipts. Its documentation merge supplies no
+runtime evidence and does not change the service verdict above. Start from its
+[local handoff](es6-owner-safety/local-client-handoff.md), reconcile the actual
+candidate and active writers, then measure the first bounded reproducer.
+
 ### Steering enforcement follow-ups (13 November 2026)
 
 The steering reconciliation was inspected against main
