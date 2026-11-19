@@ -186,17 +186,19 @@ function renderBinary(expr) {
 }
 
 function renderIn(expr) {
+  const lhs = renderExpression(expr.expression);
   const operator = (expr.negated ? SQL.NOT : '') + SQL.IN;
   const members = expr.subquery ? renderSelect(expr.subquery.query) : renderList(expr.values);
-  return parenthesize(renderExpression(expr.expression) + SQL.SPACE + operator + SQL.SPACE +
+  return parenthesize(lhs + SQL.SPACE + operator + SQL.SPACE +
     parenthesize(members));
 }
 
 function renderLike(expr) {
+  const lhs = renderExpression(expr.expression);
   const operator = (expr.negated ? SQL.NOT : '') + SQL.LIKE;
+  const pattern = renderExpression(expr.pattern);
   const escape = expr.escape ? SQL.ESCAPE + renderExpression(expr.escape) : '';
-  return parenthesize(renderExpression(expr.expression) + SQL.SPACE + operator +
-    renderExpression(expr.pattern) + escape);
+  return parenthesize(lhs + SQL.SPACE + operator + pattern + escape);
 }
 
 function renderAggregate(expr) {
@@ -249,10 +251,19 @@ function renderCollate(expr) {
   return parenthesize(renderExpression(expr.expression) + SQL.COLLATE + expr.collation);
 }
 
+let activeParameterSink = null;
+
+function renderParameter(expr) {
+  if (activeParameterSink !== null) {
+    activeParameterSink(expr);
+  }
+  return SQL.PARAMETER;
+}
+
 const EXPRESSION_RENDERERS = Object.freeze(Object.assign(Object.create(null), {
   [EXPR_TYPE.STAR]: renderStar,
   [EXPR_TYPE.LITERAL]: renderLiteral,
-  [EXPR_TYPE.PARAMETER]: () => SQL.PARAMETER,
+  [EXPR_TYPE.PARAMETER]: renderParameter,
   [EXPR_TYPE.COLUMN_REF]: renderColumnRef,
   [EXPR_TYPE.BINARY]: renderBinary,
   [EXPR_TYPE.UNARY]: (expr) =>
@@ -278,6 +289,26 @@ function renderExpression(expr) {
     return EXPRESSION_RENDERERS[expr.type](expr);
   }
   return renderStructuredExpression(expr ?? {type: String(expr)});
+}
+
+/**
+ * Render one expression node and collect its bound parameter values in exact
+ * placeholder emission order through the canonical renderer.
+ * @param {Object} expr - Expression AST node.
+ * @param {Function} resolveParameter - Maps each PARAMETER AST node to its bound value.
+ * @return {{sql: string, params: Array}}
+ */
+function renderExpressionWithParameters(expr, resolveParameter) {
+  const bound = [];
+  const previousSink = activeParameterSink;
+  activeParameterSink = (paramExpr) => {
+    bound.push(resolveParameter(paramExpr));
+  };
+  try {
+    return {sql: renderExpression(expr), params: bound};
+  } finally {
+    activeParameterSink = previousSink;
+  }
 }
 
 /**
@@ -372,7 +403,8 @@ function renderSelectClauses(ast) {
  * @return {string} SQL text.
  */
 function renderSelect(ast) {
-  let sql = SQL.SELECT + (ast.distinct ? SQL.DISTINCT : '') +
+  const prefix = ast.ctes && ast.ctes.length > 0 ? renderCtes(ast) : '';
+  let sql = prefix + SQL.SELECT + (ast.distinct ? SQL.DISTINCT : '') +
     ast.columns.map(renderResultColumn).join(SQL.COMMA);
   if (ast.from) sql += SQL.FROM + renderTableSource(ast.from);
   sql += renderSelectClauses(ast);
@@ -380,11 +412,12 @@ function renderSelect(ast) {
     sql += SQL.SPACE + ast.setOperation.type + SQL.SPACE +
       renderSelect(ast.setOperation.right);
   }
-  return ast.ctes && ast.ctes.length > 0 ? renderCtes(ast) + sql : sql;
+  return sql;
 }
 
 export {
   renderExpression,
+  renderExpressionWithParameters,
   renderLiteral,
   renderResultColumn,
   renderSelect,

@@ -296,11 +296,11 @@ test('Q02: Cross-partition UNIQUE constraint enforcement rejects duplicate candi
   });
 
   coordinator.queryExecutor = {
-    async executeOnPartitions(partitionIds, sql, params) {
-      if (params[0] === 'existing@example.com') {
-        return [{success: true, rows: [{1: 1}]}];
-      }
-      return [{success: true, rows: []}];
+    async executeOnPartitions(partitionIds, _sql, params) {
+      return partitionIds.map((_pid, idx) => ({
+        success: true,
+        rows: idx === 0 && params[0] === 'existing@example.com' ? [{1: 1}] : [],
+      }));
     },
   };
 
@@ -440,6 +440,63 @@ test('Q02: UPDATE uniqueness distinguishes self-update, zero-row stale CAS, comp
       ),
     );
     assert.equal(probeCallCount, callsBeforeUnrelated);
+
+    // 6. Parameterized subquery in WHERE (IN (SELECT ?), EXISTS, scalar subquery):
+    // rendered SQL and bindings remain aligned through the canonical renderer
+    // and catch competing ownership on nodes-p2.
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE node_id = \'node-1\' AND node_id IN (SELECT ?)'),
+        ['ws://localhost:50552', 'node-1'],
+      ),
+      (err) => err.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+        err.message.includes('UNIQUE constraint failed: nodes.node_address'),
+    );
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE EXISTS (SELECT 1 WHERE node_id = ?)'),
+        ['ws://localhost:50552', 'node-1'],
+      ),
+      (err) => err.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+        err.message.includes('UNIQUE constraint failed: nodes.node_address'),
+    );
+    await assert.doesNotReject(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE node_id = \'node-1\' AND node_id IN (SELECT ?)'),
+        ['ws://localhost:50553', 'node-1'],
+      ),
+    );
+
+    // 7. Failed or incomplete partition observation stops the mutation instead
+    // of treating missing/failed partition results as empty observations.
+    coordinator.queryExecutor = {
+      async executeOnPartitions() {
+        return [
+          {success: true, rows: []},
+          {
+            success: false,
+            errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+            error: 'partition nodes-p2 unreachable during uniqueness probe',
+          },
+        ];
+      },
+    };
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('UPDATE nodes SET node_address = ? WHERE node_id = ?'),
+        ['ws://localhost:50552', 'node-1'],
+      ),
+      (err) => err.code === 'DISTRIBUTED_PARTICIPANT_FAILURE' &&
+        err.message.includes('partition nodes-p2 unreachable'),
+    );
+    await assert.rejects(
+      () => coordinator.enforceCrossPartitionUniqueConstraints(
+        parseSql('INSERT INTO nodes (node_id, node_address, status) VALUES (?, ?, ?)'),
+        ['node-3', 'ws://localhost:50552', 'active'],
+      ),
+      (err) => err.code === 'DISTRIBUTED_PARTICIPANT_FAILURE' &&
+        err.message.includes('partition nodes-p2 unreachable'),
+    );
   } finally {
     db1.close();
     db2.close();

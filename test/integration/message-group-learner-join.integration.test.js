@@ -62,6 +62,7 @@ const ADMISSION_DEFERRED = 'REPLICA_CREATE_ADMISSION_DEFERRED';
 const ADMISSION_RETAINED = 'message_group_create_admission_retained';
 const NOT_LEADER = 'membership-read-not-leader';
 const GENERATION_MISMATCH = 'create_generation_mismatch';
+const ADMISSION_REQUIRED = 'create_admission_required';
 
 const leaderOf = (f) => f.cluster.leaderReplicaId();
 const leaderStatus = (f) => f.cluster.node(leaderOf(f)).readStatus();
@@ -415,17 +416,28 @@ test('a replaced boot or a replaced admission generation fences the install', as
     await assertRefusedJoin(world, outcomes, ADMISSION_DEFERRED, 'replaced boot');
     assertNotInstalled(world, 'replaced boot');
   });
-  await t.test('admission attempt replaced after MATERIALIZED', async (t) => {
-    const f = await createFixture(t);
-    const world = learnerJoinWorld(t, f, {beforeDescriptor: () => f.execute(
+  await t.test('admission attempt replaced before staging', async (t) => {
+    const pre = await createFixture(t);
+    const preWorld = learnerJoinWorld(t, pre, {beforeDescriptor: () => pre.execute(
       'UPDATE replica_operations SET create_admission_attempt_token = ? WHERE operation_id = ?',
       ['a-replacement-attempt', O])});
-    const {send, outcomes} = createHandler(t, f, {learnerJoin: world.join});
-    assert.equal((await send(createPayload(f))).status, STATUS.INITIATED);
-    const error = await assertRefusedJoin(world, outcomes, REFUSAL.INSTALL_REFUSED,
-      'replaced generation');
-    assert.equal(error.detail, GENERATION_MISMATCH);
-    assertNotInstalled(world, 'replaced generation');
+    const {send, outcomes} = createHandler(t, pre, {learnerJoin: preWorld.join});
+    assert.equal((await send(createPayload(pre))).status, STATUS.INITIATED);
+    const preError = await assertRefusedJoin(preWorld, outcomes, REFUSAL.INSTALL_REFUSED,
+      'replaced generation before staging');
+    assert.equal(preError.detail, ADMISSION_REQUIRED);
+    assertNotInstalled(preWorld, 'replaced generation before staging');
+    assert.equal(fs.existsSync(path.join(path.dirname(preWorld.dbPath), 'checkpoints', TARGET,
+      'install', 'install-state.json')), false, 'no staging obligation written before staging');
+  });
+  await t.test('admission attempt replaced at install commit', async (t) => {
+    const post = await joinChangedInLastPreSwapRead(t, (f) => f.execute(
+      'UPDATE replica_operations SET create_admission_attempt_token = ? WHERE operation_id = ?',
+      ['a-replacement-attempt', O]));
+    const postError = await assertRefusedJoin(post.world, post.outcomes, REFUSAL.INSTALL_REFUSED,
+      'replaced generation at install commit');
+    assert.equal(postError.detail, GENERATION_MISMATCH);
+    assertNotInstalled(post.world, 'replaced generation at install commit');
   });
 });
 
@@ -479,8 +491,14 @@ test('process loss around install and open: the restarted node starts no second 
     };
     await t.test('lost during the install, before the swap', async (t) => {
       const f = await createFixture(t);
+      // Let admitsRaftRsInstall's pre-staging operation read succeed so
+      // staging writes install-state.json, then fail the commit's pre-swap
+      // operation read.
       const world = learnerJoinWorld(t, f, {beforeDescriptor: () => {
-        f.failReads('replica_operations');
+        f.pauseOperation(() => {
+          f.pauseOperation(null);
+          queueMicrotask(() => f.failReads('replica_operations'));
+        });
       }});
       const old = createHandler(t, f, {learnerJoin: world.join});
       assert.equal((await old.send(createPayload(f))).status, STATUS.INITIATED);
@@ -709,6 +727,22 @@ test('a terminal settlement recorded while the install commit\'s last read befor
 test('one basis column moved after MATERIALIZED defeats the install at its commit', async (t) => {
   // Fixture actuation of a single column each (no writer moves either alone):
   // the admission CLOSED with its tokens kept, and the recorded obligation.
+  // Moving create_admission_state to CLOSED before staging is caught early by
+  // admitsRaftRsInstall; moving either basis column in the last pre-swap read
+  // (after staging) is caught at the install commit's own row read.
+  await t.test('admission CLOSED before staging, tokens kept', async (t) => {
+    const f = await createFixture(t);
+    const world = learnerJoinWorld(t, f, {beforeDescriptor: () => f.execute(
+      'UPDATE replica_operations SET create_admission_state = ? WHERE operation_id = ?',
+      ['CLOSED', O])});
+    const {outcomes} = await sendCreate(t, f, world);
+    const error = await assertRefusedJoin(world, outcomes, REFUSAL.INSTALL_REFUSED,
+      'admission CLOSED before staging');
+    assert.equal(error.detail, ADMISSION_REQUIRED);
+    assertNotInstalled(world, 'admission CLOSED before staging');
+    assert.equal(fs.existsSync(path.join(path.dirname(world.dbPath), 'checkpoints', TARGET,
+      'install', 'install-state.json')), false, 'no staging marker written');
+  });
   const moves = [
     ['admission CLOSED, tokens kept', 'create_admission_state', 'CLOSED'],
     ['membership obligation moved', 'message_group_membership_obligation_state',
@@ -716,10 +750,9 @@ test('one basis column moved after MATERIALIZED defeats the install at its commi
   ];
   for (const [name, column, value] of moves) {
     await t.test(name, async (t) => {
-      const f = await createFixture(t);
-      const world = learnerJoinWorld(t, f, {beforeDescriptor: () => f.execute(
-        `UPDATE replica_operations SET ${column} = ? WHERE operation_id = ?`, [value, O])});
-      const {outcomes} = await sendCreate(t, f, world);
+      const {f, world, outcomes} = await joinChangedInLastPreSwapRead(t, (fixture) =>
+        fixture.execute(
+          `UPDATE replica_operations SET ${column} = ? WHERE operation_id = ?`, [value, O]));
       const error = await assertRefusedJoin(world, outcomes, REFUSAL.INSTALL_REFUSED, name);
       assert.equal(error.detail, GENERATION_MISMATCH,
         `${name}: the install commit re-requires the column on its own row read`);
