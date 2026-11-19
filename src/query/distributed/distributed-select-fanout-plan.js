@@ -1,6 +1,7 @@
 import {
   SELECT_MERGE_MODE,
   assertSelectFanoutAdmissible,
+  unsupportedFeatureError,
 } from '../coordinator-sql-admission.js';
 import {EXPR_TYPE} from '../parser-constants.js';
 import {resultColumnName} from '../sql-statement-renderer.js';
@@ -224,6 +225,9 @@ function collectAggregateSpecs(ast) {
     }
   }
   walkAggregates(ast.having, (expr) => register(expr, null));
+  if (ast.having && !expressionEvaluable(ast.having)) {
+    throw unsupportedFeatureError('HAVING clause expression is not evaluable at coordinator');
+  }
   walkAggregates(ast.orderBy, (expr) => register(expr, null));
   return specs;
 }

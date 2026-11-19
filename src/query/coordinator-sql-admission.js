@@ -661,6 +661,7 @@ function assertLiveQueryRendererAdmissible(parsedQuery, resolveTableSchema = nul
 export {
   COORDINATOR_ADMISSION_DECISION,
   SELECT_MERGE_MODE,
+  unsupportedFeatureError,
   assertLiveQueryGroupAdmissible,
   assertLiveQueryPredicateAdmissible,
   assertLiveQueryRendererAdmissible,
