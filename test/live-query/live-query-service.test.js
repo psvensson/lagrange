@@ -346,4 +346,43 @@ test('LiveQueryService - gets query signature', async (t) => {
 
   t.ok(sig.startsWith('orders:'), 'should include table');
   t.ok(sig.length > 10, 'should have predicate hash');
+  service.cleanup();
+});
+
+test('compilePredicate - evaluates COLLATE, LIKE ESCAPE, and catalog schema collations via SQLite', async (t) => {
+  const schema = {
+    tableName: 'users',
+    columns: [
+      {name: 'id', type: 'INTEGER', primaryKey: true},
+      {name: 'email', type: 'TEXT', collation: 'NOCASE'},
+      {name: 'tag', type: 'TEXT', collation: 'RTRIM'},
+    ],
+  };
+  const emailPred = compilePredicate(
+    {
+      type: 'binary',
+      operator: '=',
+      left: {type: 'column_ref', column: 'email'},
+      right: {type: 'literal', value: 'alice@example.com', sqlType: 'TEXT'},
+    },
+    [],
+    schema,
+  );
+  t.equal(emailPred({id: 1, email: 'ALICE@EXAMPLE.COM', tag: 'a'}), true, 'NOCASE column matches');
+  t.equal(emailPred({id: 2, email: 'bob@example.com', tag: 'a'}), false, 'different email does not match');
+  emailPred.close();
+
+  const tagPred = compilePredicate(
+    {
+      type: 'binary',
+      operator: '=',
+      left: {type: 'column_ref', column: 'tag'},
+      right: {type: 'literal', value: ' padded', sqlType: 'TEXT'},
+    },
+    [],
+    schema,
+  );
+  t.equal(tagPred({id: 1, email: 'a', tag: ' padded   '}), true, 'RTRIM column ignores trailing spaces');
+  t.equal(tagPred({id: 2, email: 'a', tag: 'padded'}), false, 'leading space still distinct under RTRIM');
+  tagPred.close();
 });

@@ -1,8 +1,19 @@
 /**
  * Helper utilities and extracted functions for Live Query Group.
+ *
+ * Uses the single canonical SQL statement renderer (`renderSelect` in
+ * `src/query/sql-statement-renderer.js`) and in-memory SQLite predicate
+ * evaluation (`compilePredicate` in `src/live-query/live-query-service.js`).
+ *
+ * @module live-query/live-query-group-helpers
  */
 
 import {v4 as uuidv4} from 'uuid';
+
+import {assertLiveQueryGroupAdmissible} from '../query/coordinator-sql-admission.js';
+import {EXPR_TYPE} from '../query/parser-constants.js';
+import {PG_EXPR_TYPE} from '../query/pg/pg-compat-constants.js';
+import {renderSelect} from '../query/sql-statement-renderer.js';
 import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_EVENT,
@@ -11,30 +22,257 @@ import {
 } from './live-query-constants.js';
 import {
   compilePredicate,
-  isComplexWhereNode,
-} from './live-query-service.js';
-import {
-  buildSelectSQL,
   extractReferencedTables,
-  isComplexQuery as baseIsComplexQuery,
-} from './live-query-sql-renderer.js';
-import {
-  assertLiveQueryGroupAdmissible,
-  assertLiveQueryRendererAdmissible,
-} from '../query/coordinator-sql-admission.js';
+  isComplexWhereNode,
+  normalizeWhereAstForRenderer,
+} from './live-query-service.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_NORMAL = 'NORMAL';
+const DEFAULT_JOIN_TYPE = 'INNER';
+const DEFAULT_ORDER_DIRECTION = 'ASC';
 const WILDCARD_COLUMN = '*';
 
+const AGGREGATE_FUNCTIONS = new Set([
+  'COUNT',
+  'SUM',
+  'AVG',
+  'MIN',
+  'MAX',
+  'GROUP_CONCAT',
+  'TOTAL',
+  'STRING_AGG',
+  'JSON_GROUP_ARRAY',
+  'JSON_GROUP_OBJECT',
+]);
+
+function isAggregateExpression(expr) {
+  if (!expr || typeof expr !== LOCAL_STR_OBJECT) {
+    return false;
+  }
+  if (
+    expr.type === LIVE_QUERY_AST_TYPE.AGGR_FUNC ||
+    expr.type === LIVE_QUERY_AST_TYPE.AGGREGATE ||
+    expr.type === EXPR_TYPE.AGGREGATE
+  ) {
+    return true;
+  }
+  if (
+    expr.type === LIVE_QUERY_AST_TYPE.FUNCTION ||
+    expr.type === PG_EXPR_TYPE.FUNCTION_CALL
+  ) {
+    const fnName = String(expr.name || expr.func || '').toUpperCase();
+    return AGGREGATE_FUNCTIONS.has(fnName);
+  }
+  return false;
+}
+
+function hasAggregateColumn(columns) {
+  if (!Array.isArray(columns)) {
+    return false;
+  }
+  for (const col of columns) {
+    const expr = col?.expression || col;
+    if (isAggregateExpression(expr)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const ACTIVE_PARTITION_VERSION_KEYS = Object.freeze([
+  'active_partition_version',
+  'activePartitionVersion',
+]);
+const PARTITION_VERSION_KEYS = Object.freeze([
+  'partition_version',
+  'partitionVersion',
+]);
+
+function readFirstDefinedProperty(record, keys) {
+  if (!record || typeof record !== LOCAL_STR_OBJECT) return undefined;
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null) {
+      return record[key];
+    }
+  }
+  return undefined;
+}
+
+function hasNonEmptyList(list) {
+  return Array.isArray(list) && list.length > 0;
+}
+
+function hasComplexClause(parsedQuery) {
+  if (
+    hasNonEmptyList(parsedQuery.joins) ||
+    hasNonEmptyList(parsedQuery.groupBy) ||
+    hasNonEmptyList(parsedQuery.orderBy) ||
+    hasNonEmptyList(parsedQuery.ctes)
+  ) {
+    return true;
+  }
+  if (parsedQuery.having || parsedQuery.distinct || parsedQuery.limit) {
+    return true;
+  }
+  if (parsedQuery.setOperation) {
+    return true;
+  }
+  return Boolean(parsedQuery.from?.subquery);
+}
+
 /**
- * Check if a query requires full re-execution rather than incremental delta.
+ * Check if a query requires Tier 2 full re-execution rather than Tier 1
+ * single-row incremental delta evaluation.
  * @param {Object} parsedQuery
  * @return {boolean}
  */
 function isComplexQuery(parsedQuery) {
   if (!parsedQuery) return false;
-  if (baseIsComplexQuery(parsedQuery)) return true;
+  if (hasComplexClause(parsedQuery) || hasAggregateColumn(parsedQuery.columns)) {
+    return true;
+  }
   return Boolean(parsedQuery.where && isComplexWhereNode(parsedQuery.where));
+}
+
+function isStarSelectColumn(col) {
+  return (
+    col === WILDCARD_COLUMN ||
+    col?.type === LIVE_QUERY_AST_TYPE.STAR ||
+    Boolean(col?.star)
+  );
+}
+
+function buildDefaultColumnRefExpression(col) {
+  const column = col?.column || col?.name || WILDCARD_COLUMN;
+  return col?.table ?
+    {type: EXPR_TYPE.COLUMN_REF, column, table: col.table} :
+    {type: EXPR_TYPE.COLUMN_REF, column};
+}
+
+function normalizeSelectColumnForRenderer(col) {
+  if (isStarSelectColumn(col)) {
+    return col?.table ?
+      {type: EXPR_TYPE.STAR, table: col.table} :
+      {type: EXPR_TYPE.STAR};
+  }
+  const rawExpr = col?.expression || buildDefaultColumnRefExpression(col);
+  return {
+    ...col,
+    expression: normalizeWhereAstForRenderer(rawExpr),
+  };
+}
+
+function normalizeJoinForRenderer(join) {
+  return {
+    ...join,
+    joinType: String(join?.joinType || DEFAULT_JOIN_TYPE).toUpperCase(),
+    table: typeof join?.table === LOCAL_STR_STRING ?
+      {name: join.table} :
+      join?.table,
+    condition: normalizeWhereAstForRenderer(join?.condition),
+  };
+}
+
+function normalizeOrderTermForRenderer(item) {
+  const rawExpr = item?.expression || {
+    type: EXPR_TYPE.COLUMN_REF,
+    column: item?.column || item?.name,
+  };
+  return {
+    ...item,
+    expression: normalizeWhereAstForRenderer(rawExpr),
+    direction: String(item?.direction || DEFAULT_ORDER_DIRECTION).toUpperCase(),
+  };
+}
+
+function normalizeLimitForRenderer(limit) {
+  if (!limit) return null;
+  if (typeof limit !== LOCAL_STR_OBJECT) {
+    return {count: Number(limit), offset: null};
+  }
+  const count = typeof limit.count === LOCAL_STR_NUMBER ?
+    limit.count :
+    normalizeWhereAstForRenderer(limit.count);
+  const offset =
+    limit.offset === null ||
+    limit.offset === undefined ||
+    typeof limit.offset === LOCAL_STR_NUMBER ?
+      limit.offset :
+      normalizeWhereAstForRenderer(limit.offset);
+  return {count, offset};
+}
+
+function normalizeFromForRenderer(parsedQuery) {
+  if (parsedQuery.from) {
+    return typeof parsedQuery.from === LOCAL_STR_STRING ?
+      {name: parsedQuery.from} :
+      parsedQuery.from;
+  }
+  if (typeof parsedQuery.table === LOCAL_STR_STRING) {
+    return {name: parsedQuery.table};
+  }
+  return null;
+}
+
+/**
+ * Normalize a parsed SELECT AST (including synthetic test ASTs) for the
+ * canonical SQL renderer `renderSelect`.
+ * @param {Object} parsedQuery
+ * @return {Object}
+ */
+function normalizeSelectAstForRenderer(parsedQuery) {
+  if (!parsedQuery || typeof parsedQuery !== LOCAL_STR_OBJECT) {
+    return parsedQuery;
+  }
+  const columns =
+    Array.isArray(parsedQuery.columns) && parsedQuery.columns.length > 0 ?
+      parsedQuery.columns.map(normalizeSelectColumnForRenderer) :
+      [{type: EXPR_TYPE.STAR}];
+  return {
+    ...parsedQuery,
+    columns,
+    from: normalizeFromForRenderer(parsedQuery),
+    joins: Array.isArray(parsedQuery.joins) ?
+      parsedQuery.joins.map(normalizeJoinForRenderer) :
+      null,
+    where: normalizeWhereAstForRenderer(parsedQuery.where),
+    groupBy: Array.isArray(parsedQuery.groupBy) ?
+      parsedQuery.groupBy.map(normalizeWhereAstForRenderer) :
+      null,
+    having: normalizeWhereAstForRenderer(parsedQuery.having),
+    orderBy: Array.isArray(parsedQuery.orderBy) ?
+      parsedQuery.orderBy.map(normalizeOrderTermForRenderer) :
+      null,
+    limit: normalizeLimitForRenderer(parsedQuery.limit),
+  };
+}
+
+function resolveRawSql(parsedQuery) {
+  if (typeof parsedQuery?.sql === LOCAL_STR_STRING && parsedQuery.sql.trim().length > 0) {
+    return parsedQuery.sql.trim();
+  }
+  if (typeof parsedQuery?.rawSql === LOCAL_STR_STRING && parsedQuery.rawSql.trim().length > 0) {
+    return parsedQuery.rawSql.trim();
+  }
+  return null;
+}
+
+/**
+ * Render a SELECT AST through the single canonical SQL statement renderer.
+ * @param {Object} parsedQuery - Parsed SELECT AST.
+ * @return {string}
+ */
+function renderLiveQuerySelectSql(parsedQuery) {
+  if (!parsedQuery) return '';
+  const rawSql = resolveRawSql(parsedQuery);
+  if (rawSql !== null) {
+    return rawSql;
+  }
+  return renderSelect(normalizeSelectAstForRenderer(parsedQuery));
 }
 
 /**
@@ -44,7 +282,7 @@ function isComplexQuery(parsedQuery) {
  */
 function resolveGroupSql(options) {
   return options.rawSql || options.sql ||
-    (typeof options.parsedQuery === 'string' ? options.parsedQuery : null);
+    (typeof options.parsedQuery === LOCAL_STR_STRING ? options.parsedQuery : null);
 }
 
 /**
@@ -60,17 +298,91 @@ function resolveTableInfo(parsedAst) {
   };
 }
 
+function resolveSchemasForTables(tables, resolveTableSchema) {
+  if (!resolveTableSchema) return null;
+  return tables.map((tableName) => resolveTableSchema(tableName)).filter(Boolean);
+}
+
 /**
- * Compile WHERE clause predicate from parsed AST.
+ * Compile WHERE clause predicate from parsed AST using in-memory SQLite.
  * @param {Object} parsedAst
  * @param {Array|Object} [params]
  * @param {Function|null} [resolveTableSchema]
  * @return {{whereClause: Object|null, predicate: Function}}
  */
 function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null) {
-  assertLiveQueryGroupAdmissible(parsedAst, resolveTableSchema);
+  assertLiveQueryGroupAdmissible(parsedAst);
   const whereClause = parsedAst?.where ?? null;
-  return {whereClause, predicate: compilePredicate(whereClause, params)};
+  const tables = extractReferencedTables(parsedAst);
+  const schemas = resolveSchemasForTables(tables, resolveTableSchema);
+  return {
+    whereClause,
+    predicate: compilePredicate(whereClause, params, schemas, {
+      tableName: tables[0] || null,
+    }),
+  };
+}
+
+/**
+ * Compare two versions or timestamps.
+ * @param {*} a
+ * @param {*} b
+ * @return {number} -1, 0, or 1.
+ */
+function compareVersions(a, b) {
+  if (a === null || a === undefined || b === null || b === undefined) {
+    return 0;
+  }
+  if (typeof a === LOCAL_STR_NUMBER && typeof b === LOCAL_STR_NUMBER) {
+    return a - b;
+  }
+  try {
+    const bigA = BigInt(a);
+    const bigB = BigInt(b);
+    if (bigA < bigB) return -1;
+    if (bigA > bigB) return 1;
+    return 0;
+  } catch {
+    return String(a) < String(b) ? -1 : (String(a) > String(b) ? 1 : 0);
+  }
+}
+
+/**
+ * Resolve active partition version from table metadata.
+ * @param {Object|null} tableInfo
+ * @return {number}
+ */
+function resolveActivePartitionVersion(tableInfo) {
+  const value = readFirstDefinedProperty(
+    tableInfo,
+    ACTIVE_PARTITION_VERSION_KEYS,
+  );
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 1;
+  }
+  return parsed;
+}
+
+/**
+ * Check if partition is visible for routing given active version.
+ * @param {Object} partition
+ * @param {number} activePartitionVersion
+ * @return {boolean}
+ */
+function isPartitionVisibleForRouting(partition, activePartitionVersion) {
+  const partitionVersion = Number(
+    readFirstDefinedProperty(partition, PARTITION_VERSION_KEYS),
+  );
+  const normalizedVersion =
+    Number.isInteger(partitionVersion) && partitionVersion >= 1 ?
+      partitionVersion :
+      1;
+  if (normalizedVersion !== activePartitionVersion) {
+    return false;
+  }
+  const state = String(partition?.state ?? LOCAL_STR_NORMAL).toUpperCase();
+  return state === LOCAL_STR_NORMAL;
 }
 
 /**
@@ -200,15 +512,19 @@ async function executeSnapshotQuery(sqlQueryEngine, sql, params) {
 }
 
 /**
- * Resolve SQL query string for execution.
+ * Resolve SQL query string for execution through the canonical SQL renderer.
  */
 function resolveExecutionSQL(sql, sqlQueryEngine, parsedQuery) {
   if (sql) return sql;
-  if (sqlQueryEngine?.executor?.buildSelectSQL) {
-    return sqlQueryEngine.executor.buildSelectSQL(parsedQuery);
+  const rawSql = resolveRawSql(parsedQuery);
+  if (rawSql !== null) {
+    return rawSql;
   }
-  assertLiveQueryRendererAdmissible(parsedQuery);
-  return buildSelectSQL(parsedQuery);
+  const normalized = normalizeSelectAstForRenderer(parsedQuery);
+  if (sqlQueryEngine?.executor?.buildSelectSQL) {
+    return sqlQueryEngine.executor.buildSelectSQL(normalized);
+  }
+  return renderLiveQuerySelectSql(normalized);
 }
 
 /**
@@ -404,14 +720,19 @@ export {
   buildUpdateEvent,
   checkAndAdvanceFrontier,
   collectExpiredClientIds,
+  compareVersions,
   createClientSubscription,
   executeSnapshotQuery,
   extractEventVersion,
   fanOutToClients,
   isComplexQuery,
+  isPartitionVisibleForRouting,
+  normalizeSelectAstForRenderer,
   projectSingleColumn,
   recordInitialFrontiers,
+  renderLiveQuerySelectSql,
   renewClientSubscription,
+  resolveActivePartitionVersion,
   resolveEffectiveRows,
   resolveExecutionSQL,
   resolveGroupSql,

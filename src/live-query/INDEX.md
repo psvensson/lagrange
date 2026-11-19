@@ -12,5 +12,4 @@ documentClass: generated
 - [live-query-group.js](live-query-group.js) - QueryGroup manages clients with identical queries sharing CDC subscriptions. (importers: few)
 - [live-query-manager.js](live-query-manager.js) - Live Query Manager - Manages live query subscriptions and query grouping. (importers: few)
 - [live-query-service.js](live-query-service.js) - Live Query Service - Core service for real-time streaming queries. (importers: many)
-- [live-query-sql-renderer.js](live-query-sql-renderer.js) - Live Query SQL Renderer and AST Inspector. (importers: few)
 - [live-query-startup-wiring.js](live-query-startup-wiring.js) - Live query startup wiring helpers. (importers: few)

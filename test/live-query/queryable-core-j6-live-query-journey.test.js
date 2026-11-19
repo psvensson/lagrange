@@ -18,7 +18,7 @@ import {createLiveQueryStartupWiring} from '../../src/live-query/live-query-star
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-  evaluateWhereExpression,
+  compilePredicate,
 } from '../../src/live-query/live-query-service.js';
 import {
   startLeader,
@@ -220,9 +220,12 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
     assert.equal(latest2f.rows[0].customer, 'Bob');
   });
 
-  it('evaluates unknown expressions fail-closed as false', () => {
+  it('compiles predicates through SQLite and fails closed on unknown expressions', () => {
     const unknownNode = {type: 'UNKNOWN_EXPRESSION_NODE', val: 123};
-    assert.equal(evaluateWhereExpression(unknownNode, {id: 1}), false);
+    assert.throws(
+      () => compilePredicate(unknownNode),
+      {code: 'UNSUPPORTED_SQL_FEATURE'},
+    );
 
     const unknownOp = {
       type: 'binary',
@@ -230,32 +233,38 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
       left: {type: 'literal', value: 1},
       right: {type: 'literal', value: 1},
     };
-    assert.equal(evaluateWhereExpression(unknownOp, {}), false);
+    assert.throws(
+      () => compilePredicate(unknownOp),
+      {code: 'UNSUPPORTED_SQL_FEATURE'},
+    );
 
-    const isNullExpr = {
+    const isNullPred = compilePredicate({
       type: 'binary',
       operator: 'IS NULL',
       left: {type: 'column_ref', column: 'val'},
-    };
-    assert.equal(evaluateWhereExpression(isNullExpr, {val: null}), true);
-    assert.equal(evaluateWhereExpression(isNullExpr, {val: 10}), false);
+    });
+    assert.equal(isNullPred({val: null}), true);
+    assert.equal(isNullPred({val: 10}), false);
+    isNullPred.close();
 
-    const isNotNullExpr = {
+    const isNotNullPred = compilePredicate({
       type: 'binary',
       operator: 'IS NOT NULL',
       left: {type: 'column_ref', column: 'val'},
-    };
-    assert.equal(evaluateWhereExpression(isNotNullExpr, {val: 10}), true);
-    assert.equal(evaluateWhereExpression(isNotNullExpr, {val: null}), false);
+    });
+    assert.equal(isNotNullPred({val: 10}), true);
+    assert.equal(isNotNullPred({val: null}), false);
+    isNotNullPred.close();
 
-    const betweenExpr = {
+    const betweenPred = compilePredicate({
       type: 'between',
       expression: {type: 'column_ref', column: 'score'},
       low: {type: 'literal', value: 10},
       high: {type: 'literal', value: 20},
-    };
-    assert.equal(evaluateWhereExpression(betweenExpr, {score: 15}), true);
-    assert.equal(evaluateWhereExpression(betweenExpr, {score: 5}), false);
+    });
+    assert.equal(betweenPred({score: 15}), true);
+    assert.equal(betweenPred({score: 5}), false);
+    betweenPred.close();
 
     const paramExpr = {
       type: 'binary',
@@ -263,8 +272,12 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
       left: {type: 'column_ref', column: 'status'},
       right: {type: 'parameter', index: 1},
     };
-    assert.equal(evaluateWhereExpression(paramExpr, {status: 'ACTIVE'}, ['ACTIVE']), true);
-    assert.equal(evaluateWhereExpression(paramExpr, {status: 'ACTIVE'}, ['INACTIVE']), false);
+    const activePred = compilePredicate(paramExpr, ['ACTIVE']);
+    const inactivePred = compilePredicate(paramExpr, ['INACTIVE']);
+    assert.equal(activePred({status: 'ACTIVE'}), true);
+    assert.equal(inactivePred({status: 'ACTIVE'}), false);
+    activePred.close();
+    inactivePred.close();
   });
 
   it('serializes and coalesces refresh so stale completions do not overwrite newer state', async () => {

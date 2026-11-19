@@ -170,17 +170,22 @@ Per-query and per-stage budgets enforced by `BudgetEnforcer`:
 
 Budget violations terminate the operation with a descriptive `BudgetLimitError`.
 
-### Coordinator Scalar Semantics
+### Coordinator Merge is SQLite
 
-The SELECT partial-aggregate combiner and the HAVING evaluator share
-`src/query/sql-scalar-functions.js` for ROUND, LENGTH and SUBSTR/SUBSTRING.
-Native SQLite supplies the expected values in scalar and complete query
-regressions, including both consumers and one- and two-partition delivery.
-Changes to these semantics must preserve the parser's actual value
-representations and run those consumer regressions, rather than testing only
-the helper with hand-built values.
+Distributed SQL evaluation has one semantic authority: SQLite. The coordinator
+evaluates final projection, aggregate combination, `GROUP BY`, `HAVING`,
+`DISTINCT`, `ORDER BY` (collations, `NULL` ordering, storage-class ordering),
+`LIMIT`/`OFFSET`, cross-partition joins, `FROM`-less `SELECT` statements,
+write-key expressions, batch `UNIQUE` checks, and live-query `WHERE` predicates
+through per-statement in-memory SQLite connections (`CoordinatorMergeSession`
+in `src/query/distributed/coordinator-merge-session.js` and the bounded
+child-process pool in `src/query/distributed/coordinator-merge-process.js`).
 
-Coordinator JavaScript numbers do not preserve SQLite INTEGER/REAL storage-class
-metadata. This shared helper does not reconstruct that metadata or establish
-complete numeric-to-text affinity equivalence. Any extension requiring those
-distinctions must address the row representation and planner boundary explicitly.
+Row values and parameters preserve their exact SQLite storage class (`NULL`,
+64-bit `INTEGER`, `REAL`, `TEXT`, `BLOB`) across partition requests and answers
+via `src/query/sql-value-codec.js`, and client presentation is applied once at
+the result exit boundary via `src/query/sql-value-presentation.js`. Declared
+column types and collations are rendered from the catalog schema through the
+single DDL authority `src/query/sql-table-definition.js`. No JavaScript SQL
+expression evaluator, comparator, affinity classifier, or duplicate SQL
+renderer exists outside the classified routing, codec, and presentation owners.

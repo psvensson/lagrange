@@ -2234,20 +2234,29 @@
         "test/rebalancer/rebalancer-distinct-spread-and-continuation-wake.test.js"
       ]
     },
-    "coordinator-scalar-semantics": {
-      "description": "SELECT partial aggregation and HAVING evaluation preserve the same admitted scalar semantics, using native SQLite expected values and actual parser/planner/partition deliveries.",
+    "coordinator-sqlite-merge": {
+      "description": "Coordinator SELECT merge, HAVING, ORDER BY, cross-partition JOIN, write-key normalization, batch uniqueness, and live-query predicates execute through in-memory SQLite over codec-typed rows and canonical DDL definitions, with zero JavaScript SQL evaluators.",
       "owners": [
         "src/query/coordinator-sql-admission.js",
-        "src/query/sql-scalar-functions.js",
-        "src/query/distributed/partial-aggregate-combiner.js",
+        "src/query/distributed/coordinator-merge-session.js",
+        "src/query/distributed/coordinator-merge-process.js",
+        "src/query/distributed/distributed-merge-engine.js",
         "src/query/distributed/distributed-select-fanout-plan.js",
-        "src/query/query-executor-select-aggregation.js"
+        "src/query/distributed/distributed-write-constraint-helpers.js",
+        "src/query/sql-statement-renderer.js",
+        "src/query/sql-table-definition.js",
+        "src/query/sql-value-codec.js",
+        "src/query/sql-value-presentation.js",
+        "src/live-query/live-query-service.js"
       ],
       "tests": [
         "test/query/coordinator-interim-refusals.test.js",
-        "test/query/sql-scalar-functions.test.js",
+        "test/query/coordinator-sql-evaluation-census.test.js",
+        "test/query/distributed-merge-engine.test.js",
         "test/query/distributed-select-global-merge-correctness.test.js",
-        "test/query/cross-partition-join-pushdown.test.js"
+        "test/query/cross-partition-join-pushdown.test.js",
+        "test/query/sql-mutation-and-constraint-stabilization.test.js",
+        "test/live-query/live-query-service.test.js"
       ]
     },
     "query-budget-normalization-and-enforcement": {

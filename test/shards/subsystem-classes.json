@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 286,
-    "query-sql": 199,
+    "query-sql": 200,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2690,
-  "digest": "fnv1a32-9543e106",
+  "censusSize": 2691,
+  "digest": "fnv1a32-46c3aadc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1e403f03",
+  "observationDigest": "fnv1a32-c810fc2f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1589,6 +1589,7 @@
     "test/query/catalog-authority-and-visible-reconciliation.test.js": "query-sql",
     "test/query/coordinator-interim-refusals.test.js": "query-sql",
     "test/query/coordinator-resource-limits.property.test.js": "query-sql",
+    "test/query/coordinator-sql-evaluation-census.test.js": "query-sql",
     "test/query/create-table-policy-option.test.js": "query-sql",
     "test/query/cross-partition-join-pushdown.test.js": "query-sql",
     "test/query/cross-partition-join.property.test.js": "query-sql",
@@ -14488,6 +14489,24 @@
         "src/query/distributed/distributed-write-coordinator.js",
         "src/query/sql-query-engine-select-execution.js",
         "src/query/sql-select-execution-helpers.js"
+      ]
+    },
+    "test/query/coordinator-sql-evaluation-census.test.js": {
+      "files": [
+        "src/live-query/live-query-service.js",
+        "src/partition/split-key-comparator.js",
+        "src/query/distributed/coordinator-merge-process.js",
+        "src/query/distributed/coordinator-merge-session.js",
+        "src/query/distributed/distributed-write-constraint-helpers.js",
+        "src/query/partition-resolver.js",
+        "src/query/sql-statement-renderer.js",
+        "src/query/sql-table-definition.js",
+        "src/query/sql-value-codec.js",
+        "src/query/sql-value-presentation.js"
+      ],
+      "directories": [
+        "src/live-query",
+        "src/query"
       ]
     },
     "test/query/create-table-policy-option.test.js": {

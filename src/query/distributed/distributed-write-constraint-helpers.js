@@ -1,57 +1,92 @@
-import {EXPR_TYPE, SQL_DEFAULT_COLLATION} from '../parser-constants.js';
+/**
+ * Coordinator write-key evaluation and cross-partition UNIQUE constraint
+ * helpers backed by in-memory SQLite and the canonical table-definition owner
+ * (design coordinator-sqlite-merge §2.10, WP4).
+ *
+ * - Evaluates write-key expressions in an in-memory SQLite connection and
+ *   applies the target column's declared affinity via `renderTableColumnsSql`.
+ * - Enforces multi-row INSERT batch uniqueness by inserting candidate rows into
+ *   an in-memory SQLite table declared with the table's exact column types,
+ *   collations (`BINARY`, `NOCASE`, `RTRIM`), and `UNIQUE` constraints via
+ *   `renderTableDefinitionSql`.
+ *
+ * @module query/distributed/distributed-write-constraint-helpers
+ */
+
+import Database from 'better-sqlite3';
+
+import {
+  lexPartitionStatement,
+} from '../../partition/partition-statement-admission-lexer.js';
+import {
+  namesRefusedFunction,
+  resolveNamePositions,
+} from '../../partition/partition-statement-admission-names.js';
+import {EXPR_TYPE} from '../parser-constants.js';
+import {PG_EXPR_TYPE} from '../pg/pg-compat-constants.js';
 import {QUERY_AST_NODE, QUERY_AST_TYPE, QUERY_ERROR_CODE} from '../query-constants.js';
 import {renderExpressionWithParameters} from '../sql-statement-renderer.js';
+import {
+  renderTableColumnsSql,
+  renderTableDefinitionSql,
+} from '../sql-table-definition.js';
+import {decodeTypedParams, encodeTypedParams} from '../sql-value-codec.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 
+const MEMORY_DATABASE = ':memory:';
+const PROBE_TABLE_NAME = '__write_key_probe';
+const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const UNCONDITIONAL_WHERE_SQL = '1 = 1';
 const UPDATE_UNIQUENESS_ORDER_LIMIT_SQL = 'ORDER BY target_match DESC LIMIT 2';
 const ERR_UNIQUENESS_PROBE_INCOMPLETE =
   'Cross-partition uniqueness observation failed or was incomplete';
 
-const UNARY_MINUS = '-';
-const UNARY_PLUS = '+';
-const OP_MULTIPLY = '*';
-const OP_DIVIDE = '/';
-const OP_CONCAT = '||';
-const FN_UPPER = 'UPPER';
-const FN_LOWER = 'LOWER';
-const FN_TRIM = 'TRIM';
-const FN_COALESCE = 'COALESCE';
 const SQLITE_CONSTRAINT_UNIQUE_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
+const SQLITE_ERROR_CODE = 'SQLITE_ERROR';
 const CONSTRAINT_TYPE_UNIQUE = 'UNIQUE';
+const UNIQUE_FAILED_PREFIX = 'UNIQUE constraint failed: ';
 const ERR_COLUMN_REF_IN_KEY =
   'Column references cannot be used in partition key value';
-// Interim I1c (removed by WP4, design §5.1): the coordinator evaluates a
-// write-key expression in JavaScript, which cannot apply a collation.
-const ERR_COLLATE_IN_KEY =
-  'COLLATE in a partition key value is not supported yet (interim I1c, until WP4)';
-const ERR_NON_BINARY_UNIQUE_BATCH =
-  'Multi-row INSERT on a UNIQUE column with non-BINARY collation is not supported yet ' +
-  '(interim I1c, until WP4)';
+const ERR_SUBQUERY_OR_AGGREGATE_IN_KEY =
+  'Subqueries and aggregates cannot be used in partition key value';
+const ERR_UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
 const COLUMN_LIST_SEPARATOR = ', ';
 const WHERE_AND_SEPARATOR = ' AND ';
-const FUNCTION_NODE_TYPES = new Set([
-  'function',
-  'function_call',
-  'FUNCTION_CALL',
+
+const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+const COLUMN_REF_NODE_TYPES = new Set([
+  'column_ref',
+  QUERY_AST_NODE.COLUMN_REF,
+  EXPR_TYPE.COLUMN_REF,
+]);
+
+const DISALLOWED_KEY_NODE_TYPES = new Set([
+  EXPR_TYPE.AGGREGATE,
+  'aggr_func',
+  'aggregate',
+  PG_EXPR_TYPE.SUBQUERY,
+  PG_EXPR_TYPE.EXISTS,
 ]);
 
 function throwUnsupportedKeyExpression(message) {
   const error = new Error(message);
   error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  error.errorCode = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
   throw error;
 }
 
 function throwUniqueConstraintViolation(tableName, colNames) {
-  const label = Array.isArray(colNames) ? colNames.join(COLUMN_LIST_SEPARATOR) : colNames;
-  const error = new Error(`UNIQUE constraint failed: ${tableName}.${label}`);
+  const label = Array.isArray(colNames) ?
+    colNames.join(COLUMN_LIST_SEPARATOR) :
+    colNames;
+  const error = new Error(`${UNIQUE_FAILED_PREFIX}${tableName}.${label}`);
   error.code = SQLITE_CONSTRAINT_UNIQUE_CODE;
   error.errorCode = SQLITE_CONSTRAINT_UNIQUE_CODE;
   throw error;
 }
-
-const ERR_UNBOUND_PARAMETER_PREFIX = 'Unbound parameter index: ';
 
 function extractParameterValue(expr, params) {
   const index = typeof expr.index === 'number' ? expr.index : 0;
@@ -69,100 +104,196 @@ function extractParameterValue(expr, params) {
   return params[index];
 }
 
-function evaluateUnaryKeyValue(coordinator, expr, params) {
-  const operand = coordinator.extractKeyValue(expr.operand || expr.expr, params);
-  if (expr.operator === UNARY_MINUS) {
-    return -Number(operand);
+function assertAdmissibleKeyExpressionAst(node) {
+  if (!node || typeof node !== TYPEOF_OBJECT) {
+    return;
   }
-  if (expr.operator === UNARY_PLUS) {
-    return Number(operand);
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      assertAdmissibleKeyExpressionAst(child);
+    }
+    return;
   }
-  return operand;
+  if (COLUMN_REF_NODE_TYPES.has(node.type)) {
+    throwUnsupportedKeyExpression(ERR_COLUMN_REF_IN_KEY);
+  }
+  if (
+    DISALLOWED_KEY_NODE_TYPES.has(node.type) ||
+    (node.type === EXPR_TYPE.IN && Boolean(node.subquery))
+  ) {
+    throwUnsupportedKeyExpression(ERR_SUBQUERY_OR_AGGREGATE_IN_KEY);
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === TYPEOF_OBJECT) {
+      assertAdmissibleKeyExpressionAst(value);
+    }
+  }
 }
 
-function evaluateBinaryKeyValue(coordinator, expr, params) {
-  const left = coordinator.extractKeyValue(expr.left, params);
-  const right = coordinator.extractKeyValue(expr.right, params);
-  switch (expr.operator) {
-  case UNARY_PLUS:
-    return Number(left) + Number(right);
-  case UNARY_MINUS:
-    return Number(left) - Number(right);
-  case OP_MULTIPLY:
-    return Number(left) * Number(right);
-  case OP_DIVIDE:
-    return Number(left) / Number(right);
-  case OP_CONCAT:
-    return String(left ?? '') + String(right ?? '');
-  default:
-    return throwUnsupportedKeyExpression(
-      `Unsupported binary operator in key expression: ${expr.operator}`,
+function normalizeKeyCellValue(value) {
+  if (value === undefined) {
+    return null;
+  }
+  if (
+    typeof value === 'bigint' &&
+    value >= MIN_SAFE_BIGINT &&
+    value <= MAX_SAFE_BIGINT
+  ) {
+    return Number(value);
+  }
+  return value;
+}
+
+const CONNECTION_SCOPED_FUNCTIONS = new Set([
+  'changes',
+  'last_insert_rowid',
+  'total_changes',
+]);
+const OPEN_PAREN_TOKEN = '(';
+const ERR_REFUSED_KEY_FUNCTION =
+  'Refused or connection-scoped function in write key expression';
+
+function assertWriteKeySelectAdmitted(selectSql) {
+  const lexed = resolveNamePositions(lexPartitionStatement(selectSql));
+  if (namesRefusedFunction(lexed)) {
+    throwUnsupportedKeyExpression(ERR_REFUSED_KEY_FUNCTION);
+  }
+  const {tokens} = lexed;
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (
+      token.identifier !== null &&
+      CONNECTION_SCOPED_FUNCTIONS.has(token.identifier) &&
+      next?.text === OPEN_PAREN_TOKEN
+    ) {
+      throwUnsupportedKeyExpression(ERR_REFUSED_KEY_FUNCTION);
+    }
+  }
+}
+
+function renderKeyExpressionBatch(exprs, params) {
+  const sqlList = [];
+  const boundParams = [];
+  for (const expr of exprs) {
+    assertAdmissibleKeyExpressionAst(expr);
+    const rendered = renderExpressionWithParameters(
+      expr,
+      (paramExpr) => extractParameterValue(paramExpr, params),
     );
+    sqlList.push(rendered.sql);
+    boundParams.push(...rendered.params);
   }
+  const selectSql = `SELECT ${sqlList.join(COLUMN_LIST_SEPARATOR)}`;
+  assertWriteKeySelectAdmitted(selectSql);
+  const typedParams = decodeTypedParams(encodeTypedParams(boundParams));
+  return {sqlList, selectSql, typedParams};
 }
 
-function evaluateFunctionKeyValue(coordinator, expr, params) {
-  const fnName = String(expr.name || '').toUpperCase();
-  const rawArgs = expr.args || [];
-  const args = (Array.isArray(rawArgs) ? rawArgs : [rawArgs]).map((arg) =>
-    coordinator.extractKeyValue(arg, params),
+function mapSqliteKeyEvaluationError(error) {
+  if (
+    error &&
+    typeof error === TYPEOF_OBJECT &&
+    (!error.code || error.code === SQLITE_ERROR_CODE)
+  ) {
+    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+    error.errorCode = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+  }
+  return error;
+}
+
+function hasColumnAffinityOrCollation(columnSchemas) {
+  return (
+    Array.isArray(columnSchemas) &&
+    columnSchemas.length > 0 &&
+    columnSchemas.some(
+      (col) =>
+        (typeof col?.type === TYPEOF_STRING && col.type.length > 0) ||
+        (typeof col?.collation === TYPEOF_STRING && col.collation.length > 0),
+    )
   );
-  switch (fnName) {
-  case FN_UPPER:
-    return String(args[0] ?? '').toUpperCase();
-  case FN_LOWER:
-    return String(args[0] ?? '').toLowerCase();
-  case FN_TRIM:
-    return String(args[0] ?? '').trim();
-  case FN_COALESCE:
-    return args.find((v) => v !== null && v !== undefined) ?? null;
-  default:
-    return throwUnsupportedKeyExpression(
-      `Unsupported function in key expression: ${fnName}`,
-    );
+}
+
+/**
+ * Evaluate one or more write-key expressions in an in-memory SQLite session and
+ * apply the target columns' declared storage affinities when schema metadata is
+ * present.
+ * @param {Array<Object>} exprs - Expression AST nodes.
+ * @param {Array<*>} [params] - Bound parameters.
+ * @param {Array<Object>|null} [columnSchemas] - Target column definitions.
+ * @return {Array<*>} Normalized key values.
+ */
+function evaluateKeyExpressionsInSqlite(exprs, params = [], columnSchemas = null) {
+  const {sqlList, selectSql, typedParams} = renderKeyExpressionBatch(exprs, params);
+  const db = new Database(MEMORY_DATABASE);
+  try {
+    db.defaultSafeIntegers(true);
+    if (
+      hasColumnAffinityOrCollation(columnSchemas) &&
+      columnSchemas.length === exprs.length
+    ) {
+      const probeColumns = columnSchemas.map((col, idx) => ({
+        name: col?.name || `c${idx}`,
+        ...(typeof col?.type === TYPEOF_STRING && col.type.length > 0 ?
+          {type: col.type} :
+          {}),
+        ...(typeof col?.collation === TYPEOF_STRING && col.collation.length > 0 ?
+          {collation: col.collation} :
+          {}),
+      }));
+      db.exec(renderTableColumnsSql(PROBE_TABLE_NAME, {columns: probeColumns}));
+      const quotedTable = renderSqliteIdentifier(PROBE_TABLE_NAME);
+      const quotedCols = probeColumns
+        .map((col) => renderSqliteIdentifier(col.name))
+        .join(COLUMN_LIST_SEPARATOR);
+      db.prepare(
+        `INSERT INTO ${quotedTable} (${quotedCols}) ` +
+        `SELECT ${sqlList.join(COLUMN_LIST_SEPARATOR)}`,
+      ).run(...typedParams);
+      const storedRow = db
+        .prepare(`SELECT ${quotedCols} FROM ${quotedTable}`)
+        .raw(true)
+        .safeIntegers(true)
+        .get();
+      return storedRow.map(normalizeKeyCellValue);
+    }
+    const rawRow = db
+      .prepare(selectSql)
+      .raw(true)
+      .safeIntegers(true)
+      .get(...typedParams);
+    return rawRow.map(normalizeKeyCellValue);
+  } catch (error) {
+    throw mapSqliteKeyEvaluationError(error);
+  } finally {
+    db.close();
   }
 }
 
-const UNARY_NODE_TYPES = new Set([QUERY_AST_NODE.UNARY, 'unary_expr']);
-const BINARY_NODE_TYPES = new Set([QUERY_AST_NODE.BINARY, 'binary_expr']);
-const COLUMN_REF_NODE_TYPES = new Set(['column_ref', QUERY_AST_NODE.COLUMN_REF]);
-
-function extractCoordinatorKeyValue(coordinator, expr, params = []) {
-  if (!expr || typeof expr !== 'object') {
+function extractCoordinatorKeyValue(
+  _coordinator,
+  expr,
+  params = [],
+  columnSchema = null,
+) {
+  if (!expr || typeof expr !== TYPEOF_OBJECT) {
     return expr;
   }
-  if (expr.type === QUERY_AST_NODE.LITERAL) return expr.value;
-  if (expr.type === QUERY_AST_NODE.PARAMETER) {
-    return extractParameterValue(expr, params);
-  }
-  if (UNARY_NODE_TYPES.has(expr.type)) {
-    return evaluateUnaryKeyValue(coordinator, expr, params);
-  }
-  if (BINARY_NODE_TYPES.has(expr.type)) {
-    return evaluateBinaryKeyValue(coordinator, expr, params);
-  }
-  if (FUNCTION_NODE_TYPES.has(expr.type)) {
-    return evaluateFunctionKeyValue(coordinator, expr, params);
-  }
-  if (COLUMN_REF_NODE_TYPES.has(expr.type)) {
-    return throwUnsupportedKeyExpression(ERR_COLUMN_REF_IN_KEY);
-  }
-  if (expr.type === EXPR_TYPE.COLLATE) {
-    return throwUnsupportedKeyExpression(ERR_COLLATE_IN_KEY);
-  }
-  return expr.value !== undefined ?
-    expr.value :
-    throwUnsupportedKeyExpression(
-      `Unsupported expression type in key: ${expr.type}`,
-    );
+  const schemas = columnSchema ? [columnSchema] : null;
+  return evaluateKeyExpressionsInSqlite([expr], params, schemas)[0];
+}
+
+function readCoordinatorTableInfo(coordinator, tableName) {
+  return (
+    coordinator.getTableInfo?.(tableName) ||
+    coordinator.getTableMetadata?.(tableName) ||
+    coordinator.systemTableCache?.getTable?.(tableName) ||
+    null
+  );
 }
 
 function resolveCoordinatorTableSchema(coordinator, tableName) {
-  const tableInfo =
-    coordinator.getTableInfo(tableName) ||
-    coordinator.getTableMetadata?.(tableName) ||
-    coordinator.systemTableCache?.getTable?.(tableName) ||
-    null;
+  const tableInfo = readCoordinatorTableInfo(coordinator, tableName);
   if (!tableInfo) return null;
   if (typeof tableInfo.schema_definition === TYPEOF_STRING) {
     return JSON.parse(tableInfo.schema_definition);
@@ -171,6 +302,29 @@ function resolveCoordinatorTableSchema(coordinator, tableName) {
     return JSON.parse(tableInfo.schema);
   }
   return tableInfo.schema || (tableInfo.columns ? tableInfo : null);
+}
+
+function resolveSchemaColumnDefinition(schema, columnName) {
+  const target = String(columnName ?? '').toLowerCase();
+  const match = Array.isArray(schema?.columns) ?
+    schema.columns.find(
+      (col) =>
+        typeof col?.name === TYPEOF_STRING &&
+        col.name.toLowerCase() === target,
+    ) :
+    null;
+  if (!match) {
+    return {name: String(columnName)};
+  }
+  return {
+    name: match.name,
+    ...(typeof match.type === TYPEOF_STRING && match.type.length > 0 ?
+      {type: match.type} :
+      {}),
+    ...(typeof match.collation === TYPEOF_STRING && match.collation.length > 0 ?
+      {collation: match.collation} :
+      {}),
+  };
 }
 
 function collectUniqueColumnSets(schema) {
@@ -200,20 +354,24 @@ function resolveTablePartitionIds(coordinator, tableName) {
 }
 
 function assertCompletePartitionProbeResults(results, partitionIds) {
-  if (Array.isArray(results) &&
-      results.length === partitionIds.length &&
-      results.every((res) => res?.success === true && Array.isArray(res.rows))) {
+  if (
+    Array.isArray(results) &&
+    results.length === partitionIds.length &&
+    results.every((res) => res?.success === true && Array.isArray(res.rows))
+  ) {
     return;
   }
   const failed = Array.isArray(results) ?
     results.find((res) => res?.success !== true || !Array.isArray(res?.rows)) :
     null;
-  const message = typeof failed?.error === TYPEOF_STRING && failed.error.length > 0 ?
-    failed.error :
-    ERR_UNIQUENESS_PROBE_INCOMPLETE;
-  const code = typeof failed?.errorCode === TYPEOF_STRING && failed.errorCode.length > 0 ?
-    failed.errorCode :
-    QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
+  const message =
+    typeof failed?.error === TYPEOF_STRING && failed.error.length > 0 ?
+      failed.error :
+      ERR_UNIQUENESS_PROBE_INCOMPLETE;
+  const code =
+    typeof failed?.errorCode === TYPEOF_STRING && failed.errorCode.length > 0 ?
+      failed.errorCode :
+      QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE;
   const error = new Error(message);
   error.code = code;
   error.errorCode = code;
@@ -231,37 +389,74 @@ async function assertUniqueAcrossPartitions(
   if (!executor) {
     return;
   }
-  const whereClause = colNames.map((c) => `"${c}" = ?`).join(WHERE_AND_SEPARATOR);
-  const checkSql = `SELECT 1 FROM "${tableName}" WHERE ${whereClause} LIMIT 1`;
+  const whereClause = colNames
+    .map((c) => `${renderSqliteIdentifier(c)} = ?`)
+    .join(WHERE_AND_SEPARATOR);
+  const checkSql =
+    `SELECT 1 FROM ${renderSqliteIdentifier(tableName)} ` +
+    `WHERE ${whereClause} LIMIT 1`;
   const results = await executor.executeOnPartitions(
     partitionIds,
     checkSql,
     candidateValues,
   );
-  if (Array.isArray(results) &&
-      results.some((res) =>
-        res?.success === true && Array.isArray(res.rows) && res.rows.length > 0)) {
+  if (
+    Array.isArray(results) &&
+    results.some(
+      (res) =>
+        res?.success === true &&
+        Array.isArray(res.rows) &&
+        res.rows.length > 0,
+    )
+  ) {
     throwUniqueConstraintViolation(tableName, colNames);
   }
   assertCompletePartitionProbeResults(results, partitionIds);
-}
-
-function columnSetHoldsNonBinaryCollation(schema, colNames) {
-  if (!Array.isArray(schema?.columns)) return false;
-  const targets = new Set(colNames.map((name) => String(name).toLowerCase()));
-  return schema.columns.some((col) =>
-    typeof col?.name === TYPEOF_STRING &&
-    targets.has(col.name.toLowerCase()) &&
-    typeof col.collation === TYPEOF_STRING &&
-    col.collation.toUpperCase() !== SQL_DEFAULT_COLLATION,
-  );
 }
 
 function resolveInsertColumnNames(ast, schema) {
   if (Array.isArray(ast.columns) && ast.columns.length > 0) {
     return ast.columns;
   }
-  return Array.isArray(schema?.columns) ? schema.columns.map((col) => col.name) : [];
+  return Array.isArray(schema?.columns) ?
+    schema.columns.map((col) => col.name) :
+    [];
+}
+
+function isUniqueConstraintError(error) {
+  return (
+    error?.code === SQLITE_CONSTRAINT_UNIQUE_CODE ||
+    String(error?.message || '').includes(UNIQUE_FAILED_PREFIX)
+  );
+}
+
+function insertBatchCandidateIntoProbeTable(
+  db,
+  tableName,
+  colNames,
+  quotedTable,
+  quotedCols,
+  selectByRowidStmt,
+  rowExprs,
+  params,
+) {
+  const {sqlList, typedParams} = renderKeyExpressionBatch(rowExprs, params);
+  let info;
+  try {
+    info = db
+      .prepare(
+        `INSERT INTO ${quotedTable} (${quotedCols}) ` +
+        `SELECT ${sqlList.join(COLUMN_LIST_SEPARATOR)}`,
+      )
+      .run(...typedParams);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throwUniqueConstraintViolation(tableName, colNames);
+    }
+    throw mapSqliteKeyEvaluationError(error);
+  }
+  const storedRow = selectByRowidStmt.get(info.lastInsertRowid);
+  return storedRow.map(normalizeKeyCellValue);
 }
 
 async function checkInsertColumnSetUniqueness(
@@ -281,30 +476,56 @@ async function checkInsertColumnSetUniqueness(
   if (!colIndices.every((idx) => idx >= 0)) {
     return;
   }
-  if (Array.isArray(ast.values) && ast.values.length > 1 &&
-      columnSetHoldsNonBinaryCollation(schema, colNames)) {
-    throwUnsupportedKeyExpression(ERR_NON_BINARY_UNIQUE_BATCH);
-  }
-  const seenValues = new Set();
-  for (const row of ast.values || []) {
-    const candidateValues = colIndices.map((idx) =>
-      coordinator.extractKeyValue(row[idx], params),
-    );
-    if (candidateValues.some((v) => v === null || v === undefined)) {
-      continue;
+  const probeColumns = colNames.map((name) =>
+    resolveSchemaColumnDefinition(schema, name),
+  );
+  const probeSchema = {
+    columns: probeColumns,
+    primaryKey: [],
+    tableConstraints: [
+      {
+        type: CONSTRAINT_TYPE_UNIQUE,
+        columns: probeColumns.map((col) => col.name),
+      },
+    ],
+  };
+  const db = new Database(MEMORY_DATABASE);
+  try {
+    db.defaultSafeIntegers(true);
+    db.exec(renderTableDefinitionSql(ast.table, probeSchema));
+    const quotedTable = renderSqliteIdentifier(ast.table);
+    const quotedCols = probeColumns
+      .map((col) => renderSqliteIdentifier(col.name))
+      .join(COLUMN_LIST_SEPARATOR);
+    const selectByRowidStmt = db
+      .prepare(`SELECT ${quotedCols} FROM ${quotedTable} WHERE rowid = ?`)
+      .raw(true)
+      .safeIntegers(true);
+    for (const row of ast.values || []) {
+      const rowExprs = colIndices.map((idx) => row[idx]);
+      const candidateValues = insertBatchCandidateIntoProbeTable(
+        db,
+        ast.table,
+        colNames,
+        quotedTable,
+        quotedCols,
+        selectByRowidStmt,
+        rowExprs,
+        params,
+      );
+      if (candidateValues.some((v) => v === null || v === undefined)) {
+        continue;
+      }
+      await assertUniqueAcrossPartitions(
+        coordinator,
+        ast.table,
+        partitionIds,
+        colNames,
+        candidateValues,
+      );
     }
-    const keyStr = JSON.stringify(candidateValues);
-    if (seenValues.has(keyStr)) {
-      throwUniqueConstraintViolation(ast.table, colNames);
-    }
-    seenValues.add(keyStr);
-    await assertUniqueAcrossPartitions(
-      coordinator,
-      ast.table,
-      partitionIds,
-      colNames,
-      candidateValues,
-    );
+  } finally {
+    db.close();
   }
 }
 
@@ -370,8 +591,10 @@ async function assertUpdateUniqueAcrossPartitions(
   assertCompletePartitionProbeResults(results, partitionIds);
   const {matchedTargetCount, externalOwnerCount} =
     tallyUpdateUniquenessProbeRows(results);
-  if (matchedTargetCount > 1 ||
-      (matchedTargetCount === 1 && externalOwnerCount > 0)) {
+  if (
+    matchedTargetCount > 1 ||
+    (matchedTargetCount === 1 && externalOwnerCount > 0)
+  ) {
     throwUniqueConstraintViolation(ast.table, colNames);
   }
 }
@@ -382,6 +605,7 @@ async function checkUpdateColumnSetUniqueness(
   params,
   partitionIds,
   colNames,
+  schema,
 ) {
   const assignments = ast.assignments || ast.set || [];
   const assigned = colNames.map((colName) =>
@@ -390,8 +614,13 @@ async function checkUpdateColumnSetUniqueness(
     ),
   );
   if (!assigned.every(Boolean)) return;
-  const candidateValues = assigned.map((a) =>
-    coordinator.extractKeyValue(a.value, params),
+  const probeColumns = colNames.map((name) =>
+    resolveSchemaColumnDefinition(schema, name),
+  );
+  const candidateValues = evaluateKeyExpressionsInSqlite(
+    assigned.map((a) => a.value),
+    params,
+    probeColumns,
   );
   if (candidateValues.some((v) => v === null || v === undefined)) return;
   await assertUpdateUniqueAcrossPartitions(
@@ -434,6 +663,7 @@ async function enforceCoordinatorUniqueConstraints(coordinator, ast, params = []
         params,
         partitionIds,
         colNames,
+        schema,
       );
     }
   }
@@ -441,5 +671,8 @@ async function enforceCoordinatorUniqueConstraints(coordinator, ast, params = []
 
 export {
   enforceCoordinatorUniqueConstraints,
+  evaluateKeyExpressionsInSqlite,
   extractCoordinatorKeyValue,
+  resolveCoordinatorTableSchema,
+  resolveSchemaColumnDefinition,
 };

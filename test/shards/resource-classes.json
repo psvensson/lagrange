@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2664,
+    "ordinary": 2665,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2690,
-  "digest": "fnv1a32-280f722e",
+  "censusSize": 2691,
+  "digest": "fnv1a32-2f9ddd53",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1569,6 +1569,7 @@
     "test/query/catalog-authority-and-visible-reconciliation.test.js": "ordinary",
     "test/query/coordinator-interim-refusals.test.js": "ordinary",
     "test/query/coordinator-resource-limits.property.test.js": "ordinary",
+    "test/query/coordinator-sql-evaluation-census.test.js": "ordinary",
     "test/query/create-table-policy-option.test.js": "ordinary",
     "test/query/cross-partition-join-pushdown.test.js": "ordinary",
     "test/query/cross-partition-join.property.test.js": "ordinary",

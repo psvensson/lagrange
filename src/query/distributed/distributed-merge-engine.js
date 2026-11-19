@@ -2,9 +2,8 @@
  * DistributedMergeEngine: coordinator SQLite merge engine backed by
  * CoordinatorMergeSession (design coordinator-sqlite-merge §2.1, §2.2, §2.8).
  *
- * Replaces the legacy JavaScript StreamingAggregator and
- * partial-aggregate-combiner with per-statement in-memory SQLite merge
- * sessions ingesting partition fragments in canonical layout.
+ * Executes per-statement in-memory SQLite merge sessions ingesting partition
+ * fragments in canonical layout.
  *
  * @module query/distributed/distributed-merge-engine
  */

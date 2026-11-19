@@ -183,33 +183,24 @@ test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params
   assert.deepEqual(updateParams, []);
 });
 
-test('Q01: DistributedWriteCoordinator extractKeyValue evaluates constant expressions and fails closed', async () => {
+test('Q01: DistributedWriteCoordinator extractKeyValue evaluates constant expressions via SQLite and fails closed', async () => {
   const coordinator = new DistributedWriteCoordinator();
+  const parseExpr = (sql) => new SQLParser(`SELECT ${sql}`).parse().columns[0].expression;
 
-  assert.equal(coordinator.extractKeyValue({type: 'literal', value: 42}), 42);
-
-  const addExpr = {
-    type: 'binary',
-    operator: '+',
-    left: {type: 'literal', value: 10},
-    right: {type: 'literal', value: 20},
-  };
-  assert.equal(coordinator.extractKeyValue(addExpr), 30);
-
-  const concatExpr = {
-    type: 'binary',
-    operator: '||',
-    left: {type: 'literal', value: 'hello_'},
-    right: {type: 'literal', value: 'world'},
-  };
-  assert.equal(coordinator.extractKeyValue(concatExpr), 'hello_world');
-
-  const fnExpr = {
-    type: 'function',
-    name: 'UPPER',
-    args: [{type: 'literal', value: 'abc'}],
-  };
-  assert.equal(coordinator.extractKeyValue(fnExpr), 'ABC');
+  assert.equal(coordinator.extractKeyValue(parseExpr('42')), 42);
+  assert.equal(coordinator.extractKeyValue(parseExpr('10 + 20')), 30);
+  assert.equal(coordinator.extractKeyValue(parseExpr('\'hello_\' || \'world\'')), 'hello_world');
+  assert.equal(coordinator.extractKeyValue(parseExpr('UPPER(\'abc\')')), 'ABC');
+  assert.equal(coordinator.extractKeyValue(parseExpr('TRIM(\'xxabcxx\', \'x\')')), 'abc');
+  assert.equal(coordinator.extractKeyValue(parseExpr('\'a\' COLLATE NOCASE')), 'a');
+  assert.equal(
+    coordinator.extractKeyValue(parseExpr('\'42\''), [], {name: 'id', type: 'INTEGER'}),
+    42,
+  );
+  assert.equal(
+    coordinator.extractKeyValue(parseExpr('100'), [], {name: 'k', type: 'TEXT'}),
+    '100',
+  );
 
   assert.throws(
     () => coordinator.extractKeyValue({type: 'column_ref', column: 'x'}),
@@ -304,45 +295,28 @@ test('Q02: Cross-partition UNIQUE constraint enforcement rejects duplicate candi
     },
   };
 
-  const insertDuplicateExisting = {
-    type: 'INSERT',
-    table: 'u',
-    columns: ['id', 'email'],
-    values: [[
-      {type: 'literal', value: 2},
-      {type: 'literal', value: 'existing@example.com'},
-    ]],
-  };
+  const parseSql = (sql) => new SQLParser(sql, {dialect: 'sqlite'}).parse();
+  const insertDuplicateExisting = parseSql(
+    'INSERT INTO u (id, email) VALUES (2, \'existing@example.com\')',
+  );
 
   await assert.rejects(
     async () => coordinator.enforceCrossPartitionUniqueConstraints(insertDuplicateExisting, []),
     (err) => err.message.includes('UNIQUE constraint failed: u.email'),
   );
 
-  const insertBatchDuplicate = {
-    type: 'INSERT',
-    table: 'u',
-    columns: ['id', 'email'],
-    values: [
-      [{type: 'literal', value: 1}, {type: 'literal', value: 'same@example.com'}],
-      [{type: 'literal', value: 2}, {type: 'literal', value: 'same@example.com'}],
-    ],
-  };
+  const insertBatchDuplicate = parseSql(
+    'INSERT INTO u (id, email) VALUES (1, \'same@example.com\'), (2, \'same@example.com\')',
+  );
 
   await assert.rejects(
     async () => coordinator.enforceCrossPartitionUniqueConstraints(insertBatchDuplicate, []),
     (err) => err.message.includes('UNIQUE constraint failed: u.email'),
   );
 
-  const insertValid = {
-    type: 'INSERT',
-    table: 'u',
-    columns: ['id', 'email'],
-    values: [[
-      {type: 'literal', value: 3},
-      {type: 'literal', value: 'unique@example.com'},
-    ]],
-  };
+  const insertValid = parseSql(
+    'INSERT INTO u (id, email) VALUES (3, \'unique@example.com\')',
+  );
 
   await assert.doesNotReject(
     async () => coordinator.enforceCrossPartitionUniqueConstraints(insertValid, []),

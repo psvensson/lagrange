@@ -22,6 +22,8 @@ import {
 import {
   enforceCoordinatorUniqueConstraints,
   extractCoordinatorKeyValue,
+  resolveCoordinatorTableSchema,
+  resolveSchemaColumnDefinition,
 } from './distributed-write-constraint-helpers.js';
 import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
 
@@ -506,11 +508,13 @@ class DistributedWriteCoordinator {
     this.appendInsertRowToPartition(partitionStatements, partitionId, ast, row);
   }
 
-  extractCompositeInsertKeyValues(row, keyIndices, params) {
+  extractCompositeInsertKeyValues(row, keyIndices, params, keyColumnSchemas = null) {
     const keyValues = [];
-    for (const idx of keyIndices) {
+    for (let i = 0; i < keyIndices.length; i += 1) {
+      const idx = keyIndices[i];
       if (idx === -1 || row[idx] === undefined) return null;
-      const val = this.extractKeyValue(row[idx], params);
+      const colSchema = Array.isArray(keyColumnSchemas) ? keyColumnSchemas[i] : null;
+      const val = this.extractKeyValue(row[idx], params, colSchema);
       if (val === undefined) return null;
       keyValues.push(val);
     }
@@ -518,12 +522,14 @@ class DistributedWriteCoordinator {
   }
 
   routeCompositeInsertRows(ast, params, partitions, primaryKeyColumns,
-    partitionStatements) {
+    partitionStatements, schema = null) {
     const keyIndices = primaryKeyColumns.map((col) =>
       this.findPrimaryKeyIndex(ast, col));
+    const keyColumnSchemas = primaryKeyColumns.map((col) =>
+      resolveSchemaColumnDefinition(schema, col));
     for (const row of ast.values || []) {
       const keyValues = this.extractCompositeInsertKeyValues(
-        row, keyIndices, params);
+        row, keyIndices, params, keyColumnSchemas);
       if (!keyValues) {
         this.routeRowToSinglePartitionOrThrow(
           partitions, partitionStatements, ast, row);
@@ -552,6 +558,7 @@ class DistributedWriteCoordinator {
   createInsertPartitionStatements(ast, params, partitionStatements) {
     const partitions = this.getTablePartitions(ast.table) || [];
     const tableInfo = this.getTableInfo(ast.table);
+    const schema = resolveCoordinatorTableSchema(this, ast.table);
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo);
 
     if (primaryKeyColumns.length === 0) {
@@ -565,9 +572,14 @@ class DistributedWriteCoordinator {
     if (primaryKeyColumns.length === 1) {
       const primaryKey = primaryKeyColumns[0];
       const keyIndex = this.findPrimaryKeyIndex(ast, primaryKey);
+      const keyColumnSchema = resolveSchemaColumnDefinition(schema, primaryKey);
 
       for (const row of ast.values || []) {
-        const keyValue = this.extractKeyValue(row[keyIndex], params);
+        const keyValue = this.extractKeyValue(
+          row[keyIndex],
+          params,
+          keyColumnSchema,
+        );
         const partitionId = this.partitionResolver.resolvePartitionForKey(
           ast.table,
           keyValue,
@@ -583,7 +595,7 @@ class DistributedWriteCoordinator {
     }
 
     this.routeCompositeInsertRows(
-      ast, params, partitions, primaryKeyColumns, partitionStatements);
+      ast, params, partitions, primaryKeyColumns, partitionStatements, schema);
   }
 
   /**
@@ -615,14 +627,16 @@ class DistributedWriteCoordinator {
   }
 
   /**
-   * Extract key value from INSERT row expression.
+   * Extract key value from INSERT row expression via SQLite evaluation and
+   * optional target column affinity probe.
    * @param {Object} expr - Value expression.
-   * @param {Array} params - Bound parameters.
+   * @param {Array} [params] - Bound parameters.
+   * @param {Object|null} [columnSchema] - Target column schema definition.
    * @return {*} Key value.
    * @private
    */
-  extractKeyValue(expr, params = []) {
-    return extractCoordinatorKeyValue(this, expr, params);
+  extractKeyValue(expr, params = [], columnSchema = null) {
+    return extractCoordinatorKeyValue(this, expr, params, columnSchema);
   }
 
   /**

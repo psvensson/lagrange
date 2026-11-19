@@ -21,15 +21,15 @@ import {
 } from './live-query-constants.js';
 import {QueryGroup} from './live-query-group.js';
 import {
+  renderLiveQuerySelectSql,
+  resolveExecutionSQL,
+} from './live-query-group-helpers.js';
+import {
   canonicalizePredicate,
+  extractReferencedTables,
   parseLiveSelect,
   sortObject,
 } from './live-query-service.js';
-import {
-  buildSelectSQL as renderSelectSQL,
-  extractReferencedTables,
-} from './live-query-sql-renderer.js';
-import {assertLiveQueryRendererAdmissible} from '../query/coordinator-sql-admission.js';
 
 const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const CANONICAL_SEPARATOR = ',';
@@ -103,12 +103,7 @@ function recordSnapshotFrontiers(group, options, result) {
 }
 
 function resolveSnapshotExecutionSql(manager, group) {
-  if (group.sql) return group.sql;
-  if (manager.sqlQueryEngine?.executor?.buildSelectSQL) {
-    return manager.sqlQueryEngine.executor.buildSelectSQL(group.parsedQuery);
-  }
-  assertLiveQueryRendererAdmissible(group.parsedQuery);
-  return manager.buildSelectSQL(group.parsedQuery);
+  return resolveExecutionSQL(group.sql, manager.sqlQueryEngine, group.parsedQuery);
 }
 
 function populateSnapshotRows(group, result) {
@@ -400,7 +395,7 @@ class LiveQueryManager extends EventEmitter {
    * @private
    */
   buildSelectSQL(parsedQuery) {
-    return renderSelectSQL(parsedQuery);
+    return renderLiveQuerySelectSql(parsedQuery);
   }
 
   /**

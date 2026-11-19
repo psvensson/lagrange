@@ -41,8 +41,6 @@ import {TableCreationService} from '../../src/query/table-creation-service.js';
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) config.initialize();
 
-const UNSUPPORTED = {code: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE};
-
 function parse(sql) {
   return new SQLParser(sql).parse();
 }
@@ -106,28 +104,53 @@ describe('LIMIT/OFFSET parameters (removed by WP3): coordinator and partition SQ
   });
 });
 
-describe('I1c (removed by WP4): a write key is evaluated by the coordinator', () => {
-  test('COLLATE in a write-key expression is refused', () => {
+describe('I1c (removed by WP4): write keys and batch uniqueness are evaluated by SQLite', () => {
+  test('COLLATE in a write-key expression is evaluated by SQLite', () => {
     const coordinator = new DistributedWriteCoordinator();
     const value = parse('SELECT \'a\' COLLATE NOCASE FROM t').columns[0].expression;
-    assert.throws(() => coordinator.extractKeyValue(value),
-      {code: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, message: /I1c/u});
+    assert.equal(coordinator.extractKeyValue(value), 'a');
+  });
+
+  test('column storage affinity is applied to write keys by SQLite', () => {
+    const coordinator = new DistributedWriteCoordinator();
+    const textNum = parse('SELECT \'42\' FROM t').columns[0].expression;
+    assert.equal(
+      coordinator.extractKeyValue(textNum, [], {name: 'id', type: 'INTEGER'}),
+      42,
+    );
+    const intNum = parse('SELECT 42 FROM t').columns[0].expression;
+    assert.equal(
+      coordinator.extractKeyValue(intNum, [], {name: 'k', type: 'TEXT'}),
+      '42',
+    );
   });
 });
 
-describe('I1d and I1e (removed by WP7): the live-query evaluator and fallback renderer', () => {
-  test('a live-query predicate holding COLLATE or ESCAPE is refused', () => {
-    for (const sql of ['SELECT * FROM t WHERE x = \'a\' COLLATE NOCASE',
-      'SELECT * FROM t WHERE x LIKE \'a!%\' ESCAPE \'!\'']) {
-      assert.throws(() => compilePredicate(parse(sql).where), UNSUPPORTED, sql);
-    }
-    assert.equal(compilePredicate(parse('SELECT * FROM t WHERE x = \'a\'').where)({x: 'a'}),
-      true);
+describe('I1d and I1e (removed by WP7): live-query predicates and SQL rendering use SQLite and the canonical renderer', () => {
+  test('a live-query predicate holding COLLATE or ESCAPE is evaluated by SQLite', () => {
+    const collatePred = compilePredicate(
+      parse('SELECT * FROM t WHERE x = \'a\' COLLATE NOCASE').where,
+    );
+    assert.equal(collatePred({x: 'a'}), true);
+    assert.equal(collatePred({x: 'A'}), true);
+    assert.equal(collatePred({x: 'b'}), false);
+    collatePred.close();
+
+    const escapePred = compilePredicate(
+      parse('SELECT * FROM t WHERE x LIKE \'a!%\' ESCAPE \'!\'').where,
+    );
+    assert.equal(escapePred({x: 'a%'}), true);
+    assert.equal(escapePred({x: 'abc'}), false);
+    escapePred.close();
+
+    const plainPred = compilePredicate(parse('SELECT * FROM t WHERE x = \'a\'').where);
+    assert.equal(plainPred({x: 'a'}), true);
+    plainPred.close();
   });
 
-  test('the fallback renderer refuses COLLATE; the engine renderer carries it', () => {
+  test('resolveExecutionSQL always uses the canonical renderer and carries COLLATE with or without an engine', () => {
     const query = parse('SELECT x FROM t WHERE x = \'a\' COLLATE NOCASE');
-    assert.throws(() => resolveExecutionSQL(null, null, query), UNSUPPORTED);
+    assert.match(resolveExecutionSQL(null, null, query), /COLLATE NOCASE/u);
     const engine = {executor: {buildSelectSQL: (ast) => QueryExecutor.prototype
       .buildSelectSQL.call({}, ast)}};
     assert.match(resolveExecutionSQL(null, engine, query), /COLLATE NOCASE/u);
@@ -319,27 +342,31 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       assert.equal(joinRes.success, true);
       assert.deepEqual(joinRes.rows, [{id: 1}, {id: 3}, {id: 4}]);
 
-      // Live-query predicate and QueryGroup registration still refuse non-BINARY declared columns (I1d/I1e, bound WP7).
+      // Live-query predicate and QueryGroup registration now evaluate non-BINARY declared columns via SQLite (WP7).
       const usersSchema = JSON.parse(systemCache.getAll(TABLES.TABLES)[0].schema_definition);
-      assert.throws(
-        () => compilePredicate(parse('SELECT * FROM users WHERE name = \'a\'').where, [],
-          usersSchema),
-        UNSUPPORTED,
+      const nocasePred = compilePredicate(
+        parse('SELECT * FROM users WHERE name = \'a\'').where,
+        [],
+        usersSchema,
       );
-      assert.throws(
-        () => new QueryGroup({
-          parsedQuery: parse('SELECT id, name FROM users WHERE name = \'a\''),
-          systemCache,
-        }),
-        UNSUPPORTED,
-      );
-      assert.throws(
-        () => new QueryGroup({
-          parsedQuery: parse('SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\''),
-          systemCache,
-        }),
-        UNSUPPORTED,
-      );
+      assert.equal(nocasePred({id: 1, name: 'a', score: 10}), true);
+      assert.equal(nocasePred({id: 4, name: 'A', score: 40}), true);
+      assert.equal(nocasePred({id: 2, name: 'c', score: 30}), false);
+      nocasePred.close();
+
+      const group1 = new QueryGroup({
+        parsedQuery: parse('SELECT id, name FROM users WHERE name = \'a\''),
+        systemCache,
+      });
+      assert.equal(group1.predicate({id: 4, name: 'A', score: 40}), true);
+      group1.cleanup();
+
+      const group2 = new QueryGroup({
+        parsedQuery: parse('SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\''),
+        systemCache,
+      });
+      assert.equal(group2.isComplex, true);
+      group2.cleanup();
     });
 
   test('compound SELECTs, CTEs, derived tables, and subqueries execute through CoordinatorMergeSession',
@@ -365,45 +392,66 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       }
     });
 
-  test('MF-3R2/R3: batch UNIQUE write-key refusal (I1c, bound WP4) and LiveQueryService refusal (I1d, bound WP7)',
+  test('MF-3R2/R3: batch UNIQUE write-key enforcement (WP4) and LiveQueryService evaluation (WP7) over SQLite collations and affinities',
     async () => {
       const accountsDdl = 'CREATE TABLE accounts (id INTEGER PRIMARY KEY, ' +
-        'email TEXT COLLATE NOCASE UNIQUE, score INTEGER)';
+        'email TEXT COLLATE NOCASE UNIQUE, tag TEXT COLLATE RTRIM UNIQUE, code INTEGER UNIQUE)';
       const {systemCache} = createSqliteBackedExecutor([{
         ddl: accountsDdl,
         partitions: [
-          [{id: 1, email: 'a@x.com', score: 10}],
-          [{id: 2, email: 'B@x.com', score: 20}],
+          [{id: 1, email: 'a@x.com', tag: 't1', code: 10}],
+          [{id: 2, email: 'B@x.com', tag: 't2', code: 20}],
         ],
       }]);
 
-      // MF-3R2: Multi-row INSERT on UNIQUE non-BINARY column fails closed (I1c, bound WP4).
+      // MF-3R2: Multi-row INSERT on UNIQUE non-BINARY or affinity-coerced columns enforces SQLite uniqueness (WP4).
       const writeCoordinator = new DistributedWriteCoordinator({
         getTableInfo: (name) => systemCache.find(TABLES.TABLES, (t) => t.table_name === name),
         getTablePartitions: () => [
           {partition_id: 'accounts-p1'},
           {partition_id: 'accounts-p2'},
         ],
-        queryExecutor: {executeOnPartitions: async () => []},
+        queryExecutor: {
+          executeOnPartitions: async (partitionIds) =>
+            partitionIds.map(() => ({success: true, rows: []})),
+        },
       });
       for (const sql of [
-        'INSERT INTO accounts (id, email, score) VALUES (10, \'alice@x.com\', 1), ' +
-          '(200, \'ALICE@X.COM\', 2)',
-        'INSERT INTO accounts VALUES (10, \'alice@x.com\', 1), (200, \'ALICE@X.COM\', 2)',
+        'INSERT INTO accounts (id, email, tag, code) VALUES ' +
+          '(10, \'alice@x.com\', \'x\', 100), (200, \'ALICE@X.COM\', \'y\', 200)',
+        'INSERT INTO accounts VALUES ' +
+          '(10, \'alice@x.com\', \'x\', 100), (200, \'ALICE@X.COM\', \'y\', 200)',
+        'INSERT INTO accounts (id, email, tag, code) VALUES ' +
+          '(10, \'c1@x.com\', \'pad\', 100), (200, \'c2@x.com\', \'pad   \', 200)',
+        'INSERT INTO accounts (id, email, tag, code) VALUES ' +
+          '(10, \'c1@x.com\', \'x\', 100), (200, \'c2@x.com\', \'y\', \'100\')',
       ]) {
         await assert.rejects(
           () => enforceCoordinatorUniqueConstraints(writeCoordinator, parse(sql), []),
-          {code: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, message: /I1c/u},
+          {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+          sql,
         );
       }
 
-      // MF-3R3 (a): LiveQueryService constructor refuses non-BINARY column predicates via cache (I1d, bound WP7).
-      assert.throws(
-        () => new LiveQueryService({
-          parsedQuery: parse('SELECT id, email FROM accounts WHERE email = \'a@x.com\''),
-          systemCache,
-        }),
-        UNSUPPORTED,
+      // Distinct rows under NOCASE, RTRIM, and INTEGER affinity succeed.
+      await assert.doesNotReject(
+        () => enforceCoordinatorUniqueConstraints(
+          writeCoordinator,
+          parse(
+            'INSERT INTO accounts (id, email, tag, code) VALUES ' +
+            '(10, \'alice@x.com\', \'pad\', 100), (200, \'bob@x.com\', \'pad_other\', 200)',
+          ),
+          [],
+        ),
       );
+
+      // MF-3R3 (a): LiveQueryService evaluates non-BINARY column predicates via SQLite (WP7).
+      const service = new LiveQueryService({
+        parsedQuery: parse('SELECT id, email FROM accounts WHERE email = \'a@x.com\''),
+        systemCache,
+      });
+      assert.equal(service.evaluatePredicate({id: 1, email: 'A@X.COM'}), true);
+      assert.equal(service.evaluatePredicate({id: 2, email: 'b@x.com'}), false);
+      service.cleanup();
     });
 });

@@ -233,10 +233,9 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
   // would). ORDER BY id is the lexicographic order of the statement's own
   // storage collation (SQLite BINARY for TEXT), the same order its range
   // predicate is evaluated in, so `img:Z` < `img:a` and `img:` < `img;`. The
-  // coordinator merge compares strings by their UTF-8 bytes
-  // (src/query/query-executor-select-aggregation.js
-  // compareOrderByClauseValues); binary/codepoint order is the decided
-  // ordering contract. On these ASCII ids the JS default sort is that order.
+  // coordinator merge evaluates ORDER BY through SQLite in
+  // CoordinatorMergeSession (src/query/distributed/coordinator-merge-session.js);
+  // binary/codepoint order is the decided ordering contract.
   await t.test('ORDER BY id follows the binary storage collation, not locale order', async (t) => {
     const binary = sortedIds(OBJECT_IDS);
     const locale = [...OBJECT_IDS].sort((left, right) => left.localeCompare(right));

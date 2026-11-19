@@ -24,25 +24,23 @@ import {
   extractPartitionKeyValue,
 } from './live-query-service.js';
 import {
-  compareVersions,
-  isPartitionVisibleForRouting,
-  resolveActivePartitionVersion,
-} from './live-query-sql-renderer.js';
-import {
   buildDeleteEvent,
   buildInsertEvent,
   buildResetNotification,
   buildUpdateEvent,
   checkAndAdvanceFrontier,
   collectExpiredClientIds,
+  compareVersions,
   createClientSubscription,
   executeSnapshotQuery,
   extractEventVersion,
   fanOutToClients,
   isComplexQuery,
+  isPartitionVisibleForRouting,
   projectSingleColumn,
   recordInitialFrontiers,
   renewClientSubscription,
+  resolveActivePartitionVersion,
   resolveEffectiveRows,
   resolveExecutionSQL,
   resolveGroupSql,
@@ -767,6 +765,7 @@ class QueryGroup extends EventEmitter {
     this.subscribedPartitions.clear();
     this.cdcHandlers.clear();
     this.resultSet.clear();
+    this.predicate?.close?.();
     this.removeAllListeners();
 
     this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CLEANED_UP, {

@@ -121,22 +121,6 @@ const LIVE_QUERY_OPERATION = Object.freeze({
   DELETE: 'DELETE',
 });
 
-const LIVE_QUERY_REGEX = Object.freeze({
-  REGEX_SPECIAL: /[.*+?^${}()|[\]\\]/g,
-  PERCENT: /%/g,
-  UNDERSCORE: /_/g,
-});
-
-const LIVE_QUERY_REGEX_REPLACE = Object.freeze({
-  ESCAPE: '\\$&',
-  WILDCARD: '.*',
-  SINGLE_CHAR: '.',
-});
-
-const LIVE_QUERY_REGEX_FLAG = Object.freeze({
-  CASE_INSENSITIVE: 'i',
-});
-
 const LIVE_QUERY_CURSOR = Object.freeze({
   SEPARATOR: ':',
 });
@@ -176,9 +160,6 @@ export {
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_OPERATOR,
-  LIVE_QUERY_REGEX,
-  LIVE_QUERY_REGEX_FLAG,
-  LIVE_QUERY_REGEX_REPLACE,
   LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
 };
