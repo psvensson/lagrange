@@ -9,6 +9,8 @@ import {
   readWaitClock,
   reportWaitBoundSpent,
 } from '../logging/wait-bound-spent.js';
+import {decodeTypedRowSet, encodeTypedParams} from '../query/sql-value-codec.js';
+import {materializeAndPresentRowObjects} from '../query/sql-value-presentation.js';
 
 const JOIN_HTTP_POST_WAIT = Object.freeze({
   wait: 'httpTimeoutMs',
@@ -238,18 +240,19 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     seenAddresses = new Set(),
   ) {
     if (seenAddresses.has(address)) {
-      return {
-        success: false,
-        rows: [],
-        error: `redirect loop detected for ${address}`,
-      };
+      return {success: false, rows: [], error: `redirect loop detected for ${address}`};
     }
     const nextSeenAddresses = new Set(seenAddresses);
     nextSeenAddresses.add(address);
     try {
       const deliveryEnvelope = await messageRouter.deliver(
         address,
-        {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
+        {
+          type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE,
+          sql,
+          params: [],
+          typedParams: encodeTypedParams([]),
+        },
         {deliveryPriority: options.deliveryPriority},
       );
       const transport = deliveryTransportOf(deliveryEnvelope);
@@ -260,22 +263,17 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         response?.leaderAddress
       ) {
         return this.queryBackfillReplicaAddress(
-          messageRouter,
-          response.leaderAddress,
-          sql,
-          options,
-          nextSeenAddresses,
-        );
+          messageRouter, response.leaderAddress, sql, options, nextSeenAddresses);
       }
       if (isDeliveredTransportDeliveryOutcome(transport) && response?.success) {
-        return {
-          success: true,
-          rows: Array.isArray(response.rows) ? response.rows : [],
-        };
+        const decoded = response.rowSet ? decodeTypedRowSet(response.rowSet) : null;
+        const rows = decoded ?
+          materializeAndPresentRowObjects(decoded.columns, decoded.rows) :
+          (Array.isArray(response.rows) ? response.rows : []);
+        return {success: true, rows};
       }
       return {
-        success: false,
-        rows: [],
+        success: false, rows: [],
         error: (response ?? transport).error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
       };
     } catch (error) {

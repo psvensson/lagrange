@@ -15,6 +15,10 @@ import {
 import {
   areAuthoritativeSystemTableCacheRowsEqual,
 } from '../cache/system-table-cache-authoritative-reconciliation.js';
+import {
+  collectAllBaseTableNames,
+  hasSubqueryCteOrCompound,
+} from './distributed/distributed-select-fanout-soundness.js';
 
 const {
   QUERY_ERROR_CODE,
@@ -656,6 +660,12 @@ function collectColdSelectTables(engine, ast, distributedPlan) {
       coldTables.push(tableName);
     }
   };
+  if (hasSubqueryCteOrCompound(ast)) {
+    for (const baseName of collectAllBaseTableNames(ast)) {
+      addIfCold(baseName, baseName);
+    }
+    return coldTables;
+  }
   addIfCold(ast.from.name, ast.from.alias || ast.from.name);
   for (const join of ast.joins || []) {
     const joinTableName = join.table?.name;
@@ -666,43 +676,55 @@ function collectColdSelectTables(engine, ast, distributedPlan) {
 
 async function refreshColdSelectTables(engine, coldTables, queryOptions) {
   for (const coldTableName of coldTables) {
-    const refreshResult =
-      await engine.refreshTableRoutingMetadataFromAuthority(
-        coldTableName,
-        queryOptions,
-      );
-    if (
-      refreshResult.outcome !== METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND
-    ) {
+    const refreshResult = await engine.refreshTableRoutingMetadataFromAuthority(
+      coldTableName, queryOptions);
+    if (refreshResult.outcome !== METADATA_AUTHORITY_REFRESH_OUTCOME.FOUND) {
       return refreshResult.failure;
     }
   }
   return null;
 }
 
-function validatePlannedSelectRootAndJoins(engine, ast, distributedPlan) {
-  const tableName = ast.from.name;
-  const rootAlias = ast.from.alias || tableName;
-  const rootPlan = distributedPlan.tablePlans.get(rootAlias) ||
-    distributedPlan.tablePlans.get(tableName) || null;
+function validatePlannedSelectTable(engine, tableName, alias, distributedPlan) {
   const tableInfo = engine.getTableInfo(tableName);
   if (!tableInfo) return {errorResponse: buildTableNotFoundFailureResult(tableName)};
-  if (!hasRoutableTablePlan(rootPlan)) {
+  const plan = distributedPlan.tablePlans.get(alias || tableName) ||
+    distributedPlan.tablePlans.get(tableName) || null;
+  if (!hasRoutableTablePlan(plan)) {
     return {
       errorResponse: buildUnavailableFailureResult(
-        tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED,
-      ),
+        tableName, METADATA_AUTHORITY_UNAVAILABLE_REASON.AUTHORITY_READ_FAILED),
     };
   }
+  return {plan};
+}
+
+function validatePlannedSelectRootAndJoins(engine, ast, distributedPlan) {
+  if (hasSubqueryCteOrCompound(ast)) {
+    const baseTables = collectAllBaseTableNames(ast);
+    for (const baseName of baseTables) {
+      const checked = validatePlannedSelectTable(engine, baseName, baseName, distributedPlan);
+      if (checked.errorResponse) return checked;
+    }
+    const primaryName = baseTables.length > 0 ? baseTables[0] : null;
+    return {rootPlan: distributedPlan.tablePlans.get(primaryName) || null};
+  }
+  const tableName = ast.from.name;
+  const checked = validatePlannedSelectTable(
+    engine, tableName, ast.from.alias || tableName, distributedPlan);
+  if (checked.errorResponse) return checked;
   const joinErrorResponse = engine.validateSelectJoinPlans(ast, distributedPlan);
-  return joinErrorResponse ? {errorResponse: joinErrorResponse} : {rootPlan};
+  return joinErrorResponse ? {errorResponse: joinErrorResponse} : {rootPlan: checked.plan};
 }
 
 async function resolveSelectExecutionPlanWithAuthorityRefresh(
   engine, ast, params, context = {},
 ) {
   const {sessionId, queryOptions = {}} = context;
-  const tableName = ast.from.name;
+  const baseTables = collectAllBaseTableNames(ast);
+  const tableName = hasSubqueryCteOrCompound(ast) ?
+    (baseTables.length > 0 ? baseTables[0] : null) :
+    ast.from.name;
   const planningStartTimeMs = Date.now();
   let distributedPlan = engine.distributedQueryPlanner.planSelect(ast, params, {sessionId});
   const coldTables = collectColdSelectTables(engine, ast, distributedPlan);

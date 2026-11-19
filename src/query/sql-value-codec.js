@@ -116,6 +116,8 @@ const EMPTY_ROW_SET_BYTES = bufferByteLength(
 const ERROR_COMPONENT = 'sql-value-codec';
 const POSITION_ROW_TEXT = ' at row ';
 const POSITION_COLUMN_TEXT = ' at value ';
+const BOOLEAN_TRUE_INTEGER_TEXT = '1';
+const BOOLEAN_FALSE_INTEGER_TEXT = '0';
 
 const NO_POSITION = null;
 
@@ -158,11 +160,13 @@ function realText(value) {
 
 // ---- encoding ----------------------------------------------------------
 
-// The input-typing table (D3): the one place a JS value gets a storage class.
+// The input-typing table (D3, D15): the one place a JS value gets a storage class.
 function storageClassOf(value, row, column) {
   if (value === null) return SQL_STORAGE_CLASS.NULL;
   switch (typeof value) {
-  case 'bigint': return SQL_STORAGE_CLASS.INTEGER;
+  case 'bigint':
+  case 'boolean':
+    return SQL_STORAGE_CLASS.INTEGER;
   case 'number': return SQL_STORAGE_CLASS.REAL;
   case 'string': return SQL_STORAGE_CLASS.TEXT;
   case 'object':
@@ -175,6 +179,9 @@ function storageClassOf(value, row, column) {
 }
 
 function encodeInteger(value, row, column) {
+  if (typeof value === 'boolean') {
+    return value ? BOOLEAN_TRUE_INTEGER_TEXT : BOOLEAN_FALSE_INTEGER_TEXT;
+  }
   if (bigIntAsIntN(INT64_BITS, value) !== value) {
     throw unrepresentable(SQL_VALUE_CODEC_REFUSAL.INTEGER_OUT_OF_RANGE, row, column);
   }
@@ -499,10 +506,41 @@ function typedRowSetByteLength(rowSet) {
     separatedListBytes(rowBytes, rows.length);
 }
 
+/**
+ * Encode one raw row and measure its UTF-8 JSON byte length (C9: per-row
+ * encode-and-measure entry point for bounded partition collection).
+ * @param {Array<*>} values - Raw row values as returned by better-sqlite3
+ *   with `.raw(true)` and `safeIntegers(true)`.
+ * @param {number} width - Expected column count.
+ * @param {number} [row] - Row index for error reporting.
+ * @return {{encoded: Array<?string>, byteLength: number}}
+ */
+function encodeAndMeasureTypedRow(values, width, row = NO_POSITION) {
+  const encoded = encodeRow(values, width, row);
+  return {encoded, byteLength: rowByteLength(encoded)};
+}
+
+/**
+ * Assemble a TypedRowSet from column names and pre-encoded rows produced by
+ * encodeAndMeasureTypedRow.
+ * @param {string[]} columns - Result column names in order.
+ * @param {Array<Array<?string>>} encodedRows - Encoded rows.
+ * @return {{v: number, columns: string[], rows: Array<Array<?string>>}}
+ */
+function assembleTypedRowSet(columns, encodedRows) {
+  const names = copyColumnNames(columns, unrepresentable);
+  if (!arrayIsArray(encodedRows)) {
+    throw unrepresentable(SQL_VALUE_CODEC_REFUSAL.SHAPE_INVALID);
+  }
+  return {v: CODEC_VERSION, columns: names, rows: encodedRows};
+}
+
 export {
   SqlValueCodecError,
+  assembleTypedRowSet,
   decodeTypedParams,
   decodeTypedRowSet,
+  encodeAndMeasureTypedRow,
   encodeTypedParams,
   encodeTypedRowSet,
   typedRowSetByteLength,

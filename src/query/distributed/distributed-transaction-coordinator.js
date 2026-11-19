@@ -761,7 +761,6 @@ Object.assign(DistributedTransactionCoordinator.prototype,
 
 export {
   DistributedTransactionCoordinator,
-  PARTICIPANT_STATUS,
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 };

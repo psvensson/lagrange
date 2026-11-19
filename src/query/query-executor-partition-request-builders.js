@@ -1,10 +1,24 @@
-import {STATEMENT_INGRESS_FIELD} from './sql-statement-ingress.js';
+import {
+  deliveryAnswerOf,
+  deliveryTransportOf,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
+import {
+  statementParticipantFieldsOf,
+} from './distributed/distributed-transaction-identity.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QUERY_RESULT_REQUEST_FIELD} from './query-result-budget.js';
-import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
-  '../transport/transport-semantic-outcome.js';
-import {statementParticipantFieldsOf} from
-  './distributed/distributed-transaction-identity.js';
+import {STATEMENT_INGRESS_FIELD} from './sql-statement-ingress.js';
+import {
+  SqlValueCodecError,
+  decodeTypedRowSet,
+  encodeTypedParams,
+  typedRowSetByteLength,
+} from './sql-value-codec.js';
+import {
+  materializeAndPresentRowObjects,
+  presentRawSqlRows,
+} from './sql-value-presentation.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
@@ -19,6 +33,24 @@ const {
   QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
   QUERY_MESSAGE_TYPE,
 } = QUERY_EXECUTOR_SHARED;
+
+const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function toJsonSafeParams(params) {
+  if (!Array.isArray(params)) return params;
+  if (!params.some((value) => typeof value === 'bigint')) {
+    return params;
+  }
+  return params.map((value) => {
+    if (typeof value === 'bigint') {
+      return value >= MIN_SAFE_BIGINT && value <= MAX_SAFE_BIGINT ?
+        Number(value) :
+        value.toString();
+    }
+    return value;
+  });
+}
 
 function copySafeResultLimit(request, field, value) {
   if (Number.isSafeInteger(value) && value >= 0) {
@@ -80,15 +112,26 @@ function stampTransactionIdentityFields(request, executionOptions,
 
 function createDefaultPartitionRequestBuilder({
   executionOptions,
+  forRead = false,
   params,
   partitionId = null,
   sql,
 }) {
+  const shouldEncodeTypedParams =
+    forRead === true &&
+    !executionOptions?.transactionIdentity &&
+    Array.isArray(params);
+  const preEncodedTypedParams = shouldEncodeTypedParams ?
+    encodeTypedParams(params) :
+    null;
+  const jsonSafeParams = toJsonSafeParams(params);
+
   return () => {
     const request = {
       type: QUERY_MESSAGE_TYPE.QUERY,
       sql,
-      params,
+      params: jsonSafeParams,
+      ...(preEncodedTypedParams ? {typedParams: preEncodedTypedParams} : {}),
     };
     stampOptionalStringField(
       request, QUERY_MESSAGE_FIELD_SESSION_ID, executionOptions.sessionId);
@@ -108,9 +151,6 @@ function createDefaultPartitionRequestBuilder({
       request, STATEMENT_INGRESS_FIELD,
       executionOptions[STATEMENT_INGRESS_FIELD]);
     stampMigrationIdentityFields(request, executionOptions);
-    // Write-path epoch fencing: carry the partition epoch the write was
-    // planned against so the partition boundary can reject stale-epoch
-    // writes with a typed outcome.
     if (Number.isSafeInteger(executionOptions.expectedPartitionVersion) &&
         executionOptions.expectedPartitionVersion > 0) {
       request[QUERY_MESSAGE_FIELD_EXPECTED_PARTITION_VERSION] =
@@ -121,8 +161,33 @@ function createDefaultPartitionRequestBuilder({
   };
 }
 
+function decodePartitionResponseRows(response, executionOptions) {
+  const safeIntegers = executionOptions?.safeIntegers === true;
+  if (response.rowSet !== undefined && response.rowSet !== null) {
+    const decoded = decodeTypedRowSet(response.rowSet);
+    const byteLength = typedRowSetByteLength(response.rowSet);
+    return {
+      rows: materializeAndPresentRowObjects(decoded.columns, decoded.rows, {
+        safeIntegers,
+      }),
+      rawRows: presentRawSqlRows(decoded.rows, {safeIntegers}),
+      columns: decoded.columns,
+      rowSet: response.rowSet,
+      byteLength,
+    };
+  }
+  return {
+    rows: response.rows || [],
+    rawRows: null,
+    columns: null,
+    rowSet: null,
+    byteLength: 0,
+  };
+}
+
 function resolvePartitionExecutionBuilders({
   executionOptions = {},
+  forRead = false,
   params,
   partitionId,
   sql,
@@ -133,6 +198,7 @@ function resolvePartitionExecutionBuilders({
       executionOptions.buildRequest :
       createDefaultPartitionRequestBuilder({
         executionOptions,
+        forRead,
         params,
         partitionId,
         sql,
@@ -147,26 +213,51 @@ function resolvePartitionExecutionBuilders({
     typeof executionOptions.buildSuccessResult ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
       executionOptions.buildSuccessResult :
-      (response) => ({
-        partitionId,
-        success: true,
-        rows: response.rows || [],
-        changes: response.changes,
-        ...(typeof response.rowSetComplete === 'boolean' ?
-          {rowSetComplete: response.rowSetComplete} :
-          {}),
-        ...(response.partial === true ? {partial: true} : {}),
-        ...(response.settledReplay === undefined ? {} :
-          {settledReplay: response.settledReplay}),
-        durableCommitWitness: response.durableCommitWitness,
-        originHlc: response.originHlc,
-        acceptingNodeId: response.acceptingNodeId,
-        acknowledgedAtMs: response.acknowledgedAtMs,
-        readAuthorityWitness: response.readAuthorityWitness,
-        ...(response.authoritativeObservation ?
-          {authoritativeObservation: response.authoritativeObservation} :
-          {}),
-      });
+      (response) => {
+        let decodedPayload;
+        try {
+          decodedPayload = decodePartitionResponseRows(response, executionOptions);
+        } catch (error) {
+          if (error instanceof SqlValueCodecError) {
+            return {
+              partitionId,
+              success: false,
+              error: error.message,
+              errorCode: error.code,
+            };
+          }
+          throw error;
+        }
+        return {
+          partitionId,
+          success: true,
+          rows: decodedPayload.rows,
+          ...(decodedPayload.rawRows ? {rawRows: decodedPayload.rawRows} : {}),
+          ...(decodedPayload.columns ? {columns: decodedPayload.columns} : {}),
+          ...(decodedPayload.rowSet ? {rowSet: decodedPayload.rowSet} : {}),
+          ...(decodedPayload.byteLength > 0 ?
+            {byteLength: decodedPayload.byteLength} :
+            {}),
+          ...(response.executionEnvelope ?
+            {executionEnvelope: response.executionEnvelope} :
+            {}),
+          changes: response.changes,
+          ...(typeof response.rowSetComplete === 'boolean' ?
+            {rowSetComplete: response.rowSetComplete} :
+            {}),
+          ...(response.partial === true ? {partial: true} : {}),
+          ...(response.settledReplay === undefined ? {} :
+            {settledReplay: response.settledReplay}),
+          durableCommitWitness: response.durableCommitWitness,
+          originHlc: response.originHlc,
+          acceptingNodeId: response.acceptingNodeId,
+          acknowledgedAtMs: response.acknowledgedAtMs,
+          readAuthorityWitness: response.readAuthorityWitness,
+          ...(response.authoritativeObservation ?
+            {authoritativeObservation: response.authoritativeObservation} :
+            {}),
+        };
+      };
   return Object.freeze({
     buildRequest,
     buildSuccessResult,

@@ -134,7 +134,7 @@ export function createStaleOverlayOwnerHandoffFixture(options = {}) {
  * @param {Object} options
  * @return {Object}
  */
-export function createNoHandlerRepairMessageRouter(options) {
+function createNoHandlerRepairMessageRouter(options) {
   const staleAddress = options.staleAddress;
   const refreshedAddress = options.refreshedAddress;
   const deliveries = options.deliveries || [];

@@ -9,6 +9,7 @@ import {
   QUERY_MEMORY_LIMIT_BYTES,
   QUERY_WALL_TIME_LIMIT_MS,
   RESULT_MAX_ROWS,
+  MERGE_INPUT_MAX_ROWS,
   RESULT_MAX_BYTES,
   OUT_MAX_BYTES,
   NESTED_MAX_CALLS,
@@ -104,6 +105,7 @@ describe('query-budget-constants', () => {
         'MEMORY_LIMIT_BYTES',
         'WALL_TIME_LIMIT_MS',
         'RESULT_MAX_ROWS',
+        'MERGE_INPUT_MAX_ROWS',
         'RESULT_MAX_BYTES',
         'OUT_MAX_BYTES',
         'NESTED_MAX_CALLS',
@@ -112,6 +114,7 @@ describe('query-budget-constants', () => {
         'MAX_INFLIGHT',
       ]);
       assert.equal(DEFAULT_QUERY_BUDGET.RESULT_MAX_ROWS, RESULT_MAX_ROWS);
+      assert.equal(DEFAULT_QUERY_BUDGET.MERGE_INPUT_MAX_ROWS, MERGE_INPUT_MAX_ROWS);
       assert.equal(DEFAULT_QUERY_BUDGET.RESULT_MAX_BYTES, RESULT_MAX_BYTES);
       assert.equal(DEFAULT_QUERY_BUDGET.OUT_MAX_BYTES, OUT_MAX_BYTES);
       assert.equal(DEFAULT_QUERY_BUDGET.NESTED_MAX_CALLS, NESTED_MAX_CALLS);

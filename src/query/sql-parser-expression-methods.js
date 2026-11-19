@@ -72,6 +72,8 @@ const EXT_EXPR_TYPE = Object.freeze({
   UNARY_EXPR: 'unary_expr',
   COLUMN_REF: 'column_ref',
   NUMBER: 'number',
+  BIGINT: 'bigint',
+  HEX_STRING: 'hex_string',
   SINGLE_QUOTE_STRING: 'single_quote_string',
   DOUBLE_QUOTE_STRING: 'double_quote_string',
   STRING: 'string',
@@ -100,6 +102,8 @@ const READ_KEYS = Object.freeze(Object.assign(Object.create(null), {
   [EXT_EXPR_TYPE.UNARY_EXPR]: ['operator', 'expr'],
   [EXT_EXPR_TYPE.COLUMN_REF]: ['table', 'column', 'collate'],
   [EXT_EXPR_TYPE.NUMBER]: ['value', 'suffix'],
+  [EXT_EXPR_TYPE.BIGINT]: ['value', 'suffix'],
+  [EXT_EXPR_TYPE.HEX_STRING]: ['prefix', 'value', 'suffix'],
   [EXT_EXPR_TYPE.SINGLE_QUOTE_STRING]: ['value', 'suffix'],
   [EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING]: ['value', 'suffix'],
   [EXT_EXPR_TYPE.STRING]: ['value', 'suffix'],
@@ -211,11 +215,58 @@ function externalCollation(expr) {
   return upper;
 }
 
+const INT64_BITS = 64;
+const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const INTEGER_LEXEME = /^-?[0-9]+$/u;
+const HEX_LEXEME = /^[0-9a-fA-F]*$/u;
+const MINUS_OPERATOR = '-';
+
+function convertBigIntOrExponentText(rawText) {
+  const text = String(rawText);
+  if (!INTEGER_LEXEME.test(text)) {
+    return {
+      type: EXPR_TYPE.LITERAL,
+      value: text,
+      sqlType: SQL_STORAGE_CLASS.REAL,
+    };
+  }
+  const bigVal = BigInt(text);
+  if (BigInt.asIntN(INT64_BITS, bigVal) !== bigVal) {
+    throw unsupportedFeature(PARSER_ERROR_MSG.BIG_INTEGER_LITERAL);
+  }
+  const value = bigVal >= MIN_SAFE_BIGINT && bigVal <= MAX_SAFE_BIGINT ?
+    Number(bigVal) :
+    bigVal;
+  return {
+    type: EXPR_TYPE.LITERAL,
+    value,
+    sqlType: SQL_STORAGE_CLASS.INTEGER,
+  };
+}
+
+const HEX_BUFFER_ENCODING = 'hex';
+
+function convertHexBlobLiteral(rawHex) {
+  const hex = String(rawHex ?? '');
+  if (hex.length % 2 !== 0 || !HEX_LEXEME.test(hex)) {
+    const error = new Error(`Invalid hex literal: X'${hex}'`);
+    error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+    throw error;
+  }
+  return {
+    type: EXPR_TYPE.LITERAL,
+    value: Buffer.from(hex, HEX_BUFFER_ENCODING),
+    sqlType: SQL_STORAGE_CLASS.BLOB,
+  };
+}
+
 /**
  * The literal node of a node-sql-parser literal, carrying its SQLite storage
  * class (`sqlType`). The JS-visible `value` is what it has always been: an
- * integer as a number, a decimal as its lexeme text, a string unescaped,
- * TRUE/FALSE as the boolean in SQLite mode.
+ * integer as a number (or BigInt beyond 2^53), a decimal/exponent as its
+ * lexeme text, a string unescaped, a hex BLOB as a Buffer, TRUE/FALSE as the
+ * boolean in SQLite mode.
  * @param {Object} expr - External literal node.
  * @return {Object} LITERAL node.
  */
@@ -225,13 +276,14 @@ function convertExternalLiteral(expr) {
     if (typeof expr.value === 'string') {
       return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.REAL};
     }
-    // node-sql-parser reads a negative integer beyond 2^53 through
-    // parseFloat: the value is already rounded, so it is refused (interim I3,
-    // bound WP3), never carried.
     if (!Number.isSafeInteger(expr.value)) {
       throw unsupportedFeature(PARSER_ERROR_MSG.BIG_INTEGER_LITERAL);
     }
     return {type: EXPR_TYPE.LITERAL, value: expr.value, sqlType: SQL_STORAGE_CLASS.INTEGER};
+  case EXT_EXPR_TYPE.BIGINT:
+    return convertBigIntOrExponentText(expr.value);
+  case EXT_EXPR_TYPE.HEX_STRING:
+    return convertHexBlobLiteral(expr.value);
   case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
     return {type: EXPR_TYPE.LITERAL, value: String(expr.value).replace(/''/g, SINGLE_QUOTE_CHAR),
       sqlType: SQL_STORAGE_CLASS.TEXT};
@@ -246,8 +298,15 @@ function convertExternalLiteral(expr) {
   }
 }
 
-const LITERAL_TYPES = new Set([EXT_EXPR_TYPE.NUMBER, EXT_EXPR_TYPE.SINGLE_QUOTE_STRING,
-  EXT_EXPR_TYPE.STRING, EXT_EXPR_TYPE.BOOL, EXT_EXPR_TYPE.NULL]);
+const LITERAL_TYPES = new Set([
+  EXT_EXPR_TYPE.NUMBER,
+  EXT_EXPR_TYPE.BIGINT,
+  EXT_EXPR_TYPE.HEX_STRING,
+  EXT_EXPR_TYPE.SINGLE_QUOTE_STRING,
+  EXT_EXPR_TYPE.STRING,
+  EXT_EXPR_TYPE.BOOL,
+  EXT_EXPR_TYPE.NULL,
+]);
 
 function convertDialectLiteral(dialect, expr) {
   return dialect === PARSER_DIALECT.POSTGRESQL && expr.type === EXT_EXPR_TYPE.BOOL ?
@@ -597,9 +656,19 @@ const sqlParserExpressionMethods = {
   },
 
   convertUnaryExpr(expr) {
+    const operator = expr.operator.toUpperCase();
+    if (
+      operator === MINUS_OPERATOR &&
+      expr.expr?.type === EXT_EXPR_TYPE.BIGINT &&
+      !carriesValue(expr.expr.suffix) &&
+      /^[0-9]+$/u.test(String(expr.expr.value))
+    ) {
+      refuseUnreadExpressionKeys(expr.expr);
+      return convertBigIntOrExponentText(`-${expr.expr.value}`);
+    }
     return {
       type: EXPR_TYPE.UNARY,
-      operator: expr.operator.toUpperCase(),
+      operator,
       operand: this.convertExpression(expr.expr),
     };
   },
@@ -659,6 +728,9 @@ const sqlParserExpressionMethods = {
     }
     if (this.dialect === PARSER_DIALECT.POSTGRESQL && val.type === EXT_EXPR_TYPE.BOOL) {
       return translateBooleanLiteral(val);
+    }
+    if (val.type === EXT_EXPR_TYPE.UNARY_EXPR) {
+      return this.convertUnaryExpr(val);
     }
     return convertExternalLiteral(val);
   },

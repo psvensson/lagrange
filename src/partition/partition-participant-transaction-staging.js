@@ -21,8 +21,10 @@
 // request's result budget. A statement that fails is refused and stages
 // nothing; a replay that no longer runs dooms the session.
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {collectBoundedSqliteRows, QUERY_RESULT_REQUEST_FIELD} from
+import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
+import {collectBoundedTypedRowSet, QUERY_RESULT_REQUEST_FIELD} from
   '../query/query-result-budget.js';
+import {materializeAndPresentRowObjects} from '../query/sql-value-presentation.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
   admitCommittedCommand,
@@ -308,11 +310,21 @@ function stageWrite(service, session, request, params) {
     lastInsertRowid: outcome.ran.lastInsertRowid};
 }
 
+function buildSessionReadAnswer(service, collected) {
+  return {
+    success: true,
+    rowSet: collected.rowSet,
+    rows: materializeAndPresentRowObjects(collected.columns, collected.rawRows),
+    count: collected.rawRows.length,
+    executionEnvelope: executionEnvelopeOf(service.db),
+  };
+}
+
 function executeDirectEmptyRead(service, statement, params, rowBudgetOptions) {
   try {
-    const rows = collectBoundedSqliteRows(statement, params, rowBudgetOptions);
+    const collected = collectBoundedTypedRowSet(statement, params, rowBudgetOptions);
     replayStatsOf(service).emptyReadDirectExecutions += ONE;
-    return {success: true, rows, count: rows.length};
+    return buildSessionReadAnswer(service, collected);
   } catch (directReadError) {
     return refused(CODE.STATEMENT_FAILED, {
       error: String(directReadError?.message ?? directReadError),
@@ -341,7 +353,7 @@ function readInSession(service, session, request, params) {
     );
   }
   const outcome = validateOverReplay(service, session, () =>
-    collectBoundedSqliteRows(classified.statement, params, rowBudgetOptions));
+    collectBoundedTypedRowSet(classified.statement, params, rowBudgetOptions));
   if (outcome.failure?.replayDiverged === true) {
     return doomSession(service, session, outcome.failure);
   }
@@ -352,7 +364,7 @@ function readInSession(service, session, request, params) {
       error: String(outcome.failure?.message ?? outcome.failure),
       errorCode: outcome.failure?.code ?? null});
   }
-  return {success: true, rows: outcome.ran, count: outcome.ran.length};
+  return buildSessionReadAnswer(service, outcome.ran);
 }
 
 /**

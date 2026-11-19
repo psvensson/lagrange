@@ -3,7 +3,6 @@ import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {QueryExecutorCancellationRouting} from './query-executor-cancellation-routing-install.js';
-import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
 import {
   SERVE_ELIGIBILITY_STATE,
@@ -750,9 +749,6 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   }
 }
 
-installQueryExecutorSelectAggregationHelpers(
-  QueryExecutorPartitionServiceResolution,
-);
 installQueryExecutorSqlCommandHelpers(
   QueryExecutorPartitionServiceResolution,
 );

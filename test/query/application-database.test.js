@@ -147,9 +147,9 @@ test('application inputs reject accessors without invoking them', async (t) => {
 
 // Referenced by the public consumer-contract ratchet
 // (test/release/public-consumer-contract-ratchet.test.js): the bind values a
-// consumer can produce by mistake (a missing field, a bigint, a hole) are
-// refused as INVALID_ARGUMENT before any await, so no statement reaches SqlCore;
-// -0 (which cannot cross the ratchet's JSON IPC) is normalized to 0.
+// consumer can produce by mistake (a missing field, an out-of-range bigint, a
+// hole) are refused as INVALID_ARGUMENT before any await, so no statement
+// reaches SqlCore; 64-bit signed bigints and -0 are preserved under D15.
 test('application params reject undefined, bigint and sparse slots before any await; -0 binds as 0',
   async (t) => {
     const core = createCore();
@@ -157,7 +157,8 @@ test('application params reject undefined, bigint and sparse slots before any aw
     const db = runtime.openApplicationDatabase({applicationId: 'images'});
     const refused = [
       ['id', undefined],
-      ['id', 1n],
+      ['id', 9223372036854775808n],
+      ['id', -9223372036854775809n],
       // eslint-disable-next-line no-sparse-arrays
       ['id', , 1],
     ].map((params) => db.query('SELECT ?, ?', params));
@@ -166,8 +167,9 @@ test('application params reject undefined, bigint and sparse slots before any aw
       t.equal((await captureRejection(pending)).code, 'INVALID_ARGUMENT');
     }
     t.equal(core.calls.length, 0);
-    await db.query('SELECT ?', [-0]);
-    t.ok(Object.is(core.calls[0].params[0], 0), '-0 is normalized to 0');
+    await db.query('SELECT ?, ?', [-0, 1n]);
+    t.ok(Object.is(core.calls[0].params[0], -0), '-0 is preserved as REAL -0.0');
+    t.equal(core.calls[0].params[1], 1n, 'int64 BigInt is preserved as INTEGER');
   });
 
 test('application queries use isolated generated sessions and copied params',
@@ -183,7 +185,8 @@ test('application queries use isolated generated sessions and copied params',
 
     t.not(core.calls[0].options.sessionId,
       core.calls[1].options.sessionId);
-    t.equal(core.calls[0].params[0], 1);
+    t.equal(core.calls[0].params[0], 1n);
+    t.equal(core.calls[1].params[0], 0n);
     t.same([...core.calls[0].params[1]], [1, 2]);
   });
 

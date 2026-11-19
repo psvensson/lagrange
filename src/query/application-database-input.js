@@ -10,6 +10,9 @@ import {createApplicationDatabaseError} from './application-database-error.js';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
+const LOCAL_BIGINT_ZERO = 0n;
+const LOCAL_BIGINT_ONE = 1n;
+const INT64_BITS = 64;
 const LOCAL_STR_VALUE = 'value';
 const APPLICATION_ID_PROPERTY = 'applicationId';
 const ArrayConstructor = Array;
@@ -28,17 +31,17 @@ const typedArrayByteOffsetGetter = Object.getOwnPropertyDescriptor(
   'byteOffset',
 ).get;
 const arrayIsArray = Array.isArray;
+const bigIntAsIntN = BigInt.asIntN;
 const bufferFrom = Buffer.from;
-const numberIsFinite = Number.isFinite;
-const numberIsSafeInteger = Number.isSafeInteger;
+const numberIsNaN = Number.isNaN;
 const objectFreeze = Object.freeze;
 const objectDefineProperty = Object.defineProperty;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
-const objectIs = Object.is;
 const reflectApply = Reflect.apply;
 const reflectOwnKeys = Reflect.ownKeys;
+const stringIsWellFormed = Function.call.bind(String.prototype.isWellFormed);
 const {isProxy, isSharedArrayBuffer, isUint8Array} = utilTypes;
 
 function snapshotApplicationDatabaseOpenOptions(options) {
@@ -136,19 +139,28 @@ function copyByteValue(value) {
 function snapshotBindValue(value) {
   if (value === null) return null;
   if (typeof value === LOCAL_STR_STRING) {
-    if (value.length > APPLICATION_DATABASE_LIMIT.STRING_BIND_LENGTH) {
+    if (
+      value.length > APPLICATION_DATABASE_LIMIT.STRING_BIND_LENGTH ||
+      !stringIsWellFormed(value)
+    ) {
       invalidArgument(APPLICATION_DATABASE_ERROR_MSG.INVALID_PARAMS);
     }
     return value;
   }
   if (typeof value === 'boolean') {
-    return value ? LOCAL_NUM_ONE : LOCAL_NUM_ZERO;
+    return value ? LOCAL_BIGINT_ONE : LOCAL_BIGINT_ZERO;
   }
-  if (typeof value === 'number') {
-    if (!numberIsFinite(value) || !numberIsSafeInteger(value)) {
+  if (typeof value === 'bigint') {
+    if (bigIntAsIntN(INT64_BITS, value) !== value) {
       invalidArgument(APPLICATION_DATABASE_ERROR_MSG.INVALID_PARAMS);
     }
-    return objectIs(value, -LOCAL_NUM_ZERO) ? LOCAL_NUM_ZERO : value;
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (numberIsNaN(value)) {
+      invalidArgument(APPLICATION_DATABASE_ERROR_MSG.INVALID_PARAMS);
+    }
+    return value;
   }
   if (isUint8Array(value)) return copyByteValue(value);
   invalidArgument(APPLICATION_DATABASE_ERROR_MSG.INVALID_PARAMS);
@@ -188,7 +200,6 @@ function snapshotParams(params) {
 
 export {
   snapshotApplicationDatabaseOpenOptions,
-  snapshotApplicationId,
   snapshotParams,
   snapshotSql,
 };

@@ -27,7 +27,6 @@ export {
   QueryExecutionMetrics,
 } from './distributed/parallel-query-coordinator.js';
 export {StragglerDetector, SpeculativeExecutor} from './distributed/straggler-detector.js';
-export {StreamingAggregator} from './streaming-aggregator.js';
 export {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
 export {DistributedWriteCoordinator} from './distributed/distributed-write-coordinator.js';
 export {

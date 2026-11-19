@@ -17,6 +17,7 @@ import {waitForConflictingRowKeyHolderToSettle} from
 import {coordinatorTableSchemaRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
+import {decodeTypedParams} from '../query/sql-value-codec.js';
 import {
   admitPartitionStatement,
   classifyPartitionStatementHead,
@@ -118,7 +119,9 @@ function writeRoutingRefusal(service, payload, isWriteOperation) {
 
 async function executeRemoteQuery(service, payload) {
   const sql = payload.sql;
-  const params = payload.params || [];
+  const params = payload.typedParams !== undefined && payload.typedParams !== null ?
+    decodeTypedParams(payload.typedParams) :
+    (payload.params || []);
   if (payload[QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION] ===
       PARTITION_SERVICE_MIGRATION_OPERATION.ALTER_TABLE) {
     return service.executeMigrationAlterQuery(sql, params, {
@@ -137,17 +140,22 @@ async function executeRemoteQuery(service, payload) {
     resultDeadlineMs: payload[QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS],
     resultMaxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
     resultMaxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
+    wireRead: true,
   });
 }
 
 function remoteQueryAnswer(service, result, readAuthorityWitness) {
   const success = result?.success === true;
+  const hasRowSet = Boolean(result?.rowSet);
   const rowSetComplete = success &&
-    Array.isArray(result?.rows) &&
+    (hasRowSet || Array.isArray(result?.rows)) &&
     result?.partial !== true &&
     result?.rowSetComplete === true;
   const answer = {
-    success, rows: result.rows, changes: result.changes,
+    success,
+    ...(hasRowSet ? {rowSet: result.rowSet} : {rows: result.rows}),
+    ...(result?.executionEnvelope ? {executionEnvelope: result.executionEnvelope} : {}),
+    changes: result.changes,
     count: result.count, partitionId: service.partitionId,
     rowSetComplete,
     ...(result?.partial === true ? {partial: true} : {}),

@@ -58,6 +58,13 @@ const QUERY_WALL_TIME_LIMIT_MS = NUM.THIRTY_THOUSAND;
 const RESULT_MAX_ROWS = NUM.HUNDRED_THOUSAND;
 
 /**
+ * Default maximum total input rows ingested across all partition fragments in
+ * one coordinator SQLite merge session (1,000,000).
+ * @type {number}
+ */
+const MERGE_INPUT_MAX_ROWS = NUM.THOUSAND * NUM.THOUSAND;
+
+/**
  * Default maximum result bytes per query (8 MiB).
  * @type {number}
  */
@@ -108,6 +115,7 @@ const DEFAULT_QUERY_BUDGET = Object.freeze({
   MEMORY_LIMIT_BYTES: QUERY_MEMORY_LIMIT_BYTES,
   WALL_TIME_LIMIT_MS: QUERY_WALL_TIME_LIMIT_MS,
   RESULT_MAX_ROWS,
+  MERGE_INPUT_MAX_ROWS,
   RESULT_MAX_BYTES,
   OUT_MAX_BYTES,
   NESTED_MAX_CALLS,
@@ -242,6 +250,7 @@ export {
   QUERY_MEMORY_LIMIT_BYTES,
   QUERY_WALL_TIME_LIMIT_MS,
   RESULT_MAX_ROWS,
+  MERGE_INPUT_MAX_ROWS,
   RESULT_MAX_BYTES,
   OUT_MAX_BYTES,
   NESTED_MAX_CALLS,

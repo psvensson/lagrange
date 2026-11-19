@@ -1,4 +1,8 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  assembleTypedRowSet,
+  encodeAndMeasureTypedRow,
+} from './sql-value-codec.js';
 
 const BYTE_ENCODING = 'utf8';
 const RESULT_DEADLINE_WAIT = Object.freeze({
@@ -106,8 +110,76 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
   return rows;
 }
 
+/**
+ * Collect bounded SQLite rows as a TypedRowSet using `.raw(true)`,
+ * `.safeIntegers(true)`, `.columns()`, and per-row encode-and-measure byte
+ * accounting (design coordinator-sqlite-merge §2.6, Sub-package 3d, C9).
+ * @param {Object} statement - better-sqlite3 prepared statement.
+ * @param {Array<*>} [params=[]] - Bound parameters.
+ * @param {Object} [options={}] - Budget options (`maxBytes`, `maxRows`,
+ *   `deadlineMs`, `cancellationToken`).
+ * @return {{
+ *   rowSet: {v: number, columns: string[], rows: Array<Array<?string>>},
+ *   columns: string[],
+ *   rawRows: Array<Array<*>>,
+ *   byteLength: number
+ * }}
+ */
+function collectBoundedTypedRowSet(statement, params = [], options = {}) {
+  const maxBytes = positiveSafeLimit(options.maxBytes);
+  const maxRows = positiveSafeLimit(options.maxRows);
+  statement.raw(true).safeIntegers(true);
+  const columns = statement.columns().map((column) => column.name);
+  const rawRows = [];
+  const encodedRows = [];
+  let totalBytes = 0;
+  assertQueryResultDeadline(options, {rowsCollected: 0, bytesCollected: 0});
+  for (const rawRow of statement.iterate(...params)) {
+    assertQueryResultDeadline(options, {
+      rowsCollected: encodedRows.length,
+      bytesCollected: totalBytes,
+    });
+    const nextRowCount = encodedRows.length + 1;
+    if (maxRows !== null && nextRowCount > maxRows) {
+      throw new QueryResultBudgetError(
+        QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
+        QUERY_RESULT_BUDGET_ERROR_MESSAGE.ROWS_EXHAUSTED,
+        {actual: nextRowCount, limit: maxRows},
+      );
+    }
+    const {encoded, byteLength} = encodeAndMeasureTypedRow(
+      rawRow,
+      columns.length,
+      encodedRows.length,
+    );
+    const nextBytes = totalBytes + byteLength;
+    if (maxBytes !== null && nextBytes > maxBytes) {
+      throw new QueryResultBudgetError(
+        QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
+        QUERY_RESULT_BUDGET_ERROR_MESSAGE.BYTES_EXHAUSTED,
+        {actual: nextBytes, limit: maxBytes},
+      );
+    }
+    rawRows.push(rawRow);
+    encodedRows.push(encoded);
+    totalBytes = nextBytes;
+  }
+  assertQueryResultDeadline(options, {
+    rowsCollected: encodedRows.length,
+    bytesCollected: totalBytes,
+    iterationComplete: true,
+  });
+  return {
+    rowSet: assembleTypedRowSet(columns, encodedRows),
+    columns,
+    rawRows,
+    byteLength: totalBytes,
+  };
+}
+
 export {
-  collectBoundedSqliteRows,
   QUERY_RESULT_BUDGET_ERROR_CODE,
   QUERY_RESULT_REQUEST_FIELD,
+  collectBoundedSqliteRows,
+  collectBoundedTypedRowSet,
 };

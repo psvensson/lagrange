@@ -77,8 +77,6 @@ function isBuiltinCollation(value) {
 export {
   AST_TYPE,
   EXPR_TYPE,
-  SQL_BUILTIN_COLLATIONS,
-  SQL_COLLATION,
   SQL_DEFAULT_COLLATION,
   SQL_STORAGE_CLASS,
   isBuiltinCollation,

@@ -24,7 +24,6 @@ import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {
   FANOUT_PLAN_KIND,
   buildSelectFanoutPlan,
-  substituteParameterLiterals,
 } from '../../src/query/distributed/distributed-select-fanout-plan.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
@@ -400,16 +399,21 @@ test('expression evaluation matches SQLite affinity and fallback', async (t) => 
     'modulo casts to integer like SQLite (55 % 10 = 5)',
   );
 
-  // Operators outside the scalar evaluator force the RAW_ROWS fallback
-  // instead of silently returning null through the partial path.
-  const unsupported = new SQLParser(
+  // Boolean conjunction over SUM and COUNT is planned as GUARDED_PARTIAL
+  // and evaluated by CoordinatorMergeSession SQLite.
+  const conjunctionAst = new SQLParser(
     'SELECT SUM(amount) > 50 AND COUNT(*) > 2 AS x FROM t',
   ).parse();
-  const plan = buildSelectFanoutPlan(unsupported, [], 2);
+  const plan = buildSelectFanoutPlan(conjunctionAst, [], 2);
   t.equal(
     plan.kind,
-    FANOUT_PLAN_KIND.RAW_ROWS,
-    'unsupported operator in aggregate expression falls back to legacy',
+    FANOUT_PLAN_KIND.GUARDED_PARTIAL,
+    'boolean conjunction over SUM and COUNT uses GUARDED_PARTIAL in SQLite merge',
+  );
+  t.same(
+    await select(executor, 'SELECT SUM(amount) > 50 AND COUNT(*) > 2 AS x FROM t', partitionIds),
+    [{x: 1}],
+    'boolean conjunction over SUM and COUNT evaluates to 1 in SQLite merge',
   );
 });
 
@@ -442,35 +446,14 @@ test('partition SQL carries partials, not the bare aggregate', async (t) => {
 
   await select(executor, 'SELECT AVG(amount) FROM t', partitionIds);
   const sql = deliveredSql[deliveredSql.length - 1].sql;
-  t.match(sql, /SUM\(amount\)/, 'AVG ships as SUM partial');
-  t.match(sql, /COUNT\(amount\)/, 'AVG ships as COUNT partial');
+  t.match(sql, /SUM\(\(amount >> 32\)\)/, 'AVG ships carry-normalized hi partial');
+  t.match(sql, /COUNT\(amount\)/, 'AVG ships COUNT partial');
 });
 
-test('substituteParameterLiterals and partial-aggregate HAVING handle root ' +
-  'parameters, IN-list arrays, nested arrays, CASE, and function arguments',
+test('parameterized HAVING handles root parameters, IN-list arrays, ' +
+  'CASE, and function arguments',
 async (t) => {
   const {executor, partitionIds} = standardCluster();
-
-  // Direct AST rewrite checks for root node, array entries, and nested arrays
-  t.same(
-    substituteParameterLiterals({type: 'parameter', index: 0}, [1]),
-    {type: 'literal', value: 1},
-    'root parameter node is replaced with literal',
-  );
-  t.same(
-    substituteParameterLiterals(
-      [
-        {type: 'parameter', index: 0},
-        [{type: 'parameter', index: 1}],
-      ],
-      [10, 20],
-    ),
-    [
-      {type: 'literal', value: 10},
-      [{type: 'literal', value: 20}],
-    ],
-    'array and nested-array parameter entries are replaced recursively',
-  );
 
   // 1. HAVING 1 and HAVING ? ([1] vs [0])
   t.same(
@@ -737,8 +720,16 @@ test('SELECT and HAVING scalar operations match the native SQLite oracle', async
     for (const [sql, params] of cases) {
       const plan = buildSelectFanoutPlan(new SQLParser(sql).parse(), params,
         partitionIds.length);
-      t.equal(plan.kind, FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
-        'the existing coordinator expression path is admitted');
+      if (partitionIds.length === 1) {
+        t.equal(plan.kind, FANOUT_PLAN_KIND.SINGLE_PARTITION,
+          '1-partition aggregate uses SINGLE_PARTITION');
+      } else {
+        t.ok(
+          plan.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE ||
+            plan.kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL,
+          'multi-partition aggregate uses PARTIAL_AGGREGATE or GUARDED_PARTIAL',
+        );
+      }
       const expected = oracle.prepare(sql).all(...params);
       const deliveryStart = deliveredSql.length;
       t.same(await select(executor, sql, partitionIds, params), expected,
@@ -746,14 +737,16 @@ test('SELECT and HAVING scalar operations match the native SQLite oracle', async
       const deliveries = deliveredSql.slice(deliveryStart);
       t.same(new Set(deliveries.map(({partitionId}) => partitionId)), new Set(partitionIds),
         'actual partition SQL ran on every selected partition');
-      t.ok(deliveries.every(({sql: delivered}) =>
-        !/\b(?:ROUND|LENGTH|SUBSTR(?:ING)?)\s*\(/u.test(delivered)),
-      'the repaired scalar is evaluated at the coordinator after native partials');
+      if (partitionIds.length > 1) {
+        t.ok(deliveries.every(({sql: delivered}) =>
+          !/\b(?:ROUND|LENGTH|SUBSTR(?:ING)?)\s*\(/u.test(delivered)),
+        'the scalar wrapper is evaluated at the coordinator after native partials');
+      }
     }
   }
 });
 
-test('QueryExecutor.applyOrderBy matches SQLite UTF-8 BINARY ordering', async (t) => {
+test('CoordinatorMergeSession ORDER BY matches SQLite UTF-8 BINARY ordering', async (t) => {
   const textValues = [
     'abc', '😀', '\u{10000}', '\uE000', 'a', 'A', 'aa', 'a!', '',
     'é', 'e\u0301', 'a\u0000a', 'a\u0000b',
@@ -781,7 +774,7 @@ test('QueryExecutor.applyOrderBy matches SQLite UTF-8 BINARY ordering', async (t
     'the independent native oracle uses the same text encoding');
 
   const projections = [
-    {kind: FANOUT_PLAN_KIND.RAW_ROWS,
+    {kind: FANOUT_PLAN_KIND.FRAGMENT_MERGE,
       sql: 'SELECT id, dept, amount FROM t', secondary: 'id'},
     {kind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
       sql: 'SELECT dept, amount, COUNT(*) AS cnt FROM t GROUP BY dept, amount',

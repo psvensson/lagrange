@@ -292,10 +292,6 @@ function describeDivergence({seed, layout, caseId, sql, params, delivered, expec
 }
 
 export {
-  COLLATION,
-  compareCell,
   compareOutcomes,
   describeDivergence,
-  formatOutcome,
-  formatParam,
 };

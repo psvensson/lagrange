@@ -1,85 +1,302 @@
-import {StreamingAggregator} from '../streaming-aggregator.js';
-import {FANOUT_PLAN_KIND} from './distributed-select-fanout-plan.js';
-import {combinePartialAggregateRows} from './partial-aggregate-combiner.js';
-
 /**
- * DistributedMergeEngine wraps StreamingAggregator for canonical
- * distributed SQL global-merge semantics. When a fan-out plan is
- * provided, partial-aggregate partition rows are combined with global
- * semantics (aggregates, GROUP BY/HAVING, LIMIT/OFFSET applied exactly
- * once); without a plan the legacy raw-row merge applies (used by the
- * cross-partition JOIN path, whose coordinator-side rows are raw).
+ * DistributedMergeEngine: coordinator SQLite merge engine backed by
+ * CoordinatorMergeSession (design coordinator-sqlite-merge §2.1, §2.2, §2.8).
+ *
+ * Replaces the legacy JavaScript StreamingAggregator and
+ * partial-aggregate-combiner with per-statement in-memory SQLite merge
+ * sessions ingesting partition fragments in canonical layout.
+ *
+ * @module query/distributed/distributed-merge-engine
  */
+
+import {EXPR_TYPE} from '../parser-constants.js';
+import {
+  presentRawSqlRows,
+  presentSqlRowObjects,
+} from '../sql-value-presentation.js';
+import {getDefaultMergeProcessPool} from './coordinator-merge-process.js';
+import {
+  CoordinatorMergeSession,
+  GUARD_OUTCOME,
+} from './coordinator-merge-session.js';
+import {
+  FANOUT_PLAN_KIND,
+  buildSelectFanoutPlan,
+} from './distributed-select-fanout-plan.js';
+
+const DEFAULT_COORDINATOR_TABLE = '__table';
+const NON_EXPRESSION_AST_KEYS = new Set(['type', 'alias', 'span']);
+
+function collectAstReferencedColumns(ast) {
+  const columns = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (node.type === EXPR_TYPE.COLUMN_REF && typeof node.column === 'string') {
+      columns.add(node.column);
+      return;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (NON_EXPRESSION_AST_KEYS.has(key)) continue;
+      walk(value);
+    }
+  };
+  walk(ast);
+  return [...columns];
+}
+
+function extractColumnsFromFragment(fragment) {
+  if (!fragment || typeof fragment !== 'object') return null;
+  if (Array.isArray(fragment.rowSet?.columns) && fragment.rowSet.columns.length > 0) {
+    return fragment.rowSet.columns;
+  }
+  if (Array.isArray(fragment.columns) && fragment.columns.length > 0) {
+    return fragment.columns;
+  }
+  const firstRow = Array.isArray(fragment.rows) ? fragment.rows[0] : null;
+  if (firstRow && typeof firstRow === 'object' && !Array.isArray(firstRow)) {
+    return Object.keys(firstRow);
+  }
+  return null;
+}
+
+function inferFragmentColumns(fragments, ast = null) {
+  const list = Array.isArray(fragments) ? fragments : [];
+  for (const fragment of list) {
+    const columns = extractColumnsFromFragment(fragment);
+    if (columns !== null) return columns;
+  }
+  return ast ? collectAstReferencedColumns(ast) : [];
+}
+
+function resolveCoordinatorTableName(effectivePlan, ast) {
+  if (
+    typeof effectivePlan?.coordinatorTableName === 'string' &&
+    effectivePlan.coordinatorTableName.length > 0
+  ) {
+    return effectivePlan.coordinatorTableName;
+  }
+  if (typeof ast?.from?.name === 'string' && ast.from.name.length > 0) {
+    return ast.from.name;
+  }
+  return DEFAULT_COORDINATOR_TABLE;
+}
+
+function buildSinglePartitionFastPathResult(validFragments, effectivePlan) {
+  const first = validFragments[0] || {rows: [], columns: null, rowSet: null};
+  return {
+    guardOutcome: GUARD_OUTCOME.GUARD_HELD,
+    rows: Array.isArray(first.rows) ? first.rows : [],
+    rawRows: Array.isArray(first.rawRows) ? first.rawRows : null,
+    columns: Array.isArray(first.columns) ? first.columns : effectivePlan.expectedColumns,
+    rowSet: first.rowSet || null,
+  };
+}
+
+function buildGuardFailedResult() {
+  return {
+    guardOutcome: GUARD_OUTCOME.GUARD_FAILED,
+    rows: [],
+    rawRows: [],
+    columns: null,
+    rowSet: null,
+  };
+}
+
+function presentMergedExecutionResult(merged, safeIntegers) {
+  return {
+    guardOutcome: GUARD_OUTCOME.GUARD_HELD,
+    rows: presentSqlRowObjects(merged.rows, {safeIntegers}),
+    rawRows: presentRawSqlRows(merged.rawRows, {safeIntegers}),
+    columns: merged.columns,
+    rowSet: merged.rowSet,
+    byteLength: merged.byteLength,
+  };
+}
+
+async function ingestSessionTables(
+  session,
+  tableName,
+  validFragments,
+  ast,
+  effectivePlan,
+  extraTables,
+) {
+  const declaredColumns = inferFragmentColumns(validFragments, ast);
+  session.createTable(
+    tableName,
+    effectivePlan.coordinatorTableSchema || null,
+    declaredColumns,
+  );
+  await session.ingestTableFragments(tableName, validFragments, {
+    columns: declaredColumns,
+  });
+
+  if (!Array.isArray(extraTables)) return;
+  for (const extra of extraTables) {
+    const extraDeclaredColumns = Array.isArray(extra.declaredColumns) ?
+      extra.declaredColumns :
+      inferFragmentColumns(extra.fragments);
+    session.createTable(extra.tableName, extra.schema || null, extraDeclaredColumns);
+    await session.ingestTableFragments(extra.tableName, extra.fragments || [], {
+      columns: extraDeclaredColumns,
+    });
+  }
+}
+
+function isPartialAggregatePlanKind(kind) {
+  return (
+    kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE ||
+    kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL
+  );
+}
+
+async function executePooledCoordinatorMerge(
+  pool,
+  tableName,
+  validFragments,
+  ast,
+  effectivePlan,
+  options,
+) {
+  const declaredColumns = inferFragmentColumns(validFragments, ast);
+  const tables = [{
+    tableName,
+    schema: effectivePlan.coordinatorTableSchema || null,
+    declaredColumns,
+    fragments: validFragments,
+  }];
+  if (Array.isArray(options.extraTables)) {
+    for (const extra of options.extraTables) {
+      tables.push({
+        tableName: extra.tableName,
+        schema: extra.schema || null,
+        declaredColumns: Array.isArray(extra.declaredColumns) ?
+          extra.declaredColumns :
+          inferFragmentColumns(extra.fragments),
+        fragments: extra.fragments || [],
+      });
+    }
+  }
+  const merged = await pool.execute({
+    tables,
+    sql: effectivePlan.coordinatorSql,
+    params: effectivePlan.coordinatorParams || [],
+    expectedColumns: effectivePlan.expectedColumns || null,
+    sessionOptions: options.sessionOptions || {},
+  });
+  return presentMergedExecutionResult(merged, options.safeIntegers === true);
+}
+
 class DistributedMergeEngine {
   /**
-   * @param {Object} options
-   * @param {Function} [options.streamingAggregatorFactory]
+   * Merge partition results through an in-memory SQLite CoordinatorMergeSession
+   * in canonical partition layout.
+   * @param {Object[]} partitionResults - Ordered partition execution results.
+   * @param {Object} ast - Parsed SELECT AST.
+   * @param {Object} [queryExecutor] - QueryExecutor instance (for catalog schema lookup).
+   * @param {Object|null} [fanoutPlan] - Fan-out plan from buildSelectFanoutPlan.
+   * @param {Array<*>} [params=[]] - Bound query parameters.
+   * @param {Object} [options={}] - Optional session and extra-table options.
+   * @return {Promise<Object>} Merged result `{rows, rawRows, columns, rowSet, guardOutcome}`.
    */
-  constructor(options = {}) {
-    this.streamingAggregatorFactory = options.streamingAggregatorFactory ||
-      (() => new StreamingAggregator());
-  }
-
-  /**
-   * Merge partition results using streaming buffering and global semantics.
-   * @param {Object[]} partitionResults - Partition execution results.
-   * @param {Object} ast - SELECT AST.
-   * @param {Object} queryExecutor - QueryExecutor instance.
-   * @param {Object} [fanoutPlan] - Fan-out plan from
-   *   buildSelectFanoutPlan; absent for raw coordinator-side row sets.
-   * @param {Array} [params] - Bound query parameters.
-   * @return {Object} Aggregated result.
-   */
-  mergePartitionResults(
+  async mergePartitionResults(
     partitionResults,
     ast,
-    queryExecutor,
-    fanoutPlan,
-    params,
+    queryExecutor = null,
+    fanoutPlan = null,
+    params = [],
+    options = {},
   ) {
-    const aggregator = this.streamingAggregatorFactory();
-    for (const partitionResult of partitionResults) {
-      if (partitionResult.success && Array.isArray(partitionResult.rows)) {
-        aggregator.addRows(partitionResult.rows);
-      }
-    }
-    const mergedRows = aggregator.getAllRows();
-    const effectiveParams = Array.isArray(params) ?
-      params :
-      fanoutPlan?.partitionParams;
-    if (fanoutPlan?.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
-      return {
-        rows: combinePartialAggregateRows(
-          mergedRows,
-          fanoutPlan.combineSpec,
-          queryExecutor,
-          effectiveParams,
-        ),
-      };
-    }
-    return queryExecutor.aggregateSelectResults(
-      [{success: true, rows: mergedRows}],
+    const validFragments = (partitionResults || []).filter(
+      (result) => result && result.success !== false,
+    );
+    const effectivePlan = fanoutPlan || buildSelectFanoutPlan(
       ast,
-      effectiveParams,
+      params,
+      Math.max(validFragments.length, 2),
+      {resolveTableSchema: queryExecutor?.resolveTableInfo},
+    );
+
+    if (
+      effectivePlan.kind === FANOUT_PLAN_KIND.SINGLE_PARTITION &&
+      validFragments.length <= 1
+    ) {
+      return buildSinglePartitionFastPathResult(validFragments, effectivePlan);
+    }
+
+    const tableName = resolveCoordinatorTableName(effectivePlan, ast);
+    if (
+      effectivePlan.kind === FANOUT_PLAN_KIND.COORDINATOR_EVALUATED &&
+      (options.useProcessPool === true || Boolean(options.processPool))
+    ) {
+      const pool = options.processPool || getDefaultMergeProcessPool();
+      return executePooledCoordinatorMerge(
+        pool,
+        tableName,
+        validFragments,
+        ast,
+        effectivePlan,
+        options,
+      );
+    }
+
+    return this.executeInProcessSessionMerge(
+      tableName,
+      validFragments,
+      ast,
+      effectivePlan,
+      options,
     );
   }
 
-  /**
-   * Merge set-operation fragments through the same canonical merge path.
-   * @param {Object[]} partitionResults - Partition execution results.
-   * @param {Object} ast - SELECT AST with set operation.
-   * @param {Object} queryExecutor - QueryExecutor instance.
-   * @param {Array} [params] - Bound query parameters.
-   * @return {Object} Aggregated result.
-   */
-  mergeSetOperationResults(partitionResults, ast, queryExecutor, params) {
-    return this.mergePartitionResults(
-      partitionResults,
-      ast,
-      queryExecutor,
-      null,
-      params,
-    );
+  async executeInProcessSessionMerge(
+    tableName,
+    validFragments,
+    ast,
+    effectivePlan,
+    options,
+  ) {
+    const session = new CoordinatorMergeSession(options.sessionOptions || {});
+    try {
+      await ingestSessionTables(
+        session,
+        tableName,
+        validFragments,
+        ast,
+        effectivePlan,
+        options.extraTables,
+      );
+
+      const shouldRunGuard =
+        effectivePlan.kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL &&
+        typeof effectivePlan.guardSql === 'string';
+      const guardOutcome = shouldRunGuard ?
+        session.evaluateGuardSql(
+          effectivePlan.guardSql,
+          effectivePlan.guardParams || [],
+        ) :
+        GUARD_OUTCOME.GUARD_HELD;
+
+      if (guardOutcome === GUARD_OUTCOME.GUARD_FAILED) {
+        return buildGuardFailedResult();
+      }
+
+      const merged = session.executeMergeSql(
+        effectivePlan.coordinatorSql,
+        effectivePlan.coordinatorParams || [],
+        {
+          expectedColumns: effectivePlan.expectedColumns || null,
+          partialAggregate: isPartialAggregatePlanKind(effectivePlan.kind),
+        },
+      );
+      return presentMergedExecutionResult(merged, options.safeIntegers === true);
+    } finally {
+      session.close();
+    }
   }
 }
 

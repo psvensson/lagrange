@@ -1,771 +1,630 @@
-import {
-  SELECT_MERGE_MODE,
-  assertSelectFanoutAdmissible,
-} from '../coordinator-sql-admission.js';
+/**
+ * Five-kind distributed SELECT fan-out planner (design coordinator-sqlite-merge
+ * §2.2, §2.3, Revision 6):
+ *
+ *   SINGLE_PARTITION      1 table reference routed to 1 partition (order-
+ *                         independent or rowid-bearing): runs losslessly
+ *                         rendered SQL directly on the partition.
+ *   FRAGMENT_MERGE        1 table reference, >= 2 partitions, non-aggregate,
+ *                         order-independent, all WHERE conjuncts pushable, no
+ *                         per-statement time: ships referenced base columns
+ *                         (with sound DISTINCT and SQL-rendered overfetch LIMIT)
+ *                         and runs the original projection, DISTINCT, ORDER BY,
+ *                         and LIMIT/OFFSET in CoordinatorMergeSession.
+ *   PARTIAL_AGGREGATE     1 table reference, >= 2 partitions, allowlisted
+ *                         GROUP BY keys and COUNT/MIN/MAX partials, all WHERE
+ *                         conjuncts pushable, no per-statement time: ships
+ *                         per-partition partials into `__partial` and combines
+ *                         in CoordinatorMergeSession.
+ *   GUARDED_PARTIAL       1 table reference, >= 2 partitions, allowlisted
+ *                         GROUP BY keys and non-DISTINCT deterministic
+ *                         SUM/AVG/TOTAL with carry-normalized 32-bit partials
+ *                         (Sub-package 3f): coordinator SQLite evaluates
+ *                         `GUARD_HELD` vs `GUARD_FAILED`; on `GUARD_FAILED`
+ *                         discards phase-1 partials and transitions to
+ *                         COORDINATOR_EVALUATED.
+ *   COORDINATOR_EVALUATED Everything else (order-dependent queries, expression
+ *                         GROUP BY, non-allowlisted MIN/MAX/GROUP BY/DISTINCT,
+ *                         GROUP_CONCAT, per-statement time, subqueries, CTEs,
+ *                         compounds): ships base rows (with `ORDER BY <pk ASC>`
+ *                         when order-dependent) into CoordinatorMergeSession /
+ *                         CoordinatorMergeProcessPool.
+ *
+ * @module query/distributed/distributed-select-fanout-plan
+ */
+
 import {EXPR_TYPE} from '../parser-constants.js';
-import {resultColumnName} from '../sql-statement-renderer.js';
+import {QUERY_ERROR_CODE} from '../query-constants.js';
+import {
+  renderSelectWithParameters,
+  resultColumnName,
+} from '../sql-statement-renderer.js';
+import {
+  assertMultiPartitionRowidAdmissible,
+  classifySingleTableStatement,
+  collectAllBaseTableNames,
+  hasUnshadowedRowidReference,
+  isAllowlistedColumnExpr,
+  isDeterministicExpression,
+  isPerStatementTimeExpression,
+  joinWhereConjuncts,
+  splitWhereConjuncts,
+  unwrapCollateColumn,
+} from './distributed-select-fanout-soundness.js';
+import {
+  binaryExpr,
+  buildPartialOrGuardedPlan,
+  colRef,
+  fnCall,
+  intLiteral,
+  searchedCase,
+} from './distributed-select-partial-rewrite.js';
 
-/** Aggregate function names as the parser normalizes them. */
-const AGGREGATE_FN = Object.freeze({
-  COUNT: 'COUNT',
-  SUM: 'SUM',
-  AVG: 'AVG',
-  MIN: 'MIN',
-  MAX: 'MAX',
-});
-
-/** Row-key text fragments mirroring QueryExecutor#getArgName. */
-const ARG_NAME = Object.freeze({
-  STAR: '*',
-  UNKNOWN: '?',
-});
-
-/**
- * Fan-out plan kinds for a distributed SELECT. Explicit variants — the
- * merge engine branches on this single canonical outcome instead of
- * re-deriving aggregate-ness from the AST.
- */
-const FANOUT_PLAN_KIND = {
-  RAW_ROWS: 'raw_rows',
+const FANOUT_PLAN_KIND = Object.freeze({
+  SINGLE_PARTITION: 'single_partition',
+  FRAGMENT_MERGE: 'fragment_merge',
   PARTIAL_AGGREGATE: 'partial_aggregate',
-};
-
-/** Internal construction states before the public plan kind is emitted. */
-const FANOUT_BUILD_STATE = SELECT_MERGE_MODE;
-
-/**
- * Deterministic partition-side aliases for combinable partial columns.
- * Prefixed so they can never collide with user column names, and stable
- * per column index so the coordinator can address them positionally.
- */
-const PARTIAL_ALIAS = {
-  GROUP_KEY_PREFIX: '__fanout_gk_',
-  AGGREGATE_PREFIX: '__fanout_agg_',
-  BARE_PREFIX: '__fanout_bare_',
-  DISTINCT_VALUES_SUFFIX: '_dv',
-  SUM_SUFFIX: '_sum',
-  COUNT_SUFFIX: '_count',
-  MIN_SUFFIX: '_min',
-  MAX_SUFFIX: '_max',
-};
-
-/**
- * Per-aggregate combine strategies. One canonical decision table:
- * every supported aggregate maps to the partial columns it needs
- * partition-side and the combine rule the coordinator applies.
- */
-const AGGREGATE_COMBINE_MODE = {
-  SUM_OF_COUNTS: 'sum_of_counts',
-  SUM_OF_SUMS: 'sum_of_sums',
-  SUM_PAIR_RATIO: 'sum_pair_ratio',
-  MIN_OF_MINS: 'min_of_mins',
-  MAX_OF_MAXES: 'max_of_maxes',
-  DISTINCT_VALUES: 'distinct_values',
-};
-
-const COMBINE_MODE_BY_FUNCTION = {
-  [AGGREGATE_FN.COUNT]: AGGREGATE_COMBINE_MODE.SUM_OF_COUNTS,
-  [AGGREGATE_FN.SUM]: AGGREGATE_COMBINE_MODE.SUM_OF_SUMS,
-  [AGGREGATE_FN.AVG]: AGGREGATE_COMBINE_MODE.SUM_PAIR_RATIO,
-  [AGGREGATE_FN.MIN]: AGGREGATE_COMBINE_MODE.MIN_OF_MINS,
-  [AGGREGATE_FN.MAX]: AGGREGATE_COMBINE_MODE.MAX_OF_MAXES,
-};
-
-/**
- * Coordinator-side expression node type marking a combined aggregate
- * value inside a SELECT expression (e.g. `SUM(x) + 1`): the partition
- * ships the aggregate's partials, and the combiner substitutes the
- * globally-combined value at this marker before evaluating the rest of
- * the expression.
- */
-const COMBINED_AGGREGATE_MARKER = 'combined_aggregate_marker';
-const BARE_HAVING_KEY_TAG = 'h';
-const EXTENDED_EXPR_TYPE = Object.freeze({
-  CASE: 'case', CAST: 'cast', FUNCTION_CALL: 'function_call', FUNCTION: 'function',
-});
-const EVALUABLE_SCALAR_FUNCTIONS = new Set([
-  'COALESCE', 'IFNULL', 'NULLIF', 'IIF', 'ABS',
-  'LOWER', 'UPPER', 'TRIM', 'LENGTH', 'SUBSTR', 'SUBSTRING', 'ROUND',
-]);
-const EVALUABLE_EXPRESSION_TYPES = new Set([
-  EXPR_TYPE.BINARY, EXPR_TYPE.UNARY, EXPR_TYPE.LITERAL, EXPR_TYPE.COLUMN_REF,
-  EXPR_TYPE.PARAMETER, EXPR_TYPE.AGGREGATE, EXPR_TYPE.IN,
-  EXTENDED_EXPR_TYPE.CASE, EXTENDED_EXPR_TYPE.CAST,
-  EXTENDED_EXPR_TYPE.FUNCTION_CALL, EXTENDED_EXPR_TYPE.FUNCTION,
-]);
-
-/**
- * Binary operators the coordinator scalar evaluator supports, with
- * SQLite affinity semantics: integer/integer division truncates and
- * modulo casts its operands to integer; division or modulo by zero is
- * NULL; comparisons surface as 1/0. This table is the single source of
- * truth for BOTH plan-time evaluability (an unsupported operator forces
- * the RAW_ROWS fallback) and combine-time evaluation.
- */
-const SCALAR_BINARY_OPS = Object.freeze({
-  '+': (a, b) => a + b,
-  '-': (a, b) => a - b,
-  '*': (a, b) => a * b,
-  '/': (a, b) => {
-    if (Number(b) === 0) {
-      return null;
-    }
-    if (Number.isInteger(a) && Number.isInteger(b)) {
-      return Math.trunc(a / b);
-    }
-    return a / b;
-  },
-  '%': (a, b) => {
-    const divisor = Math.trunc(Number(b));
-    if (divisor === 0) {
-      return null;
-    }
-    return Math.trunc(Number(a)) % divisor;
-  },
-  '=': (a, b) => (a === b ? 1 : 0),
-  '!=': (a, b) => (a !== b ? 1 : 0),
-  '<>': (a, b) => (a !== b ? 1 : 0),
-  '<': (a, b) => (a < b ? 1 : 0),
-  '<=': (a, b) => (a <= b ? 1 : 0),
-  '>': (a, b) => (a > b ? 1 : 0),
-  '>=': (a, b) => (a >= b ? 1 : 0),
+  GUARDED_PARTIAL: 'guarded_partial',
+  COORDINATOR_EVALUATED: 'coordinator_evaluated',
+  // Alias for callers referencing RAW_ROWS:
+  RAW_ROWS: 'coordinator_evaluated',
 });
 
-/** Unary operators the coordinator scalar evaluator supports. */
-const SCALAR_UNARY_OPS = Object.freeze({
-  '-': (value) => -value,
-  '+': (value) => +value,
+const MAX_GUARDED_PARTIAL_PARTITIONS = 1073741824; // 2^30
+const INT64_MAX_BIGINT = 9223372036854775807n;
+const ASC_DIRECTION = 'ASC';
+const STAR_SYMBOL = '*';
+const UNBOUND_PARAM_PREFIX = 'Unbound parameter index: ';
+const NON_EXPRESSION_AST_KEYS = new Set(['type', 'alias', 'span']);
+
+const SQL_OP = Object.freeze({
+  LT: '<',
+  PLUS: '+',
 });
 
-/**
- * Render an expression AST to a canonical comparison string. Used to
- * structurally match SELECT columns against GROUP BY expressions without
- * relying on object identity.
- * @param {Object} expr - Expression AST node.
- * @return {string} Canonical rendering.
- */
-function canonicalExpressionKey(expr) {
-  return JSON.stringify(normalizeForKey(expr));
-}
+const SQL_FN = Object.freeze({
+  MIN: 'min',
+  MAX: 'max',
+});
 
-function normalizeForKey(node) {
-  if (node === null || typeof node !== 'object') {
-    return node;
-  }
-  if (Array.isArray(node)) {
-    return node.map(normalizeForKey);
-  }
-  const out = {};
-  for (const key of Object.keys(node).sort()) {
-    out[key] = normalizeForKey(node[key]);
-  }
-  return out;
-}
-
-/**
- * Canonical `FUNC(arg)` name; matches evaluateExpression's HAVING lookup.
- * @param {Object} expr - Aggregate expression AST.
- * @return {string} Canonical aggregate name.
- */
-function canonicalAggregateName(expr) {
-  let argName = ARG_NAME.UNKNOWN;
-  if (expr.argument?.type === EXPR_TYPE.STAR) {
-    argName = ARG_NAME.STAR;
-  } else if (
-    expr.argument?.type === EXPR_TYPE.COLUMN_REF
-  ) {
-    argName = expr.argument.column;
-  }
-  return `${expr.function}(${argName})`;
-}
-
-/**
- * Collect every aggregate expression referenced by the SELECT columns and
- * the HAVING clause, deduplicated by canonical shape, so HAVING can filter
- * on aggregates that are not projected.
- * @param {Object} ast - SELECT AST.
- * @return {Array<{expr: Object, outputKeys: string[], havingKey: string}>}
- */
-function collectAggregateSpecs(ast) {
-  const specs = [];
-  const byShape = new Map();
-
-  const register = (expr, outputKey) => {
-    const shape = canonicalExpressionKey(expr);
-    let spec = byShape.get(shape);
-    if (!spec) {
-      spec = {
-        expr,
-        outputKeys: [],
-        havingKey: canonicalAggregateName(expr),
-        combineMode: expr.distinct ?
-          AGGREGATE_COMBINE_MODE.DISTINCT_VALUES :
-          COMBINE_MODE_BY_FUNCTION[expr.function.toUpperCase()],
-        index: specs.length,
-      };
-      byShape.set(shape, spec);
-      specs.push(spec);
+function createParameterResolver(params) {
+  return (paramNode) => {
+    const index = paramNode?.index;
+    if (
+      !Array.isArray(params) ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= params.length ||
+      params[index] === undefined
+    ) {
+      const error = new Error(`${UNBOUND_PARAM_PREFIX}${index}`);
+      error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+      throw error;
     }
-    if (outputKey && !spec.outputKeys.includes(outputKey)) {
-      spec.outputKeys.push(outputKey);
-    }
-    return spec;
+    return params[index];
   };
-
-  for (const col of ast.columns) {
-    const expr = col.expression || col;
-    if (expr.type === EXPR_TYPE.AGGREGATE) {
-      register(expr, resultColumnName(col));
-    } else {
-      // Aggregates nested inside a SELECT expression (SUM(x) + 1) still
-      // need partials shipped; the expression itself is evaluated at the
-      // coordinator over the combined values.
-      walkAggregates(expr, (nested) => register(nested, null));
-    }
-  }
-  walkAggregates(ast.having, (expr) => register(expr, null));
-  walkAggregates(ast.orderBy, (expr) => register(expr, null));
-  return specs;
-}
-
-function containsAggregate(node) {
-  let found = false;
-  walkAggregates(node, () => {
-    found = true;
-  });
-  return found;
 }
 
 /**
- * Replace every aggregate node inside an expression clone with a
- * combined-aggregate marker pointing at its registered spec.
- * @param {*} node - Expression AST clone (mutated in place).
- * @param {Map} specByShape - Canonical shape -> aggregate spec.
- * @return {*} Rewritten expression node.
+ * Validate that every PARAMETER AST node in `node` has a bound value in
+ * `params` (SQL NULL is valid; `undefined` or out-of-bounds is rejected with
+ * SYNTAX_ERROR).
+ * @param {*} node - AST node or subtree.
+ * @param {Array<*>} params - Positional parameters.
  */
-function replaceAggregatesWithMarkers(node, specByShape) {
-  if (!node || typeof node !== 'object') {
-    return node;
-  }
+function assertQueryParametersBound(node, params = []) {
+  if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index += 1) {
-      node[index] = replaceAggregatesWithMarkers(node[index], specByShape);
+    for (const item of node) assertQueryParametersBound(item, params);
+    return;
+  }
+  if (node.type === EXPR_TYPE.PARAMETER) {
+    createParameterResolver(params)(node);
+    return;
+  }
+  for (const value of Object.values(node)) {
+    assertQueryParametersBound(value, params);
+  }
+}
+
+function extractCatalogSchema(rawSchema) {
+  if (!rawSchema || typeof rawSchema !== 'object') return null;
+  if (Array.isArray(rawSchema.columns)) return rawSchema;
+  if (typeof rawSchema.schema_definition === 'string') {
+    return JSON.parse(rawSchema.schema_definition);
+  }
+  if (typeof rawSchema.schema === 'string') {
+    return JSON.parse(rawSchema.schema);
+  }
+  if (rawSchema.schema && typeof rawSchema.schema === 'object') {
+    return rawSchema.schema;
+  }
+  return null;
+}
+
+function extractPrimaryBaseTableName(ast) {
+  const baseTables = collectAllBaseTableNames(ast);
+  if (baseTables.length > 0) return baseTables[0];
+  return typeof ast?.from?.name === 'string' ? ast.from.name : null;
+}
+
+function extractTableSchemaForSelect(ast, options) {
+  if (options?.schema) {
+    return extractCatalogSchema(options.schema);
+  }
+  const tableName = extractPrimaryBaseTableName(ast);
+  if (typeof tableName === 'string' && options?.resolveTableSchema) {
+    return extractCatalogSchema(options.resolveTableSchema(tableName));
+  }
+  return null;
+}
+
+function resolveExpectedOutputColumns(ast) {
+  if (!Array.isArray(ast?.columns)) return null;
+  if (ast.columns.some((col) => col.type === EXPR_TYPE.STAR)) {
+    return null;
+  }
+  return ast.columns.map((col) => resultColumnName(col));
+}
+
+function collectBaseColumnsInList(items, into, aliasSet) {
+  let hasStar = false;
+  for (const item of items) {
+    if (collectBaseColumnsInNode(item, into, aliasSet).hasStar) {
+      hasStar = true;
     }
-    return node;
   }
-  if (node.type === EXPR_TYPE.AGGREGATE) {
-    return buildAggregateMarker(node, specByShape);
-  }
+  return {hasStar};
+}
+
+function collectBaseColumnsInObject(node, into, aliasSet) {
+  let hasStar = false;
   for (const [key, value] of Object.entries(node)) {
-    if (value && typeof value === 'object') {
-      node[key] = replaceAggregatesWithMarkers(value, specByShape);
+    if (NON_EXPRESSION_AST_KEYS.has(key)) continue;
+    if (collectBaseColumnsInNode(value, into, aliasSet).hasStar) {
+      hasStar = true;
     }
   }
-  return node;
+  return {hasStar};
 }
 
-function buildAggregateMarker(aggregateNode, specByShape) {
-  const spec = specByShape.get(canonicalExpressionKey(aggregateNode));
-  return {type: COMBINED_AGGREGATE_MARKER, specIndex: spec.index};
-}
-
-/**
- * Visit column refs that sit outside any aggregate.
- * @param {Object} node - Expression AST.
- * @param {Function} visit - Called with each column_ref node.
- */
-function collectOutsideColumnRefs(node, visit) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-  if (node.type === EXPR_TYPE.COLUMN_REF) {
-    visit(node);
-    return;
-  }
-  if (
-    node.type === COMBINED_AGGREGATE_MARKER ||
-    node.type === EXPR_TYPE.AGGREGATE
-  ) {
-    return;
-  }
-  for (const value of Object.values(node)) {
-    if (Array.isArray(value)) {
-      value.forEach((entry) => collectOutsideColumnRefs(entry, visit));
-    } else if (value && typeof value === 'object') {
-      collectOutsideColumnRefs(value, visit);
-    }
-  }
-}
-
-/**
- * Whether a SELECT expression containing aggregates can be evaluated at
- * the coordinator after its aggregates are combined.
- * @param {Object} node - Expression AST.
- * @return {boolean} True when every node type is evaluable.
- */
-function expressionEvaluable(node) {
-  if (!node || typeof node !== 'object') {
-    return true;
-  }
+function collectBaseColumnsInNode(node, into, aliasSet = null) {
+  if (!node || typeof node !== 'object') return {hasStar: false};
   if (Array.isArray(node)) {
-    return node.every((entry) => expressionEvaluable(entry));
+    return collectBaseColumnsInList(node, into, aliasSet);
   }
-  if (node.type === EXPR_TYPE.AGGREGATE) {
-    return true;
+  if (node.type === EXPR_TYPE.STAR) {
+    return {hasStar: true};
   }
-  if (node.type && !EVALUABLE_EXPRESSION_TYPES.has(node.type)) {
+  if (node.type === EXPR_TYPE.COLUMN_REF && typeof node.column === 'string') {
+    const isNonBaseAlias = !node.table &&
+      Boolean(aliasSet) &&
+      aliasSet.has(node.column.toLowerCase());
+    if (!isNonBaseAlias) {
+      into.add(node.column);
+    }
+    return {hasStar: false};
+  }
+  return collectBaseColumnsInObject(node, into, aliasSet);
+}
+
+function buildNonBaseSelectAliasSet(columns, baseColumnSet) {
+  const aliases = new Set();
+  for (const col of columns || []) {
+    if (typeof col?.alias === 'string' && col.alias.length > 0) {
+      const lower = col.alias.toLowerCase();
+      if (!baseColumnSet.has(lower)) {
+        aliases.add(lower);
+      }
+    }
+  }
+  return aliases;
+}
+
+function toLimitOperandAst(value, defaultZero = false) {
+  if (value === null || value === undefined) {
+    return defaultZero ? intLiteral(0) : intLiteral(-1);
+  }
+  return typeof value === 'number' ? intLiteral(value) : value;
+}
+
+function buildOverfetchLimitExpression(limitClause) {
+  const countIsInt = typeof limitClause.count === 'number' &&
+    Number.isSafeInteger(limitClause.count);
+  const offsetVal = limitClause.offset === null || limitClause.offset === undefined ?
+    0 :
+    limitClause.offset;
+  const offsetIsInt = typeof offsetVal === 'number' && Number.isSafeInteger(offsetVal);
+  if (countIsInt && offsetIsInt) {
+    return limitClause.count < 0 ? -1 : limitClause.count + Math.max(offsetVal, 0);
+  }
+  const countExpr = toLimitOperandAst(limitClause.count, false);
+  const offsetExpr = toLimitOperandAst(limitClause.offset, true);
+
+  return searchedCase(
+    binaryExpr(SQL_OP.LT, countExpr, intLiteral(0)),
+    intLiteral(-1),
+    fnCall(SQL_FN.MIN, [
+      binaryExpr(SQL_OP.PLUS, countExpr, fnCall(SQL_FN.MAX, [offsetExpr, intLiteral(0)])),
+      intLiteral(INT64_MAX_BIGINT),
+    ]),
+  );
+}
+
+function isOrderByTermPushable(term, isDistinct, aliasSet, selectColumnNames) {
+  const expr = term?.expression ?? term;
+  if (!isDeterministicExpression(expr)) return false;
+  if (expr?.type === EXPR_TYPE.LITERAL && Number.isInteger(expr.value)) {
     return false;
   }
-  if (
-    (node.type === EXTENDED_EXPR_TYPE.FUNCTION_CALL ||
-      node.type === EXTENDED_EXPR_TYPE.FUNCTION) &&
-    !EVALUABLE_SCALAR_FUNCTIONS.has(String(node.name || '').toUpperCase())
-  ) {
+  const orderCols = new Set();
+  if (collectBaseColumnsInNode(expr, orderCols, null).hasStar) {
     return false;
   }
-  if (node.type === EXPR_TYPE.BINARY &&
-    !Object.hasOwn(SCALAR_BINARY_OPS, node.operator)) {
-    return false;
-  }
-  if (node.type === EXPR_TYPE.UNARY &&
-    !Object.hasOwn(SCALAR_UNARY_OPS, node.operator)) {
-    return false;
-  }
-  for (const value of Object.values(node)) {
-    if (value && typeof value === 'object' && !expressionEvaluable(value)) {
+  for (const col of orderCols) {
+    if (aliasSet.has(col.toLowerCase())) {
       return false;
     }
+  }
+  if (!isDistinct) return true;
+  const bare = unwrapCollateColumn(expr);
+  return Boolean(bare) && selectColumnNames.has(bare.columnRef.column.toLowerCase());
+}
+
+function canPushOrderByAndLimitInFragmentMerge(
+  ast,
+  partitionDistinct,
+  selectColumnNames,
+  baseColumnSet,
+) {
+  if (!ast.limit) return false;
+  if (ast.distinct && !partitionDistinct) return false;
+  const aliasSet = buildNonBaseSelectAliasSet(ast.columns, baseColumnSet);
+  const terms = Array.isArray(ast.orderBy) ? ast.orderBy : [];
+  return terms.every((term) =>
+    isOrderByTermPushable(term, Boolean(ast.distinct), aliasSet, selectColumnNames));
+}
+
+function extractWitnessColumnName(schema) {
+  if (Array.isArray(schema?.primaryKey) && schema.primaryKey.length > 0) {
+    return schema.primaryKey[0];
+  }
+  if (Array.isArray(schema?.columns) && schema.columns.length > 0) {
+    return schema.columns[0].name;
+  }
+  return null;
+}
+
+function buildFragmentPartitionColumns(selectStar, orderStar, allReferenced, schema) {
+  if (selectStar || orderStar) {
+    return [{type: EXPR_TYPE.STAR, value: STAR_SYMBOL}];
+  }
+  if (allReferenced.size > 0) {
+    return [...allReferenced].map((colName) => ({
+      type: EXPR_TYPE.COLUMN,
+      expression: colRef(colName),
+      alias: null,
+    }));
+  }
+  const witnessCol = extractWitnessColumnName(schema);
+  return witnessCol ?
+    [{type: EXPR_TYPE.COLUMN, expression: colRef(witnessCol), alias: null}] :
+    [{type: EXPR_TYPE.STAR, value: STAR_SYMBOL}];
+}
+
+function canPushDistinctToPartition(ast, selectStar, selectLowerSet, orderCols, schema) {
+  if (!ast.distinct || selectStar) return false;
+  const allSelectBareAllowlisted = ast.columns.every(
+    (col) => col.type !== EXPR_TYPE.STAR && isAllowlistedColumnExpr(col.expression, schema),
+  );
+  if (!allSelectBareAllowlisted) return false;
+  return [...orderCols].every((col) => selectLowerSet.has(col.toLowerCase()));
+}
+
+function buildFragmentMergePlan(ast, params, schema) {
+  const resolveParam = createParameterResolver(params);
+  const schemaCols = Array.isArray(schema?.columns) ? schema.columns : [];
+  const baseColumnSet = new Set(schemaCols.map((c) => String(c.name).toLowerCase()));
+  const selectCols = new Set();
+  const orderCols = new Set();
+  const selectStar = collectBaseColumnsInNode(ast.columns, selectCols, null).hasStar;
+  const aliasSet = buildNonBaseSelectAliasSet(ast.columns, baseColumnSet);
+  const orderStar = collectBaseColumnsInNode(ast.orderBy, orderCols, aliasSet).hasStar;
+  const allReferenced = new Set([...selectCols, ...orderCols]);
+  const selectLowerSet = new Set([...selectCols].map((c) => c.toLowerCase()));
+
+  const partitionDistinct = canPushDistinctToPartition(
+    ast,
+    selectStar,
+    selectLowerSet,
+    orderCols,
+    schema,
+  );
+  const pushLimit = canPushOrderByAndLimitInFragmentMerge(
+    ast,
+    partitionDistinct,
+    selectLowerSet,
+    baseColumnSet,
+  );
+  const partitionColumns = buildFragmentPartitionColumns(
+    selectStar,
+    orderStar,
+    allReferenced,
+    schema,
+  );
+
+  const partitionAst = {
+    type: ast.type,
+    distinct: partitionDistinct,
+    columns: partitionColumns,
+    from: ast.from,
+    joins: [],
+    where: ast.where,
+    groupBy: null,
+    having: null,
+    orderBy: pushLimit ? ast.orderBy : null,
+    limit: pushLimit ? {count: buildOverfetchLimitExpression(ast.limit), offset: null} : null,
+    ctes: null,
+    setOperation: null,
+  };
+
+  const coordinatorAst = {
+    ...ast,
+    where: null,
+  };
+
+  const renderedPartition = renderSelectWithParameters(partitionAst, resolveParam);
+  const renderedCoordinator = renderSelectWithParameters(coordinatorAst, resolveParam);
+
+  return {
+    kind: FANOUT_PLAN_KIND.FRAGMENT_MERGE,
+    orderIndependent: true,
+    partitionSql: renderedPartition.sql,
+    partitionParams: renderedPartition.params,
+    coordinatorTableName: ast.from.name,
+    coordinatorTableSchema: schema,
+    coordinatorSql: renderedCoordinator.sql,
+    coordinatorParams: renderedCoordinator.params,
+    expectedColumns: resolveExpectedOutputColumns(ast),
+  };
+}
+
+function isConjunctPushableToPartition(conjunct, orderIndependent) {
+  if (isPerStatementTimeExpression(conjunct)) return false;
+  if (!orderIndependent && !isDeterministicExpression(conjunct)) {
+    return false;
   }
   return true;
 }
 
-/**
- * True when some SELECT column mixes aggregates into an expression the
- * coordinator evaluator cannot compute — forces legacy fallback.
- * @param {Object} ast - SELECT AST.
- * @return {boolean} Unsupported mixed expression present.
- */
-function hasUnsupportedAggregateExpression(ast) {
-  return ast.columns.some((col) => {
-    const expr = col.expression || col;
-    return expr.type !== EXPR_TYPE.AGGREGATE &&
-      containsAggregate(expr) &&
-      !expressionEvaluable(expr);
-  });
+function buildPrimaryKeyOrderBy(schema) {
+  const primaryKey = Array.isArray(schema?.primaryKey) ? schema.primaryKey : [];
+  if (primaryKey.length === 0) return null;
+  return primaryKey.map((colName) => ({
+    expression: colRef(colName),
+    direction: ASC_DIRECTION,
+  }));
 }
 
-function walkAggregates(node, visit) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-  if (node.type === EXPR_TYPE.AGGREGATE) {
-    visit(node);
-    return;
-  }
-  for (const value of Object.values(node)) {
-    if (Array.isArray(value)) {
-      value.forEach((entry) => walkAggregates(entry, visit));
-    } else if (value && typeof value === 'object') {
-      walkAggregates(value, visit);
-    }
-  }
-}
-
-/**
- * Whether every aggregate in the AST has a supported combine mode; an
- * unsupported function falls the whole plan back to legacy behavior
- * rather than producing silently-wrong partials.
- * @param {Array} specs - Aggregate specs.
- * @return {boolean} True when all combine modes are known.
- */
-function allAggregatesCombinable(specs) {
-  return specs.every((spec) => Boolean(spec.combineMode));
-}
-
-/**
- * True when the SELECT shape supports the partial/raw fan-out rewrite.
- * Set operations, CTEs, subquery FROM, and JOINs keep legacy rendering
- * (JOINs are rewritten separately by the join execution path).
- * @param {Object} ast - SELECT AST.
- * @return {boolean} Rewrite applicability.
- */
-function fanoutRewriteApplies(ast) {
-  return !ast.setOperation &&
-    !(ast.ctes && ast.ctes.length > 0) &&
-    !ast.from?.subquery &&
-    !(ast.joins && ast.joins.length > 0);
-}
-
-function hasAggregatesOrGroupBy(ast, specs) {
-  return specs.length > 0 || Boolean(ast.groupBy);
-}
-
-function walkSelectClauseParameters(ast, onParameter) {
-  const visit = (node) => {
-    if (!node || typeof node !== 'object') {
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (node.type === EXPR_TYPE.PARAMETER) {
-      onParameter(node);
-      return;
-    }
-    for (const value of Object.values(node)) {
-      visit(value);
-    }
-  };
-  for (const clause of [
-    ast.columns,
-    ast.where,
-    ast.groupBy,
-    ast.having,
-    ast.orderBy,
-  ]) {
-    visit(clause);
-  }
-}
-
-function tagParameterOrdinals(ast) {
-  let ordinal = 0;
-  walkSelectClauseParameters(ast, (node) => {
-    node.__fanoutParamIndex = ordinal;
-    ordinal += 1;
-  });
-  return ordinal;
-}
-
-function collectPartitionParamOrdinals(partitionAst) {
-  const ordinals = [];
-  walkSelectClauseParameters(partitionAst, (node) => {
-    ordinals.push(node.__fanoutParamIndex);
-  });
-  return ordinals;
-}
-
-function cloneAst(node) {
-  return structuredClone(node);
-}
-
-function resolveParameterNodeOrdinal(node) {
-  return Number.isInteger(node?.__fanoutParamIndex) ?
-    node.__fanoutParamIndex : node?.index;
-}
-
-function hasBoundParameterAt(params, ordinal) {
-  return Array.isArray(params) && Number.isInteger(ordinal) &&
-    ordinal >= 0 && ordinal < params.length && params[ordinal] !== undefined;
-}
-
-/**
- * Replace parameter nodes inside a coordinator-side clause with literal
- * nodes carrying the bound value (root, object properties, and arrays).
- * @param {*} node - Clause AST node or array (mutated in place).
- * @param {Array} params - Original positional parameters.
- * @return {*} Rewritten AST node.
- */
-function substituteParameterLiterals(node, params) {
-  if (!node || typeof node !== 'object') {
-    return node;
-  }
-  if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index += 1) {
-      node[index] = substituteParameterLiterals(node[index], params);
-    }
-    return node;
-  }
-  if (node.type === EXPR_TYPE.PARAMETER) {
-    const ordinal = resolveParameterNodeOrdinal(node);
-    return hasBoundParameterAt(params, ordinal) ?
-      {type: EXPR_TYPE.LITERAL, value: params[ordinal]} : node;
-  }
-  for (const [key, value] of Object.entries(node)) {
-    if (value && typeof value === 'object') {
-      node[key] = substituteParameterLiterals(value, params);
-    }
-  }
-  return node;
-}
-
-/**
- * Build the partition-side over-fetch limit for raw-row fan-out.
- * @param {Object} limit - Original limit AST ({count, offset}).
- * @return {Object} Rewritten limit AST.
- */
-function buildOverfetchLimit(limit) {
-  const offset = Number.isInteger(limit.offset) ? Math.max(limit.offset, 0) : 0;
-  if (!Number.isInteger(limit.count)) {
-    return {count: limit.count, offset: 0};
-  }
-  return {count: Math.max(limit.count, 0) + offset, offset: 0};
-}
-
-/**
- * Build the partition-side projection and GROUP BY for a
- * partial-aggregate fan-out, plus the coordinator combine spec.
- * @param {Object} ast - Original SELECT AST.
- * @param {Array} specs - Aggregate specs from collectAggregateSpecs.
- * @return {{partitionAst: Object, combineSpec: Object}} Plan parts.
- */
-function buildPartialAggregateParts(ast, specs) {
-  const partitionAst = cloneAst(ast);
-  const columns = [];
-  const groupKeys = [];
-  const bareColumns = [];
-  const partitionGroupBy = [];
-
-  const groupByEntries = ast.groupBy || [];
-  const groupKeyByShape = new Map();
-  groupByEntries.forEach((groupExpr, index) => {
-    const alias = `${PARTIAL_ALIAS.GROUP_KEY_PREFIX}${index}`;
-    const shape = canonicalExpressionKey(groupExpr);
-    const columnName = groupExpr.type === EXPR_TYPE.COLUMN_REF ?
-      groupExpr.column : null;
-    const key = {alias, shape, outputKeys: [], columnName};
-    groupKeyByShape.set(shape, key);
-    groupKeys.push(key);
-    columns.push({expression: cloneAst(groupExpr), alias});
-    partitionGroupBy.push(cloneAst(groupExpr));
-  });
-
-  const expressionColumns = [];
-  let includeStar = false;
-  const specByShape = new Map(
-    specs.map((spec) => [canonicalExpressionKey(spec.expr), spec]),
-  );
-  const bareByColumn = new Map();
-  const ensureBareColumn = (expr, outputKey, index, projected) => {
-    const existing = bareByColumn.get(outputKey);
-    if (existing) {
-      existing.projected = existing.projected || projected;
-      return;
-    }
-    const alias = `${PARTIAL_ALIAS.BARE_PREFIX}${index}_${bareByColumn.size}`;
-    const bare = {alias, outputKey, projected};
-    bareByColumn.set(outputKey, bare);
-    bareColumns.push(bare);
-    columns.push({expression: cloneAst(expr), alias});
-  };
-
-  ast.columns.forEach((col, index) => {
-    const expr = col.expression || col;
-    if (expr.type === EXPR_TYPE.AGGREGATE) {
-      return;
-    }
-    if (expr.type === EXPR_TYPE.STAR) {
-      // SELECT * alongside aggregates/GROUP BY: ship the raw columns and
-      // let the combiner surface an arbitrary row's values per group —
-      // SQLite's own bare-column semantics.
-      includeStar = true;
-      columns.push({type: EXPR_TYPE.STAR});
-      return;
-    }
-    const shape = canonicalExpressionKey(expr);
-    const outputKey = resultColumnName(col);
-    const groupKey = groupKeyByShape.get(shape);
-    if (groupKey) {
-      groupKey.outputKeys.push(outputKey);
-      return;
-    }
-    if (containsAggregate(expr)) {
-      // Combined-aggregate expression: replace each aggregate node with
-      // a marker resolving to the globally-combined value, and project
-      // any raw columns it references as bare partials.
-      const markerExpr = replaceAggregatesWithMarkers(
-        cloneAst(expr),
-        specByShape,
-      );
-      collectOutsideColumnRefs(markerExpr, (refExpr) =>
-        ensureBareColumn(refExpr, refExpr.column, index, false),
-      );
-      expressionColumns.push({outputKey, expression: markerExpr});
-      return;
-    }
-    ensureBareColumn(expr, outputKey, index, true);
-  });
-  collectOutsideColumnRefs(ast.having, (refExpr) => {
-    if (!groupKeyByShape.has(canonicalExpressionKey(refExpr))) {
-      ensureBareColumn(refExpr, refExpr.column, BARE_HAVING_KEY_TAG, false);
-    }
-  });
-
-  const distinctArgShapes = new Map();
-  for (const spec of specs) {
-    const base = `${PARTIAL_ALIAS.AGGREGATE_PREFIX}${spec.index}`;
-    if (spec.combineMode === AGGREGATE_COMBINE_MODE.DISTINCT_VALUES) {
-      const argShape = canonicalExpressionKey(spec.expr.argument);
-      let valueAlias = distinctArgShapes.get(argShape);
-      if (!valueAlias) {
-        valueAlias = `${base}${PARTIAL_ALIAS.DISTINCT_VALUES_SUFFIX}`;
-        distinctArgShapes.set(argShape, valueAlias);
-        columns.push({
-          expression: cloneAst(spec.expr.argument),
-          alias: valueAlias,
-        });
-        partitionGroupBy.push(cloneAst(spec.expr.argument));
-      }
-      spec.partials = {values: valueAlias};
-      continue;
-    }
-    if (spec.combineMode === AGGREGATE_COMBINE_MODE.SUM_PAIR_RATIO) {
-      const sumAlias = `${base}${PARTIAL_ALIAS.SUM_SUFFIX}`;
-      const countAlias = `${base}${PARTIAL_ALIAS.COUNT_SUFFIX}`;
-      columns.push({
-        expression: {
-          type: EXPR_TYPE.AGGREGATE,
-          function: AGGREGATE_FN.SUM,
-          argument: cloneAst(spec.expr.argument),
-          distinct: false,
-        },
-        alias: sumAlias,
-      });
-      columns.push({
-        expression: {
-          type: EXPR_TYPE.AGGREGATE,
-          function: AGGREGATE_FN.COUNT,
-          argument: cloneAst(spec.expr.argument),
-          distinct: false,
-        },
-        alias: countAlias,
-      });
-      spec.partials = {sum: sumAlias, count: countAlias};
-      continue;
-    }
-    const suffixByMode = {
-      [AGGREGATE_COMBINE_MODE.SUM_OF_COUNTS]: PARTIAL_ALIAS.COUNT_SUFFIX,
-      [AGGREGATE_COMBINE_MODE.SUM_OF_SUMS]: PARTIAL_ALIAS.SUM_SUFFIX,
-      [AGGREGATE_COMBINE_MODE.MIN_OF_MINS]: PARTIAL_ALIAS.MIN_SUFFIX,
-      [AGGREGATE_COMBINE_MODE.MAX_OF_MAXES]: PARTIAL_ALIAS.MAX_SUFFIX,
-    };
-    const alias = `${base}${suffixByMode[spec.combineMode]}`;
-    columns.push({
-      expression: cloneAst(spec.expr),
-      alias,
-    });
-    spec.partials = {value: alias};
-  }
-
-  partitionAst.columns = columns;
-  partitionAst.groupBy = partitionGroupBy.length > 0 ?
-    partitionGroupBy :
-    null;
-  partitionAst.having = null;
-  partitionAst.orderBy = null;
-  partitionAst.limit = null;
-  partitionAst.distinct = false;
-
-  const combineSpec = {
-    groupKeys,
-    bareColumns,
-    aggregates: specs.map((spec) => ({
-      index: spec.index,
-      combineMode: spec.combineMode,
-      outputKeys: spec.outputKeys,
-      havingKey: spec.havingKey,
-      partials: spec.partials,
-      fn: spec.expr.function.toUpperCase(),
-    })),
-    having: ast.having || null,
-    orderBy: ast.orderBy || null,
-    limit: ast.limit || null,
-    hasGroupBy: groupByEntries.length > 0,
-    expressionColumns,
-    includeStar,
-  };
-
-  return {partitionAst, combineSpec};
-}
-
-/**
- * Build the fan-out plan for a distributed SELECT: what SQL each
- * partition executes and how the coordinator must merge the results so
- * aggregates, GROUP BY/HAVING, and LIMIT/OFFSET are applied with global
- * semantics exactly once. Unaliased outputs are named as SQLite names them
- * (resultColumnName).
- * @param {Object} ast - Parsed SELECT AST (not mutated).
- * @param {Array} params - Original positional parameters.
- * @param {number} partitionCount - Partitions the statement fans out to.
- * @return {{kind: string, partitionAst: Object, partitionParams: Array,
- *   combineSpec: (Object|null)}} Fan-out plan.
- * @throws {Error} UNSUPPORTED_SQL_FEATURE for an interim refusal.
- */
-function buildSelectFanoutPlan(ast, params, partitionCount, options = {}) {
-  const workingAst = cloneAst(ast);
-  tagParameterOrdinals(workingAst);
-  const specs = collectAggregateSpecs(workingAst);
-
-  const hasAggregatePlan = hasAggregatesOrGroupBy(workingAst, specs);
-  const mustUseOriginalRows = !fanoutRewriteApplies(workingAst) ||
-    (hasAggregatePlan && (!allAggregatesCombinable(specs) ||
-      hasUnsupportedAggregateExpression(workingAst)));
-  const buildState = mustUseOriginalRows ?
-    FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS :
-    hasAggregatePlan ?
-      FANOUT_BUILD_STATE.PARTIAL_AGGREGATE :
-      FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS;
-  assertSelectFanoutAdmissible(ast, partitionCount, {
-    mergeMode: buildState,
-    hasAggregatePlan,
-    resolveTableSchema: options.resolveTableSchema ?? null,
-  });
-
-  switch (buildState) {
-  case FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS:
-    return {
-      kind: FANOUT_PLAN_KIND.RAW_ROWS,
-      partitionAst: ast,
-      partitionParams: params,
-      combineSpec: null,
-    };
-  case FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS: {
-    const partitionAst = workingAst;
-    if (partitionAst.limit) {
-      partitionAst.limit = buildOverfetchLimit(partitionAst.limit);
-    }
-    const ordinals = collectPartitionParamOrdinals(partitionAst);
-    return {
-      kind: FANOUT_PLAN_KIND.RAW_ROWS,
-      partitionAst,
-      partitionParams: ordinals.map((ordinal) => params[ordinal]),
-      combineSpec: null,
-    };
-  }
-  default:
-    break;
-  }
-
-  const {partitionAst, combineSpec} = buildPartialAggregateParts(
-    workingAst,
-    specs,
-  );
-  combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
-  for (const expressionColumn of combineSpec.expressionColumns) {
-    expressionColumn.expression = substituteParameterLiterals(
-      expressionColumn.expression,
-      params,
-    );
-  }
-  const ordinals = collectPartitionParamOrdinals(partitionAst);
+function buildFullTableFetchAst(selectType, tableName, pkOrderBy, whereClause = null) {
   return {
-    kind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
-    partitionAst,
-    partitionParams: ordinals.map((ordinal) => params[ordinal]),
-    combineSpec,
+    type: selectType,
+    distinct: false,
+    columns: [{type: EXPR_TYPE.STAR, value: STAR_SYMBOL}],
+    from: {type: EXPR_TYPE.TABLE, name: tableName, alias: null},
+    joins: [],
+    where: whereClause,
+    groupBy: null,
+    having: null,
+    orderBy: pkOrderBy,
+    limit: null,
+    ctes: null,
+    setOperation: null,
   };
+}
+
+function buildNestedCoordinatorEvaluatedPlan(ast, resolveParam, schema) {
+  const baseTables = collectAllBaseTableNames(ast);
+  const primaryTable = extractPrimaryBaseTableName(ast);
+  const extraBaseTableNames = baseTables.slice(1);
+  const renderedCoordinator = renderSelectWithParameters(ast, resolveParam);
+  const pkOrderBy = buildPrimaryKeyOrderBy(schema);
+  const partitionAst = primaryTable ?
+    buildFullTableFetchAst(ast.type, primaryTable, pkOrderBy) :
+    null;
+  const renderedPartition = partitionAst ?
+    renderSelectWithParameters(partitionAst, resolveParam) :
+    {sql: renderedCoordinator.sql, params: renderedCoordinator.params};
+
+  return {
+    kind: FANOUT_PLAN_KIND.COORDINATOR_EVALUATED,
+    orderIndependent: false,
+    hasNestedOrCompound: true,
+    extraBaseTableNames,
+    partitionSql: renderedPartition.sql,
+    partitionParams: renderedPartition.params,
+    coordinatorTableName: primaryTable,
+    coordinatorTableSchema: schema,
+    coordinatorSql: renderedCoordinator.sql,
+    coordinatorParams: renderedCoordinator.params,
+    expectedColumns: resolveExpectedOutputColumns(ast),
+  };
+}
+
+function partitionWhereConjuncts(whereClause, orderIndependent) {
+  const conjuncts = splitWhereConjuncts(whereClause);
+  const pushedConjuncts = [];
+  const coordinatorConjuncts = [];
+  for (const conjunct of conjuncts) {
+    if (isConjunctPushableToPartition(conjunct, orderIndependent)) {
+      pushedConjuncts.push(conjunct);
+    } else {
+      coordinatorConjuncts.push(conjunct);
+    }
+  }
+  return {
+    partitionWhere: joinWhereConjuncts(pushedConjuncts),
+    coordinatorWhere: orderIndependent ?
+      joinWhereConjuncts(coordinatorConjuncts) :
+      whereClause,
+  };
+}
+
+function buildCoordinatorEvaluatedPlan(ast, params, schema, classification) {
+  const resolveParam = createParameterResolver(params);
+  if (classification.hasNestedOrCompound || !ast.from?.name) {
+    return buildNestedCoordinatorEvaluatedPlan(ast, resolveParam, schema);
+  }
+
+  const orderIndependent = classification.orderIndependent === true;
+  const {partitionWhere, coordinatorWhere} = partitionWhereConjuncts(
+    ast.where,
+    orderIndependent,
+  );
+  const pkOrderBy = orderIndependent ? null : buildPrimaryKeyOrderBy(schema);
+
+  const partitionAst = {
+    type: ast.type,
+    distinct: false,
+    columns: [{type: EXPR_TYPE.STAR, value: STAR_SYMBOL}],
+    from: ast.from,
+    joins: [],
+    where: partitionWhere,
+    groupBy: null,
+    having: null,
+    orderBy: pkOrderBy,
+    limit: null,
+    ctes: null,
+    setOperation: null,
+  };
+
+  const coordinatorAst = orderIndependent ?
+    {...ast, where: coordinatorWhere} :
+    ast;
+
+  const renderedPartition = renderSelectWithParameters(partitionAst, resolveParam);
+  const renderedCoordinator = renderSelectWithParameters(coordinatorAst, resolveParam);
+
+  return {
+    kind: FANOUT_PLAN_KIND.COORDINATOR_EVALUATED,
+    orderIndependent,
+    hasNestedOrCompound: false,
+    partitionSql: renderedPartition.sql,
+    partitionParams: renderedPartition.params,
+    coordinatorTableName: ast.from.name,
+    coordinatorTableSchema: schema,
+    coordinatorSql: renderedCoordinator.sql,
+    coordinatorParams: renderedCoordinator.params,
+    expectedColumns: resolveExpectedOutputColumns(ast),
+  };
+}
+
+function isSinglePartitionTableQuery(ast, partitionCount, classification) {
+  return (
+    partitionCount <= 1 &&
+    !classification.hasNestedOrCompound &&
+    Boolean(ast.from?.name)
+  );
+}
+
+function canExecuteDirectlyOnSinglePartition(ast, schema, classification) {
+  if (classification.orderIndependent) return true;
+  if (hasUnshadowedRowidReference(ast, schema)) return true;
+  const hasPrimaryKey = Array.isArray(schema?.primaryKey) && schema.primaryKey.length > 0;
+  return !hasPrimaryKey;
+}
+
+function isMultiPartitionPushdownCandidate(partitionCount, classification) {
+  return (
+    partitionCount >= 2 &&
+    !classification.hasNestedOrCompound &&
+    !classification.hasPerStatementTime
+  );
+}
+
+/**
+ * Build the five-kind distributed SELECT fan-out plan.
+ * @param {Object} ast - Parsed SELECT AST.
+ * @param {Array<*>} [params=[]] - Positional parameters.
+ * @param {number} [partitionCount=1] - Number of target partitions.
+ * @param {Object} [options={}] - Optional catalog schema or resolver.
+ * @return {Object} Fan-out plan descriptor.
+ */
+function buildSelectFanoutPlan(ast, params = [], partitionCount = 1, options = {}) {
+  assertQueryParametersBound(ast, params);
+  const schema = extractTableSchemaForSelect(ast, options);
+  assertMultiPartitionRowidAdmissible(ast, partitionCount, schema);
+
+  const classification = classifySingleTableStatement(ast, schema);
+  const resolveParam = createParameterResolver(params);
+
+  // 1. SINGLE_PARTITION
+  if (isSinglePartitionTableQuery(ast, partitionCount, classification)) {
+    if (canExecuteDirectlyOnSinglePartition(ast, schema, classification)) {
+      const rendered = renderSelectWithParameters(ast, resolveParam);
+      return {
+        kind: FANOUT_PLAN_KIND.SINGLE_PARTITION,
+        orderIndependent: true,
+        partitionSql: rendered.sql,
+        partitionParams: rendered.params,
+        coordinatorTableName: null,
+        coordinatorTableSchema: null,
+        coordinatorSql: null,
+        coordinatorParams: [],
+        expectedColumns: resolveExpectedOutputColumns(ast),
+      };
+    }
+    return buildCoordinatorEvaluatedPlan(ast, params, schema, classification);
+  }
+
+  if (isMultiPartitionPushdownCandidate(partitionCount, classification)) {
+    // 2. FRAGMENT_MERGE
+    if (!classification.isAggregateQuery && classification.orderIndependent) {
+      return buildFragmentMergePlan(ast, params, schema);
+    }
+
+    // 3. PARTIAL_AGGREGATE
+    if (classification.isAggregateQuery && classification.eligibleForPartialAggregate) {
+      return buildPartialOrGuardedPlan({
+        ast,
+        resolveParam,
+        schema,
+        allowGuarded: false,
+        planKind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
+        expectedColumns: resolveExpectedOutputColumns(ast),
+        buildUnmergedPlan: () => null,
+      });
+    }
+
+    // 4. GUARDED_PARTIAL (Sub-package 3f)
+    if (
+      partitionCount < MAX_GUARDED_PARTIAL_PARTITIONS &&
+      classification.isAggregateQuery &&
+      classification.eligibleForGuardedPartial
+    ) {
+      return buildPartialOrGuardedPlan({
+        ast,
+        resolveParam,
+        schema,
+        allowGuarded: true,
+        planKind: FANOUT_PLAN_KIND.GUARDED_PARTIAL,
+        expectedColumns: resolveExpectedOutputColumns(ast),
+        buildUnmergedPlan: () =>
+          buildCoordinatorEvaluatedPlan(ast, params, schema, classification),
+      });
+    }
+  }
+
+  // 5. COORDINATOR_EVALUATED
+  return buildCoordinatorEvaluatedPlan(ast, params, schema, classification);
 }
 
 export {
   FANOUT_PLAN_KIND,
-  AGGREGATE_COMBINE_MODE,
-  COMBINED_AGGREGATE_MARKER,
-  EXTENDED_EXPR_TYPE,
-  PARTIAL_ALIAS,
-  SCALAR_BINARY_OPS,
-  SCALAR_UNARY_OPS,
+  assertQueryParametersBound,
+  buildPrimaryKeyOrderBy,
   buildSelectFanoutPlan,
-  hasBoundParameterAt,
-  resolveParameterNodeOrdinal,
-  substituteParameterLiterals,
+  createParameterResolver,
+  extractCatalogSchema,
+  resolveExpectedOutputColumns,
 };

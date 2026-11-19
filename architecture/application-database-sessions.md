@@ -162,12 +162,15 @@ internal result.
 - `applicationId` and SQL are bounded primitive strings; boxed strings,
   coercible objects, symbols, and accessors are rejected.
 - Params must be a genuine dense array with own data descriptors, bounded by
-  the SQL bind-variable ceiling. Accepted elements are `null`, primitive
-  strings, booleans, finite safe numbers (`-0` normalized to `0`), and
-  non-shared `Buffer`/`Uint8Array` values. Strings and bytes are bounded; byte
-  arrays are copied. `undefined`, bigint, symbols, functions, boxes, accessors,
-  sparse slots, objects, other views, and shared buffers are rejected before
-  the first await.
+  the SQL bind-variable ceiling, under the one SQL input-typing table (D3,
+  D15). Accepted elements are `null` (`NULL`), signed 64-bit `bigint`
+  (`INTEGER`), booleans (`INTEGER` `1`/`0`), non-`NaN` numbers (`REAL`,
+  including fractional numbers and `-0`, which is preserved), well-formed
+  UTF-16 primitive strings (`TEXT`), and non-shared `Buffer`/`Uint8Array`
+  values (`BLOB`). Strings and bytes are bounded; byte arrays are copied.
+  `undefined`, out-of-range `bigint`, `NaN`, unpaired UTF-16 surrogates,
+  symbols, functions, boxes, accessors, sparse slots, objects, other views,
+  and shared buffers are rejected before the first await.
 - Query callers cannot provide an execution-options object. Session id,
   transaction capability, dialect, deadlines, work class, or authorization
   identity therefore cannot be overwritten or forged through this first API.

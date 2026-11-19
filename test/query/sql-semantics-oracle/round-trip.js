@@ -108,4 +108,4 @@ function ddlRoundTrip(golden) {
   return {equal: reasons.length === 0, reasons, renderedDdl: table.renderedDdl};
 }
 
-export {ddlRoundTrip, renderThroughFrontEnd, statementRoundTrip};
+export {ddlRoundTrip, statementRoundTrip};

@@ -14,6 +14,15 @@ const PLAN_HASH = Object.freeze({
  * @return {*} Normalized value.
  */
 function normalizePlanPayload(value) {
+  if (typeof value === 'bigint') {
+    return `${value.toString()}n`;
+  }
+  if (value instanceof Uint8Array) {
+    const buf = Buffer.isBuffer(value) ?
+      value :
+      Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+    return {__blob: buf.toString(PLAN_HASH.HEX)};
+  }
   if (Array.isArray(value)) {
     return value.map((entry) => normalizePlanPayload(entry));
   }
@@ -75,5 +84,4 @@ function createDeterministicPlanId(
 export {
   createDeterministicPlanId,
   normalizePlanPayload,
-  PLAN_HASH,
 };

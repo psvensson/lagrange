@@ -146,22 +146,6 @@ const PRIMITIVE_ERROR_MSG = Object.freeze({
 });
 
 /**
- * Log messages for distributed movement primitives.
- * @enum {string}
- */
-const PRIMITIVE_LOG_MSG = Object.freeze({
-  LOOKUP_STARTED: 'Lookup operation started',
-  LOOKUP_COMPLETED: 'Lookup operation completed',
-  LOOKUP_DEDUPED: 'Lookup keys deduplicated',
-  EMIT_STARTED: 'Emit operation started',
-  EMIT_COMPLETED: 'Emit operation completed',
-  EMIT_BACKPRESSURE: 'Emit backpressure applied',
-  EMIT_SPILL: 'Emit spilling to disk',
-  BROADCAST_PUBLISHED: 'Broadcast dataset published',
-  BROADCAST_RETRIEVED: 'Broadcast dataset retrieved',
-});
-
-/**
  * Default emit queue high-water mark (number of buffered records).
  * @type {number}
  */
@@ -184,7 +168,6 @@ export {
   BROADCAST_FIELD,
   EMIT_QUEUE_STATE,
   PRIMITIVE_ERROR_MSG,
-  PRIMITIVE_LOG_MSG,
   EMIT_QUEUE_HIGH_WATER_MARK,
   EMIT_SPILL_THRESHOLD_BYTES,
 };

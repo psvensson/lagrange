@@ -1,173 +1,163 @@
-import {EXPR_TYPE} from '../parser-constants.js';
-import {QUERY_JOIN_TYPE, QUERY_OPERATOR} from '../query-constants.js';
-
 /**
- * Cross-partition JOIN pushdown planning. Splits a JOIN query's WHERE
- * into AND-connected conjuncts classified by owning table (single-table
- * conjuncts run inside the per-partition SQL), derives the
- * per-join-table column projection, and plans the join-key semi-filter.
- * Pure planning: no I/O; the executor renders the returned ASTs.
+ * Cross-partition JOIN pushdown and COORDINATOR_EVALUATED table-reference
+ * planner (design coordinator-sqlite-merge §2.2, Sub-package 3c).
  *
- * Attribution rule: an unqualified column ref is attributed to the main
- * (FROM) table and pushed into the main table's partition SQL — exactly
- * where the legacy path sent the whole WHERE — so a misattributed
- * join-table column surfaces as the same partition-side unknown-column
- * error as before, never as a silently wrong result.
+ * Splits a JOIN query's WHERE clause into AND-connected conjuncts, pushes
+ * deterministic single-table conjuncts to non-NULL-extensible table fragments,
+ * derives per-edge column projections, gates the join-key `IN (?, ...)`
+ * semi-filter on catalog type/collation parity and absence of explicit
+ * `COLLATE` in `ON`, and assigns each table reference its own coordinator
+ * main table (supporting self-joins `t a JOIN t b` as `t__a` and `t__b`).
  *
- * OUTER-join rule: SQL applies WHERE after the join, so a conjunct
- * owned by a table whose rows can be NULL-extended by any join in the
- * chain (the right side of a LEFT join; the accumulated left side of a
- * RIGHT join) is never pushed below the join — it stays coordinator-side
- * and runs after the join, preserving WHERE semantics exactly.
+ * All residual evaluation and join execution occur in CoordinatorMergeSession
+ * (SQLite). No legacy whole-WHERE fallback or JavaScript predicate evaluator
+ * exists.
+ *
+ * @module query/distributed/join-pushdown-plan
  */
 
-/** Plan kinds: genuinely split WHERE vs legacy whole-WHERE-on-main. */
-const JOIN_PUSHDOWN_PLAN_KIND = {SPLIT: 'split', LEGACY_WHERE: 'legacy_where'};
+import {EXPR_TYPE, SQL_DEFAULT_COLLATION} from '../parser-constants.js';
+import {PG_EXPR_TYPE} from '../pg/pg-compat-constants.js';
+import {QUERY_ERROR_CODE, QUERY_JOIN_TYPE, QUERY_OPERATOR} from '../query-constants.js';
+import {
+  createParameterResolver,
+  extractCatalogSchema,
+} from './distributed-select-fanout-plan.js';
+import {
+  findSchemaColumn,
+  isAllowlistedColumnExpr,
+  isDeterministicExpression,
+} from './distributed-select-fanout-soundness.js';
 
-/** Semi-filter variants for one join edge. */
-const SEMI_FILTER_KIND = {KEY_IN: 'key_in', NONE: 'none'};
+const ROWID_ALIASES = new Set(['rowid', '_rowid_', 'oid']);
+const JOIN_ROWID_REFUSAL_MSG =
+  'rowid/_rowid_/oid is not supported in multi-partition distributed queries';
 
-/** Conjunct classification outcomes (single canonical decision). */
-const CONJUNCT_CLASS = {
+const SEMI_FILTER_KIND = Object.freeze({
+  KEY_IN: 'key_in',
+  NONE: 'none',
+});
+
+const CONJUNCT_CLASS = Object.freeze({
   OWNED: 'owned',
   RESIDUAL: 'residual',
-  UNSUPPORTED: 'unsupported',
-};
+});
 
-/**
- * Parser-emitted operator names QUERY_OPERATOR does not carry.
- */
-const EXTENDED_OPERATOR = {
-  OR: 'OR',
-  IS_NULL: 'IS NULL',
-  IS_NOT_NULL: 'IS NOT NULL',
-  NOT: 'NOT',
-  PLUS: '+',
-  MINUS: '-',
-};
-
-/**
- * Binary operators supported by BOTH partition-side SQL rendering and
- * the coordinator evaluator (QueryExecutor#evaluateBinary); anything
- * else forces the legacy whole-WHERE path.
- */
-const SUPPORTED_BINARY_OPERATORS = new Set([
-  QUERY_OPERATOR.AND,
-  EXTENDED_OPERATOR.OR,
-  QUERY_OPERATOR.EQUALS,
-  QUERY_OPERATOR.NOT_EQUALS,
-  QUERY_OPERATOR.NOT_EQUALS_ALT,
-  QUERY_OPERATOR.LESS_THAN,
-  QUERY_OPERATOR.LESS_THAN_OR_EQUAL,
-  QUERY_OPERATOR.GREATER_THAN,
-  QUERY_OPERATOR.GREATER_THAN_OR_EQUAL,
-  EXTENDED_OPERATOR.IS_NULL,
-  EXTENDED_OPERATOR.IS_NOT_NULL,
-]);
-
-/** Unary operators supported by both rendering and evaluation. */
-const SUPPORTED_UNARY_OPERATORS = new Set([
-  EXTENDED_OPERATOR.NOT,
-  EXTENDED_OPERATOR.PLUS,
-  EXTENDED_OPERATOR.MINUS,
-]);
-
-/** JOIN types that NULL-extend their right side. */
 const RIGHT_NULL_EXTENDING_JOIN_TYPES = new Set([
   QUERY_JOIN_TYPE.LEFT,
   QUERY_JOIN_TYPE.LEFT_OUTER,
 ]);
 
-/** JOIN types that preserve unmatched right rows. */
 const RIGHT_PRESERVING_JOIN_TYPES = new Set([
   QUERY_JOIN_TYPE.RIGHT,
   QUERY_JOIN_TYPE.RIGHT_OUTER,
 ]);
 
-/**
- * Normalize a join's type to the canonical uppercase QUERY_JOIN_TYPE.
- * @param {Object} join - JOIN AST node.
- * @return {string} Normalized join type.
- */
 function normalizeJoinType(join) {
-  return (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase();
+  return String(join?.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase();
 }
 
-/**
- * Register a table qualifier; a qualifier already registered for a
- * different ref makes the index ambiguous (invalid).
- * @param {Object} index - Table index (mutated).
- * @param {string|null} qualifier - Table name or alias.
- * @param {string|null} ref - Canonical table ref.
- */
 function registerQualifier(index, qualifier, ref) {
-  if (!qualifier) {
-    return;
-  }
+  if (!qualifier) return;
   const existing = index.refByQualifier.get(qualifier);
   if (existing !== undefined && existing !== ref) {
-    index.valid = false;
+    index.ambiguousQualifiers.add(qualifier);
+    index.refByQualifier.delete(qualifier);
     return;
   }
-  index.refByQualifier.set(qualifier, ref);
+  if (!index.ambiguousQualifiers.has(qualifier)) {
+    index.refByQualifier.set(qualifier, ref);
+  }
 }
 
-/**
- * Register one join edge in the table index.
- * @param {Object} index - Table index (mutated).
- * @param {Object} join - JOIN AST node.
- */
-function registerJoinEdge(index, join) {
-  const table = join.table || {};
-  const name = table.name || null;
-  const alias = table.alias || null;
-  const ref = alias || name;
-  if (!name || table.subquery) {
-    index.valid = false;
+function assignCoordinatorTableNames(mainEntry, edges) {
+  const countsByTable = new Map();
+  const allEntries = [mainEntry, ...edges];
+  for (const entry of allEntries) {
+    if (!entry.tableName) continue;
+    countsByTable.set(entry.tableName, (countsByTable.get(entry.tableName) || 0) + 1);
   }
-  registerQualifier(index, name, ref);
-  registerQualifier(index, alias, ref);
-  index.edges.push({
-    ref,
-    tableName: name,
-    alias,
-    joinType: normalizeJoinType(join),
+  allEntries.forEach((entry, position) => {
+    if (!entry.tableName) {
+      entry.coordinatorTableName = null;
+      return;
+    }
+    const count = countsByTable.get(entry.tableName) || 1;
+    if (count === 1) {
+      entry.coordinatorTableName = entry.tableName;
+      return;
+    }
+    const suffix = entry.alias || String(position);
+    entry.coordinatorTableName = `${entry.tableName}__${suffix}`;
   });
 }
 
-/**
- * Build the table index: canonical refs (alias || name) for the main
- * table and every join edge, plus a qualifier -> ref map. The index is
- * invalid (forcing the legacy WHERE path and disabling projection and
- * semi-filter planning) when a table is unnamed, a subquery, or a
- * qualifier is ambiguous (e.g. self-join without distinct aliases).
- * @param {Object} ast - SELECT AST with joins.
- * @return {Object} Table index.
- */
+function registerEdgeEntries(joins, index) {
+  const list = Array.isArray(joins) ? joins : [];
+  list.forEach((join, edgeIdx) => {
+    const table = join.table || {};
+    const name = table.name || null;
+    const alias = table.alias || null;
+    const ref = alias || name || `__join_${edgeIdx}`;
+    if (!name || table.subquery) {
+      index.valid = false;
+    }
+    registerQualifier(index, alias || name, ref);
+    index.edges.push({
+      ref,
+      tableName: name,
+      alias,
+      joinType: normalizeJoinType(join),
+      coordinatorTableName: name,
+    });
+  });
+}
+
+function registerUnambiguousBaseTableNames(allEntries, index) {
+  const nameCounts = new Map();
+  for (const entry of allEntries) {
+    if (entry.tableName) {
+      nameCounts.set(entry.tableName, (nameCounts.get(entry.tableName) || 0) + 1);
+    }
+  }
+  for (const entry of allEntries) {
+    if (entry.tableName && nameCounts.get(entry.tableName) === 1) {
+      registerQualifier(index, entry.tableName, entry.ref);
+    }
+  }
+}
+
 function buildTableIndex(ast) {
   const from = ast.from || {};
-  const mainRef = from.alias || from.name || null;
+  const mainName = from.name || null;
+  const mainAlias = from.alias || null;
+  const mainRef = mainAlias || mainName || null;
+  const mainEntry = {
+    ref: mainRef,
+    tableName: mainName,
+    alias: mainAlias,
+    coordinatorTableName: mainName,
+  };
   const index = {
+    main: mainEntry,
     mainRef,
     edges: [],
     refByQualifier: new Map(),
+    ambiguousQualifiers: new Set(),
     valid: Boolean(mainRef) && !from.subquery,
   };
-  registerQualifier(index, from.name, mainRef);
-  registerQualifier(index, from.alias, mainRef);
-  for (const join of ast.joins || []) {
-    registerJoinEdge(index, join);
+
+  registerQualifier(index, mainAlias || mainName, mainRef);
+  registerEdgeEntries(ast.joins, index);
+  registerUnambiguousBaseTableNames([mainEntry, ...index.edges], index);
+
+  if (index.ambiguousQualifiers.size > 0) {
+    index.valid = false;
   }
+  assignCoordinatorTableNames(mainEntry, index.edges);
   return index;
 }
 
-/**
- * Compute which tables the join chain can NULL-extend: the right side
- * of a LEFT join, plus the main table and every earlier join table
- * when any RIGHT join appears (it NULL-extends the accumulated left).
- * @param {Object} index - Table index (edges mutated in place).
- * @return {boolean} Whether the main table is NULL-extensible.
- */
 function computeNullExtensibility(index) {
   let mainNullExtensible = false;
   for (const edge of index.edges) {
@@ -177,7 +167,7 @@ function computeNullExtensibility(index) {
   index.edges.forEach((edge, edgeIndex) => {
     if (RIGHT_PRESERVING_JOIN_TYPES.has(edge.joinType)) {
       mainNullExtensible = true;
-      for (let earlier = 0; earlier < edgeIndex; earlier++) {
+      for (let earlier = 0; earlier < edgeIndex; earlier += 1) {
         index.edges[earlier].nullExtensible = true;
       }
     }
@@ -185,15 +175,9 @@ function computeNullExtensibility(index) {
   return mainNullExtensible;
 }
 
-/**
- * Flatten a WHERE tree into its AND-connected conjuncts.
- * @param {Object} node - WHERE AST node.
- * @param {Object[]} out - Accumulator.
- * @return {Object[]} Conjuncts in render order.
- */
 function flattenAndConjuncts(node, out = []) {
-  if (node.type === EXPR_TYPE.BINARY &&
-    node.operator === QUERY_OPERATOR.AND) {
+  if (!node) return out;
+  if (node.type === EXPR_TYPE.BINARY && node.operator === QUERY_OPERATOR.AND) {
     flattenAndConjuncts(node.left, out);
     flattenAndConjuncts(node.right, out);
     return out;
@@ -202,127 +186,71 @@ function flattenAndConjuncts(node, out = []) {
   return out;
 }
 
-/**
- * Per-node-type conjunct analyzers recording column-ref ownership and
- * parameter ordinals into the shared state; an unknown node type has
- * no analyzer and marks the conjunct unsupported.
- */
-const CONJUNCT_NODE_ANALYZERS = {
-  [EXPR_TYPE.LITERAL]: () => {},
-  [EXPR_TYPE.PARAMETER]: (node, index, state) => {
-    if (!Number.isInteger(node.index)) {
-      state.supported = false;
-      return;
-    }
-    state.paramIndexes.push(node.index);
-  },
-  [EXPR_TYPE.COLUMN_REF]: (node, index, state) => {
-    if (node.table) {
-      const ref = index.refByQualifier.get(node.table);
-      if (ref === undefined) {
-        state.unknownOwner = true;
-        return;
-      }
-      state.ownerRefs.add(ref);
-      return;
-    }
-    // Unqualified column: attributed to the main table (module doc).
-    state.ownerRefs.add(index.mainRef);
-  },
-  [EXPR_TYPE.BINARY]: (node, index, state) => {
-    if (!SUPPORTED_BINARY_OPERATORS.has(node.operator)) {
-      state.supported = false;
-      return;
-    }
-    analyzeConjunctNode(node.left, index, state);
-    analyzeConjunctNode(node.right, index, state);
-  },
-  [EXPR_TYPE.UNARY]: (node, index, state) => {
-    if (!SUPPORTED_UNARY_OPERATORS.has(node.operator)) {
-      state.supported = false;
-      return;
-    }
-    analyzeConjunctNode(node.operand, index, state);
-  },
-  [EXPR_TYPE.IN]: (node, index, state) => {
-    if (!Array.isArray(node.values)) {
-      // IN (SELECT ...) has a subquery instead of a value list — the
-      // renderer and evaluator cannot handle it; force the legacy path.
-      state.supported = false;
-      return;
-    }
-    analyzeConjunctNode(node.expression, index, state);
-    for (const value of node.values) {
-      analyzeConjunctNode(value, index, state);
-    }
-  },
-  [EXPR_TYPE.BETWEEN]: (node, index, state) => {
-    analyzeConjunctNode(node.expression, index, state);
-    analyzeConjunctNode(node.low, index, state);
-    analyzeConjunctNode(node.high, index, state);
-  },
-  [EXPR_TYPE.LIKE]: (node, index, state) => {
-    analyzeConjunctNode(node.expression, index, state);
-    analyzeConjunctNode(node.pattern, index, state);
-  },
-};
-
-/**
- * Analyze one conjunct AST node into the shared classification state.
- * @param {Object} node - Expression AST node.
- * @param {Object} index - Table index.
- * @param {Object} state - Mutable classification state.
- */
-function analyzeConjunctNode(node, index, state) {
-  const analyzer = node && typeof node === 'object' ?
-    CONJUNCT_NODE_ANALYZERS[node.type] :
-    undefined;
-  if (!analyzer) {
-    state.supported = false;
+function collectColumnRefs(node, visit) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) collectColumnRefs(entry, visit);
     return;
   }
-  analyzer(node, index, state);
+  if (node.type === EXPR_TYPE.COLUMN_REF) {
+    visit(node);
+    return;
+  }
+  for (const value of Object.values(node)) {
+    collectColumnRefs(value, visit);
+  }
 }
 
-/**
- * Classify one conjunct: owned by a single table (no column refs at
- * all counts as main-table), residual (cross-table/unknown ownership;
- * evaluated coordinator-side after the join), or unsupported (forces
- * the legacy whole-WHERE path).
- * @param {Object} conjunct - Conjunct AST.
- * @param {Object} index - Table index.
- * @return {Object} {kind, ownerRef, paramIndexes}.
- */
+function nodeContainsSubquery(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(nodeContainsSubquery);
+  if (
+    node.type === PG_EXPR_TYPE.SUBQUERY ||
+    node.type === PG_EXPR_TYPE.EXISTS ||
+    (node.type === EXPR_TYPE.IN && Boolean(node.subquery))
+  ) {
+    return true;
+  }
+  return Object.values(node).some(nodeContainsSubquery);
+}
+
+function extractSingleConjunctOwnerRef(conjunct, index) {
+  if (
+    !index.valid ||
+    nodeContainsSubquery(conjunct) ||
+    !isDeterministicExpression(conjunct)
+  ) {
+    return null;
+  }
+  const ownerRefs = new Set();
+  let unknownOwner = false;
+  collectColumnRefs(conjunct, (colNode) => {
+    if (colNode.table) {
+      const ref = index.refByQualifier.get(colNode.table);
+      if (ref === undefined) {
+        unknownOwner = true;
+        return;
+      }
+      ownerRefs.add(ref);
+      return;
+    }
+    // Unqualified column in WHERE is attributed to the main table.
+    ownerRefs.add(index.mainRef);
+  });
+  if (unknownOwner || ownerRefs.size > 1) {
+    return null;
+  }
+  const [firstOwner] = ownerRefs;
+  return ownerRefs.size === 0 ? index.mainRef : firstOwner;
+}
+
 function classifyConjunct(conjunct, index) {
-  const state = {
-    supported: true,
-    ownerRefs: new Set(),
-    unknownOwner: false,
-    paramIndexes: [],
-  };
-  analyzeConjunctNode(conjunct, index, state);
-  const kind = !state.supported ? CONJUNCT_CLASS.UNSUPPORTED :
-    state.unknownOwner || state.ownerRefs.size > 1 ?
-      CONJUNCT_CLASS.RESIDUAL : CONJUNCT_CLASS.OWNED;
-  const [firstOwner] = state.ownerRefs;
-  const ownerRef = state.ownerRefs.size === 0 ? index.mainRef : firstOwner;
-  return {
-    kind,
-    ...(kind === CONJUNCT_CLASS.OWNED ? {ownerRef} : {}),
-    paramIndexes: kind === CONJUNCT_CLASS.UNSUPPORTED ?
-      [] : state.paramIndexes,
-  };
+  const ownerRef = extractSingleConjunctOwnerRef(conjunct, index);
+  return ownerRef === null ?
+    {kind: CONJUNCT_CLASS.RESIDUAL} :
+    {kind: CONJUNCT_CLASS.OWNED, ownerRef};
 }
 
-/**
- * Resolve the pushdown bucket for a single-table conjunct, or null
- * when the owning table is NULL-extensible (OUTER rule: residual).
- * @param {string} ownerRef - Owning table ref.
- * @param {Object} index - Table index.
- * @param {Object} split - Split buckets under construction.
- * @param {boolean} mainNullExtensible - Main-table NULL-extensibility.
- * @return {Object|null} Target bucket, or null for residual.
- */
 function resolveOwnedConjunctBucket(ownerRef, index, split, mainNullExtensible) {
   if (ownerRef === index.mainRef) {
     return mainNullExtensible ? null : split.main;
@@ -334,35 +262,17 @@ function resolveOwnedConjunctBucket(ownerRef, index, split, mainNullExtensible) 
   return split.byEdgeRef.get(ownerRef);
 }
 
-/**
- * Split the WHERE clause into main-table, per-edge, and residual
- * buckets.
- * @param {Object} ast - SELECT AST.
- * @param {Object} index - Table index.
- * @param {boolean} mainNullExtensible - Main-table NULL-extensibility.
- * @return {Object} Split buckets, or {legacy: true} when unsupported.
- */
 function buildWhereSplit(ast, index, mainNullExtensible) {
   const split = {
-    legacy: false,
-    main: {conjuncts: [], paramIndexes: []},
+    main: {conjuncts: []},
     byEdgeRef: new Map(
-      index.edges.map((edge) => [
-        edge.ref,
-        {conjuncts: [], paramIndexes: []},
-      ]),
+      index.edges.map((edge) => [edge.ref, {conjuncts: []}]),
     ),
     residual: [],
   };
-  if (!ast.where) {
-    return split;
-  }
+  if (!ast.where) return split;
   for (const conjunct of flattenAndConjuncts(ast.where)) {
     const outcome = classifyConjunct(conjunct, index);
-    if (outcome.kind === CONJUNCT_CLASS.UNSUPPORTED) {
-      split.legacy = true;
-      return split;
-    }
     if (outcome.kind === CONJUNCT_CLASS.RESIDUAL) {
       split.residual.push(conjunct);
       continue;
@@ -378,38 +288,10 @@ function buildWhereSplit(ast, index, mainNullExtensible) {
       continue;
     }
     bucket.conjuncts.push(conjunct);
-    bucket.paramIndexes.push(...outcome.paramIndexes);
   }
   return split;
 }
 
-/**
- * Visit every column_ref reachable from a clause (generic deep walk).
- * @param {Object|Array} node - Clause AST.
- * @param {Function} visit - Called with each column_ref node.
- */
-function collectColumnRefs(node, visit) {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-  if (Array.isArray(node)) {
-    node.forEach((entry) => collectColumnRefs(entry, visit));
-    return;
-  }
-  if (node.type === EXPR_TYPE.COLUMN_REF) {
-    visit(node);
-    return;
-  }
-  for (const value of Object.values(node)) {
-    collectColumnRefs(value, visit);
-  }
-}
-
-/**
- * Whether the SELECT list contains a star column.
- * @param {Array} columns - SELECT column entries.
- * @return {boolean} Star present.
- */
 function selectListHasStar(columns) {
   return (columns || []).some(
     (col) =>
@@ -418,14 +300,6 @@ function selectListHasStar(columns) {
   );
 }
 
-/**
- * Derive the per-edge column projection. Provable only when the SELECT
- * list has no star AND every column ref in the statement carries a
- * resolvable table qualifier — otherwise a join table falls back to
- * SELECT * because an unqualified ref might belong to it.
- * @param {Object} ast - SELECT AST.
- * @param {Object} index - Table index (edges mutated: projection).
- */
 function buildEdgeProjections(ast, index) {
   const clauses = [
     ast.columns,
@@ -458,24 +332,18 @@ function buildEdgeProjections(ast, index) {
   }
 }
 
-/**
- * Resolve a join-condition side's owning table ref via its qualifier.
- * @param {Object} node - column_ref node.
- * @param {Object} index - Table index.
- * @return {string|null} Owning ref, or null when unresolvable.
- */
+function holdsExplicitCollate(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(holdsExplicitCollate);
+  if (node.type === EXPR_TYPE.COLLATE) return true;
+  return Object.values(node).some(holdsExplicitCollate);
+}
+
 function resolveConditionSideRef(node, index) {
-  if (!node.table) {
-    return null;
-  }
+  if (!node?.table) return null;
   return index.refByQualifier.get(node.table) ?? null;
 }
 
-/**
- * Whether a join condition is an equality between two column refs.
- * @param {Object} condition - JOIN condition AST.
- * @return {boolean} Equi-join condition shape.
- */
 function isEquiJoinCondition(condition) {
   return Boolean(condition) &&
     condition.type === EXPR_TYPE.BINARY &&
@@ -484,70 +352,89 @@ function isEquiJoinCondition(condition) {
     condition.right?.type === EXPR_TYPE.COLUMN_REF;
 }
 
-/**
- * Plan the join-key semi-filter for one edge. INNER equi-joins only:
- * a filtered-empty right fetch would change a LEFT join's NULL-extended
- * row shape, and RIGHT joins must preserve unmatched right rows.
- * @param {Object} join - JOIN AST node.
- * @param {Object} edge - Edge entry from the table index.
- * @param {Object} index - Table index.
- * @return {Object} Semi-filter descriptor ({kind} variant).
- */
-function buildEdgeSemiFilter(join, edge, index) {
+function resolveTableNameByRef(ref, index) {
+  if (ref === index.mainRef) return index.main.tableName;
+  const edge = index.edges.find((e) => e.ref === ref);
+  return edge?.tableName || null;
+}
+
+function normalizeColumnSignature(colDef) {
+  if (!colDef || typeof colDef !== 'object') return null;
+  const rawType = typeof colDef.type === 'string' ?
+    colDef.type :
+    (typeof colDef.dataType === 'string' ? colDef.dataType : '');
+  const rawCollation = typeof colDef.collation === 'string' && colDef.collation.length > 0 ?
+    colDef.collation :
+    SQL_DEFAULT_COLLATION;
+  return `${rawType.toUpperCase()}:${rawCollation.toUpperCase()}`;
+}
+
+function columnsShareEqualTypeAndCollation(
+  leftTableName,
+  leftColName,
+  rightTableName,
+  rightColName,
+  resolveTableSchema,
+) {
+  if (!resolveTableSchema) return true;
+  const leftSchema = extractCatalogSchema(resolveTableSchema(leftTableName));
+  const rightSchema = extractCatalogSchema(resolveTableSchema(rightTableName));
+  if (!leftSchema && !rightSchema) return true;
+  if (!leftSchema || !rightSchema) return false;
+  const leftSig = normalizeColumnSignature(findSchemaColumn(leftSchema, leftColName));
+  const rightSig = normalizeColumnSignature(findSchemaColumn(rightSchema, rightColName));
+  return leftSig !== null && leftSig === rightSig;
+}
+
+function buildEdgeSemiFilter(join, edge, index, resolveTableSchema) {
   const none = {kind: SEMI_FILTER_KIND.NONE};
   if (!index.valid || edge.joinType !== QUERY_JOIN_TYPE.INNER) {
     return none;
   }
   const condition = join.condition;
-  if (!isEquiJoinCondition(condition)) {
+  if (!isEquiJoinCondition(condition) || holdsExplicitCollate(condition)) {
     return none;
   }
-  const leftIsEdge =
-    resolveConditionSideRef(condition.left, index) === edge.ref;
-  const rightIsEdge =
-    resolveConditionSideRef(condition.right, index) === edge.ref;
+  const leftIsEdge = resolveConditionSideRef(condition.left, index) === edge.ref;
+  const rightIsEdge = resolveConditionSideRef(condition.right, index) === edge.ref;
   if (leftIsEdge === rightIsEdge) {
     return none;
   }
   const edgeSide = leftIsEdge ? condition.left : condition.right;
   const otherSide = leftIsEdge ? condition.right : condition.left;
   const otherRef = resolveConditionSideRef(otherSide, index);
-  const leftKeyCandidates = [];
-  if (otherRef) {
-    // Joined rows expose collided columns under their qualified key.
-    leftKeyCandidates.push(`${otherRef}.${otherSide.column}`);
+  if (otherRef !== index.mainRef) {
+    return none;
   }
-  leftKeyCandidates.push(otherSide.column);
+  const otherTableName = resolveTableNameByRef(otherRef, index);
+  if (!columnsShareEqualTypeAndCollation(
+    otherTableName,
+    otherSide.column,
+    edge.tableName,
+    edgeSide.column,
+    resolveTableSchema,
+  )) {
+    return none;
+  }
   return {
     kind: SEMI_FILTER_KIND.KEY_IN,
     joinKeyColumn: edgeSide.column,
-    leftKeyCandidates,
+    leftKeyCandidates: [
+      `${otherRef}.${otherSide.column}`,
+      otherSide.column,
+    ],
   };
 }
 
-/**
- * Look up a row value trying candidate keys in priority order.
- * @param {Object} row - Row object.
- * @param {string[]} candidates - Row keys to try.
- * @return {*} Found value, or undefined.
- */
 function lookupRowValue(row, candidates) {
   for (const key of candidates) {
-    if (Object.prototype.hasOwnProperty.call(row, key)) {
+    if (Object.hasOwn(row, key)) {
       return row[key];
     }
   }
   return undefined;
 }
 
-/**
- * Collect the distinct main-side join-key values for a semi-filter.
- * NULL keys are dropped: an equi-join never matches NULL.
- * @param {Object[]} rows - Current left-side rows.
- * @param {Object} semiFilter - KEY_IN semi-filter descriptor.
- * @param {number} maxValues - Inclusive distinct-value cap.
- * @return {{overLimit: boolean, values: Array}} Distinct key set.
- */
 function collectDistinctJoinKeyValues(rows, semiFilter, maxValues) {
   const values = new Set();
   for (const row of rows) {
@@ -563,13 +450,6 @@ function collectDistinctJoinKeyValues(rows, semiFilter, maxValues) {
   return {overLimit: false, values: [...values]};
 }
 
-/**
- * Build the `joinKey IN (?, ..., ?)` filter AST for a semi-filter; the
- * key values are bound as parameters, never interpolated.
- * @param {Object} semiFilter - KEY_IN semi-filter descriptor.
- * @param {number} valueCount - Number of bound key values.
- * @return {Object} IN expression AST.
- */
 function buildJoinKeyInFilter(semiFilter, valueCount) {
   return {
     type: EXPR_TYPE.IN,
@@ -585,14 +465,8 @@ function buildJoinKeyInFilter(semiFilter, valueCount) {
   };
 }
 
-/**
- * AND-combine conjuncts into one left-associated expression tree that
- * renders the conjuncts in their original order.
- * @param {Object[]} conjuncts - Conjunct ASTs.
- * @return {Object|null} Combined AST, or null for an empty list.
- */
 function andCombineConjuncts(conjuncts) {
-  if (conjuncts.length === 0) {
+  if (!Array.isArray(conjuncts) || conjuncts.length === 0) {
     return null;
   }
   return conjuncts.reduce((left, right) => ({
@@ -603,14 +477,6 @@ function andCombineConjuncts(conjuncts) {
   }));
 }
 
-/**
- * Clone a conjunct with every column qualifier rewritten to the
- * canonical table ref (alias || name) so rendered SQL matches the
- * per-table fetch's aliased FROM clause.
- * @param {Object} conjunct - Conjunct AST.
- * @param {Object} index - Table index.
- * @return {Object} Canonicalized clone.
- */
 function canonicalizeQualifiers(conjunct, index) {
   const clone = structuredClone(conjunct);
   collectColumnRefs(clone, (node) => {
@@ -621,123 +487,142 @@ function canonicalizeQualifiers(conjunct, index) {
   return clone;
 }
 
-/**
- * Replace parameter placeholders inside a residual clone with literal
- * nodes carrying the bound value (root, object properties, and arrays).
- * @param {*} node - Residual conjunct clone (mutated in place).
- * @param {Array} params - Original positional parameters.
- * @return {*} Rewritten residual node.
- */
-function substituteResidualParameterLiterals(node, params) {
-  if (!node || typeof node !== 'object') {
-    return node;
-  }
-  if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index += 1) {
-      node[index] = substituteResidualParameterLiterals(node[index], params);
-    }
-    return node;
-  }
-  if (node.type === EXPR_TYPE.PARAMETER) {
-    const ordinal = node.index;
-    const isBound = Array.isArray(params) && Number.isInteger(ordinal) &&
-      ordinal >= 0 && ordinal < params.length && params[ordinal] !== undefined;
-    return isBound ?
-      {type: EXPR_TYPE.LITERAL, value: params[ordinal]} : node;
-  }
-  for (const [key, value] of Object.entries(node)) {
-    if (value && typeof value === 'object') {
-      node[key] = substituteResidualParameterLiterals(value, params);
-    }
-  }
-  return node;
-}
-
-/**
- * Prepare a residual conjunct for coordinator-side evaluation:
- * canonicalize qualifiers and bind parameter literals.
- * @param {Object} conjunct - Residual conjunct AST.
- * @param {Array} params - Original positional parameters.
- * @param {Object} index - Table index.
- * @return {Object} Evaluation-ready clone.
- */
-function prepareResidualConjunct(conjunct, params, index) {
-  const clone = canonicalizeQualifiers(conjunct, index);
-  return substituteResidualParameterLiterals(clone, params);
-}
-
-/**
- * Resolve a residual conjunct's column refs against the joined-row key
- * format (combineJoinRows): collided columns live under the qualified
- * `ref.column` key, unique columns under their plain name.
- * @param {Object} conjunct - Prepared residual conjunct.
- * @param {Object} sampleRow - Representative joined row.
- * @return {Object} Clone whose column refs name actual row keys.
- */
-function resolveResidualConjunctForRow(conjunct, sampleRow) {
-  const clone = structuredClone(conjunct);
-  collectColumnRefs(clone, (node) => {
-    if (!node.table) {
+function collectOrderedParameterValues(expr, resolveParam) {
+  const values = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
       return;
     }
-    const qualifiedKey = `${node.table}.${node.column}`;
-    if (Object.prototype.hasOwnProperty.call(sampleRow, qualifiedKey)) {
-      node.column = qualifiedKey;
+    if (node.type === EXPR_TYPE.PARAMETER) {
+      values.push(resolveParam(node));
+      return;
     }
-    node.table = null;
+    for (const val of Object.values(node)) {
+      walk(val);
+    }
+  };
+  walk(expr);
+  return values;
+}
+
+function hasAggregatesOrGroupOrHaving(ast) {
+  if (Array.isArray(ast?.groupBy) && ast.groupBy.length > 0) return true;
+  if (ast?.having) return true;
+  let found = false;
+  const walk = (node) => {
+    if (found || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (node.type === EXPR_TYPE.AGGREGATE) {
+      found = true;
+      return;
+    }
+    for (const val of Object.values(node)) walk(val);
+  };
+  walk(ast?.columns);
+  walk(ast?.orderBy);
+  return found;
+}
+
+function isDistinctJoinColumnAllowlisted(col, index, resolveTableSchema) {
+  if (col?.type === EXPR_TYPE.STAR) return false;
+  const expr = col?.expression;
+  if (expr?.type !== EXPR_TYPE.COLUMN_REF) return false;
+  const ref = expr.table ? index.refByQualifier.get(expr.table) : index.mainRef;
+  const tableName = resolveTableNameByRef(ref, index);
+  const schema = tableName ? extractCatalogSchema(resolveTableSchema(tableName)) : null;
+  return Boolean(schema) && isAllowlistedColumnExpr(expr, schema);
+}
+
+function isJoinOrderIndependent(ast, index, resolveTableSchema) {
+  if (hasAggregatesOrGroupOrHaving(ast)) return false;
+  if (ast.setOperation || (Array.isArray(ast.ctes) && ast.ctes.length > 0)) {
+    return false;
+  }
+  if (!ast.distinct) return true;
+  if (!resolveTableSchema) return false;
+  const columns = Array.isArray(ast.columns) ? ast.columns : [];
+  return columns.every((col) =>
+    isDistinctJoinColumnAllowlisted(col, index, resolveTableSchema));
+}
+
+function assertJoinRowidAdmissible(ast, index, resolveTableSchema) {
+  const allTableNames = [
+    index.main.tableName,
+    ...index.edges.map((e) => e.tableName),
+  ].filter(Boolean);
+
+  collectColumnRefs(ast, (node) => {
+    const colLower = String(node.column || '').toLowerCase();
+    if (!ROWID_ALIASES.has(colLower)) return;
+    if (resolveTableSchema) {
+      if (node.table) {
+        const ref = index.refByQualifier.get(node.table);
+        const tableName = resolveTableNameByRef(ref, index);
+        const schema = tableName ? extractCatalogSchema(resolveTableSchema(tableName)) : null;
+        if (findSchemaColumn(schema, node.column)) return;
+      } else {
+        const shadowed = allTableNames.some((tName) => {
+          const schema = extractCatalogSchema(resolveTableSchema(tName));
+          return Boolean(findSchemaColumn(schema, node.column));
+        });
+        if (shadowed) return;
+      }
+    }
+    const error = new Error(JOIN_ROWID_REFUSAL_MSG);
+    error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+    error.errorCode = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+    throw error;
   });
-  return clone;
 }
 
-/**
- * Shape one edge's plan entry from the indexed edge state.
- * @param {Object} edge - Edge entry from the table index.
- * @param {Object|null} where - Pushed WHERE AST for the edge.
- * @param {Array} params - Bound parameters for the pushed WHERE.
- * @return {Object} Edge plan entry.
- */
-function buildEdgePlanEntry(edge, where, params) {
+function buildCoordinatorJoinAst(ast, index, split, orderIndependent) {
+  const mainAlias = index.main.alias ||
+    (index.main.coordinatorTableName !== index.main.tableName ? index.main.tableName : null);
+  const rewrittenFrom = {
+    ...ast.from,
+    name: index.main.coordinatorTableName,
+    alias: mainAlias,
+  };
+  const rewrittenJoins = (ast.joins || []).map((join, edgeIdx) => {
+    const edge = index.edges[edgeIdx];
+    const edgeAlias = edge.alias ||
+      (edge.coordinatorTableName !== edge.tableName ? edge.tableName : null);
+    return {
+      ...join,
+      table: {
+        ...join.table,
+        name: edge.coordinatorTableName,
+        alias: edgeAlias,
+      },
+    };
+  });
   return {
-    tableName: edge.tableName,
-    alias: edge.alias,
-    ref: edge.ref,
-    joinType: edge.joinType,
-    preservesRightRows: edge.preservesRightRows,
-    projection: edge.projection,
-    semiFilter: edge.semiFilter,
-    where,
-    params,
+    ...ast,
+    from: rewrittenFrom,
+    joins: rewrittenJoins,
+    where: orderIndependent ? andCombineConjuncts(split.residual) : ast.where,
   };
 }
 
 /**
- * Build the legacy-shaped plan: the whole WHERE and params array go to
- * the main-table fetch exactly as the pre-pushdown path did; projection
- * and semi-filter planning still apply where provable.
- * @param {Object} ast - SELECT AST.
- * @param {Array} params - Original positional parameters.
- * @param {Object} index - Table index.
- * @return {Object} Legacy plan.
+ * Build the cross-partition JOIN pushdown and COORDINATOR_EVALUATED execution
+ * plan.
+ * @param {Object} ast - Parsed SELECT AST with joins.
+ * @param {Array<*>} [params=[]] - Original positional parameters.
+ * @param {Object} [options={}]
+ * @param {Function|null} [options.resolveTableSchema] - Catalog schema resolver.
+ * @return {Object} Join pushdown plan.
  */
-function buildLegacyPlan(ast, params, index) {
-  return {
-    kind: JOIN_PUSHDOWN_PLAN_KIND.LEGACY_WHERE,
-    main: {where: ast.where || null, params},
-    joins: index.edges.map((edge) => buildEdgePlanEntry(edge, null, [])),
-    residualConjuncts: [],
-  };
-}
-
-/**
- * Build the cross-partition JOIN pushdown plan: per-table WHERE
- * conjuncts with bound parameters, per-join-table projections, join-key
- * semi-filter descriptors, and coordinator-side residual conjuncts.
- * @param {Object} ast - Parsed SELECT AST with joins (not mutated).
- * @param {Array} params - Original positional parameters.
- * @return {Object} Pushdown plan.
- */
-function buildJoinPushdownPlan(ast, params = []) {
+function buildJoinPushdownPlan(ast, params = [], options = {}) {
+  const resolveParam = createParameterResolver(params);
+  const resolveTableSchema = options?.resolveTableSchema || null;
   const index = buildTableIndex(ast);
+  assertJoinRowidAdmissible(ast, index, resolveTableSchema);
   const mainNullExtensible = computeNullExtensibility(index);
   buildEdgeProjections(ast, index);
   (ast.joins || []).forEach((join, edgeIndex) => {
@@ -745,44 +630,54 @@ function buildJoinPushdownPlan(ast, params = []) {
       join,
       index.edges[edgeIndex],
       index,
+      resolveTableSchema,
     );
   });
-  if (!index.valid) {
-    return buildLegacyPlan(ast, params, index);
-  }
   const split = buildWhereSplit(ast, index, mainNullExtensible);
-  if (split.legacy) {
-    return buildLegacyPlan(ast, params, index);
-  }
+  const mainWhere = andCombineConjuncts(
+    split.main.conjuncts.map((conjunct) => canonicalizeQualifiers(conjunct, index)),
+  );
+  const orderIndependent = isJoinOrderIndependent(ast, index, resolveTableSchema);
+  const coordinatorAst = buildCoordinatorJoinAst(ast, index, split, orderIndependent);
+
   return {
-    kind: JOIN_PUSHDOWN_PLAN_KIND.SPLIT,
+    orderIndependent,
+    coordinatorAst,
     main: {
-      where: andCombineConjuncts(
-        split.main.conjuncts.map((conjunct) =>
-          canonicalizeQualifiers(conjunct, index),
-        ),
-      ),
-      params: split.main.paramIndexes.map((ordinal) => params[ordinal]),
+      tableName: index.main.tableName,
+      alias: index.main.alias,
+      ref: index.main.ref,
+      coordinatorTableName: index.main.coordinatorTableName,
+      where: mainWhere,
+      params: collectOrderedParameterValues(mainWhere, resolveParam),
     },
     joins: index.edges.map((edge) => {
       const bucket = split.byEdgeRef.get(edge.ref);
-      return buildEdgePlanEntry(
-        edge,
-        andCombineConjuncts(
-          bucket.conjuncts.map((conjunct) =>
-            canonicalizeQualifiers(conjunct, index),
-          ),
+      const edgeWhere = andCombineConjuncts(
+        (bucket?.conjuncts || []).map((conjunct) =>
+          canonicalizeQualifiers(conjunct, index),
         ),
-        bucket.paramIndexes.map((ordinal) => params[ordinal]),
       );
+      return {
+        tableName: edge.tableName,
+        alias: edge.alias,
+        ref: edge.ref,
+        coordinatorTableName: edge.coordinatorTableName,
+        joinType: edge.joinType,
+        preservesRightRows: edge.preservesRightRows,
+        projection: edge.projection,
+        semiFilter: edge.semiFilter,
+        where: edgeWhere,
+        params: collectOrderedParameterValues(edgeWhere, resolveParam),
+      };
     }),
-    residualConjuncts: split.residual.map((conjunct) =>
-      prepareResidualConjunct(conjunct, params, index),
-    ),
   };
 }
+
 export {
-  SEMI_FILTER_KIND, andCombineConjuncts, buildJoinKeyInFilter,
-  buildJoinPushdownPlan, collectDistinctJoinKeyValues,
-  resolveResidualConjunctForRow,
+  SEMI_FILTER_KIND,
+  andCombineConjuncts,
+  buildJoinKeyInFilter,
+  buildJoinPushdownPlan,
+  collectDistinctJoinKeyValues,
 };

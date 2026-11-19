@@ -164,6 +164,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       isSuccessfulResponse,
     } = resolvePartitionExecutionBuilders({
       executionOptions,
+      forRead,
       params,
       partitionId,
       sql,

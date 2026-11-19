@@ -62,6 +62,7 @@ const SELECT_LIST_END = new Set([
 // sqlite3Isspace: the ASCII whitespace SQLite trims from a span.
 const SPAN_EDGE_WHITESPACE = /^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/gu;
 const DECIMAL_ZERO_LEXEME = /^(?:0+\.0*|0*\.0+)$/u;
+const BIG_INTEGER_LEXEME = /^[0-9]{16,}$/u;
 /** The named parameter a `LIMIT ?` / `OFFSET ?` placeholder is respelled as. */
 const LIMIT_PARAMETER_NAME = '__lagrange_limit_parameter';
 const LIMIT_PARAMETER_TEXT = `:${LIMIT_PARAMETER_NAME}`;
@@ -222,7 +223,8 @@ function isNegativeDecimalZero(tokens, index) {
   const token = tokens[index];
   const next = tokens[index + 1];
   return token.text === TOKEN_TEXT.MINUS && next?.type === NUMBER_TOKEN &&
-    next.start === token.start + 1 && DECIMAL_ZERO_LEXEME.test(next.text);
+    next.start === token.start + 1 &&
+    (DECIMAL_ZERO_LEXEME.test(next.text) || BIG_INTEGER_LEXEME.test(next.text));
 }
 
 function tokenRespelling(tokens, index) {

@@ -1,11 +1,22 @@
 /**
- * Helper routines for select query execution and wait reporting.
+ * Helper routines for select query execution, FROM-less SELECT evaluation in
+ * CoordinatorMergeSession, and wait reporting.
  *
  * @module query/sql-select-execution-helpers
  */
 
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {CoordinatorMergeSession} from './distributed/coordinator-merge-session.js';
+import {
+  assertQueryParametersBound,
+  createParameterResolver,
+  resolveExpectedOutputColumns,
+} from './distributed/distributed-select-fanout-plan.js';
+import {renderSelectWithParameters} from './sql-statement-renderer.js';
+import {
+  presentRawSqlRows,
+  presentSqlRowObjects,
+} from './sql-value-presentation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -69,38 +80,54 @@ export function selectRequestOptions(queryOptions, sessionId, transactionRead) {
     cancellationToken: queryOptions.cancellationToken || null,
     resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
     resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
+    safeIntegers: queryOptions.safeIntegers === true,
   };
 }
 
 /**
- * Format result for a FROM-less SELECT statement.
+ * Evaluate a FROM-less SELECT statement directly in CoordinatorMergeSession
+ * (design coordinator-sqlite-merge §2.2, Sub-package 3d, decision D11).
  *
- * @param {Object} first
- * @param {string} partitionId
- * @return {Object}
+ * @param {Object} ast - Parsed SELECT AST.
+ * @param {Array<*>} [params=[]] - Positional parameters.
+ * @param {Object} [queryOptions={}] - Query options.
+ * @return {Object} Query execution result.
  */
-export function fromlessSelectResult(first, partitionId) {
-  if (!first || !first.success) {
+export function executeFromlessSelectInSession(ast, params = [], queryOptions = {}) {
+  assertQueryParametersBound(ast, params);
+  const rendered = renderSelectWithParameters(ast, createParameterResolver(params));
+  const session = new CoordinatorMergeSession({
+    budget: queryOptions?.budgets,
+    resultMaxBytes: queryOptions?.budgets?.RESULT_MAX_BYTES,
+    resultMaxRows: queryOptions?.budgets?.RESULT_MAX_ROWS,
+    cancellationToken: queryOptions?.cancellationToken || null,
+  });
+  try {
+    const merged = session.executeMergeSql(rendered.sql, rendered.params, {
+      expectedColumns: resolveExpectedOutputColumns(ast),
+    });
+    const safeIntegers = queryOptions?.safeIntegers === true;
+    const presentedRows = presentSqlRowObjects(merged.rows, {safeIntegers});
+    const presentedRawRows = presentRawSqlRows(merged.rawRows, {safeIntegers});
     return {
-      success: false,
-      error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-      errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+      success: true,
+      rows: presentedRows,
+      rawRows: presentedRawRows,
+      columns: merged.columns,
+      rowSet: merged.rowSet,
+      count: presentedRows.length,
+      partitions: [],
+      tableName: null,
+      distributedPlan: null,
+      distributedDiagnostics: null,
+      distributedMetrics: {
+        planningDurationMs: 0,
+        executionDurationMs: 0,
+        fanout: null,
+        mergeDurationMs: 0,
+      },
     };
+  } finally {
+    session.close();
   }
-
-  return {
-    success: true,
-    rows: first.rows || [],
-    count: first.rows?.length || 0,
-    partitions: [partitionId],
-    tableName: null,
-    distributedPlan: null,
-    distributedDiagnostics: null,
-    distributedMetrics: {
-      planningDurationMs: 0,
-      executionDurationMs: 0,
-      fanout: null,
-      mergeDurationMs: 0,
-    },
-  };
 }

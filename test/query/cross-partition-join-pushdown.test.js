@@ -25,12 +25,8 @@ import {
 import {
   ParallelQueryCoordinator,
 } from '../../src/query/distributed/parallel-query-coordinator.js';
-import {
-  areSqlScalarsEqualWithAffinity,
-  buildColumnAffinityMapFromColumns,
-  compareSqlScalarsWithAffinity,
-  residualPredicateAdmitsRow,
-} from '../../src/query/distributed/residual-predicate-evaluator.js';
+import {sqliteDeclaredTypeAffinity} from '../../src/query/sql-table-definition.js';
+import {encodeTypedRowSet} from '../../src/query/sql-value-codec.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const config = ConfigurationManager.getInstance();
@@ -555,9 +551,13 @@ async (t) => {
       const partitionId = address.split('/')[2];
       const db = partitionDbs.get(partitionId);
       const rows = db.prepare(message.sql).all(...(message.params || []));
+      const rawStmt = db.prepare(message.sql).raw(true).safeIntegers(true);
+      const cols = rawStmt.columns().map((c) => c.name);
+      const rawRows = rawStmt.all(...(message.params || []));
       return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
+        rowSet: encodeTypedRowSet(cols, rawRows),
         count: rows.length,
         partitionId,
       });
@@ -572,16 +572,49 @@ async (t) => {
     address: `test-node/partition/${partitionId}`,
     status: 'active',
   }));
+  const buildTableRow = (tableName) => {
+    for (const db of partitionDbs.values()) {
+      const info = db.pragma(`table_info("${tableName}")`);
+      if (Array.isArray(info) && info.length > 0) {
+        return {
+          table_id: tableName,
+          table_name: tableName,
+          primaryKey: 'id',
+          partition_key: 'id',
+          schema: {
+            columns: info.map((col) => ({
+              name: col.name,
+              type: sqliteDeclaredTypeAffinity(col.type),
+              primaryKey: col.pk > 0,
+            })),
+          },
+        };
+      }
+    }
+    return null;
+  };
+  const allTableRows = () =>
+    ['order_line', 'stock', 'a', 'b', 'b_paren'].map(buildTableRow).filter(Boolean);
   const systemCache = {
     services,
     filter(type, predicate) {
-      return type === 'services' ? this.services.filter(predicate) : [];
+      if (type === 'services') return this.services.filter(predicate);
+      if (type === 'tables') return allTableRows().filter(predicate);
+      return [];
     },
-    get() {
+    find(type, predicate) {
+      if (type === 'tables') return allTableRows().find(predicate) || null;
+      if (type === 'services') return this.services.find(predicate) || null;
+      return null;
+    },
+    get(type, key) {
+      if (type === 'tables') return buildTableRow(key);
       return null;
     },
     getAll(type) {
-      return type === 'services' ? this.services : [];
+      if (type === 'services') return this.services;
+      if (type === 'tables') return allTableRows();
+      return [];
     },
   };
   const executor = new QueryExecutor({
@@ -632,72 +665,6 @@ async (t) => {
     residualResult.rows,
     [{low_stock: 5}],
     'residual WHERE predicates coerce PG-wire string params against SQLite numeric columns',
-  );
-
-  // Safe-integer boundary and SQLite Section 4.2 affinity controls:
-  const evalColVsLiteralEq = (colVal, literalVal, affinity = 'NUMERIC') =>
-    executor.evaluateBinary(
-      {a: colVal},
-      {
-        type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'a', affinity},
-        right: {type: 'literal', value: literalVal},
-      },
-    );
-  const evalResidualColVsLiteralEq = (colVal, literalVal, affinity = 'NUMERIC') =>
-    residualPredicateAdmitsRow(
-      {
-        type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'a', affinity},
-        right: {type: 'literal', value: literalVal},
-      },
-      {a: colVal},
-    );
-  for (const [colVal, literalVal, affinity, label] of [
-    ['9007199254740993', 9007199254740992, 'NUMERIC', 'unsafe 64-bit integer string vs rounded number'],
-    ['1.0', 1, 'TEXT', 'TEXT column "1.0" vs integer literal 1'],
-    ['01', '1', 'TEXT', 'leading-zero string vs canonical string'],
-    [1, '01', 'BLOB', 'BLOB column holding numeric 1 vs bound text "01"'],
-    ['abc', 'def', 'TEXT', 'distinct non-numeric strings'],
-    [null, 1, 'NUMERIC', 'null vs number'],
-    [undefined, '1', 'TEXT', 'undefined vs string'],
-    [true, '1', 'NUMERIC', 'boolean true vs string 1'],
-    [false, '0', 'NUMERIC', 'boolean false vs string 0'],
-    [NaN, '0', 'NUMERIC', 'NaN vs string 0'],
-  ]) {
-    t.equal(evalColVsLiteralEq(colVal, literalVal, affinity), false, `evaluateBinary rejects ${label}`);
-    t.equal(
-      evalResidualColVsLiteralEq(colVal, literalVal, affinity),
-      false,
-      `residualPredicateAdmitsRow rejects ${label}`,
-    );
-  }
-  t.equal(
-    evalColVsLiteralEq(1, '01', 'NUMERIC'),
-    true,
-    'evaluateBinary coerces numeric text "01" against NUMERIC column 1',
-  );
-  t.equal(
-    evalResidualColVsLiteralEq(1, '01', 'NUMERIC'),
-    true,
-    'residualPredicateAdmitsRow coerces numeric text "01" against NUMERIC column 1',
-  );
-  t.equal(
-    evalColVsLiteralEq(1, '01', null),
-    false,
-    'unannotated column_ref defaults to NONE affinity, never runtime typeof inference',
-  );
-  t.equal(
-    areSqlScalarsEqualWithAffinity('01', 1, 'NONE', 'NONE'),
-    false,
-    'NONE vs NONE performs no coercion',
-  );
-  t.equal(
-    compareSqlScalarsWithAffinity(1, '01', 'NONE', 'NONE'),
-    -1,
-    'NONE vs NONE orders number < string',
   );
 });
 
@@ -752,9 +719,13 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
       const partitionId = address.split('/')[2];
       const db = partitionDbs.get(partitionId);
       const rows = db.prepare(message.sql).all(...(message.params || []));
+      const rawStmt = db.prepare(message.sql).raw(true).safeIntegers(true);
+      const cols = rawStmt.columns().map((c) => c.name);
+      const rawRows = rawStmt.all(...(message.params || []));
       return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
+        rowSet: encodeTypedRowSet(cols, rawRows),
         count: rows.length,
         partitionId,
       });
@@ -769,16 +740,46 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     address: `test-node/partition/${partitionId}`,
     status: 'active',
   }));
+  const buildTableRow = (tableName) => {
+    const db = tableName === 'a' ? leftDb : rightDb;
+    const info = db.pragma(`table_info("${tableName}")`);
+    if (!Array.isArray(info) || info.length === 0) return null;
+    return {
+      table_id: tableName,
+      table_name: tableName,
+      primaryKey: 'id',
+      partition_key: 'id',
+      schema: {
+        columns: info.map((col) => ({
+          name: col.name,
+          type: sqliteDeclaredTypeAffinity(col.type),
+          primaryKey: col.pk > 0,
+        })),
+      },
+    };
+  };
+  const allTableRows = () =>
+    ['order_line', 'stock', 'a', 'b', 'b_paren'].map(buildTableRow).filter(Boolean);
   const systemCache = {
     services,
     filter(type, predicate) {
-      return type === 'services' ? this.services.filter(predicate) : [];
+      if (type === 'services') return this.services.filter(predicate);
+      if (type === 'tables') return allTableRows().filter(predicate);
+      return [];
     },
-    get() {
+    find(type, predicate) {
+      if (type === 'tables') return allTableRows().find(predicate) || null;
+      if (type === 'services') return this.services.find(predicate) || null;
+      return null;
+    },
+    get(type, key) {
+      if (type === 'tables') return buildTableRow(key);
       return null;
     },
     getAll(type) {
-      return type === 'services' ? this.services : [];
+      if (type === 'services') return this.services;
+      if (type === 'tables') return allTableRows();
+      return [];
     },
   };
   const executor = new QueryExecutor({
@@ -952,13 +953,6 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
   const alterPgQn8Spec = new MigrationPipeline({migrationCoordinator: {}}).buildAlterSpec(
     alterPgQn8Ast,
   );
-  t.equal(
-    buildColumnAffinityMapFromColumns([
-      {name: alterPgQn8Spec.columnName, type: alterPgQn8Spec.dataType},
-    ]).get('qn8'),
-    'NUMERIC',
-    'buildColumnAffinityMapFromColumns maps PG-dialect quoted "INT8" to NUMERIC',
-  );
   for (const db of [rightDb, oracleDb]) {
     db.exec(alterPgQn8Spec.sql);
   }
@@ -1015,18 +1009,17 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     );
   }
 
-  // Counterexample 8 (Schema-read failure propagation and finite-failure recovery):
-  let failSchemaReads = true;
-  let schemaFailureAttempts = 0;
+  // Counterexample 8 (Partition read failure propagation and finite-failure recovery):
+  let failParticipantReads = true;
+  let participantFailureAttempts = 0;
   const origDeliver = messageRouter.deliver.bind(messageRouter);
   messageRouter.deliver = async (address, message) => {
     if (
-      failSchemaReads &&
+      failParticipantReads &&
       message.type === 'QUERY' &&
-      String(message.sql).includes('sqlite_master') &&
       address.endsWith('/b_p1')
     ) {
-      schemaFailureAttempts += 1;
+      participantFailureAttempts += 1;
       return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'SQLITE_BUSY: database is locked',
@@ -1036,28 +1029,28 @@ test('SQLite Section 4.2 affinity parity against better-sqlite3 oracle: ' +
     }
     return origDeliver(address, message);
   };
-  const failedSchemaAst = new SQLParser(intEqZeroOneSql).parse();
-  const failedSchemaRes = await executor.executeSelect(
-    failedSchemaAst,
+  const failedReadAst = new SQLParser(intEqZeroOneSql).parse();
+  const failedReadRes = await executor.executeSelect(
+    failedReadAst,
     ['a_p1'],
     [],
     {distributedPlan: {tablePlans}},
   );
   t.equal(
-    failedSchemaRes.success,
+    failedReadRes.success,
     false,
-    'failed schema read propagates failure instead of returning an incomplete success',
+    'failed participant read propagates failure instead of returning an incomplete success',
   );
   t.equal(
-    schemaFailureAttempts,
+    participantFailureAttempts,
     3,
-    'existing read retry owner makes 3 attempts on schema read failure',
+    'existing read retry owner makes 3 attempts on participant read failure',
   );
-  failSchemaReads = false;
+  failParticipantReads = false;
   t.same(
     await execJoin(intEqZeroOneSql),
     [1, 2],
-    'once schema-read failure clears, the same executor returns the complete matching rows',
+    'once participant read failure clears, the same executor returns the complete matching rows',
   );
 });
 
@@ -1462,13 +1455,5 @@ test('JOIN HAVING preserves supplied query parameters, matches literal ' +
     ),
     {code: 'SYNTAX_ERROR', message: /Unbound parameter index: 0/u},
     'JOIN HAVING with undefined parameter rejects with SYNTAX_ERROR',
-  );
-  t.throws(
-    () => cluster.executor.applyHaving(
-      [{id: 1, cnt: 1}],
-      new SQLParser(paramHavingSql).parse().having,
-    ),
-    {code: 'SYNTAX_ERROR', message: /Unbound parameter index: 0/u},
-    'direct applyHaving without params rejects unbound placeholder',
   );
 });

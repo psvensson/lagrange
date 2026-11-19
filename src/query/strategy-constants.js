@@ -97,16 +97,6 @@ const STRATEGY_ERROR_MSG = Object.freeze({
 });
 
 /**
- * Log messages for strategy selection.
- * @enum {string}
- */
-const STRATEGY_LOG_MSG = Object.freeze({
-  STRATEGY_SELECTED: 'Strategy selected',
-  HINT_APPLIED: 'User hint applied to strategy selection',
-  HINT_REJECTED: 'User hint rejected by guardrail',
-});
-
-/**
  * Set of valid strategy values for fast membership check.
  * @type {Set<string>}
  */
@@ -124,6 +114,5 @@ export {
   HINT_FIELD,
   STRATEGY_DECISION_FIELD,
   STRATEGY_ERROR_MSG,
-  STRATEGY_LOG_MSG,
   VALID_STRATEGIES,
 };

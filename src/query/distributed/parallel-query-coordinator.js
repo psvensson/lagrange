@@ -107,9 +107,6 @@ class ParallelQueryCoordinator {
     this.speculativeExecutionDelayMs = config.get(
       QUERY_CONFIG_KEY.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS,
     ) || QUERY_DEFAULTS.COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS;
-    this.streamingEnabled = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_ENABLED) !== false;
-    this.streamingChunkSize = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_CHUNK_SIZE) ||
-      QUERY_DEFAULTS.COORDINATOR_STREAMING_CHUNK_SIZE;
 
     // Track active queries for resource management
     this.activeConnections = 0;

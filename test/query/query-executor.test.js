@@ -246,12 +246,10 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
   t.equal(result.success, true);
   t.equal(result.rows.length, 1, 'data response sequencing produces the joined row');
   t.equal(dataCalls.length, 2, 'join should fan out once per table for data reads');
-  t.equal(schemaCalls.length, 2, 'join should fan out once per table for schema reads');
+  t.equal(schemaCalls.length, 0, 'join uses catalog schema authority without sqlite_master reads');
   t.same(
     fanoutCalls.map((call) => call.executionOptions.routingReadinessDimension),
     [
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ],

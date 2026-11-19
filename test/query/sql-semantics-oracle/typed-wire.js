@@ -19,6 +19,10 @@
  * as written, because each one is SQLite's own typed answer.
  */
 
+import {
+  decodeTypedRowSet,
+  encodeTypedParams,
+} from '../../../src/query/sql-value-codec.js';
 import {encodeDeliveryMessage} from
   '../../../src/transport/message-router-delivery-encoding.js';
 import {sendRaw} from '../../../src/transport/message-router-delivery-behaviors.js';
@@ -67,21 +71,17 @@ function sqliteCell(value) {
 }
 
 const CURRENT_WIRE = Object.freeze({
-  name: 'json-frames-without-value-codec',
-  // False until a codec carries the class: a number observed at the
-  // coordinator is then NUMERIC_UNCLASSIFIED, never INTEGER or REAL.
-  carriesStorageClass: false,
+  name: 'typed-row-set-v1',
+  carriesStorageClass: true,
   /**
    * What the coordinator holds for one result cell.
-   * @param {*} value - The cell as delivered.
+   * @param {*} value - The cell as decoded.
    * @return {{c: string, v: string}}
    */
   observeCell(value) {
     if (value === undefined) return cell(CELL_CLASS.MISSING, '');
     if (value === null) return cell(CELL_CLASS.NULL, '');
-    if (typeof value === 'number') {
-      return cell(CELL_CLASS.NUMERIC_UNCLASSIFIED, canonicalNumber(value));
-    }
+    if (typeof value === 'number') return cell(CELL_CLASS.REAL, canonicalNumber(value));
     if (typeof value === 'bigint') return cell(CELL_CLASS.INTEGER, value.toString());
     if (typeof value === 'string') return cell(CELL_CLASS.TEXT, value);
     if (Buffer.isBuffer(value)) return cell(CELL_CLASS.BLOB, value.toString('base64'));
@@ -94,17 +94,38 @@ const CURRENT_WIRE = Object.freeze({
    * @return {Array<Array<{c: string, v: string}>>}
    */
   observeAnswerRows(answer, columns) {
+    if (answer?.rowSet) {
+      const decoded = decodeTypedRowSet(answer.rowSet);
+      return decoded.rows.map((row) =>
+        columns.map((column) => {
+          const idx = decoded.columns.indexOf(column);
+          return CURRENT_WIRE.observeCell(idx >= 0 ? row[idx] : undefined);
+        }),
+      );
+    }
     return (answer?.rows || []).map((row) =>
       columns.map((column) => CURRENT_WIRE.observeCell(row?.[column])));
   },
   /**
    * Replace the first answer cell with a value that is not a canonical cell
-   * of this wire: today's {type:'Buffer',data} shape, the exact object a
-   * BLOB becomes after a frame.
+   * of this wire.
    * @param {Object} answer - A successful partition QUERY answer.
    * @return {Object} The answer with one corrupted cell.
    */
   corruptFirstCell(answer) {
+    if (answer?.rowSet && Array.isArray(answer.rowSet.rows) && answer.rowSet.rows.length > 0) {
+      const [firstRow, ...restRows] = answer.rowSet.rows;
+      return {
+        ...answer,
+        rowSet: {
+          ...answer.rowSet,
+          rows: [
+            [firstRow[0], {type: 'Buffer', data: [0x41]}, ...firstRow.slice(2)],
+            ...restRows,
+          ],
+        },
+      };
+    }
     const [first, ...rest] = answer.rows;
     const column = Object.keys(first)[0];
     return {...answer,
@@ -215,6 +236,39 @@ function encodeResponseFrame(inbound, result) {
   return written[0];
 }
 
+function prepareWirePayload(payload) {
+  if (
+    payload &&
+    payload.type === 'QUERY' &&
+    Array.isArray(payload.params) &&
+    payload.typedParams === undefined
+  ) {
+    const typedParams = encodeTypedParams(payload.params);
+    const jsonSafeParams = payload.params.map((val) =>
+      (typeof val === 'bigint' ? val.toString() : val));
+    return {...payload, params: jsonSafeParams, typedParams};
+  }
+  return payload;
+}
+
+function attachAnswerColumnShape(answer) {
+  if (
+    answer &&
+    typeof answer === 'object' &&
+    answer.rowSet &&
+    Array.isArray(answer.rowSet.columns) &&
+    Array.isArray(answer.rowSet.rows) &&
+    !Array.isArray(answer.rows)
+  ) {
+    const template = Object.fromEntries(answer.rowSet.columns.map((col) => [col, null]));
+    return {
+      ...answer,
+      rows: answer.rowSet.rows.map(() => ({...template})),
+    };
+  }
+  return answer;
+}
+
 /**
  * Deliver one request to a partition's registered transport handler.
  * @param {Object} options
@@ -227,13 +281,19 @@ function encodeResponseFrame(inbound, result) {
  * @return {Promise<Object>} The answer as the coordinator receives it.
  */
 async function deliverToPartition({service, sourceNodeId, targetAddress, payload, remote}) {
+  const effectivePayload = prepareWirePayload(payload);
   if (!remote) {
-    return service.handleTransportMessage({
+    const localAnswer = await service.handleTransportMessage({
       messageId: 'oracle-local', sourceAddress: ROUTER_ADDRESS.buildSourceAddress(sourceNodeId),
-      sourceNodeId, targetAddress, payload, timestamp: 0,
+      sourceNodeId, targetAddress, payload: effectivePayload, timestamp: 0,
     });
+    return attachAnswerColumnShape(localAnswer);
   }
-  const inbound = decodeFrame(encodeRequestFrame({sourceNodeId, targetAddress, payload}));
+  const inbound = decodeFrame(encodeRequestFrame({
+    sourceNodeId,
+    targetAddress,
+    payload: effectivePayload,
+  }));
   const answer = await service.handleTransportMessage({
     messageId: inbound.messageId,
     sourceAddress: inbound.sourceAddress,
@@ -242,7 +302,8 @@ async function deliverToPartition({service, sourceNodeId, targetAddress, payload
     payload: inbound.payload,
     timestamp: inbound.timestamp,
   });
-  return decodeFrame(encodeResponseFrame(inbound, answer)).result;
+  const framedAnswer = decodeFrame(encodeResponseFrame(inbound, answer)).result;
+  return attachAnswerColumnShape(framedAnswer);
 }
 
 export {
@@ -250,7 +311,6 @@ export {
   CURRENT_WIRE,
   PARAMETER_WITNESSES,
   ROW_VALUE_WITNESSES,
-  canonicalNumber,
   deliverToPartition,
   sqliteCell,
 };

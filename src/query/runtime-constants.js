@@ -132,16 +132,6 @@ const OUT_ERROR_MSG = Object.freeze({
 });
 
 /**
- * Output telemetry event types.
- * @enum {string}
- */
-const OUT_TELEMETRY_EVENT = Object.freeze({
-  WRITE: 'write',
-  BUDGET_EXCEEDED: 'budgetExceeded',
-  STREAM_CLOSED: 'streamClosed',
-});
-
-/**
  * Output telemetry field names for snapshots.
  * @enum {string}
  */
@@ -323,18 +313,6 @@ const REDUCE_FIELD = Object.freeze({
 });
 
 /**
- * Error messages for reduceByKey execution.
- * @enum {string}
- */
-const REDUCE_ERROR_MSG = Object.freeze({
-  NO_EXCHANGE_MANAGER:
-    'reduceByKey requires an exchange manager on the ' +
-    'execution context',
-  EMPTY_EXCHANGE:
-    'reduceByKey received no records from exchange buffers',
-});
-
-/**
  * Default maximum number of groups per batch delivered to
  * the reduceByKey handler.
  * @type {number}
@@ -401,7 +379,6 @@ export {
   PLAN_FIELD,
   PLAN_ERROR_MSG,
   OUT_ERROR_MSG,
-  OUT_TELEMETRY_EVENT,
   OUT_TELEMETRY_FIELD,
   NESTED_CALL_CLASSIFICATION,
   NESTED_CALL_REASON,
@@ -409,7 +386,6 @@ export {
   NESTED_CALL_MAX_IN_PARAMS,
   DIAGNOSTICS_FIELD,
   REDUCE_FIELD,
-  REDUCE_ERROR_MSG,
   DEFAULT_MAX_GROUPS_PER_BATCH,
   DEFAULT_MAX_RECORDS_PER_GROUP,
   RETRY_SCOPE,

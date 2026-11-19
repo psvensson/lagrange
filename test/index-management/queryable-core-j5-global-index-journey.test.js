@@ -589,10 +589,13 @@ test('J5 Step 5: READ_WRITE routing and current-owner Stage 2 resolution on spli
   const postSplitRead = await cluster.coordinator.planAndExecuteRead({
     tableName: 'orders',
     where: {customer_id: 42},
-    orderBy: 'order_id ASC',
   });
 
-  t.same(postSplitRead, oracle42, 'Current owner resolution returns complete live rows after split');
+  t.same(
+    [...postSplitRead].sort((a, b) => a.order_id - b.order_id),
+    oracle42,
+    'Current owner resolution returns complete live rows after split',
+  );
   t.ok(postSplitRead.some((r) => r.order_id === 20), 'Migrated row 20 is present');
 });
 

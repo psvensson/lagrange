@@ -9,8 +9,10 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
-import {coordinatorTableParticipantRefusal} from
-  './distributed/distributed-transaction-participant-admission.js';
+import {
+  collectAllBaseTableNames,
+  hasSubqueryCteOrCompound,
+} from './distributed/distributed-select-fanout-soundness.js';
 import {PARTICIPANT_ENLISTMENT_MODE} from
   './distributed/distributed-transaction-coordinator-constants.js';
 import {
@@ -18,7 +20,7 @@ import {
   isLockingReadAst,
 } from './sql-locking-read-execution.js';
 import {
-  fromlessSelectResult,
+  executeFromlessSelectInSession,
   reportConditionWaitSpent,
   selectRequestOptions,
 } from './sql-select-execution-helpers.js';
@@ -53,7 +55,6 @@ const {
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
   createTimeoutBudgetError,
@@ -338,13 +339,17 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     if (admission.decision === COORDINATOR_ADMISSION_DECISION.REFUSED) {
       return admission.response;
     }
-    if (!ast.from) {
+    const baseTableNames = collectAllBaseTableNames(ast);
+    if (!ast.from || baseTableNames.length === 0) {
       return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
         transactionRead);
     }
 
-    const tableName = ast.from.name;
-    const authoritativeLocalResult = transactionRead ? null :
+    const tableName = hasSubqueryCteOrCompound(ast) ?
+      baseTableNames[0] :
+      ast.from.name;
+    const authoritativeLocalResult = (transactionRead || hasSubqueryCteOrCompound(ast)) ?
+      null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
         ast,
@@ -728,45 +733,9 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeFromlessSelect(ast, params, sessionId, queryOptions,
-    transactionRead) {
-    const allPartitions = this.systemCache?.getAll?.(TABLES.PARTITIONS) || [];
-    if (allPartitions.length === 0) {
-      return {
-        success: false,
-        error: QUERY_ERROR_MSG.NO_PARTITIONS_FOR_TABLE,
-        errorCode: QUERY_ERROR_CODE.PARTITION_NOT_FOUND,
-      };
-    }
-
-    const target = transactionRead ? allPartitions.find((partition) =>
-      !coordinatorTableParticipantRefusal(partition.table_name)) : allPartitions[0];
-    if (!target) return coordinatorTableParticipantRefusal(allPartitions[0].table_name);
-    const targetPartitionId = target.partition_id;
-    if (transactionRead) {
-      const enlisted = await transactionRead.enlist([targetPartitionId]);
-      if (enlisted.success !== true) return enlisted;
-    }
-    const cols = ast.columns.map((col) =>
-      this.queryExecutor.buildColumnSQL(col),
-    );
-    const sql = `SELECT ${cols.join(', ')}`;
-
-    const results = await this.queryExecutor.executeOnPartitions(
-      [targetPartitionId],
-      sql,
-      params,
-      null,
-      true,
-      Boolean(transactionRead),
-      false,
-      {
-        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
-        routingReadinessDimension: this.defaultRoutingReadinessDimension,
-      },
-    );
-
-    return fromlessSelectResult(results[0], targetPartitionId);
+  async executeFromlessSelect(ast, params, _sessionId, queryOptions,
+    _transactionRead) {
+    return executeFromlessSelectInSession(ast, params, queryOptions);
   }
 
   isRetryableControlPlaneMutationFailure(error) {

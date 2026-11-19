@@ -1,37 +1,36 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
-  INITIAL_PARTITION_IDS,
-} from '../bootstrap/system-table-schemas-constants.js';
-import {
   buildLocalAuthoritativeObservation,
 } from '../cdc/cdc-integration-service-local-system-table-routing.js';
+import {
+  GUARD_OUTCOME,
+} from './distributed/coordinator-merge-session.js';
+import {
+  FANOUT_PLAN_KIND,
+  assertQueryParametersBound,
+  buildSelectFanoutPlan,
+} from './distributed/distributed-select-fanout-plan.js';
+import {
+  collectAllBaseTableNames,
+  hasSubqueryCteOrCompound,
+} from './distributed/distributed-select-fanout-soundness.js';
+import {PartitionResolver} from './partition-resolver.js';
 import {
   installQueryExecutorJoinExecutionHelpers,
 } from './query-executor-join-execution.js';
 import {
-  buildSelectFanoutPlan,
-} from './distributed/distributed-select-fanout-plan.js';
-import {PartitionResolver} from './partition-resolver.js';
+  presentRawSqlRows,
+  presentSqlRowObjects,
+} from './sql-value-presentation.js';
 
 function createExecutorTableInfoResolver(executor, options) {
   if (options.getTableInfo) {
     return options.getTableInfo;
   }
-  let cachedCache = null;
-  let resolver = null;
   return (tableName) => {
     if (!executor.systemCache) return null;
-    if (executor.systemCache !== cachedCache) {
-      cachedCache = executor.systemCache;
-      resolver = new PartitionResolver({systemCache: cachedCache});
-    }
-    return resolver.getTableInfo(tableName);
+    return new PartitionResolver({systemCache: executor.systemCache}).getTableInfo(tableName);
   };
-}
-
-function partitionBudgetShare(limit, partitionCount) {
-  if (!Number.isSafeInteger(limit) || limit < 0) return null;
-  return Math.floor(limit / Math.max(1, partitionCount));
 }
 
 const {
@@ -49,7 +48,6 @@ const {
   QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   QUERY_SUBSYSTEM,
-  buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
 /**
@@ -386,7 +384,7 @@ class QueryExecutorBase {
    * @return {Promise<Object>} Query result.
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
-    this.assertQueryParametersBound(ast, params);
+    assertQueryParametersBound(ast, params);
     if (partitionIds.length === 0) {
       return {
         success: true,
@@ -396,7 +394,6 @@ class QueryExecutorBase {
       };
     }
 
-    // Get consistent snapshot timestamp
     const queryTimestamp = this.hlcClock.now();
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_DISTRIBUTED_SELECT, {
       partitionCount: partitionIds.length,
@@ -405,10 +402,12 @@ class QueryExecutorBase {
       hasAggregates: this.hasAggregates(ast),
     });
 
-    // Check if this is a cross-partition JOIN query
-    if (ast.joins && ast.joins.length > 0) {
+    if (ast.joins && ast.joins.length > 0 && !hasSubqueryCteOrCompound(ast)) {
       const joinPartitions = this.resolveJoinPartitions(ast, options);
-      if (joinPartitions.size > 0) {
+      const isSelfJoin = ast.joins.every(
+        (join) => join?.table?.name && join.table.name === ast.from?.name,
+      );
+      if (joinPartitions.size > 0 || isSelfJoin) {
         return this.executeCrossPartitionJoin(
           ast,
           partitionIds,
@@ -435,123 +434,87 @@ class QueryExecutorBase {
       };
     }
 
-    // Annotate HAVING column affinities before building the fanout plan so the
-    // cloned combineSpec.having expression carries declared schema affinities.
-    const tableName = resolveSelectTableName(ast);
-    if (ast.having) {
-      const affinityOutcome = await this.ensureQueryColumnAffinities(
-        ast,
-        [],
-        [
-          {
-            tableName,
-            alias: ast.from?.alias || tableName,
-            partitions: partitionIds,
-          },
-        ],
-        queryTimestamp,
-        options,
-      );
-      if (affinityOutcome?.ok === false) {
-        const failureSummary = buildDistributedFailureSummary(
-          affinityOutcome.failedResults,
-        );
-        return {
-          success: false,
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          ...failureSummary,
-          partitions: partitionIds,
-          distributedMetrics: {
-            fanout: this.getLastCoordinatorMetrics(),
-            mergeDurationMs: 0,
-            failedPartitionCount: affinityOutcome.failedResults.length,
-          },
-        };
-      }
-    }
+    const baseTables = collectAllBaseTableNames(ast);
+    const tableName = resolveSelectTableName(ast) || baseTables[0] || null;
+    const resolveTableSchema = (name) => this.resolveJoinTableSchema(name);
 
-    // Build the fan-out plan: partition-side SQL with combinable partial
-    // aggregates and over-fetched LIMIT, so global clauses (aggregates,
-    // GROUP BY/HAVING, OFFSET) are applied exactly once at the merge.
     const fanoutPlan = buildSelectFanoutPlan(ast, params, partitionIds.length, {
-      resolveTableSchema: this.resolveTableInfo,
+      resolveTableSchema,
     });
-    const sql = this.buildSelectSQL(fanoutPlan.partitionAst);
-    const resultMaxBytes = partitionBudgetShare(
-      options.resultMaxBytes,
-      partitionIds.length,
-    );
-    const resultMaxRows = partitionBudgetShare(
-      options.resultMaxRows,
-      partitionIds.length,
-    );
+    const sql = fanoutPlan.partitionSql;
 
-    // Execute on all partitions in parallel (read operations can go to any replica)
-    const preferLeader =
-      options.preferLeader === true ||
-      Boolean(tableName && INITIAL_PARTITION_IDS[tableName]);
-    const results = await this.executeOnPartitions(
+    const initialFetch = await this.fetchSelectPartitionResults(
       partitionIds,
       sql,
       fanoutPlan.partitionParams,
       queryTimestamp,
-      true,
-      // forRead = true for SELECT
-      preferLeader,
-      options.preferSameLatencyGroup === true,
-      {
-        sessionId: options.sessionId,
-        transactionIdentity: options.transactionIdentity,
-        deliveryPriority: options.deliveryPriority,
-        routingReadinessDimension: options.routingReadinessDimension,
-        timeoutMs: options.timeoutMs,
-        timeoutBudget: options.timeoutBudget || null,
-        cancellationToken: options.cancellationToken || null,
-        resultMaxBytes,
-        resultMaxRows,
-        tableName,
-      },
+      tableName,
+      options,
     );
-    const fanoutMetrics = this.getLastCoordinatorMetrics();
-    const failedPartitions = results
-      .filter((result) => !result.success)
-      .map((result) => result.partitionId);
-    if (failedPartitions.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(
-        results.filter((result) => !result.success),
-      );
-      return {
-        success: false,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        ...failureSummary,
-        partitions: partitionIds,
-        distributedMetrics: {
-          fanout: fanoutMetrics,
-          mergeDurationMs: 0,
-          failedPartitionCount: failedPartitions.length,
-        },
-      };
+    if (!initialFetch.ok) {
+      return initialFetch.failureResult;
     }
+    let results = initialFetch.results;
+    const fanoutMetrics = initialFetch.fanoutMetrics;
 
-    // Aggregate results
+    const extraFetch = await this.fetchExtraNestedBaseTables(
+      ast,
+      fanoutPlan.extraBaseTableNames,
+      queryTimestamp,
+      options,
+    );
+    if (!extraFetch.ok) {
+      return extraFetch.failureResult;
+    }
+    const {extraTables} = extraFetch;
+
+    const safeIntegers = options.safeIntegers === true;
     const mergeStartTimeMs = Date.now();
-    const aggregated = this.mergeEngine.mergePartitionResults(
+    let aggregated = await this.mergeEngine.mergePartitionResults(
       results,
       ast,
       this,
       fanoutPlan,
       params,
+      {extraTables, safeIntegers},
     );
+    if (
+      fanoutPlan.kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL &&
+      aggregated.guardOutcome === GUARD_OUTCOME.GUARD_FAILED &&
+      fanoutPlan.unmergedPlan
+    ) {
+      const unmergedFetch = await this.fetchSelectPartitionResults(
+        partitionIds,
+        fanoutPlan.unmergedPlan.partitionSql,
+        fanoutPlan.unmergedPlan.partitionParams,
+        queryTimestamp,
+        tableName,
+        options,
+      );
+      if (!unmergedFetch.ok) {
+        return unmergedFetch.failureResult;
+      }
+      results = unmergedFetch.results;
+      aggregated = await this.mergeEngine.mergePartitionResults(
+        results,
+        ast,
+        this,
+        fanoutPlan.unmergedPlan,
+        params,
+        {extraTables, safeIntegers},
+      );
+    }
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
+    const presentedRows = presentSqlRowObjects(aggregated.rows, {safeIntegers});
+    const presentedRawRows = presentRawSqlRows(aggregated.rawRows, {safeIntegers});
+
     try {
       this.logger.info(METRICS_LOG_TAG.SELECT_DISTRIBUTED, {
         partitionCount: partitionIds.length,
         fanoutTotalLatencyMs: fanoutMetrics?.totalLatencyMs,
         fanoutMedianLatencyMs: fanoutMetrics?.medianLatencyMs,
         mergeDurationMs,
-        totalRows: aggregated.rows.length,
+        totalRows: presentedRows.length,
         stragglerCount: fanoutMetrics?.stragglers?.length ?? 0,
         speculativeExecutions: fanoutMetrics?.speculativeExecutions ?? 0,
       });
@@ -583,8 +546,11 @@ class QueryExecutorBase {
       null;
     return {
       success: true,
-      rows: aggregated.rows,
-      count: aggregated.rows.length,
+      rows: presentedRows,
+      rawRows: presentedRawRows,
+      columns: aggregated.columns,
+      rowSet: aggregated.rowSet,
+      count: presentedRows.length,
       partitions: partitionIds,
       tableName,
       rowSetComplete,

@@ -1,10 +1,12 @@
 /**
- * The interim typed refusals of WP2 (design coordinator-sqlite-merge §5.1),
- * each tagged with the work package that removes it. Until then the
- * coordinator's JavaScript evaluators cannot evaluate an explicit COLLATE
- * (or an ESCAPE) or apply a parameter LIMIT as SQLite does, so the statement
- * is refused, typed, where they would evaluate it, and runs where SQLite
- * evaluates it.
+ * Coordinator interim typed refusals (design coordinator-sqlite-merge §5.1).
+ *
+ * WP3 removes interims I1a, I1b, I2, and I3 by routing distributed SELECTs,
+ * cross-partition JOINs, and FROM-less SELECTs through CoordinatorMergeSession
+ * (in-memory SQLite). Interims I1c (write-key evaluation, removed by WP4) and
+ * I1d/I1e (live-query predicate and fallback renderer, removed by WP7), plus
+ * the permanent refusal of connection-state functions on coordinator read paths,
+ * remain enforced and verified here.
  */
 
 import assert from 'node:assert/strict';
@@ -30,7 +32,10 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngineSelectExecution} from
   '../../src/query/sql-query-engine-select-execution.js';
+import {executeFromlessSelectInSession} from
+  '../../src/query/sql-select-execution-helpers.js';
 import {renderTableDefinitionSql} from '../../src/query/sql-table-definition.js';
+import {encodeTypedRowSet} from '../../src/query/sql-value-codec.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 
 const config = ConfigurationManager.getInstance();
@@ -42,85 +47,62 @@ function parse(sql) {
   return new SQLParser(sql).parse();
 }
 
-function plan(sql, partitionCount) {
-  return buildSelectFanoutPlan(parse(sql), [], partitionCount);
+function plan(sql, partitionCount, params = []) {
+  return buildSelectFanoutPlan(parse(sql), params, partitionCount);
 }
 
-describe('I1a (removed by WP3): COLLATE/ESCAPE in coordinator-evaluated positions', () => {
-  test('HAVING is evaluated by the coordinator at every partition count', () => {
+describe('I1a (removed by WP3): COLLATE/ESCAPE in coordinator-evaluated positions now planned for SQLite merge', () => {
+  test('HAVING with COLLATE, ESCAPE, or scalar functions over aggregates plans cleanly at every partition count', () => {
     for (const count of [1, 3]) {
-      assert.throws(() => plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
-        'HAVING x = \'a\' COLLATE NOCASE', count), UNSUPPORTED);
-      assert.throws(() => plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
-        'HAVING x LIKE \'a!%\' ESCAPE \'!\'', count), UNSUPPORTED);
-      assert.throws(() => plan('SELECT x COLLATE NOCASE AS k, COUNT(*) AS n FROM t ' +
-        'GROUP BY id HAVING k = \'a\'', count), UNSUPPORTED);
-      assert.throws(() => plan('SELECT SUM(a) AS s FROM t ' +
-        'HAVING concat(SUM(a), \'\') = \'3\'', count), UNSUPPORTED);
+      assert.ok(plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
+        'HAVING x = \'a\' COLLATE NOCASE', count));
+      assert.ok(plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
+        'HAVING x LIKE \'a!%\' ESCAPE \'!\'', count));
+      assert.ok(plan('SELECT x COLLATE NOCASE AS k, COUNT(*) AS n FROM t ' +
+        'GROUP BY id HAVING k = \'a\'', count));
+      assert.ok(plan('SELECT SUM(a) AS s FROM t ' +
+        'HAVING concat(SUM(a), \'\') = \'3\'', count));
     }
   });
 
-  test('ORDER BY: refused where the coordinator sorts, run where the partition does', () => {
-    // One partition's raw rows: the coordinator's re-sort keeps its order.
+  test('ORDER BY with COLLATE plans SINGLE_PARTITION at 1 partition and FRAGMENT_MERGE at >= 2 partitions', () => {
     assert.equal(plan('SELECT id FROM t ORDER BY x COLLATE NOCASE', 1).kind,
-      FANOUT_PLAN_KIND.RAW_ROWS);
+      FANOUT_PLAN_KIND.SINGLE_PARTITION);
     assert.equal(plan('SELECT id FROM t ORDER BY id, x COLLATE NOCASE', 1).kind,
-      FANOUT_PLAN_KIND.RAW_ROWS);
-    // The re-sort by a later term, several partitions, or a partial aggregate
-    // (the partitions do not sort): the coordinator orders the rows.
-    assert.throws(() => plan('SELECT id FROM t ORDER BY x COLLATE NOCASE, id', 1), UNSUPPORTED);
-    assert.throws(() => plan('SELECT id FROM t ORDER BY x COLLATE NOCASE', 2), UNSUPPORTED);
-    assert.throws(() => plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
-      'ORDER BY x COLLATE NOCASE', 1), UNSUPPORTED);
-    assert.throws(() => plan('SELECT x COLLATE NOCASE AS k FROM t ORDER BY k', 1), UNSUPPORTED);
+      FANOUT_PLAN_KIND.SINGLE_PARTITION);
+    assert.equal(plan('SELECT id FROM t ORDER BY x COLLATE NOCASE, id', 1).kind,
+      FANOUT_PLAN_KIND.SINGLE_PARTITION);
+    assert.equal(plan('SELECT id FROM t ORDER BY x COLLATE NOCASE', 2).kind,
+      FANOUT_PLAN_KIND.FRAGMENT_MERGE);
+    assert.equal(plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
+      'ORDER BY x COLLATE NOCASE', 2).kind,
+    FANOUT_PLAN_KIND.PARTIAL_AGGREGATE);
   });
 
-  test('GROUP BY terms and aggregate arguments are refused once partitions meet', () => {
-    for (const sql of ['SELECT COUNT(*) AS n FROM t GROUP BY x COLLATE NOCASE',
+  test('GROUP BY terms and aggregate arguments with explicit COLLATE route to COORDINATOR_EVALUATED', () => {
+    for (const sql of [
+      'SELECT COUNT(*) AS n FROM t GROUP BY x COLLATE NOCASE',
       'SELECT MIN(x COLLATE NOCASE) AS m FROM t',
-      'SELECT x COLLATE NOCASE AS k FROM t']) {
-      assert.throws(() => plan(sql, 2), UNSUPPORTED, sql);
-      assert.ok(plan(sql, 1), `${sql}: one partition's SQLite evaluates it`);
-    }
-    for (const count of [1, 2]) {
-      assert.throws(() => plan('SELECT COUNT(DISTINCT x COLLATE NOCASE) AS n FROM t', count),
-        UNSUPPORTED);
+      'SELECT COUNT(DISTINCT x COLLATE NOCASE) AS n FROM t',
+    ]) {
+      assert.equal(plan(sql, 2).kind, FANOUT_PLAN_KIND.COORDINATOR_EVALUATED, sql);
     }
   });
 
   test('a WHERE conjunct is pushed to the partitions and never refused', () => {
     assert.equal(plan('SELECT id FROM t WHERE x = \'a\' COLLATE NOCASE AND ' +
-      'x LIKE \'a!%\' ESCAPE \'!\'', 5).kind, FANOUT_PLAN_KIND.RAW_ROWS);
+      'x LIKE \'a!%\' ESCAPE \'!\'', 5).kind, FANOUT_PLAN_KIND.FRAGMENT_MERGE);
   });
 });
 
-describe('LIMIT/OFFSET parameters (removed by WP3): the coordinator applies the limit', () => {
-  test('a parameter LIMIT or OFFSET is refused at every partition count', () => {
-    for (const count of [1, 2]) {
-      assert.throws(() => buildSelectFanoutPlan(parse('SELECT id FROM t ORDER BY id LIMIT ?'),
-        [2n], count), UNSUPPORTED);
-      assert.throws(() => buildSelectFanoutPlan(parse('SELECT id FROM t ORDER BY id ' +
-        'LIMIT 2 OFFSET ?'), [1n], count), UNSUPPORTED);
-    }
-    assert.equal(plan('SELECT id FROM t ORDER BY id LIMIT 2 OFFSET 1', 2).kind,
-      FANOUT_PLAN_KIND.RAW_ROWS);
-  });
-});
-
-describe('I1b (removed by WP3): a cross-partition join is evaluated by the coordinator', () => {
-  const join = (sql) => QueryExecutor.prototype.executeCrossPartitionJoin.call({},
-    parse(sql), ['p1'], [], {joinPartitions: new Map()}, null);
-
-  test('COLLATE in ON, COLLATE or ESCAPE elsewhere, parameter LIMIT, and unsupported HAVING are refused', async () => {
-    for (const sql of ['SELECT t.id FROM t JOIN u ON t.x = u.tk COLLATE NOCASE',
-      'SELECT t.id FROM t JOIN u ON t.id = u.k WHERE t.x LIKE \'a!%\' ESCAPE \'!\'',
-      'SELECT t.id FROM t JOIN u ON t.id = u.k ORDER BY t.x COLLATE NOCASE',
-      'SELECT t.id FROM t JOIN u ON t.id = u.k LIMIT ?',
-      'SELECT SUM(t.a) AS s FROM t JOIN u ON t.id = u.id HAVING concat(SUM(t.a), \'\') = \'3\'']) {
-      const result = await join(sql);
-      assert.equal(result.success, false, sql);
-      assert.equal(result.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, sql);
-    }
+describe('LIMIT/OFFSET parameters (removed by WP3): coordinator and partition SQL-rendered overfetch limit', () => {
+  test('a parameter LIMIT or OFFSET is planned at every partition count', () => {
+    assert.equal(plan('SELECT id FROM t ORDER BY id LIMIT ?', 1, [2n]).kind,
+      FANOUT_PLAN_KIND.SINGLE_PARTITION);
+    const multiLimit = plan('SELECT id FROM t ORDER BY id LIMIT ? OFFSET ?', 2, [2n, 1n]);
+    assert.equal(multiLimit.kind, FANOUT_PLAN_KIND.FRAGMENT_MERGE);
+    assert.match(multiLimit.partitionSql, /LIMIT CASE WHEN/u);
+    assert.deepEqual(multiLimit.partitionParams, [2n, 2n, 1n]);
   });
 });
 
@@ -153,18 +135,47 @@ describe('I1d and I1e (removed by WP7): the live-query evaluator and fallback re
 });
 
 describe('I2 (removed by WP3) and connection-state functions on coordinator paths', () => {
-  const execute = (sql) => SQLQueryEngineSelectExecution.prototype.executeSelectOwned.call(
-    {executeFromlessSelect: async () => ({success: true, evaluated: true})},
-    parse(sql), [], 'session', {}, null, null);
+  const mockEngine = {
+    recordServicePartitionAccess() {},
+    executeFromlessSelect(ast, params, _sessionId, queryOptions) {
+      return executeFromlessSelectInSession(ast, params, queryOptions);
+    },
+  };
+  const execute = (sql, params = []) =>
+    SQLQueryEngineSelectExecution.prototype.executeSelectOwned.call(
+      mockEngine,
+      parse(sql),
+      params,
+      'session',
+      {},
+      null,
+      null,
+    );
 
-  test('a FROM-less SELECT with clauses beyond its result columns is refused', async () => {
-    for (const sql of ['SELECT 1 AS c0 LIMIT 0', 'SELECT 2 AS c0 ORDER BY 1',
-      'SELECT 1 AS c0 WHERE 0', 'SELECT DISTINCT 1 AS c0', 'SELECT 1 UNION SELECT 2',
-      'SELECT 1 AS c0 GROUP BY 1 HAVING 1']) {
-      const result = await execute(sql);
-      assert.equal(result.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, sql);
-    }
-    assert.equal((await execute('SELECT 1 + 1 AS c0')).evaluated, true);
+  test('a FROM-less SELECT with clauses beyond its result columns executes in CoordinatorMergeSession', async () => {
+    const rLimit0 = await execute('SELECT 1 AS c0 LIMIT 0');
+    assert.equal(rLimit0.success, true);
+    assert.deepEqual(rLimit0.rows, []);
+
+    const rOrder = await execute('SELECT 2 AS c0 ORDER BY 1');
+    assert.equal(rOrder.success, true);
+    assert.deepEqual(rOrder.rows, [{c0: 2}]);
+
+    const rWhere0 = await execute('SELECT 1 AS c0 WHERE 0');
+    assert.equal(rWhere0.success, true);
+    assert.deepEqual(rWhere0.rows, []);
+
+    const rDistinct = await execute('SELECT DISTINCT 1 AS c0');
+    assert.equal(rDistinct.success, true);
+    assert.deepEqual(rDistinct.rows, [{c0: 1}]);
+
+    const rUnion = await execute('SELECT 1 AS c0 UNION SELECT 2 AS c0 ORDER BY 1');
+    assert.equal(rUnion.success, true);
+    assert.deepEqual(rUnion.rows, [{c0: 1}, {c0: 2}]);
+
+    const rSum = await execute('SELECT 1 + 1 AS c0');
+    assert.equal(rSum.success, true);
+    assert.deepEqual(rSum.rows, [{c0: 2}]);
   });
 
   test('changes(), last_insert_rowid() and total_changes() are refused on reads', async () => {
@@ -201,6 +212,7 @@ function createSqliteBackedExecutor(tableFixtures) {
     fixture.partitions.forEach((rows, index) => {
       const partitionId = `${schema.tableName}-p${index + 1}`;
       const db = new Database(':memory:');
+      db.defaultSafeIntegers(true);
       openDatabases.push(db);
       db.exec(renderTableDefinitionSql(schema.tableName, schema));
       for (const row of rows) {
@@ -220,18 +232,30 @@ function createSqliteBackedExecutor(tableFixtures) {
     find(table, predicate) {
       return (table === TABLES.TABLES ? tableRows : partitionRows).find(predicate) || null;
     },
+    filter(table, predicate) {
+      return (table === TABLES.TABLES ? tableRows : partitionRows).filter(predicate);
+    },
     get() {
       return null;
     },
   };
   const executor = new QueryExecutor({systemCache});
   executor.executeOnPartitions = async (partitionIds, sql, params = []) =>
-    partitionIds.map((partitionId) => ({
-      partitionId,
-      success: true,
-      rowSetComplete: true,
-      rows: dbByPartition.get(partitionId).prepare(sql).all(...params),
-    }));
+    partitionIds.map((partitionId) => {
+      const db = dbByPartition.get(partitionId);
+      const stmt = db.prepare(sql);
+      const rows = stmt.all(...params);
+      const rawStmt = db.prepare(sql).raw(true).safeIntegers(true);
+      const cols = rawStmt.columns().map((c) => c.name);
+      const rawRows = rawStmt.all(...params);
+      return {
+        partitionId,
+        success: true,
+        rowSetComplete: true,
+        rows,
+        rowSet: encodeTypedRowSet(cols, rawRows),
+      };
+    });
   return {executor, systemCache, tableRows};
 }
 
@@ -240,7 +264,7 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
     'name TEXT COLLATE NOCASE, score INTEGER)';
   const notesDdl = 'CREATE TABLE notes (k INTEGER PRIMARY KEY, author TEXT COLLATE NOCASE)';
 
-  test('2-partition non-BINARY declared columns refuse coordinator JS merge but run pushed WHERE',
+  test('2-partition non-BINARY declared columns execute through CoordinatorMergeSession while LiveQuery refuses (I1d/I1e)',
     async () => {
       const {executor, systemCache} = createSqliteBackedExecutor([
         {
@@ -257,7 +281,7 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       ]);
       const userPartitions = ['users-p1', 'users-p2'];
 
-      // Pushed WHERE with no coordinator-side comparison executes on SQLite with NOCASE.
+      // Pushed WHERE executes on SQLite with NOCASE.
       const pushed = await executor.executeSelect(
         parse('SELECT id, name FROM users WHERE name = \'a\' ORDER BY id'),
         userPartitions,
@@ -266,53 +290,36 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       assert.equal(pushed.success, true);
       assert.deepEqual(pushed.rows, [{id: 1, name: 'a'}, {id: 4, name: 'A'}]);
 
-      // Every coordinator-evaluated clause over `name` (NOCASE) fails closed.
-      for (const sql of [
-        'SELECT name, COUNT(*) AS n FROM users GROUP BY name',
-        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY k',
-        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY 1',
-        'SELECT DISTINCT name FROM users',
-        'SELECT DISTINCT * FROM users',
-        'SELECT id, name FROM users ORDER BY name',
-        'SELECT name AS k FROM users ORDER BY k',
-        'SELECT name AS k FROM users ORDER BY LOWER(k)',
-        'SELECT id, name FROM users ORDER BY 2',
-        'SELECT id, COUNT(*) AS n FROM users GROUP BY id HAVING MAX(score) > 0 AND name = \'a\'',
-        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\'',
-        'SELECT MIN(name) AS m FROM users',
-        'SELECT MAX(name) AS m FROM users',
-        'SELECT COUNT(DISTINCT name) AS n FROM users',
-        'SELECT SUM(score) AS s FROM users HAVING concat(SUM(score), \'\') = \'100\'',
-      ]) {
-        await assert.rejects(
-          () => executor.executeSelect(parse(sql), userPartitions, []),
-          UNSUPPORTED,
-          sql,
-        );
-      }
-      for (const sql of [
-        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\'',
-        'SELECT SUM(score) AS s FROM users HAVING concat(SUM(score), \'\') = \'40\'',
-      ]) {
-        await assert.rejects(
-          () => executor.executeSelect(parse(sql), ['users-p1'], []),
-          UNSUPPORTED,
-          sql,
-        );
-      }
+      // GROUP BY over NOCASE declared column folds 'a' and 'A' into one group.
+      const grouped = await executor.executeSelect(
+        parse('SELECT COUNT(*) AS n FROM users GROUP BY name ORDER BY n DESC'),
+        userPartitions,
+        [],
+      );
+      assert.equal(grouped.success, true);
+      assert.deepEqual(grouped.rows, [{n: 2}, {n: 1}, {n: 1}]);
 
-      // Cross-partition JOIN referencing a non-BINARY column is refused.
+      // DISTINCT over NOCASE declared column folds 'a' and 'A'.
+      const distinctRes = await executor.executeSelect(
+        parse('SELECT COUNT(DISTINCT name) AS n FROM users'),
+        userPartitions,
+        [],
+      );
+      assert.equal(distinctRes.success, true);
+      assert.deepEqual(distinctRes.rows, [{n: 3}]);
+
+      // Cross-partition JOIN referencing a non-BINARY column executes with NOCASE in SQLite.
       const joinRes = await executor.executeCrossPartitionJoin(
-        parse('SELECT users.id FROM users JOIN notes ON users.name = notes.author'),
+        parse('SELECT users.id AS id FROM users JOIN notes ON users.name = notes.author ORDER BY users.id'),
         userPartitions,
         [],
         {joinPartitions: new Map([['notes', ['notes-p1', 'notes-p2']]])},
         null,
       );
-      assert.equal(joinRes.success, false);
-      assert.equal(joinRes.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+      assert.equal(joinRes.success, true);
+      assert.deepEqual(joinRes.rows, [{id: 1}, {id: 3}, {id: 4}]);
 
-      // Live-query predicate and QueryGroup registration refuse non-BINARY declared columns.
+      // Live-query predicate and QueryGroup registration still refuse non-BINARY declared columns (I1d/I1e, bound WP7).
       const usersSchema = JSON.parse(systemCache.getAll(TABLES.TABLES)[0].schema_definition);
       assert.throws(
         () => compilePredicate(parse('SELECT * FROM users WHERE name = \'a\'').where, [],
@@ -335,122 +342,42 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       );
     });
 
-  test('compound SELECTs, CTEs, derived tables, and subqueries cannot bypass interim refusals',
+  test('compound SELECTs, CTEs, derived tables, and subqueries execute through CoordinatorMergeSession',
     async () => {
       const {executor} = createSqliteBackedExecutor([
-        {ddl: usersDdl, partitions: [[{id: 1, name: 'a', score: 10}]]},
+        {ddl: usersDdl, partitions: [[{id: 1, name: 'a', score: 10}], [{id: 2, name: 'A', score: 20}]]},
         {ddl: notesDdl, partitions: [[{k: 1, author: 'A'}]]},
       ]);
-      for (const [sql, params] of [
-        ['SELECT id FROM users UNION ALL SELECT id FROM users LIMIT ?', [1]],
-        ['SELECT name FROM users UNION SELECT name FROM users', []],
-        ['SELECT name COLLATE NOCASE FROM users UNION ALL SELECT name FROM users', []],
-        ['WITH c AS (SELECT id FROM users LIMIT ?) SELECT id FROM c', [1]],
-        ['WITH c AS (SELECT id FROM users ORDER BY name COLLATE NOCASE) SELECT id FROM c', []],
-        ['SELECT sub.id FROM (SELECT id FROM users LIMIT ?) AS sub', [1]],
-        ['SELECT sub.id FROM (SELECT id FROM users ORDER BY name) AS sub', []],
-        ['SELECT id FROM users WHERE id IN (SELECT k FROM notes LIMIT ?)', [1]],
-        ['SELECT id FROM users WHERE id IN (SELECT k FROM notes WHERE author = \'a\' COLLATE NOCASE)',
-          []],
+      const userPartitions = ['users-p1', 'users-p2'];
+      for (const [sql, params, expectedRows] of [
+        ['SELECT id FROM users UNION ALL SELECT id FROM users ORDER BY id LIMIT ?', [2], [{id: 1}, {id: 1}]],
+        ['SELECT COUNT(*) AS n FROM (SELECT name FROM users UNION SELECT name FROM users) AS u', [], [{n: 1}]],
+        ['WITH c AS (SELECT id FROM users ORDER BY id LIMIT ?) SELECT id FROM c', [1], [{id: 1}]],
+        ['SELECT id FROM users WHERE id IN (SELECT k FROM notes WHERE author = \'a\' COLLATE NOCASE)', [], [{id: 1}]],
       ]) {
-        await assert.rejects(
-          () => executor.executeSelect(parse(sql), ['users-p1'], params),
-          UNSUPPORTED,
-          sql,
-        );
+        const res = await executor.executeSelect(parse(sql), userPartitions, params, {
+          distributedPlan: {
+            tablePlans: new Map([['notes', {partitions: ['notes-p1']}]]),
+          },
+        });
+        assert.equal(res.success, true, sql);
+        assert.deepEqual(res.rows, expectedRows, sql);
       }
     });
 
-  test('1-partition ORIGINAL_RAW_ROWS refuses JS re-aggregation and ORDER BY skips undefined key',
-    async () => {
-      const {executor} = createSqliteBackedExecutor([{
-        ddl: 'CREATE TABLE items (id INTEGER PRIMARY KEY, x TEXT, r INTEGER)',
-        partitions: [[
-          {id: 1, x: 'b', r: 99},
-          {id: 2, x: 'A', r: 10},
-          {id: 3, x: 'c', r: 50},
-        ]],
-      }]);
-
-      // `typeof(COUNT(*))` forces ORIGINAL_RAW_ROWS; 1-partition JS re-aggregation is refused.
-      await assert.rejects(
-        () => executor.executeSelect(
-          parse('SELECT MIN(x COLLATE NOCASE) AS m, typeof(COUNT(*)) AS tp FROM items'),
-          ['items-p1'],
-          [],
-        ),
-        UNSUPPORTED,
-      );
-
-      // 1-partition `ORDER BY x COLLATE NOCASE` with an `"undefined"` column alias preserves
-      // SQLite's exact NOCASE order ('A', 'b', 'c') instead of sorting by row["undefined"].
-      const sorted = await executor.executeSelect(
-        parse('SELECT id, r AS "undefined" FROM items ORDER BY x COLLATE NOCASE'),
-        ['items-p1'],
-        [],
-      );
-      assert.equal(sorted.success, true);
-      assert.deepEqual(sorted.rows.map((row) => row.id), [2, 1, 3]);
-    });
-
-  test('MF-3R1/R2/R3: combined aggregate expressions, DISTINCT agg, batch UNIQUE, setSystemCache',
+  test('MF-3R2/R3: batch UNIQUE write-key refusal (I1c, bound WP4) and LiveQueryService refusal (I1d, bound WP7)',
     async () => {
       const accountsDdl = 'CREATE TABLE accounts (id INTEGER PRIMARY KEY, ' +
         'email TEXT COLLATE NOCASE UNIQUE, score INTEGER)';
-      const {executor, systemCache} = createSqliteBackedExecutor([{
+      const {systemCache} = createSqliteBackedExecutor([{
         ddl: accountsDdl,
         partitions: [
           [{id: 1, email: 'a@x.com', score: 10}],
           [{id: 2, email: 'B@x.com', score: 20}],
         ],
-      }, {
-        ddl: 'CREATE TABLE items2 (id INTEGER PRIMARY KEY, x TEXT)',
-        partitions: [[{id: 1, x: 'a'}, {id: 2, x: 'A'}]],
       }]);
 
-      // MF-3R1 (1): PARTIAL_AGGREGATE combined aggregate-scalar expression at 1 & 2 partitions.
-      for (const partitions of [['accounts-p1'], ['accounts-p1', 'accounts-p2']]) {
-        await assert.rejects(
-          () => executor.executeSelect(
-            parse('SELECT CASE WHEN COUNT(*) > 0 THEN email = \'A@X.COM\' ELSE 0 END AS v ' +
-              'FROM accounts'),
-            partitions,
-            [],
-          ),
-          UNSUPPORTED,
-        );
-      }
-
-      // MF-3R1 (2): 1-partition PARTIAL_AGGREGATE with multiple DISTINCT aggregates.
-      await assert.rejects(
-        () => executor.executeSelect(
-          parse('SELECT COUNT(DISTINCT id), COUNT(DISTINCT x COLLATE NOCASE) FROM items2'),
-          ['items2-p1'],
-          [],
-        ),
-        UNSUPPORTED,
-      );
-      await assert.rejects(
-        () => executor.executeSelect(
-          parse('SELECT COUNT(DISTINCT id), COUNT(DISTINCT email) FROM accounts'),
-          ['accounts-p1'],
-          [],
-        ),
-        UNSUPPORTED,
-      );
-
-      // MF-3R1 (3): 1-partition ORIGINAL_RAW_ROWS re-projecting scalar COLLATE/non-BINARY column.
-      await assert.rejects(
-        () => executor.executeSelect(
-          parse('SELECT CASE WHEN COUNT(*) > 0 THEN x = \'A\' COLLATE NOCASE ELSE 0 END AS v, ' +
-            'typeof(COUNT(*)) AS tp FROM items2 GROUP BY id'),
-          ['items2-p1'],
-          [],
-        ),
-        UNSUPPORTED,
-      );
-
-      // MF-3R2: Multi-row INSERT on UNIQUE non-BINARY column fails closed (with & without cols).
+      // MF-3R2: Multi-row INSERT on UNIQUE non-BINARY column fails closed (I1c, bound WP4).
       const writeCoordinator = new DistributedWriteCoordinator({
         getTableInfo: (name) => systemCache.find(TABLES.TABLES, (t) => t.table_name === name),
         getTablePartitions: () => [
@@ -470,7 +397,7 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
         );
       }
 
-      // MF-3R3 (a): LiveQueryService constructor refuses non-BINARY column predicates via cache.
+      // MF-3R3 (a): LiveQueryService constructor refuses non-BINARY column predicates via cache (I1d, bound WP7).
       assert.throws(
         () => new LiveQueryService({
           parsedQuery: parse('SELECT id, email FROM accounts WHERE email = \'a@x.com\''),
@@ -478,34 +405,5 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
         }),
         UNSUPPORTED,
       );
-
-      // MF-3R3 (b): Standalone QueryExecutor wired via setSystemCache enforces non-BINARY refusal.
-      const lateWiredExecutor = new QueryExecutor();
-      lateWiredExecutor.setSystemCache(systemCache);
-      await assert.rejects(
-        () => lateWiredExecutor.executeSelect(
-          parse('SELECT DISTINCT email FROM accounts'),
-          ['accounts-p1', 'accounts-p2'],
-          [],
-        ),
-        UNSUPPORTED,
-      );
-
-      // JOIN queries also refuse unsupported coordinator-evaluated HAVING expressions.
-      const joinHavingRes = await executor.executeSelect(
-        parse(
-          'SELECT SUM(accounts.id) AS s FROM accounts JOIN accounts AS a2 ' +
-          'ON accounts.id = a2.id HAVING concat(SUM(accounts.id), \'\') = \'3\'',
-        ),
-        ['accounts-p1', 'accounts-p2'],
-        [],
-        {
-          distributedPlan: {
-            tablePlans: {a2: {partitions: ['accounts-p1', 'accounts-p2']}},
-          },
-        },
-      );
-      assert.equal(joinHavingRes.success, false);
-      assert.equal(joinHavingRes.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
     });
 });

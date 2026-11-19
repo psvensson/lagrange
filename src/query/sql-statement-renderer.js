@@ -80,7 +80,7 @@ const SQL = Object.freeze({
 
 const NULL_TEST_OPERATORS = new Set(['IS NULL', 'IS NOT NULL']);
 const INTEGER_LEXEME = /^[+-]?\d+$/u;
-const NUMERIC_LEXEME = /^[+-]?\d+(?:\.\d*)?$/u;
+const NUMERIC_LEXEME = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
 const RENDER_ERROR_MSG = Object.freeze({
   UNSUPPORTED_EXPRESSION_PREFIX: 'Unsupported expression type: ',
   UNSUPPORTED_COLLATION_PREFIX: 'Unsupported collation sequence: ',
@@ -131,10 +131,13 @@ function renderRealLiteral(value) {
 }
 
 function renderBlobLiteral(value) {
-  if (!Buffer.isBuffer(value)) {
+  if (!(value instanceof Uint8Array)) {
     throw renderError(RENDER_ERROR_MSG.UNREPRESENTABLE_LITERAL_PREFIX + SQL_STORAGE_CLASS.BLOB);
   }
-  return SQL.BLOB_PREFIX + value.toString(SQL.HEX_RADIX) + SQL.QUOTE;
+  const buf = Buffer.isBuffer(value) ?
+    value :
+    Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  return SQL.BLOB_PREFIX + buf.toString(SQL.HEX_RADIX) + SQL.QUOTE;
 }
 
 /**
@@ -415,11 +418,32 @@ function renderSelect(ast) {
   return sql;
 }
 
+/**
+ * Render a SELECT statement and collect its bound parameter values in exact
+ * placeholder emission order through the canonical renderer.
+ * @param {Object} ast - SELECT AST.
+ * @param {Function} resolveParameter - Maps each PARAMETER AST node to its bound value.
+ * @return {{sql: string, params: Array}}
+ */
+function renderSelectWithParameters(ast, resolveParameter) {
+  const bound = [];
+  const previousSink = activeParameterSink;
+  activeParameterSink = (paramExpr) => {
+    bound.push(resolveParameter(paramExpr));
+  };
+  try {
+    return {sql: renderSelect(ast), params: bound};
+  } finally {
+    activeParameterSink = previousSink;
+  }
+}
+
 export {
   renderExpression,
   renderExpressionWithParameters,
   renderLiteral,
   renderResultColumn,
   renderSelect,
+  renderSelectWithParameters,
   resultColumnName,
 };

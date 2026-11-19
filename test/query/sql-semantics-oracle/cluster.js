@@ -35,6 +35,7 @@ import {ConfigurationManager} from '../../../src/config/configuration-manager.js
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {PartitionService} from '../../../src/partition/partition-service.js';
 import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
+import {decodeTypedRowSet} from '../../../src/query/sql-value-codec.js';
 import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 import {createMockSystemCache} from '../sql-query-engine-test-support.js';
@@ -160,6 +161,15 @@ function runOracle(database, sql, params) {
 // the order of the first row's keys) and its cells. A result with no rows
 // carries no column metadata, so its names are null (unobservable).
 function observeDistributed(result) {
+  if (result?.rowSet) {
+    const decoded = decodeTypedRowSet(result.rowSet);
+    const columns = decoded.rows.length > 0 ? decoded.columns : null;
+    return {
+      kind: 'rows',
+      columns,
+      rows: decoded.rows.map((row) => row.map((val) => CURRENT_WIRE.observeCell(val))),
+    };
+  }
   const rows = Array.isArray(result.rows) ? result.rows : [];
   const columns = rows.length > 0 ? Object.keys(rows[0]) : null;
   return {
@@ -286,7 +296,7 @@ class OracleCluster {
     const expected = runOracle(this.references[reference], sql, params);
     let actual;
     try {
-      const result = await this.engine.executeQuery(sql, params);
+      const result = await this.engine.executeQuery(sql, params, {safeIntegers: true});
       actual = result?.success === true ? observeDistributed(result) :
         {kind: 'error', error: errorClassOfDistributed(result), detail: errorDetail(result)};
     } catch (error) {
@@ -343,4 +353,4 @@ async function openOracleCluster({partitionCount, remote = true}) {
     references: openReferences(tables)});
 }
 
-export {ERROR_SOURCE, NODE_ID, REFERENCE, openOracleCluster, runOracle};
+export {NODE_ID, REFERENCE, openOracleCluster, runOracle};

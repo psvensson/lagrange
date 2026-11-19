@@ -200,5 +200,4 @@ export {
   ResultStream,
   estimateRowBytes,
   STREAM_STATE,
-  STREAM_ERROR_MSG,
 };

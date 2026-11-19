@@ -48,9 +48,9 @@ const AFFINITY_SCHEMA_READ_SQL = /FROM sqlite_master WHERE type = 'table'/u;
 
 for (const [name, sql, partitions, affinityReadCount] of [
   ['table', 'SELECT id FROM users', ['users-p'], 0],
-  ['fromless', 'SELECT 1 AS id', ['users-p'], 0],
+  ['fromless', 'SELECT 1 AS id', [], 0],
   ['join', 'SELECT u.id FROM users u JOIN items i ON u.id = i.id',
-    ['users-p', 'items-p'], 2],
+    ['users-p', 'items-p'], 0],
 ]) {
   test(`TX1 Q5: ${name} SELECT enlists and carries its session identity`,
     async (t) => {

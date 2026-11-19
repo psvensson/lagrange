@@ -4,8 +4,9 @@ import {unreplicatedLocalMutationRefusal} from './partition-local-mutation-admis
 import {
   startAdmittedPartitionWrite,
 } from './partition-service-raft-write-commit.js';
-import {collectBoundedSqliteRows} from
-  '../query/query-result-budget.js';
+import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
+import {collectBoundedTypedRowSet} from '../query/query-result-budget.js';
+import {materializeAndPresentRowObjects} from '../query/sql-value-presentation.js';
 import {
   admitPartitionStatement,
   classifyPartitionStatementHead,
@@ -129,8 +130,7 @@ function buildWriteConfirmationTarget(service, result, operation, entry) {
 
 function executeAdmittedReadQuery(service, admission, params, options) {
   const sqliteStartMs = service.timeSource.now();
-  admission.statement.safeIntegers(options?.safeIntegers === true);
-  const visibleRows = collectBoundedSqliteRows(admission.statement, params, {
+  const collected = collectBoundedTypedRowSet(admission.statement, params, {
     cancellationToken: options.cancellationToken || null,
     deadlineMs: options.resultDeadlineMs,
     maxBytes: options.resultMaxBytes,
@@ -142,17 +142,35 @@ function executeAdmittedReadQuery(service, admission, params, options) {
       partitionId: service.partitionId,
       operation: PARTITION_SERVICE_LITERAL.SELECT,
       durationMs,
-      rowCount: visibleRows.length,
+      rowCount: collected.rawRows.length,
     });
   } catch (metricsErr) {
     void metricsErr;
   }
+  const executionEnvelope = executionEnvelopeOf(service.db);
+  if (options?.wireRead === true) {
+    return {
+      success: true,
+      rowSet: collected.rowSet,
+      count: collected.rawRows.length,
+      rowSetComplete: true,
+      partitionId: service.partitionId,
+      executionEnvelope,
+    };
+  }
+  const visibleRows = materializeAndPresentRowObjects(
+    collected.columns,
+    collected.rawRows,
+    {safeIntegers: options?.safeIntegers === true},
+  );
   return {
     success: true,
     rows: visibleRows,
+    rowSet: collected.rowSet,
     count: visibleRows.length,
     rowSetComplete: true,
     partitionId: service.partitionId,
+    executionEnvelope,
   };
 }
 
@@ -418,41 +436,15 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       correlationId: correlationId || requestId || operationId,
     };
   }
-  /**
-   * Normalize identifier-like values for metric payload fields.
-   * @param {*} value - Candidate value.
-   * @return {string|null}
-   * @private
-   */
   normalizeMetricIdentifier(value) {
-    if (value === null || value === void 0) {
-      return null;
-    }
+    if (value === null || value === void 0) return null;
     const normalized = String(value).trim();
     return normalized.length > 0 ? normalized : null;
   }
-  /**
-   * Record a write phase timing duration.
-   * @param {Object|null} phaseTimings - Target phase timing object.
-   * @param {string} field - Phase field name.
-   * @param {number} startedAtMs - Phase start timestamp.
-   * @private
-   */
   recordWritePhaseDuration(phaseTimings, field, startedAtMs) {
-    if (!phaseTimings || !Number.isFinite(startedAtMs)) {
-      return;
-    }
-    const durationMs = Math.max(0, this.timeSource.now() - startedAtMs);
-    phaseTimings[field] = durationMs;
+    if (!phaseTimings || !Number.isFinite(startedAtMs)) return;
+    phaseTimings[field] = Math.max(0, this.timeSource.now() - startedAtMs);
   }
-  /**
-   * Merge baseline and measured write phase timings for metric payloads.
-   * @param {Object} phaseTimings - Measured phase timings.
-   * @param {number} totalDurationMs - End-to-end write duration.
-   * @param {number} entryBuildMs - Entry-construction duration.
-   * @return {Object}
-   * @private
-   */
   buildWritePhaseTimingPayload(phaseTimings, totalDurationMs, entryBuildMs) {
     return {
       [WRITE_PHASE_FIELD_ENTRY_BUILD_MS]: entryBuildMs,
@@ -469,12 +461,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       [WRITE_PHASE_FIELD_TOTAL_MS]: Math.max(0, totalDurationMs),
     };
   }
-  /**
-   * Propose a write operation through Raft.
-   * @param {Object} operation - Write operation.
-   * @return {Promise<Object>} Operation result.
-   * @private
-   */
   async proposeWrite(operation, options) {
     const proposeStartMs = this.timeSource.now();
     const timestamp = this.hlcClock.now();

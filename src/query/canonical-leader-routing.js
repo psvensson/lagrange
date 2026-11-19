@@ -327,31 +327,11 @@ function resolveCanonicalLeaderRoutingGapState(routingSnapshot = null) {
   return CANONICAL_LEADER_ROUTING_GAP_STATE.NONE;
 }
 
-function hasCanonicalLeaderServiceGap(routingSnapshot = null) {
-  return resolveCanonicalLeaderRoutingGapState(routingSnapshot) ===
-    CANONICAL_LEADER_ROUTING_GAP_STATE.SERVICE_MISSING;
-}
-
-function hasCanonicalLeaderOwnerGap(routingSnapshot = null) {
-  return resolveCanonicalLeaderRoutingGapState(routingSnapshot) ===
-    CANONICAL_LEADER_ROUTING_GAP_STATE.OWNER_MISSING;
-}
-
-function hasCanonicalLeaderRoutingGap(routingSnapshot = null) {
-  return resolveCanonicalLeaderRoutingGapState(routingSnapshot) !==
-    CANONICAL_LEADER_ROUTING_GAP_STATE.NONE;
-}
-
 export {
-  buildCanonicalLeaderIdentitySnapshot,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_REASON,
   CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
   CANONICAL_LEADER_IDENTITY_SOURCE,
   CANONICAL_LEADER_IDENTITY_STATE,
   CANONICAL_LEADER_ROUTING_GAP_STATE,
-  hasCanonicalLeaderOwnerGap,
-  hasCanonicalLeaderRoutingGap,
-  hasCanonicalLeaderServiceGap,
   resolveCanonicalPartitionLeaderObservation,
   resolveCanonicalLeaderIdentitySnapshot,
   resolveCanonicalLeaderRoutingGapState,

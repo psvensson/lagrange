@@ -28,6 +28,10 @@ import {
   createDeterministicPlanId,
   normalizePlanPayload,
 } from './distributed-query-planner-plan-id.js';
+import {
+  collectAllBaseTableNames,
+  hasSubqueryCteOrCompound,
+} from './distributed-select-fanout-soundness.js';
 
 /**
  * Canonical planner for distributed SQL plans.
@@ -316,7 +320,17 @@ class DistributedQueryPlanner {
    * @return {Object[]} Ordered table graph nodes.
    */
   extractTableGraph(ast) {
-    if (!ast || !ast.from) {
+    if (!ast) {
+      return [];
+    }
+    if (hasSubqueryCteOrCompound(ast)) {
+      return collectAllBaseTableNames(ast).map((tableName) => ({
+        tableName,
+        tableAlias: tableName,
+        joinType: null,
+      }));
+    }
+    if (!ast.from) {
       return [];
     }
 
@@ -394,11 +408,16 @@ class DistributedQueryPlanner {
     const tableName = tableNode.tableName;
     const tableAlias = tableNode.tableAlias;
     const partitions = this.getTablePartitions(tableName) || [];
-    const localPredicate = this.extractTableLocalPredicate(
-      ast?.where || null,
-      tableAlias,
-    );
-    const targetPredicate = localPredicate || ast?.where || null;
+    const isNestedOrCompound = Boolean(ast && hasSubqueryCteOrCompound(ast));
+    const localPredicate = isNestedOrCompound ?
+      null :
+      this.extractTableLocalPredicate(
+        ast?.where || null,
+        tableAlias,
+      );
+    const targetPredicate = isNestedOrCompound ?
+      null :
+      (localPredicate || ast?.where || null);
     const partitionIds = this.partitionResolver ?
       this.partitionResolver.resolvePartitions(
         tableName,

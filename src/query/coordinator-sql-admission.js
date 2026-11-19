@@ -1,20 +1,37 @@
 /**
- * Coordinator SQL admission for constructs that require SQLite evaluation
- * (design coordinator-sqlite-merge §2.2, §2.5, §5.1):
+ * Coordinator SQL admission (design coordinator-sqlite-merge §2.2, §2.5, §5.1):
  *
+ * - Every SQL statement executed on a coordinator merge session must pass the
+ *   partition statement-admission owner as a read query (`SELECT` /
+ *   `WITH ... SELECT`), refusing `pragma_*`, `ATTACH`, mutations, and
+ *   unclassified functions.
  * - Connection-scoped SQLite functions (`changes`, `last_insert_rowid`,
  *   `total_changes`) are refused on coordinator read paths because neither a
  *   partition connection nor a merge connection holds client session state.
- * - While coordinator merge, cross-partition joins, FROM-less SELECT clauses,
- *   and live-query predicates/renderers still run JavaScript evaluators (until
- *   WP3 / WP7), explicit `COLLATE`, `LIKE ... ESCAPE`, non-`BINARY` declared
- *   column collations in coordinator-evaluated positions, parameterized
- *   `LIMIT`/`OFFSET`, and extra FROM-less clauses are refused with the typed
- *   `UNSUPPORTED_SQL_FEATURE` rather than silently mis-evaluated.
+ * - While live-query predicates and the secondary live-query SQL renderer still
+ *   run JavaScript evaluators (interims I1d and I1e, until WP7), explicit
+ *   `COLLATE`, `LIKE ... ESCAPE`, non-`BINARY` declared column collations,
+ *   parameterized `LIMIT`/`OFFSET`, and unevaluable `HAVING` expressions are
+ *   refused on live-query paths with `UNSUPPORTED_SQL_FEATURE`.
  *
  * @module query/coordinator-sql-admission
  */
 
+import {
+  admitPartitionStatement,
+  classifyPartitionStatementHead,
+} from '../partition/partition-statement-admission.js';
+import {
+  PARTITION_STATEMENT_KIND,
+  PARTITION_STATEMENT_PATH,
+} from '../partition/partition-statement-admission-constants.js';
+import {
+  lexPartitionStatement,
+} from '../partition/partition-statement-admission-lexer.js';
+import {
+  namesRefusedFunction,
+  resolveNamePositions,
+} from '../partition/partition-statement-admission-names.js';
 import {AST_TYPE, EXPR_TYPE, SQL_DEFAULT_COLLATION} from './parser-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {QUERY_ERROR_CODE} from './query-constants.js';
@@ -25,27 +42,11 @@ const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const UNION_ALL_OP = 'UNION ALL';
 const UNNAMED_SCHEMA_KEY = '*';
+const OPEN_PAREN_TOKEN = '(';
 
 const COORDINATOR_ADMISSION_DECISION = Object.freeze({
   ADMITTED: 'admitted',
   REFUSED: 'refused',
-});
-
-const SELECT_MERGE_MODE = Object.freeze({
-  ORIGINAL_RAW_ROWS: 'original_raw_rows',
-  DISTRIBUTED_RAW_ROWS: 'distributed_raw_rows',
-  PARTIAL_AGGREGATE: 'partial_aggregate',
-});
-
-const EVALUATED_POSITION = Object.freeze({
-  NONE: 'none',
-  HAVING: 'HAVING',
-  ORDER_BY: 'ORDER BY (or a select-list expression an ORDER BY can sort by) applied ' +
-    'by the coordinator',
-  SELECT_LIST: 'the select list or aggregate of a coordinator-merged statement',
-  GROUP_BY: 'GROUP BY of a coordinator-merged statement',
-  DISTINCT: 'DISTINCT of a coordinator-merged statement',
-  SUBQUERY_OR_COMPOUND: 'a compound SELECT, CTE, derived table or subquery',
 });
 
 const CONNECTION_SCOPED_FUNCTIONS = new Set([
@@ -71,34 +72,15 @@ const EVALUABLE_HAVING_EXPRESSION_TYPES = new Set([
   PG_EXPR_TYPE.FUNCTION_CALL, FUNCTION_EXPR_TYPE,
 ]);
 
-const FROMLESS_CLAUSES = Object.freeze([
-  'where',
-  'groupBy',
-  'having',
-  'orderBy',
-  'limit',
-  'setOperation',
-]);
-
 const REFUSAL_MESSAGE = Object.freeze({
   CONNECTION_FUNCTION_PREFIX:
     'A connection-state function is not supported on a coordinator read path: ',
-  FROMLESS_CLAUSE:
-    'WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, DISTINCT, WITH and compound ' +
-    'operators on a SELECT without FROM are not supported yet (interim I2, until WP3)',
-  FANOUT_SYNTAX_PREFIX: 'COLLATE, non-BINARY column collation, and LIKE ... ESCAPE in ',
-  FANOUT_SYNTAX_SUFFIX: ' are not supported yet: the coordinator evaluates that position ' +
-    '(interim I1a, until WP3)',
-  FANOUT_HAVING_EXPRESSION:
-    'HAVING expression is not supported by the coordinator evaluator yet ' +
-    '(interim, until WP3)',
-  FANOUT_LIMIT_PARAMETER: 'LIMIT or OFFSET bound to a parameter is not supported yet: the ' +
-    'coordinator applies the limit (interim, until WP3)',
-  JOIN_SYNTAX:
-    'COLLATE, non-BINARY column collation, and LIKE ... ESCAPE in a cross-partition JOIN ' +
-    'statement are not supported yet: the coordinator evaluates the join (interim I1b, until WP3)',
-  JOIN_LIMIT_PARAMETER: 'LIMIT or OFFSET bound to a parameter in a cross-partition JOIN ' +
-    'statement is not supported yet (interim, until WP3)',
+  STATEMENT_NOT_ADMITTED_PREFIX:
+    'Coordinator merge statement refused by statement admission: ',
+  LIVE_QUERY_HAVING_EXPRESSION:
+    'HAVING expression is not supported by the live-query evaluator yet (interim, until WP7)',
+  LIVE_QUERY_LIMIT_PARAMETER:
+    'LIMIT or OFFSET bound to a parameter is not supported by live-query yet (interim, until WP7)',
   LIVE_QUERY_PREDICATE:
     'COLLATE, non-BINARY column collation, and LIKE ... ESCAPE in a live-query predicate ' +
     'are not supported yet (interim I1d, until WP7)',
@@ -223,12 +205,6 @@ function buildCollationScopeFromSchemas(schemasOrSchema) {
   return scope;
 }
 
-/**
- * Whether an AST subtree contains explicit syntax that only SQLite can evaluate
- * (`COLLATE` or `LIKE ... ESCAPE`).
- * @param {*} node - AST node or array of nodes.
- * @return {boolean}
- */
 function holdsExplicitSqliteSyntax(node) {
   if (!node || typeof node !== TYPEOF_OBJECT) return false;
   if (Array.isArray(node)) return node.some(holdsExplicitSqliteSyntax);
@@ -272,13 +248,6 @@ function holdsSqliteSemantics(node, scope, checkStar = false) {
   return holdsExplicitSqliteSyntax(node) || holdsNonBinaryColumnRef(node, scope, checkStar);
 }
 
-function containsAggregateNode(node) {
-  if (!node || typeof node !== TYPEOF_OBJECT) return false;
-  if (Array.isArray(node)) return node.some(containsAggregateNode);
-  if (node.type === EXPR_TYPE.AGGREGATE) return true;
-  return Object.values(node).some(containsAggregateNode);
-}
-
 function holdsAggregateSqliteSemantics(node, scope) {
   if (!node || typeof node !== TYPEOF_OBJECT) return false;
   if (Array.isArray(node)) {
@@ -288,29 +257,6 @@ function holdsAggregateSqliteSemantics(node, scope) {
     return holdsSqliteSemantics(node.argument, scope);
   }
   return Object.values(node).some((val) => holdsAggregateSqliteSemantics(val, scope));
-}
-
-function holdsDistinctAggregateSqliteSemantics(node, scope) {
-  if (!node || typeof node !== TYPEOF_OBJECT) return false;
-  if (Array.isArray(node)) {
-    return node.some((entry) => holdsDistinctAggregateSqliteSemantics(entry, scope));
-  }
-  if (node.type === EXPR_TYPE.AGGREGATE && node.distinct === true &&
-      holdsSqliteSemantics(node.argument, scope)) {
-    return true;
-  }
-  return Object.values(node).some((val) => holdsDistinctAggregateSqliteSemantics(val, scope));
-}
-
-function holdsPartialAggregateColumnSqlite(columns, scope) {
-  if (holdsDistinctAggregateSqliteSemantics(columns, scope)) return true;
-  return columns.some((col) => {
-    const expr = col?.expression;
-    return Boolean(expr) &&
-      expr.type !== EXPR_TYPE.AGGREGATE &&
-      containsAggregateNode(expr) &&
-      holdsSqliteSemantics(expr, scope);
-  });
 }
 
 function holdsDirectLimitParameter(limit) {
@@ -481,164 +427,6 @@ function havingExpressionEvaluable(node) {
   );
 }
 
-/**
- * Whether the coordinator's re-sort preserves a single partition's ORDER BY
- * order: `applyOrderBy` skips explicit `COLLATE` expressions (no bare column
- * key), so a single partition's SQLite order survives only when no term holds a
- * bare non-BINARY column or alias of a SQLite-only expression and no evaluable
- * term follows an explicit `COLLATE` term.
- * @param {Object} ast - SELECT AST.
- * @param {Object} scope - Collation scope.
- * @return {boolean}
- */
-function singlePartitionOrderSurvivesResort(ast, scope) {
-  for (const term of ast.orderBy) {
-    const expr = unwrapClauseExpression(term);
-    if (expr?.type !== EXPR_TYPE.COLLATE &&
-        termReferencesSqliteColumn(term, ast.columns, scope)) {
-      return false;
-    }
-  }
-  const explicitTerms = ast.orderBy.map((term) => holdsExplicitSqliteSyntax(term));
-  const firstExplicit = explicitTerms.indexOf(true);
-  return firstExplicit < 0 || !explicitTerms.slice(firstExplicit).includes(false);
-}
-
-function isMergeEvaluatedOrderBy(ast, multiPartition, mergeMode, hasAggregatePlan, scope) {
-  if (!ast.orderBy) return false;
-  if (!ast.orderBy.some((term) => termReferencesSqliteColumn(term, ast.columns, scope))) {
-    return false;
-  }
-  if (multiPartition || mergeMode === SELECT_MERGE_MODE.PARTIAL_AGGREGATE) return true;
-  if (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan) return true;
-  return !singlePartitionOrderSurvivesResort(ast, scope);
-}
-
-function selectListMergeEvaluated(ast, multiPartition, mergeMode, hasAggregatePlan, scope) {
-  if (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan) {
-    return holdsSqliteSemantics(ast.columns, scope);
-  }
-  if (mergeMode === SELECT_MERGE_MODE.PARTIAL_AGGREGATE &&
-      holdsPartialAggregateColumnSqlite(ast.columns, scope)) {
-    return true;
-  }
-  if (!multiPartition) return false;
-  return ast.columns.some((col) => holdsExplicitSqliteSyntax(col.expression)) ||
-    holdsAggregateSqliteSemantics(ast.columns, scope);
-}
-
-function selectGroupOrListPosition(ast, multiPartition, mergeMode, hasAggregatePlan, scope) {
-  const coordinatorMergesGroups = multiPartition ||
-    (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan);
-  if (coordinatorMergesGroups &&
-      (ast.groupBy || []).some((term) => termReferencesSqliteColumn(term, ast.columns, scope))) {
-    return EVALUATED_POSITION.GROUP_BY;
-  }
-  if (selectListMergeEvaluated(ast, multiPartition, mergeMode, hasAggregatePlan, scope)) {
-    return EVALUATED_POSITION.SELECT_LIST;
-  }
-  return EVALUATED_POSITION.NONE;
-}
-
-function selectEvaluatedPosition(ast, partitionCount, mergeMode, hasAggregatePlan, scope,
-  resolveTableSchema) {
-  if (compoundOrNestedHoldsSqlite(ast, resolveTableSchema)) {
-    return EVALUATED_POSITION.SUBQUERY_OR_COMPOUND;
-  }
-  if (holdsClauseSqliteSemantics(ast.having, ast.columns, scope)) {
-    return EVALUATED_POSITION.HAVING;
-  }
-  const multiPartition = partitionCount > 1;
-  const isOriginalRawRows = mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS;
-  if (ast.distinct && (multiPartition || isOriginalRawRows) &&
-      holdsSqliteSemantics(ast.columns, scope, true)) {
-    return EVALUATED_POSITION.DISTINCT;
-  }
-  if (isMergeEvaluatedOrderBy(ast, multiPartition, mergeMode, hasAggregatePlan, scope)) {
-    return EVALUATED_POSITION.ORDER_BY;
-  }
-  return selectGroupOrListPosition(ast, multiPartition, mergeMode, hasAggregatePlan, scope);
-}
-
-function isCoordinatorEvaluatedHaving(mergeMode, hasAggregatePlan) {
-  return mergeMode === SELECT_MERGE_MODE.PARTIAL_AGGREGATE ||
-    (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan);
-}
-
-/**
- * Refuse a single-table SELECT plan whose coordinator merge would evaluate
- * `COLLATE`, non-`BINARY` column collations, `LIKE ... ESCAPE`, an unevaluable
- * `HAVING` expression, or a parameterized `LIMIT`/`OFFSET` in JavaScript.
- * @param {Object} ast - SELECT AST.
- * @param {number} partitionCount - Partitions the statement fans out to.
- * @param {Object} [context] - Merge mode and schema lookup context.
- */
-function assertSelectFanoutAdmissible(
-  ast,
-  partitionCount,
-  {
-    mergeMode = SELECT_MERGE_MODE.DISTRIBUTED_RAW_ROWS,
-    hasAggregatePlan = false,
-    resolveTableSchema = null,
-  } = {},
-) {
-  if (holdsParameterLimit(ast)) {
-    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_LIMIT_PARAMETER);
-  }
-  if (ast.having &&
-      isCoordinatorEvaluatedHaving(mergeMode, hasAggregatePlan === true) &&
-      !havingExpressionEvaluable(ast.having)) {
-    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
-  }
-  const scope = buildCollationScopeForSelect(ast, resolveTableSchema);
-  const position = selectEvaluatedPosition(
-    ast,
-    partitionCount,
-    mergeMode,
-    hasAggregatePlan === true,
-    scope,
-    resolveTableSchema,
-  );
-  if (position !== EVALUATED_POSITION.NONE) {
-    throw unsupportedFeatureError(
-      REFUSAL_MESSAGE.FANOUT_SYNTAX_PREFIX + position + REFUSAL_MESSAGE.FANOUT_SYNTAX_SUFFIX,
-    );
-  }
-}
-
-/**
- * Decide whether a cross-partition JOIN statement is admissible under the
- * current coordinator evaluator.
- * @param {Object} ast - SELECT AST with joins.
- * @param {string[]} partitionIds - Target main-table partition IDs.
- * @param {Function|null} [resolveTableSchema] - Catalog schema resolver.
- * @return {{decision: string, response?: Object}}
- */
-function evaluateCrossPartitionJoinAdmission(ast, partitionIds, resolveTableSchema = null) {
-  const scope = buildCollationScopeForSelect(ast, resolveTableSchema);
-  const hasSqliteSyntax = holdsSqliteSemantics(ast, scope, true) ||
-    compoundOrNestedHoldsSqlite(ast, resolveTableSchema);
-  const hasParamLimit = holdsParameterLimit(ast);
-  const hasUnsupportedHaving = Boolean(ast?.having) &&
-    !havingExpressionEvaluable(ast.having);
-  if (!hasSqliteSyntax && !hasParamLimit && !hasUnsupportedHaving) {
-    return {decision: COORDINATOR_ADMISSION_DECISION.ADMITTED};
-  }
-  const error = hasSqliteSyntax ?
-    REFUSAL_MESSAGE.JOIN_SYNTAX :
-    (hasParamLimit ? REFUSAL_MESSAGE.JOIN_LIMIT_PARAMETER :
-      REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
-  return {
-    decision: COORDINATOR_ADMISSION_DECISION.REFUSED,
-    response: {
-      success: false,
-      errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
-      error,
-      partitions: partitionIds,
-    },
-  };
-}
-
 function firstConnectionFunctionName(node) {
   if (!node || typeof node !== TYPEOF_OBJECT) {
     return '';
@@ -661,39 +449,93 @@ function firstConnectionFunctionName(node) {
   return '';
 }
 
-function holdsFromlessUnsupportedClause(ast) {
-  if (ast.from) {
-    return false;
+function firstLexedConnectionFunctionName(sql) {
+  const {tokens} = lexPartitionStatement(sql);
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (
+      token.identifier !== null &&
+      CONNECTION_SCOPED_FUNCTIONS.has(token.identifier) &&
+      next?.text === OPEN_PAREN_TOKEN
+    ) {
+      return token.text;
+    }
   }
-  if (ast.distinct === true) {
-    return true;
+  return '';
+}
+
+const DEFAULT_ADMISSION_REFUSAL_REASON = 'statement not admitted';
+const REFUSED_FUNCTION_REASON = 'statement_function';
+
+function resolveVerdictRefusalDetail(verdict) {
+  if (typeof verdict?.reason === 'string' && verdict.reason.length > 0) {
+    return verdict.reason;
   }
-  if (Array.isArray(ast.ctes) && ast.ctes.length > 0) {
-    return true;
+  if (typeof verdict?.refusalLayer === 'string' && verdict.refusalLayer.length > 0) {
+    return verdict.refusalLayer;
   }
-  return FROMLESS_CLAUSES.some((clause) => Boolean(ast[clause]));
+  return DEFAULT_ADMISSION_REFUSAL_REASON;
+}
+
+function assertReadVerdictAdmitted(verdict) {
+  if (verdict.admitted !== true || verdict.kind !== PARTITION_STATEMENT_KIND.READ) {
+    throw unsupportedFeatureError(
+      REFUSAL_MESSAGE.STATEMENT_NOT_ADMITTED_PREFIX + resolveVerdictRefusalDetail(verdict),
+    );
+  }
 }
 
 /**
- * Decide whether a coordinator SELECT is admissible (refusing connection-state
- * functions and unimplemented FROM-less clauses).
+ * Verify that a SQL statement string is admitted as a coordinator read query
+ * by the partition statement-admission owner and calls no connection-scoped
+ * function (`changes`, `last_insert_rowid`, `total_changes`).
+ * @param {string} sql - SQL statement text.
+ * @param {Object|null} [db] - Optional SQLite connection for full admission.
+ * @throws {Error} UNSUPPORTED_SQL_FEATURE when refused.
+ */
+function assertCoordinatorStatementAdmitted(sql, db = null) {
+  const connectionFn = firstLexedConnectionFunctionName(sql);
+  if (connectionFn !== '') {
+    throw unsupportedFeatureError(
+      REFUSAL_MESSAGE.CONNECTION_FUNCTION_PREFIX + connectionFn,
+    );
+  }
+  if (db !== null && typeof db === TYPEOF_OBJECT) {
+    const verdict = admitPartitionStatement(
+      {db},
+      sql,
+      [],
+      PARTITION_STATEMENT_PATH.READ_ONLY,
+    );
+    assertReadVerdictAdmitted(verdict);
+    return;
+  }
+  assertReadVerdictAdmitted(classifyPartitionStatementHead(sql));
+  const lexed = resolveNamePositions(lexPartitionStatement(sql));
+  if (namesRefusedFunction(lexed)) {
+    throw unsupportedFeatureError(
+      REFUSAL_MESSAGE.STATEMENT_NOT_ADMITTED_PREFIX + REFUSED_FUNCTION_REASON,
+    );
+  }
+}
+
+/**
+ * Decide whether a coordinator SELECT AST is admissible (refusing
+ * connection-state functions).
  * @param {Object} ast - SELECT AST.
  * @return {{decision: string, response?: Object}}
  */
 function evaluateCoordinatorSelectAdmission(ast) {
   const connectionFn = firstConnectionFunctionName(ast);
-  const hasFromlessClause = connectionFn === '' && holdsFromlessUnsupportedClause(ast);
-  if (connectionFn === '' && !hasFromlessClause) {
+  if (connectionFn === '') {
     return {decision: COORDINATOR_ADMISSION_DECISION.ADMITTED};
   }
-  const error = connectionFn !== '' ?
-    REFUSAL_MESSAGE.CONNECTION_FUNCTION_PREFIX + connectionFn :
-    REFUSAL_MESSAGE.FROMLESS_CLAUSE;
   return {
     decision: COORDINATOR_ADMISSION_DECISION.REFUSED,
     response: {
       success: false,
-      error,
+      error: REFUSAL_MESSAGE.CONNECTION_FUNCTION_PREFIX + connectionFn,
       errorCode: QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
     },
   };
@@ -701,7 +543,7 @@ function evaluateCoordinatorSelectAdmission(ast) {
 
 /**
  * Refuse a live-query predicate holding `COLLATE`, non-`BINARY` column
- * collation, or `LIKE ... ESCAPE`.
+ * collation, or `LIKE ... ESCAPE` (interim I1d, until WP7).
  * @param {Object|null} whereClause - Parsed WHERE AST.
  * @param {Object|Object[]|null} [schemas] - Referenced catalog schema(s).
  */
@@ -733,17 +575,18 @@ function liveQueryColumnsHoldSqlite(parsedQuery, scope) {
 
 /**
  * Refuse a live-query AST whose JS predicate/delta/group/order/join evaluation
- * references a non-`BINARY` column or holds `COLLATE` / `LIKE ... ESCAPE`.
+ * references a non-`BINARY` column or holds `COLLATE` / `LIKE ... ESCAPE`
+ * (interim I1d, until WP7).
  * @param {Object|null} parsedQuery - Parsed SELECT AST.
  * @param {Function|null} [resolveTableSchema] - Catalog schema resolver.
  */
 function assertLiveQueryGroupAdmissible(parsedQuery, resolveTableSchema = null) {
   if (!parsedQuery) return;
   if (holdsParameterLimit(parsedQuery)) {
-    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_LIMIT_PARAMETER);
+    throw unsupportedFeatureError(REFUSAL_MESSAGE.LIVE_QUERY_LIMIT_PARAMETER);
   }
   if (parsedQuery.having && !havingExpressionEvaluable(parsedQuery.having)) {
-    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
+    throw unsupportedFeatureError(REFUSAL_MESSAGE.LIVE_QUERY_HAVING_EXPRESSION);
   }
   const scope = buildCollationScopeForSelect(parsedQuery, resolveTableSchema);
   if (liveQueryClausesHoldSqlite(parsedQuery, scope) ||
@@ -755,7 +598,8 @@ function assertLiveQueryGroupAdmissible(parsedQuery, resolveTableSchema = null) 
 
 /**
  * Refuse rendering a live-query AST through the secondary live-query renderer
- * when it holds `COLLATE`, non-`BINARY` column collation, or `LIKE ... ESCAPE`.
+ * when it holds `COLLATE`, non-`BINARY` column collation, or `LIKE ... ESCAPE`
+ * (interim I1e, until WP7).
  * @param {Object|null} parsedQuery - Parsed SELECT AST.
  * @param {Function|null} [resolveTableSchema] - Catalog schema resolver.
  */
@@ -769,11 +613,9 @@ function assertLiveQueryRendererAdmissible(parsedQuery, resolveTableSchema = nul
 
 export {
   COORDINATOR_ADMISSION_DECISION,
-  SELECT_MERGE_MODE,
+  assertCoordinatorStatementAdmitted,
   assertLiveQueryGroupAdmissible,
   assertLiveQueryPredicateAdmissible,
   assertLiveQueryRendererAdmissible,
-  assertSelectFanoutAdmissible,
   evaluateCoordinatorSelectAdmission,
-  evaluateCrossPartitionJoinAdmission,
 };

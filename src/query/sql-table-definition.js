@@ -123,7 +123,9 @@ function resolveRenderedCollation(collation) {
 }
 
 function columnTypeAndCollationSql(col) {
-  return renderSqliteIdentifier(col.name) + DDL.SPACE + col.type +
+  const hasType = typeof col.type === 'string' && col.type.length > 0;
+  return renderSqliteIdentifier(col.name) +
+    (hasType ? DDL.SPACE + col.type : '') +
     resolveRenderedCollation(col.collation);
 }
 
@@ -224,9 +226,7 @@ function renderTableColumnsSql(tableName, schema) {
 }
 
 export {
-  renderColumnDefinitionSql,
   renderTableColumnsSql,
   renderTableDefinitionSql,
   sqliteDeclaredTypeAffinity,
-  tableColumnSqlShape,
 };

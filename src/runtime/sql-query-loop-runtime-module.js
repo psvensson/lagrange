@@ -240,6 +240,9 @@ function compareReducedRows(left, right) {
 }
 
 function sqlLiteral(value) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
   return typeof value === 'number' && Number.isFinite(value) ?
     String(value) :
     `'${String(value).replace(/'/g, '\'\'')}'`;

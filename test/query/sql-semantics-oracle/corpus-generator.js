@@ -705,9 +705,7 @@ function generateSeedCorpus(seed, collations) {
 
 export {
   FAMILY,
-  FIXED_SEEDS,
   SEED_ENV,
-  createPrng,
   generateSeedCorpus,
   resolveSeeds,
 };

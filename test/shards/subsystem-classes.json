@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 286,
-    "query-sql": 201,
+    "query-sql": 199,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2691,
-  "digest": "fnv1a32-f077a4fa",
+  "censusSize": 2689,
+  "digest": "fnv1a32-92628bb7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e5ebfdd0",
+  "observationDigest": "fnv1a32-b77592ce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1718,14 +1718,12 @@
     "test/query/sql-query-engine.test.js": "query-sql",
     "test/query/sql-query-pbt.test.js": "query-sql",
     "test/query/sql-request.test.js": "query-sql",
-    "test/query/sql-scalar-functions.test.js": "query-sql",
     "test/query/sql-semantics-differential-oracle.test.js": "query-sql",
     "test/query/sql-statement-refusals.test.js": "query-sql",
     "test/query/sql-table-definition.test.js": "query-sql",
     "test/query/sql-value-codec.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
-    "test/query/streaming-aggregation.property.test.js": "query-sql",
     "test/query/system-table-ingress-boundary-adversarial.test.js": "query-sql",
     "test/query/table-creation-service.test.js": "query-sql",
     "test/query/transaction-begin-collision-production.test.js": "query-sql",
@@ -14443,7 +14441,8 @@
       "files": [
         "src/query/distributed/distributed-write-constraint-helpers.js",
         "src/query/distributed/distributed-write-coordinator.js",
-        "src/query/sql-query-engine-select-execution.js"
+        "src/query/sql-query-engine-select-execution.js",
+        "src/query/sql-select-execution-helpers.js"
       ]
     },
     "test/query/create-table-policy-option.test.js": {

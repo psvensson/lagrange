@@ -183,35 +183,6 @@ function resolveBackfillOutcome(context) {
   }
 }
 
-function applySorting(rows, orderBy) {
-  if (!orderBy || !Array.isArray(rows) || rows.length <= 1) {
-    return rows;
-  }
-  const orderList = Array.isArray(orderBy) ? orderBy : [orderBy];
-  return [...rows].sort((a, b) => {
-    for (const ord of orderList) {
-      const col = typeof ord === 'string' ? ord.split(/\s+/)[0] : ord.column;
-      const desc = typeof ord === 'string' ?
-        /desc/i.test(ord) :
-        String(ord.direction).toUpperCase() === 'DESC';
-      if (a[col] < b[col]) return desc ? 1 : -1;
-      if (a[col] > b[col]) return desc ? -1 : 1;
-    }
-    return 0;
-  });
-}
-
-function applyPostProcessing(rows, {orderBy, limit}) {
-  let result = Array.isArray(rows) ? rows : [];
-  if (orderBy) {
-    result = applySorting(result, orderBy);
-  }
-  if (typeof limit === 'number' && limit >= 0) {
-    result = result.slice(0, limit);
-  }
-  return result;
-}
-
 function normalizeGlobalIndexDefinition(ddlOrAst, options) {
   const rawDef = typeof ddlOrAst === 'string' ?
     parseGlobalIndexDdl(ddlOrAst) :
@@ -747,8 +718,6 @@ export class GlobalIndexLifecycleCoordinator {
       tableName,
       where,
       whereClause,
-      orderBy,
-      limit,
       projectedColumns,
       executeScatterGatherRead,
     } = readContext;
@@ -776,7 +745,7 @@ export class GlobalIndexLifecycleCoordinator {
       });
     }
 
-    return applyPostProcessing(rows, {orderBy, limit});
+    return Array.isArray(rows) ? rows : [];
   }
 
   /**

@@ -88,15 +88,21 @@ test('negative zero survives as REAL -0.0; integer -0 is 0', () => {
   assert.deepEqual(typedRows(rendered).rows[0], ['number:-0', 'bigint:0', 'number:1']);
 });
 
-test('integer literals beyond 2^53 are refused, typed, never rounded (I3, until WP3)', () => {
-  assertTypedRefusal('SELECT 9007199254740993 FROM t');
-  assertTypedRefusal('SELECT -9223372036854775808 FROM t');
+test('integer literals beyond 2^53 round-trip as BigInt INTEGER; above int64 is refused (WP3 removes I3)', () => {
+  assert.deepEqual(selectedLiteral('SELECT 9007199254740993 FROM t'),
+    {type: 'literal', value: 9007199254740993n, sqlType: SQL_STORAGE_CLASS.INTEGER});
+  assert.deepEqual(selectedLiteral('SELECT -9223372036854775808 FROM t'),
+    {type: 'literal', value: -9223372036854775808n, sqlType: SQL_STORAGE_CLASS.INTEGER});
+  assertRoundTrip('SELECT 9007199254740993 AS hi, -9223372036854775808 AS lo FROM t WHERE id = 1');
+  assertTypedRefusal('SELECT 9223372036854775808 FROM t');
   assert.deepEqual(selectedLiteral('SELECT 9007199254740990 FROM t'),
     {type: 'literal', value: 9007199254740990, sqlType: SQL_STORAGE_CLASS.INTEGER});
 });
 
-test('a BLOB literal is refused, typed (until WP3); a BLOB-class node renders as X\'..\'', () => {
-  assertTypedRefusal('SELECT x\'41\' FROM t');
+test('a BLOB literal parses as a Buffer and renders as X\'..\'', () => {
+  assert.deepEqual(selectedLiteral('SELECT x\'41\' FROM t'),
+    {type: 'literal', value: Buffer.from('41', 'hex'), sqlType: SQL_STORAGE_CLASS.BLOB});
+  assertRoundTrip('SELECT x\'41\' AS b, x\'\' AS empty FROM t WHERE id = 1');
   assert.equal(renderLiteral({type: 'literal', value: Buffer.from('AB'),
     sqlType: SQL_STORAGE_CLASS.BLOB}), 'X\'4142\'');
 });

@@ -477,16 +477,16 @@ describe('sql-value-codec refuses every non-canonical form', () => {
 });
 
 describe('sql-value-codec input typing (D3)', () => {
-  it('types BigInt, number, string, Buffer, Uint8Array and null', () => {
-    const encoded = encodeTypedParams([5n, 5, 5.5, '5', Buffer.from([5]),
+  it('types BigInt, boolean (D15: 1/0 INTEGER), number, string, Buffer, Uint8Array and null', () => {
+    const encoded = encodeTypedParams([5n, true, false, 5, 5.5, '5', Buffer.from([5]),
       new Uint8Array([5]), null]);
-    assert.equal(encoded.classes, 'irrtbbn');
+    assert.equal(encoded.classes, 'iiirrtbbn');
+    assert.deepEqual(encoded.cells.slice(0, 3), ['5', '1', '0']);
+    assert.deepEqual(decodeTypedParams(encoded).slice(0, 3), [5n, 1n, 0n]);
   });
 
   it('refuses every value outside the table as unrepresentable', () => {
     const cases = [
-      [true, REFUSAL.VALUE_TYPE_UNSUPPORTED],
-      [false, REFUSAL.VALUE_TYPE_UNSUPPORTED],
       [undefined, REFUSAL.VALUE_TYPE_UNSUPPORTED],
       [{}, REFUSAL.VALUE_TYPE_UNSUPPORTED],
       [[], REFUSAL.VALUE_TYPE_UNSUPPORTED],

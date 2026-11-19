@@ -165,7 +165,7 @@ documentClass: generated
 - [partition-statement-admission.js](partition-statement-admission.js) - The statement-admission owner: the single owner of what caller-supplied SQL text may be prepared on a partition's... (importers: many)
 - [partition-transaction-determinism-constants.js](partition-transaction-determinism-constants.js) - The vocabulary of the participant's staging classifier (partition-transaction-determinism.js; TX1 design revision... (importers: many)
 - [partition-transaction-determinism.js](partition-transaction-determinism.js) - The participant's staging classifier (TX1 design revision 10, section 3.3; decisions I, Q, AB, AH, AK, AN, AO): one... (importers: many)
-- [partition-transaction-execution-envelope.js](partition-transaction-execution-envelope.js) - The execution compatibility envelope of the participant's transaction commands (TX1 design revision 10, sections 2.3... (importers: few)
+- [partition-transaction-execution-envelope.js](partition-transaction-execution-envelope.js) - The execution compatibility envelope of the participant's transaction commands (TX1 design revision 10, sections 2.3... (importers: many)
 - [partition-transition-overlap-guard.js](partition-transition-overlap-guard.js) - Durable split/merge overlap guard (F23). (importers: few)
 - [partition-transition-row.js](partition-transition-row.js) - The one parser of the transition columns a `tables` row carries (partition_transition_state +... (importers: few)
 - [partition-write-footprint-contract.js](partition-write-footprint-contract.js) - Canonical producer contract, runtime conformance validator, and AST-based write-footprint extractor for... (importers: many)
