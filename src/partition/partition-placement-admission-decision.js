@@ -289,4 +289,10 @@ function decideHoldRelease(db, {command, release}) {
   rows: [Object.freeze({...db.prepare(ROW_SQL).get(held.operationId)})]};
 }
 
-export {LEDGER_PARTITION_ID, decideHoldRelease, decidePlacementAdmission};
+export {
+  LEDGER_PARTITION_ID,
+  decideHoldRelease,
+  decidePlacementAdmission,
+  isOccupyingCopy,
+  readPlacementCensus,
+};

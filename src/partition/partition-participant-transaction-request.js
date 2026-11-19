@@ -385,6 +385,13 @@ function sealSession(service, payload, session) {
   return null;
 }
 
+function clearStaleRowKeySealedPrepare(service, session) {
+  if (session.sealed !== null && isRowKeyConcurrencyEnabled(service) &&
+      readPartitionWriteGeneration(service.db) !== session.generationBase) {
+    session.sealed = null;
+  }
+}
+
 async function prepareSession(service, payload, session) {
   const refused = sessionRefusalOf(service, payload, session);
   if (refused !== null) {
@@ -402,10 +409,7 @@ async function prepareSession(service, payload, session) {
     return refusalOf(service, payload, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
   }
-  if (session.sealed !== null && isRowKeyConcurrencyEnabled(service) &&
-      readPartitionWriteGeneration(service.db) !== session.generationBase) {
-    session.sealed = null;
-  }
+  clearStaleRowKeySealedPrepare(service, session);
   // A sealed command already submitted belongs to its outcome owner. Only a
   // new PREPARE is admission (release fence, then topology); retries retain
   // their exact bytes. A local staging session is not an obligation, so its

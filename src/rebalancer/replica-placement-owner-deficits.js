@@ -99,16 +99,28 @@ function hostCountsOf(replicas, eligibility) {
   return counts;
 }
 
-// An eligible node that does not host the partition, on a host it does not
-// use when one exists; ties by node id.
-function targetNodeOf(replicas, eligibility, {requireUnusedHost}) {
+function findTargetNode(replicas, eligibility, {requireUnusedHost, excludedTargetNodeIds = null}) {
   const usedNodes = new Set(replicas.map((replica) => replica.nodeId));
   const usedHosts = new Set(replicas.map((replica) =>
     eligibility.hostOfNode.get(replica.nodeId)));
-  const free = eligibility.eligibleNodeIds.filter((nodeId) => !usedNodes.has(nodeId));
+  const free = eligibility.eligibleNodeIds.filter((nodeId) =>
+    !usedNodes.has(nodeId) && !excludedTargetNodeIds?.has(nodeId));
   const unusedHost = free.find((nodeId) =>
     !usedHosts.has(eligibility.hostOfNode.get(nodeId)));
   return unusedHost ?? (requireUnusedHost ? null : free[0] ?? null);
+}
+
+// An eligible node that does not host the partition, on a host it does not
+// use when one exists; prefers a target not in saturatedTargetNodeIds; ties by node id.
+function targetNodeOf(replicas, eligibility, {requireUnusedHost, saturatedTargetNodeIds = null}) {
+  const anyTarget = findTargetNode(replicas, eligibility, {requireUnusedHost});
+  if (anyTarget === null || !saturatedTargetNodeIds || saturatedTargetNodeIds.size === 0) {
+    return anyTarget;
+  }
+  return findTargetNode(replicas, eligibility, {
+    requireUnusedHost,
+    excludedTargetNodeIds: saturatedTargetNodeIds,
+  }) ?? anyTarget;
 }
 
 // The replica to move off the most over-represented host: never the leader
@@ -145,7 +157,8 @@ function waitingOf(context, deficitKind, reason) {
 // A copy reads from the current leader; with no known leader it waits.
 function copyMoveOf(context, deficitKind, type, fields) {
   const target = targetNodeOf(context.live, context.eligibility,
-    {requireUnusedHost: deficitKind === KIND.HOST_SPREAD});
+    {requireUnusedHost: deficitKind === KIND.HOST_SPREAD,
+      saturatedTargetNodeIds: context.saturatedTargetNodeIds});
   if (target === null) return waitingOf(context, deficitKind, WAITING.NO_ELIGIBLE_TARGET);
   if (context.leader === undefined) {
     return waitingOf(context, deficitKind, WAITING.LEADER_UNKNOWN);
@@ -186,10 +199,11 @@ function surplusDeficit(context) {
  *   {state: WAITING, waiting}.
  */
 function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
-  eligibility}) {
+  eligibility, saturatedTargetNodeIds = null}) {
   const live = liveReplicasOf(replicaRows, eligibility);
   const distinctHostCount = hostCountsOf(live, eligibility).size;
   const context = {replicaRows, live, eligibility, replicationFactor,
+    saturatedTargetNodeIds,
     leader: live.find((replica) => replica.isLeader === true),
     summary: Object.freeze({partitionId,
       placementClass: classifyPlacementClass(partitionId),

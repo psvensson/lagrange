@@ -23,9 +23,11 @@ import {
   SERVE_ELIGIBILITY_STATE,
   SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
   STALE_SIGNATURE,
+  UNAVAILABLE_FORMATION,
   buildCommittedReadResult,
   checkOwnerUnavailability,
   decideServeEligibility,
+  evaluateCommittedFormation,
   evaluateServeEligibilityRecordSignature,
   hasAdvancedNodeLeaseOrHeartbeat,
   isMembershipPublication,
@@ -700,12 +702,14 @@ class ServeEligibilityOwner {
         epoch: unavail.epoch,
         retryAfterMs: unavail.retryAfterMs,
         nodeRows: Object.freeze([]),
+        formation: UNAVAILABLE_FORMATION,
       });
     }
     return Object.freeze({
       state: SERVE_ELIGIBILITY_STATE.READY,
       epoch: this.record.epoch,
       nodeRows: Object.freeze(Array.from(this.record.nodeRowsById.values())),
+      formation: evaluateCommittedFormation(this.record.publication),
     });
   }
 

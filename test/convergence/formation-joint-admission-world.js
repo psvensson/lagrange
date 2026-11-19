@@ -709,6 +709,7 @@ function seedSystemRows(cache, nowMs) {
   insert(TABLES.NODES, {
     ...createNodeEntry(SEED_NODE_ID, {
       [COLUMN.NODE_ADDRESS]: nodeAddressOf(SEED_NODE_ID),
+      [COLUMN.HOST_ID]: simulatedHostIdOf(SEED_NODE_ID),
       [COLUMN.LAST_HEARTBEAT]: nowMs,
       [COLUMN.READY_LEASE_EXPIRES_AT]: nowMs + READY_LEASE_MS,
       [COLUMN.CREATED_AT]: nowMs,

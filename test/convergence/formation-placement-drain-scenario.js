@@ -46,9 +46,16 @@
 // has no SQL engine for CREATE TABLE, so a user table's founding creates are
 // not hosted here.
 
+import Database from 'better-sqlite3';
+import {EventEmitter} from 'node:events';
 import {
   INITIAL_MESSAGE_GROUP_ID,
+  REPLICA_OPERATIONS_SCHEMA,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
 import {
   classifySystemPartition,
 } from '../../src/bootstrap/system-partition-classification.js';
@@ -59,8 +66,18 @@ import {
   CDC_OPERATION, COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
+import {
+  PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_RELEASE_HOLD_TYPE,
+  PLACEMENT_RESULT_FIELD,
+} from '../../src/partition/partition-placement-admission-constants.js';
+import {
+  LEDGER_PARTITION_ID,
+  decideHoldRelease,
+  decidePlacementAdmission,
+} from '../../src/partition/partition-placement-admission-decision.js';
+import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {SeededRandomSource} from '../../src/random/random-source.js';
 import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
@@ -69,11 +86,13 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
-  EntityType,
-  UnifiedRebalancer,
-} from '../../src/rebalancer/unified-rebalancer.js';
+  PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_OUTCOME,
+} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {ReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {createRoundDriver} from './formation-joint-admission-rounds.js';
 import {
   applyEvent,
@@ -88,8 +107,7 @@ import {
 
 // The capacity the owner must respect (design section 2.11, recommendation
 // D2): unresolved copy-phase operations per copy-source node and per target.
-const K_SRC = 2;
-const K_TGT = 2;
+const {K_SRC, K_TGT} = PLACEMENT_COPY_CAPACITY;
 // From admission until the learner is voter-ready (design section 2.5).
 const COPY_PHASE_STEPS = new Set([
   WORKFLOW_STEP.PENDING,
@@ -121,7 +139,6 @@ const SYNCING_SERVICE_STATUS = 'syncing';
 const ROUND_CAP = 160;
 const REDELIVERY_ROUNDS = 3;
 const TIMER_PROBE_CAP = 400;
-const DECIDER_RANDOM_SEED = 20261117;
 const INJECTED_CREATE_FAILURE = 'injected_replica_create_failure';
 const QUIET_LOGGER = Object.freeze({
   debug() {}, info() {}, warn() {}, error() {},
@@ -166,99 +183,169 @@ const DRIVER_STEP_METHODS = Object.freeze({
 // COMPOSITION: the tree's placement deciders (the one seam a cutover changes).
 // ---------------------------------------------------------------------------
 
-// Timers a placement decider of this tree arms, by arming site: the planning
-// check and its stagger, safety and wake re-arms (scheduleNextCheck), the
-// stabilization window, the inter-batch delay of a planning pass, and the
-// partition service's traffic-ready stagger.
+// Timers a placement decider of this tree arms, by arming site.
 const PLACEMENT_TIMER_SITES = Object.freeze([
-  'src/rebalancer/rebalancer-planning-gate-methods.js',
-  'src/rebalancer/unified-rebalancer-',
-  'src/rebalancer/rebalancer-local-mutation-readiness-wake.js',
-  'src/rebalancer/continuation-wake-coordinator.js',
-  'src/rebalancer/background-priority-spread-release-tracker.js',
-  'src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js',
-  'src/partition/partition-service-rebalancer-methods.js',
+  'src/rebalancer/replica-placement-owner.js',
 ]);
 
 function isPlacementTimer(timer) {
   return PLACEMENT_TIMER_SITES.some((site) => timer.armedBy.startsWith(site));
 }
 
-function deciderEntities(cache, nodeId) {
-  const partitions = cache.getAll(TABLES.PARTITIONS)
-    .filter((row) => row[COLUMN.LEADER_NODE_ID] === nodeId)
-    .map((row) => ({
-      entityId: row[COLUMN.PARTITION_ID],
-      entityType: EntityType.PARTITION,
-    }));
-  const groups = cache.getAll(TABLES.MESSAGE_GROUPS)
-    .filter((row) => row[COLUMN.LEADER_NODE_ID] === nodeId)
-    .map((row) => ({
-      entityId: row[COLUMN.GROUP_ID],
-      entityType: EntityType.MESSAGE_GROUP,
-    }));
-  return [...partitions, ...groups]
-    .sort((left, right) => left.entityId.localeCompare(right.entityId));
+function createSimulatedLedgerPartitionService({seedHosts, cache}) {
+  const db = new Database(':memory:');
+  db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) {
+    db.exec(indexSql);
+  }
+  const columns = REPLICA_OPERATIONS_SCHEMA.columns.map((c) => c.name);
+  const placeholders = columns.map(() => '?').join(', ');
+  const upsertStmt = db.prepare(
+    `INSERT OR REPLACE INTO ${REPLICA_OPERATIONS_SCHEMA.tableName} ` +
+      `(${columns.join(', ')}) VALUES (${placeholders})`,
+  );
+  const deleteStmt = db.prepare(
+    `DELETE FROM ${REPLICA_OPERATIONS_SCHEMA.tableName} WHERE operation_id = ?`,
+  );
+  const bindVal = (v) => (typeof v === 'boolean' ? Number(v) : v === undefined ? null : v);
+  const syncRowToDb = (row) => {
+    if (!row || !row[COLUMN.OPERATION_ID]) return;
+    upsertStmt.run(...columns.map((col) => bindVal(row[col])));
+  };
+  for (const existing of cache.getAll(TABLES.REPLICA_OPERATIONS)) {
+    syncRowToDb(existing);
+  }
+  const emitter = new EventEmitter();
+  let applyingPlacementCommand = false;
+  let logIndex = 0;
+
+  cache.onCacheApplyChange((tableName, operation, row) => {
+    if (tableName !== TABLES.REPLICA_OPERATIONS || applyingPlacementCommand) return;
+    if (operation === CDC_OPERATION.DELETE) {
+      if (row?.[COLUMN.OPERATION_ID]) deleteStmt.run(row[COLUMN.OPERATION_ID]);
+    } else {
+      syncRowToDb(row);
+    }
+  });
+
+  const service = Object.assign(emitter, {
+    partitionId: LEDGER_PARTITION_ID,
+    tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
+    db,
+    close: () => {
+      if (db.open) db.close();
+    },
+  });
+
+  const admitPlacement = ({entryId, body}) => {
+    logIndex += 1;
+    const command = {
+      type: PLACEMENT_ADMIT_TYPE,
+      entryId,
+      partitionId: LEDGER_PARTITION_ID,
+      proposedBy: seedHosts.nodeId,
+      proposedAt: seedHosts.now(),
+      body,
+    };
+    const {result, rows} = decidePlacementAdmission(db, {
+      command,
+      statement: body,
+      index: logIndex,
+    });
+    applyingPlacementCommand = true;
+    try {
+      for (const row of rows) {
+        cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, CDC_OPERATION.INSERT, {...row});
+      }
+    } finally {
+      applyingPlacementCommand = false;
+    }
+    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+      partitionId: LEDGER_PARTITION_ID,
+      command,
+    });
+    return {
+      success: result.outcome !== PLACEMENT_OUTCOME.REFUSED,
+      partitionId: LEDGER_PARTITION_ID,
+      committed: true,
+      logIndex,
+      term: 1,
+      [PLACEMENT_RESULT_FIELD]: result,
+    };
+  };
+
+  const releasePlacementHold = ({entryId, body}) => {
+    logIndex += 1;
+    const command = {
+      type: PLACEMENT_RELEASE_HOLD_TYPE,
+      entryId,
+      partitionId: LEDGER_PARTITION_ID,
+      proposedBy: seedHosts.nodeId,
+      proposedAt: seedHosts.now(),
+      body,
+    };
+    const {result, rows} = decideHoldRelease(db, {
+      command,
+      release: body,
+    });
+    applyingPlacementCommand = true;
+    try {
+      for (const row of rows) {
+        cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, CDC_OPERATION.UPDATE, {...row});
+      }
+    } finally {
+      applyingPlacementCommand = false;
+    }
+    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+      partitionId: LEDGER_PARTITION_ID,
+      command,
+    });
+    return {
+      success: result.outcome !== PLACEMENT_OUTCOME.REFUSED,
+      partitionId: LEDGER_PARTITION_ID,
+      committed: true,
+      logIndex,
+      term: 1,
+      [PLACEMENT_RESULT_FIELD]: result,
+    };
+  };
+
+  return {service, admitPlacement, releasePlacementHold};
 }
 
 /**
- * Mount the placement deciders of a starting seed as this tree's production
- * composition builds them: one UnifiedRebalancer per partition and per
- * message group the seed leads, built and initialized as
- * PartitionService.initializeRebalancer and MessageGroupService build theirs;
- * leadership is taken when the seed forms (setLeader). Its timers are armed
- * on the world clock, where a cancelled timer is disarmed, as the platform's
- * clearTimeout does.
+ * Mount the placement decider of a starting seed as this tree's production
+ * composition builds it: one ReplicaPlacementOwner on replica_operations-p1.
  * @param {object} mount
  * @param {object} mount.seedHosts the seed's real owners
  * @param {object} mount.clock the world clock
  * @param {object} mount.cache the durable row store
  * @return {Map<string, object>} the deciders by entity id
  */
-function mountPlacementDeciders({seedHosts, clock, cache}) {
-  const deciders = new Map();
-  deciderEntities(cache, seedHosts.nodeId).forEach(
-    ({entityId, entityType}, index) => {
-      const decider = new UnifiedRebalancer({
-        entityId,
-        entityType,
-        nodeId: seedHosts.nodeId,
-        systemTableCache: seedHosts.cache,
-        cdcIntegrationService: seedHosts.cdcIntegrationService,
-        tablePolicyService: seedHosts.tablePolicyService,
-        messageRouter: seedHosts.messageRouter,
-        rebalanceCoordinator: seedHosts.rebalanceCoordinator,
-        sqlQueryEngine: seedHosts.sqlQueryEngine,
-        controlPlaneSystemTableGateway:
-          seedHosts.controlPlaneSystemTableGateway,
-        controlPlaneReadinessService: seedHosts.controlPlaneReadinessService,
-        nowFn: seedHosts.now,
-        randomSource: new SeededRandomSource({
-          seed: DECIDER_RANDOM_SEED + index,
-        }),
-        setTimeoutFn: (callback, delayMs) => clock.setTimeout(callback, delayMs),
-        clearTimeoutFn: (handle) => clock.clearTimeout(handle),
-      });
-      decider.logger = QUIET_LOGGER;
-      decider.initialize();
-      deciders.set(entityId, decider);
-    });
-  return deciders;
+function mountPlacementDeciders({seedHosts, cache}) {
+  const {service, admitPlacement, releasePlacementHold} =
+    createSimulatedLedgerPartitionService({seedHosts, cache});
+  const owner = new ReplicaPlacementOwner({
+    nodeId: seedHosts.nodeId,
+    ledgerPartitionService: service,
+    nodeAuthority: seedHosts.controlPlaneReadinessService.serveEligibilityOwner,
+    systemTableCache: seedHosts.cache,
+    workflowOwner: seedHosts.rebalanceCoordinator.workflowOwner,
+    storageAccountingService: seedHosts.storageAccountingService,
+    now: seedHosts.now,
+    logger: QUIET_LOGGER,
+    admitPlacement,
+    releasePlacementHold,
+  });
+  const baseShutdown = owner.shutdown.bind(owner);
+  owner.shutdown = () => {
+    baseShutdown();
+    service.close();
+  };
+  return new Map([[LEDGER_PARTITION_ID, owner]]);
 }
 
-// Elapsed time, for the deciders of this tree: in production the seed runs
-// alone for a while before a joiner arrives, and when a decider's timer
-// fires its spacing windows (the check floor, the stabilization window, the
-// start delay) have elapsed too. The frozen clock cannot say so; these
-// stamps are aged, as the joint-admission driver ages them before it polls.
-// No timer runs and no bound is touched.
-function elapseDeciderWindows(deciders) {
-  for (const decider of deciders.values()) {
-    decider.lastCheckAtMs = null;
-    decider.lastStateChangeTime = null;
-    decider.rebalanceStartAtMs = 0;
-  }
-}
+function elapseDeciderWindows(_deciders) {}
 
 // ---------------------------------------------------------------------------
 // CENSUS of the durable rows (properties, never planning).

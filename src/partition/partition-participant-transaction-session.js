@@ -331,6 +331,16 @@ function extractOperationsRowKeyFootprint(service, operations) {
   return {scoped: true, rowKeys, hasUnscopedWrite: false};
 }
 
+function isPreparedEntryConflicting(entry, rowKeys, hasUnscopedWrite) {
+  if (!entry || entry.hasUnscopedWrite === true || hasUnscopedWrite === true) {
+    return true;
+  }
+  for (const rk of rowKeys ?? []) {
+    if (entry.rowKeys?.has(rk)) return true;
+  }
+  return false;
+}
+
 function isPartitionReservedForPrepare(
   service,
   selfParticipantId,
@@ -341,18 +351,8 @@ function isPartitionReservedForPrepare(
   if (!isRowKeyConcurrencyEnabled(service)) return true;
   const preparedIds = readPreparedParticipantIds(service.db);
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
-  for (let i = 0; i < preparedIds.length; i += 1) {
-    const otherId = preparedIds[i];
-    if (otherId === selfParticipantId) continue;
-    const entry = preparedMap?.get(otherId);
-    if (!entry || entry.hasUnscopedWrite === true || hasUnscopedWrite === true) {
-      return true;
-    }
-    for (const rk of rowKeys ?? []) {
-      if (entry.rowKeys?.has(rk)) return true;
-    }
-  }
-  return false;
+  return preparedIds.some((otherId) => otherId !== selfParticipantId &&
+    isPreparedEntryConflicting(preparedMap?.get(otherId), rowKeys, hasUnscopedWrite));
 }
 
 function findMinActiveGenerationBase(service) {

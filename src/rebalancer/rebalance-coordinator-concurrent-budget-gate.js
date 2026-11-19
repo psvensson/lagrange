@@ -2,76 +2,37 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   buildAfterCreateBudgetTurnArmContext,
 } from './operation-workflow-owner-create-budget-dispatch.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
+import {isGenesisFoundingCreateOperation} from './replica-operation-constants.js';
+import {COPY_PHASE_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {
-  evaluateSystemPartitionTargetNodeSlotAdmission,
-} from './system-spread-transition-policy.js';
-import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
-import {isTerminalReplicaOperationRecord} from './replica-status.js';
+  PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_REFUSAL,
+} from './replica-placement-owner-constants.js';
 
 const {
   OperationType,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
-  SYSTEM_TABLE_NAME,
   TOPOLOGY_GUARD_ERROR_MSG,
 } = REBALANCE_COORDINATOR_SHARED;
 
-function collectCurrentOperationsForTargetSlotAdmission(coordinator) {
-  const terminalOperationIds = new Set();
-  const operationsById = new Map();
-  const appendCandidate = (operation, allowOverwrite = false) => {
-    if (!operation) {
-      return;
-    }
-    const normalized = normalizeReplicaOperationRecord(operation);
-    const operationId = normalized.operationId || null;
-    if (
-      isTerminalReplicaOperationRecord(normalized) ||
-      coordinator.isOperationTerminal?.(operation) === true
-    ) {
-      if (operationId) {
-        terminalOperationIds.add(operationId);
-        operationsById.delete(operationId);
-      }
-      return;
-    }
-    if (!operationId) {
-      return;
-    }
-    if (terminalOperationIds.has(operationId)) {
-      return;
-    }
-    if (allowOverwrite || !operationsById.has(operationId)) {
-      operationsById.set(operationId, operation);
-    }
-  };
-  if (coordinator.systemTableCache?.filter) {
-    const cachedOperations = coordinator.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      () => true,
-    );
-    for (const operation of Array.isArray(cachedOperations) ? cachedOperations : []) {
-      appendCandidate(operation, true);
-    }
+function isOccupyingTargetCopyOperation(operation, targetNodeId) {
+  if (!operation || operation.targetNodeId !== targetNodeId) {
+    return false;
   }
-  if (coordinator.operations instanceof Map) {
-    for (const operation of coordinator.operations.values()) {
-      appendCandidate(operation, true);
-    }
+  const type = operation.type;
+  if (type !== OperationType.ADD && type !== OperationType.REPLACE) {
+    return false;
   }
-  // The retained owner-read result is an array. The visibility-observation
-  // envelope is returned by a separate repository API.
-  const observedOperations =
-    coordinator.repository?.lastIncompleteOperationObservation;
-  for (const operation of Array.isArray(observedOperations) ? observedOperations : []) {
-    appendCandidate(operation, false);
+  if (operation.entityType && operation.entityType !== UNIFIED_SERVICE_TYPE.PARTITION) {
+    return false;
   }
-  if (coordinator.recentOperationIntents instanceof Map) {
-    for (const entry of coordinator.recentOperationIntents.values()) {
-      appendCandidate(entry?.operation || entry, false);
-    }
+  if (isGenesisFoundingCreateOperation(operation)) {
+    return false;
   }
-  return [...operationsById.values()];
+  return COPY_PHASE_WORKFLOW_STEPS.has(operation.workflowStep);
 }
 
 class RebalanceCoordinatorConcurrentBudgetGate {
@@ -156,7 +117,7 @@ class RebalanceCoordinatorConcurrentBudgetGate {
         );
       }
       if (!usePriorityConcurrentAddLane && options.targetNodeId) {
-        this.ensureSystemPartitionTargetNodeSlotAllowed(
+        await this.ensureSystemPartitionTargetNodeSlotAllowed(
           normalizedMoveType,
           options,
         );
@@ -180,28 +141,34 @@ class RebalanceCoordinatorConcurrentBudgetGate {
     }
   }
 
-  ensureSystemPartitionTargetNodeSlotAllowed(normalizedMoveType, options = {}) {
+  async ensureSystemPartitionTargetNodeSlotAllowed(normalizedMoveType, options = {}) {
     if (!options?.targetNodeId || !options?.partitionId) {
       return null;
     }
-    const operations = collectCurrentOperationsForTargetSlotAdmission(this);
-    const decision = evaluateSystemPartitionTargetNodeSlotAdmission({
-      systemTableCache: this.systemTableCache || null,
-      controlPlaneReadinessService: this.controlPlaneReadinessService || null,
-      partitionId: options.partitionId,
-      targetNodeId: options.targetNodeId,
-      operations,
-    });
-    if (decision.allowed) {
-      return decision;
+    if (!classifySystemPartition({partitionId: options.partitionId}).systemTable) {
+      return null;
+    }
+    if (!this.repository) {
+      return null;
+    }
+    const operations = await this.repository.queryClusterWideIncompleteOperations();
+    const occupying = operations.filter((operation) =>
+      isOccupyingTargetCopyOperation(operation, options.targetNodeId));
+    const maxPerTargetNode = PLACEMENT_COPY_CAPACITY.K_TGT;
+    if (occupying.length < maxPerTargetNode) {
+      return {
+        allowed: true,
+        maxPerTargetNode,
+        occupyingOperationIds: occupying.map((op) => op.operationId),
+      };
     }
     throw this.createConcurrentOperationBudgetError(
       normalizedMoveType,
-      decision.maxPerTargetNode,
+      maxPerTargetNode,
       {
         targetNodeId: options.targetNodeId,
-        conflictingOperationId: decision.occupyingOperationIds[0] || null,
-        reasonCode: decision.reasonCode,
+        conflictingOperationId: occupying[0]?.operationId || null,
+        reasonCode: PLACEMENT_REFUSAL.TARGET_AT_CAPACITY,
       },
     );
   }

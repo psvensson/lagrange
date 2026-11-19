@@ -478,10 +478,16 @@ function isBootstrapTopologyDispatchDeferred(operationOrRow) {
     // The one steps-history parser: unparsable -> no steps -> not deferred.
     stepsHistory = memoizedParseStepsHistoryString(stepsHistory);
   }
-  return getOperationMetadataValue(
-    stepsHistory,
-    OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
-  ) === true;
+  return (
+    getOperationMetadataValue(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
+    ) === true ||
+    getOperationMetadataValue(
+      stepsHistory,
+      OPERATION_METADATA_KEY.DISPATCH_HOLD,
+    ) !== null
+  );
 }
 
 export {

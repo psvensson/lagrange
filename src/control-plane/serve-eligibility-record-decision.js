@@ -14,6 +14,8 @@ import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.
 import {indexCommittedNodeRows} from './committed-node-rows.js';
 import {projectNodeLivenessSemantics, readNodeLivenessRowFacts} from
   './node-liveness-semantic-projection.js';
+import {PLACEMENT_FORMATION_STATE} from
+  '../rebalancer/replica-placement-owner-constants.js';
 
 const SERVE_ELIGIBILITY_STATE = Object.freeze({
   READY: 'ready',
@@ -127,6 +129,33 @@ function resolvePrioritySpreadReason(publication) {
   return hasPriorityRecoverySpreadGap(summary) ?
     SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING :
     null;
+}
+
+const UNAVAILABLE_FORMATION = Object.freeze({
+  state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+  latchEpoch: null,
+});
+const UNDECLARED_FORMATION = Object.freeze({
+  state: PLACEMENT_FORMATION_STATE.UNDECLARED,
+  latchEpoch: null,
+});
+const FORMING_FORMATION = Object.freeze({
+  state: PLACEMENT_FORMATION_STATE.FORMING,
+  latchEpoch: null,
+});
+
+function evaluateCommittedFormation(publication) {
+  const reason = resolvePrioritySpreadReason(publication);
+  if (reason === SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED) {
+    return UNDECLARED_FORMATION;
+  }
+  if (reason === SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING) {
+    return FORMING_FORMATION;
+  }
+  return Object.freeze({
+    state: PLACEMENT_FORMATION_STATE.FORMED,
+    latchEpoch: publication.publicationEpoch,
+  });
 }
 
 /**
@@ -438,9 +467,11 @@ export {
   SERVE_ELIGIBILITY_STATE,
   SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
   STALE_SIGNATURE,
+  UNAVAILABLE_FORMATION,
   buildCommittedReadResult,
   checkOwnerUnavailability,
   decideServeEligibility,
+  evaluateCommittedFormation,
   evaluateServeEligibilityRecordSignature,
   hasAdvancedNodeLeaseOrHeartbeat,
   isMembershipPublication,

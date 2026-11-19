@@ -214,6 +214,7 @@ documentClass: generated
 - [replica-placement-owner-constants.js](replica-placement-owner-constants.js) - The vocabulary of the one replica placement owner (quest replica-placement-admission-owner, design sections 2.5-2.7... (importers: many)
 - [replica-placement-owner-deficits.js](replica-placement-owner-deficits.js) - The placement deficit model of the one replica placement owner (quest replica-placement-admission-owner, design... (importers: one)
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: few)
+- [replica-placement-owner.js](replica-placement-owner.js) - The one replica placement owner (quest replica-placement-admission-owner, design sections 2.3-2.9): runs on the Raft... (importers: none)
 - [replica-status.js](replica-status.js) - Unified Replica Status and Operation Types. (importers: hub)
 - [runtime-service-policy.js](runtime-service-policy.js) - No leading comment; first export: resolveRuntimeServiceDefinitionPolicy. (importers: many)
 - [runtime-service-replica-identity.js](runtime-service-replica-identity.js) - Canonical identity matching for runtime-service rows. (importers: hub)
