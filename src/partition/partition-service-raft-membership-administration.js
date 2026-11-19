@@ -197,15 +197,18 @@ function extractPartitionPromotionIdentities(request) {
   return [...new Set(candidates)];
 }
 
+function isNonEmptyOperationId(id) {
+  return typeof id === 'string' && id.length > 0;
+}
+
 function resolvePartitionGrowthOperationIds(request) {
-  if (Array.isArray(request?.operationIds) && request.operationIds.length > 0) {
-    return request.operationIds;
-  }
-  if (typeof request?.operationId === 'string' &&
-      request.operationId.length > 0) {
-    return [request.operationId];
-  }
-  return [];
+  if (!request) return [];
+  const promotionIds = Array.isArray(request.promotions) ?
+    request.promotions.map((item) => item?.operationId) : [];
+  const explicitIds = Array.isArray(request.operationIds) ?
+    request.operationIds : [];
+  const candidates = [request.operationId, ...explicitIds, ...promotionIds];
+  return [...new Set(candidates.filter(isNonEmptyOperationId))];
 }
 
 function resolvePartitionExpectedBaseConfig(request) {

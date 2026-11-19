@@ -18,6 +18,7 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PLACEMENT_FORMATION_STATE,
   PLACEMENT_OUTCOME,
+  PLACEMENT_REFUSAL,
 } from './replica-placement-owner-constants.js';
 import {
   buildPlacementAdmissionStatement,
@@ -47,6 +48,19 @@ const PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE =
   'PLACEMENT_LEDGER_LEADER_UNAVAILABLE';
 const PLACEMENT_ADMISSION_REFUSED_CODE = 'PLACEMENT_ADMISSION_REFUSED';
 const HOLD_RELEASE_NOT_FOUND_REASON = 'operation_not_found';
+const HOLD_RELEASE_COHORT_MISMATCH_REASON = 'topology_cohort_mismatch';
+const TRANSPORT_TIMEOUT_CODE = 'TRANSPORT_TIMEOUT';
+const TRANSPORT_TIMEOUT_MESSAGE = 'Transport delivery failed';
+const DEFINITE_PLACEMENT_OUTCOMES = Object.freeze(new Set([
+  PLACEMENT_OUTCOME.ADMITTED,
+  PLACEMENT_OUTCOME.REFUSED,
+  PLACEMENT_OUTCOME.RELEASED,
+]));
+const STATIC_PRE_PROPOSAL_FAILURE_CODES = Object.freeze(new Set([
+  PLACEMENT_ADMISSION_ERROR.BYTES,
+  PLACEMENT_ADMISSION_ERROR.TARGET,
+  PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
+]));
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER =
@@ -96,6 +110,47 @@ function isHeldPendingBootstrapOperation(operation) {
     isBootstrapTopologyDispatchDeferred(operation);
 }
 
+function extractStampNodeMap(membership) {
+  if (!membership || typeof membership !== 'object') return null;
+  if (membership.founderNodeIds && typeof membership.founderNodeIds === 'object') {
+    return membership.founderNodeIds;
+  }
+  if (membership.peerNodes && typeof membership.peerNodes === 'object') {
+    return membership.peerNodes;
+  }
+  return null;
+}
+
+function isStampNodeMapAligned(durableOperation, existingMap, incomingMap) {
+  if (!incomingMap) return true;
+  const targetNodes = Object.values(incomingMap);
+  if (durableOperation.targetNodeId && !targetNodes.includes(durableOperation.targetNodeId)) {
+    return false;
+  }
+  const mappedNode = incomingMap[durableOperation.replicaId];
+  if (mappedNode !== undefined && mappedNode !== durableOperation.targetNodeId) {
+    return false;
+  }
+  return !existingMap || JSON.stringify(existingMap) === JSON.stringify(incomingMap);
+}
+
+function isBootstrapTopologyStampCohortAligned(durableOperation, stamp) {
+  if (!stamp || typeof stamp !== 'object') return true;
+  const [creationEntry] = durableOperation.stepsHistory || [];
+  const existingReplicaIds = creationEntry?.[OPERATION_METADATA_KEY.REPLICA_IDS];
+  const incomingReplicaIds = stamp[ReplicaOperationField.REPLICA_IDS];
+  if (Array.isArray(existingReplicaIds) &&
+      Array.isArray(incomingReplicaIds) &&
+      JSON.stringify(existingReplicaIds) !== JSON.stringify(incomingReplicaIds)) {
+    return false;
+  }
+  return isStampNodeMapAligned(
+    durableOperation,
+    extractStampNodeMap(creationEntry?.[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]),
+    extractStampNodeMap(stamp[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]),
+  );
+}
+
 function buildBootstrapTopologyReleasedOperation(durableOperation, stamp, now) {
   const released = structuredClone(durableOperation);
   const [creationEntry] = released.stepsHistory;
@@ -112,11 +167,7 @@ function buildBootstrapTopologyReleasedOperation(durableOperation, stamp, now) {
   return released;
 }
 
-function buildBootstrapTopologyHoldReleaseOutcome(
-  released,
-  operation,
-  reason = null,
-) {
+function buildBootstrapTopologyHoldReleaseOutcome(released, operation, reason = null) {
   return Object.freeze({
     released,
     ...(reason ? {reason} : {}),
@@ -139,11 +190,7 @@ function formatLedgerReplicaAddress(row) {
   const nodeId = row[COLUMN.NODE_ID];
   const replicaId = row[COLUMN.REPLICA_ID];
   if (typeof nodeId !== 'string' || typeof replicaId !== 'string') return null;
-  return AddressManager.getInstance().format(
-    nodeId,
-    SERVICE_TYPE.PARTITION,
-    replicaId,
-  );
+  return AddressManager.getInstance().format(nodeId, SERVICE_TYPE.PARTITION, replicaId);
 }
 
 function wrapPlacementTransport(messageRouter) {
@@ -153,54 +200,46 @@ function wrapPlacementTransport(messageRouter) {
   return {
     deliver: async (address, message, options) => {
       const response = await messageRouter.sendToAddress(address, message, options);
-      return response?.transport ? response :
-        buildDeliveryEnvelope({acknowledged: true}, response);
+      if (response?.transport) return response;
+      if (response?.delivered === false) {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          errorCode: response.errorCode || TRANSPORT_TIMEOUT_CODE,
+          errorMessage: response.error || TRANSPORT_TIMEOUT_MESSAGE,
+        }, null);
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, response);
     },
   };
 }
 
+function isPlacementAttemptIdentitySettled(answer) {
+  if (!answer || isWriteOutcomeUnknown(answer)) return false;
+  if (STATIC_PRE_PROPOSAL_FAILURE_CODES.has(answer.failureCode)) return true;
+  if (answer.committed !== true) return false;
+  const result = answer[PLACEMENT_RESULT_FIELD];
+  return DEFINITE_PLACEMENT_OUTCOMES.has(result?.outcome);
+}
+
 function isRetainedAttemptRefusedOrMismatched(answer) {
-  if (answer?.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES) {
-    return true;
-  }
+  if (answer?.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES) return true;
   const result = answer?.[PLACEMENT_RESULT_FIELD];
   return result?.outcome === PLACEMENT_OUTCOME.REFUSED;
 }
 
-function buildSynthesizedPlacementOperation(
-  operationId,
-  descriptor,
-  defaultSourceNodeId,
-) {
-  const sourceNodeId = descriptor.sourceNodeId ?
-    descriptor.sourceNodeId : defaultSourceNodeId;
-  const replicaId = descriptor.replicaId ?
-    descriptor.replicaId : placementReplicaIdOf(operationId);
-  const entityId = descriptor.entityId ?
-    descriptor.entityId : descriptor.partitionId;
-  const {
-    type = OperationType.ADD,
-    entityType = SERVICE_TYPE.PARTITION,
-  } = descriptor;
+function buildSynthesizedPlacementOperation(operationId, descriptor, defaultSourceNodeId) {
+  const sourceNodeId = descriptor.sourceNodeId ? descriptor.sourceNodeId : defaultSourceNodeId;
+  const replicaId = descriptor.replicaId ? descriptor.replicaId : placementReplicaIdOf(operationId);
+  const entityId = descriptor.entityId ? descriptor.entityId : descriptor.partitionId;
+  const {type = OperationType.ADD, entityType = SERVICE_TYPE.PARTITION} = descriptor;
   const operation = createOperationRecord({
-    operationId,
-    type,
-    partitionId: descriptor.partitionId,
-    sourceNodeId,
-    targetNodeId: descriptor.targetNodeId,
-    replicaId,
-    sourceReplicaId: descriptor.sourceReplicaId || null,
-    membershipPublicationEpoch: null,
+    operationId, type, partitionId: descriptor.partitionId, sourceNodeId,
+    targetNodeId: descriptor.targetNodeId, replicaId,
+    sourceReplicaId: descriptor.sourceReplicaId || null, membershipPublicationEpoch: null,
   });
   operation.entityType = entityType;
   operation.entityId = entityId;
   operation.targetClaimKey = descriptor.targetClaimKey || null;
-  if (descriptor.deferredBootstrap === true &&
-      operation.stepsHistory.length > 0) {
-    operation.stepsHistory[0][
-      OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
-    ] = true;
-  }
   return operation;
 }
 
@@ -362,7 +401,7 @@ const operationCreationSupportMethods = {
       {entryId: retained.entryId, body: retained.statement},
       timeoutMs,
     );
-    if (isWriteOutcomeUnknown(answer)) {
+    if (!isPlacementAttemptIdentitySettled(answer)) {
       return {settled: false, answer: {...answer, entryId: retained.entryId}};
     }
     attempts.delete(intentKey);
@@ -399,7 +438,7 @@ const operationCreationSupportMethods = {
       {entryId: resolved.entryId, body: statement},
       timeoutMs,
     );
-    if (resolved.key && !isWriteOutcomeUnknown(answer)) {
+    if (resolved.key && isPlacementAttemptIdentitySettled(answer)) {
       this.ensureUncertainPlacementAttemptsMap().delete(resolved.key);
     }
     return {...answer, entryId: resolved.entryId};
@@ -418,31 +457,25 @@ const operationCreationSupportMethods = {
     );
   },
 
-  async materializePlacementAdmittedOperations({
-    operationIds,
-    partitionId,
-    entityType = SERVICE_TYPE.PARTITION,
-    entityId = partitionId,
-    targetNodeIds = [],
-    type = OperationType.ADD,
-    sourceNodeId = this.nodeId || DEFAULT_NODE_ID,
-    deferredBootstrap = false,
-  }) {
+  async materializePlacementFoundingOperations({operationIds}) {
+    if (!Array.isArray(operationIds) ||
+        operationIds.length === 0 ||
+        !this.repository?.queryAuthoritativeOperationById) {
+      return [];
+    }
     const operations = [];
     for (let idx = 0; idx < operationIds.length; idx += 1) {
       const operationId = operationIds[idx];
-      const operation = await this.materializePlacementOperationById(operationId, {
-        type,
-        partitionId,
-        entityType,
-        entityId,
-        targetNodeId: targetNodeIds[idx] || targetNodeIds[0] || null,
-        sourceNodeId,
-        deferredBootstrap,
-      });
+      const operation =
+        await this.repository.queryAuthoritativeOperationById(operationId);
+      if (!operation) return [];
       operations.push(operation);
     }
     return operations;
+  },
+
+  async materializePlacementAdmittedOperations(options = {}) {
+    return this.materializePlacementFoundingOperations(options);
   },
 
   async resolveRuntimeServicePlacementIds(context) {
@@ -670,6 +703,13 @@ const operationCreationSupportMethods = {
     if (!isHeldPendingBootstrapOperation(durableOperation)) {
       return buildBootstrapTopologyHoldReleaseOutcome(false, durableOperation);
     }
+    if (!isBootstrapTopologyStampCohortAligned(durableOperation, stamp)) {
+      return buildBootstrapTopologyHoldReleaseOutcome(
+        false,
+        null,
+        HOLD_RELEASE_COHORT_MISMATCH_REASON,
+      );
+    }
     const released = buildBootstrapTopologyReleasedOperation(
       durableOperation,
       stamp,
@@ -699,73 +739,49 @@ const operationCreationSupportMethods = {
   },
 
   async queryExistingOperationAfterInsertConflict(context) {
-    const {
-      operationIntentId,
-      operationId,
-      partitionId,
-      targetNodeId,
-      entityType,
-      entityId,
-      normalizedMove,
-    } = context;
+    const {operationIntentId, operationId, partitionId, targetNodeId,
+      entityType, entityId, normalizedMove} = context;
     if (operationIntentId) {
       const existingByDeterministicId =
         await this.repository.queryAuthoritativeOperationById(operationId);
       if (existingByDeterministicId) return existingByDeterministicId;
     }
     return this.queryExistingInFlightOperation(
-      partitionId,
-      targetNodeId,
-      entityType,
-      entityId,
-      normalizedMove,
+      partitionId, targetNodeId, entityType, entityId, normalizedMove,
       STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
     );
   },
 
   async armCoordinatorCreatedOperationProgress(operation, armContext = {}) {
     return this.runCoordinatorCreatedOperationProgressStep(
-      operation,
-      OWNER_PROGRESS_STEP_METHOD.ARM,
-      (workflowOwner) =>
-        workflowOwner.armCoordinatorCreatedOperation(operation, armContext),
+      operation, OWNER_PROGRESS_STEP_METHOD.ARM,
+      (workflowOwner) => workflowOwner.armCoordinatorCreatedOperation(operation, armContext),
     );
   },
 
   async dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(operation) {
     return this.runCoordinatorCreatedOperationProgressStep(
-      operation,
-      OWNER_PROGRESS_STEP_METHOD.DISPATCH_AFTER_CREATE_BUDGET_TURN,
-      (workflowOwner) =>
-        workflowOwner.dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
-          operation.operationId,
-        ),
+      operation, OWNER_PROGRESS_STEP_METHOD.DISPATCH_AFTER_CREATE_BUDGET_TURN,
+      (owner) => owner.dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
+        operation.operationId,
+      ),
     );
   },
 
-  async runCoordinatorCreatedOperationProgressStep(
-    operation,
-    ownerMethodName,
-    invokeStep,
-  ) {
-    if (
-      !operation?.operationId ||
-      typeof this.workflowOwner?.[ownerMethodName] !== LOCAL_STR_FUNCTION
-    ) {
+  async runCoordinatorCreatedOperationProgressStep(operation, ownerMethodName, invokeStep) {
+    if (!operation?.operationId ||
+        typeof this.workflowOwner?.[ownerMethodName] !== LOCAL_STR_FUNCTION) {
       return false;
     }
     try {
       return await invokeStep(this.workflowOwner);
     } catch (error) {
-      this.logger.warn(
-        LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER,
-        {
-          operationId: operation.operationId,
-          partitionId: operation.partitionId || null,
-          workflowStep: operation.workflowStep,
-          error: error?.message || String(error),
-        },
-      );
+      this.logger.warn(LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER, {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId || null,
+        workflowStep: operation.workflowStep,
+        error: error?.message || String(error),
+      });
       return false;
     }
   },

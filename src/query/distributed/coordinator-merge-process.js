@@ -46,7 +46,10 @@ const PROCESS_EVENT = Object.freeze({
   MESSAGE: 'message',
   EXIT: 'exit',
   ERROR: 'error',
+  ABORT: 'abort',
 });
+
+const CANCEL_POLL_INTERVAL_MS = NUM.TEN;
 
 const STDIO_MODE = Object.freeze({
   IGNORE: 'ignore',
@@ -250,6 +253,62 @@ function resolveSessionBudget(sessionOptions) {
   return normalizeQueryBudget(sessionOptions.budget || DEFAULT_QUERY_BUDGET);
 }
 
+function resolveRequestDeadlineMs(deadlineMs, timeoutMs) {
+  if (Number.isSafeInteger(deadlineMs) && deadlineMs > 0) {
+    return deadlineMs;
+  }
+  if (Number.isSafeInteger(timeoutMs) && timeoutMs > 0) {
+    return Date.now() + timeoutMs;
+  }
+  return null;
+}
+
+function buildIpcSessionOptions(sessionOptions, budget, deadlineMs) {
+  return {
+    budget,
+    memoryLimitBytes: sessionOptions.memoryLimitBytes,
+    mergeInputMaxRows: sessionOptions.mergeInputMaxRows,
+    resultMaxRows: sessionOptions.resultMaxRows,
+    resultMaxBytes: sessionOptions.resultMaxBytes,
+    deadlineMs,
+    expectedEngineEnvelope: sessionOptions.expectedEngineEnvelope ?? null,
+  };
+}
+
+function isCancellationRequested(sessionOptions) {
+  if (sessionOptions?.signal?.aborted === true) return true;
+  if (sessionOptions?.cancellationToken?.isCancelled?.() === true) return true;
+  return Boolean(sessionOptions?.isCancelled && sessionOptions.isCancelled() === true);
+}
+
+function attachCancellationWatcher(sessionOptions, onTrigger) {
+  if (!sessionOptions) return () => {};
+  const cleanups = [];
+  const signal = sessionOptions.signal;
+  if (signal && typeof signal === 'object') {
+    const onAbort = () => onTrigger();
+    signal.addEventListener?.(PROCESS_EVENT.ABORT, onAbort, {once: true});
+    cleanups.push(() => signal.removeEventListener?.(PROCESS_EVENT.ABORT, onAbort));
+  }
+  const token = sessionOptions.cancellationToken;
+  if (token?.onCancel) {
+    const off = token.onCancel(() => onTrigger());
+    if (off) cleanups.push(off);
+  }
+  if (sessionOptions.isCancelled || (token && !token.onCancel)) {
+    const poll = setInterval(() => {
+      if (isCancellationRequested(sessionOptions)) {
+        onTrigger();
+      }
+    }, CANCEL_POLL_INTERVAL_MS);
+    poll.unref?.();
+    cleanups.push(() => clearInterval(poll));
+  }
+  return () => {
+    for (const fn of cleanups) fn();
+  };
+}
+
 function serializeInitTables(tables) {
   if (!Array.isArray(tables)) return [];
   return tables.map((table) => ({
@@ -364,20 +423,40 @@ class CoordinatorMergeProcessPool {
     this.activeCount = Math.max(0, this.activeCount - 1);
   }
 
-  sendAndWait(child, payload, timeoutMs) {
+  sendAndWait(child, payload, timeoutMs, sessionOptions = null) {
     return new Promise((resolve, reject) => {
       let settled = false;
       let timer = null;
+      let detachCancel = null;
       let onMessage = null;
       let onExit = null;
       let onError = null;
 
       const cleanup = () => {
         if (timer !== null) clearTimeout(timer);
+        if (detachCancel !== null) detachCancel();
         child.removeListener(PROCESS_EVENT.MESSAGE, onMessage);
         child.removeListener(PROCESS_EVENT.EXIT, onExit);
         child.removeListener(PROCESS_EVENT.ERROR, onError);
       };
+
+      const abortChildForDeadlineOrCancel = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (!child.killed && child.exitCode === null) {
+          child.kill(KILL_SIGNAL);
+        }
+        reject(createMergeError(
+          QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+          PROCESS_ERROR_MSG.DEADLINE_KILLED,
+        ));
+      };
+
+      if (isCancellationRequested(sessionOptions)) {
+        abortChildForDeadlineOrCancel();
+        return;
+      }
 
       onMessage = (response) => {
         if (settled) return;
@@ -407,19 +486,13 @@ class CoordinatorMergeProcessPool {
         reject(error);
       };
 
+      detachCancel = attachCancellationWatcher(
+        sessionOptions,
+        abortChildForDeadlineOrCancel,
+      );
+
       if (Number.isFinite(timeoutMs) && timeoutMs >= 0) {
-        timer = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          if (!child.killed && child.exitCode === null) {
-            child.kill(KILL_SIGNAL);
-          }
-          reject(createMergeError(
-            QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
-            PROCESS_ERROR_MSG.DEADLINE_KILLED,
-          ));
-        }, timeoutMs);
+        timer = setTimeout(abortChildForDeadlineOrCancel, timeoutMs);
       }
 
       child.on(PROCESS_EVENT.MESSAGE, onMessage);
@@ -457,20 +530,29 @@ class CoordinatorMergeProcessPool {
   async execute(request) {
     const sessionOptions = request.sessionOptions || {};
     const budget = resolveSessionBudget(sessionOptions);
-    const deadlineMs = sessionOptions.deadlineMs ?? null;
+    const deadlineMs = resolveRequestDeadlineMs(
+      sessionOptions.deadlineMs,
+      sessionOptions.timeoutMs,
+    );
     const child = await this.acquireWorker(deadlineMs);
     let workerUsable = true;
     try {
       const timeoutMs = this.computeRemainingTimeoutMs(budget, deadlineMs);
       await this.sendAndWait(child, {
         type: IPC_MSG_TYPE.INIT_SESSION,
-        sessionOptions: {...sessionOptions, budget},
+        sessionOptions: buildIpcSessionOptions(sessionOptions, budget, deadlineMs),
         tables: serializeInitTables(request.tables),
-      }, timeoutMs);
+      }, timeoutMs, sessionOptions);
 
       const tables = Array.isArray(request.tables) ? request.tables : [];
       for (const table of tables) {
-        await this.forwardTableFragments(child, table, budget, deadlineMs);
+        await this.forwardTableFragments(
+          child,
+          table,
+          budget,
+          deadlineMs,
+          sessionOptions,
+        );
       }
 
       const typedParams = encodeTypedParams(request.params || []);
@@ -480,7 +562,7 @@ class CoordinatorMergeProcessPool {
         sql: request.sql,
         typedParams,
         expectedColumns: request.expectedColumns || null,
-      }, mergeTimeoutMs);
+      }, mergeTimeoutMs, sessionOptions);
 
       const decoded = decodeTypedRowSet(response.rowSet);
       return {
@@ -500,7 +582,13 @@ class CoordinatorMergeProcessPool {
     }
   }
 
-  async forwardTableFragments(child, table, budget, deadlineMs) {
+  async forwardTableFragments(
+    child,
+    table,
+    budget,
+    deadlineMs,
+    sessionOptions = null,
+  ) {
     const fragments = Array.isArray(table.fragments) ? table.fragments : [];
     for (const fragment of fragments) {
       if (!fragment) continue;
@@ -518,7 +606,7 @@ class CoordinatorMergeProcessPool {
           encodedRows: [],
           byteLength: normalized.byteLength,
           executionEnvelope: normalized.executionEnvelope,
-        }, timeoutMs);
+        }, timeoutMs, sessionOptions);
         continue;
       }
       for (let offset = 0; offset < rows.length; offset += FORWARD_CHUNK_MAX_ROWS) {
@@ -533,7 +621,7 @@ class CoordinatorMergeProcessPool {
           encodedRows: chunkRows,
           byteLength: chunkBytes,
           executionEnvelope: offset === 0 ? normalized.executionEnvelope : null,
-        }, timeoutMs);
+        }, timeoutMs, sessionOptions);
         if (end < rows.length) {
           await yieldToEventLoop();
         }
@@ -548,6 +636,10 @@ class CoordinatorMergeProcessPool {
         worker.kill(KILL_SIGNAL);
       }
     }
+  }
+
+  close() {
+    this.shutdown();
   }
 }
 

@@ -75,6 +75,8 @@ const MERGE_ERROR_MSG = Object.freeze({
     'Query result byte size exceeds RESULT_MAX_BYTES budget',
   DEADLINE_EXCEEDED:
     'Query execution deadline exceeded during coordinator merge',
+  CANCELLED:
+    'Query execution cancelled during coordinator merge',
 });
 
 function createMergeError(code, message, details = null) {
@@ -248,6 +250,23 @@ function yieldToEventLoop() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function resolveSessionBudgetObject(budgetOption) {
+  if (isNormalizedQueryBudget(budgetOption)) {
+    return budgetOption;
+  }
+  return normalizeQueryBudget(budgetOption || DEFAULT_QUERY_BUDGET);
+}
+
+function resolveSessionDeadlineMs(deadlineMs, timeoutMs) {
+  if (Number.isSafeInteger(deadlineMs) && deadlineMs > 0) {
+    return deadlineMs;
+  }
+  if (Number.isSafeInteger(timeoutMs) && timeoutMs > 0) {
+    return Date.now() + timeoutMs;
+  }
+  return null;
+}
+
 class CoordinatorMergeSession {
   /**
    * @param {Object} [options]
@@ -257,13 +276,14 @@ class CoordinatorMergeSession {
    * @param {number} [options.resultMaxRows]
    * @param {number} [options.resultMaxBytes]
    * @param {number|null} [options.deadlineMs]
+   * @param {number|null} [options.timeoutMs]
    * @param {Object|null} [options.cancellationToken]
+   * @param {AbortSignal|null} [options.signal]
+   * @param {Function|null} [options.isCancelled]
    * @param {Object|null} [options.expectedEngineEnvelope]
    */
   constructor(options = {}) {
-    const budget = isNormalizedQueryBudget(options.budget) ?
-      options.budget :
-      normalizeQueryBudget(options.budget || DEFAULT_QUERY_BUDGET);
+    const budget = resolveSessionBudgetObject(options.budget);
     this.budget = budget;
     this.memoryLimitBytes = normalizePositiveLimit(
       options.memoryLimitBytes,
@@ -281,10 +301,10 @@ class CoordinatorMergeSession {
       options.resultMaxBytes,
       budget.RESULT_MAX_BYTES,
     );
-    this.deadlineMs = Number.isSafeInteger(options.deadlineMs) && options.deadlineMs > 0 ?
-      options.deadlineMs :
-      null;
+    this.deadlineMs = resolveSessionDeadlineMs(options.deadlineMs, options.timeoutMs);
     this.cancellationToken = options.cancellationToken ?? null;
+    this.signal = options.signal ?? null;
+    this.isCancelled = options.isCancelled ?? null;
     this.ingestedRows = 0;
     this.ingestedBytes = 0;
     this.nextCanonicalRowId = 1n;
@@ -318,8 +338,20 @@ class CoordinatorMergeSession {
     this.db.pragma(PRAGMA_PAGE_POOL_KIB);
   }
 
+  isSessionCancelled() {
+    if (this.signal?.aborted === true) return true;
+    if (this.cancellationToken?.isCancelled?.() === true) return true;
+    return Boolean(this.isCancelled && this.isCancelled() === true);
+  }
+
   assertActiveAndWithinDeadline() {
     this.cancellationToken?.throwIfCancelled?.();
+    if (this.isSessionCancelled()) {
+      throw createMergeError(
+        QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+        MERGE_ERROR_MSG.CANCELLED,
+      );
+    }
     if (this.deadlineMs !== null && Date.now() >= this.deadlineMs) {
       throw createMergeError(
         QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,

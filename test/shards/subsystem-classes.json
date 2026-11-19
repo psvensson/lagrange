@@ -28,7 +28,7 @@
   "censusSize": 2690,
   "digest": "fnv1a32-9543e106",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-21401094",
+  "observationDigest": "fnv1a32-1e403f03",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5849,6 +5849,20 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-retry-scheduling.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-observed-progress-retention.js",
@@ -5856,7 +5870,9 @@
         "src/storage/data-directory-manager.js",
         "src/storage/data-directory-process-owner.js",
         "test/convergence/formation-joint-admission-world.js",
-        "test/simulation/formation-sim-infrastructure-composition.js"
+        "test/simulation/formation-sim-infrastructure-composition.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "directories": [
         "src"

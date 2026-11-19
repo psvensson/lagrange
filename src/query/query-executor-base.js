@@ -18,10 +18,6 @@ import {PartitionResolver} from './partition-resolver.js';
 import {
   installQueryExecutorJoinExecutionHelpers,
 } from './query-executor-join-execution.js';
-import {
-  presentRawSqlRows,
-  presentSqlRowObjects,
-} from './sql-value-presentation.js';
 
 function createExecutorTableInfoResolver(executor, options) {
   if (options.getTableInfo) {
@@ -394,6 +390,7 @@ class QueryExecutorBase {
       };
     }
 
+    const requestDeadlineMs = this.resolveRequestDeadlineMs(options);
     const queryTimestamp = this.hlcClock.now();
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_DISTRIBUTED_SELECT, {
       partitionCount: partitionIds.length,
@@ -468,7 +465,11 @@ class QueryExecutorBase {
     }
     const {extraTables} = extraFetch;
 
-    const safeIntegers = options.safeIntegers === true;
+    const mergeOptions = this.buildCoordinatorMergeOptions(
+      options,
+      extraTables,
+      requestDeadlineMs,
+    );
     const mergeStartTimeMs = Date.now();
     let aggregated = await this.mergeEngine.mergePartitionResults(
       results,
@@ -476,7 +477,7 @@ class QueryExecutorBase {
       this,
       fanoutPlan,
       params,
-      {extraTables, safeIntegers},
+      mergeOptions,
     );
     if (
       fanoutPlan.kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL &&
@@ -501,12 +502,12 @@ class QueryExecutorBase {
         this,
         fanoutPlan.unmergedPlan,
         params,
-        {extraTables, safeIntegers},
+        mergeOptions,
       );
     }
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
-    const presentedRows = presentSqlRowObjects(aggregated.rows, {safeIntegers});
-    const presentedRawRows = presentRawSqlRows(aggregated.rawRows, {safeIntegers});
+    const presentedRows = aggregated.rows;
+    const presentedRawRows = aggregated.rawRows;
 
     try {
       this.logger.info(METRICS_LOG_TAG.SELECT_DISTRIBUTED, {
@@ -617,17 +618,81 @@ class QueryExecutorBase {
     return this.lastCoordinatorMetrics;
   }
 
-  /**
-   * Execute a query on a single partition.
-   * Routes ALL queries through message router - no local vs remote distinction.
-   * Looks up service address from system cache and delivers via message router.
-   * Requirements: 22.4, 22.5
-   * @param {string} partitionId - Partition ID.
-   * @param {string} sql - SQL query.
-   * @param {Array} params - Query parameters.
-   * @return {Promise<Object>} Partition result.
-   * @private
-   */
+  resolveRequestDeadlineMs(options = {}) {
+    return computeDeadlineFromNumbers(
+      options.deadlineMs,
+      options.timeoutBudget?.deadlineMs,
+      options.timeoutMs,
+    );
+  }
+
+  buildCoordinatorMergeOptions(options = {}, extraTables = [], requestDeadlineMs = null) {
+    const baseSession = options.sessionOptions || {};
+    const budget = pickFirstDefined(options.budget, options.budgets, baseSession.budget);
+    const deadlineMs = pickFirstDefined(requestDeadlineMs, baseSession.deadlineMs, null);
+    const sessionOptions = {
+      ...baseSession,
+      budget,
+      memoryLimitBytes: pickFirstDefined(
+        options.memoryLimitBytes,
+        budget?.MEMORY_LIMIT_BYTES,
+        baseSession.memoryLimitBytes,
+      ),
+      mergeInputMaxRows: pickFirstDefined(
+        options.mergeInputMaxRows,
+        budget?.MERGE_INPUT_MAX_ROWS,
+        baseSession.mergeInputMaxRows,
+      ),
+      resultMaxRows: pickFirstDefined(
+        options.resultMaxRows,
+        budget?.RESULT_MAX_ROWS,
+        baseSession.resultMaxRows,
+      ),
+      resultMaxBytes: pickFirstDefined(
+        options.resultMaxBytes,
+        budget?.RESULT_MAX_BYTES,
+        baseSession.resultMaxBytes,
+      ),
+      deadlineMs,
+      timeoutMs: pickFirstDefined(options.timeoutMs, baseSession.timeoutMs, null),
+      cancellationToken: pickFirstDefined(
+        options.cancellationToken,
+        baseSession.cancellationToken,
+        null,
+      ),
+      signal: pickFirstDefined(options.signal, baseSession.signal, null),
+      isCancelled: pickFirstDefined(options.isCancelled, baseSession.isCancelled, null),
+    };
+    return {
+      extraTables,
+      safeIntegers: options.safeIntegers === true,
+      deadlineMs: sessionOptions.deadlineMs,
+      timeoutMs: sessionOptions.timeoutMs,
+      cancellationToken: sessionOptions.cancellationToken,
+      signal: sessionOptions.signal,
+      isCancelled: sessionOptions.isCancelled,
+      useProcessPool: options.useProcessPool,
+      processPool: options.processPool || null,
+      sessionOptions,
+    };
+  }
+}
+
+function pickFirstDefined(firstValue, secondValue, defaultValue = undefined) {
+  if (firstValue !== undefined && firstValue !== null) return firstValue;
+  if (secondValue !== undefined && secondValue !== null) return secondValue;
+  return defaultValue;
+}
+
+function computeDeadlineFromNumbers(explicitDeadlineMs, budgetDeadlineMs, timeoutMs) {
+  const chosenDeadline = pickFirstDefined(explicitDeadlineMs, budgetDeadlineMs, null);
+  if (Number.isSafeInteger(chosenDeadline) && chosenDeadline > 0) {
+    return chosenDeadline;
+  }
+  if (Number.isSafeInteger(timeoutMs) && timeoutMs > 0) {
+    return Date.now() + timeoutMs;
+  }
+  return null;
 }
 
 installQueryExecutorJoinExecutionHelpers(QueryExecutorBase);

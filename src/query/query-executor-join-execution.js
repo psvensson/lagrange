@@ -41,10 +41,6 @@ import {
   renderSelect,
   renderSelectWithParameters,
 } from './sql-statement-renderer.js';
-import {
-  presentRawSqlRows,
-  presentSqlRowObjects,
-} from './sql-value-presentation.js';
 
 const {
   QUERY_AST_TYPE,
@@ -498,6 +494,7 @@ const queryExecutorJoinExecutionMethods = {
     queryTimestamp = null,
   ) {
     assertQueryParametersBound(ast, params);
+    const requestDeadlineMs = this.resolveRequestDeadlineMs(options);
     const joinPartitions = options.joinPartitions || new Map();
     const fanoutMetrics = [];
     const resolveTableSchema = (name) => this.resolveJoinTableSchema(name);
@@ -572,26 +569,28 @@ const queryExecutorJoinExecutionMethods = {
     };
 
     const mergeStartTimeMs = Date.now();
+    const mergeOptions = this.buildCoordinatorMergeOptions(
+      options,
+      extraTables,
+      requestDeadlineMs,
+    );
     const aggregated = await this.mergeEngine.mergePartitionResults(
       mainFetch.results,
       ast,
       this,
       coordinatorPlan,
       params,
-      {extraTables},
+      mergeOptions,
     );
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
-    const safeIntegers = options.safeIntegers === true;
-    const presentedRows = presentSqlRowObjects(aggregated.rows, {safeIntegers});
-    const presentedRawRows = presentRawSqlRows(aggregated.rawRows, {safeIntegers});
 
     return {
       success: true,
-      rows: presentedRows,
-      rawRows: presentedRawRows,
+      rows: aggregated.rows,
+      rawRows: aggregated.rawRows,
       columns: aggregated.columns,
       rowSet: aggregated.rowSet,
-      count: presentedRows.length,
+      count: aggregated.rows.length,
       partitions: [...new Set(allPartitions)],
       timestamp: queryTimestamp ? queryTimestamp.toString() : null,
       distributedMetrics: {

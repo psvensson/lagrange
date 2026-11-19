@@ -1,28 +1,6 @@
-// When the core takes a configuration-change proposal or a typed membership
-// operation, read and decided from the core's own numbers in one queued turn.
-//
-// The one ingress: a conf-change proposal is taken only at the LEADER's own
-// port. A follower's (or candidate's) port answers a typed, retryable
-// NOT_LEADER naming the leader it knows, and hands the crate nothing.
-//
-// Typed membership operations (WP-P of single-voter-founding-and-odd-growth):
-//   - ADMIT / ADD_LEARNER: proposes AddLearnerNode with the 3-key admission
-//     context when absent (LEARNER_PROPOSED), answers LEARNER_ADMITTED when
-//     already a learner, and ALREADY_VOTER when already a voter;
-//   - LEARNER_CAUGHT_UP: evaluates the fixed-reference catch-up predicate c0
-//     keyed by (operationId, peerId, requestKind) in the leader's tenure;
-//   - GROWTH_PROMOTE: promotes 1 or 2 caught-up learners to voters when
-//     |V u P| is odd (Auto ConfChangeV2 with empty context), refusing
-//     PROMOTION_WOULD_BE_EVEN when |V u P| is even and
-//     MULTI_CHANGE_SHAPE_REFUSED for unsupported multi-change shapes;
-//   - REPLACE_PROMOTE: promotes a single caught-up target learner while its
-//     source is a voter and |V| == V(r, H), otherwise refusing
-//     REPLACE_PROMOTE_NOT_AT_TARGET;
-//   - WITHDRAW_PROMOTION: records a per-operation tenure tombstone and answers
-//     WITHDRAWN or PROMOTION_IN_LOG;
-//   - REMOVE_LEARNER: proposes RemoveNode for a learner, refusing NOT_LEARNER
-//     when the subject is an incoming or outgoing voter (NOT_A_VOTER_REMOVAL).
-
+// Leader-port configuration-change admission and typed WP-P membership
+// operations (ADMIT, LEARNER_CAUGHT_UP, GROWTH_PROMOTE, REPLACE_PROMOTE,
+// WITHDRAW_PROMOTION, REMOVE_LEARNER), decided in the leader's queued turn.
 import {deepFreeze} from './raft-operation-port.js';
 import {
   RAFT_CATCH_UP_REQUEST_KIND,
@@ -156,6 +134,7 @@ function createLeadershipTenure(term) {
     withdrawnOperationIds: new Set(),
     proposedPromotions: new Map(),
     operationSubjects: new Map(),
+    peerOperationIds: new Map(),
   };
 }
 
@@ -384,23 +363,58 @@ function confChangeProposalRefusal({status, confState, change,
 }
 
 function recordOperationSubjects(tenure, operationId, peerIds) {
-  if (typeof operationId !== 'string' || operationId.length === 0) {
-    return;
-  }
+  if (typeof operationId !== 'string' || operationId.length === 0) return;
   const existing = tenure.operationSubjects.get(operationId) || [];
   const merged = [...new Set([...existing, ...peerIds.map(String)])];
   tenure.operationSubjects.set(operationId, merged);
 }
 
-function isWithdrawingOperation(tenure, operation) {
-  if (tenure.withdrawnOperationIds.has(operation.operationId)) {
+function recordPeerOperationBinding(tenure, peerId, operationId) {
+  if (!tenure || typeof operationId !== 'string' || operationId.length === 0) {
+    return;
+  }
+  tenure.peerOperationIds.set(String(peerId), operationId);
+  recordOperationSubjects(tenure, operationId, [peerId]);
+}
+
+function resolvePeerOperationId(tenure, operation, peerId) {
+  const bindings = operation.promotionBindings || [];
+  const bound = bindings.find((b) => b.peerId === String(peerId));
+  if (bound?.operationId) return bound.operationId;
+  const peerOpId = tenure.peerOperationIds.get(String(peerId));
+  return peerOpId ? peerOpId : operation.operationId;
+}
+
+function collectPromotionOperationIds(tenure, operation, peerIds) {
+  const ids = new Set(operation.operationIds || [operation.operationId]);
+  for (const peerId of peerIds) {
+    const opId = resolvePeerOperationId(tenure, operation, peerId);
+    if (opId) ids.add(opId);
+    const admittedOpId = tenure.peerOperationIds.get(String(peerId));
+    if (admittedOpId) ids.add(admittedOpId);
+  }
+  return [...ids];
+}
+
+function hasMismatchedPromotionBinding(tenure, operation) {
+  const bindings = operation.promotionBindings || [];
+  return bindings.some((b) => {
+    const admitted = tenure.peerOperationIds.get(String(b.peerId));
+    return Boolean(admitted && admitted !== b.operationId);
+  });
+}
+
+function isWithdrawingOperation(tenure, operation, peerIds = []) {
+  if (hasMismatchedPromotionBinding(tenure, operation)) return true;
+  const opIds = collectPromotionOperationIds(tenure, operation, peerIds);
+  if (opIds.some((opId) => tenure.withdrawnOperationIds.has(opId))) {
     return true;
   }
   return operation.workflowStep !== undefined &&
     !ADMITTED_PROMOTION_STEPS.has(operation.workflowStep);
 }
 
-function decideLearnerAdmit({status, confState, operation}) {
+function decideLearnerAdmit({tenure, status, confState, operation}) {
   if (operation.kind === RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER &&
       String(operation.peerId) === String(status.id)) {
     return {
@@ -408,6 +422,7 @@ function decideLearnerAdmit({status, confState, operation}) {
         RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LEADER, true),
     };
   }
+  recordPeerOperationBinding(tenure, operation.peerId, operation.operationId);
   const role = projectPeerRole(confState, operation.peerId);
   if (role === COMMITTED_REPLICA_ROLE.VOTER) {
     return {
@@ -447,7 +462,7 @@ function decideLearnerCaughtUp({group, tenure, status, confState, operation}) {
         RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEARNER, false),
     };
   }
-  recordOperationSubjects(tenure, operation.operationId, [peerId]);
+  recordPeerOperationBinding(tenure, peerId, operation.operationId);
   const record = ensureCatchUpRecord(tenure, {
     operationId: operation.operationId,
     peerId,
@@ -474,8 +489,8 @@ function decideLearnerCaughtUp({group, tenure, status, confState, operation}) {
 }
 
 function promotionPreconditionRefusal({group, tenure, status, confState,
-  operation}) {
-  if (isWithdrawingOperation(tenure, operation)) {
+  operation, peerIds = []}) {
+  if (isWithdrawingOperation(tenure, operation, peerIds)) {
     return admissionRefusal(
       RAFT_MEMBERSHIP_CHANGE_REFUSAL.OPERATION_WITHDRAWING, false);
   }
@@ -499,7 +514,7 @@ function evaluatePromotionCatchUp({group, tenure, status, operation, peerIds,
   const evaluations = peerIds.map((peerId) => evaluatePeerCatchUp(
     status,
     ensureCatchUpRecord(tenure, {
-      operationId: operation.operationId,
+      operationId: resolvePeerOperationId(tenure, operation, peerId),
       peerId,
       requestKind,
       leaderLogIndex,
@@ -517,6 +532,7 @@ function evaluatePromotionCatchUp({group, tenure, status, operation, peerIds,
 function buildPromotionProposalDecision({tenure, operation, peerIds,
   requestKind}) {
   const promotedPeerIds = Object.freeze(peerIds.map(String));
+  const opIds = collectPromotionOperationIds(tenure, operation, promotedPeerIds);
   return {
     change: deepFreeze({
       transition: AUTO_TRANSITION,
@@ -526,10 +542,12 @@ function buildPromotionProposalDecision({tenure, operation, peerIds,
       })),
     }),
     onAccepted: () => {
-      tenure.proposedPromotions.set(operation.operationId, {
-        peerIds: promotedPeerIds,
-        kind: requestKind,
-      });
+      for (const opId of opIds) {
+        tenure.proposedPromotions.set(opId, {
+          peerIds: promotedPeerIds,
+          kind: requestKind,
+        });
+      }
     },
     onDrained: () => typedOk(RAFT_FOUNDING_GROWTH_OUTCOME.PROMOTION_PROPOSED, {
       operationId: operation.operationId,
@@ -569,9 +587,11 @@ function decideGrowthPromote({group, tenure, status, confState, operation}) {
         RAFT_MEMBERSHIP_CHANGE_REFUSAL.MULTI_CHANGE_SHAPE_REFUSED, false),
     };
   }
-  recordOperationSubjects(tenure, operation.operationId, peerIds);
+  for (const opId of collectPromotionOperationIds(tenure, operation, peerIds)) {
+    recordOperationSubjects(tenure, opId, peerIds);
+  }
   const precondition = promotionPreconditionRefusal({
-    group, tenure, status, confState, operation,
+    group, tenure, status, confState, operation, peerIds,
   }) ?? growthTargetRefusal(confState, peerIds) ??
     evaluatePromotionCatchUp({
       group, tenure, status, operation, peerIds,
@@ -729,12 +749,6 @@ const TYPED_OPERATION_DECIDERS = Object.freeze({
   [RAFT_MEMBERSHIP_OPERATION.REMOVE_LEARNER]: decideRemoveLearner,
 });
 
-/**
- * Decide one typed membership operation in the leader's queued core turn.
- * @param {Object} context - {group, status, confState, operation,
- *   leaderReplicaIdOf}.
- * @return {Object} {immediate} or {change, onAccepted?, onDrained}.
- */
 function decideTypedConfChangeOperation({group, status, confState, operation,
   leaderReplicaIdOf}) {
   const tenure = syncLeadershipTenure(group, status);
@@ -751,11 +765,6 @@ function decideTypedConfChangeOperation({group, status, confState, operation,
   return decider({group, tenure, status, confState, operation});
 }
 
-/**
- * The settlement one drain announces, or null when it settled nothing.
- * @param {Object} observation - {before, now, confChangeEntries, appliedIndex}.
- * @return {Object|null}
- */
 function confChangeSettlement({before, now, confChangeEntries,
   appliedIndex}) {
   const pendingNow = hasPendingConfChange(now);

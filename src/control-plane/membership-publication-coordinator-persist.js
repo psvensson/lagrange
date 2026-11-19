@@ -1,5 +1,5 @@
 import {readStateField, readUpperStateField} from '../utils/state-field-read.js';
-import {TABLES} from '../constants/index.js';
+import {CDC_OPERATION, TABLES} from '../constants/index.js';
 import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from
   '../cdc/cdc-integration-service-shared-constants.js';
 import {resolveLocalSystemTableServices} from
@@ -16,8 +16,9 @@ import {
   PUBLICATION_WRITE_MAX_ATTEMPTS,
 } from './membership-publication-row-contract.js';
 import {
-  FORMATION_PUBLICATION_ID,
+  FORMATION_REFUSAL_REASON,
   FORMATION_TRANSITION_ACTION,
+  FORMATION_TRANSITION_OUTCOME,
   FORMATION_TRANSITION_TYPE,
   buildFormationLatchBody,
   decodeFormationRecord,
@@ -116,25 +117,70 @@ function syncCommittedFormationRow(coordinator, partitionService) {
   return committedRow;
 }
 
+function retainedLatchAttemptsOf(coordinator) {
+  if (!coordinator.retainedFormationLatchAttempts) {
+    coordinator.retainedFormationLatchAttempts = new Map();
+  }
+  return coordinator.retainedFormationLatchAttempts;
+}
+
+function getOrBuildFormationLatchAttempt(coordinator, evaluation, nowMs) {
+  const entryId =
+    `formation-latch:${evaluation.clusterId}:` +
+    `${evaluation.formedPublicationEpoch}`;
+  const retained = retainedLatchAttemptsOf(coordinator);
+  const existing = retained.get(entryId);
+  if (existing) {
+    return existing;
+  }
+  const body = buildFormationLatchBody({
+    clusterId: evaluation.clusterId,
+    declaredHostCount: evaluation.declaredHostCount,
+    formedAt: nowMs,
+    formedByNodeId: coordinator.nodeId || DEFAULT_FORMATION_LATCH_NODE_ID,
+    formedPublicationEpoch: evaluation.formedPublicationEpoch,
+    formedHostIds: evaluation.formedHostIds,
+    formedReadyNodeIds: evaluation.formedReadyNodeIds,
+    priorityPartitionVoters: evaluation.priorityPartitionVoters,
+  });
+  if (!body) {
+    return {entryId, body: null};
+  }
+  const attempt = Object.freeze({entryId, body});
+  retained.set(entryId, attempt);
+  return attempt;
+}
+
+function isSettledTerminalFormationLatchResponse(response) {
+  if (response?.deferRetry === true) {
+    return false;
+  }
+  const result = response?.formationResult;
+  if (!result) {
+    return false;
+  }
+  if (
+    result.outcome === FORMATION_TRANSITION_OUTCOME.APPLIED ||
+    result.outcome === FORMATION_TRANSITION_OUTCOME.SETTLED
+  ) {
+    return true;
+  }
+  return (
+    result.outcome === FORMATION_TRANSITION_OUTCOME.REFUSED &&
+    result.reason !== FORMATION_REFUSAL_REASON.CDC_CAPACITY
+  );
+}
+
 async function submitFormationLatchCommand(
   coordinator,
   partitionService,
   evaluation,
   nowMs,
 ) {
-  const latchBody = partitionService ?
-    buildFormationLatchBody({
-      clusterId: evaluation.clusterId,
-      declaredHostCount: evaluation.declaredHostCount,
-      formedAt: nowMs,
-      formedByNodeId: coordinator.nodeId || DEFAULT_FORMATION_LATCH_NODE_ID,
-      formedPublicationEpoch: evaluation.formedPublicationEpoch,
-      formedHostIds: evaluation.formedHostIds,
-      formedReadyNodeIds: evaluation.formedReadyNodeIds,
-      priorityPartitionVoters: evaluation.priorityPartitionVoters,
-    }) :
-    null;
-  if (!partitionService || !latchBody) {
+  const attempt = partitionService ?
+    getOrBuildFormationLatchAttempt(coordinator, evaluation, nowMs) :
+    {entryId: null, body: null};
+  if (!partitionService || !attempt.body) {
     return {
       latched: false,
       evaluation,
@@ -143,12 +189,10 @@ async function submitFormationLatchCommand(
         LATCH_REASON_BODY_INVALID,
     };
   }
-  const response = await requestFormationLatch(partitionService, {
-    entryId:
-      `formation-latch:${evaluation.clusterId}:` +
-      `${evaluation.formedPublicationEpoch}`,
-    body: latchBody,
-  });
+  const response = await requestFormationLatch(partitionService, attempt);
+  if (isSettledTerminalFormationLatchResponse(response)) {
+    retainedLatchAttemptsOf(coordinator).delete(attempt.entryId);
+  }
   if (response?.success === true) {
     syncCommittedFormationRow(coordinator, partitionService);
   }
@@ -308,19 +352,24 @@ class MembershipPublicationCoordinatorPersist extends
   }
 
   projectCommittedFormationRow(row) {
-    if (!row) {
+    if (!row || this._projectingFormationRow === true) {
       return;
     }
-    this.systemTableCache?.set?.(
-      TABLES.CONTROL_PLANE_PUBLICATIONS,
-      FORMATION_PUBLICATION_ID,
-      row,
-    );
-    const decoded = decodeFormationRecord(row);
-    const serveOwner =
-      this.controlPlaneReadinessService?.getServeEligibilityOwner?.();
-    serveOwner?.adoptFormationObservation?.(decoded);
-    serveOwner?.scheduleRefresh?.();
+    this._projectingFormationRow = true;
+    try {
+      this.systemTableCache?.applySystemTableChange?.(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        CDC_OPERATION.UPDATE,
+        row,
+      );
+      const decoded = decodeFormationRecord(row);
+      const serveOwner =
+        this.controlPlaneReadinessService?.getServeEligibilityOwner?.();
+      serveOwner?.adoptFormationObservation?.(decoded);
+      serveOwner?.scheduleRefresh?.();
+    } finally {
+      this._projectingFormationRow = false;
+    }
   }
 
   async evaluateAndLatchFormationIfEligible(context = {}) {
@@ -351,8 +400,12 @@ class MembershipPublicationCoordinatorPersist extends
       return;
     }
     if (this.systemTableCache) {
-      this._formationCacheTriggerListener = (change) => {
-        if (!FORMATION_WATCHED_TABLES.has(change?.tableName)) {
+      this._formationCacheTriggerListener = (tableNameOrChange) => {
+        if (
+          this._projectingFormationRow === true ||
+          (!FORMATION_WATCHED_TABLES.has(tableNameOrChange) &&
+            !FORMATION_WATCHED_TABLES.has(tableNameOrChange?.tableName))
+        ) {
           return;
         }
         this.evaluateAndLatchFormationIfEligible().catch(() => {});

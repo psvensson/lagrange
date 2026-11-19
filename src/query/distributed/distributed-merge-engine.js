@@ -85,12 +85,22 @@ function resolveCoordinatorTableName(effectivePlan, ast) {
   return DEFAULT_COORDINATOR_TABLE;
 }
 
-function buildSinglePartitionFastPathResult(validFragments, effectivePlan) {
+function buildSinglePartitionFastPathResult(
+  validFragments,
+  effectivePlan,
+  safeIntegers,
+) {
   const first = validFragments[0] || {rows: [], columns: null, rowSet: null};
+  const rawRows = Array.isArray(first.rawRows) ?
+    presentRawSqlRows(first.rawRows, {safeIntegers}) :
+    null;
+  const rows = Array.isArray(first.rows) ?
+    presentSqlRowObjects(first.rows, {safeIntegers}) :
+    [];
   return {
     guardOutcome: GUARD_OUTCOME.GUARD_HELD,
-    rows: Array.isArray(first.rows) ? first.rows : [],
-    rawRows: Array.isArray(first.rawRows) ? first.rawRows : null,
+    rows,
+    rawRows,
     columns: Array.isArray(first.columns) ? first.columns : effectivePlan.expectedColumns,
     rowSet: first.rowSet || null,
   };
@@ -115,6 +125,76 @@ function presentMergedExecutionResult(merged, safeIntegers) {
     rowSet: merged.rowSet,
     byteLength: merged.byteLength,
   };
+}
+
+function pickDefinedValue(firstValue, secondValue, defaultValue = undefined) {
+  if (firstValue !== undefined && firstValue !== null) return firstValue;
+  if (secondValue !== undefined && secondValue !== null) return secondValue;
+  return defaultValue;
+}
+
+function resolveDeadlineFromOptions(sessionDeadline, topDeadline, timeoutMs) {
+  const explicit = pickDefinedValue(sessionDeadline, topDeadline, null);
+  if (Number.isSafeInteger(explicit) && explicit > 0) {
+    return explicit;
+  }
+  if (Number.isSafeInteger(timeoutMs) && timeoutMs > 0) {
+    return Date.now() + timeoutMs;
+  }
+  return null;
+}
+
+function buildEffectiveSessionOptions(options = {}) {
+  const base = options.sessionOptions || {};
+  const timeoutMs = pickDefinedValue(base.timeoutMs, options.timeoutMs, null);
+  const deadlineMs = resolveDeadlineFromOptions(
+    base.deadlineMs,
+    options.deadlineMs,
+    timeoutMs,
+  );
+  return {
+    ...base,
+    budget: pickDefinedValue(base.budget, options.budget),
+    memoryLimitBytes: pickDefinedValue(base.memoryLimitBytes, options.memoryLimitBytes),
+    mergeInputMaxRows: pickDefinedValue(base.mergeInputMaxRows, options.mergeInputMaxRows),
+    resultMaxRows: pickDefinedValue(base.resultMaxRows, options.resultMaxRows),
+    resultMaxBytes: pickDefinedValue(base.resultMaxBytes, options.resultMaxBytes),
+    deadlineMs,
+    timeoutMs,
+    cancellationToken: pickDefinedValue(
+      base.cancellationToken,
+      options.cancellationToken,
+      null,
+    ),
+    signal: pickDefinedValue(base.signal, options.signal, null),
+    isCancelled: pickDefinedValue(base.isCancelled, options.isCancelled, null),
+  };
+}
+
+function hasActiveInterruptionContract(sessionOptions) {
+  return (
+    sessionOptions.deadlineMs !== null ||
+    Boolean(sessionOptions.cancellationToken) ||
+    Boolean(sessionOptions.signal) ||
+    Boolean(sessionOptions.isCancelled)
+  );
+}
+
+function shouldUseProcessPool(effectivePlan, options, sessionOptions, ownedPool) {
+  if (effectivePlan.kind !== FANOUT_PLAN_KIND.COORDINATOR_EVALUATED) {
+    return false;
+  }
+  if (options.useProcessPool === false) {
+    return false;
+  }
+  if (
+    options.useProcessPool === true ||
+    Boolean(options.processPool) ||
+    Boolean(ownedPool)
+  ) {
+    return true;
+  }
+  return hasActiveInterruptionContract(sessionOptions);
 }
 
 async function ingestSessionTables(
@@ -161,6 +241,7 @@ async function executePooledCoordinatorMerge(
   ast,
   effectivePlan,
   options,
+  sessionOptions,
 ) {
   const declaredColumns = inferFragmentColumns(validFragments, ast);
   const tables = [{
@@ -186,12 +267,24 @@ async function executePooledCoordinatorMerge(
     sql: effectivePlan.coordinatorSql,
     params: effectivePlan.coordinatorParams || [],
     expectedColumns: effectivePlan.expectedColumns || null,
-    sessionOptions: options.sessionOptions || {},
+    sessionOptions,
   });
   return presentMergedExecutionResult(merged, options.safeIntegers === true);
 }
 
 class DistributedMergeEngine {
+  constructor(options = {}) {
+    this.processPool = options.processPool || null;
+  }
+
+  resolveProcessPool(overridePool = null) {
+    if (overridePool) return overridePool;
+    if (this.processPool === null) {
+      this.processPool = getDefaultMergeProcessPool();
+    }
+    return this.processPool;
+  }
+
   /**
    * Merge partition results through an in-memory SQLite CoordinatorMergeSession
    * in canonical partition layout.
@@ -220,20 +313,23 @@ class DistributedMergeEngine {
       Math.max(validFragments.length, 2),
       {resolveTableSchema: queryExecutor?.resolveTableInfo},
     );
+    const safeIntegers = options.safeIntegers === true;
 
     if (
       effectivePlan.kind === FANOUT_PLAN_KIND.SINGLE_PARTITION &&
       validFragments.length <= 1
     ) {
-      return buildSinglePartitionFastPathResult(validFragments, effectivePlan);
+      return buildSinglePartitionFastPathResult(
+        validFragments,
+        effectivePlan,
+        safeIntegers,
+      );
     }
 
     const tableName = resolveCoordinatorTableName(effectivePlan, ast);
-    if (
-      effectivePlan.kind === FANOUT_PLAN_KIND.COORDINATOR_EVALUATED &&
-      (options.useProcessPool === true || Boolean(options.processPool))
-    ) {
-      const pool = options.processPool || getDefaultMergeProcessPool();
+    const sessionOptions = buildEffectiveSessionOptions(options);
+    if (shouldUseProcessPool(effectivePlan, options, sessionOptions, this.processPool)) {
+      const pool = this.resolveProcessPool(options.processPool);
       return executePooledCoordinatorMerge(
         pool,
         tableName,
@@ -241,6 +337,7 @@ class DistributedMergeEngine {
         ast,
         effectivePlan,
         options,
+        sessionOptions,
       );
     }
 
@@ -250,6 +347,7 @@ class DistributedMergeEngine {
       ast,
       effectivePlan,
       options,
+      sessionOptions,
     );
   }
 
@@ -259,8 +357,10 @@ class DistributedMergeEngine {
     ast,
     effectivePlan,
     options,
+    sessionOptions = null,
   ) {
-    const session = new CoordinatorMergeSession(options.sessionOptions || {});
+    const effectiveSessionOptions = sessionOptions || buildEffectiveSessionOptions(options);
+    const session = new CoordinatorMergeSession(effectiveSessionOptions);
     try {
       await ingestSessionTables(
         session,
@@ -297,6 +397,14 @@ class DistributedMergeEngine {
     } finally {
       session.close();
     }
+  }
+
+  shutdown() {
+    this.processPool?.shutdown?.();
+  }
+
+  close() {
+    this.shutdown();
   }
 }
 

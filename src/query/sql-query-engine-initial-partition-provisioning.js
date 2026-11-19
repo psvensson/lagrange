@@ -426,7 +426,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         targetNodeIds: admittedTargetNodeIds.slice(0, requiredNewReplicaCount),
         context,
       });
-      plannedOperations.push(...founded.operations);
+      plannedOperations.push(...founded.plannedOperations);
       createdPlanningOperations.push(...founded.createdOperations);
     } else {
       for (const targetNodeId of admittedTargetNodeIds) {
@@ -727,9 +727,24 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       sourceNodeId,
       deferredBootstrap: true,
     });
+    if (!Array.isArray(operations) ||
+        operations.length !== result.operationIds.length) {
+      return {
+        provisioned: false,
+        deferred: true,
+        operations: null,
+        plannedOperations: [],
+        createdOperations: [],
+        result,
+        answer,
+      };
+    }
     const admitted = result.outcome === PLACEMENT_OUTCOME.ADMITTED;
     return {
+      provisioned: true,
+      deferred: false,
       operations,
+      plannedOperations: operations,
       createdOperations: admitted ? operations : [],
       result,
       answer,

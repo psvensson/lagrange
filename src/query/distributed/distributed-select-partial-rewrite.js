@@ -158,16 +158,63 @@ function searchedCase(whenExpr, thenExpression, elseExpr) {
   };
 }
 
-function buildPartialColumnMetadata(colName, baseColName, schema) {
+function maybeWrapCollate(expr, explicitCollation) {
+  if (typeof explicitCollation !== 'string' || explicitCollation.length === 0) {
+    return expr;
+  }
+  return {
+    type: EXPR_TYPE.COLLATE,
+    expression: expr,
+    collation: explicitCollation,
+  };
+}
+
+function buildPartialColumnMetadata(
+  colName,
+  baseColName,
+  schema,
+  explicitCollation = null,
+) {
   const baseDef = baseColName ? findSchemaColumn(schema, baseColName) : null;
   if (!baseDef) {
-    return {name: colName};
+    return explicitCollation ?
+      {name: colName, collation: explicitCollation} :
+      {name: colName};
   }
   return {
     name: colName,
     type: baseDef.type ?? baseDef.dataType ?? null,
-    collation: baseDef.collation ?? null,
+    collation: explicitCollation ?? baseDef.collation ?? null,
   };
+}
+
+function extractCollateColumnTraits(argumentExpr) {
+  const unwrapped = unwrapCollateColumn(argumentExpr);
+  return {
+    baseColName: unwrapped?.columnRef?.column || null,
+    explicitCollation: unwrapped?.explicitCollation || null,
+  };
+}
+
+function registerDistinctCountPartialAggregate(aggNode, state, schema, index) {
+  const partialName = `${DISTINCT_COL_PREFIX}${index}`;
+  const {baseColName, explicitCollation} = extractCollateColumnTraits(
+    aggNode.argument,
+  );
+  state.partitionColumns.push({
+    type: EXPR_TYPE.COLUMN,
+    expression: aggNode.argument,
+    alias: partialName,
+  });
+  state.extraPartitionGroupBy.push(aggNode.argument);
+  state.partialTableColumns.push(
+    buildPartialColumnMetadata(partialName, baseColName, schema, explicitCollation),
+  );
+  return aggCall(
+    PARTIAL_COUNT_NAME,
+    maybeWrapCollate(colRef(partialName, state.tableQualifier), explicitCollation),
+    true,
+  );
 }
 
 function registerStandardPartialAggregate(aggNode, state, schema) {
@@ -177,19 +224,7 @@ function registerStandardPartialAggregate(aggNode, state, schema) {
   const tableQualifier = state.tableQualifier;
 
   if (fn === PARTIAL_COUNT_NAME && aggNode.distinct) {
-    const partialName = `${DISTINCT_COL_PREFIX}${index}`;
-    const unwrapped = unwrapCollateColumn(aggNode.argument);
-    const baseColName = unwrapped?.columnRef?.column || null;
-    state.partitionColumns.push({
-      type: EXPR_TYPE.COLUMN,
-      expression: aggNode.argument,
-      alias: partialName,
-    });
-    state.extraPartitionGroupBy.push(aggNode.argument);
-    state.partialTableColumns.push(
-      buildPartialColumnMetadata(partialName, baseColName, schema),
-    );
-    return aggCall(PARTIAL_COUNT_NAME, colRef(partialName, tableQualifier), true);
+    return registerDistinctCountPartialAggregate(aggNode, state, schema, index);
   }
 
   const partialName = `${PARTIAL_COL_PREFIX}${index}`;
@@ -210,12 +245,17 @@ function registerStandardPartialAggregate(aggNode, state, schema) {
     ]);
   }
 
-  const unwrapped = unwrapCollateColumn(aggNode.argument);
-  const baseColName = unwrapped?.columnRef?.column || null;
-  state.partialTableColumns.push(
-    buildPartialColumnMetadata(partialName, baseColName, schema),
+  const {baseColName, explicitCollation} = extractCollateColumnTraits(
+    aggNode.argument,
   );
-  return aggCall(fn, colRef(partialName, tableQualifier), false);
+  state.partialTableColumns.push(
+    buildPartialColumnMetadata(partialName, baseColName, schema, explicitCollation),
+  );
+  return aggCall(
+    fn,
+    maybeWrapCollate(colRef(partialName, tableQualifier), explicitCollation),
+    false,
+  );
 }
 
 function registerGuardedSumAggregate(aggNode, state) {
@@ -471,6 +511,7 @@ function populateGroupByPartialColumns(groupBy, state, schema) {
   for (const term of groupBy || []) {
     const unwrapped = unwrapCollateColumn(term);
     const colName = unwrapped.columnRef.column;
+    const explicitCollation = unwrapped.explicitCollation || null;
     const lower = colName.toLowerCase();
     if (!seenGroupCols.has(lower)) {
       seenGroupCols.add(lower);
@@ -480,7 +521,7 @@ function populateGroupByPartialColumns(groupBy, state, schema) {
         alias: colName,
       });
       state.partialTableColumns.push(
-        buildPartialColumnMetadata(colName, colName, schema),
+        buildPartialColumnMetadata(colName, colName, schema, explicitCollation),
       );
     }
   }

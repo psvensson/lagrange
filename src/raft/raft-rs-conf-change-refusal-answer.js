@@ -196,15 +196,50 @@ function normalizeLearnerCaughtUp(change, registry) {
   };
 }
 
-function resolvePrimaryOperationId(change) {
+function resolveAllOperationIds(change) {
+  const ids = [];
   if (nonEmptyString(change.operationId)) {
-    return change.operationId;
+    ids.push(change.operationId);
   }
-  if (!Array.isArray(change.operationIds)) {
-    return null;
+  if (Array.isArray(change.operationIds)) {
+    for (const id of change.operationIds) {
+      if (nonEmptyString(id)) ids.push(id);
+    }
   }
-  const [first] = change.operationIds;
-  return nonEmptyString(first) ? first : null;
+  if (Array.isArray(change.promotions)) {
+    for (const item of change.promotions) {
+      if (nonEmptyString(item?.operationId)) {
+        ids.push(item.operationId);
+      }
+    }
+  }
+  return [...new Set(ids)];
+}
+
+function resolvePrimaryOperationId(change) {
+  const [first] = resolveAllOperationIds(change);
+  return first ?? null;
+}
+
+function resolvePromotionBindings(change, registry) {
+  if (!Array.isArray(change.promotions)) {
+    return [];
+  }
+  const bindings = [];
+  for (const item of change.promotions) {
+    if (!item || typeof item !== 'object' || !nonEmptyString(item.operationId)) {
+      continue;
+    }
+    const identity = extractPromotionIdentity(item);
+    const resolved = resolvePeerIdFromInput(registry, identity, item.peerId);
+    if (resolved.refusal === undefined) {
+      bindings.push(deepFreeze({
+        operationId: item.operationId,
+        peerId: String(resolved.peerId),
+      }));
+    }
+  }
+  return bindings;
 }
 
 function extractPromotionIdentity(item) {
@@ -243,10 +278,11 @@ function resolveBaseConfigurationDigest(change) {
 }
 
 function normalizeGrowthPromote(change, registry) {
-  const operationId = resolvePrimaryOperationId(change);
-  if (operationId === null) {
+  const operationIds = resolveAllOperationIds(change);
+  if (operationIds.length === 0) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_OPERATION_ID};
   }
+  const [operationId] = operationIds;
   const targets = resolvePeerIdList(
     registry,
     extractTargetIdentities(change),
@@ -267,6 +303,8 @@ function normalizeGrowthPromote(change, registry) {
     typedOperation: deepFreeze({
       kind: RAFT_MEMBERSHIP_OPERATION.GROWTH_PROMOTE,
       operationId,
+      operationIds: Object.freeze(operationIds),
+      promotionBindings: Object.freeze(resolvePromotionBindings(change, registry)),
       promotePeerIds: Object.freeze(targets.peerIds),
       baseConfigurationDigest: resolveBaseConfigurationDigest(change),
       baseVoterPeerIds: baseVoters.peerIds === null ? null :

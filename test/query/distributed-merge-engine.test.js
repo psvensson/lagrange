@@ -1,4 +1,7 @@
+import Database from 'better-sqlite3';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CoordinatorMergeProcessPool,
@@ -12,10 +15,11 @@ import {
   FANOUT_PLAN_KIND,
   buildSelectFanoutPlan,
 } from '../../src/query/distributed/distributed-select-fanout-plan.js';
-import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {QUERY_ERROR_CODE, QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
+import {collectBoundedTypedRowSet} from '../../src/query/query-result-budget.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
-import {encodeTypedRowSet} from '../../src/query/sql-value-codec.js';
+import {decodeTypedParams, encodeTypedRowSet} from '../../src/query/sql-value-codec.js';
 import {presentSqlValue} from '../../src/query/sql-value-presentation.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
@@ -268,4 +272,236 @@ test('GUARDED_PARTIAL (3f) - carry-normalized partial-row fixtures Case A, Case 
     overflowErr = err;
   }
   t.equal(overflowErr?.code, QUERY_ERROR_CODE.QUERY_MERGE_PARTIAL_OVERFLOW);
+});
+
+function createSqliteClusterExecutor(tableSpecs) {
+  const dbs = new Map();
+  const tableRows = [];
+  const serviceRows = [];
+
+  for (const spec of tableSpecs) {
+    tableRows.push({
+      table_id: spec.tableName,
+      table_name: spec.tableName,
+      schema_definition: JSON.stringify(spec.schema),
+    });
+    spec.partitions.forEach((rows, idx) => {
+      const partitionId = `${spec.tableName}-p${idx + 1}`;
+      const db = new Database(':memory:');
+      db.defaultSafeIntegers(true);
+      db.exec(spec.ddl);
+      const cols = spec.schema.columns.map((c) => c.name);
+      const insertSql = `INSERT INTO ${spec.tableName} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
+      const stmt = db.prepare(insertSql);
+      for (const row of rows) {
+        stmt.run(...cols.map((c) => row[c]));
+      }
+      dbs.set(partitionId, db);
+      serviceRows.push(
+        PartitionServiceRowOwner.buildServiceRow({
+          partitionId,
+          replicaId: partitionId,
+          nodeId: 'test-node',
+          status: SERVICE_STATUS.ACTIVE,
+          service: {isLeader: true},
+        }),
+      );
+    });
+  }
+
+  const systemCache = {
+    getAll(table) {
+      if (table === TABLES.TABLES) return tableRows;
+      if (table === TABLES.SERVICES) return serviceRows;
+      return [];
+    },
+    filter(table, predicate) {
+      return this.getAll(table).filter(predicate);
+    },
+    get(table, key) {
+      if (table === TABLES.TABLES) {
+        return tableRows.find((r) => r.table_name === key || r.table_id === key) || null;
+      }
+      return null;
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address, request) {
+      if (request.type !== QUERY_MESSAGE_TYPE.QUERY) {
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
+      }
+      const partitionId = address.split('/')[2];
+      const db = dbs.get(partitionId);
+      const params = request.typedParams ?
+        decodeTypedParams(request.typedParams) :
+        (request.params || []);
+      const {rowSet} = collectBoundedTypedRowSet(db.prepare(request.sql), params, {});
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: true,
+        rowSet,
+        rowSetComplete: true,
+        partitionId,
+      });
+    },
+  };
+
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter,
+    systemCache,
+  });
+
+  const close = () => {
+    executor.mergeEngine?.close?.();
+    for (const db of dbs.values()) db.close();
+  };
+
+  return {executor, close};
+}
+
+test('Review 3 Item 4a: QueryExecutor interrupts expensive multiway CROSS JOIN COUNT(*) on deadline and remains responsive', async (t) => {
+  const rowsP1 = Array.from({length: 80}, (_, i) => ({id: BigInt(i + 1)}));
+  const rowsP2 = Array.from({length: 80}, (_, i) => ({id: BigInt(i + 81)}));
+  const {executor, close} = createSqliteClusterExecutor([{
+    tableName: 't',
+    ddl: 'CREATE TABLE t (id INTEGER PRIMARY KEY)',
+    schema: {columns: [{name: 'id', type: 'INTEGER'}], primaryKey: ['id']},
+    partitions: [rowsP1, rowsP2],
+  }]);
+
+  try {
+    // 5-way self-join over 160 rows = 160^5 = 104,857,600,000 combinations inside SQLite before first row
+    const heavyAst = new SQLParser(
+      'SELECT COUNT(*) AS n FROM t a JOIN t b ON 1 = 1 JOIN t c ON 1 = 1 JOIN t d ON 1 = 1 JOIN t e ON 1 = 1',
+    ).parse();
+    const startMs = Date.now();
+    let caughtError = null;
+    try {
+      await executor.executeSelect(
+        heavyAst,
+        ['t-p1', 't-p2'],
+        [],
+        {deadlineMs: Date.now() + 80},
+      );
+    } catch (error) {
+      caughtError = error;
+    }
+    const elapsedMs = Date.now() - startMs;
+    t.equal(caughtError?.code, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED);
+    t.ok(elapsedMs < 2500, `interrupted in ${elapsedMs}ms (< 2500ms)`);
+
+    // Coordinator remains responsive for a subsequent query immediately after SIGKILL
+    const lightAst = new SQLParser('SELECT COUNT(*) AS n FROM t').parse();
+    const nextResult = await executor.executeSelect(
+      lightAst,
+      ['t-p1', 't-p2'],
+      [],
+      {deadlineMs: Date.now() + 5000},
+    );
+    t.equal(nextResult.success, true);
+    t.same(nextResult.rows, [{n: 160}]);
+  } finally {
+    close();
+  }
+});
+
+test('Review 3 Item 4b: QueryExecutor cross-partition JOIN preserves safeIntegers: true for small and >2^53 BigInts', async (t) => {
+  const bigVal = 9007199254740993n;
+  const {executor, close} = createSqliteClusterExecutor([
+    {
+      tableName: 'orders',
+      ddl: 'CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, small_val INTEGER)',
+      schema: {
+        columns: [
+          {name: 'id', type: 'INTEGER'},
+          {name: 'user_id', type: 'INTEGER'},
+          {name: 'small_val', type: 'INTEGER'},
+        ],
+        primaryKey: ['id'],
+      },
+      partitions: [[{id: 1n, user_id: 10n, small_val: 42n}], []],
+    },
+    {
+      tableName: 'ledger',
+      ddl: 'CREATE TABLE ledger (user_id INTEGER PRIMARY KEY, big_val INTEGER)',
+      schema: {
+        columns: [
+          {name: 'user_id', type: 'INTEGER'},
+          {name: 'big_val', type: 'INTEGER'},
+        ],
+        primaryKey: ['user_id'],
+      },
+      partitions: [[], [{user_id: 10n, big_val: bigVal}]],
+    },
+  ]);
+
+  try {
+    const joinAst = new SQLParser(
+      'SELECT orders.small_val AS small_val, ledger.big_val AS big_val ' +
+      'FROM orders JOIN ledger ON orders.user_id = ledger.user_id',
+    ).parse();
+    const res = await executor.executeSelect(
+      joinAst,
+      ['orders-p1', 'orders-p2'],
+      [],
+      {
+        safeIntegers: true,
+        distributedPlan: {
+          tablePlans: new Map([
+            ['orders', {partitions: ['orders-p1', 'orders-p2']}],
+            ['ledger', {partitions: ['ledger-p1', 'ledger-p2']}],
+          ]),
+        },
+      },
+    );
+    t.equal(res.success, true);
+    t.equal(res.rows.length, 1);
+    t.equal(typeof res.rows[0].small_val, 'bigint');
+    t.equal(res.rows[0].small_val, 42n);
+    t.equal(typeof res.rows[0].big_val, 'bigint');
+    t.equal(res.rows[0].big_val, bigVal);
+  } finally {
+    close();
+  }
+});
+
+test('Review 3 Item 4c: PARTIAL_AGGREGATE preserves explicit COLLATE BINARY override over NOCASE base column', async (t) => {
+  const schema = {
+    columns: [
+      {name: 'id', type: 'INTEGER'},
+      {name: 'name', type: 'TEXT', collation: 'NOCASE'},
+    ],
+    primaryKey: ['id'],
+  };
+  const {executor, close} = createSqliteClusterExecutor([{
+    tableName: 't',
+    ddl: 'CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT COLLATE NOCASE)',
+    schema,
+    partitions: [
+      [{id: 1n, name: 'a'}],
+      [{id: 2n, name: 'A'}],
+    ],
+  }]);
+
+  try {
+    const binaryAst = new SQLParser(
+      'SELECT COUNT(DISTINCT name COLLATE BINARY) AS n FROM t',
+    ).parse();
+    const binaryPlan = buildSelectFanoutPlan(binaryAst, [], 2, {schema});
+    t.equal(binaryPlan.kind, FANOUT_PLAN_KIND.PARTIAL_AGGREGATE);
+
+    const binaryRes = await executor.executeSelect(binaryAst, ['t-p1', 't-p2'], []);
+    t.equal(binaryRes.success, true);
+    t.same(binaryRes.rows, [{n: 2}]);
+
+    const nocaseAst = new SQLParser(
+      'SELECT COUNT(DISTINCT name) AS n FROM t',
+    ).parse();
+    const nocaseRes = await executor.executeSelect(nocaseAst, ['t-p1', 't-p2'], []);
+    t.equal(nocaseRes.success, true);
+    t.same(nocaseRes.rows, [{n: 1}]);
+  } finally {
+    close();
+  }
 });

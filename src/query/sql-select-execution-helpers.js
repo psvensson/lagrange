@@ -63,6 +63,27 @@ export function reportConditionWaitSpent(engine, spent) {
   spent.error.waitBoundSpentReported = true;
 }
 
+function buildBudgetExecutionLimits(budgets) {
+  return {
+    budgets,
+    memoryLimitBytes: budgets?.MEMORY_LIMIT_BYTES,
+    mergeInputMaxRows: budgets?.MERGE_INPUT_MAX_ROWS,
+    resultMaxBytes: budgets?.RESULT_MAX_BYTES,
+    resultMaxRows: budgets?.RESULT_MAX_ROWS,
+  };
+}
+
+function buildInterruptionRequestOptions(queryOptions) {
+  return {
+    timeoutMs: queryOptions.timeoutMs,
+    timeoutBudget: queryOptions.timeoutBudget,
+    deadlineMs: queryOptions.deadlineMs,
+    cancellationToken: queryOptions.cancellationToken,
+    signal: queryOptions.signal,
+    isCancelled: queryOptions.isCancelled,
+  };
+}
+
 /**
  * Preserve the same request identity and caller budget on every read branch.
  *
@@ -75,11 +96,11 @@ export function selectRequestOptions(queryOptions, sessionId, transactionRead) {
   return {
     sessionId: transactionRead ? sessionId : null,
     transactionIdentity: transactionRead?.identity,
-    timeoutMs: queryOptions.timeoutMs,
-    timeoutBudget: queryOptions.timeoutBudget || null,
-    cancellationToken: queryOptions.cancellationToken || null,
-    resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
-    resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
+    ...buildInterruptionRequestOptions(queryOptions),
+    ...buildBudgetExecutionLimits(queryOptions.budgets),
+    useProcessPool: queryOptions.useProcessPool,
+    processPool: queryOptions.processPool,
+    sessionOptions: queryOptions.sessionOptions,
     safeIntegers: queryOptions.safeIntegers === true,
   };
 }
@@ -96,17 +117,17 @@ export function selectRequestOptions(queryOptions, sessionId, transactionRead) {
 export function executeFromlessSelectInSession(ast, params = [], queryOptions = {}) {
   assertQueryParametersBound(ast, params);
   const rendered = renderSelectWithParameters(ast, createParameterResolver(params));
+  const opts = queryOptions || {};
   const session = new CoordinatorMergeSession({
-    budget: queryOptions?.budgets,
-    resultMaxBytes: queryOptions?.budgets?.RESULT_MAX_BYTES,
-    resultMaxRows: queryOptions?.budgets?.RESULT_MAX_ROWS,
-    cancellationToken: queryOptions?.cancellationToken || null,
+    budget: opts.budgets,
+    ...buildBudgetExecutionLimits(opts.budgets),
+    ...buildInterruptionRequestOptions(opts),
   });
   try {
     const merged = session.executeMergeSql(rendered.sql, rendered.params, {
       expectedColumns: resolveExpectedOutputColumns(ast),
     });
-    const safeIntegers = queryOptions?.safeIntegers === true;
+    const safeIntegers = opts.safeIntegers === true;
     const presentedRows = presentSqlRowObjects(merged.rows, {safeIntegers});
     const presentedRawRows = presentRawSqlRows(merged.rawRows, {safeIntegers});
     return {

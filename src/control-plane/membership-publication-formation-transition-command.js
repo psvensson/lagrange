@@ -19,6 +19,7 @@ import {
 import {
   PARTITION_CDC_ADMISSION_STATE,
   admitCdcOwedWork,
+  settleCdcOwedRefusal,
 } from '../partition/partition-cdc-owed-admission.js';
 import {PARTITION_CDC_EVENT_BUILD_STATE} from
   '../partition/partition-cdc-generator.js';
@@ -618,17 +619,18 @@ function cdcEventsOf(service, {command, index, term, entryKey}, rows, operation)
   });
 }
 
-function decideCommittedTransition(service, committed) {
-  if (
-    admitCdcOwedWork(service, committed.command).state ===
-    PARTITION_CDC_ADMISSION_STATE.REFUSED
-  ) {
-    return buildTransitionDecision({
-      outcome: FORMATION_TRANSITION_OUTCOME.REFUSED,
-      reason: FORMATION_REFUSAL_REASON.CDC_CAPACITY,
-    });
-  }
-  return decideFormationTransition(service.db, committed.command);
+const CDC_CAPACITY_FORMATION_RESULT = Object.freeze({
+  outcome: FORMATION_TRANSITION_OUTCOME.REFUSED,
+  reason: FORMATION_REFUSAL_REASON.CDC_CAPACITY,
+});
+
+function isValidTargetFormationCommand(service, command) {
+  return (
+    service.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS &&
+    service.partitionId === PUBLICATIONS_PARTITION_ID &&
+    command.partitionId === service.partitionId &&
+    isPinnedFormationTransitionCommand(command)
+  );
 }
 
 function settleReservedFormationStatement(service, {command, afterCommit}) {
@@ -675,12 +677,7 @@ function recordFormationOperationCdc(service, committed, events) {
 
 function applyFormationTransitionCommand(service, committed) {
   const {command, index, term, afterCommit, afterRollback} = committed;
-  if (
-    service.tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS ||
-    service.partitionId !== PUBLICATIONS_PARTITION_ID ||
-    command.partitionId !== service.partitionId ||
-    !isPinnedFormationTransitionCommand(command)
-  ) {
+  if (!isValidTargetFormationCommand(service, command)) {
     throw new Error(FORMATION_REFUSAL_REASON.INVALID_COMMAND);
   }
   const entryKey = service.getCommittedEntryKey(command);
@@ -696,10 +693,22 @@ function applyFormationTransitionCommand(service, committed) {
   if (isPartitionReserved(service.db)) {
     return settleReservedFormationStatement(service, {command, afterCommit});
   }
-  try {
-    const {result, rows, operation} = decideCommittedTransition(
+  const cdcAdmission = admitCdcOwedWork(service, command);
+  if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
+    return settleCdcOwedRefusal(
       service,
-      committed,
+      {command, afterCommit},
+      {
+        ...cdcAdmission.answer,
+        admitted: false,
+        [FORMATION_RESULT_FIELD]: CDC_CAPACITY_FORMATION_RESULT,
+      },
+    );
+  }
+  try {
+    const {result, rows, operation} = decideFormationTransition(
+      service.db,
+      command,
     );
     recordCommittedStatementOutcome(service, {
       entryKey,

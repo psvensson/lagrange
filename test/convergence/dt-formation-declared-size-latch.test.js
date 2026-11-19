@@ -27,6 +27,16 @@ import {
   resolveVoterTarget,
 } from '../../src/bootstrap/replication-target-authority.js';
 import {
+  CONTROL_PLANE_PUBLICATIONS_SCHEMA,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  SystemTableCache,
+} from '../../src/cache/system-table-cache.js';
+import {
+  MembershipPublicationCoordinator,
+} from '../../src/control-plane/membership-publication-coordinator.js';
+import {
   assertAllocationHeader,
   createSeedOriginalAllocation,
   requireDeclaredHostCount,
@@ -51,8 +61,35 @@ import {
 import {
   COLUMN,
   SERVICE_STATUS,
+  SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {
+  PARTITION_CDC_OBLIGATION_BOUND,
+} from '../../src/partition/partition-cdc-obligation-constants.js';
+import {
+  buildCdcAcknowledgementCommand,
+  cdcObligationEventKeyDigest,
+  countCdcObligations,
+  ensureCdcObligationLedger,
+  insertCdcObligation,
+} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {
+  readCommittedStatementOutcome,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+} from '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from '../../src/partition/partition-write-kernel.js';
+import {
+  applyCommitted,
+  awaitProposal,
+  shutdownAll,
+  startLeader,
+  track,
+} from '../test-helpers/participant-transaction-fixture.js';
 import {
   PG_ERROR_CODE,
 } from '../../src/runtime/pgwire-protocol-constants.js';
@@ -472,6 +509,351 @@ test('S3 unit contracts: FORMATION_TRANSITION applier state machine and ' +
   } finally {
     world.time.restore();
     service.close();
+  }
+});
+
+test('S3 CDC capacity & positional cache listener witnesses: temporary CDC_CAPACITY ' +
+  'leaves LATCH entryKey unsettled, retries pinned attempt bytes at same epoch after ' +
+  'CDC_DELIVERED drain, and positional SystemTableCache listener fires latch',
+async () => {
+  // Part A (Item 3a): Real proposal path on control_plane_publications-p1 under
+  // temporary CDC capacity pressure.
+  const {leader, proposed} = await startLeader(
+    {
+      tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      schema: CONTROL_PLANE_PUBLICATIONS_SCHEMA,
+    },
+    'control_plane_publications-p1',
+  );
+  try {
+    const cache = new SystemTableCache({nodeId: SEED_NODE_ID});
+    let clockMs = 2000;
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: SEED_NODE_ID,
+      systemTableCache: cache,
+      publicationsPartitionService: leader,
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
+      now: () => clockMs,
+    });
+
+    // Commit DECLARE{D: 1} through the real proposal path:
+    const declarePending = track(
+      requestFormationDeclare(leader, {
+        entryId: 'declare-cdc-1',
+        body: buildFormationDeclareBody({
+          clusterId: 'cluster-cdc-pressure',
+          declaredHostCount: 1,
+          declaredByNodeId: SEED_NODE_ID,
+          declaredAt: 1000,
+        }),
+      }),
+    );
+    const declareCmd = await awaitProposal(
+      proposed,
+      (entry) => entry.entryId === 'declare-cdc-1',
+    );
+    applyCommitted(leader, declareCmd);
+    const declareAns = await declarePending.promise;
+    assert.equal(declareAns.success, true);
+
+    // Populate cache with PUBLISHED membership at epoch 1, 1 READY seed host,
+    // and all 6 priority partitions holding caught-up ACTIVE voters:
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      [COLUMN.NODE_ID]: SEED_NODE_ID,
+      [COLUMN.HOST_ID]: 'seed-machine',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: 60_000,
+    });
+    cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'INSERT', {
+      publication_id: 'pub-epoch-1',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 1,
+      status: 'PUBLISHED',
+      published_active_node_ids: JSON.stringify([SEED_NODE_ID]),
+      required_ack_node_ids: JSON.stringify([SEED_NODE_ID]),
+      acknowledged_node_ids: JSON.stringify([SEED_NODE_ID]),
+    });
+    for (const partitionId of PRIORITY_PARTITION_IDS) {
+      cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+        [COLUMN.PARTITION_ID]: partitionId,
+        replica_count: 3,
+      });
+      cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+        [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
+        [COLUMN.REPLICA_ID]: `${partitionId}-r1`,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: partitionId,
+        [COLUMN.NODE_ID]: SEED_NODE_ID,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+        [COLUMN.ADDRESS]: 'ws://seed:9000',
+      });
+    }
+
+    // Fill the CDC obligation ledger to OWED_MAX_EVENTS - 1 so 1 slot remains
+    // at preflight for both an ordinary write and the formation LATCH:
+    ensureCdcObligationLedger(leader.db);
+    const targetOwed = PARTITION_CDC_OBLIGATION_BOUND.OWED_MAX_EVENTS - 1;
+    const alreadyOwed = countCdcObligations(leader.db).owed;
+    for (let i = 1; i <= targetOwed - alreadyOwed; i += 1) {
+      insertCdcObligation(leader.db, {
+        eventKey: `prefill:${i}:0`,
+        logIndex: 100 + i,
+        term: 1,
+        ordinal: 0,
+        entryId: `prefill-${i}`,
+        eventJson: '{"type":"INSERT"}',
+      });
+    }
+    assert.equal(countCdcObligations(leader.db).owed, targetOwed);
+
+    // Propose an ordinary publication write AND the coordinator's formation LATCH
+    // concurrently while 1 CDC slot remains:
+    const ordinaryWritePending = track(
+      leader.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.QUERY,
+        entryId: 'ordinary-pub-write-1',
+        sql:
+          'INSERT INTO control_plane_publications (' +
+          'publication_id, publication_kind, publication_epoch, publisher_node_id, ' +
+          'published_active_node_ids, required_ack_node_ids, acknowledged_node_ids, ' +
+          'status, created_at, updated_at, transition_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        params: [
+          'pub-epoch-1',
+          'cluster_membership',
+          1,
+          SEED_NODE_ID,
+          '["seed"]',
+          '["seed"]',
+          '["seed"]',
+          'PUBLISHED',
+          1500,
+          1500,
+          '[]',
+        ],
+      }),
+    );
+    const latchAttempt1Pending = track(
+      coordinator.evaluateAndLatchFormationIfEligible(),
+    );
+
+    const ordinaryWriteCmd = await awaitProposal(
+      proposed,
+      (entry) => entry.entryId === 'ordinary-pub-write-1',
+    );
+    const expectedLatchEntryId = 'formation-latch:cluster-cdc-pressure:1';
+    const latchCmd1 = await awaitProposal(
+      proposed,
+      (entry) => entry.entryId === expectedLatchEntryId,
+    );
+    assert.ok(ordinaryWriteCmd, 'ordinary publication write passed preflight');
+    assert.ok(latchCmd1, 'formation LATCH passed preflight while 1 slot remained');
+
+    // Apply the ordinary write first, exhausting the final CDC slot:
+    applyCommitted(leader, ordinaryWriteCmd);
+    const ordinaryWriteAns = await ordinaryWritePending.promise;
+    assert.equal(ordinaryWriteAns.success, true);
+    assert.equal(
+      countCdcObligations(leader.db).owed,
+      PARTITION_CDC_OBLIGATION_BOUND.OWED_MAX_EVENTS,
+    );
+
+    // Apply the committed formation LATCH behind the write that exhausted capacity:
+    applyCommitted(leader, latchCmd1);
+    const latchAttempt1 = await latchAttempt1Pending.promise;
+    assert.equal(latchAttempt1.latched, false);
+    assert.equal(
+      latchAttempt1.response?.failureCode,
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_CAPACITY,
+    );
+    assert.equal(latchAttempt1.response?.deferRetry, true);
+    assert.equal(
+      latchAttempt1.response?.formationResult?.reason,
+      FORMATION_REFUSAL_REASON.CDC_CAPACITY,
+    );
+
+    // Crucially, entryKey is UNRECORDED (not settled) in _partition_statement_outcomes,
+    // and the coordinator retained the pinned attempt body (formedAt = 2000):
+    const latchEntryKey = leader.getCommittedEntryKey(latchCmd1);
+    assert.equal(
+      readCommittedStatementOutcome(leader, latchEntryKey).state,
+      PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
+      'temporary CDC_CAPACITY refusal must NOT settle entryKey in _partition_statement_outcomes',
+    );
+    assert.equal(
+      coordinator.retainedFormationLatchAttempts?.get(expectedLatchEntryId)?.body
+        ?.formedAt,
+      2000,
+    );
+
+    // Apply a committed CDC acknowledgment (buildCdcAcknowledgementCommand) to drain capacity:
+    const ackCmd = buildCdcAcknowledgementCommand(
+      leader.partitionId,
+      [
+        {
+          logIndex: 101,
+          events: [
+            {
+              ordinal: 0,
+              eventKeyDigest: cdcObligationEventKeyDigest('prefill:1:0'),
+            },
+          ],
+        },
+      ],
+      {
+        timestamp: leader.hlcClock.now().toString(),
+        proposedBy: leader.replicaId,
+        proposedAt: clockMs,
+      },
+    );
+    applyCommitted(leader, ackCmd);
+    assert.equal(
+      countCdcObligations(leader.db).owed,
+      PARTITION_CDC_OBLIGATION_BOUND.OWED_MAX_EVENTS - 1,
+    );
+
+    // Advance the clock and retry formation at the SAME publicationEpoch (1):
+    clockMs = 9500;
+    const proposedBeforeRetry = proposed.length;
+    const latchAttempt2Pending = track(
+      coordinator.evaluateAndLatchFormationIfEligible(),
+    );
+    const latchCmd2 = await awaitProposal(
+      proposed,
+      (entry, idx) =>
+        idx >= proposedBeforeRetry && entry.entryId === expectedLatchEntryId,
+    );
+    assert.ok(latchCmd2, 'retry at same publicationEpoch proposed LATCH');
+    assert.equal(
+      latchCmd2.bodyText,
+      latchCmd1.bodyText,
+      'retry reuses exact pinned bodyText (including original formedAt)',
+    );
+    assert.equal(latchCmd2.body.formedAt, 2000);
+
+    applyCommitted(leader, latchCmd2);
+    const latchAttempt2 = await latchAttempt2Pending.promise;
+    assert.equal(latchAttempt2.latched, true);
+    assert.equal(
+      latchAttempt2.response?.formationResult?.outcome,
+      FORMATION_TRANSITION_OUTCOME.APPLIED,
+    );
+    assert.equal(
+      coordinator.retainedFormationLatchAttempts?.has(expectedLatchEntryId),
+      false,
+      'settled LATCH clears retained attempt entry',
+    );
+    const formedAfterRetry = decodeFormationRecord(
+      readFormationRecordIn(leader.db),
+    );
+    assert.equal(formedAfterRetry.state, PLACEMENT_FORMATION_STATE.FORMED);
+    assert.equal(formedAfterRetry.latchEpoch, 1);
+    assert.equal(formedAfterRetry.formedAt, 2000);
+  } finally {
+    await shutdownAll(leader);
+  }
+
+  // Part B (Item 3b): Positional SystemTableCache listener callback fires
+  // evaluateAndLatchFormationIfEligible immediately on cache.set('services', ...).
+  const listenerWorld = createFormationWorld({
+    declaredHostCount: 1,
+    clusterId: 'cluster-positional-cache-listener',
+  });
+  const listenerService = listenerWorld.publicationsPartitionService;
+  try {
+    const listenerCache = new SystemTableCache({nodeId: SEED_NODE_ID});
+    await requestFormationDeclare(listenerService, {
+      entryId: 'declare-listener-1',
+      body: buildFormationDeclareBody({
+        clusterId: 'cluster-positional-cache-listener',
+        declaredHostCount: 1,
+        declaredByNodeId: SEED_NODE_ID,
+        declaredAt: 1000,
+      }),
+    });
+    const declaredRow = readFormationRecordIn(listenerService.db);
+    listenerCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'INSERT',
+      declaredRow,
+    );
+    listenerCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      [COLUMN.NODE_ID]: SEED_NODE_ID,
+      [COLUMN.HOST_ID]: 'seed-machine',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: 60_000,
+    });
+    listenerCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'INSERT',
+      {
+        publication_id: 'pub-listener-1',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 1,
+        status: 'PUBLISHED',
+        published_active_node_ids: JSON.stringify([SEED_NODE_ID]),
+        required_ack_node_ids: JSON.stringify([SEED_NODE_ID]),
+        acknowledged_node_ids: JSON.stringify([SEED_NODE_ID]),
+      },
+    );
+    for (const partitionId of PRIORITY_PARTITION_IDS) {
+      listenerCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+        [COLUMN.PARTITION_ID]: partitionId,
+        replica_count: 3,
+      });
+    }
+    // Seed 5 of the 6 priority partitions before attaching the cache watcher:
+    for (const partitionId of PRIORITY_PARTITION_IDS.slice(0, 5)) {
+      listenerCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+        [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
+        [COLUMN.REPLICA_ID]: `${partitionId}-r1`,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: partitionId,
+        [COLUMN.NODE_ID]: SEED_NODE_ID,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+        [COLUMN.ADDRESS]: 'ws://seed:9000',
+      });
+    }
+    const listenerCoordinator = new MembershipPublicationCoordinator({
+      nodeId: SEED_NODE_ID,
+      systemTableCache: listenerCache,
+      publicationsPartitionService: listenerService,
+      resolveIsControlPlanePublicationsWriteLeader: () => true,
+      now: () => 3000,
+    });
+    listenerCoordinator.attachFormationLatchTriggers();
+    assert.equal(
+      decodeFormationRecord(readFormationRecordIn(listenerService.db)).state,
+      PLACEMENT_FORMATION_STATE.FORMING,
+    );
+
+    // Final real cache mutation on SystemTableCache (invokes listener('services', ...)):
+    const finalPartitionId = PRIORITY_PARTITION_IDS[5];
+    listenerCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      [COLUMN.SERVICE_ID]: `${finalPartitionId}-r1`,
+      [COLUMN.REPLICA_ID]: `${finalPartitionId}-r1`,
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.PARTITION_ID]: finalPartitionId,
+      [COLUMN.NODE_ID]: SEED_NODE_ID,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      [COLUMN.ADDRESS]: 'ws://seed:9000',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const latchedFromListener = decodeFormationRecord(
+      readFormationRecordIn(listenerService.db),
+    );
+    assert.equal(
+      latchedFromListener.state,
+      PLACEMENT_FORMATION_STATE.FORMED,
+      'positional SystemTableCache listener must trigger formation latch on services update',
+    );
+    assert.equal(latchedFromListener.latchEpoch, 1);
+    listenerCoordinator.detachFormationLatchTriggers();
+  } finally {
+    listenerWorld.time.restore();
+    listenerService.close();
   }
 });
 

@@ -35,6 +35,7 @@ import {
 import {cruise} from 'dependency-cruiser';
 import depcruiseConfig from '../../dependency-cruiser.config.cjs';
 import {
+  buildDecisionRecord,
   buildPrepareCommand,
   operationsOf,
 } from '../../src/partition/partition-participant-transaction-bytes.js';
@@ -1011,11 +1012,31 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     );
     assert.deepEqual(snapWhileContradicted.userRows, []);
 
-    // Explicit incident disposition against the coordinator's durable decision record:
-    // txHist1 has a COMMIT decision record in the coordinator table, while txHist2 has no
-    // COMMIT record; resolveRetainedPreparedContradictionDisposition orders ROLLBACK of
-    // txHist2 first, followed by COMMIT of txHist1:
+    // Explicit incident disposition against the coordinator's canonical durable decision record
+    // (validating decision, decision_text, and decision_digest via canonicalDecisionRecord):
     const coordinatorGateway = createTransactionPersistenceGateway();
+    const lookupDecisionRow = (txId) =>
+      coordinatorGateway.db
+        .prepare('SELECT * FROM sql_transactions WHERE transaction_id = ?')
+        .get(txId) ?? null;
+    const canonicalCommitHist1 = buildDecisionRecord(
+      txHist1.transactionId,
+      V3.DECISION.COMMIT,
+      [[txHist1.participantId, prepHist1.preparedDigest]],
+    );
+    const canonicalCommitHist2 = buildDecisionRecord(
+      txHist2.transactionId,
+      V3.DECISION.COMMIT,
+      [[txHist2.participantId, prepHist2.preparedDigest]],
+    );
+    const canonicalRollbackHist2 = buildDecisionRecord(
+      txHist2.transactionId,
+      V3.DECISION.ROLLBACK,
+      [[txHist2.participantId, prepHist2.preparedDigest]],
+    );
+
+    // Case (a): Authoritative evidence is unavailable or incomplete (txHist2 record absent
+    // or lacking canonical decision_text/decision_digest) -> emit no disposition:
     coordinatorGateway.seed('sql_transactions', {
       transaction_id: txHist1.transactionId,
       session_id: 'hist-sess-1',
@@ -1024,26 +1045,88 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
       participant_set_state: 'FROZEN',
       commit_mode: 'TWO_PHASE',
       frozen_participant_count: 1,
-      decision: 'COMMIT',
+      decision: canonicalCommitHist1.decision,
+      decision_text: canonicalCommitHist1.decisionText,
+      decision_digest: canonicalCommitHist1.decisionDigest,
+      created_at: 1000,
+      updated_at: 1000,
+    });
+    const unavailableDisposition = resolveRetainedPreparedContradictionDisposition(
+      initialInspection,
+      lookupDecisionRow,
+    );
+    assert.deepEqual(unavailableDisposition, {
+      resolvable: false,
+      reason: 'decision_evidence_unavailable',
+      orderedDecisions: [],
+    });
+
+    // Case (b): Both canonical decisions are COMMIT -> retain and report the contradiction
+    // (emit no disposition):
+    coordinatorGateway.seed('sql_transactions', {
+      transaction_id: txHist2.transactionId,
+      session_id: 'hist-sess-2',
+      status: 'COMMITTED',
+      transaction_mode: 'DISTRIBUTED',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE',
+      frozen_participant_count: 1,
+      decision: canonicalCommitHist2.decision,
+      decision_text: canonicalCommitHist2.decisionText,
+      decision_digest: canonicalCommitHist2.decisionDigest,
+      created_at: 1000,
+      updated_at: 1000,
+    });
+    const conflictingCommitDisposition = resolveRetainedPreparedContradictionDisposition(
+      initialInspection,
+      lookupDecisionRow,
+    );
+    assert.deepEqual(conflictingCommitDisposition, {
+      resolvable: false,
+      reason: 'conflicting_committed_decisions',
+      orderedDecisions: [],
+    });
+
+    // Case (c): One genuine recorded canonical ROLLBACK decision record (txHist2) and one
+    // genuine recorded canonical COMMIT decision record (txHist1) -> replay those exact
+    // canonical records ordered ROLLBACK first, then COMMIT:
+    coordinatorGateway.seed('sql_transactions', {
+      transaction_id: txHist2.transactionId,
+      session_id: 'hist-sess-2',
+      status: 'ABORTED',
+      transaction_mode: 'DISTRIBUTED',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE',
+      frozen_participant_count: 1,
+      decision: canonicalRollbackHist2.decision,
+      decision_text: canonicalRollbackHist2.decisionText,
+      decision_digest: canonicalRollbackHist2.decisionDigest,
       created_at: 1000,
       updated_at: 1000,
     });
     const disposition = resolveRetainedPreparedContradictionDisposition(
       initialInspection,
-      (txId) =>
-        coordinatorGateway.db
-          .prepare('SELECT * FROM sql_transactions WHERE transaction_id = ?')
-          .get(txId) ?? null,
+      lookupDecisionRow,
     );
     assert.equal(disposition.resolvable, true);
+    assert.equal(disposition.reason, null);
     assert.deepEqual(
       disposition.orderedDecisions.map((a) => ({
         participantId: a.participantId,
         decision: a.decision,
+        decisionDigest: a.decisionDigest,
       })),
       [
-        {participantId: txHist2.participantId, decision: 'ROLLBACK'},
-        {participantId: txHist1.participantId, decision: 'COMMIT'},
+        {
+          participantId: txHist2.participantId,
+          decision: 'ROLLBACK',
+          decisionDigest: canonicalRollbackHist2.decisionDigest,
+        },
+        {
+          participantId: txHist1.participantId,
+          decision: 'COMMIT',
+          decisionDigest: canonicalCommitHist1.decisionDigest,
+        },
       ],
     );
     const preparedByParticipantId = new Map([
@@ -1052,9 +1135,7 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     ]);
     const dispositionCommands = disposition.orderedDecisions.map((item) => {
       const target = preparedByParticipantId.get(item.participantId);
-      return item.decision === 'COMMIT' ?
-        commitDecision(target.identity, target.prep) :
-        decisionCommandOf(target.identity, V3.DECISION.ROLLBACK, target.prep.preparedDigest);
+      return decisionCommandOf(target.identity, item.decision, target.prep.preparedDigest);
     });
     leader2.controllablePort.commitBatches(
       dispositionCommands,
@@ -1287,7 +1368,7 @@ test('P2 (Finding 1): staging leader, session-less followers ([1, 1] and [2]), a
   }
 });
 
-test('P2 (Review 2 Finding 3): 114bd420 -> current transition reconstructs exact generation history for retained PREPARED transactions across disjoint participant commits and fail-closes across 114bd420 ordinary writes', async () => {
+test('P2 (Review 2 Finding 3): pre-_partition_write_generation_history storage representation (modeled by dropping the history table before reopen) reconstructs exact generation history for retained PREPARED transactions across disjoint participant commits and fail-closes across ordinary writes', async () => {
   resetFixtureSingletons();
   const {directory, dbPath} = temporaryDbPath();
   let leader1 = null;

@@ -33,7 +33,7 @@ documentClass: generated
 - [raft-rs-committed-membership-context.js](raft-rs-committed-membership-context.js) - The encoded admission context of a host-proposed ADD. (importers: many)
 - [raft-rs-committed-membership-read.js](raft-rs-committed-membership-read.js) - The one read of a replica group's committed configuration (owner decision O1, committed-read amendment 1, section... (importers: many)
 - [raft-rs-committed-peer-address.js](raft-rs-committed-peer-address.js) - The one address of a configured raft peer: its unified address on the node its admission committed (an admission or... (importers: many)
-- [raft-rs-conf-change-admission.js](raft-rs-conf-change-admission.js) - When the core takes a configuration-change proposal or a typed membership operation, read and decided from the... (importers: few)
+- [raft-rs-conf-change-admission.js](raft-rs-conf-change-admission.js) - Leader-port configuration-change admission and typed WP-P membership operations (ADMIT, LEARNER_CAUGHT_UP,... (importers: few)
 - [raft-rs-conf-change-refusal-answer.js](raft-rs-conf-change-refusal-answer.js) - The leader's port's answer to a configuration-change proposal or a typed membership operation, decided in the... (importers: few)
 - [raft-rs-conf-state-key.js](raft-rs-conf-state-key.js) - The canonical, role-aware key of one applied ConfState. (importers: hub)
 - [raft-rs-core-constants.js](raft-rs-core-constants.js) - What the raft-rs-wasm binding must expose for phase 1, what it must never expose, and the names of the files that... (importers: many)

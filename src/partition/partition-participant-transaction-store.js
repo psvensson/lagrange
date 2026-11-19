@@ -27,7 +27,10 @@ import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
   RAFT_RS_RETAINED_HISTORY_COVERAGE as COVERAGE,
   RAFT_RS_STORE_ERROR_CODE as RAFT_ERROR} from '../raft/raft-rs-durable-store-constants.js';
-import {isCanonicalRetainedGenerationOrigin} from './partition-participant-transaction-bytes.js';
+import {
+  canonicalDecisionRecord,
+  isCanonicalRetainedGenerationOrigin,
+} from './partition-participant-transaction-bytes.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
   './partition-retained-store-observation.js';
@@ -98,19 +101,9 @@ const OUTCOME_OF_STATE = Object.freeze({
 });
 
 /**
- * Create the participant transaction table and the write generation row
- * (1, 0) when the partition opens (DDL; idempotent over an existing image).
- * A generation table created before the origin columns existed (an earlier
- * increment-3 build) gets them here, empty, as the outcome table gets its
- * result columns: its origin is then not recorded, so BEGIN stays refused
- * until the origin command applies.
- * @param {Object} db - The partition's connection.
- */
-/**
  * The participant store's open hook, run by the lifecycle owner on every
  * connection it opens: the transaction table, the generation row (its
- * origin columns added to an older table), and the connection's stamp
- * (partition-participant-transaction-connection.js).
+ * origin columns added to an older table), and the connection's stamp.
  * @param {Object} db - The partition's newly opened connection.
  */
 function openParticipantTransactionStore(db) {
@@ -351,60 +344,30 @@ function isPartitionReserved(db) {
   return reserved;
 }
 
-/**
- * Whether a PREPARED row carries this routing sessionId (the current routing
- * collision predicate refuses a sessionId-only request naming it).
- * @param {Object} db - The partition's connection.
- * @param {string} sessionId - The routing sessionId.
- * @return {boolean} Whether a PREPARED row names it.
- */
 function isParticipantSessionPrepared(db, sessionId) {
-  if (canSkipPreparedRead(db)) {
-    return false;
-  }
+  if (canSkipPreparedRead(db)) return false;
   return sqliteConnectionState(db).statement(SQL.SELECT_SESSION_PREPARED)
     .get(sessionId, STATE.PREPARED) !== undefined;
 }
 
-/**
- * The participants PREPARED here (the hold sweep reports them).
- * @param {Object} db - The partition's connection.
- * @return {Array<string>} Their participantIds.
- */
 function readPreparedParticipantIds(db) {
-  if (canSkipPreparedRead(db)) {
-    return [];
-  }
+  if (canSkipPreparedRead(db)) return [];
   const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_PARTICIPANTS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);
   return rows.map((row) => row.participantId);
 }
 
-/**
- * All PREPARED rows with their operationsText, validationText and prepareIndex.
- * @param {Object} db - The partition's connection.
- * @return {Array<Object>} Durable PREPARED rows.
- */
 function readPreparedParticipantRows(db) {
-  if (canSkipPreparedRead(db)) {
-    return [];
-  }
+  if (canSkipPreparedRead(db)) return [];
   const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_ROWS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);
   return rows;
 }
 
-/**
- * All COMMITTED rows ordered by decision_index for durable generation recovery.
- * @param {Object} db - The partition's connection.
- * @return {Array<Object>} Durable COMMITTED rows.
- */
 function readCommittedParticipantRows(db) {
-  if (!db || db.open === false) {
-    return [];
-  }
+  if (!db || db.open === false) return [];
   return sqliteConnectionState(db).statement(SQL.SELECT_COMMITTED_ROWS)
     .all(STATE.COMMITTED);
 }
@@ -724,19 +687,35 @@ function readTableFootprintMetadata(db, tableName) {
   return meta;
 }
 
+const DISPOSITION_REASON = Object.freeze({
+  UNAVAILABLE: 'decision_evidence_unavailable',
+  CONFLICT: 'conflicting_committed_decisions',
+});
+const EMPTY_DECISIONS = Object.freeze([]);
+
 function decisionRankOf(action) {
   return action.decision === DECISION.ROLLBACK ? -ONE_ROW : ONE_ROW;
 }
 
-function buildContradictionAction(participantId, lookupCoordinatorRecord) {
+function readCanonicalCoordinatorDecision(participantId, lookupCoordinatorRecord) {
   const txId = String(participantId).split(BYTES.IDENTITY_SEPARATOR)[ZERO];
   const rec = lookupCoordinatorRecord(txId);
-  const isCommitted = rec?.decision === DECISION.COMMIT || rec?.status === STATE.COMMITTED;
-  return Object.freeze({
+  const record = canonicalDecisionRecord({
+    transactionId: txId,
+    decision: rec?.decision,
+    decisionText: rec?.decision_text,
+    decisionDigest: rec?.decision_digest,
+  });
+  const namesParticipant = Boolean(
+    record && record.participants.some((entry) => entry[ZERO] === participantId),
+  );
+  return namesParticipant ? Object.freeze({
     participantId,
     transactionId: txId,
-    decision: isCommitted ? DECISION.COMMIT : DECISION.ROLLBACK,
-  });
+    decision: record.decision,
+    decisionText: record.decisionText,
+    decisionDigest: record.decisionDigest,
+  }) : null;
 }
 
 function isCommittedConflictPair(actionsById, pair) {
@@ -746,13 +725,27 @@ function isCommittedConflictPair(actionsById, pair) {
 
 function resolveRetainedPreparedContradictionDisposition(inspection, lookupCoordinatorRecord) {
   const ids = inspection?.contradictoryParticipantIds ?? [];
-  const actions = ids.map((id) => buildContradictionAction(id, lookupCoordinatorRecord));
+  const actions = ids.map((id) => readCanonicalCoordinatorDecision(id, lookupCoordinatorRecord));
+  if (actions.some((action) => action === null)) {
+    return Object.freeze({
+      resolvable: false,
+      reason: DISPOSITION_REASON.UNAVAILABLE,
+      orderedDecisions: EMPTY_DECISIONS,
+    });
+  }
   const actionsById = new Map(actions.map((a) => [a.participantId, a]));
   const pairs = inspection?.contradictions ?? [];
-  const unresolvable = pairs.some((pair) => isCommittedConflictPair(actionsById, pair));
+  if (pairs.some((pair) => isCommittedConflictPair(actionsById, pair))) {
+    return Object.freeze({
+      resolvable: false,
+      reason: DISPOSITION_REASON.CONFLICT,
+      orderedDecisions: EMPTY_DECISIONS,
+    });
+  }
   actions.sort((a, b) => decisionRankOf(a) - decisionRankOf(b));
   return Object.freeze({
-    resolvable: !unresolvable,
+    resolvable: true,
+    reason: null,
     orderedDecisions: Object.freeze(actions),
   });
 }
