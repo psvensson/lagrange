@@ -1,0 +1,23 @@
+{
+  "schema": "solve-quest/2",
+  "id": "sql-merge-verified-repairs-integration",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Integrate and land verified repairs for WP2, K2, WP-V, and Removal Cleanup.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/sql-merge-verified-repairs-integration/evidence/receipt.json",
+      "requiredReceipts": [
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "verified-fix",
+      "statement": "Land verified repairs for WP2, K2, WP-V, and Removal Cleanup."
+    }
+  ],
+  "sealedAt": "2c96ba2bc51fd1a61f32e6a5ade61d15933b3a59"
+}

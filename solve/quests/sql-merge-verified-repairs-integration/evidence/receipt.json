@@ -1,0 +1,1 @@
+{"schema": "test-receipt/1", "quest": "sql-merge-verified-repairs-integration", "status": "pass", "receipts": [{"id": "independent-verification", "passed": true}]}
