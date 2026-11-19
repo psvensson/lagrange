@@ -12,6 +12,7 @@
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
@@ -32,10 +33,6 @@ import {
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
-// Per connection: the store's own read statements, prepared once (the
-// reservation read runs on every committed statement and on the leader's
-// request path).
-const READ_STATEMENTS = new WeakMap();
 // Databases known to have zero PREPARED rows track an owner-held state
 // (cleared when verified empty outside an open transaction, or closed).
 const PREPARED_STATE_KEY = Symbol('participantPreparedObservation');
@@ -62,20 +59,6 @@ function recordPreparedObservation(db, hasPrepared) {
   db[PREPARED_STATE_KEY] = hasPrepared ?
     PREPARED_OBSERVATION.MAYBE_PREPARED :
     PREPARED_OBSERVATION.EMPTY;
-}
-
-function readStatementOf(db, sql) {
-  let statements = READ_STATEMENTS.get(db);
-  if (statements === undefined) {
-    statements = new Map();
-    READ_STATEMENTS.set(db, statements);
-  }
-  let statement = statements.get(sql);
-  if (statement === undefined) {
-    statement = db.prepare(sql);
-    statements.set(sql, statement);
-  }
-  return statement;
 }
 
 // What a durable state answers (design 5.2): a terminal row is the only
@@ -118,13 +101,13 @@ function openParticipantTransactionStore(db) {
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
   recordPreparedObservation(
     db,
-    readStatementOf(db, SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
+    sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
       undefined,
   );
 }
 
 function generationRowOf(db) {
-  const row = readStatementOf(db, SQL.SELECT_GENERATION).get();
+  const row = sqliteConnectionState(db).statement(SQL.SELECT_GENERATION).get();
   if (row === undefined) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
@@ -281,7 +264,8 @@ function validParticipantCensusRow(row) {
  * @param {{index: number, term: number}} position - The origin's position.
  */
 function recordPartitionWriteOrigin(db, {index, term}) {
-  if (db.prepare(SQL.RECORD_ORIGIN).run(index, term).changes !== ONE_ROW) {
+  if (sqliteConnectionState(db).statement(SQL.RECORD_ORIGIN).run(index, term)
+    .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.ORIGIN_UPDATE_NOT_ONE_ROW);
   }
 }
@@ -292,7 +276,8 @@ function recordPartitionWriteOrigin(db, {index, term}) {
  * @param {Object} db - The partition's connection.
  */
 function advancePartitionWriteGeneration(db) {
-  if (db.prepare(SQL.ADVANCE_GENERATION).run().changes !== ONE_ROW) {
+  if (sqliteConnectionState(db).statement(SQL.ADVANCE_GENERATION).run()
+    .changes !== ONE_ROW) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
 }
@@ -306,7 +291,7 @@ function isPartitionReserved(db) {
   if (canSkipPreparedRead(db)) {
     return false;
   }
-  const reserved = readStatementOf(db, SQL.SELECT_RESERVATION)
+  const reserved = sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION)
     .get(STATE.PREPARED) !== undefined;
   recordPreparedObservation(db, reserved);
   return reserved;
@@ -323,8 +308,8 @@ function isParticipantSessionPrepared(db, sessionId) {
   if (canSkipPreparedRead(db)) {
     return false;
   }
-  return readStatementOf(db, SQL.SELECT_SESSION_PREPARED).get(sessionId, STATE.PREPARED) !==
-    undefined;
+  return sqliteConnectionState(db).statement(SQL.SELECT_SESSION_PREPARED)
+    .get(sessionId, STATE.PREPARED) !== undefined;
 }
 
 /**
@@ -336,7 +321,7 @@ function readPreparedParticipantIds(db) {
   if (canSkipPreparedRead(db)) {
     return [];
   }
-  const rows = readStatementOf(db, SQL.SELECT_PREPARED_PARTICIPANTS)
+  const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_PARTICIPANTS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);
   return rows.map((row) => row.participantId);
@@ -349,7 +334,7 @@ function readPreparedParticipantIds(db) {
  * @return {Object|null} The frozen row, in the command's field names.
  */
 function readParticipantTransactionRow(db, {transactionId, participantId}) {
-  const row = readStatementOf(db, SQL.SELECT_ROW).get(transactionId, participantId);
+  const row = sqliteConnectionState(db).statement(SQL.SELECT_ROW).get(transactionId, participantId);
   if (row === undefined) {
     return null;
   }
@@ -391,7 +376,7 @@ function insertParticipantTransactionRow(db, row) {
       Object.isExtensible(db)) {
     db[PREPARED_STATE_KEY] = PREPARED_OBSERVATION.MAYBE_PREPARED;
   }
-  db.prepare(SQL.INSERT_ROW).run({
+  sqliteConnectionState(db).statement(SQL.INSERT_ROW).run({
     transactionId: row.transactionId,
     participantId: row.participantId,
     sessionId: textOrNull(row.sessionId),
@@ -424,7 +409,7 @@ function insertParticipantTransactionRow(db, row) {
  *   refusalCause, refusalDetail}.
  */
 function updateParticipantTransactionDecided(db, decided) {
-  const moved = db.prepare(SQL.UPDATE_DECIDED).run({
+  const moved = sqliteConnectionState(db).statement(SQL.UPDATE_DECIDED).run({
     transactionId: decided.transactionId,
     participantId: decided.participantId,
     state: decided.state,

@@ -1,9 +1,9 @@
 /**
- * WP-D witnesses (owner decision D3, 2026-11-17): the node host identity is
- * a required boot-time value, written into NODES.host_id by every NODES
- * registration, read through one typed reader, and added in place to an
- * existing NODES table. A row an older version wrote reads HOST_UNDECLARED;
- * a host is never derived from the node id.
+ * WP-D witnesses (owner decision D3, 2026-11-17; ruling A3, 2026-11-18): the
+ * node host identity is a required boot-time value, written into NODES.host_id
+ * by every NODES registration, read through one typed reader, and created from
+ * NODES_SCHEMA without any runtime ALTER TABLE shim. A row without a declared
+ * host reads HOST_UNDECLARED; a host is never derived from the node id.
  */
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
@@ -101,50 +101,40 @@ function nodesService(db) {
   });
 }
 
-test('apply-time column add: an existing NODES table without host_id gains ' +
-  'it in place, its rows read HOST_UNDECLARED, and its DDL equals a fresh ' +
-  'table\'s', (t) => {
-  const db = new Database(':memory:');
-  t.after(() => db.close());
-  // The table as the previous version created it: every column but host_id.
-  const previousSchema = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns
-    .filter((column) => column.name !== COLUMN.HOST_ID)};
-  assert.equal(previousSchema.columns.length, NODES_SCHEMA.columns.length - 1);
-  db.exec(renderTableDefinitionSql(SYSTEM_TABLE_NAME.NODES, previousSchema));
-  db.prepare('INSERT INTO nodes (node_id, node_address, cpu_cores, memory_mb, ' +
-    'disk_gb, last_heartbeat, created_at) VALUES (?, ?, 1, 1, 1, 1, 1)')
-    .run(NODE_ID, 'old:8080');
-
-  const added = [];
-  const service = nodesService(db);
-  service.logger = {...QUIET, info: (message, fields) => {
-    if (fields?.columnName) added.push(fields.columnName);
-  }};
-  createPartitionServiceTable(service);
-  assert.deepEqual(added, [COLUMN.HOST_ID], 'host_id is added exactly once');
-  const old = db.prepare('SELECT * FROM nodes WHERE node_id = ?').get(NODE_ID);
-  assert.equal(old[COLUMN.HOST_ID], null);
-  assert.equal(readNodeHostIdentity(old).state,
-    NODE_HOST_IDENTITY_STATE.HOST_UNDECLARED);
-
-  const upgraded = readPartitionServiceTableSchemaIn(db, NODES_SCHEMA);
-  assert.equal(upgraded.state, PARTITION_TABLE_OBSERVATION.COMPLETE,
-    'the upgraded table is the schema\'s own table');
+test('schema: a fresh NODES table declares host_id, writes and reads it ' +
+  'through readNodeHostIdentity, and never alters a pre-release table in place',
+(t) => {
   const fresh = new Database(':memory:');
   t.after(() => fresh.close());
   createPartitionServiceTable(nodesService(fresh));
-  const ddl = (handle) => handle.prepare(
-    'SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?')
-    .get('table', SYSTEM_TABLE_NAME.NODES).sql;
-  assert.equal(ddl(db), ddl(fresh));
+  assert.equal(readPartitionServiceTableSchemaIn(fresh, NODES_SCHEMA).state,
+    PARTITION_TABLE_OBSERVATION.COMPLETE);
+  fresh.prepare('INSERT INTO nodes (node_id, node_address, cpu_cores, ' +
+    'memory_mb, disk_gb, last_heartbeat, created_at) ' +
+    'VALUES (?, ?, 1, 1, 1, 1, 1)')
+    .run(NODE_ID, 'old:8080');
+  const undeclared = fresh.prepare(
+    'SELECT * FROM nodes WHERE node_id = ?').get(NODE_ID);
+  assert.equal(undeclared[COLUMN.HOST_ID], null);
+  assert.equal(readNodeHostIdentity(undeclared).state,
+    NODE_HOST_IDENTITY_STATE.HOST_UNDECLARED);
+  fresh.prepare('UPDATE nodes SET host_id = ? WHERE node_id = ?')
+    .run(HOST_A, NODE_ID);
+  assert.equal(readNodeHostIdentity(
+    fresh.prepare('SELECT * FROM nodes WHERE node_id = ?').get(NODE_ID)).hostId,
+  HOST_A);
 
-  // A declared registration lands in the added column.
-  db.prepare('UPDATE nodes SET host_id = ? WHERE node_id = ?').run(HOST_A, NODE_ID);
-  assert.equal(readNodeHostIdentity(db.prepare('SELECT * FROM nodes').get())
-    .hostId, HOST_A);
-  added.length = 0;
-  createPartitionServiceTable(service);
-  assert.deepEqual(added, [], 'a table that has host_id is left as it is');
+  // Under O16 + A3, old clusters are re-founded behind the version fence;
+  // createPartitionServiceTable never alters a pre-release table in place.
+  const older = new Database(':memory:');
+  t.after(() => older.close());
+  const previousSchema = {...NODES_SCHEMA, columns: NODES_SCHEMA.columns
+    .filter((column) => column.name !== COLUMN.HOST_ID)};
+  older.exec(renderTableDefinitionSql(SYSTEM_TABLE_NAME.NODES, previousSchema));
+  createPartitionServiceTable(nodesService(older));
+  const observed = readPartitionServiceTableSchemaIn(older, NODES_SCHEMA);
+  assert.equal(observed.state, PARTITION_TABLE_OBSERVATION.UNAVAILABLE);
+  assert.deepEqual(observed.missingColumns, [COLUMN.HOST_ID]);
 });
 
 test('every joiner registration row carries the declared host; without one ' +

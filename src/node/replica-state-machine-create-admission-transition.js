@@ -55,6 +55,19 @@ function buildCreateAdmissionLifecycleIdentity(
   };
 }
 
+// A REMOVING intent names the create generation whose CREATE admission its
+// writer closed first: the tracked source must still be that generation. The
+// admission's revision fence then keeps the persisted CAS on this source.
+function holdsClosedCreateGeneration(replicaState, generation) {
+  return Number.isFinite(replicaState?.createdAt) &&
+    replicaState.createdAt === generation.createdAt &&
+    (replicaState.createAttemptToken ?? null) === generation.createAttemptToken;
+}
+
+function matchesRequiredClosedCreateGeneration(replicaState, generation) {
+  return !generation || holdsClosedCreateGeneration(replicaState, generation);
+}
+
 function isCreateAdmissionTransitionAllowed(
   stateMachine,
   replicaId,
@@ -67,6 +80,10 @@ function isCreateAdmissionTransitionAllowed(
         context.createAdmissionEvidence.replicaId !== replicaId ||
         context.createAdmissionEvidence.attemptToken !==
           context.createAttemptToken)) return false;
+  if (!matchesRequiredClosedCreateGeneration(
+    stateMachine.replicas.get(replicaId), context.closedCreateGeneration)) {
+    return false;
+  }
   if (!expectedSourceEvidence) return true;
   const tracked = buildReplicaLifecycleMutationPredicateFromState(
     stateMachine.replicas.get(replicaId),
@@ -76,5 +93,7 @@ function isCreateAdmissionTransitionAllowed(
 
 export {
   buildCreateAdmissionLifecycleIdentity,
+  holdsClosedCreateGeneration,
   isCreateAdmissionTransitionAllowed,
+  matchesRequiredClosedCreateGeneration,
 };

@@ -21,6 +21,8 @@ import {
   getRemainingBudgetMs,
 } from
   '../../src/control-plane/timeout-budget.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const TEST_NAME =
   'BootstrapAPI returns bootstrap-not-ready when admitted bootstrap work' +
@@ -113,6 +115,19 @@ function initializeTestEnvironment() {
   }
 }
 
+function injectBootstrapPost(api, extraPayload = {}) {
+  return api.getFastify().inject({
+    method: 'POST',
+    url: '/bootstrap',
+    payload: {
+      ...clusterFormatRevisionClaim(),
+      nodeId: TEST_REQUEST_NODE_ID,
+      nodeAddress: TEST_REQUEST_NODE_ADDRESS,
+      ...extraPayload,
+    },
+  });
+}
+
 test(TEST_NAME, async (t) => {
   initializeTestEnvironment();
 
@@ -163,6 +178,7 @@ test(TEST_NAME, async (t) => {
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: TEST_REQUEST_NODE_ID,
         nodeAddress: TEST_REQUEST_NODE_ADDRESS,
       },
@@ -260,6 +276,7 @@ test(
         method: 'POST',
         url: '/bootstrap',
         payload: {
+          ...clusterFormatRevisionClaim(),
           nodeId: TEST_REQUEST_NODE_ID,
           nodeAddress: TEST_REQUEST_NODE_ADDRESS,
         },
@@ -328,15 +345,9 @@ test(
     await api.initialize(0, {listen: TEST_LISTEN_DISABLED});
 
     try {
-      const response = await api.getFastify().inject({
-        method: 'POST',
-        url: '/bootstrap',
-        payload: {
-          nodeId: TEST_REQUEST_NODE_ID,
-          nodeAddress: TEST_REQUEST_NODE_ADDRESS,
-          [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
-            Date.now() - TEST_EXPIRED_CLIENT_ATTEMPT_LAG_MS,
-        },
+      const response = await injectBootstrapPost(api, {
+        [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
+          Date.now() - TEST_EXPIRED_CLIENT_ATTEMPT_LAG_MS,
       });
 
       t.equal(
@@ -434,15 +445,9 @@ test(
     await api.initialize(0, {listen: TEST_LISTEN_DISABLED});
 
     try {
-      const response = await api.getFastify().inject({
-        method: 'POST',
-        url: '/bootstrap',
-        payload: {
-          nodeId: TEST_REQUEST_NODE_ID,
-          nodeAddress: TEST_REQUEST_NODE_ADDRESS,
-          [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
-            Date.now() + TEST_PRE_ADMISSION_CLIENT_ATTEMPT_BUDGET_MS,
-        },
+      const response = await injectBootstrapPost(api, {
+        [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
+          Date.now() + TEST_PRE_ADMISSION_CLIENT_ATTEMPT_BUDGET_MS,
       });
 
       t.equal(
@@ -553,16 +558,10 @@ test(
 
     try {
       const result = await Promise.race([
-        api.getFastify().inject({
-          method: 'POST',
-          url: '/bootstrap',
-          payload: {
-            nodeId: TEST_REQUEST_NODE_ID,
-            nodeAddress: TEST_REQUEST_NODE_ADDRESS,
-            [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
-              Date.now() +
-                TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS,
-          },
+        injectBootstrapPost(api, {
+          [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
+            Date.now() +
+              TEST_PRE_ADMISSION_CLIENT_ATTEMPT_SHORT_BUDGET_MS,
         }),
         new Promise((resolve) => {
           setTimeout(

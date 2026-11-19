@@ -19,6 +19,8 @@ import {
 } from './helpers/cluster-test-helpers.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 const TEST_TIMEOUT_MS = 120000;
 const NODE_ONE_ID = '550e8400-e29b-41d4-a716-446655440231';
 const NODE_TWO_ID = '550e8400-e29b-41d4-a716-446655440232';
@@ -45,7 +47,8 @@ function joinRequest(nodeId, port) {
   return {
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: `ws://localhost:${port}`},
+    payload: {...clusterFormatRevisionClaim(), nodeId,
+      nodeAddress: `ws://localhost:${port}`},
   };
 }
 

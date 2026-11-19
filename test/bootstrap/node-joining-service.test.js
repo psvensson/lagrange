@@ -59,11 +59,10 @@ import {
   ENDPOINT_STATUS,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {insertViaUpsert} from
+import {FIXTURE_ENDPOINT_INCARNATION, insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
-import {
-  FIXTURE_ENDPOINT_INCARNATION,
-} from '../test-helpers/endpoint-incarnation-fixture.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -1618,7 +1617,7 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
           );
         }
         return {
-          success: true,
+          success: true, ...clusterFormatRevisionClaim(),
           seedNodeId: 'seed-node-1',
           seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
@@ -1664,7 +1663,7 @@ test('NodeJoiningService - sends contact-seed attempt deadline to seed',
       httpPost: async (_url, request) => {
         capturedBootstrapRequest = request;
         return {
-          success: true,
+          success: true, ...clusterFormatRevisionClaim(),
           seedNodeId: 'seed-node-1',
           seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {
@@ -1707,7 +1706,7 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
           throw new Error('Request timeout after 10000ms');
         }
         return {
-          success: true,
+          success: true, ...clusterFormatRevisionClaim(),
           seedNodeId: 'seed-node-1',
           seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
           messageGroupAssignment: {

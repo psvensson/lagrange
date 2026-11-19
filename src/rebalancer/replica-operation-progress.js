@@ -323,16 +323,16 @@ const OPERATION_METADATA_KEY = Object.freeze({
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
   BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
   BOOTSTRAP_MEMBERSHIP: 'bootstrapMembership',
-  BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED:
-    'bootstrapTopologyDispatchDeferred',
-  // The one exact membership transition a critical spread cure authorized.
-  // Decoded, evaluated and stamped by
-  // spread-cure-transition-authorization.js.
+  BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED: 'bootstrapTopologyDispatchDeferred',
+  // The one exact membership transition a critical spread cure authorized;
+  // decoded, evaluated and stamped by spread-cure-transition-authorization.js.
   CURE_TRANSITION_AUTHORIZATION: 'cureTransitionAuthorization',
-  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
-    'failedCreateTargetLifecyclePrecondition',
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION: 'failedCreateTargetLifecyclePrecondition',
   TARGET_NODE_BOOT_INCARNATION: 'targetNodeBootIncarnation',
   TARGET_NODE_STORAGE_INCARNATION: 'targetNodeStorageIncarnation',
+  // The admitting placement entry, and an engaged ledger move's dispatch hold.
+  PLACEMENT_ADMISSION: 'placementAdmission',
+  DISPATCH_HOLD: 'dispatchHold',
 });
 
 function quoteSqlValue(value) {

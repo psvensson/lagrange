@@ -13,6 +13,8 @@ import {
   TERMINAL_MANAGEMENT_OPERATION_STATES,
 } from '../../src/bootstrap/owners/management-v1-constants.js';
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
+import {buildSupportEnvelopeRecord} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 import {BackupRestoreOwner} from '../../src/bootstrap/owners/backup-restore-owner.js';
 import {
   computeCanonicalOperationDigest, failValidation,
@@ -32,8 +34,16 @@ const PARTITIONS = Object.freeze([1, 2, 3].map((partitionId) => Object.freeze({
 })));
 const READY_BACKUP_SNAPSHOT = Object.freeze({ready: true, hasPartitionQuorum: true});
 
+// An in-place release transition is admitted only for a pair certified by a
+// support envelope of this build's cluster format revision (the release
+// version fence); without an envelope it is refused OUTSIDE_SUPPORT_ENVELOPE.
+const certifiedEnvelope = (targetVersion) => buildSupportEnvelopeRecord({
+  versionPair: {sourceVersion: C.DEFAULT_RELEASE_VERSION, targetVersion}});
+const CERTIFIED_RELEASE_ENVELOPE = certifiedEnvelope('0.5.0');
+
 /** Physical rolling-upgrade ports; without both the capability is unsupported. */
 const upgradePorts = (extra = {}) => ({
+  supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
   onDrainNodeLeadership: () => {}, onTriggerNodeRestart: () => {}, ...extra,
 });
 
@@ -129,6 +139,7 @@ function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
 
   let nextDrains = 0;
   const drainGateOwner = new RollingUpgradeOwner({
+    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
     onDrainNodeLeadership: () => {
       nextDrains += 1;
     },
@@ -154,6 +165,7 @@ function assertRollingUpgradeQuorumSafetyGates(t, snap, p) {
   for (const [idx, missingQuorum] of [false, null, undefined, 1, 'true'].entries()) {
     let effects = 0;
     const rejOwner = new RollingUpgradeOwner({
+      supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
       onDrainNodeLeadership: () => {
         effects += 1;
       },
@@ -198,6 +210,12 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     L4_ROLLING_UPGRADE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       {targetVersion: '0.3.0'}, snap),
+    L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE],
+    [() => new RollingUpgradeOwner({...upgradePorts(), supportEnvelope: undefined})
+      .evaluatePreflight(p, snap),
+    L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE],
+    [() => new RollingUpgradeOwner(upgradePorts({supportEnvelope: certifiedEnvelope('0.3.0')}))
+      .evaluatePreflight({targetVersion: '0.3.0'}, snap),
     L4_ROLLING_UPGRADE_REASON_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [() => new RollingUpgradeOwner(upgradePorts({
       expectedArtifactDigests: {'0.5.0': 'sha256:different'},
@@ -252,6 +270,7 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
 
   const [drained, readyzCalls, restarts] = [[], [], []];
   const uOwner = new RollingUpgradeOwner({
+    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
     currentVersion: '0.4.0',
     onDrainNodeLeadership: (id) => drained.push(id),
     onSetNodeReadyz: (id, val) => readyzCalls.push({id, val}),

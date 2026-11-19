@@ -51,7 +51,8 @@ const TARGET_THRESHOLD = 20;
 // 2026-11-02 (quest serve-eligibility-committed-epoch-read attempt 1b): tightened 147 -> 146 on the checker's hint.
 // 2026-11-05: tightened 146 -> 145 on the inventory refresh checker hint.
 // 2026-11-17: tightened 145 -> 144 after unified-rebalancer-rebalance-loop extraction.
-const BASELINE_COUNT = 144;
+// 2026-11-19: tightened 144 -> 143 on the checker's hint after composing repairs.
+const BASELINE_COUNT = 143;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

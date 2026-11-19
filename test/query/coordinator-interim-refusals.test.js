@@ -53,6 +53,10 @@ describe('I1a (removed by WP3): COLLATE/ESCAPE in coordinator-evaluated position
         'HAVING x = \'a\' COLLATE NOCASE', count), UNSUPPORTED);
       assert.throws(() => plan('SELECT x, COUNT(*) AS n FROM t GROUP BY x ' +
         'HAVING x LIKE \'a!%\' ESCAPE \'!\'', count), UNSUPPORTED);
+      assert.throws(() => plan('SELECT x COLLATE NOCASE AS k, COUNT(*) AS n FROM t ' +
+        'GROUP BY id HAVING k = \'a\'', count), UNSUPPORTED);
+      assert.throws(() => plan('SELECT SUM(a) AS s FROM t ' +
+        'HAVING concat(SUM(a), \'\') = \'3\'', count), UNSUPPORTED);
     }
   });
 
@@ -264,18 +268,33 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       // Every coordinator-evaluated clause over `name` (NOCASE) fails closed.
       for (const sql of [
         'SELECT name, COUNT(*) AS n FROM users GROUP BY name',
+        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY k',
+        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY 1',
         'SELECT DISTINCT name FROM users',
         'SELECT DISTINCT * FROM users',
         'SELECT id, name FROM users ORDER BY name',
         'SELECT name AS k FROM users ORDER BY k',
+        'SELECT name AS k FROM users ORDER BY LOWER(k)',
         'SELECT id, name FROM users ORDER BY 2',
         'SELECT id, COUNT(*) AS n FROM users GROUP BY id HAVING MAX(score) > 0 AND name = \'a\'',
+        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\'',
         'SELECT MIN(name) AS m FROM users',
         'SELECT MAX(name) AS m FROM users',
         'SELECT COUNT(DISTINCT name) AS n FROM users',
+        'SELECT SUM(score) AS s FROM users HAVING concat(SUM(score), \'\') = \'100\'',
       ]) {
         await assert.rejects(
           () => executor.executeSelect(parse(sql), userPartitions, []),
+          UNSUPPORTED,
+          sql,
+        );
+      }
+      for (const sql of [
+        'SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\'',
+        'SELECT SUM(score) AS s FROM users HAVING concat(SUM(score), \'\') = \'40\'',
+      ]) {
+        await assert.rejects(
+          () => executor.executeSelect(parse(sql), ['users-p1'], []),
           UNSUPPORTED,
           sql,
         );
@@ -302,6 +321,13 @@ describe('MF-3 composed SQLite + QueryExecutor + LiveQuery witnesses', () => {
       assert.throws(
         () => new QueryGroup({
           parsedQuery: parse('SELECT id, name FROM users WHERE name = \'a\''),
+          systemCache,
+        }),
+        UNSUPPORTED,
+      );
+      assert.throws(
+        () => new QueryGroup({
+          parsedQuery: parse('SELECT name AS k, COUNT(*) AS n FROM users GROUP BY id HAVING k = \'a\''),
           systemCache,
         }),
         UNSUPPORTED,

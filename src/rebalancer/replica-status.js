@@ -138,7 +138,18 @@ function getOperationMetadataObject(stepsHistory, metadataKey) {
  * @return {Operation} A new Operation object.
  */
 function createOperation(params) {
-  const now = Date.now();
+  return createOperationAt(params, Date.now());
+}
+
+/**
+ * The one operation record builder at an explicit creation time: the
+ * placement admission applier stamps the committed command's proposal time,
+ * so every replica builds the same record.
+ * @param {Object} params - As createOperation.
+ * @param {number} now - The creation time (ms since epoch).
+ * @return {Operation} A new Operation object.
+ */
+function createOperationAt(params, now) {
   const initialStep = WORKFLOW_STEP.PENDING;
   const initialHistory = {step: initialStep, timestamp: now};
 
@@ -478,6 +489,7 @@ export {
   isLiveCreateTargetStatus,
   isPeerRowStatusAdmissible,
   createOperation,
+  createOperationAt,
   getAllStatusValues,
   isValidStatus,
   getOperationMetadataValue,

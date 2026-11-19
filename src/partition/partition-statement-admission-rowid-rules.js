@@ -21,6 +21,7 @@
 // determinism.js) asks the stricter forms: R1 refuses every alias token, and
 // R2 requires every primary-key column named and an INTEGER PRIMARY KEY's
 // every value an explicit integer in [-2^62, 2^62).
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {asciiLower} from './partition-statement-admission-lexer.js';
 import {
   dmlVerbIndex,
@@ -38,12 +39,12 @@ import {
 } from './partition-statement-admission-constants.js';
 
 // --- the table shape: read through the owner's own code-built statements
-// (prepared once per connection), fresh for every admitted statement ---
+// (prepared once per connection, sqlite-connection-state.js), fresh for every
+// admitted statement ---
 
 const ABSENT_SHAPE = Object.freeze({exists: false, withoutRowid: false,
   columns: Object.freeze([]), primaryKey: Object.freeze([]),
   notNull: Object.freeze([]), integerPrimaryKey: null, maxRowid: null});
-const statementsByConnection = new WeakMap();
 
 function quoteIdentifier(name) {
   return CHAR.DOUBLE_QUOTE +
@@ -51,29 +52,10 @@ function quoteIdentifier(name) {
     CHAR.DOUBLE_QUOTE;
 }
 
-function connectionStatements(db) {
-  let statements = statementsByConnection.get(db);
-  if (statements === undefined) {
-    statements = {
-      tableList: db.prepare(SHAPE_SQL.TABLE_LIST),
-      tableInfo: db.prepare(SHAPE_SQL.TABLE_INFO),
-      primaryKeyIndex: db.prepare(SHAPE_SQL.PRIMARY_KEY_INDEX),
-      mainIndexTable: db.prepare(SHAPE_SQL.MAIN_INDEX_TABLE),
-      tempIndexTable: db.prepare(SHAPE_SQL.TEMP_INDEX_TABLE),
-      maxRowidBySql: new Map(),
-    };
-    statementsByConnection.set(db, statements);
-  }
-  return statements;
-}
-
 // The own table's maximum-rowid read, as an exact BigInt.
-function maxRowidStatement(db, statements, rowidName, tableName) {
-  const sql = SHAPE_SQL.maxRowid(rowidName, quoteIdentifier(tableName));
-  if (!statements.maxRowidBySql.has(sql)) {
-    statements.maxRowidBySql.set(sql, db.prepare(sql).safeIntegers(true));
-  }
-  return statements.maxRowidBySql.get(sql);
+function maxRowidStatement(statements, rowidName, tableName) {
+  return statements.exactStatement(
+    SHAPE_SQL.maxRowid(rowidName, quoteIdentifier(tableName)));
 }
 
 // SQLite's own alias rule, read from the schema: a rowid table whose primary
@@ -81,7 +63,7 @@ function maxRowidStatement(db, statements, rowidName, tableName) {
 // and `INT PRIMARY KEY` get one, and are not aliases).
 function aliasKeyColumn(statements, tableName, keys) {
   if (keys.length !== 1 ||
-      statements.primaryKeyIndex.get(tableName).count !== 0) {
+      statements.statement(SHAPE_SQL.PRIMARY_KEY_INDEX).get(tableName).count !== 0) {
     return null;
   }
   return asciiLower(keys[0].name);
@@ -102,13 +84,13 @@ function readTableShape(db, tableName) {
   if (typeof tableName !== 'string' || tableName.length === 0) {
     return ABSENT_SHAPE;
   }
-  const statements = connectionStatements(db);
-  const listed = statements.tableList.get(tableName);
+  const statements = sqliteConnectionState(db);
+  const listed = statements.statement(SHAPE_SQL.TABLE_LIST).get(tableName);
   if (listed === undefined) {
     return ABSENT_SHAPE;
   }
   const withoutRowid = listed.wr === 1;
-  const columns = statements.tableInfo.all(tableName);
+  const columns = statements.statement(SHAPE_SQL.TABLE_INFO).all(tableName);
   const names = columns.map((column) => asciiLower(column.name));
   const rowidName = withoutRowid ? null :
     ROWID_ALIASES.find((alias) => !names.includes(alias)) ?? null;
@@ -124,7 +106,7 @@ function readTableShape(db, tableName) {
     integerPrimaryKey: withoutRowid ? null : aliasKeyColumn(statements, tableName,
       columns.filter((column) => column.pk > 0)),
     maxRowid: rowidName === null ? null :
-      maxRowidStatement(db, statements, rowidName, tableName),
+      maxRowidStatement(statements, rowidName, tableName),
   });
 }
 
@@ -136,12 +118,12 @@ function readTableShape(db, tableName) {
  * @return {{temporary: boolean, tableName: (string|null)}} Its table.
  */
 function readIndexTable(db, indexName) {
-  const statements = connectionStatements(db);
-  const temporary = statements.tempIndexTable.get(indexName);
+  const statements = sqliteConnectionState(db);
+  const temporary = statements.statement(SHAPE_SQL.TEMP_INDEX_TABLE).get(indexName);
   if (temporary !== undefined) {
     return {temporary: true, tableName: temporary.tableName};
   }
-  const main = statements.mainIndexTable.get(indexName);
+  const main = statements.statement(SHAPE_SQL.MAIN_INDEX_TABLE).get(indexName);
   return {temporary: false, tableName: main?.tableName ?? null};
 }
 

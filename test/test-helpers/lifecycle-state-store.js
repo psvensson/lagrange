@@ -26,7 +26,9 @@ function cloneRow(row) {
 }
 
 function rowKey(tableName, row) {
-  return tableName === TABLES.SERVICES ? row?.service_id : row?.partition_id;
+  if (tableName === TABLES.SERVICES) return row?.service_id;
+  if (tableName === TABLES.REPLICA_OPERATIONS) return row?.operation_id;
+  return row?.partition_id;
 }
 
 function predicateMatches(row, whereClause = {}) {
@@ -201,6 +203,11 @@ function selectRows(tableName, sql, params, durable) {
       (column, index) => row[column] === params[index],
     ));
   }
+  const notNullColumns = [...String(sql).matchAll(
+    /\b([a-z][a-z0-9_]*)\s+IS\s+NOT\s+NULL\b/giu,
+  )].map((match) => match[1].toLowerCase());
+  rows = rows.filter((row) => notNullColumns.every(
+    (column) => row[column] !== null && row[column] !== undefined));
   return rows.map(cloneRow);
 }
 
@@ -224,6 +231,8 @@ function createLifecycleStateStore(options = {}) {
   function projectMutation(mutation) {
     if (projectionLagged) return;
     const table = projection[mutation.tableName];
+    // Only SERVICES and PARTITIONS have a CDC projection here.
+    if (!table) return;
     const key = rowKey(
       mutation.tableName,
       mutation.row || mutation.whereClause || {},

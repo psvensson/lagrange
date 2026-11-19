@@ -54,6 +54,23 @@ const CONNECTION_SCOPED_FUNCTIONS = new Set([
   'total_changes',
 ]);
 
+const FUNCTION_EXPR_TYPE = 'function';
+const EVALUABLE_HAVING_SCALAR_FUNCTIONS = new Set([
+  'COALESCE', 'IFNULL', 'NULLIF', 'IIF', 'ABS', 'LOWER', 'UPPER',
+  'TRIM', 'LENGTH', 'SUBSTR', 'SUBSTRING', 'ROUND',
+]);
+const EVALUABLE_HAVING_BINARY_OPERATORS = new Set([
+  '+', '-', '*', '/', '%', '||', '=', '!=', '<>', '<', '<=', '>', '>=',
+  'AND', 'OR', 'IS NULL', 'IS NOT NULL',
+]);
+const EVALUABLE_HAVING_UNARY_OPERATORS = new Set(['-', '+', 'NOT']);
+const EVALUABLE_HAVING_EXPRESSION_TYPES = new Set([
+  EXPR_TYPE.BINARY, EXPR_TYPE.UNARY, EXPR_TYPE.LITERAL, EXPR_TYPE.COLUMN_REF,
+  EXPR_TYPE.PARAMETER, EXPR_TYPE.AGGREGATE, EXPR_TYPE.IN, EXPR_TYPE.BETWEEN,
+  EXPR_TYPE.LIKE, PG_EXPR_TYPE.CASE, PG_EXPR_TYPE.CAST,
+  PG_EXPR_TYPE.FUNCTION_CALL, FUNCTION_EXPR_TYPE,
+]);
+
 const FROMLESS_CLAUSES = Object.freeze([
   'where',
   'groupBy',
@@ -72,6 +89,9 @@ const REFUSAL_MESSAGE = Object.freeze({
   FANOUT_SYNTAX_PREFIX: 'COLLATE, non-BINARY column collation, and LIKE ... ESCAPE in ',
   FANOUT_SYNTAX_SUFFIX: ' are not supported yet: the coordinator evaluates that position ' +
     '(interim I1a, until WP3)',
+  FANOUT_HAVING_EXPRESSION:
+    'HAVING expression is not supported by the coordinator evaluator yet ' +
+    '(interim, until WP3)',
   FANOUT_LIMIT_PARAMETER: 'LIMIT or OFFSET bound to a parameter is not supported yet: the ' +
     'coordinator applies the limit (interim, until WP3)',
   JOIN_SYNTAX:
@@ -378,22 +398,87 @@ function columnItemHoldsSqlite(col, scope) {
   return holdsSqliteSemantics(expr, scope);
 }
 
-function orderTermReferencesSqliteColumn(term, columns, scope) {
-  const expr = term?.expression ?? term;
-  if (holdsSqliteSemantics(expr, scope)) return true;
-  if (expr?.type === EXPR_TYPE.LITERAL && Number.isInteger(expr.value)) {
-    const target = columns[expr.value - 1];
-    return target ? columnItemHoldsSqlite(target, scope) : false;
+function selectColumnHoldsSqliteAtOrdinal(columns, ordinal, scope) {
+  if (!Array.isArray(columns) || !Number.isInteger(ordinal)) return false;
+  const target = columns[ordinal - 1];
+  return target ? columnItemHoldsSqlite(target, scope) : false;
+}
+
+function selectAliasHoldsSqlite(columns, columnName, scope) {
+  if (!Array.isArray(columns) || typeof columnName !== TYPEOF_STRING) return false;
+  const lower = columnName.toLowerCase();
+  return columns.some((col) =>
+    typeof col?.alias === TYPEOF_STRING &&
+    col.alias.toLowerCase() === lower &&
+    columnItemHoldsSqlite(col, scope),
+  );
+}
+
+function holdsAliasedColumnSqliteSemantics(node, columns, scope) {
+  if (!node || typeof node !== TYPEOF_OBJECT || !Array.isArray(columns)) {
+    return false;
   }
-  if (expr?.type === EXPR_TYPE.COLUMN_REF && !expr.table) {
-    const lower = String(expr.column).toLowerCase();
-    return columns.some((col) =>
-      typeof col?.alias === TYPEOF_STRING &&
-      col.alias.toLowerCase() === lower &&
-      columnItemHoldsSqlite(col, scope),
-    );
+  if (Array.isArray(node)) {
+    return node.some((entry) => holdsAliasedColumnSqliteSemantics(entry, columns, scope));
+  }
+  if (node.type === EXPR_TYPE.COLUMN_REF && !node.table) {
+    return selectAliasHoldsSqlite(columns, node.column, scope);
+  }
+  return Object.values(node).some((val) =>
+    holdsAliasedColumnSqliteSemantics(val, columns, scope),
+  );
+}
+
+function holdsClauseSqliteSemantics(node, columns, scope) {
+  return holdsSqliteSemantics(node, scope) ||
+    holdsAliasedColumnSqliteSemantics(node, columns, scope);
+}
+
+function unwrapClauseExpression(term) {
+  return term?.type ? term : (term?.expression ?? term);
+}
+
+function termReferencesSqliteColumn(term, columns, scope) {
+  const expr = unwrapClauseExpression(term);
+  if (holdsClauseSqliteSemantics(expr, columns, scope)) return true;
+  if (expr?.type === EXPR_TYPE.LITERAL && Number.isInteger(expr.value)) {
+    return selectColumnHoldsSqliteAtOrdinal(columns, expr.value, scope);
   }
   return false;
+}
+
+function isEvaluableHavingFunction(node) {
+  if (node.type !== PG_EXPR_TYPE.FUNCTION_CALL && node.type !== FUNCTION_EXPR_TYPE) {
+    return true;
+  }
+  return EVALUABLE_HAVING_SCALAR_FUNCTIONS.has(String(node.name || '').toUpperCase());
+}
+
+function isEvaluableHavingOperator(node) {
+  if (node.type === EXPR_TYPE.BINARY) {
+    return EVALUABLE_HAVING_BINARY_OPERATORS.has(node.operator);
+  }
+  if (node.type === EXPR_TYPE.UNARY) {
+    return EVALUABLE_HAVING_UNARY_OPERATORS.has(node.operator);
+  }
+  return node.type !== EXPR_TYPE.IN || !node.subquery;
+}
+
+function isEvaluableHavingNode(node) {
+  if (!node.type) return true;
+  return EVALUABLE_HAVING_EXPRESSION_TYPES.has(node.type) &&
+    isEvaluableHavingFunction(node) &&
+    isEvaluableHavingOperator(node);
+}
+
+function havingExpressionEvaluable(node) {
+  if (!node || typeof node !== TYPEOF_OBJECT) return true;
+  if (Array.isArray(node)) return node.every(havingExpressionEvaluable);
+  if (node.type === EXPR_TYPE.AGGREGATE) return true;
+  if (!isEvaluableHavingNode(node)) return false;
+  return Object.values(node).every((val) =>
+    !val || typeof val !== TYPEOF_OBJECT || havingExpressionEvaluable(val),
+  );
 }
 
 /**
@@ -408,9 +493,9 @@ function orderTermReferencesSqliteColumn(term, columns, scope) {
  */
 function singlePartitionOrderSurvivesResort(ast, scope) {
   for (const term of ast.orderBy) {
-    const expr = term?.expression ?? term;
+    const expr = unwrapClauseExpression(term);
     if (expr?.type !== EXPR_TYPE.COLLATE &&
-        orderTermReferencesSqliteColumn(term, ast.columns, scope)) {
+        termReferencesSqliteColumn(term, ast.columns, scope)) {
       return false;
     }
   }
@@ -421,7 +506,7 @@ function singlePartitionOrderSurvivesResort(ast, scope) {
 
 function isMergeEvaluatedOrderBy(ast, multiPartition, mergeMode, hasAggregatePlan, scope) {
   if (!ast.orderBy) return false;
-  if (!ast.orderBy.some((term) => orderTermReferencesSqliteColumn(term, ast.columns, scope))) {
+  if (!ast.orderBy.some((term) => termReferencesSqliteColumn(term, ast.columns, scope))) {
     return false;
   }
   if (multiPartition || mergeMode === SELECT_MERGE_MODE.PARTIAL_AGGREGATE) return true;
@@ -445,7 +530,8 @@ function selectListMergeEvaluated(ast, multiPartition, mergeMode, hasAggregatePl
 function selectGroupOrListPosition(ast, multiPartition, mergeMode, hasAggregatePlan, scope) {
   const coordinatorMergesGroups = multiPartition ||
     (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan);
-  if (coordinatorMergesGroups && holdsSqliteSemantics(ast.groupBy, scope)) {
+  if (coordinatorMergesGroups &&
+      (ast.groupBy || []).some((term) => termReferencesSqliteColumn(term, ast.columns, scope))) {
     return EVALUATED_POSITION.GROUP_BY;
   }
   if (selectListMergeEvaluated(ast, multiPartition, mergeMode, hasAggregatePlan, scope)) {
@@ -459,7 +545,7 @@ function selectEvaluatedPosition(ast, partitionCount, mergeMode, hasAggregatePla
   if (compoundOrNestedHoldsSqlite(ast, resolveTableSchema)) {
     return EVALUATED_POSITION.SUBQUERY_OR_COMPOUND;
   }
-  if (holdsSqliteSemantics(ast.having, scope)) {
+  if (holdsClauseSqliteSemantics(ast.having, ast.columns, scope)) {
     return EVALUATED_POSITION.HAVING;
   }
   const multiPartition = partitionCount > 1;
@@ -474,10 +560,15 @@ function selectEvaluatedPosition(ast, partitionCount, mergeMode, hasAggregatePla
   return selectGroupOrListPosition(ast, multiPartition, mergeMode, hasAggregatePlan, scope);
 }
 
+function isCoordinatorEvaluatedHaving(mergeMode, hasAggregatePlan) {
+  return mergeMode === SELECT_MERGE_MODE.PARTIAL_AGGREGATE ||
+    (mergeMode === SELECT_MERGE_MODE.ORIGINAL_RAW_ROWS && hasAggregatePlan);
+}
+
 /**
  * Refuse a single-table SELECT plan whose coordinator merge would evaluate
- * `COLLATE`, non-`BINARY` column collations, `LIKE ... ESCAPE`, or a
- * parameterized `LIMIT`/`OFFSET` in JavaScript.
+ * `COLLATE`, non-`BINARY` column collations, `LIKE ... ESCAPE`, an unevaluable
+ * `HAVING` expression, or a parameterized `LIMIT`/`OFFSET` in JavaScript.
  * @param {Object} ast - SELECT AST.
  * @param {number} partitionCount - Partitions the statement fans out to.
  * @param {Object} [context] - Merge mode and schema lookup context.
@@ -493,6 +584,11 @@ function assertSelectFanoutAdmissible(
 ) {
   if (holdsParameterLimit(ast)) {
     throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_LIMIT_PARAMETER);
+  }
+  if (ast.having &&
+      isCoordinatorEvaluatedHaving(mergeMode, hasAggregatePlan === true) &&
+      !havingExpressionEvaluable(ast.having)) {
+    throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_HAVING_EXPRESSION);
   }
   const scope = buildCollationScopeForSelect(ast, resolveTableSchema);
   const position = selectEvaluatedPosition(
@@ -624,16 +720,16 @@ function assertLiveQueryGroupAdmissible(parsedQuery, resolveTableSchema = null) 
     throw unsupportedFeatureError(REFUSAL_MESSAGE.FANOUT_LIMIT_PARAMETER);
   }
   const scope = buildCollationScopeForSelect(parsedQuery, resolveTableSchema);
-  const evaluatedClauses = [
-    parsedQuery.where,
-    parsedQuery.groupBy,
-    parsedQuery.having,
-    parsedQuery.orderBy,
-    parsedQuery.joins,
-  ];
-  const hasNonBinaryClause = evaluatedClauses.some((clause) =>
-    holdsSqliteSemantics(clause, scope),
-  );
+  const hasNonBinaryClause =
+    holdsSqliteSemantics(parsedQuery.where, scope) ||
+    holdsSqliteSemantics(parsedQuery.joins, scope) ||
+    holdsClauseSqliteSemantics(parsedQuery.having, parsedQuery.columns, scope) ||
+    (parsedQuery.groupBy || []).some((term) =>
+      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
+    ) ||
+    (parsedQuery.orderBy || []).some((term) =>
+      termReferencesSqliteColumn(term, parsedQuery.columns, scope),
+    );
   const hasDistinctOrAggregate = (Boolean(parsedQuery.distinct) &&
       holdsSqliteSemantics(parsedQuery.columns, scope, true)) ||
     holdsAggregateSqliteSemantics(parsedQuery.columns, scope) ||

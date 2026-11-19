@@ -141,7 +141,6 @@ async function evaluateUniversalPartitionRemoveSafety(
   operation,
   input,
 ) {
-  const {projectQuorumAfterRemoval, QUORUM_PROJECTION_SCOPE} = input;
   if (input.isReplaceRemoveInitialDispatch) {
     const replacementGuard = evaluateReplaceReplacementVoterReady(
       context,
@@ -174,21 +173,14 @@ async function evaluateUniversalPartitionRemoveSafety(
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  const minReplicaCount = await context.getCriticalMinReplicaCount(
-    operation.partitionId,
-  );
-  const projectedVoterReadyCount = input.projectedVoterReadyRows.length;
-  const simpleFloor = projectQuorumAfterRemoval({
-    projectedVoterReadyRows: input.projectedVoterReadyRows,
-    minReplicaCount,
-    scope: QUORUM_PROJECTION_SCOPE.SIMPLE_FLOOR,
-  });
+  const simpleFloor = await input.resolveRemoveSafetySimpleFloor(context,
+    operation, input.projectedVoterReadyRows);
   if (!simpleFloor.floorSatisfied) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Critical partition ${operation.partitionId}` +
         OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
-        ` (${projectedVoterReadyCount}/${minReplicaCount})`,
+        ` (${simpleFloor.projectedVoterReadyCount}/${simpleFloor.minReplicaCount})`,
     );
   }
 

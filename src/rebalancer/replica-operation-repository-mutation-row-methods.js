@@ -12,6 +12,73 @@ function nullableOperationValue(value) {
   return value === undefined ? null : value;
 }
 
+/**
+ * The one replica_operations row of an operation record: the repository's
+ * persisted row and the placement admission applier's inserted row alike.
+ * @param {Object} operation - The operation record.
+ * @param {number|null} leaseExpiresAt - The owner lease the row carries.
+ * @return {Object} The row, keyed by column.
+ */
+function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
+  const {entityType, entityId} =
+    assertCanonicalRebalancerEntityIdentity(operation);
+  return {
+    operation_id: operation.operationId,
+    type: operation.type,
+    partition_id: operation.partitionId,
+    replica_id: operation.replicaId,
+    target_claim_key: operation.targetClaimKey || null,
+    source_node_id: operation.sourceNodeId,
+    target_node_id: operation.targetNodeId,
+    status: operation.status,
+    workflow_step: operation.workflowStep,
+    created_at: operation.createdAt,
+    updated_at: operation.updatedAt,
+    completed_at: operation.completedAt,
+    lease_expires_at: leaseExpiresAt,
+    error_message: operation.errorMessage,
+    steps_history: JSON.stringify(operation.stepsHistory),
+    entity_type: entityType,
+    entity_id: entityId,
+    membership_publication_epoch:
+      operation.membershipPublicationEpoch,
+    source_replica_id: nullableOperationValue(operation.sourceReplicaId),
+    message_group_membership_lane_key:
+      nullableOperationValue(operation.messageGroupMembershipLaneKey),
+    message_group_membership_phase:
+      nullableOperationValue(operation.messageGroupMembershipPhase),
+    message_group_membership_obligation_state:
+      nullableOperationValue(
+        operation.messageGroupMembershipObligationState),
+    message_group_membership_identity:
+      nullableOperationValue(operation.messageGroupMembershipIdentity),
+    message_group_learner_stamp:
+      nullableOperationValue(operation.messageGroupLearnerStamp),
+    message_group_voter_stamp:
+      nullableOperationValue(operation.messageGroupVoterStamp),
+    message_group_removal_stamp:
+      nullableOperationValue(operation.messageGroupRemovalStamp),
+    message_group_source_lifecycle_claim:
+      nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
+    create_admission_state:
+      nullableOperationValue(operation.createAdmissionState),
+    create_admission_token:
+      nullableOperationValue(operation.createAdmissionToken),
+    create_admission_replica_created_at:
+      nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
+    create_admission_attempt_token:
+      nullableOperationValue(operation.createAdmissionAttemptToken),
+    create_admission_previous_attempt_token:
+      nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
+    create_admission_attempt_seq:
+      nullableOperationValue(operation.createAdmissionAttemptSeq),
+    create_admission_workflow_updated_at:
+      nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
+    create_admission_owner_incarnation:
+      nullableOperationValue(operation.createAdmissionOwnerIncarnation),
+  };
+}
+
 function assignReplicaOperationRepositoryMutationRowMethods(
   ReplicaOperationRepository,
 ) {
@@ -30,64 +97,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
     }
 
     buildReplicaOperationRow(operation) {
-      const {entityType, entityId} =
-        assertCanonicalRebalancerEntityIdentity(operation);
-      return {
-        operation_id: operation.operationId,
-        type: operation.type,
-        partition_id: operation.partitionId,
-        replica_id: operation.replicaId,
-        target_claim_key: operation.targetClaimKey || null,
-        source_node_id: operation.sourceNodeId,
-        target_node_id: operation.targetNodeId,
-        status: operation.status,
-        workflow_step: operation.workflowStep,
-        created_at: operation.createdAt,
-        updated_at: operation.updatedAt,
-        completed_at: operation.completedAt,
-        lease_expires_at:
-          this.resolveOperationOwnerLeasePersistExpiry(operation),
-        error_message: operation.errorMessage,
-        steps_history: JSON.stringify(operation.stepsHistory),
-        entity_type: entityType,
-        entity_id: entityId,
-        membership_publication_epoch:
-          operation.membershipPublicationEpoch,
-        source_replica_id: nullableOperationValue(operation.sourceReplicaId),
-        message_group_membership_lane_key:
-          nullableOperationValue(operation.messageGroupMembershipLaneKey),
-        message_group_membership_phase:
-          nullableOperationValue(operation.messageGroupMembershipPhase),
-        message_group_membership_obligation_state:
-          nullableOperationValue(
-            operation.messageGroupMembershipObligationState),
-        message_group_membership_identity:
-          nullableOperationValue(operation.messageGroupMembershipIdentity),
-        message_group_learner_stamp:
-          nullableOperationValue(operation.messageGroupLearnerStamp),
-        message_group_voter_stamp:
-          nullableOperationValue(operation.messageGroupVoterStamp),
-        message_group_removal_stamp:
-          nullableOperationValue(operation.messageGroupRemovalStamp),
-        message_group_source_lifecycle_claim:
-          nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
-        create_admission_state:
-          nullableOperationValue(operation.createAdmissionState),
-        create_admission_token:
-          nullableOperationValue(operation.createAdmissionToken),
-        create_admission_replica_created_at:
-          nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
-        create_admission_attempt_token:
-          nullableOperationValue(operation.createAdmissionAttemptToken),
-        create_admission_previous_attempt_token:
-          nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
-        create_admission_attempt_seq:
-          nullableOperationValue(operation.createAdmissionAttemptSeq),
-        create_admission_workflow_updated_at:
-          nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
-        create_admission_owner_incarnation:
-          nullableOperationValue(operation.createAdmissionOwnerIncarnation),
-      };
+      return buildCanonicalReplicaOperationRow(operation,
+        this.resolveOperationOwnerLeasePersistExpiry(operation));
     }
 
     buildReplicaOperationUpdateData(operation) {
@@ -194,4 +205,4 @@ function assignReplicaOperationRepositoryMutationRowMethods(
   }
 }
 
-export {assignReplicaOperationRepositoryMutationRowMethods};
+export {assignReplicaOperationRepositoryMutationRowMethods, buildCanonicalReplicaOperationRow};

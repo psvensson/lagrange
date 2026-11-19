@@ -20,6 +20,8 @@ import {
 } from './bootstrap-api-test-fixtures.js';
 import {withRegisteredIncarnations} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 
 test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
@@ -531,82 +533,48 @@ test('BootstrapAPI - buildSystemTableSnapshots includes node_endpoints', async (
   await api.shutdown();
 });
 
-test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots', async (t) => {
-  initializeTestEnvironment();
-
-  // Create a mock system table cache with node_endpoints data
-  // Validates: Requirements 6.10, 8.1 - node_endpoints included in bootstrap response
-  const mockCache = {
-    get() {
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
-      }
-      if (tableName === TABLES.PARTITIONS) {
-        return [{
-          partition_id: 'p1',
-          table_name: 'nodes',
-          leader_node_id: 'seed-node-1',
-        }];
-      }
-      if (tableName === TABLES.SERVICES) {
-        return [
-          {
-            service_id: 'partition-leader',
-            service_type: SERVICE_TYPE.PARTITION,
-            partition_id: 'p1',
-            node_id: 'seed-node-1',
-            address: 'seed-node-1/partition/partition-leader',
-            raft_role: RAFT_ROLE.LEADER,
-            status: SERVICE_STATUS.ACTIVE,
-          },
-          {
-            service_id: 'message-group-leader',
-            service_type: SERVICE_TYPE.MESSAGE_GROUP,
-            group_id: 'mg1',
-            node_id: 'seed-node-1',
-            address: 'seed-node-1/message-group/message-group-leader',
-            raft_role: RAFT_ROLE.LEADER,
-            status: SERVICE_STATUS.ACTIVE,
-          },
-        ];
-      }
-      if (tableName === TABLES.TABLES) {
-        return [{table_id: 't1', table_name: 'nodes'}];
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [{group_id: 'mg1', leader_node_id: 'seed-node-1'}];
-      }
-      if (tableName === TABLES.NODE_ENDPOINTS) {
-        return [
-          {
-            endpoint_id: 'ep-seed-1',
-            node_id: 'seed-node-1',
-            transport_type: 'ws',
-            address: 'ws://localhost:8080',
-            priority: 0,
-            metadata: '{}',
-            status: 'active',
-            created_at: Date.now(),
-            updated_at: Date.now(),
-          },
-        ];
-      }
-      return [];
-    },
-    filter() {
-      return [];
-    },
-    find() {
-      return null;
-    },
-    getReadyNodes() {
-      return [];
-    },
+function createSnapshotTestMockCache(extraTables = {}) {
+  const baseTables = {
+    [TABLES.NODES]: [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}],
+    [TABLES.PARTITIONS]: [{
+      partition_id: 'p1',
+      table_name: 'nodes',
+      leader_node_id: 'seed-node-1',
+    }],
+    [TABLES.SERVICES]: [
+      {
+        service_id: 'partition-leader',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'p1',
+        node_id: 'seed-node-1',
+        address: 'seed-node-1/partition/partition-leader',
+        raft_role: RAFT_ROLE.LEADER,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'message-group-leader',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg1',
+        node_id: 'seed-node-1',
+        address: 'seed-node-1/message-group/message-group-leader',
+        raft_role: RAFT_ROLE.LEADER,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    [TABLES.TABLES]: [{table_id: 't1', table_name: 'nodes'}],
+    [TABLES.MESSAGE_GROUPS]: [{group_id: 'mg1', leader_node_id: 'seed-node-1'}],
+    ...extraTables,
   };
+  return {
+    get: () => null,
+    getAll: (tableName) => baseTables[tableName] || [],
+    filter: () => [],
+    find: () => null,
+    getReadyNodes: () => [],
+  };
+}
 
+async function runBootstrapSnapshotRequest(mockCache, nodeId) {
   const api = new BootstrapAPI({
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'http://localhost:8080',
@@ -614,17 +582,41 @@ test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
     systemTableCache: mockCache,
     messageGroupServices: new Map(),
   });
-
   await api.initialize(0, {listen: false});
-
   const response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
     payload: {
-      nodeId: '550e8400-e29b-41d4-a716-446655440000',
+      ...clusterFormatRevisionClaim(),
+      nodeId,
       nodeAddress: 'ws://localhost:9090',
     },
   });
+  return {api, response};
+}
+
+test('BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots', async (t) => {
+  initializeTestEnvironment();
+
+  const mockCache = createSnapshotTestMockCache({
+    [TABLES.NODE_ENDPOINTS]: [
+      {
+        endpoint_id: 'ep-seed-1',
+        node_id: 'seed-node-1',
+        transport_type: 'ws',
+        address: 'ws://localhost:8080',
+        priority: 0,
+        metadata: '{}',
+        status: 'active',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      },
+    ],
+  });
+  const {api, response} = await runBootstrapSnapshotRequest(
+    mockCache,
+    '550e8400-e29b-41d4-a716-446655440000',
+  );
 
   t.equal(response.statusCode, 200, 'should return 200');
   const body = JSON.parse(response.body);
@@ -647,96 +639,24 @@ test('BootstrapAPI - handleBootstrapRequest includes latency topology hints',
   async (t) => {
     initializeTestEnvironment();
 
-    const mockCache = {
-      get() {
-        return null;
-      },
-      getAll(tableName) {
-        if (tableName === TABLES.NODES) {
-          return [{node_id: 'seed-node-1', node_address: 'ws://localhost:8080'}];
-        }
-        if (tableName === TABLES.PARTITIONS) {
-          return [{
-            partition_id: 'p1',
-            table_name: 'nodes',
-            leader_node_id: 'seed-node-1',
-          }];
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [
-            {
-              service_id: 'partition-leader',
-              service_type: SERVICE_TYPE.PARTITION,
-              partition_id: 'p1',
-              node_id: 'seed-node-1',
-              address: 'seed-node-1/partition/partition-leader',
-              raft_role: RAFT_ROLE.LEADER,
-              status: SERVICE_STATUS.ACTIVE,
-            },
-            {
-              service_id: 'message-group-leader',
-              service_type: SERVICE_TYPE.MESSAGE_GROUP,
-              group_id: 'mg1',
-              node_id: 'seed-node-1',
-              address: 'seed-node-1/message-group/message-group-leader',
-              raft_role: RAFT_ROLE.LEADER,
-              status: SERVICE_STATUS.ACTIVE,
-            },
-          ];
-        }
-        if (tableName === TABLES.TABLES) {
-          return [{table_id: 't1', table_name: 'nodes'}];
-        }
-        if (tableName === TABLES.MESSAGE_GROUPS) {
-          return [{group_id: 'mg1', leader_node_id: 'seed-node-1'}];
-        }
-        if (tableName === TABLES.LATENCY_GROUPS) {
-          return [
-            {group_id: 'g-1', representative_node_id: 'seed-node-1'},
-            {group_id: 'g-2', representative_node_id: 'seed-node-2'},
-          ];
-        }
-        if (tableName === TABLES.INTER_GROUP_LATENCIES) {
-          return [
-            {
-              source_group_id: 'g-1',
-              target_group_id: 'g-2',
-              latency_ms: 42,
-              sample_count: 3,
-            },
-          ];
-        }
-        return [];
-      },
-      filter() {
-        return [];
-      },
-      find() {
-        return null;
-      },
-      getReadyNodes() {
-        return [];
-      },
-    };
-
-    const api = new BootstrapAPI({
-      seedNodeId: 'seed-node-1',
-      seedNodeAddress: 'http://localhost:8080',
-      wsPort: 9090,
-      systemTableCache: mockCache,
-      messageGroupServices: new Map(),
+    const mockCache = createSnapshotTestMockCache({
+      [TABLES.LATENCY_GROUPS]: [
+        {group_id: 'g-1', representative_node_id: 'seed-node-1'},
+        {group_id: 'g-2', representative_node_id: 'seed-node-2'},
+      ],
+      [TABLES.INTER_GROUP_LATENCIES]: [
+        {
+          source_group_id: 'g-1',
+          target_group_id: 'g-2',
+          latency_ms: 42,
+          sample_count: 3,
+        },
+      ],
     });
-
-    await api.initialize(0, {listen: false});
-
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/bootstrap',
-      payload: {
-        nodeId: '550e8400-e29b-41d4-a716-446655440123',
-        nodeAddress: 'ws://localhost:9090',
-      },
-    });
+    const {api, response} = await runBootstrapSnapshotRequest(
+      mockCache,
+      '550e8400-e29b-41d4-a716-446655440123',
+    );
 
     t.equal(response.statusCode, 200, 'should return 200');
     const body = JSON.parse(response.body);

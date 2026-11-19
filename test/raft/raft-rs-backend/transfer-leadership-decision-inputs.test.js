@@ -12,8 +12,10 @@
 //     ahead, is never the successor, and the transfer really runs;
 //   - the retryable leadership-transfer-in-progress answer is given for a
 //     proposal the core dropped because a transfer runs, and for no other
-//     drop: a leader the committed configuration removed drops every proposal
-//     for good, and that stays the core's non-retryable refusal.
+//     drop: a replica whose own removal committed while it led steps down in
+//     the call that applied it (binding fork fix 5) and drops a proposal as a
+//     follower that knows no leader, and that stays the core's non-retryable
+//     refusal.
 //
 // Real rs-raft ports through the provider seam, time moved only by explicit
 // ticks (TransferLeadershipDriver). Expected values are raft-rs 0.7's own
@@ -39,6 +41,7 @@ import {
   assertTransferInProgress,
   mostCaughtUp,
   namedSuccessor,
+  returnLeadershipBeforeOwnRemoval,
 } from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -145,21 +148,22 @@ test('most-caught-up never names a learner, even one further ahead than ' +
   }
 });
 
-test('a leader the committed configuration removed answers its dropped ' +
-  'proposal as the core\'s refusal, never as a transfer in progress',
-async () => {
+test('a leader whose own removal committed (leadership returned to it ' +
+  'before the removal B proposed committed) answers its dropped proposal ' +
+  'as the core\'s refusal, never as a transfer in progress', async () => {
   const driver = formedGroup('inputs-removed-leader');
   try {
     const selfId = driver.raftIdAt(A, A);
-    assert.equal(driver.port(A).proposeConfChange({
-      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: A,
-    }).result.outcome, CORE_OK);
+    await returnLeadershipBeforeOwnRemoval({driver,
+      act: (operation) => operation(),
+      deliverOnly: (replicaIds) => driver.deliverOnly(replicaIds)},
+    {leader: A, successor: B, witness: C});
     driver.deliver();
     const status = driver.status(A);
     assert.equal(status.confState.voters.includes(selfId), false,
       'precondition: the removal of the leader is committed');
-    assert.equal(status.role, RAFT_ROLE.LEADER,
-      'precondition: raft-rs keeps the removed leader leading');
+    assert.notEqual(status.role, RAFT_ROLE.LEADER,
+      'the removed leader stepped down');
     const answer = turnChainValue(driver.propose(A, {on: 'removed-leader'}));
     assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
     assert.notEqual(answer.reason, IN_PROGRESS_REASON,

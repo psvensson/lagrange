@@ -75,10 +75,9 @@ import {
   tuningOf,
 } from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
-import {
-  confChangeProposalRefusal,
-  confChangeSettlement,
-} from './raft-rs-conf-change-admission.js';
+import {confChangeSettlement} from './raft-rs-conf-change-admission.js';
+import {answerConfChangeRefusal, refusedConfChange} from
+  './raft-rs-conf-change-refusal-answer.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {
   admitsReplica,
@@ -1448,24 +1447,6 @@ function announceAppliedProgress(group, expectedGeneration, observed) {
   group.emit(RUNTIME_EVENT.APPLIED_PROGRESS);
 }
 
-// A conf-change proposal is taken only at the leader's port; one the core
-// would drop is deferred typed - read from the core's status and
-// configuration in this turn (verification V2, round 2 F-1).
-function refusedConfChange(group, expectedGeneration, change) {
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
-  if (!status.ok) {
-    return status.result;
-  }
-  const conf = invokeCoreAt(group, expectedGeneration,
-    CORE_OPERATION.CONF_STATE);
-  if (!conf.ok) {
-    return conf.result;
-  }
-  return confChangeProposalRefusal({status: status.value,
-    confState: conf.value, change,
-    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead)});
-}
-
 // The configuration's voter-bearing and learner parts as one comparable key.
 // The applied ConfState is announced when it differs from the one last
 // announced, and first after every (re)construction: the transition the core
@@ -1747,8 +1728,14 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
   }
   const observed = readGroupObservation(group, expectedGeneration);
   return observed.ok &&
-    droppedByLeadershipTransfer(refused, group.peerId, observed.value) ?
+    droppedByLeadershipTransfer(refused, observed.value) ?
     leadershipTransferInProgress(refused.phase) : refused;
+}
+
+// A refused conf change, answered after the hand-off REMOVES_LEADER needs.
+function answerGroupConfChangeRefusal(group, expectedGeneration, refused) {
+  return answerConfChangeRefusal(refused, (transfer) =>
+    transferLeadership(group, expectedGeneration, transfer));
 }
 
 const COMMAND_OPERATION = Object.freeze({
@@ -1771,7 +1758,7 @@ const COMMAND_OPERATION = Object.freeze({
         group, expectedGeneration: generation, command: command.transition,
         runtimeGeneration, invokeCoreAt,
         leaderReplicaIdOf: semanticLeaderIdentity, answerRefusedProposal,
-        drainReady,
+        answerConfChangeRefusal: answerGroupConfChangeRefusal, drainReady,
       }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
@@ -1845,9 +1832,10 @@ function performCommand(group, command, expectedGeneration) {
     }));
   }
   const refused = command.type === PROPOSE_CONF_CHANGE ?
-    refusedConfChange(group, expectedGeneration, command.change) : null;
+    refusedConfChange({group, expectedGeneration, change: command.change,
+      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity}) : null;
   if (refused !== null) {
-    return settledTurn(refused);
+    return answerGroupConfChangeRefusal(group, expectedGeneration, refused);
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);

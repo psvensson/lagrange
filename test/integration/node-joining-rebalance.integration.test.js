@@ -45,6 +45,8 @@ import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 async function shutdownOrFail(t, promise, label) {
   try {
     await promise;
@@ -385,6 +387,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
       const reply = {code: (_status) => {}};
       const response = await api.handleBootstrapRequest({
         body: {
+          ...clusterFormatRevisionClaim(),
           nodeId: '550e8400-e29b-41d4-a716-446655440011',
           nodeAddress: 'ws://node-1:9001',
         },

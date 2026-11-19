@@ -17,6 +17,8 @@ import {
 import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {isReplicaCreateProgressRowSuperseded} from './replica-create-process-owner.js';
 import {REPLICA_HANDLER_SERVICE} from './replica-handler-constants.js';
+import {buildRemovalErrorResponseFields} from
+  './replica-removal-debt-errors.js';
 
 function initialStatusDeferral(evidence, cause) {
   return Object.assign(new Error(
@@ -298,7 +300,14 @@ async function claimTerminalFailedCreateTargetCleanup(handler, payload) {
     try {
       return await executeFailedCreateCleanupClaim(handler, owner, request);
     } catch (error) {
-      return buildClaimErrorResponse(handler, request, error.message);
+      return handler.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        buildRemovalErrorResponseFields(error, {
+          operationId: request.operationId,
+          replicaId: request.replicaId,
+          nodeId: handler.nodeId,
+        }),
+      );
     }
   });
 }

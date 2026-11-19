@@ -27,8 +27,11 @@ import {
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
   classifyNodeIncarnationRelation,
+  clearIndeterminateRegistrationIssue,
+  hasPendingBlindBirthIssue,
   isRegistrationAttemptIndeterminate,
-  matchesIndeterminateAttemptRow,
+  reconcileAuthoritativeObservation,
+  recordAuthoritativeIndeterminateIssue,
   recordNodeRegistrationIssue,
   requireRegistrationClockReading,
 } from '../../control-plane/owners/node-registration-incarnation-write.js';
@@ -63,6 +66,20 @@ import {
 const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
   'Node boot incarnation advance was not observed on the authoritative row';
 
+function recordUnappliedAdvanceAttemptIssue(
+  issueRecord,
+  nextIncarnation,
+  nextNodeRow,
+  result,
+  attemptError,
+) {
+  if (isRegistrationAttemptIndeterminate(result, attemptError)) {
+    recordAuthoritativeIndeterminateIssue(issueRecord, nextIncarnation, nextNodeRow);
+    return;
+  }
+  clearIndeterminateRegistrationIssue(issueRecord);
+}
+
 class NodeRegistrationOwnerDurableRejoinMethods {
   /**
    * Throw the typed deferred error when an authoritative row read was
@@ -87,7 +104,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+    if (await this.isMembershipReuseBlocked()) {
       return null;
     }
 
@@ -153,7 +170,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async resolveExistingJoinAdmissionProgress() {
-    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+    if (await this.isMembershipReuseBlocked()) {
       return null;
     }
 
@@ -177,6 +194,16 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       currentIncarnation: this.getRegistrationBootIncarnation(),
       hostId: this.hostId,
     });
+  }
+
+  async isMembershipReuseBlocked() {
+    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+      return true;
+    }
+    return hasPendingBlindBirthIssue(
+      this.registrationIssueRecord,
+      this.getRegistrationBootIncarnation(),
+    );
   }
 
   /**
@@ -306,7 +333,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     // re-entry births the row; older -> one CAS below.
     const relation = this.classifyLifecycleRegistrationRelation(
       observedNodeRow, nextIncarnation);
-    if (relation === NODE_INCARNATION_RELATION.CURRENT) return nextNodeRow;
+    if (relation === NODE_INCARNATION_RELATION.CURRENT) {
+      return withOriginHlcStamp(
+        nextNodeRow,
+        observedNodeRow?.[COLUMN.UPDATED_AT_HLC],
+      );
+    }
     if (relation === NODE_INCARNATION_RELATION.ABSENT) {
       return this.resolveNodeBootIncarnationAdvanceByReadback(
         nextNodeRow, nextIncarnation);
@@ -330,16 +362,21 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     }
     if (classifyControlPlaneMutationResult(result).applied === true) {
       recordNodeRegistrationIssue(this.registrationIssueRecord, nextIncarnation);
-      const originHlc =
-        result?.originHlc || result?.partitionResult?.originHlc;
-      return withOriginHlcStamp(nextNodeRow, originHlc);
+      return withOriginHlcStamp(
+        nextNodeRow,
+        result?.originHlc || result?.partitionResult?.originHlc,
+      );
     }
-    const indeterminate =
-      isRegistrationAttemptIndeterminate(result, attemptError);
+    recordUnappliedAdvanceAttemptIssue(
+      this.registrationIssueRecord,
+      nextIncarnation,
+      nextNodeRow,
+      result,
+      attemptError,
+    );
     return this.resolveNodeBootIncarnationAdvanceByReadback(
       nextNodeRow,
       nextIncarnation,
-      indeterminate,
     );
   }
 
@@ -407,6 +444,11 @@ class NodeRegistrationOwnerDurableRejoinMethods {
    * @return {string} ABSENT, OLDER or CURRENT.
    */
   classifyLifecycleRegistrationRelation(observedNodeRow, bootIncarnation) {
+    reconcileAuthoritativeObservation(
+      this.registrationIssueRecord,
+      observedNodeRow,
+      bootIncarnation,
+    );
     const relation = classifyNodeIncarnationRelation(observedNodeRow,
       bootIncarnation, this.registrationIssueRecord);
     if (relation === NODE_INCARNATION_RELATION.NEWER) {
@@ -452,15 +494,8 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   async resolveNodeBootIncarnationAdvanceByReadback(
     nextNodeRow,
     nextIncarnation,
-    indeterminateAttempt = false,
   ) {
     const observedRow = await this.readAuthoritativeDurableRejoinNodeRow();
-    if (indeterminateAttempt &&
-        matchesIndeterminateAttemptRow(
-          nextNodeRow, observedRow, nextIncarnation)) {
-      recordNodeRegistrationIssue(
-        this.registrationIssueRecord, nextIncarnation);
-    }
     if (this.classifyLifecycleRegistrationRelation(observedRow,
       nextIncarnation) === NODE_INCARNATION_RELATION.CURRENT) {
       return withOriginHlcStamp(

@@ -45,6 +45,8 @@ import {
   '../integration/helpers/cluster-test-helpers.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 const ports = createPortAllocator(import.meta.url);
 function getUniquePort() {
   return ports.getPort();
@@ -209,6 +211,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
 
       // Make bootstrap request directly via HTTP POST
       const bootstrapResponse = await httpPost('http://localhost:0/bootstrap', {
+        ...clusterFormatRevisionClaim(),
         nodeId: joiningNodeId,
         nodeAddress: joiningNodeAddress,
       });
@@ -284,6 +287,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const joiningWsPort1 = getUniquePort();
 
       const response1 = await httpPost('http://localhost:0/bootstrap', {
+        ...clusterFormatRevisionClaim(),
         nodeId: duplicateNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort1}`,
       });
@@ -300,6 +304,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       let error = null;
       try {
         secondResponse = await httpPost('http://localhost:0/bootstrap', {
+          ...clusterFormatRevisionClaim(),
           nodeId: duplicateNodeId,
           nodeAddress: `ws://localhost:${joiningWsPort2}`,
         });
@@ -373,6 +378,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const joiningWsPort = getUniquePort();
 
       const response = await httpPost('http://localhost:0/bootstrap', {
+        ...clusterFormatRevisionClaim(),
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
       });

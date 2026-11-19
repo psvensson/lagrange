@@ -23,8 +23,13 @@ import {
   JOINING_SEED_CONTACT_OUTCOME,
 } from '../node-joining-constants.js';
 import {
+  HTTP_STATUS,
   NUM,
 } from '../../constants/index.js';
+import {
+  clusterFormatRevisionClaim,
+  resolveJoinSupportEnvelopeConflict,
+} from '../owners/support-envelope-owner.js';
 import {
   MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES,
   RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE,
@@ -230,6 +235,9 @@ class ContactSeedPhase {
 
   buildSeedContactRequest(context, attempt) {
     const bootstrapRequest = {
+      // This build's cluster format revision: the admitting node refuses an
+      // absent or different revision (the release version fence).
+      ...clusterFormatRevisionClaim(),
       nodeId: this.nodeId,
       nodeAddress: context.nodeAddress,
       [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
@@ -255,10 +263,13 @@ class ContactSeedPhase {
   }
 
   async executeSeedContactAttempt(context, attempt) {
-    const response = await this.delegates.getHttpPostImpl()(
-      attempt.bootstrapUrl,
-      this.buildSeedContactRequest(context, attempt),
-      {timeoutMs: attempt.requestTimeoutMs},
+    const response = this.fenceSeedContactResponse(
+      await this.delegates.getHttpPostImpl()(
+        attempt.bootstrapUrl,
+        this.buildSeedContactRequest(context, attempt),
+        {timeoutMs: attempt.requestTimeoutMs},
+      ),
+      attempt,
     );
     this.recordSeedContactStartupAuthority(
       response,
@@ -288,6 +299,32 @@ class ContactSeedPhase {
       seedNodeId: response.seedNodeId,
       strategy: response.messageGroupAssignment?.strategy,
     });
+  }
+
+  // The joiner's side of the release version fence: an admission answered by
+  // a node of another cluster format revision (or by a build that carries
+  // none) is refused before the response is applied, as the terminal typed
+  // conflict the admitting side would have answered.
+  fenceSeedContactResponse(response, attempt) {
+    if (response?.success !== true) {
+      return response;
+    }
+    const conflict = resolveJoinSupportEnvelopeConflict({
+      nodeId: response.seedNodeId,
+      nodeAddress: attempt.currentCandidate,
+      carrier: response,
+    });
+    if (conflict === null) {
+      return response;
+    }
+    return {
+      success: false,
+      statusCode: HTTP_STATUS.CONFLICT,
+      error: conflict.error,
+      code: conflict.code,
+      localClusterFormatRevision: conflict.localClusterFormatRevision,
+      peerClusterFormatRevision: conflict.peerClusterFormatRevision,
+    };
   }
 
   recordSeedContactStartupAuthority(value, currentCandidate) {

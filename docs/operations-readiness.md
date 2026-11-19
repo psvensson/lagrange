@@ -197,11 +197,70 @@ Before changing versions:
 A successful rolling-restart test in the repository is engineering evidence,
 not a general mixed-version support promise.
 
+### Cluster format revision: no in-place upgrade, no downgrade
+
+Every build carries one cluster format revision, owned by the support-envelope
+owner (`src/bootstrap/owners/support-envelope-owner.js`). The seed writes its
+build's revision into the original allocation it founds, so a cluster is
+founded at exactly one revision. Revision 1 is the release that ships the
+formation latch, the placement owner, single-voter founding, the coordinator
+SQLite merge and row-level participant concurrency together; every earlier
+build has no revision.
+
+The revision is a fence, and it fails closed:
+
+- A joining node sends its build's revision with every bootstrap request. The
+  admitting node refuses an absent or different revision with the terminal
+  conflict `OUTSIDE_SUPPORT_ENVELOPE` before it claims an admission slot,
+  decides a takeover or reserves an assignment. The joiner applies the same
+  rule to the admission response, so a new build never joins a node that
+  carries no revision or another one. This covers fresh joins, rejoins and
+  durable rejoins (including a seed that restarts after its bootstrap
+  completed, which rejoins through its peers).
+- A seed whose data directory holds a retained original allocation without
+  this build's revision refuses to start, typed
+  `ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED`, before any founder opens:
+  the startup decision refuses it, and so does the original-allocation
+  preparation.
+- A release transition or rollback through the management API is admitted only
+  for a version pair certified by a support envelope of this build's revision.
+  Without a configured envelope nothing is certified, and every in-place
+  transition and rollback is refused `OUTSIDE_SUPPORT_ENVELOPE`.
+
+There is therefore no in-place upgrade, rolling or full-stop, across a cluster
+format revision, and no downgrade. A build older than the cluster's revision
+also fails closed when it replays the newer log: it refuses an entry it does
+not know (`COMMITTED_COMMAND_UNRECOGNISED`, for example `FORMATION_TRANSITION`
+or `PLACEMENT_ADMIT`) and stops applying instead of diverging. Do not start an
+older build on a data directory a newer revision has written; recovery is
+re-founding.
+
+**Re-founding a cluster across a revision:**
+
+1. With the old build still running, export the data you need through an
+   application-owned path (SQL export or the pilot dataset reload). There is
+   no backup product to carry data across the boundary.
+2. Stop every node of the old cluster.
+3. Remove every node's data directory, the seed's included (on Kubernetes,
+   delete the release's PVCs). The new build never reopens them.
+4. Start the new build's seed on an empty data directory. It founds the
+   cluster at the new revision.
+5. Start the other nodes on empty data directories; each is admitted at the
+   same revision.
+6. Reload the exported data and re-run the pilot's correctness drills.
+
+A refusal names its reason: `OUTSIDE_SUPPORT_ENVELOPE` in the joiner's terminal
+seed-contact failure and the admitting node's conflict log, or
+`ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED` in the seed's startup
+failure. Either means a node or data directory of another revision, and the
+answer is re-founding, never a retry.
+
 ### Certified pilot support envelope
 
 When a deployment configures the bounded pilot support envelope
 ([`support-envelope.json`](support-envelope.json)), admission and recovery are
-pinned to the exact certified version pair (`0.4.1 -> 0.5.0`), topology bounds
+pinned to its cluster format revision (`clusterFormatRevision`, which must equal
+the build's), the exact certified version pair (`0.4.1 -> 0.5.0`), topology bounds
 (`3..7` nodes, `RF=3`), rollback cutoff (`BEFORE_TARGET_SCHEMA_FINALIZE`), and
 five drill receipts (`rolling_upgrade`, `downgrade_rollback_boundary`,
 `one_node_failure_recovery`, `wiped_replica_rebuild`, and

@@ -297,8 +297,10 @@ const RATCHET_TARGETS = [
     // consolidating loadMysql2Promise in the comparative OLTP reference client.
     // 2026-11-17: tightened 618/22225 -> 618/22200 on the checker hint after
     // consolidating sleepWithAbortSignal across the TiDB reference harness.
-    baselineCloneGroupCount: 612,
-    baselineDuplicatedLineCount: 21898,
+    // 2026-11-18 (fix-removal-cleanup): tightened 21898 -> 21888 on the checker hint.
+    // 2026-11-19: tightened 612/21888 -> 610/21830 on the checker hint.
+    baselineCloneGroupCount: 610,
+    baselineDuplicatedLineCount: 21830,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

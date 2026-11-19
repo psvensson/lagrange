@@ -21,6 +21,7 @@ import {
   LOCKING_READ_LOCAL_EXPIRY,
   LOCKING_READ_RESERVATION_OUTCOME,
 } from '../query/sql-locking-read-constants.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
 
 export {
@@ -40,9 +41,6 @@ const PARTITION_DBS = new Map();
 
 // WeakSet<Database>
 const INITIALIZED_DBS = new WeakSet();
-
-// WeakMap<Database, Map<string, Statement>>
-const PREPARED_STATEMENTS = new WeakMap();
 
 const RESERVATION_SQL = Object.freeze({
   DDL: `
@@ -87,27 +85,6 @@ const RESERVATION_SQL = Object.freeze({
         expires_at = excluded.expires_at
   `,
 });
-
-/**
- * Get or prepare a statement on a partition database.
- *
- * @param {Object} db - SQLite database.
- * @param {string} sql - SQL query text.
- * @return {Object} Prepared statement.
- */
-function resolvePreparedStatement(db, sql) {
-  let statements = PREPARED_STATEMENTS.get(db);
-  if (!statements) {
-    statements = new Map();
-    PREPARED_STATEMENTS.set(db, statements);
-  }
-  let stmt = statements.get(sql);
-  if (!stmt) {
-    stmt = db.prepare(sql);
-    statements.set(sql, stmt);
-  }
-  return stmt;
-}
 
 /**
  * Ensure the reservation table exists on a partition database.
@@ -196,7 +173,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
   const now = Date.now();
   let existing;
   try {
-    existing = resolvePreparedStatement(db, RESERVATION_SQL.SELECT_ROW).get(
+    existing = sqliteConnectionState(db).statement(RESERVATION_SQL.SELECT_ROW).get(
       partitionId,
       tableName,
       rowKey,
@@ -211,7 +188,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
       existing.expires_at > 0 &&
       existing.expires_at <= now) {
     try {
-      resolvePreparedStatement(db, RESERVATION_SQL.DELETE_ROW).run(
+      sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_ROW).run(
         partitionId,
         tableName,
         rowKey,
@@ -237,7 +214,7 @@ function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId})
 function insertDbReservation(db, record) {
   ensureTableInitialized(db);
   try {
-    resolvePreparedStatement(db, RESERVATION_SQL.UPSERT_ROW).run(
+    sqliteConnectionState(db).statement(RESERVATION_SQL.UPSERT_ROW).run(
       record.partitionId,
       record.tableName,
       record.rowKey,
@@ -539,7 +516,7 @@ export function checkRowReservationConflict({
 function releaseDbTransactionReservations(db, transactionId) {
   try {
     ensureTableInitialized(db);
-    const info = resolvePreparedStatement(db, RESERVATION_SQL.DELETE_BY_TRANSACTION).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_TRANSACTION).run(
       transactionId,
     );
     return info.changes;
@@ -613,7 +590,7 @@ export function releaseTransactionReservations(transactionId, options = {}) {
 function releaseDbSessionReservations(db, sessionId) {
   try {
     ensureTableInitialized(db);
-    const info = resolvePreparedStatement(db, RESERVATION_SQL.DELETE_BY_SESSION).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_SESSION).run(
       sessionId,
     );
     return info.changes;
@@ -687,7 +664,7 @@ export function sweepExpiredReservations(db) {
   if (!db || db.open === false) return 0;
   try {
     ensureTableInitialized(db);
-    const info = resolvePreparedStatement(db, RESERVATION_SQL.DELETE_EXPIRED).run(
+    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_EXPIRED).run(
       Date.now(),
     );
     return info.changes;
@@ -743,7 +720,7 @@ export function clearAllReservations() {
     if (store && store.open !== false) {
       try {
         ensureTableInitialized(store);
-        resolvePreparedStatement(store, RESERVATION_SQL.DELETE_ALL).run();
+        sqliteConnectionState(store).statement(RESERVATION_SQL.DELETE_ALL).run();
       } catch (_err) {
         INITIALIZED_DBS.delete(store);
       }

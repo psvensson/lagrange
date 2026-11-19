@@ -13,13 +13,10 @@ import {
 import {ensureSqlTransactionParticipantsTableColumns} from
   './partition-coordinator-table-columns.js';
 import {
-  renderColumnDefinitionSql,
   renderTableDefinitionSql,
-  tableColumnSqlShape,
 } from '../query/sql-table-definition.js';
 
 const {
-  COLUMN,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_LOG_MSG,
@@ -160,33 +157,6 @@ function ensureNodesTableColumns(service) {
     service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_READY_LEASE, {
       tableName: service.tableName,
       partitionId: service.partitionId,
-    });
-  }
-  ensureNodesTableAddedColumns(service, columns);
-}
-
-// NODES columns added after the table first shipped. Each is added in place
-// from its own schema definition, which lists it last, so an upgraded
-// table's DDL is the DDL a fresh table is created with. host_id is the
-// declared host identity (topology/node-host-identity.js): rows already
-// present keep it NULL (HOST_UNDECLARED) until their node re-registers.
-const NODES_TABLE_ADDED_COLUMNS = Object.freeze([COLUMN.HOST_ID]);
-const LOG_ADDED_NODES_COLUMN = 'Added column to nodes table';
-
-function ensureNodesTableAddedColumns(service, columns) {
-  const shape = tableColumnSqlShape(service.schema);
-  for (const columnName of NODES_TABLE_ADDED_COLUMNS) {
-    if (columns.some((col) => col.name === columnName)) {
-      continue;
-    }
-    const definition = service.schema.columns.find(
-      (col) => col.name === columnName);
-    service.db.exec(`ALTER TABLE ${service.tableName} ADD COLUMN ` +
-      renderColumnDefinitionSql(definition, shape));
-    service.logger.info(LOG_ADDED_NODES_COLUMN, {
-      tableName: service.tableName,
-      partitionId: service.partitionId,
-      columnName,
     });
   }
 }

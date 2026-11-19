@@ -200,6 +200,11 @@
         "src/node/replica-cleanup-tombstone-owner.js",
         "src/node/replica-handler-remove-execution-methods.js",
         "src/node/replica-handler-removed-cleanup-sweep.js",
+        "src/node/replica-handler-status-methods.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-removal-completion-record.js",
+        "src/node/replica-removal-create-admission-close.js",
+        "src/node/replica-removal-debt-errors.js",
         "src/node/replica-handler-create-methods.js",
         "src/node/replica-state-machine",
         "src/node/replica-storage-artifacts.js",
@@ -208,13 +213,18 @@
         "src/bootstrap/rejoin-hints-durable-evidence.js",
         "src/cdc/cdc-integration-service-mutations.js",
         "src/node/replica-handler-create-admission-methods.js",
-        "src/node/replica-create-admission-owner.js"
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-create-lifecycle-close.js",
+        "src/node/replica-create-process-owner.js"
       ],
       "tests": [
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/node/replica-removal-consensus-exit.test.js",
+        "test/node/replica-removal-deferred-row-write.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -223,17 +233,28 @@
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/operation-workflow-terminal-transition-repair.js",
         "src/rebalancer/operation-workflow-transition-persistence.js",
+        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-operation-repository-entity-read-methods.js",
         "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
         "src/node/replica-state-machine-failed-create-claim.js",
+        "src/node/replica-state-machine-authoritative-transition.js",
+        "src/node/replica-handler-failed-create-publication.js",
         "src/node/replica-handler-remove-request-methods.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/node/replica-removal-create-admission-close.js",
+        "src/node/replica-removal-debt-errors.js",
         "src/node/replica-cleanup-tombstone-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
-        "test/node/replica-failed-create-cleanup-generation.test.js"
+        "test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/node/fresh-create-claimed-cleanup-never-admitted.test.js"
       ]
     },
     "critical-create-admission-topology-ordering": {
@@ -2268,6 +2289,27 @@
         "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
         "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
       ]
+    },
+    "release-version-fence": {
+      "description": "The support-envelope owner owns the single cluster format revision for a build, and every seed founding declaration, retained-seed startup/rejoin decision, bootstrap join handshake (admitting node and ContactSeedPhase), and in-place rolling upgrade or rollback fails closed when the revision claim is absent, non-numeric, or of another revision, or when an upgrade or rollback envelope is uncertified.",
+      "owners": [
+        "src/bootstrap/owners/support-envelope-owner.js",
+        "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+        "src/bootstrap/owners/bootstrap-request-owner-handler.js",
+        "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/bootstrap/phases/contact-seed-phase.js",
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-original-allocation-startup.js",
+        "src/entrypoint-runtime-join-decision.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ],
+      "tests": [
+        "test/bootstrap/release-version-fence.test.js",
+        "test/bootstrap/support-envelope-owner.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2453,13 +2495,20 @@
             "src/node/replica-cleanup-tombstone-owner.js",
             "src/node/replica-handler-remove-execution-methods.js",
             "src/node/replica-handler-removed-cleanup-sweep.js",
+            "src/node/replica-handler-status-methods.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-removal-completion-record.js",
+            "src/node/replica-removal-create-admission-close.js",
+            "src/node/replica-removal-debt-errors.js",
             "src/node/replica-storage-artifacts.js",
             "src/node/replica-handler-create-methods.js",
             "src/bootstrap/phases/seed-partitions-phase.js",
             "src/bootstrap/rejoin-hints-durable-evidence.js",
             "src/cdc/cdc-integration-service-mutations.js",
             "src/node/replica-handler-create-admission-methods.js",
-            "src/node/replica-create-admission-owner.js"
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-create-lifecycle-close.js",
+            "src/node/replica-create-process-owner.js"
           ]
         }
       ],
@@ -2468,7 +2517,10 @@
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js",
-        "test/node/replica-create-timeout-replay-custody.test.js"
+        "test/node/replica-create-timeout-replay-custody.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/node/replica-removal-consensus-exit.test.js",
+        "test/node/replica-removal-deferred-row-write.test.js"
       ]
     },
     "failed-create-target-authoritative-cleanup": {
@@ -2480,6 +2532,10 @@
             "src/rebalancer/operation-workflow-replace-terminal-admission.js",
             "src/rebalancer/operation-workflow-terminal-transition-repair.js",
             "src/rebalancer/operation-workflow-transition-persistence.js",
+            "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+            "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
+            "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+            "src/rebalancer/operation-workflow-recovery-reconcile.js",
             "src/rebalancer/replica-operation-repository.js",
             "src/rebalancer/replica-operation-repository-entity-read-methods.js",
             "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
@@ -2490,7 +2546,12 @@
           "id": "authoritative-lifecycle-cleanup-owner",
           "owners": [
             "src/node/replica-state-machine-failed-create-claim.js",
+            "src/node/replica-state-machine-authoritative-transition.js",
+            "src/node/replica-handler-failed-create-publication.js",
             "src/node/replica-handler-remove-request-methods.js",
+            "src/node/replica-handler-remove-execution-methods.js",
+            "src/node/replica-removal-create-admission-close.js",
+            "src/node/replica-removal-debt-errors.js",
             "src/node/replica-cleanup-tombstone-owner.js"
           ]
         }
@@ -2498,7 +2559,9 @@
       "contract": "failed-create-target-authoritative-cleanup",
       "witnessTests": [
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
-        "test/node/replica-failed-create-cleanup-generation.test.js"
+        "test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js",
+        "test/node/fresh-create-claimed-cleanup-never-admitted.test.js"
       ]
     },
     "critical-create-hold-topology-guard-order": {
@@ -4811,6 +4874,38 @@
         "test/distributed/harness/__tests__/comparative-benchmark-runner-workload-call-site.test.js",
         "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js",
         "test/distributed/harness/__tests__/real-product-cluster-deployer-readiness.test.js"
+      ]
+    },
+    "release-version-fence": {
+      "description": "The support-envelope owner's cluster format revision and certified-envelope authority couple symmetrically with seed original-allocation reopen/rejoin decisions, both sides of bootstrap join admission, and rolling-upgrade/rollback preflight so any absent, malformed, mismatched, or uncertified claim fails closed before state mutation.",
+      "endpoints": [
+        {
+          "id": "cluster-format-revision-and-envelope-authority",
+          "owners": [
+            "src/bootstrap/owners/support-envelope-owner.js"
+          ]
+        },
+        {
+          "id": "seed-reopen-join-and-upgrade-fence-consumers",
+          "owners": [
+            "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+            "src/bootstrap/owners/bootstrap-request-owner-handler.js",
+            "src/bootstrap/owners/rolling-upgrade-owner.js",
+            "src/bootstrap/phases/contact-seed-phase.js",
+            "src/bootstrap/rejoin-hints-constants.js",
+            "src/bootstrap/rejoin-hints-durable-evidence.js",
+            "src/bootstrap/rejoin-hints.js",
+            "src/bootstrap/seed-original-allocation-declaration.js",
+            "src/bootstrap/seed-original-allocation-startup.js",
+            "src/entrypoint-runtime-join-decision.js",
+            "src/raft/raft-rs-replica-lifecycle-owner.js"
+          ]
+        }
+      ],
+      "contract": "release-version-fence",
+      "witnessTests": [
+        "test/bootstrap/release-version-fence.test.js",
+        "test/bootstrap/support-envelope-owner.test.js"
       ]
     }
   }

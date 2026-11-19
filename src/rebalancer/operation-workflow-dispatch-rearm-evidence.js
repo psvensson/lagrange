@@ -1,4 +1,7 @@
-import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {
+  isReplaceRemoveDispatchPhase,
+  readOperationRecordWorkflowStep,
+} from './replica-operation-progress.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
@@ -173,11 +176,20 @@ function isRetryableControlPlaneOperationTarget(operation) {
     partitionId: operation.partitionId,
   }).systemTable;
 }
-function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
+function isRemovalDispatchOperation(operation) {
+  return (
+    operation.type === OperationType.REMOVE ||
+    isReplaceRemoveDispatchPhase(operation)
+  );
+}
+function shouldDeferRetryableDispatchFailure(_owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return isRetryableControlPlaneOperationTarget(operation);
+  return (
+    isRetryableControlPlaneOperationTarget(operation) ||
+    isRemovalDispatchOperation(operation)
+  );
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {

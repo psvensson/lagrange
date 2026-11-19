@@ -47,6 +47,8 @@ import {
 } from './node-joining-service-test-support.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 const LOCAL_NODE_ID = 'restarted-node';
 const LOCAL_NODE_ADDRESS = 'restarted-node:8080';
@@ -201,6 +203,7 @@ function createContactFixture(decision, options = {}) {
         }
         return {
           success: true,
+          ...clusterFormatRevisionClaim(),
           seedNodeId: DURABLE_PEER_B_NODE_ID,
           seedNodeWsAddress: DURABLE_PEER_B_WS_ADDRESS,
           startupAuthority: CANONICAL_STARTUP_AUTHORITY,
@@ -552,6 +555,7 @@ test(
         }
         return {
           success: true,
+          ...clusterFormatRevisionClaim(),
           seedNodeId: DURABLE_PEER_B_NODE_ID,
           seedNodeWsAddress: DURABLE_PEER_B_WS_ADDRESS,
           startupAuthority: CANONICAL_STARTUP_AUTHORITY,

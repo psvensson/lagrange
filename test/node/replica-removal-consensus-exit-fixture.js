@@ -26,6 +26,7 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import {CDC_OPERATION} from '../../src/constants/index.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {REPLICA_HANDLER_LOG_MSG} from
@@ -36,10 +37,18 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
+  redriveAdmissionsOnMembershipChange,
+  retireRaftPeerFromAuthoritativeServiceChange,
+} from '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
+import {
   createLifecycleServiceRow,
   createLifecycleStateStore,
   createPartitionRow,
 } from '../test-helpers/lifecycle-state-store.js';
+import {
+  DELIVERED_TO_PEER,
+  PartitionNodeCluster,
+} from '../raft/raft-rs-backend/partition-node-cluster.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const SERVICES = 'services';
@@ -79,6 +88,54 @@ function partitionServiceRow(partitionId, replicaId, status) {
 }
 
 /**
+ * A partition whose peers are addressed as production addresses them: each
+ * peer at its node's partition address, the address its services row
+ * carries (partitionServiceRow). The row-driven retirement of a peer matches
+ * the row against that address.
+ * @param {string} partitionId
+ * @param {Array<string>} replicaIds
+ * @return {PartitionNodeCluster}
+ */
+function partitionClusterAtRowAddresses(partitionId, replicaIds) {
+  const addressOf = (replicaId) => partitionServiceRow(partitionId, replicaId,
+    ReplicaStatus.ACTIVE).address;
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds,
+    resolveFor: (_replicaId, peerReplicaId) => addressOf(peerReplicaId),
+    sendFor: (replicaId, address, packet) => {
+      const target = replicaIds.find((peer) => addressOf(peer) === address);
+      cluster.queue(replicaId, cluster.addressOf(target), packet);
+      return DELIVERED_TO_PEER;
+    }});
+  return cluster;
+}
+
+/**
+ * Every replica's row-driven retirement as its partition service runs it:
+ * one long-lived service per replica, with the re-drive the partition
+ * service subscribes at initialization (LEADER, CONF_CHANGE_APPLIED).
+ * @param {Object} options
+ * @param {PartitionNodeCluster} options.cluster
+ * @param {string} options.partitionId
+ * @param {Array<string>} options.replicaIds
+ * @param {Object} options.logger
+ * @return {Function} (row) => the row's update reaches every replica.
+ */
+function rowDrivenRetirements({cluster, partitionId, replicaIds, logger}) {
+  const services = replicaIds.map((replicaId) => {
+    const service = {raft: cluster.node(replicaId), replicaId, partitionId,
+      replicaIds: [...replicaIds], peerAddresses: [], logger};
+    redriveAdmissionsOnMembershipChange(service);
+    return service;
+  });
+  return (row) => {
+    for (const service of services) {
+      retireRaftPeerFromAuthoritativeServiceChange(service,
+        CDC_OPERATION.UPDATE, row);
+    }
+  };
+}
+
+/**
  * The durable lifecycle state of one replica of a group, read on an
  * independent read-only connection (null while no row exists).
  * @param {string} dbFile - The replica's database file.
@@ -112,11 +169,15 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
- * @return {Object} {handler, service, outcomes, exits, removeRequest,
- *   dispose}.
+ * @param {string|null} [options.createAttemptToken] - The replica's create
+ *   attempt (its generation's CREATE admission is in replicaOperations).
+ * @param {Array<Object>} [options.replicaOperations] - replica_operations
+ *   rows served by the same lifecycle authority.
+ * @return {Object} {handler, service, outcomes, exits, lifecycleStore,
+ *   removeRequest, dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf}) {
+  cache, rowOf, createAttemptToken = null, replicaOperations = []}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
@@ -127,6 +188,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     status: ReplicaStatus.ACTIVE,
     createdAt: 1,
     stateEnteredAt: 1,
+    createAttemptToken,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
   const lifecycleStore = createLifecycleStateStore({
@@ -136,6 +198,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       leaderNodeId: null,
     })],
   });
+  lifecycleStore.durable.replica_operations = new Map(
+    replicaOperations.map((row) => [row.operation_id, {...row}]));
   const submitMutation = lifecycleStore.gateway.submitMutation.bind(
     lifecycleStore.gateway,
   );
@@ -212,11 +276,13 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   handler.localServices.set(replicaId, service);
   handler.localReplicas.set(replicaId, {replicaId, partitionId,
     status: ReplicaStatus.ACTIVE, service});
+  const restarted = [];
   return {
     handler,
     service,
     outcomes,
     exits,
+    lifecycleStore,
     removeRequest(operationId, reason = 'rebalancing') {
       return handler.handleRemoveReplica({
         [ReplicaOperationField.TYPE]:
@@ -227,7 +293,57 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
         [ReplicaOperationField.REASON]: reason,
       });
     },
+    /**
+     * The same node after a process restart: a new production handler and
+     * lifecycle owner over the SAME durable store and system-table cache,
+     * with nothing process-local carried over, initialized through the
+     * production startup path (its removed-cleanup admission barrier).
+     * @return {Object} {handler, outcomes, removeRequest}.
+     */
+    restart() {
+      const restartOutcomes = [];
+      const restartedStateMachine = new ReplicaStateMachine({
+        nodeId,
+        systemTableCache: lifecycleStore.cache,
+        controlPlaneSystemTableGateway: lifecycleStore.gateway,
+      });
+      const restartedHandler = new ReplicaHandler({
+        nodeId,
+        dataDir,
+        systemTableCache: cache,
+        cdcIntegrationService: {},
+        controlPlaneSystemTableGateway: lifecycleStore.gateway,
+        createPartitionService: () => {
+          throw new Error('this world creates no partition service');
+        },
+        replicaStateMachine: restartedStateMachine,
+        executorOutcomeEmitter: {
+          emitOutcome: (...args) => restartOutcomes.push(args),
+        },
+      });
+      restartedHandler.initialize();
+      restarted.push({handler: restartedHandler,
+        replicaStateMachine: restartedStateMachine});
+      return {
+        handler: restartedHandler,
+        outcomes: restartOutcomes,
+        removeRequest: (operationId, reason = 'rebalancing') =>
+          restartedHandler.handleRemoveReplica({
+            [ReplicaOperationField.TYPE]:
+              ReplicaOperationMessageType.REMOVE_REPLICA,
+            [ReplicaOperationField.OPERATION_ID]: operationId,
+            [ReplicaOperationField.PARTITION_ID]: partitionId,
+            [ReplicaOperationField.REPLICA_ID]: replicaId,
+            [ReplicaOperationField.REASON]: reason,
+          }),
+      };
+    },
     async dispose() {
+      for (const restart of restarted) {
+        restart.handler.shuttingDown = true;
+        await restart.handler.removedReplicaCleanupDebtSweepTask;
+        await restart.replicaStateMachine.clear();
+      }
       handler.shuttingDown = true;
       // The production shutdown boundary: close lifecycle admission and
       // advance every generation, so a removal still in flight cannot reach
@@ -244,5 +360,7 @@ export {
   createRemovalSourceHandler,
   durableLifecycleState,
   nextTurns,
+  partitionClusterAtRowAddresses,
   partitionServiceRow,
+  rowDrivenRetirements,
 };

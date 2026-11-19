@@ -157,7 +157,8 @@ const TARGET_THRESHOLD = 12;
 // 2026-11-17 (fix-j small follow-ups): tightened 1691 -> 1689 on the checker hint.
 // 2026-11-18 (integration-20261118): tightened 1689 -> 1688 on the checker hint
 // (the merged tree of fixes H, J, M, B2 and WP-K, WP-D, WP-B, WP0, WP1).
-const BASELINE_COUNT = 1688;
+// 2026-11-19: tightened 1688 -> 1680 on the checker's hint after composing K2, WP-E, WP-V, Removal, Raft, and SeedCPU repairs.
+const BASELINE_COUNT = 1680;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

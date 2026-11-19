@@ -24,6 +24,8 @@ import {
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 
 test('BootstrapAPI - allows bootstrap when only message-group leaders are missing',
@@ -53,6 +55,7 @@ test('BootstrapAPI - allows bootstrap when only message-group leaders are missin
       method: 'POST',
       url: '/bootstrap',
       payload: {
+        ...clusterFormatRevisionClaim(),
         nodeId: '550e8400-e29b-41d4-a716-446655440000',
         nodeAddress: 'ws://localhost:9090',
       },
@@ -286,7 +289,7 @@ test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) =>
   const response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(), nodeId, nodeAddress: 'ws://localhost:9090'},
   });
 
   t.equal(response.statusCode, 200, 'bootstrap should succeed');
@@ -379,7 +382,7 @@ test('BootstrapAPI - bootstrap never moves a seed message-group replica', async 
   const response = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(), nodeId, nodeAddress: 'ws://localhost:9090'},
   });
 
   t.equal(response.statusCode, 200, 'bootstrap should succeed');
@@ -440,7 +443,7 @@ test('BootstrapAPI - cluster state endpoint', async (t) => {
   await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
-    payload: {nodeId, nodeAddress: 'ws://localhost:9090'},
+    payload: {...clusterFormatRevisionClaim(), nodeId, nodeAddress: 'ws://localhost:9090'},
   });
 
   // Simulate the node being registered via CDC
@@ -1117,6 +1120,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
     method: 'POST',
     url: '/bootstrap',
     payload: {
+      ...clusterFormatRevisionClaim(),
       nodeId: '550e8400-e29b-41d4-a716-446655440000',
       nodeAddress: 'ws://localhost:9090',
     },

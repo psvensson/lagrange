@@ -1,0 +1,307 @@
+// The admission statement: the one canonical body of a PLACEMENT_ADMIT
+// command (quest replica-placement-admission-owner, design sections 2.5 and
+// 2.12 item 2). The owner builds it from an ordered candidate; the partition
+// pins and validates the committed command against the same canonical form,
+// so every replica's applier reads exactly the fields the owner decided:
+// the transition kind, the entity, the class and repair flag, the copy
+// capacities (K_src, K_tgt and the level-triggered kSrcForClass), the
+// ledger's dispatch hold, the formation latch epoch, the founding intent,
+// the planned input positions and the moves.
+import {ALLOWED_UNIFIED_SERVICE_TYPES, UNIFIED_SERVICE_TYPE} from
+  '../constants/unified-service-lifecycle.js';
+import {copyDenseOwnDataRecordArray, copyStrictOwnDataRecord} from
+  '../utils/strict-own-data.js';
+import {OperationType} from './replica-operation-progress.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
+  decodeMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
+import {
+  PLACEMENT_CLASS_ORDER,
+  PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_DISPATCH_HOLD,
+  PLACEMENT_CLASS,
+  PLACEMENT_FORMATION_GATED_CLASSES,
+  PLACEMENT_FULL_SOURCE_CAPACITY_CLASSES,
+  PLACEMENT_TRANSITION_KIND as KIND,
+} from './replica-placement-owner-constants.js';
+
+const STATEMENT_FIELDS = Object.freeze(['transitionKind', 'entityType',
+  'entityId', 'partitionId', 'placementClass', 'repair', 'kSrc', 'kTgt',
+  'kSrcForClass', 'dispatchHold', 'formationLatchEpoch', 'foundingIntentId',
+  'sourceNodeId', 'membershipPublicationEpoch', 'positions', 'moves']);
+const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
+  'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
+  'targetNodeStorageIncarnation']);
+const KINDS = Object.freeze(new Set(Object.values(KIND)));
+const MOVE_TYPES = Object.freeze(new Set(Object.values(OperationType)));
+const SINGLE_MOVE = 1;
+const PLACEMENT_STATEMENT_ERROR = Object.freeze({
+  INVALID: 'placement_admission_statement_invalid',
+});
+// Whether an input is an admission statement: VALID carries the canonical
+// statement.
+const PLACEMENT_STATEMENT_VALIDITY = Object.freeze({
+  VALID: 'valid',
+  INVALID: 'invalid',
+});
+const INVALID_STATEMENT = Object.freeze({
+  validity: PLACEMENT_STATEMENT_VALIDITY.INVALID});
+
+function isText(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isPositiveInteger(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function isNullOrPositiveInteger(value) {
+  return value === null || isPositiveInteger(value);
+}
+
+// The planning epoch the dispatch gate fences on: null (unbound) or bound.
+function isNullOrEpoch(value) {
+  return value === null ||
+    decodeMembershipPublicationEpochBinding(value).state === EPOCH.BOUND;
+}
+
+function hasExactFields(record, fields) {
+  return record !== null && Object.keys(record).length === fields.length &&
+    fields.every((field) => Object.hasOwn(record, field));
+}
+
+function ordered(record, fields) {
+  return Object.freeze(Object.fromEntries(fields.map((field) =>
+    [field, record[field]])));
+}
+
+function canonicalPositions(value) {
+  const positions = copyStrictOwnDataRecord(value);
+  if (positions === null) return null;
+  const names = Object.keys(positions).sort();
+  const valid = names.every((name) => positions[name] === null ||
+    isText(positions[name]) || Number.isSafeInteger(positions[name]));
+  return valid ? ordered(positions, names) : null;
+}
+
+// What a move carries for its transition kind and type: a copy names its
+// copy source; a REMOVE names the replica it removes; a REPLACE names its
+// source replica; a new replica's identity is derived at apply, except a
+// runtime-service target, whose identity its owner supplies.
+function isMoveShapeValid(kind, move) {
+  const runtimeService = kind === KIND.RUNTIME_SERVICE;
+  const copies = kind === KIND.PLACEMENT && move.type !== OperationType.REMOVE;
+  const identityGiven = move.type === OperationType.REMOVE || runtimeService;
+  return isText(move.targetNodeId) &&
+    (identityGiven ? isText(move.replicaId) : move.replicaId === null) &&
+    (move.type === OperationType.REPLACE ? isText(move.sourceReplicaId) :
+      move.sourceReplicaId === null) &&
+    (copies ? isText(move.copySourceNodeId) : move.copySourceNodeId === null) &&
+    isNullOrPositiveInteger(move.targetNodeBootIncarnation) &&
+    isNullOrPositiveInteger(move.targetNodeStorageIncarnation);
+}
+
+function canonicalMove(kind, value) {
+  const move = copyStrictOwnDataRecord(value);
+  if (!hasExactFields(move, MOVE_FIELDS) || !MOVE_TYPES.has(move.type) ||
+      !isMoveShapeValid(kind, move)) {
+    return null;
+  }
+  return ordered(move, MOVE_FIELDS);
+}
+
+// FOUND admits the whole founding set: one ADD per founder, on distinct
+// targets. Every other kind admits exactly one move.
+function areMovesValidForKind(kind, moves) {
+  if (kind !== KIND.FOUND) return moves.length === SINGLE_MOVE;
+  return moves.length > 0 &&
+    moves.every((move) => move.type === OperationType.ADD) &&
+    new Set(moves.map((move) => move.targetNodeId)).size === moves.length;
+}
+
+function canonicalMoves(kind, value) {
+  const records = copyDenseOwnDataRecordArray(value);
+  if (records === null) return null;
+  const moves = records.map((record) => canonicalMove(kind, record));
+  return moves.every((move) => move !== null) &&
+    areMovesValidForKind(kind, moves) ? Object.freeze(moves) : null;
+}
+
+function isEntityValid(statement) {
+  if (!ALLOWED_UNIFIED_SERVICE_TYPES.has(statement.entityType) ||
+      !isText(statement.entityId) || !isText(statement.partitionId)) {
+    return false;
+  }
+  return statement.transitionKind === KIND.RUNTIME_SERVICE ?
+    statement.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE :
+    statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+      statement.entityId === statement.partitionId;
+}
+
+// K travels in the command (design section 2.5 step 7): classes 1-2 and
+// repairs use all of kSrc; other moves get kSrc, or kSrc - 1 while a repair
+// waits on their source.
+function isCapacityValid(statement) {
+  const {kSrc, kTgt, kSrcForClass} = statement;
+  if (!isPositiveInteger(kSrc) || !isPositiveInteger(kTgt) ||
+      !Number.isSafeInteger(kSrcForClass)) {
+    return false;
+  }
+  return isFullSourceCapacity(statement.placementClass, statement.repair) ?
+    kSrcForClass === kSrc : kSrcForClass === kSrc || kSrcForClass === kSrc - 1;
+}
+
+function isClassFieldsValid(statement) {
+  const ledger = statement.placementClass === PLACEMENT_CLASS.LEDGER;
+  const gated = PLACEMENT_FORMATION_GATED_CLASSES.has(statement.placementClass);
+  return PLACEMENT_CLASS_ORDER.includes(statement.placementClass) &&
+    typeof statement.repair === 'boolean' &&
+    statement.dispatchHold === (ledger ?
+      PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE : null) &&
+    (gated ? Number.isSafeInteger(statement.formationLatchEpoch) :
+      statement.formationLatchEpoch === null ||
+        Number.isSafeInteger(statement.formationLatchEpoch));
+}
+
+function isStatementScalarsValid(statement) {
+  return KINDS.has(statement.transitionKind) && isEntityValid(statement) &&
+    isClassFieldsValid(statement) && isCapacityValid(statement) &&
+    (statement.transitionKind === KIND.FOUND ?
+      isText(statement.foundingIntentId) : statement.foundingIntentId === null) &&
+    isText(statement.sourceNodeId) &&
+    isNullOrEpoch(statement.membershipPublicationEpoch);
+}
+
+/**
+ * The canonical admission statement of a raw input: exact fields, typed
+ * values, the moves its kind admits.
+ * @param {*} input - A candidate statement (plain own data).
+ * @return {Object} Frozen {validity: VALID, statement} or {validity: INVALID}.
+ */
+function canonicalPlacementStatement(input) {
+  const statement = copyStrictOwnDataRecord(input);
+  if (!hasExactFields(statement, STATEMENT_FIELDS) ||
+      !isStatementScalarsValid(statement)) {
+    return INVALID_STATEMENT;
+  }
+  const positions = canonicalPositions(statement.positions);
+  const moves = canonicalMoves(statement.transitionKind, statement.moves);
+  if (positions === null || moves === null) return INVALID_STATEMENT;
+  return Object.freeze({validity: PLACEMENT_STATEMENT_VALIDITY.VALID,
+    statement: ordered({...statement, positions, moves}, STATEMENT_FIELDS)});
+}
+
+/**
+ * Whether a class and repair flag may use all of K_src.
+ * @param {string} placementClass - A PLACEMENT_CLASS.
+ * @param {boolean} repair - Whether the move repairs a deficit.
+ * @return {boolean} Whether the full source capacity applies.
+ */
+function isFullSourceCapacity(placementClass, repair) {
+  return repair === true ||
+    PLACEMENT_FULL_SOURCE_CAPACITY_CLASSES.has(placementClass);
+}
+
+/**
+ * The source capacity a move is admitted against (owner decision D2,
+ * level-triggered repair reservation): all of K_src for classes 1-2 and
+ * repairs; for the other moves one slot less only while the owner's pass
+ * saw a repair candidate waiting on that copy source.
+ * @param {Object} input - {placementClass, repair, copySourceNodeId,
+ *   repairWaitingSourceNodeIds (a Set), kSrc}.
+ * @return {number} kSrcForClass.
+ */
+function resolveSourceCapacityForClass({placementClass, repair,
+  copySourceNodeId, repairWaitingSourceNodeIds, kSrc}) {
+  if (isFullSourceCapacity(placementClass, repair)) return kSrc;
+  return repairWaitingSourceNodeIds.has(copySourceNodeId) ? kSrc - 1 : kSrc;
+}
+
+function requireStatement(raw) {
+  const canonical = canonicalPlacementStatement(raw);
+  if (canonical.validity !== PLACEMENT_STATEMENT_VALIDITY.VALID) {
+    const error = new Error(PLACEMENT_STATEMENT_ERROR.INVALID);
+    error.code = PLACEMENT_STATEMENT_ERROR.INVALID;
+    throw error;
+  }
+  return canonical.statement;
+}
+
+function moveOf(move) {
+  return {type: move.type, targetNodeId: move.targetNodeId,
+    replicaId: move.replicaId ?? null,
+    sourceReplicaId: move.sourceReplicaId ?? null,
+    copySourceNodeId: move.copySourceNodeId ?? null,
+    targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
+    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null};
+}
+
+/**
+ * The statement of one ordered owner candidate (a PLACEMENT move).
+ * @param {Object} candidate - {partitionId, placementClass, repair, move}.
+ * @param {Object} context - {sourceNodeId, repairWaitingSourceNodeIds,
+ *   formationLatchEpoch, membershipPublicationEpoch, positions}.
+ * @return {Object} The frozen canonical statement.
+ */
+function buildPlacementAdmissionStatement(candidate, context) {
+  const kSrc = PLACEMENT_COPY_CAPACITY.K_SRC;
+  const ledger = candidate.placementClass === PLACEMENT_CLASS.LEDGER;
+  return requireStatement({
+    transitionKind: KIND.PLACEMENT,
+    entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+    entityId: candidate.partitionId,
+    partitionId: candidate.partitionId,
+    placementClass: candidate.placementClass,
+    repair: candidate.repair,
+    kSrc,
+    kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
+    kSrcForClass: resolveSourceCapacityForClass({
+      placementClass: candidate.placementClass, repair: candidate.repair,
+      copySourceNodeId: candidate.move.copySourceNodeId,
+      repairWaitingSourceNodeIds: context.repairWaitingSourceNodeIds, kSrc}),
+    dispatchHold: ledger ? PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE : null,
+    formationLatchEpoch: context.formationLatchEpoch,
+    foundingIntentId: null,
+    sourceNodeId: context.sourceNodeId,
+    membershipPublicationEpoch: context.membershipPublicationEpoch,
+    positions: context.positions,
+    moves: [moveOf(candidate.move)],
+  });
+}
+
+/**
+ * The FOUND statement of a new partition's whole founding set.
+ * @param {Object} founding - {partitionId, placementClass, foundingIntentId,
+ *   targetNodeIds, sourceNodeId, formationLatchEpoch, positions}.
+ * @return {Object} The frozen canonical statement.
+ */
+function buildFoundingAdmissionStatement(founding) {
+  return requireStatement({
+    transitionKind: KIND.FOUND,
+    entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+    entityId: founding.partitionId,
+    partitionId: founding.partitionId,
+    placementClass: founding.placementClass,
+    repair: false,
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
+    kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
+    kSrcForClass: PLACEMENT_COPY_CAPACITY.K_SRC,
+    dispatchHold: null,
+    formationLatchEpoch: founding.formationLatchEpoch,
+    foundingIntentId: founding.foundingIntentId,
+    sourceNodeId: founding.sourceNodeId,
+    membershipPublicationEpoch: null,
+    positions: founding.positions,
+    moves: founding.targetNodeIds.map((targetNodeId) => moveOf({
+      type: OperationType.ADD, targetNodeId})),
+  });
+}
+
+export {
+  PLACEMENT_STATEMENT_VALIDITY,
+  buildFoundingAdmissionStatement,
+  buildPlacementAdmissionStatement,
+  canonicalPlacementStatement,
+  resolveSourceCapacityForClass,
+};

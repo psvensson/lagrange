@@ -16,6 +16,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {clusterFormatRevisionClaim} from
+  '../../src/bootstrap/owners/support-envelope-owner.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -148,7 +150,8 @@ test('BootstrapAPI - consecutive joins each host their own group; mg-1 stays on 
     const response = await api.getFastify().inject({
       method: 'POST',
       url: '/bootstrap',
-      payload: {nodeId, nodeAddress: `ws://localhost:${9090 + index}`},
+      payload: {...clusterFormatRevisionClaim(), nodeId,
+        nodeAddress: `ws://localhost:${9090 + index}`},
     });
     t.equal(response.statusCode, 200, `bootstrap ${index + 1} should succeed`);
     const assignment = JSON.parse(response.body).messageGroupAssignment;

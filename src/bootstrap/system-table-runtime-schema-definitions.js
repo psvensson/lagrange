@@ -52,9 +52,8 @@ const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
   ],
 };
 /**
- * Replica operations system table schema.
- * Stores persistent log of all replica operations for debugging and recovery.
- * Requirements: 9.1, 9.2
+ * Replica operations system table schema: the persistent log of all replica
+ * operations for debugging and recovery. Requirements: 9.1, 9.2.
  */
 const REPLICA_OPERATIONS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -79,6 +78,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'lease_expires_at', type: COLUMN_TYPE.INTEGER},
     {name: 'error_message', type: COLUMN_TYPE.TEXT},
     {name: 'steps_history', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
+    {name: 'copy_source_node_id', type: COLUMN_TYPE.TEXT}, // placement copy source
   ],
   indices: [
     {name: 'idx_replica_ops_status', columns: ['status']},

@@ -7,10 +7,11 @@ import {UNIFIED_SERVICE_TYPE} from
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {placementReplicaIdOf} from
+  '../partition/partition-placement-admission-identity.js';
 
 const REPLACE_INTENT_ID_VERSION = 'rebalance-replace-v1';
 const REPLACE_OPERATION_ID_PREFIX = 'replace-op-';
-const REPLACE_REPLICA_ID_PREFIX = 'replace-replica-';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const ID_DIGEST_LENGTH = 32;
@@ -27,10 +28,6 @@ function digest(value) {
 
 function buildOperationId(value) {
   return `${REPLACE_OPERATION_ID_PREFIX}${digest(value)}`;
-}
-
-function buildReplicaId(operationId) {
-  return `${REPLACE_REPLICA_ID_PREFIX}${digest(operationId)}`;
 }
 
 function applyReplaceIntentIdentity(move, identity) {
@@ -93,7 +90,7 @@ function buildCoordinatorReplaceIntentIdentity(context = {}) {
     replicaIntentId:
       entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ?
         null :
-        buildReplicaId(operationIntentId),
+        placementReplicaIdOf(operationIntentId),
     collidedOperationIntentIds: Object.freeze([]),
   });
 }
@@ -119,7 +116,7 @@ function buildSuccessorReplaceIntentIdentity(identity, terminalOperationId) {
     replicaIntentId:
       identity.replicaIntentId === null ?
         null :
-        buildReplicaId(operationIntentId),
+        placementReplicaIdOf(operationIntentId),
     collidedOperationIntentIds,
   });
 }
