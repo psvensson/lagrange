@@ -4,120 +4,66 @@ import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owne
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer} from
   './raft-rs-inbound-timer-custody.js';
-import {
-  RAFT_RS_RECORD_COMPATIBILITY,
-  RAFT_RS_COMMIT_DURABILITY,
-} from './raft-rs-durable-store-constants.js';
+import {RAFT_RS_RECORD_COMPATIBILITY, RAFT_RS_COMMIT_DURABILITY} from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+import {recordInboundStepRefusal, sendMessages} from './raft-rs-peer-delivery.js';
+import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guard.js';
 import {
-  recordInboundStepRefusal,
-  sendMessages,
-} from './raft-rs-peer-delivery.js';
-import {
-  openedLastIndex,
-  persistedLastIndexAfter,
-} from './raft-rs-local-log-guard.js';
-import {
-  enterReseedHold,
-  recordReseedHold,
-  refuseInboundStep,
-  reportCoreTrap,
-  reportRuntimeReplaced,
-  reportWaitBoundExceeded,
+  enterReseedHold, recordReseedHold, refuseInboundStep,
+  reportCoreTrap, reportRuntimeReplaced, reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
-  decideLeadershipTransfer,
-  droppedByLeadershipTransfer,
-  leadershipTransferInProgress,
+  decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress,
 } from './raft-rs-leadership-transfer.js';
+import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from './raft-rs-ready-loop-constants.js';
 import {
-  RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
-} from './raft-rs-ready-loop-constants.js';
-import {
-  RAFT_RS_GROUP_TUNING,
-  RAFT_RS_INITIAL_APPLIED,
-  RAFT_RS_READY_DRAIN_MAX_CYCLES,
+  RAFT_RS_GROUP_TUNING, RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES,
 } from './raft-rs-group-constants.js';
+import {RAFT_RS_PEER_IDENTITY_RESOLUTION} from './raft-rs-peer-identity-constants.js';
 import {
-  RAFT_RS_PEER_IDENTITY_RESOLUTION,
-} from './raft-rs-peer-identity-constants.js';
-import {
-  CONF_STATE_NOT_ANNOUNCED,
-  CORE_CALL_WITHOUT_HANDLE,
-  CORE_OPERATION,
-  CORE_REFUSAL_KIND,
-  DEFAULT_MAX_INBOUND_QUEUE_LENGTH,
-  DEFAULT_MAX_INBOUND_QUEUE_BYTES,
-  DURABLE_PROGRESS_OBSERVATION,
-  FOLLOWER_RAFT_STATE,
-  HEALTHY,
-  INBOUND_DRAIN_DELAY_MS,
-  INBOUND_WAKE_DEBT,
-  NO_LEADER,
-  PERSISTENCE_ADMISSION_WAIT,
-  RECOVERY_REQUIRED,
-  REPLACING,
-  ROLE,
-  ROLE_LEADER,
-  RUNTIME_COMMAND,
-  RUNTIME_FAULT_REPORT,
-  RUNTIME_EVENT,
-  RUNTIME_PHASE,
-  RUNTIME_REASON,
-  RUNTIME_RESUME_DELAY_MS,
-  UNHEALTHY,
-  USABLE,
+  CONF_STATE_NOT_ANNOUNCED, CORE_CALL_WITHOUT_HANDLE, CORE_OPERATION,
+  CORE_REFUSAL_KIND, DEFAULT_MAX_INBOUND_QUEUE_LENGTH,
+  DEFAULT_MAX_INBOUND_QUEUE_BYTES, DURABLE_PROGRESS_OBSERVATION,
+  FOLLOWER_RAFT_STATE, HEALTHY, INBOUND_DRAIN_DELAY_MS, INBOUND_WAKE_DEBT,
+  NO_LEADER, PERSISTENCE_ADMISSION_WAIT, RECOVERY_REQUIRED, REPLACING,
+  ROLE, ROLE_LEADER, RUNTIME_COMMAND, RUNTIME_FAULT_REPORT, RUNTIME_EVENT,
+  RUNTIME_PHASE, RUNTIME_REASON, RUNTIME_RESUME_DELAY_MS, UNHEALTHY, USABLE,
 } from './raft-rs-runtime-owner-constants.js';
-import {
-  recoveryRetryWindowMsOf,
-  tuningOf,
-} from './raft-rs-runtime-tuning.js';
+import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
-import {confChangeSettlement} from './raft-rs-conf-change-admission.js';
-import {answerConfChangeRefusal, refusedConfChange} from
-  './raft-rs-conf-change-refusal-answer.js';
+import {
+  confChangeSettlement,
+  evaluateTenureCatchUpOnDrain,
+} from './raft-rs-conf-change-admission.js';
+import {
+  answerConfChangeRefusal,
+  executeTypedConfChangeOperation,
+  refusedConfChange,
+} from './raft-rs-conf-change-refusal-answer.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {
-  admitsReplica,
-  createdParticipationGate,
-  recordAppliedEntry,
-  durableRecordIncompatible,
-  identityUnrecorded,
-  participationGateClosed,
-  participationGateColumns,
-  participationObservation,
-  openingWithoutRecordRefusal,
-  restoredParticipationGate,
-  recordIdentity,
-  settleParticipationGate,
-  withIdentityRecord,
+  admitsReplica, createdParticipationGate, recordAppliedEntry,
+  durableRecordIncompatible, identityUnrecorded, participationGateClosed,
+  participationGateColumns, participationObservation, openingWithoutRecordRefusal,
+  restoreAppliedTerm, restoredParticipationGate, recordIdentity,
+  settleParticipationGate, snapshotAdmitsReplica, withIdentityRecord,
 } from './raft-rs-participation-gate.js';
-import {answerCommittedMembership, answerCommittedLearnerAction} from
-  './raft-rs-committed-membership-read.js';
-import {committedMembershipContext} from
-  './raft-rs-committed-membership-context.js';
 import {
-  MAX_NORMAL_APPLY_SLICE,
-  applyCommittedEntrySliceTransaction,
+  answerCommittedMembership, answerCommittedLearnerAction, projectPeerRole,
+} from './raft-rs-committed-membership-read.js';
+import {committedMembershipContext} from './raft-rs-committed-membership-context.js';
+import {
+  MAX_NORMAL_APPLY_SLICE, applyCommittedEntrySliceTransaction,
   nextCommittedEntrySlice,
 } from './raft-rs-application-transaction-owner.js';
-import {
-  persistenceAdmitted,
-  whenPersistenceAdmitted,
-} from './raft-rs-persistence-admission.js';
+import {persistenceAdmitted, whenPersistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {
-  continueTurn,
-  pendingTurn,
-  settledTurn,
-  turnChainValue,
-} from './raft-rs-turn-answer.js';
+import {continueTurn, pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
-import {proposeMembershipTransition} from
-  './raft-rs-membership-transition-runtime.js';
+import {proposeMembershipTransition} from './raft-rs-membership-transition-runtime.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
@@ -191,12 +137,10 @@ function applicationFailureOf(error) {
 // leadership observation follows its port. The group's next announcement
 // after it is reconstructed names its real role.
 function announceNoRole(group) {
+  group.tenure = null;
   const before = group.lastStatus;
-  if (before === null) {
-    return;
-  }
-  group.lastStatus = {...before, raftState: FOLLOWER_RAFT_STATE,
-    lead: NO_LEADER};
+  if (before === null) return;
+  group.lastStatus = {...before, raftState: FOLLOWER_RAFT_STATE, lead: NO_LEADER};
   if (before.raftState !== FOLLOWER_RAFT_STATE) {
     group.emit(ROLE[FOLLOWER_RAFT_STATE]);
   }
@@ -472,10 +416,19 @@ function createNodeArguments(group, {restore, record}) {
 // whose identity provably existed before is held for a reseed by its
 // lifecycle owner, durably (the open-time rule): it never opens empty.
 function openingParticipationRefusal(group, opening) {
+  group.tenure = null;
+  group.pendingSnapshotGateOpen = false;
   if (opening.restore) {
     group.gate = withIdentityRecord(
       restoredParticipationGate(opening.record), group.identityRecorded);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
+    group.appliedTerm = restoreAppliedTerm(opening.record);
+    const snapIdx = BigInt(opening.record.snapshot?.metadata?.index || 0);
+    if (snapshotAdmitsReplica(group.gate, opening.record.confState, group.peerId, snapIdx)) {
+      group.gate = {...group.gate, admissionIndex: group.appliedIndex};
+      group.store.putAdmissionIndex(group.groupId, String(group.appliedIndex));
+      group.pendingSnapshotGateOpen = true;
+    }
     const membershipGeneration = restoredMembershipGeneration(opening.record);
     group.membershipGenerationKnown = membershipGeneration.known;
     group.membershipGenerationIndex = membershipGeneration.index;
@@ -492,6 +445,7 @@ function openingParticipationRefusal(group, opening) {
     createdParticipationGate(group.bootstrap, group.peerId),
     group.identityRecorded);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
+  group.appliedTerm = BigInt(RAFT_RS_INITIAL_APPLIED);
   group.membershipGenerationIndex = BigInt(
     group.bootstrap.membershipGenerationIndex ?? RAFT_RS_INITIAL_APPLIED);
   group.membershipGenerationKnown = true;
@@ -1051,6 +1005,17 @@ function syncCompactedStorage(group) {
   }
   group.compactedSnapshotIndex = snapshotIndex;
   group.persistedLastIndex = openedLastIndex(record);
+  const appliedIdx = BigInt(record.appliedIndex) > snapshotIndex ?
+    BigInt(record.appliedIndex) : snapshotIndex;
+  const admitted = snapshotAdmitsReplica(
+    group.gate, record.confState, group.peerId, snapshotIndex);
+  if (admitted) group.store.putAdmissionIndex(group.groupId, String(appliedIdx));
+  if (appliedIdx > group.appliedIndex || admitted ||
+      raftRsConfStateKey(record.confState) !== group.announcedConfStateKey) {
+    group.appliedTerm = restoreAppliedTerm(record);
+    recordAppliedEntry(group, appliedIdx, admitted);
+    announce(group, runtimeGeneration);
+  }
   return null;
 }
 
@@ -1227,7 +1192,9 @@ function applyCommittedSlice(group, expectedGeneration, slice) {
   if (!applyFailure.ok) return {ok: false, result: applyFailure.result};
   group.membershipGenerationIndex = nextMembershipGeneration;
   if (resolvedConfState.decoded !== undefined) group.membershipGenerationKnown = true;
-  recordAppliedEntry(group, BigInt(slice[slice.length - 1].index), admitted);
+  const tailEntry = slice[slice.length - 1];
+  group.appliedTerm = BigInt(tailEntry.term);
+  recordAppliedEntry(group, BigInt(tailEntry.index), admitted);
   return {ok: true};
 }
 
@@ -1312,6 +1279,30 @@ function finishReady(group, expectedGeneration, ready) {
   return continuation;
 }
 
+function syncTakenSnapshotGeneration(group, snapshot) {
+  const generation = snapshot.membershipGenerationIndex;
+  group.membershipGenerationKnown = generation !== undefined && generation !== null;
+  if (group.membershipGenerationKnown) group.membershipGenerationIndex = BigInt(generation);
+}
+
+function syncTakenSnapshot(group, expectedGeneration, snapshot) {
+  if (snapshot === undefined) return ENTRY_APPLY_DURABLE_OK;
+  syncTakenSnapshotGeneration(group, snapshot);
+  const snapIdx = BigInt(snapshot.index || RAFT_RS_INITIAL_APPLIED);
+  if (snapIdx > 0n) group.compactedSnapshotIndex = snapIdx;
+  if (snapIdx <= group.appliedIndex) return ENTRY_APPLY_DURABLE_OK;
+  const set = snapshot.confState ? invokeCoreAt(group, expectedGeneration,
+    CORE_OPERATION.SET_CONF_STATE, snapshot.confState) : ENTRY_APPLY_DURABLE_OK;
+  if (!set.ok) return set;
+  const admitted = snapshotAdmitsReplica(group.gate, snapshot.confState, group.peerId, snapIdx);
+  group.store.putAppliedState(group.groupId, String(snapIdx), snapshot.confState,
+    undefined, group.membershipGenerationKnown ? String(group.membershipGenerationIndex) : null);
+  if (admitted) group.store.putAdmissionIndex(group.groupId, String(snapIdx));
+  group.appliedTerm = BigInt(snapshot.term);
+  recordAppliedEntry(group, snapIdx, admitted);
+  return ENTRY_APPLY_DURABLE_OK;
+}
+
 function processReadyCycle(group, expectedGeneration) {
   // Before take_ready: a refused Ready stays whole in the core.
   if (!persistenceAdmitted(group)) {
@@ -1322,20 +1313,10 @@ function processReadyCycle(group, expectedGeneration) {
     return {done: true, result: taken.result};
   }
   try {
-    // Native SnapshotMetadata does not carry the sender's configuration-only
-    // generation. Persist it as unknown until the group-neutral checkpoint
-    // owner supplies an exact descriptor; never substitute this receiver's
-    // current generation or the snapshot's ordinary applied index.
     group.store.persistReady(group.groupId, taken.value);
-    const snapshot = taken.value.snapshot?.metadata;
-    if (snapshot !== undefined) {
-      const generation = snapshot.membershipGenerationIndex;
-      group.membershipGenerationKnown = generation !== undefined &&
-        generation !== null;
-      if (group.membershipGenerationKnown) {
-        group.membershipGenerationIndex = BigInt(generation);
-      }
-    }
+    const snapSynced = syncTakenSnapshot(
+      group, expectedGeneration, taken.value.snapshot?.metadata);
+    if (!snapSynced.ok) return {done: true, result: snapSynced.result};
     group.persistedLastIndex = persistedLastIndexAfter(
       group.persistedLastIndex, taken.value);
   } catch (error) {
@@ -1404,15 +1385,24 @@ function semanticLeaderIdentity(group, lead) {
   }
 }
 
+function announcePendingGateAndCatchUp(group, now, observed) {
+  if (group.pendingSnapshotGateOpen && group.gateOpen) {
+    group.pendingSnapshotGateOpen = false;
+    group.emit(PARTICIPATION_GATE.GATE_OPENED,
+      participationObservation(group.gate, group.appliedIndex));
+  }
+  evaluateTenureCatchUpOnDrain(
+    group, now, observed.ok ? observed.value.confState : null);
+}
+
 function announce(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
-  if (!status.ok) {
-    return;
-  }
+  if (!status.ok) return;
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  announcePendingGateAndCatchUp(group, now, observed);
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
@@ -1421,21 +1411,14 @@ function announce(group, expectedGeneration) {
     group.emit(RUNTIME_EVENT.TERM_CHANGE, Number(now.term));
   }
   if (before && now.lead !== before.lead) {
-    group.emit(
-      RUNTIME_EVENT.LEADER_CHANGE,
-      semanticLeaderIdentity(group, now.lead),
-    );
+    group.emit(RUNTIME_EVENT.LEADER_CHANGE, semanticLeaderIdentity(group, now.lead));
   }
-  if (observed.ok) {
-    announceMembership(group, observed.value, now);
-  }
+  if (observed.ok) announceMembership(group, observed.value, now);
   const settlement = confChangeSettlement({before, now,
     confChangeEntries: group.confChangeEntriesApplied ?? 0,
     appliedIndex: group.appliedIndex});
   group.confChangeEntriesApplied = 0;
-  if (settlement !== null) {
-    group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
-  }
+  if (settlement !== null) group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
 }
 
 function announceAppliedProgress(group, expectedGeneration, observed) {
@@ -1453,14 +1436,13 @@ function announceAppliedProgress(group, expectedGeneration, observed) {
 // itself applied, never a prediction or a row.
 function announceMembership(group, {confState, appliedIndex}, status) {
   const key = raftRsConfStateKey(confState);
-  if (key === group.announcedConfStateKey) {
-    return;
-  }
+  if (key === group.announcedConfStateKey) return;
   group.announcedConfStateKey = key;
   group.emit(RUNTIME_EVENT.MEMBERSHIP_CHANGED, {
     confState,
     commitIndex: Number(status.commit),
     appliedIndex,
+    role: projectPeerRole(confState, group.peerId),
   });
 }
 
@@ -1830,6 +1812,14 @@ function performCommand(group, command, expectedGeneration) {
       phase: RUNTIME_PHASE.DISPATCH, retryable: false,
       recoveryRequired: false,
     }));
+  }
+  if (command.type === PROPOSE_CONF_CHANGE &&
+      command.typedOperation !== undefined) {
+    return executeTypedConfChangeOperation({
+      group, expectedGeneration, operation: command.typedOperation,
+      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity,
+      answerGroupConfChangeRefusal, answerRefusedProposal, drainReady,
+    });
   }
   const refused = command.type === PROPOSE_CONF_CHANGE ?
     refusedConfChange({group, expectedGeneration, change: command.change,
@@ -2206,6 +2196,9 @@ function createRuntimeDispatcher(request) {
     identityRecorded: request.identityRecordPending !== true,
     gate: null,
     appliedIndex: null,
+    appliedTerm: 0n,
+    tenure: null,
+    pendingSnapshotGateOpen: false,
     membershipGenerationIndex: 0n,
     membershipGenerationKnown: true,
     gateOpen: false,

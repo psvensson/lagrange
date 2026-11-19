@@ -6,6 +6,7 @@
 
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {projectPeerRole} from './raft-rs-committed-membership-read.js';
 import {
   NO_LEADER,
   PEER_ADDRESS_STATUS,
@@ -153,6 +154,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     membershipGenerationIndex: observation.membershipGenerationIndex,
     lifecycleIncarnation: observation.lifecycleIncarnation,
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
+    memberRole: projectPeerRole(confState, group.peerId),
     ...leader,
     voters: confState.voters,
     voterCount: confState.voters.length,

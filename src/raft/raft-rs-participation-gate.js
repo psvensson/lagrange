@@ -143,6 +143,27 @@ function admitsReplica(gate, decoded, peerId, index) {
       String(change.nodeId) === String(peerId));
 }
 
+function restoreAppliedTerm(record) {
+  if (!record) return ZERO;
+  const applied = BigInt(record.appliedIndex || ZERO);
+  const entry = (record.entries || []).find(
+    (item) => BigInt(item.index) === applied);
+  if (entry !== undefined) return BigInt(entry.term);
+  if (record.snapshot?.metadata !== undefined) {
+    return BigInt(record.snapshot.metadata.term);
+  }
+  if (record.hardState !== null && record.hardState !== undefined) {
+    return BigInt(record.hardState.term);
+  }
+  return ZERO;
+}
+
+function snapshotAdmitsReplica(gate, confState, peerId, snapshotIndex) {
+  return gate !== null && gate.admissionIndex === null &&
+    snapshotIndex > ZERO && snapshotIndex >= gate.bootstrapIndex &&
+    (confState?.voters || []).map(String).includes(String(peerId));
+}
+
 /**
  * The gate as the status observation carries it.
  * @param {Object} gate - {bootstrapIndex, admissionIndex}.
@@ -360,7 +381,9 @@ export {
   participationObservation,
   recordAppliedEntry,
   recordIdentity,
+  restoreAppliedTerm,
   restoredParticipationGate,
   settleParticipationGate,
+  snapshotAdmitsReplica,
   withIdentityRecord,
 };

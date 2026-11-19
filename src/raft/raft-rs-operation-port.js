@@ -12,8 +12,6 @@ import {
 } from './raft-rs-turn-answer.js';
 import {
   RAFT_EVENT,
-  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
-  RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
@@ -25,12 +23,15 @@ import {
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
 import {consumeOriginalAllocationOpening} from './raft-rs-original-allocation-preparation.js';
 import {captureOriginalRaftRsTiming} from './raft-rs-runtime-tuning.js';
-import {committedMembershipRefusal, normalizeCommittedLearnerRead,
-  unavailableLearnerAction} from
-  './raft-rs-committed-membership-read.js';
-import {encodeCommittedAdmissionContext, encodeCommittedLearnerAdmission} from
+import {
+  committedMembershipRefusal,
+  normalizeCommittedLearnerRead,
+  readCommittedMembershipView,
+  unavailableLearnerAction,
+} from './raft-rs-committed-membership-read.js';
+import {encodeCommittedLearnerAdmission} from
   './raft-rs-committed-membership-context.js';
-import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+import {normalizedConfChange} from './raft-rs-conf-change-refusal-answer.js';
 import {
   RAFT_COMMITTED_ENTRY_APPLY_MODE,
   RAFT_OPERATION_PORT_REQUEST,
@@ -156,53 +157,6 @@ function containRuntimeThrow(dispatcher, work) {
   }
   return turn.settled ? turn : pendingTurn(
     turn.pending.then(undefined, dispatcher.containUnexpectedThrow));
-}
-
-const ADMITTING_CHANGE_TYPES = Object.freeze(new Set([
-  RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
-  RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
-]));
-
-// {change} in the core's ConfChangeV2 shape, or {refusal} naming how the
-// request missed the canonical {type, replicaIdentity, nodeId?} shape. An ADD
-// commits its admission context {replicaIdentity, peerId, nodeId}: the node
-// the peer is admitted on is a fact of the committed log, applied by every
-// replica, so no replica ever looks the peer's node up elsewhere.
-function normalizedConfChange(change, registry) {
-  if (Array.isArray(change?.changes)) {
-    return {change: deepFreeze({...change, changes: change.changes.map(
-      (item) => deepFreeze({...item}))})};
-  }
-  const changeType = {
-    [RAFT_MEMBERSHIP_OPERATION.ADD_PEER]: RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
-    [RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER]:
-      RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
-    [RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER]:
-      RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
-  }[change?.type];
-  if (changeType === undefined) {
-    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.UNKNOWN_OPERATION};
-  }
-  if (typeof change.replicaIdentity !== 'string' ||
-      change.replicaIdentity.length === 0) {
-    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_REPLICA_IDENTITY};
-  }
-  const admits = ADMITTING_CHANGE_TYPES.has(changeType);
-  if (admits && (typeof change.nodeId !== 'string' ||
-      change.nodeId.length === 0)) {
-    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_NODE_ID};
-  }
-  const peerId = registry.raftPeerIdOf(change.replicaIdentity);
-  if (peerId === null) {
-    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.PEER_UNRESERVED};
-  }
-  return {change: deepFreeze({
-    transition: 0,
-    changes: [deepFreeze({changeType, nodeId: peerId})],
-    ...(admits ? {context: encodeCommittedAdmissionContext({
-      replicaIdentity: change.replicaIdentity, peerId,
-      nodeId: change.nodeId})} : {}),
-  })};
 }
 
 function resolveOriginalNativeEntry(request, nativeInputs) {
@@ -471,7 +425,9 @@ function createRaftRsOperationPort(request) {
     proposeConfChange: (change) => protocolTurn(() => {
       const normalized = normalizedConfChange(change, registry);
       return normalized.refusal === undefined ? dispatcher.execute({
-        type: 'propose-conf-change', change: normalized.change,
+        type: 'propose-conf-change',
+        change: normalized.change,
+        typedOperation: normalized.typedOperation,
       }) : settledTurn(deepFreeze({
         outcome: CORE_REFUSED,
         reason: normalized.refusal,
@@ -518,10 +474,22 @@ function createRaftRsOperationPort(request) {
           COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
       });
       const committed = answered.settled ? answered.result : null;
-      return committed?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
-        committed?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED ?
-        committed :
-        committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+      if (committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
+          committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED) {
+        return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+      }
+      if (committed.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
+          (readRequest?.replicaIdentity !== undefined ||
+            readRequest?.peerId !== undefined ||
+            readRequest?.includeRole === true)) {
+        const status = execute({type: RUNTIME_COMMAND.READ_STATUS}).result;
+        return readCommittedMembershipView(committed, {
+          replicaIdentity: readRequest.replicaIdentity,
+          peerId: readRequest.peerId,
+          confState: status?.confState,
+        });
+      }
+      return committed;
     },
     [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request, admitExecution) =>
       protocolTurn(() => {

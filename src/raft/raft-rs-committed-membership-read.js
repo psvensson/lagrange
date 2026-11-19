@@ -30,6 +30,13 @@ import {INVALID_COMMITTED_LEARNER_ADMISSION,
   './raft-rs-committed-membership-context.js';
 import {ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
 
+const COMMITTED_REPLICA_ROLE = Object.freeze({
+  VOTER: 'VOTER',
+  LEARNER: 'LEARNER',
+  ABSENT: 'ABSENT',
+  UNRESOLVED: 'UNRESOLVED',
+});
+
 // Raft peer ids are decimal strings without leading zeros: the shorter one
 // is the smaller, and equal lengths compare as text. Ascending id order is
 // the one deterministic order of a membership list.
@@ -39,6 +46,90 @@ function ascendingPeerIdOrder(left, right) {
 
 function sortedIds(ids) {
   return [...(ids || [])].map(String).sort(ascendingPeerIdOrder);
+}
+
+/**
+ * Project one peer id's role directly from an applied ConfState: VOTER when in
+ * incoming or outgoing voters, LEARNER when in learners or learnersNext,
+ * ABSENT otherwise.
+ * @param {Object|null|undefined} confState - The applied ConfState.
+ * @param {string} peerId - The raft peer id.
+ * @return {string} A COMMITTED_REPLICA_ROLE (VOTER, LEARNER, ABSENT).
+ */
+function projectPeerRole(confState, peerId) {
+  const id = String(peerId);
+  if ([...(confState?.voters || []), ...(confState?.votersOutgoing || [])]
+    .map(String).includes(id)) {
+    return COMMITTED_REPLICA_ROLE.VOTER;
+  }
+  if ([...(confState?.learners || []), ...(confState?.learnersNext || [])]
+    .map(String).includes(id)) {
+    return COMMITTED_REPLICA_ROLE.LEARNER;
+  }
+  return COMMITTED_REPLICA_ROLE.ABSENT;
+}
+
+/**
+ * Project one logical replica identity's role from a committed-membership
+ * read answer: VOTER, LEARNER, ABSENT, or UNRESOLVED if any peer id in the
+ * configuration has no reserved identity.
+ * @param {Object} answer - A COMMITTED answer from answerCommittedMembership.
+ * @param {string} replicaIdentity - The logical replica id.
+ * @return {string} A COMMITTED_REPLICA_ROLE.
+ */
+function peerListOf(first, second) {
+  return [...(first || []), ...(second || [])];
+}
+
+function hasUnresolvedIdentity(identities, peerIds) {
+  return peerIds.some((peerId) => {
+    const id = identities[peerId];
+    return typeof id !== 'string' || id.length === 0;
+  });
+}
+
+function projectReplicaRole(answer, replicaIdentity) {
+  if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return COMMITTED_REPLICA_ROLE.UNRESOLVED;
+  }
+  const identities = answer.identities || {};
+  const voters = peerListOf(answer.voters, answer.votersOutgoing);
+  if (voters.some((peerId) => identities[peerId] === replicaIdentity)) {
+    return COMMITTED_REPLICA_ROLE.VOTER;
+  }
+  const learners = peerListOf(answer.learners, answer.learnersNext);
+  if (learners.some((peerId) => identities[peerId] === replicaIdentity)) {
+    return COMMITTED_REPLICA_ROLE.LEARNER;
+  }
+  return hasUnresolvedIdentity(identities, [...voters, ...learners]) ?
+    COMMITTED_REPLICA_ROLE.UNRESOLVED :
+    COMMITTED_REPLICA_ROLE.ABSENT;
+}
+
+/**
+ * Shape a committed membership read with LEARNER state, outgoing voters,
+ * autoLeave, and optional target replica role projection.
+ * @param {Object} answer - A COMMITTED answer from readCommittedMembership.
+ * @param {Object} [options] - {replicaIdentity, peerId, confState}.
+ * @return {Object} Frozen summary.
+ */
+function readCommittedMembershipView(answer, options = {}) {
+  if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
+    return answer;
+  }
+  const outgoing = answer.votersOutgoing || [];
+  const autoLeave = Boolean(options.confState?.autoLeave ?? (outgoing.length > 0));
+  const role = typeof options.replicaIdentity === 'string' ?
+    projectReplicaRole(answer, options.replicaIdentity) :
+    options.peerId !== undefined && options.peerId !== null ?
+      projectPeerRole(answer, options.peerId) :
+      null;
+  return deepFreeze({
+    ...answer,
+    outgoing,
+    autoLeave,
+    ...(role === null ? {} : {role, state: role}),
+  });
 }
 
 /**
@@ -331,8 +422,12 @@ function answerCommittedLearnerAction(group, status, query) {
 }
 
 export {
+  COMMITTED_REPLICA_ROLE,
   answerCommittedLearnerAction,
   normalizeCommittedLearnerRead,
+  projectPeerRole,
+  projectReplicaRole,
+  readCommittedMembershipView,
   unavailableLearnerAction,
   answerCommittedMembership,
   ascendingPeerIdOrder,

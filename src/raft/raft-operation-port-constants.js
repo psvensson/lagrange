@@ -113,6 +113,31 @@ const RAFT_MEMBERSHIP_OPERATION = Object.freeze({
   ADD_PEER: 'add-peer',
   REMOVE_PEER: 'remove-peer',
   ADD_LEARNER: 'add-learner',
+  ADMIT: 'admit',
+  LEARNER_CAUGHT_UP: 'learner-caught-up',
+  GROWTH_PROMOTE: 'growth-promote',
+  REPLACE_PROMOTE: 'replace-promote',
+  WITHDRAW_PROMOTION: 'withdraw-promotion',
+  REMOVE_LEARNER: 'remove-learner',
+});
+
+const RAFT_CATCH_UP_REQUEST_KIND = Object.freeze({
+  LEARNER_CAUGHT_UP: 'LEARNER_CAUGHT_UP',
+  GROWTH_PROMOTE: 'GROWTH_PROMOTE',
+  REPLACE_PROMOTE: 'REPLACE_PROMOTE',
+});
+
+const RAFT_FOUNDING_GROWTH_OUTCOME = Object.freeze({
+  LEARNER_PROPOSED: 'LEARNER_PROPOSED',
+  LEARNER_ADMITTED: 'LEARNER_ADMITTED',
+  ALREADY_VOTER: 'ALREADY_VOTER',
+  CAUGHT_UP: 'CAUGHT_UP',
+  CATCH_UP_PENDING: 'CATCH_UP_PENDING',
+  PROMOTION_PROPOSED: 'PROMOTION_PROPOSED',
+  PROMOTION_IN_LOG: 'PROMOTION_IN_LOG',
+  WITHDRAWN: 'WITHDRAWN',
+  LEARNER_REMOVAL_PROPOSED: 'LEARNER_REMOVAL_PROPOSED',
+  NOT_A_VOTER_REMOVAL: 'NOT_A_VOTER_REMOVAL',
 });
 
 const RAFT_MEMBERSHIP_RESERVATION_OUTCOME = Object.freeze({
@@ -127,6 +152,7 @@ const RAFT_MEMBERSHIP_RESERVATION_OUTCOME = Object.freeze({
 const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   UNKNOWN_OPERATION: 'unknown-membership-change',
   WITHOUT_REPLICA_IDENTITY: 'membership-change-without-replica-identity',
+  WITHOUT_OPERATION_ID: 'WITHOUT_OPERATION_ID',
   // An ADD commits the node the peer is admitted on (the admission context):
   // an ADD that names no node is refused, never committed without one.
   WITHOUT_NODE_ID: 'membership-change-without-node-id',
@@ -150,6 +176,14 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // is frozen, so no member is added, replaced, promoted or removed.
   // Refused before the port; terminal for that record.
   GROUP_RETIRING: 'membership-change-group-retiring',
+  NOT_LEARNER: 'NOT_LEARNER',
+  PROMOTION_WOULD_BE_EVEN: 'PROMOTION_WOULD_BE_EVEN',
+  MULTI_CHANGE_SHAPE_REFUSED: 'MULTI_CHANGE_SHAPE_REFUSED',
+  REPLACE_PROMOTE_NOT_AT_TARGET: 'REPLACE_PROMOTE_NOT_AT_TARGET',
+  PROMOTION_PROGRESS_BEHIND: 'PROMOTION_PROGRESS_BEHIND',
+  LEADER_TERM_UNAPPLIED: 'LEADER_TERM_UNAPPLIED',
+  BASE_CONFIGURATION_CHANGED: 'BASE_CONFIGURATION_CHANGED',
+  OPERATION_WITHDRAWING: 'OPERATION_WITHDRAWING',
 });
 
 // What probePeerProgress(replicaIdentity) answers: the peer's matched index
@@ -224,7 +258,9 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_CATCH_UP_REQUEST_KIND,
   RAFT_CONSENSUS_STARTUP_OUTCOME,
+  RAFT_FOUNDING_GROWTH_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_EVENT,

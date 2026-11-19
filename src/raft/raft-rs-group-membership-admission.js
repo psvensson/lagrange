@@ -109,6 +109,7 @@ function admissionOfPortAnswer(answered) {
 // One admission decision in the group's log, with the port's own outcome
 // and reason when the admission reached the port.
 function recordAdmission(group, {peerAddress, nodeId}, admission) {
+  if (!group?.logger) return;
   const level = admission.outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED ?
     ADMISSION_REFUSED_LOG_LEVEL : ADMISSION_LOG_LEVEL;
   group.logger[level](RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG.PEER_ADMISSION, {
@@ -130,12 +131,13 @@ function recordAdmission(group, {peerAddress, nodeId}, admission) {
 // answered. An answer the port queued behind the group's in-flight work is
 // QUEUED now and recorded again, as its settled outcome, when the port
 // answers; `settled` carries that settled admission.
-function proposeAdmission(port, group, peer) {
-  const {replicaIdentity, nodeId} = peer;
+function proposeAdmission(port, group, peer, operationType = RAFT_MEMBERSHIP_OPERATION.ADD_PEER) {
+  const {replicaIdentity, nodeId, operationId} = peer;
   const proposal = port.proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+    type: peer.asLearner === true ? RAFT_MEMBERSHIP_OPERATION.ADMIT : operationType,
     replicaIdentity,
     nodeId,
+    ...(operationId === undefined ? {} : {operationId}),
   });
   if (proposal.settled) {
     return {replicaIdentity, proposal: proposal.result,
@@ -260,6 +262,63 @@ function reserveAndAdmitGroupPeer(port, group, peer) {
     return refused;
   }
   return admitGroupPeer(port, group, peer);
+}
+
+function admitGroupLearner(port, group, peer) {
+  const admission = proposeAdmission(
+    port, group, peer, RAFT_MEMBERSHIP_OPERATION.ADMIT);
+  recordAdmission(group, peer, admission);
+  return Object.freeze(admission);
+}
+
+function reserveAndAdmitGroupLearner(port, group, peer) {
+  const reservation = reserveGroupPeerIdentity(group, peer.replicaIdentity);
+  if (!ADMISSIBLE_RESERVATION_OUTCOMES.has(reservation.outcome)) {
+    const refused = Object.freeze({
+      replicaIdentity: peer.replicaIdentity,
+      outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED,
+      portOutcome: null,
+      reason: reservation.reason || reservation.outcome,
+    });
+    recordAdmission(group, peer, refused);
+    return refused;
+  }
+  return admitGroupLearner(port, group, peer);
+}
+
+function evaluateGroupLearnerCatchUp(port, request) {
+  return port.proposeConfChange({
+    ...request,
+    type: RAFT_MEMBERSHIP_OPERATION.LEARNER_CAUGHT_UP,
+  });
+}
+
+function proposeGroupGrowthPromote(port, request) {
+  return port.proposeConfChange({
+    ...request,
+    type: RAFT_MEMBERSHIP_OPERATION.GROWTH_PROMOTE,
+  });
+}
+
+function proposeGroupReplacePromote(port, request) {
+  return port.proposeConfChange({
+    ...request,
+    type: RAFT_MEMBERSHIP_OPERATION.REPLACE_PROMOTE,
+  });
+}
+
+function withdrawGroupPromotion(port, request) {
+  return port.proposeConfChange({
+    ...request,
+    type: RAFT_MEMBERSHIP_OPERATION.WITHDRAW_PROMOTION,
+  });
+}
+
+function proposeGroupRemoveLearner(port, request) {
+  return port.proposeConfChange({
+    ...request,
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_LEARNER,
+  });
 }
 
 /**
@@ -476,8 +535,15 @@ export {
   proposeAuthorizedGroupRemoval,
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
+  admitGroupLearner,
   admitGroupPeer,
+  evaluateGroupLearnerCatchUp,
+  proposeGroupGrowthPromote,
+  proposeGroupRemoveLearner,
+  proposeGroupReplacePromote,
+  reserveAndAdmitGroupLearner,
   reserveAndAdmitGroupPeer,
   reserveGroupPeerIdentity,
   takeGroupAdmissionsInFlight,
+  withdrawGroupPromotion,
 };
