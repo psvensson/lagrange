@@ -126,7 +126,7 @@ documentClass: generated
 - [partition-service-raft-init-base.js](partition-service-raft-init-base.js) - Resolve the current raft term when a live raft instance exists; the leadership-state helper passes it with the... (importers: one)
 - [partition-service-raft-lifecycle-wiring.js](partition-service-raft-lifecycle-wiring.js) - Relay the port's consensus announcements as the partition service's own CONSENSUS_OBSERVED event, as data: the... (importers: few)
 - [partition-service-raft-membership-administration.js](partition-service-raft-membership-administration.js) - The partition's one path to admitting a peer into its raft configuration, through the group-neutral admission owner:... (importers: hub)
-- [partition-service-raft-peer-cache-reconciliation.js](partition-service-raft-peer-cache-reconciliation.js) - Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED) or this replica gains leadership (LEADER):... (importers: many)
+- [partition-service-raft-peer-cache-reconciliation.js](partition-service-raft-peer-cache-reconciliation.js) - Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED) or this replica gains leadership (LEADER):... (importers: few)
 - [partition-service-raft-write-commit.js](partition-service-raft-write-commit.js) - Hand a write to consensus within the port's deferral budget. (importers: many)
 - [partition-service-rebalancer-methods.js](partition-service-rebalancer-methods.js) - Build a rebalancer dependency bundle from current PartitionService state. (importers: one)
 - [partition-service-remote-query-methods.js](partition-service-remote-query-methods.js) - Remote QUERY routing preserves the partition's ordinary read/write gates and delegates current transaction identity... (importers: many)
