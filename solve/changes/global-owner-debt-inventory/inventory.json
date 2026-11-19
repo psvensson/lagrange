@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "43d9a05e5a2aceadc82860428ff752be53e9258424a0eb1f53a213db47571858"
+        "sha256": "e966d9f804a81f93f863ad29869a6bd1fdc57de6e884a67586299fa2abcba5e0"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "d50f8da70f5f55f5dcd25fe54d16b761878f98e6fc121d1c2b9781cdcccfaa07"
+        "sha256": "45f6d098d19b5c0881e71d4cde0a45cf6c2923aa9355ca9e2993d90f4fb7c4c3"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3642017,
-        "sha256": "0b91683c477ec7fb8ff713a4e1ce0773566e1241f1c9ad884751d75b00749e21"
+        "bytes": 3642132,
+        "sha256": "66e8cd18956b5c6a2c7d889be0db2a41dd487735557fb17de57987ec5d466ae6"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "2344dacc88667ee5d2c09306ccf57a3818e83e159cbcd4fa6e045438ccda790c"
+        "sha256": "9471c260e86ed60611167e09c3306af021d04e33489e8a83497c2293c0af9ff5"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4e83a5affb2bf2588f4585ab298e6eae4c4c1581345c61a697e33ea1a9d2f319"
+        "sha256": "9ccd531ebdbe8f26eeb91e4cfcf4f8731136b9ae5308b4ac2e7a919f156eb0be"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "63bd53996a7c02768ad785bce40e27ae8ff69e67c087e60bd88f4604b2f7c742"
+    "inputDigest": "1c3f276e92483e2f6a7eeaec0190e74da882ecfbca3b4234d44386e774a098e6"
   },
   "reconciliation": {
     "complexity": {
@@ -73,18 +73,18 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "43d9a05e5a2aceadc82860428ff752be53e9258424a0eb1f53a213db47571858"
+        "sha256": "e966d9f804a81f93f863ad29869a6bd1fdc57de6e884a67586299fa2abcba5e0"
       },
-      "declaredCount": 1679,
-      "observedCount": 1679,
-      "assignedCount": 1679
+      "declaredCount": 1681,
+      "observedCount": 1681,
+      "assignedCount": 1681
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "d50f8da70f5f55f5dcd25fe54d16b761878f98e6fc121d1c2b9781cdcccfaa07"
+        "sha256": "45f6d098d19b5c0881e71d4cde0a45cf6c2923aa9355ca9e2993d90f4fb7c4c3"
       },
       "declaredCount": 143,
       "observedCount": 143,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "2344dacc88667ee5d2c09306ccf57a3818e83e159cbcd4fa6e045438ccda790c"
+          "sha256": "9471c260e86ed60611167e09c3306af021d04e33489e8a83497c2293c0af9ff5"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4e83a5affb2bf2588f4585ab298e6eae4c4c1581345c61a697e33ea1a9d2f319"
+          "sha256": "9ccd531ebdbe8f26eeb91e4cfcf4f8731136b9ae5308b4ac2e7a919f156eb0be"
         },
         "cloneGroups": 610,
         "duplicatedLines": 21830,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3642017,
-        "sha256": "0b91683c477ec7fb8ff713a4e1ce0773566e1241f1c9ad884751d75b00749e21"
+        "bytes": 3642132,
+        "sha256": "66e8cd18956b5c6a2c7d889be0db2a41dd487735557fb17de57987ec5d466ae6"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2841,
         "sha256": "3c7e7e10bd1ffa9a6744ed22c038928d52bdb7913e6b239aa5ef9a9448e3638f"
       },
-      "sourceDigest": "d13092f49c343e0f32da87549382ed891858c14964d9e05af55db7594f09f725",
+      "sourceDigest": "b97712d4fad7654cb87a12d70c3bc9098db9f8e63864ccb61a4be50e0e4b86d4",
       "moduleCount": 6275,
-      "edgeCount": 36321,
+      "edgeCount": 36323,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2351,
-    "assignedSignalCount": 2351,
-    "uniqueAssignmentCount": 2351,
-    "digest": "e8291b698773d1124ca3d8a47f9ebad1a8d39215a65274273813065bc2da7bad"
+    "sourceSignalCount": 2353,
+    "assignedSignalCount": 2353,
+    "uniqueAssignmentCount": 2353,
+    "digest": "82005605967507650598aed6771915a2195bcc1246dc54e7e1a1de8f57e7aca9"
   },
   "signalCounts": {
     "cognitive": 143,
-    "complexity": 1679,
+    "complexity": 1681,
     "duplication": 449,
     "fileSize": 40,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1221,
+    "filesWithDebt": 1222,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -720,24 +720,24 @@
       "ownerAreas": [
         "src/partition"
       ],
-      "fileCount": 20,
-      "signalCount": 32,
-      "complexity": 26,
+      "fileCount": 21,
+      "signalCount": 34,
+      "complexity": 28,
       "cognitive": 4,
       "oversizedFiles": 0,
       "duplicatedLines": 50,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 132,
-      "importOut": 163,
-      "score": 141,
+      "importIn": 141,
+      "importOut": 186,
+      "score": 149,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
         "src/partition/managed-split-workflow-provisioning-methods.js",
         "src/partition/partition-cdc-generator.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-split-merge-manager-evaluation-methods.js"
+        "src/partition/partition-participant-transaction-session.js"
       ]
     },
     {

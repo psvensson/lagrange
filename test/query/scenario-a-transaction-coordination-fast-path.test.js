@@ -27,12 +27,18 @@ import {
   ROW,
   ROW_2,
   TABLE,
+  applyProposal,
   beginMessage,
   clearFixtureSingletons,
+  commitMessage,
   identityOf,
+  isDecisionCommand,
+  isPrepareCommand,
   onFixtureLeader,
+  prepareMessage,
   queryMessage,
   resetFixtureSingletons,
+  rowCount,
   send,
 } from '../test-helpers/participant-transaction-fixture.js';
 
@@ -188,7 +194,7 @@ test('Scenario A fast path: Priority 2 concurrent participant phases while Durab
 test('Scenario A fast path: Priorities 3, 4, and 6 on partition staging, determinism cache, and Raft sync telemetry', async () => {
   resetFixtureSingletons();
   try {
-    await onFixtureLeader(async (leader) => {
+    await onFixtureLeader(async (leader, proposed) => {
       leader.concurrencyGranularity = 'row-key';
       const txA = identityOf('b'.repeat(32), {sessionId: 'sess-a'});
       const txB = identityOf('c'.repeat(32), {sessionId: 'sess-b'});
@@ -222,6 +228,57 @@ test('Scenario A fast path: Priorities 3, 4, and 6 on partition staging, determi
       });
       const statsAfter = getDeterminismClassifierStats(leader.db);
       assert.equal(statsAfter.compiledHitCount > statsBefore.compiledHitCount, true);
+
+      const tx1 = identityOf('d'.repeat(32), {sessionId: 'sess-d1'});
+      const tx2 = identityOf('e'.repeat(32), {sessionId: 'sess-d2'});
+      const tx3 = identityOf('f'.repeat(32), {sessionId: 'sess-d3'});
+      assert.equal((await send(leader, beginMessage(tx1))).success, true);
+      assert.equal((await send(leader, beginMessage(tx2))).success, true);
+      assert.equal((await send(leader, queryMessage(tx1, INSERT_SQL, ['disjoint-1', 'v1']))).success, true);
+      assert.equal((await send(leader, queryMessage(tx2, INSERT_SQL, ['disjoint-2', 'v2']))).success, true);
+
+      const prep1Promise = send(leader, prepareMessage(tx1));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx1.transactionId && isPrepareCommand(entry));
+      const prep1 = await prep1Promise;
+      assert.equal(prep1.success, true);
+
+      // Disjoint tx2 prepares while tx1 is STATE.PREPARED on the same partition:
+      const prep2Promise = send(leader, prepareMessage(tx2));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx2.transactionId && isPrepareCommand(entry));
+      const prep2 = await prep2Promise;
+      assert.equal(prep2.success, true);
+
+      // Disjoint tx3 begins and stages while tx1 and tx2 are STATE.PREPARED:
+      assert.equal((await send(leader, beginMessage(tx3))).success, true);
+      assert.equal((await send(leader, queryMessage(tx3, INSERT_SQL, ['disjoint-3', 'v3']))).success, true);
+
+      // Both prepared transactions commit even though tx1 advances generation before tx2 commits:
+      const commit1Promise = send(leader, commitMessage(tx1, prep1.preparedDigest));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx1.transactionId && isDecisionCommand(entry));
+      assert.equal((await commit1Promise).success, true);
+
+      const commit2Promise = send(leader, commitMessage(tx2, prep2.preparedDigest));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx2.transactionId && isDecisionCommand(entry));
+      assert.equal((await commit2Promise).success, true);
+
+      const prep3Promise = send(leader, prepareMessage(tx3));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx3.transactionId && isPrepareCommand(entry));
+      const prep3 = await prep3Promise;
+      assert.equal(prep3.success, true);
+
+      const commit3Promise = send(leader, commitMessage(tx3, prep3.preparedDigest));
+      await applyProposal(leader, proposed,
+        (entry) => entry.transactionId === tx3.transactionId && isDecisionCommand(entry));
+      assert.equal((await commit3Promise).success, true);
+
+      assert.equal(rowCount(leader, 'disjoint-1'), 1);
+      assert.equal(rowCount(leader, 'disjoint-2'), 1);
+      assert.equal(rowCount(leader, 'disjoint-3'), 1);
     });
   } finally {
     clearFixtureSingletons();

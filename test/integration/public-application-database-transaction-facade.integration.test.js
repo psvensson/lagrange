@@ -52,11 +52,7 @@ import {
 } from './helpers/public-application-database-shape.js';
 
 const APPLICATION_ID = 'public-seam-transactions';
-const PARTICIPANT_ALREADY_ACTIVE_MESSAGE =
-  'Participant transaction request refused: ' +
-  'participant_transaction_already_active';
 const ERROR_CODE = Object.freeze({
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
   TRANSACTION_CONTROL_RESERVED: 'TRANSACTION_CONTROL_RESERVED',
 });
 const PUBLIC_RESULT_KEYS = ['affectedRows', 'rows'];
@@ -214,18 +210,7 @@ test('public application database transaction facade semantics (single runtime, 
     t.same(await readerRows(SQL.READ_CURRENT, 'c4'), []);
   });
 
-  // FINDING F-2PC-CONCURRENT-PARTICIPANT (witness, asserts the CURRENT
-  // defect; flips when the owner fixes it): the brief expects two concurrent
-  // top-level transactions on disjoint ids to commit independently. Today a
-  // partition replica admits one active participant staging session, so the
-  // current participant owner refuses a second session with
-  // participant_transaction_already_active; the refusal reaches the
-  // application as an untyped INTERNAL_ERROR (not retryable, not deferred),
-  // and the contract in architecture/process-replication.md (snapshot
-  // isolation, first-committer-wins at prepare) is not what runs. The loser
-  // leaves nothing readable on this runtime. When the owner admits concurrent sessions (or
-  // types the conflict as retryable), replace this witness with "both commit".
-  await t.test('F-2PC-CONCURRENT-PARTICIPANT witness: a concurrent transaction on the same partitions is refused', async (t) => {
+  await t.test('F-2PC-CONCURRENT-PARTICIPANT: two concurrent transactions on the same partitions with disjoint keys both commit', async (t) => {
     const [first, second] = await Promise.all([
       writer.transaction(sessionA, [insertCurrent('c5', 'first'),
         insertHistory('h5', 'c5', 'first')]),
@@ -236,29 +221,17 @@ test('public application database transaction facade semantics (single runtime, 
     keepTransaction('I2.4 second', second);
     const outcomes = [first, second].map((result) => result.transaction.outcome);
     t.comment(`F-2PC outcomes: ${outcomes.join(' / ')}`);
-    t.same([...outcomes].sort(),
-      [EMBEDDED_STEP_OUTCOME.FULFILLED, EMBEDDED_STEP_OUTCOME.REJECTED],
-      'observed today: exactly one of two concurrent transactions commits');
-    const [winner, loser] = first.transaction.outcome ===
-      EMBEDDED_STEP_OUTCOME.FULFILLED ? [['c5', 'h5'], second] :
-      [['c6', 'h6'], first];
-    t.equal(exposedProperty(loser.transaction.value, 'code'),
-      ERROR_CODE.INTERNAL_ERROR, 'the refusal is an untyped INTERNAL_ERROR');
-    t.equal(exposedProperty(loser.transaction.value, 'message'),
-      PARTICIPANT_ALREADY_ACTIVE_MESSAGE);
-    t.equal(exposedProperty(loser.transaction.value, 'deferred'), false,
-      'and is not marked deferred');
-    t.equal(exposedProperty(loser.transaction.value, 'retryAfterMs'), null,
-      'nor retryable');
-    await readUntil(t, reader, sessionB, SQL.READ_CURRENT, [winner[0]],
+    t.same(outcomes,
+      [EMBEDDED_STEP_OUTCOME.FULFILLED, EMBEDDED_STEP_OUTCOME.FULFILLED],
+      'both concurrent disjoint-key 2PC transactions commit');
+    await readUntil(t, reader, sessionB, SQL.READ_CURRENT, ['c5'],
       (rows) => rows.length === 1);
-    await readUntil(t, reader, sessionB, SQL.READ_HISTORY, [winner[1]],
+    await readUntil(t, reader, sessionB, SQL.READ_HISTORY, ['h5'],
       (rows) => rows.length === 1);
-    await readAfterSentinels(t);
-    const loserIds = winner[0] === 'c5' ? ['c6', 'h6'] : ['c5', 'h5'];
-    t.same(await readerRows(SQL.READ_CURRENT, loserIds[0]), [],
-      'the refused transaction left nothing readable on this runtime');
-    t.same(await readerRows(SQL.READ_HISTORY, loserIds[1]), []);
+    await readUntil(t, reader, sessionB, SQL.READ_CURRENT, ['c6'],
+      (rows) => rows.length === 1);
+    await readUntil(t, reader, sessionB, SQL.READ_HISTORY, ['h6'],
+      (rows) => rows.length === 1);
   });
 
   await t.test('I2 facade: no transaction outcome carries topology or a session identity', async (t) => {

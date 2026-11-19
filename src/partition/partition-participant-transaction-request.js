@@ -55,7 +55,6 @@ import {
   validationTextOf,
 } from './partition-participant-transaction-bytes.js';
 import {
-  isPartitionReserved,
   participantOutcomeOf,
   readParticipantTransactionRow,
   readPartitionWriteGeneration,
@@ -68,6 +67,8 @@ import {
   clearPreparedParticipantRowKeys,
   endParticipantSession,
   findParticipantSession,
+  isPartitionReservedForPrepare,
+  isRowKeyConcurrencyEnabled,
   openParticipantSession,
   participantRoutingSessionCollision,
   participantTransactionActive,
@@ -392,9 +393,18 @@ async function prepareSession(service, payload, session) {
   if (session.sealed !== null && session.sealed.commitMode !== payload.commitMode) {
     return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
   }
-  if (isPartitionReserved(service.db)) {
+  if (isPartitionReservedForPrepare(
+    service,
+    session.identity.participantId,
+    session.touchedRowKeys,
+    session.hasUnscopedWrite,
+  )) {
     return refusalOf(service, payload, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
+  }
+  if (session.sealed !== null && isRowKeyConcurrencyEnabled(service) &&
+      readPartitionWriteGeneration(service.db) !== session.generationBase) {
+    session.sealed = null;
   }
   // A sealed command already submitted belongs to its outcome owner. Only a
   // new PREPARE is admission (release fence, then topology); retries retain

@@ -93,8 +93,12 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 import {
+  canAdvanceCommittedValidationText,
   clearPreparedParticipantRowKeys,
+  extractOperationsRowKeyFootprint,
+  isPartitionReservedForPrepare,
   recordCommittedParticipantRowKeys,
+  stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 
 // The private value that ends a PREPARE's dry run: thrown inside its
@@ -316,12 +320,22 @@ function applyParticipantPrepare(service, committed) {
       readPartitionWriteOrigin(service.db)?.originIndex) {
     return refuseOriginMismatch(service, committed);
   }
-  if (isPartitionReserved(service.db)) {
+  const footprint = extractOperationsRowKeyFootprint(
+    service,
+    operationsOf(command.operationsText),
+  );
+  if (isPartitionReservedForPrepare(
+    service,
+    command.participantId,
+    footprint.rowKeys,
+    footprint.hasUnscopedWrite,
+  )) {
     consumedRefusal(service, committed, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null)});
     return OUTCOME.RESERVED_REFUSED;
   }
-  if (command.validationText !== validationTextHereOf(service)) {
+  if (command.validationText !== validationTextHereOf(service) &&
+      !canAdvanceCommittedValidationText(service, command.validationText, footprint)) {
     return refusePrepare(service, committed,
       {cause: CAUSE.CONFLICT, detail: null});
   }
@@ -335,6 +349,12 @@ function applyParticipantPrepare(service, committed) {
   }
   insertParticipantTransactionRow(service.db,
     preparedRowOf(committed, {state: STATE.PREPARED}));
+  stagePreparedParticipantRowKeys(
+    service,
+    command.participantId,
+    footprint.rowKeys,
+    footprint.hasUnscopedWrite,
+  );
   answerProposer(service, committed, {success: true,
     ...rowAnswer(service, command)});
   return OUTCOME.APPLIED;
@@ -392,7 +412,11 @@ function scheduleCommitEffects(service, committed, operations, events) {
 // The reservation is released with the row's move out of PREPARED: the
 // writes the leader parked meanwhile are re-admitted after the commit.
 function releaseReservation(service, committed) {
-  committed.afterCommit(() => readmitReservedWrites(service));
+  committed.afterCommit(() => {
+    if (!isPartitionReserved(service.db)) {
+      readmitReservedWrites(service);
+    }
+  });
 }
 
 // An atomicity alarm: the row is settled REFUSED alike on every replica.
@@ -427,14 +451,16 @@ function runCommittedOperations(service, committed, operations) {
 // order with their outcomes, move the row to COMMITTED, advance g once when an
 // operation applied (a zero-operation COMMIT moves no g, W19).
 function commitPrepared(service, committed, row) {
-  if (row.validationText !== validationTextHereOf(service)) {
-    return refuseCommit(service, committed,
-      {cause: CAUSE.COMMIT_BASE_MOVED, detail: null});
-  }
   const operations = operationsOf(row.operationsText);
   if (operations === null) {
     return refuseCommit(service, committed, {cause: CAUSE.COMMIT_STATEMENT_FAILED,
       detail: MESSAGE.OPERATIONS_UNREADABLE});
+  }
+  const footprint = extractOperationsRowKeyFootprint(service, operations);
+  if (row.validationText !== validationTextHereOf(service) &&
+      !canAdvanceCommittedValidationText(service, row.validationText, footprint)) {
+    return refuseCommit(service, committed,
+      {cause: CAUSE.COMMIT_BASE_MOVED, detail: null});
   }
   let applied;
   try {
@@ -449,6 +475,12 @@ function commitPrepared(service, committed, row) {
   if (operations.length > 0) {
     advancePartitionWriteGeneration(service.db);
     const committedGeneration = readPartitionWriteGeneration(service.db);
+    stagePreparedParticipantRowKeys(
+      service,
+      committed.command.participantId,
+      footprint.rowKeys,
+      footprint.hasUnscopedWrite,
+    );
     committed.afterCommit(() => recordCommittedParticipantRowKeys(
       service,
       committed.command.participantId,

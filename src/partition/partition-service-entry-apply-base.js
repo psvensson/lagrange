@@ -25,8 +25,14 @@ import {
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
-import {advancePartitionWriteGeneration, isPartitionReserved, readPartitionWriteOrigin} from
-  './partition-participant-transaction-store.js';
+import {
+  advancePartitionWriteGeneration,
+  isPartitionReserved,
+  readPartitionWriteGeneration,
+  readPartitionWriteOrigin,
+} from './partition-participant-transaction-store.js';
+import {recordCommittedAutocommitRowKeys} from
+  './partition-participant-transaction-session.js';
 import {assertTransactionSchemaWriteEnforced} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
@@ -722,6 +728,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       recordCommittedStatementCdc(this, {command, index, term, afterCommit},
         {entryKey, result: info});
       advancePartitionWriteGeneration(this.db);
+      const committedGeneration = readPartitionWriteGeneration(this.db);
+      afterCommit(() =>
+        recordCommittedAutocommitRowKeys(this, command, committedGeneration));
       recordCommittedWriteTraffic(this, afterCommit, 1);
       if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
         afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
