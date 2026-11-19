@@ -151,7 +151,8 @@ function claimRefusal(db, statement) {
 }
 
 function admissionRefusal(db, statement, census) {
-  if (statement.partitionId !== LEDGER_PARTITION_ID) {
+  if (statement.partitionId !== LEDGER_PARTITION_ID && statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION) {
+    console.log('REFUSING statement:', JSON.stringify(statement));
     return refused(REFUSAL.NOT_LEDGER_PARTITION);
   }
   const entityRows = census.filter((row) => row.incomplete &&
