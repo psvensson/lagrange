@@ -15,6 +15,7 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
@@ -111,9 +112,21 @@ function parsedJsonOf(text) {
   }
 }
 
+const OPERATION_ALLOWED_KEYS = Object.freeze(new Set(['entryId', 'sql', 'params']));
+
+function isJsonScalar(value) {
+  return value === null || typeof value === 'string' ||
+    (typeof value === 'number' && Number.isFinite(value));
+}
+
 function isOperation(value) {
-  return value !== null && typeof value === 'object' &&
-    typeof value.sql === 'string' && Array.isArray(value.params);
+  const record = copyStrictOwnDataRecord(value);
+  return record !== null &&
+    Object.keys(record).every((key) => OPERATION_ALLOWED_KEYS.has(key)) &&
+    (record.entryId === undefined || isNonEmptyString(record.entryId)) &&
+    isNonEmptyString(record.sql) &&
+    Array.isArray(record.params) &&
+    record.params.every(isJsonScalar);
 }
 
 /**
@@ -137,7 +150,14 @@ function carriedOriginIndexOf(validationText) {
  */
 function operationsOf(operationsText) {
   const parsed = parsedJsonOf(operationsText);
-  return Array.isArray(parsed) && parsed.every(isOperation) ? parsed : null;
+  if (!Array.isArray(parsed) || !parsed.every(isOperation)) {
+    return null;
+  }
+  return Object.freeze(parsed.map((operation) => Object.freeze({
+    ...(operation.entryId === undefined ? {} : {entryId: operation.entryId}),
+    sql: operation.sql,
+    params: Object.freeze([...operation.params]),
+  })));
 }
 
 function validDecisionParticipants(record) {
@@ -256,37 +276,40 @@ function identityFieldsOf(identity) {
   };
 }
 
-/**
- * The PARTICIPANT_PREPARE command the leader proposes (design 2.3).
- * @param {Object} identity - The request's identity fields.
- * @param {Object} carried - {operationsText, validationText}.
- * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
- * @return {Object} The command.
- */
+function cloneExecutionEnvelope(envelope) {
+  const record = copyStrictOwnDataRecord(envelope);
+  if (record === null) {
+    return envelope;
+  }
+  return Object.freeze({...record});
+}
+
+function stampFieldsOf(stamp, {includeEnvelope = false} = {}) {
+  const record = copyStrictOwnDataRecord(stamp) ?? stamp ?? {};
+  return {
+    ...(includeEnvelope && record.executionEnvelope !== undefined ?
+      {executionEnvelope: cloneExecutionEnvelope(record.executionEnvelope)} : {}),
+    timestamp: record.timestamp,
+    proposedBy: record.proposedBy,
+    proposedAt: record.proposedAt,
+  };
+}
+
 function buildPrepareCommand(identity, {operationsText, validationText},
   stamp) {
-  return {
+  return Object.freeze({
     type: COMMAND.PREPARE,
     entryId: prepareEntryIdOf(identity.participantId),
     ...identityFieldsOf(identity),
     operationsText,
     validationText,
     preparedDigest: preparedDigestOf(operationsText, validationText),
-    ...stamp,
-  };
+    ...stampFieldsOf(stamp, {includeEnvelope: true}),
+  });
 }
 
-/**
- * The PARTICIPANT_DECISION command the leader proposes (design 2.3): the
- * binding and no operations.
- * @param {Object} identity - The request's identity fields.
- * @param {Object} binding - {decision, preparedDigest, decisionText,
- *   decisionDigest}.
- * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
- * @return {Object} The command.
- */
 function buildDecisionCommand(identity, binding, stamp) {
-  return {
+  return Object.freeze({
     type: COMMAND.DECISION,
     entryId: decisionEntryIdOf(identity.participantId, binding.decisionDigest),
     ...identityFieldsOf(identity),
@@ -294,24 +317,17 @@ function buildDecisionCommand(identity, binding, stamp) {
     preparedDigest: binding.preparedDigest ?? null,
     decisionText: binding.decisionText,
     decisionDigest: binding.decisionDigest,
-    ...stamp,
-  };
+    ...stampFieldsOf(stamp, {includeEnvelope: true}),
+  });
 }
 
-/**
- * The PARTICIPANT_GENERATION_ORIGIN command the leader proposes once, when
- * transaction admission is enabled on the partition (design 0.0.13).
- * @param {string} partitionId - The partition.
- * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
- * @return {Object} The command.
- */
 function buildGenerationOriginCommand(partitionId, stamp) {
-  return {
+  return Object.freeze({
     type: COMMAND.GENERATION_ORIGIN,
     entryId: generationOriginEntryIdOf(partitionId),
     partitionId,
-    ...stamp,
-  };
+    ...stampFieldsOf(stamp),
+  });
 }
 
 // The identity half of the pinned form, without a partition to compare with
@@ -330,6 +346,8 @@ function carriesPinnedIdentity(command) {
 function isPinnedPrepare(command) {
   return typeof command.operationsText === 'string' &&
     typeof command.validationText === 'string' &&
+    operationsOf(command.operationsText) !== null &&
+    carriedOriginIndexOf(command.validationText) !== null &&
     command.preparedDigest ===
       preparedDigestOf(command.operationsText, command.validationText) &&
     command.entryId === prepareEntryIdOf(command.participantId);

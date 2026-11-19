@@ -12,6 +12,7 @@ import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
 
 const FIELDS = Object.freeze(['type', 'entryId', 'partitionId', 'body',
   'bodyText', 'timestamp', 'proposedBy', 'proposedAt']);
+const INPUT_FIELDS = Object.freeze(['type', 'entryId', 'body']);
 const RELEASE_FIELDS = Object.freeze(['operationId']);
 // The rows a command adds to the partition's CDC owed ledger.
 const RELEASE_ROW_COUNT = 1;
@@ -44,15 +45,25 @@ function canonicalPlacementBody(type, body) {
     INVALID_BODY;
 }
 
+function isValidPlacementCommandInputRecord(record) {
+  return record !== null &&
+    Object.keys(record).length === INPUT_FIELDS.length &&
+    INPUT_FIELDS.every((field) => Object.hasOwn(record, field)) &&
+    isText(record.entryId);
+}
+
 /**
  * Build one placement command on the partition that proposes it.
  * @param {Object} service - The replica_operations partition.
  * @param {Object} input - {type, entryId, body}.
  * @return {Object|null} The frozen command, or null for invalid input.
  */
-function buildPlacementCommand(service, {type, entryId, body}) {
+function buildPlacementCommand(service, input) {
+  const record = copyStrictOwnDataRecord(input);
+  if (!isValidPlacementCommandInputRecord(record)) return null;
+  const {type, entryId, body} = record;
   const canonical = canonicalPlacementBody(type, body);
-  if (canonical.validity !== VALIDITY.VALID || !isText(entryId)) return null;
+  if (canonical.validity !== VALIDITY.VALID) return null;
   return Object.freeze({type, entryId, partitionId: service.partitionId,
     body: canonical.statement, bodyText: JSON.stringify(canonical.statement),
     timestamp: service.hlcClock.now().toString(),

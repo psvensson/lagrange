@@ -284,6 +284,20 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   SELECT_PREPARED_PARTICIPANTS:
     'SELECT participant_id AS participantId FROM _participant_transactions ' +
     'WHERE state = ?',
+  SELECT_PREPARED_ROWS:
+    'SELECT participant_id AS participantId, operations_text AS operationsText, ' +
+    'validation_text AS validationText, prepare_index AS prepareIndex ' +
+    'FROM _participant_transactions WHERE state = ? ' +
+    'ORDER BY COALESCE(prepare_index, 0) ASC, participant_id ASC',
+  SELECT_COMMITTED_ROWS:
+    'SELECT participant_id AS participantId, operations_text AS operationsText, ' +
+    'validation_text AS validationText, prepare_index AS prepareIndex, ' +
+    'decision_index AS decisionIndex FROM _participant_transactions WHERE state = ? ' +
+    'ORDER BY COALESCE(decision_index, 0) ASC, participant_id ASC',
+  SELECT_ORDINARY_APPLIED_COUNT_BETWEEN:
+    'SELECT COUNT(*) AS count FROM _partition_statement_outcomes ' +
+    'WHERE entry_key LIKE \'entry:%\' AND outcome = \'APPLIED\' ' +
+    'AND owner_result_text IS NULL AND log_index > ? AND log_index < ?',
   // A generation table created by an earlier increment-3 build lacks the
   // origin columns; they are added at open, as the outcome table's are.
   GENERATION_TABLE_COLUMNS: 'PRAGMA table_info(_partition_write_generation)',

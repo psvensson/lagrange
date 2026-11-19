@@ -70,9 +70,9 @@ function comparePlacementCandidates(left, right) {
       PLACEMENT_CLASS_ORDER.indexOf(right.placementClass) ||
     PLACEMENT_DEFICIT_SEVERITY.indexOf(left.deficitKind) -
       PLACEMENT_DEFICIT_SEVERITY.indexOf(right.deficitKind) ||
-    systemFirstRank(left) - systemFirstRank(right) ||
     left.distinctHostCount - right.distinctHostCount ||
     left.voterCount - right.voterCount ||
+    systemFirstRank(left) - systemFirstRank(right) ||
     compareText(left.partitionId, right.partitionId);
 }
 

@@ -1,6 +1,7 @@
 // Leader activation and its rebalancer leadership sink. Activation retains
 // the existing gate ordering and resumes durable split/merge mirror workers.
 import {trackLeaderActivation} from '../diagnostics/raft-churn-sync-sections.js';
+import {LEDGER_PARTITION_ID} from './partition-placement-admission-decision.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const {
@@ -70,7 +71,10 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
   /** @private */
   driveRebalancerLeadershipSink() {
     if (this.rebalancerLeadershipSink) {
-      this.rebalancerLeadershipSink.setLeader(this.resolveRebalancerLeadership());
+      const desired = this.partitionId === LEDGER_PARTITION_ID ?
+        Boolean(this.isLeader && !this.isShutdown) :
+        this.resolveRebalancerLeadership();
+      this.rebalancerLeadershipSink.setLeader(desired);
     }
   },
   updateRebalancerLeadership() {

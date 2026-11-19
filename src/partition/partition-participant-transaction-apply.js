@@ -1,36 +1,31 @@
 // The committed application of a partition's transaction commands (TX1 design
-// revision 10, sections 2.3, 2.4, 3.2, 4, 6.1, 6.2 and 0.0.13): the one owner
-// of what a committed PARTICIPANT_PREPARE, PARTICIPANT_DECISION and
-// PARTICIPANT_GENERATION_ORIGIN do on every replica, and of the reservation a PREPARED row
-// places on every other committed write.
-//
-// It runs inside the committed-entry application's callback, in the one
-// SQLite transaction that also writes the rs-raft applied state
-// (raft-rs-application-transaction-owner.js: store.transaction, the callback,
-// then putAppliedState): a row, the operations, their per-operation outcomes,
-// the write generation g and the applied index commit together or not at all.
-// Every disposition is a deterministic function of the committed prefix and
-// the command's bytes, the same on every replica; an environmental failure is
-// the group's host failure, records nothing and the command applies again
-// when the host recovers. The apply never classifies a statement: a committed
-// command runs its operations as carried, through the statement-admission
-// owner's committed hook (its kind and rowid rules and the post-statement
-// ceiling, identical on every replica).
-//
-// What applyCommittedEntry returns for a transaction command
-// (PARTITION_COMMITTED_COMMAND_OUTCOME): APPLIED when it wrote its row (a
-// PREPARED, REFUSED or TOMBSTONE row, or a decided transition), REPLAYED for
-// an idempotent repeat answered from the row, RESERVED_REFUSED for a PREPARE
-// that met another transaction's reservation, RECORDED_ONLY for a typed
-// refusal consumed without a write.
-//
-// Every PREPARE and decision first compares its carried execution envelope
-// with this replica's build and applies as carried either way (a mismatch is
-// a counted diagnostic, design 2.3 step 0). A decision that moves a PREPARED
-// row re-admits, after its commit, the writes the leader parked while the
-// partition was reserved (design 7, decision X); a write this leader
-// proposed that meets the reservation at apply is parked again under its
-// entryId instead of answered.
+// revision 10, sections 2.3, 2.4, 3.2, 4, 6.1, 6.2 and 0.0.13;
+// architecture/contracts/authority-and-recovery.md; architecture/runtime-contracts.md):
+// - Public entries: applyCommittedTransactionCommand, operationResultsOf,
+//   settleReservedCommittedStatement.
+// - Required collaborators: PartitionService (`db`, `partitionId`, `tableName`,
+//   `logger`, `resolveCommittedWrite`, `rejectCommittedWrite`, `emit`),
+//   partition-participant-transaction-store.js, partition-participant-transaction-session.js,
+//   partition-participant-transaction-bytes.js, partition-statement-admission.js,
+//   partition-committed-statement-outcome.js, partition-cdc-owed-admission.js,
+//   partition-cdc-obligation.js.
+// - Durable authority & commit point: runs inside the single committed-entry
+//   SQLite application transaction (raft-rs-application-transaction-owner.js)
+//   that atomically commits `_participant_transactions`, user-table operations,
+//   `_partition_statement_outcomes`, `_cdc_obligations`,
+//   `_partition_write_generation` and `_raft_rs_applied_state`.
+// - Permitted post-commit work: proposer answer resolution, parked-write
+//   re-admission on reservation release (`readmitReservedWrites`), size-update
+//   scheduling, write-traffic accounting and `ENTRY_COMMITTED` emission via
+//   `committed.afterCommit`; volatile row-key reset and proposer rejection via
+//   `committed.afterRollback`.
+// - Recovery/wake entry: committed log replay through
+//   `applyCommittedTransactionCommand`; reservation release wakes parked writes
+//   via `readmitReservedWrites` and row-key waiters via
+//   `clearPreparedParticipantRowKeys` / `recordCommittedParticipantRowKeys`.
+// - Representative tests: test/partition/partition-participant-transaction-apply.test.js,
+//   test/partition/partition-transaction-replicated-apply-v3.test.js,
+//   test/query/scenario-a-transaction-coordination-fast-path.test.js.
 
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
   './partition-cdc-owed-admission.js';
@@ -98,6 +93,7 @@ import {
   extractOperationsRowKeyFootprint,
   isPartitionReservedForPrepare,
   recordCommittedParticipantRowKeys,
+  resetParticipantRowKeyHistory,
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 
@@ -248,8 +244,8 @@ function preparedRowOf(committed, fields) {
 
 // Steps 3, 6 and 7: a REFUSED row, a control row that never moves g.
 function refusePrepare(service, committed, {cause, detail}) {
-  committed.afterCommit(() =>
-    clearPreparedParticipantRowKeys(service, committed.command.participantId));
+  clearPreparedParticipantRowKeys(service, committed.command.participantId);
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   insertParticipantTransactionRow(service.db, preparedRowOf(committed,
     {state: STATE.REFUSED, refusalCause: cause, refusalDetail: detail}));
   service.logger.warn(LOG_MSG.ROW_REFUSED, {
@@ -354,7 +350,9 @@ function applyParticipantPrepare(service, committed) {
     command.participantId,
     footprint.rowKeys,
     footprint.hasUnscopedWrite,
+    command.validationText,
   );
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   answerProposer(service, committed, {success: true,
     ...rowAnswer(service, command)});
   return OUTCOME.APPLIED;
@@ -421,10 +419,10 @@ function releaseReservation(service, committed) {
 
 // An atomicity alarm: the row is settled REFUSED alike on every replica.
 function refuseCommit(service, committed, refusal) {
-  committed.afterCommit(() =>
-    clearPreparedParticipantRowKeys(service, committed.command.participantId));
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.REFUSED, refusal));
+  clearPreparedParticipantRowKeys(service, committed.command.participantId);
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   releaseReservation(service, committed);
   alarmRefusal(service, committed, CODE.COMMIT_REFUSED,
     rowAnswer(service, committed.command));
@@ -480,16 +478,17 @@ function commitPrepared(service, committed, row) {
       committed.command.participantId,
       footprint.rowKeys,
       footprint.hasUnscopedWrite,
+      row.validationText,
     );
-    committed.afterCommit(() => recordCommittedParticipantRowKeys(
+    recordCommittedParticipantRowKeys(
       service,
       committed.command.participantId,
       committedGeneration,
-    ));
+    );
   } else {
-    committed.afterCommit(() =>
-      clearPreparedParticipantRowKeys(service, committed.command.participantId));
+    clearPreparedParticipantRowKeys(service, committed.command.participantId);
   }
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   recordCommittedWriteTraffic(service, committed.afterCommit, operations.length);
   answerProposer(service, committed, {success: true, results: applied.results,
     ...rowAnswer(service, committed.command)});
@@ -506,10 +505,10 @@ function decideOverPrepared(service, committed, row) {
   if (command.decision === DECISION.COMMIT) {
     return commitPrepared(service, committed, row);
   }
-  committed.afterCommit(() =>
-    clearPreparedParticipantRowKeys(service, command.participantId));
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.ROLLED_BACK));
+  clearPreparedParticipantRowKeys(service, command.participantId);
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   releaseReservation(service, committed);
   answerProposer(service, committed, {success: true,
     ...rowAnswer(service, command)});
@@ -565,8 +564,8 @@ function decideAbsent(service, committed) {
     return alarmRefusal(service, committed, CODE.NOT_PREPARED,
       participantOutcomeOf(null));
   }
-  committed.afterCommit(() =>
-    clearPreparedParticipantRowKeys(service, command.participantId));
+  clearPreparedParticipantRowKeys(service, command.participantId);
+  committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   insertParticipantTransactionRow(service.db, {
     transactionId: command.transactionId,
     participantId: command.participantId,

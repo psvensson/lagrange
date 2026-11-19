@@ -1,15 +1,10 @@
-// Transport, admission and deterministic application of the placement
-// owner's two committed commands (quest replica-placement-admission-owner,
-// design section 2.5), on the replica_operations-p1 partition. Modelled on
-// the coordinator settlement: the request is answered on the leader (a
-// remote proposer reaches it through the PLACEMENT_ADMIT partition message,
-// never through the SQL engine); the applier runs inside the apply
-// transaction on every replica in the order the settlement uses - validate,
-// replay a settled entry key's recorded answer, re-park on a partition
-// reservation - then counts its rows against the CDC owed bound and decides
-// over every committed row (partition-placement-admission-decision.js). Its
-// typed outcome is recorded under the entryId, CDC carries the full row
-// images, and ENTRY_COMMITTED is emitted for an admission and a refusal alike.
+// Public entry: requestPlacementAdmission, requestPlacementHoldRelease, routePlacementAdmission, applyPlacementCommand.
+// Required collaborators: PartitionService (replica_operations-p1), buildPlacementCommand, decidePlacementAdmission, decideHoldRelease.
+// Durable authority / commit point: replica_operations and _partition_statement_outcomes rows committed in applyCommittedEntrySliceTransaction.
+// Permitted post-commit work: resolveCommittedWrite and emit PARTITION_SERVICE_EVENT.ENTRY_COMMITTED via afterCommit; rejectCommittedWrite via afterRollback.
+// Recovery / wake entry: settled _partition_statement_outcomes rows replay identical command fingerprints and reject same-ID/different-command collisions.
+// Representative production tests: test/partition/placement-admission-apply.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
+import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
@@ -42,7 +37,33 @@ import {PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
   './partition-placement-admission-constants.js';
 
 const EVENT_KEY_SEPARATOR = ':';
+const FINGERPRINT_HEX_LENGTH = 12;
+const HEX_RADIX = 16;
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
+const PENDING_FINGERPRINTS_FIELD = 'pendingPlacementCommandFingerprints';
 const OUTCOMES = Object.freeze(new Set(Object.values(PLACEMENT_OUTCOME)));
+
+function pendingFingerprintsOf(service) {
+  let map = service[PENDING_FINGERPRINTS_FIELD];
+  if (map === undefined) {
+    map = new Map();
+    service[PENDING_FINGERPRINTS_FIELD] = map;
+  }
+  return map;
+}
+
+function commandFingerprintOf(command) {
+  return Number.parseInt(createHash(HASH_ALGORITHM)
+    .update(`${command.type}:${command.bodyText}`)
+    .digest(HASH_ENCODING)
+    .slice(0, FINGERPRINT_HEX_LENGTH), HEX_RADIX);
+}
+
+function isSameCommandReplay(recorded, command) {
+  return Number.isSafeInteger(recorded.lastInsertRowid) &&
+    recorded.lastInsertRowid === commandFingerprintOf(command);
+}
 
 function refusal(service, failureCode) {
   return {success: false, admitted: false, partitionId: service.partitionId,
@@ -54,11 +75,19 @@ function placementAnswer(service, result, fields = {}) {
     partitionId: service.partitionId, [PLACEMENT_RESULT_FIELD]: result, ...fields};
 }
 
+function deepFreezeResult(value) {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const child of Object.values(value)) deepFreezeResult(child);
+  return Object.freeze(value);
+}
+
 function retainedResult(recorded) {
   if (typeof recorded.ownerResultText !== 'string') throw new Error(ERROR.RESULT);
   const result = JSON.parse(recorded.ownerResultText);
   if (!OUTCOMES.has(result?.outcome)) throw new Error(ERROR.RESULT);
-  return Object.freeze(result);
+  return deepFreezeResult(result);
 }
 
 function recordedAnswer(service, recorded) {
@@ -82,11 +111,27 @@ function proposePlacementCommand(service, command) {
   }
   const recorded = readCommittedStatementOutcome(service,
     service.getCommittedEntryKey(command));
-  if (recorded.state === RECORD.SETTLED) return recordedAnswer(service, recorded);
+  if (recorded.state === RECORD.SETTLED) {
+    return isSameCommandReplay(recorded, command) ?
+      recordedAnswer(service, recorded) : refusal(service, ERROR.BYTES);
+  }
+  const fingerprint = commandFingerprintOf(command);
+  const pendingFingerprints = pendingFingerprintsOf(service);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
-  if (pending !== null) return pending;
-  return startPartitionRaftWriteCommit(service, {entry: command, phaseTimings: null,
-    applyStartMs: service.timeSource.now(), park: isPartitionReserved(service.db)});
+  if (pending !== null) {
+    return pendingFingerprints.get(command.entryId) === fingerprint ?
+      pending : refusal(service, ERROR.BYTES);
+  }
+  pendingFingerprints.set(command.entryId, fingerprint);
+  const commitPromise = startPartitionRaftWriteCommit(service, {entry: command,
+    phaseTimings: null, applyStartMs: service.timeSource.now(),
+    park: isPartitionReserved(service.db)});
+  Promise.resolve(commitPromise).finally(() => {
+    if (pendingFingerprints.get(command.entryId) === fingerprint) {
+      pendingFingerprints.delete(command.entryId);
+    }
+  }).catch(() => {});
+  return commitPromise;
 }
 
 async function requestPlacementCommand(service, type, payload) {
@@ -192,6 +237,7 @@ function applyPlacementCommand(service, committed) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
+    if (!isSameCommandReplay(recorded, command)) throw new Error(ERROR.BYTES);
     const answer = recordedAnswer(service, recorded);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
@@ -202,7 +248,9 @@ function applyPlacementCommand(service, committed) {
   try {
     const {result, rows, operation} = decide(service, committed);
     recordCommittedStatementOutcome(service, {entryKey, outcome: APPLY.APPLIED,
-      index, term, ownerResultText: JSON.stringify(result)});
+      index, term, result: {changes: rows.length,
+        lastInsertRowid: commandFingerprintOf(command)},
+      ownerResultText: JSON.stringify(result)});
     if (rows.length > 0) {
       recordCommittedOperationCdc(service, committed,
         cdcEventsOf(service, {command, index, term, entryKey}, rows, operation));

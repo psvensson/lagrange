@@ -582,5 +582,6 @@ export {
   isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
   pickTypedWriteAnswer,
+  resolveEntryId,
   resolvePartitionWriteCommitMode,
 };

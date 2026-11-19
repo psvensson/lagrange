@@ -431,6 +431,10 @@ async function startReplica(replicaId, extra, partitionId = PARTITION_ID) {
   const replica = createReplica(replicaId, extra, partitionId);
   try {
     await replica.initialize();
+    const persistedApplied = durableAppliedIndex(replica);
+    if (persistedApplied > replica.controllablePort.committedIndex) {
+      replica.controllablePort.committedIndex = persistedApplied;
+    }
     if (extra?.generationOrigin !== false && originOf(replica) === null) {
       replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
       applyCommitted(replica, originCommandOf(partitionId));

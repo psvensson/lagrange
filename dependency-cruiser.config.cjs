@@ -2,6 +2,10 @@ const DEPENDENCY_RULE = Object.freeze({
   NO_CIRCULAR: 'no-circular',
   NO_ORPHANS: 'no-orphans',
   NOT_TO_UNRESOLVABLE: 'not-to-unresolvable',
+  PARTITION_APPLY_NO_TRANSPORT_CACHE_OR_PLANNER:
+    'partition-apply-no-transport-cache-or-planner',
+  PARTITION_DECISION_AND_STORE_NO_INDIRECT_NONDETERMINISTIC_CAPABILITIES:
+    'partition-decision-and-store-no-indirect-nondeterministic-capabilities',
 });
 const DEPENDENCY_RULE_COMMENT = Object.freeze({
   NO_CIRCULAR: 'Disallow circular dependencies.',
@@ -9,6 +13,14 @@ const DEPENDENCY_RULE_COMMENT = Object.freeze({
   NOT_TO_UNRESOLVABLE: 'A relative import must resolve to a file: a module ' +
     'deleted while something still imports it fails only when that importer ' +
     'loads, which a selected proof may never do.',
+  PARTITION_APPLY_NO_TRANSPORT_CACHE_OR_PLANNER:
+    'Deterministic partition apply, store, decision and command modules must ' +
+    'not import transport, volatile cache, control-plane readiness, wall-clock ' +
+    'time sources, or rebalancer workflow/planner modules.',
+  PARTITION_DECISION_AND_STORE_NO_INDIRECT_NONDETERMINISTIC_CAPABILITIES:
+    'Pure decision, store, bytes and command modules must not transitively ' +
+    'reach transport, volatile cache, CDC delivery, wall-clock time sources, ' +
+    'query engines, or rebalancer workflow/planner execution.',
 });
 const DEPENDENCY_RULE_SEVERITY = Object.freeze({
   ERROR: 'error',
@@ -23,6 +35,30 @@ const DEPENDENCY_PATH = Object.freeze({
   INDEX_ENTRY: '(^|/)src/index\\.js$',
   NODE_MODULE_PACKAGE: 'node_modules/[^/]+',
   NODE_MODULES: 'node_modules',
+  PARTITION_APPLY_AND_DECISION_MODULES:
+    '(^|/)src/(partition/(partition-participant-transaction-(apply|store|bytes)|' +
+    'partition-placement-admission-(decision|command|identity))|' +
+    'rebalancer/replica-placement-owner-admission-statement)\\.js$',
+  PARTITION_PURE_DECISION_AND_STORE_MODULES:
+    '(^|/)src/(partition/(partition-participant-transaction-(store|bytes)|' +
+    'partition-placement-admission-(decision|command|identity))|' +
+    'rebalancer/replica-placement-owner-admission-statement)\\.js$',
+  PARTITION_APPLY_FORBIDDEN_DIRECT:
+    '(^|/)(src/(transport|cache|control-plane|api|cli|admin|time)/|' +
+    'src/bootstrap/(bootstrap-)?readiness-|' +
+    'src/rebalancer/(replica-placement-owner(-deficits|-order)?\\.js$|' +
+    'operation-workflow-|unified-rebalancer|move-planner|' +
+    'replica-operation-executor|replica-operation-repository\\.js$)|' +
+    'src/query/distributed/distributed-transaction-coordinator)|' +
+    '(^(node:)?(http|https|net|tls|dgram|dns|child_process|worker_threads|fs)(/|$))',
+  PARTITION_DECISION_FORBIDDEN_REACHABLE:
+    '(^|/)(src/(transport|cache|cdc|time|api|cli|admin|query)/|' +
+    'src/bootstrap/(bootstrap-)?readiness-|' +
+    'src/control-plane/(?!owners/service-(install-catalog|instance)-contract\\.js$)|' +
+    'src/rebalancer/(replica-placement-owner(-deficits|-order)?\\.js$|' +
+    'operation-workflow-|unified-rebalancer|move-planner|' +
+    'replica-operation-executor|replica-operation-repository\\.js$))|' +
+    '(^(node:)?(http|https|net|tls|dgram|dns|child_process|worker_threads|fs)(/|$))',
   REQUEST_CELL_WORKER_ENTRY:
     '(^|/)src/runtime/wasi-component-cell-worker\\.js$',
   COMPONENT_DERIVATION_WORKER_ENTRY:
@@ -50,6 +86,32 @@ module.exports = {
       from: {},
       to: {
         circular: true,
+      },
+    },
+    {
+      name: DEPENDENCY_RULE.PARTITION_APPLY_NO_TRANSPORT_CACHE_OR_PLANNER,
+      comment:
+        DEPENDENCY_RULE_COMMENT.PARTITION_APPLY_NO_TRANSPORT_CACHE_OR_PLANNER,
+      severity: DEPENDENCY_RULE_SEVERITY.ERROR,
+      from: {
+        path: DEPENDENCY_PATH.PARTITION_APPLY_AND_DECISION_MODULES,
+      },
+      to: {
+        path: DEPENDENCY_PATH.PARTITION_APPLY_FORBIDDEN_DIRECT,
+      },
+    },
+    {
+      name: DEPENDENCY_RULE
+        .PARTITION_DECISION_AND_STORE_NO_INDIRECT_NONDETERMINISTIC_CAPABILITIES,
+      comment: DEPENDENCY_RULE_COMMENT
+        .PARTITION_DECISION_AND_STORE_NO_INDIRECT_NONDETERMINISTIC_CAPABILITIES,
+      severity: DEPENDENCY_RULE_SEVERITY.ERROR,
+      from: {
+        path: DEPENDENCY_PATH.PARTITION_PURE_DECISION_AND_STORE_MODULES,
+      },
+      to: {
+        reachable: true,
+        path: DEPENDENCY_PATH.PARTITION_DECISION_FORBIDDEN_REACHABLE,
       },
     },
     {

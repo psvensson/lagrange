@@ -98,26 +98,68 @@ function resolveLeaderAddressStatus(leaderId, leaderAddress, explicitStatus) {
  * @param {Object} options - {database, groupId, index, term, command,
  *   applyCommittedEntry}.
  */
+function normalizeBatchSlices(orderedCommands, batchSizes) {
+  if (!Array.isArray(batchSizes) || batchSizes.length === 0) {
+    return [orderedCommands];
+  }
+  const slices = [];
+  let cursor = 0;
+  for (const rawSize of batchSizes) {
+    const size = Number(rawSize);
+    if (!Number.isSafeInteger(size) || size <= 0 || cursor + size > orderedCommands.length) {
+      throw new RangeError('Invalid batchSizes for applyCommandThroughApplicationOwner');
+    }
+    slices.push(orderedCommands.slice(cursor, cursor + size));
+    cursor += size;
+  }
+  if (cursor !== orderedCommands.length) {
+    throw new RangeError('batchSizes sum must match commands.length');
+  }
+  return slices;
+}
+
+/**
+ * Apply one committed command or an ordered command sequence with explicit
+ * batch boundaries (e.g. `[1, 1]` vs `[2]`) the way the rs-raft runtime applies
+ * committed entries: each command round-trips through the production proposal
+ * codec and each batch runs in one `applyCommittedEntrySliceTransaction` on
+ * the given database. Throws (after rollback effects ran) when application fails.
+ * @param {Object} options - {database, groupId, index, startIndex, term,
+ *   command, commands, batchSizes, applyCommittedEntry}.
+ */
 export function applyCommandThroughApplicationOwner({database, groupId, index,
-  term, command, applyCommittedEntry}) {
-  applyCommittedEntrySliceTransaction({
-    store: new RaftRsDurableStore(database),
-    groupId,
-    entries: [{
-      index: String(index),
-      term: String(term),
-      entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
-      data: Buffer.from(encodeProposal(command)).toString('base64'),
-    }],
-    confState: {},
-    applyCommittedEntry: (bytes, position) => applyCommittedEntry(
-      Object.freeze({
-        command: decodeCommittedProposal(bytes),
-        index: Number(position.index),
-        term: Number(position.term),
-        effects: position.effects,
+  startIndex, term, command, commands, batchSizes, applyCommittedEntry}) {
+  const orderedCommands = Array.isArray(commands) ? commands : [command];
+  if (orderedCommands.length === 0) return;
+  const baseIndex = Number(startIndex ?? index ?? 1);
+  const store = new RaftRsDurableStore(database);
+  const slices = normalizeBatchSlices(orderedCommands, batchSizes);
+  let offset = 0;
+  for (const slice of slices) {
+    applyCommittedEntrySliceTransaction({
+      store,
+      groupId,
+      entries: slice.map((cmd, idx) => ({
+        index: String(baseIndex + offset + idx),
+        term: String(term),
+        entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+        data: Buffer.from(encodeProposal(cmd)).toString('base64'),
       })),
-  });
+      confState: {},
+      applyCommittedEntry: (bytes, position) => applyCommittedEntry(
+        Object.freeze({
+          command: decodeCommittedProposal(bytes),
+          index: Number(position.index),
+          term: Number(position.term),
+          effects: position.effects,
+        })),
+    });
+    offset += slice.length;
+  }
+}
+
+export function applyCommandsThroughApplicationOwner(options) {
+  return applyCommandThroughApplicationOwner(options);
 }
 
 // A peer without a committed node has no address: the production status
@@ -177,17 +219,31 @@ export class ControllableConsensusPort {
    * @param {Object} command - The proposed command.
    */
   commit(command) {
-    const index = this.committedIndex + 1;
-    applyCommandThroughApplicationOwner({
-      database: this.request[RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE],
-      groupId: this.request[RAFT_OPERATION_PORT_REQUEST.GROUP_ID],
-      index,
-      term: this.term,
-      command,
-      applyCommittedEntry:
-        this.request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
-    });
-    this.committedIndex = index;
+    this.commitBatches([command], [1]);
+  }
+
+  commitBatch(commands) {
+    if (!Array.isArray(commands) || commands.length === 0) return;
+    this.commitBatches(commands, [commands.length]);
+  }
+
+  commitBatches(commands, batchSizes = null) {
+    if (!Array.isArray(commands) || commands.length === 0) return;
+    const slices = normalizeBatchSlices(commands, batchSizes);
+    for (const slice of slices) {
+      const startIndex = this.committedIndex + 1;
+      applyCommandThroughApplicationOwner({
+        database: this.request[RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE],
+        groupId: this.request[RAFT_OPERATION_PORT_REQUEST.GROUP_ID],
+        startIndex,
+        term: this.term,
+        commands: slice,
+        batchSizes: [slice.length],
+        applyCommittedEntry:
+          this.request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
+      });
+      this.committedIndex = startIndex + slice.length - 1;
+    }
   }
 
   createOperationPort(request) {
@@ -198,7 +254,14 @@ export class ControllableConsensusPort {
     // same over the replica's own database.
     const database = request[RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE];
     if (database) {
-      new RaftRsDurableStore(database);
+      const store = new RaftRsDurableStore(database);
+      const groupId = this.groupId ?? request[RAFT_OPERATION_PORT_REQUEST.GROUP_ID];
+      if (this.committedIndex === 0 && groupId) {
+        const durableApplied = Number(store.readDurableProgress(groupId).appliedIndex);
+        if (Number.isSafeInteger(durableApplied) && durableApplied > 0) {
+          this.committedIndex = durableApplied;
+        }
+      }
     }
     if (!this.peersGiven) {
       // The production port's initial configuration: every bootstrap peer

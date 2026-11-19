@@ -9,8 +9,11 @@
 // the planned input positions and the moves.
 import {ALLOWED_UNIFIED_SERVICE_TYPES, UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
-import {copyDenseOwnDataRecordArray, copyStrictOwnDataRecord} from
-  '../utils/strict-own-data.js';
+import {
+  copyDenseOwnDataArray,
+  copyDenseOwnDataRecordArray,
+  copyStrictOwnDataRecord,
+} from '../utils/strict-own-data.js';
 import {OperationType} from './replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
@@ -63,7 +66,8 @@ function isNullOrPositiveInteger(value) {
 // The planning epoch the dispatch gate fences on: null (unbound) or bound.
 function isNullOrEpoch(value) {
   return value === null ||
-    decodeMembershipPublicationEpochBinding(value).state === EPOCH.BOUND;
+    (Number.isSafeInteger(value) &&
+      decodeMembershipPublicationEpochBinding(value).state === EPOCH.BOUND);
 }
 
 function hasExactFields(record, fields) {
@@ -212,8 +216,39 @@ function isFullSourceCapacity(placementClass, repair) {
  *   repairWaitingSourceNodeIds (a Set), kSrc}.
  * @return {number} kSrcForClass.
  */
-function resolveSourceCapacityForClass({placementClass, repair,
-  copySourceNodeId, repairWaitingSourceNodeIds, kSrc}) {
+const MOVE_ALLOWED_KEYS = Object.freeze(new Set(MOVE_FIELDS));
+const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
+  'partitionId', 'placementClass', 'repair', 'move',
+]);
+const CANDIDATE_ALLOWED_KEYS = Object.freeze(new Set([
+  ...CANDIDATE_REQUIRED_FIELDS, 'deficitKind', 'distinctHostCount', 'voterCount',
+]));
+const CONTEXT_FIELDS = Object.freeze([
+  'sourceNodeId', 'repairWaitingSourceNodeIds', 'formationLatchEpoch',
+  'membershipPublicationEpoch', 'positions',
+]);
+const FOUNDING_FIELDS = Object.freeze([
+  'partitionId', 'placementClass', 'foundingIntentId', 'targetNodeIds',
+  'sourceNodeId', 'formationLatchEpoch', 'positions',
+]);
+
+function invalidStatementError() {
+  const error = new Error(PLACEMENT_STATEMENT_ERROR.INVALID);
+  error.code = PLACEMENT_STATEMENT_ERROR.INVALID;
+  return error;
+}
+
+function resolveSourceCapacityForClass(input) {
+  const record = copyStrictOwnDataRecord(input);
+  if (record === null ||
+      !(record.repairWaitingSourceNodeIds instanceof Set) ||
+      !PLACEMENT_CLASS_ORDER.includes(record.placementClass) ||
+      typeof record.repair !== 'boolean' ||
+      !isPositiveInteger(record.kSrc)) {
+    throw invalidStatementError();
+  }
+  const {placementClass, repair, copySourceNodeId,
+    repairWaitingSourceNodeIds, kSrc} = record;
   if (isFullSourceCapacity(placementClass, repair)) return kSrc;
   return repairWaitingSourceNodeIds.has(copySourceNodeId) ? kSrc - 1 : kSrc;
 }
@@ -221,14 +256,17 @@ function resolveSourceCapacityForClass({placementClass, repair,
 function requireStatement(raw) {
   const canonical = canonicalPlacementStatement(raw);
   if (canonical.validity !== PLACEMENT_STATEMENT_VALIDITY.VALID) {
-    const error = new Error(PLACEMENT_STATEMENT_ERROR.INVALID);
-    error.code = PLACEMENT_STATEMENT_ERROR.INVALID;
-    throw error;
+    throw invalidStatementError();
   }
   return canonical.statement;
 }
 
-function moveOf(move) {
+function moveOf(value) {
+  const move = copyStrictOwnDataRecord(value);
+  if (move === null ||
+      !Object.keys(move).every((field) => MOVE_ALLOWED_KEYS.has(field))) {
+    return null;
+  }
   return {type: move.type, targetNodeId: move.targetNodeId,
     replicaId: move.replicaId ?? null,
     sourceReplicaId: move.sourceReplicaId ?? null,
@@ -237,63 +275,73 @@ function moveOf(move) {
     targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null};
 }
 
-/**
- * The statement of one ordered owner candidate (a PLACEMENT move).
- * @param {Object} candidate - {partitionId, placementClass, repair, move}.
- * @param {Object} context - {sourceNodeId, repairWaitingSourceNodeIds,
- *   formationLatchEpoch, membershipPublicationEpoch, positions}.
- * @return {Object} The frozen canonical statement.
- */
+function isValidCandidateRecord(record) {
+  return record !== null &&
+    CANDIDATE_REQUIRED_FIELDS.every((field) => Object.hasOwn(record, field)) &&
+    Object.keys(record).every((field) => CANDIDATE_ALLOWED_KEYS.has(field));
+}
+
 function buildPlacementAdmissionStatement(candidate, context) {
+  const candidateRecord = copyStrictOwnDataRecord(candidate);
+  const contextRecord = copyStrictOwnDataRecord(context);
+  const move = moveOf(candidateRecord?.move);
+  if (!isValidCandidateRecord(candidateRecord) ||
+      !hasExactFields(contextRecord, CONTEXT_FIELDS) ||
+      move === null ||
+      !(contextRecord.repairWaitingSourceNodeIds instanceof Set)) {
+    return requireStatement(null);
+  }
   const kSrc = PLACEMENT_COPY_CAPACITY.K_SRC;
-  const ledger = candidate.placementClass === PLACEMENT_CLASS.LEDGER;
+  const ledger = candidateRecord.placementClass === PLACEMENT_CLASS.LEDGER;
   return requireStatement({
     transitionKind: KIND.PLACEMENT,
     entityType: UNIFIED_SERVICE_TYPE.PARTITION,
-    entityId: candidate.partitionId,
-    partitionId: candidate.partitionId,
-    placementClass: candidate.placementClass,
-    repair: candidate.repair,
+    entityId: candidateRecord.partitionId,
+    partitionId: candidateRecord.partitionId,
+    placementClass: candidateRecord.placementClass,
+    repair: candidateRecord.repair,
     kSrc,
     kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
     kSrcForClass: resolveSourceCapacityForClass({
-      placementClass: candidate.placementClass, repair: candidate.repair,
-      copySourceNodeId: candidate.move.copySourceNodeId,
-      repairWaitingSourceNodeIds: context.repairWaitingSourceNodeIds, kSrc}),
+      placementClass: candidateRecord.placementClass,
+      repair: candidateRecord.repair,
+      copySourceNodeId: move.copySourceNodeId,
+      repairWaitingSourceNodeIds: contextRecord.repairWaitingSourceNodeIds,
+      kSrc,
+    }),
     dispatchHold: ledger ? PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE : null,
-    formationLatchEpoch: context.formationLatchEpoch,
+    formationLatchEpoch: contextRecord.formationLatchEpoch,
     foundingIntentId: null,
-    sourceNodeId: context.sourceNodeId,
-    membershipPublicationEpoch: context.membershipPublicationEpoch,
-    positions: context.positions,
-    moves: [moveOf(candidate.move)],
+    sourceNodeId: contextRecord.sourceNodeId,
+    membershipPublicationEpoch: contextRecord.membershipPublicationEpoch,
+    positions: contextRecord.positions,
+    moves: [move],
   });
 }
 
-/**
- * The FOUND statement of a new partition's whole founding set.
- * @param {Object} founding - {partitionId, placementClass, foundingIntentId,
- *   targetNodeIds, sourceNodeId, formationLatchEpoch, positions}.
- * @return {Object} The frozen canonical statement.
- */
 function buildFoundingAdmissionStatement(founding) {
+  const foundingRecord = copyStrictOwnDataRecord(founding);
+  const targetNodeIds = copyDenseOwnDataArray(foundingRecord?.targetNodeIds);
+  if (!hasExactFields(foundingRecord, FOUNDING_FIELDS) || targetNodeIds === null) {
+    return requireStatement(null);
+  }
   return requireStatement({
     transitionKind: KIND.FOUND,
     entityType: UNIFIED_SERVICE_TYPE.PARTITION,
-    entityId: founding.partitionId,
-    partitionId: founding.partitionId,
-    placementClass: founding.placementClass,
+    entityId: foundingRecord.partitionId,
+    partitionId: foundingRecord.partitionId,
+    placementClass: foundingRecord.placementClass,
     repair: false,
     kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
     kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
     kSrcForClass: PLACEMENT_COPY_CAPACITY.K_SRC,
     dispatchHold: null,
-    formationLatchEpoch: founding.formationLatchEpoch,
-    foundingIntentId: founding.foundingIntentId,
-    sourceNodeId: founding.sourceNodeId,
+    formationLatchEpoch: foundingRecord.formationLatchEpoch,
+    foundingIntentId: foundingRecord.foundingIntentId,
+    sourceNodeId: foundingRecord.sourceNodeId,
     membershipPublicationEpoch: null,
-    positions: founding.positions,
-    moves: founding.targetNodeIds.map((targetNodeId) => moveOf({
+    positions: foundingRecord.positions,
+    moves: targetNodeIds.map((targetNodeId) => moveOf({
       type: OperationType.ADD, targetNodeId})),
   });
 }

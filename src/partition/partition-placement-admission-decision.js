@@ -1,10 +1,9 @@
-// The placement admission applier's decision over the committed ledger at
-// its log position (quest replica-placement-admission-owner, design section
-// 2.5 steps 4-8): a pure function of the command and the replica_operations
-// rows this replica has applied, never of the clock, a cache or the locale,
-// so every replica decides the same. It is the one canonical owner of
-// target-wide and source-wide copy occupancy: every committed row counts,
-// whichever coordinator or owner created it.
+// Public entry: decidePlacementAdmission, decideHoldRelease, readPlacementCensus, isOccupyingCopy, LEDGER_PARTITION_ID.
+// Required collaborators: PartitionService SQLite db connection inside apply transaction (replica_operations-p1).
+// Durable authority / commit point: replica_operations rows in SQLite read and mutated inside applyPlacementCommand's SQLite transaction.
+// Permitted post-commit work: none; returns frozen decision results and row images to applyPlacementCommand.
+// Recovery / wake entry: readPlacementCensus re-reads durable replica_operations rows on leader start and pass evaluation.
+// Representative production tests: test/partition/placement-admission-apply.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {classifySystemPartition, SYSTEM_PARTITION_CLASS} from
   '../bootstrap/system-partition-classification.js';
@@ -81,7 +80,7 @@ function refused(reason, detail = {}) {
 }
 
 function idsOf(rows) {
-  return rows.map((row) => row.operationId);
+  return Object.freeze(rows.map((row) => row.operationId));
 }
 
 // A copy occupies its copy source and its target while its durable step is
@@ -147,7 +146,7 @@ function claimRefusal(db, statement) {
   if (claimKey === null) return null;
   const holder = db.prepare(CLAIM_SQL).get(claimKey);
   return holder === undefined ? null :
-    refused(REFUSAL.TARGET_CLAIM_TAKEN, {operationIds: [holder.operation_id]});
+    refused(REFUSAL.TARGET_CLAIM_TAKEN, {operationIds: Object.freeze([holder.operation_id])});
 }
 
 function ledgerPartitionRefusal(command) {
@@ -253,7 +252,7 @@ function decidePlacementAdmission(db, {command, statement, index}) {
     copy_source_node_id: statement.moves[ordinal].copySourceNodeId}));
   for (const row of rows) insertRow(db, row);
   return {result: Object.freeze({outcome: PLACEMENT_OUTCOME.ADMITTED,
-    operationIds: rows.map((row) => row.operation_id)}), rows};
+    operationIds: Object.freeze(rows.map((row) => row.operation_id))}), rows};
 }
 
 /**
@@ -285,7 +284,7 @@ function decideHoldRelease(db, {command, release}) {
   db.prepare(RELEASE_SQL).run(JSON.stringify(history), command.proposedAt,
     held.operationId);
   return {result: Object.freeze({outcome: PLACEMENT_OUTCOME.RELEASED,
-    operationIds: [held.operationId]}),
+    operationIds: Object.freeze([held.operationId])}),
   rows: [Object.freeze({...db.prepare(ROW_SQL).get(held.operationId)})]};
 }
 

@@ -1,0 +1,67 @@
+{
+  "schema": "test-receipt/1",
+  "epic": "es6-owner-safety",
+  "status": "pass",
+  "testFileDigests": {
+    "test/query/scenario-a-transaction-coordination-fast-path.test.js": "b188d47120ef8e6b72ee63f08cb4ad22f04408ae365d050d3722b83c7b513ec1",
+    "test/partition/partition-participant-transaction-apply.test.js": "e831cd12a988324fb5ae9ab49139749b90236f41d44317830911850babe0789d",
+    "test/rebalancer/replica-placement-owner-core.test.js": "5bd9166ef20246840e375624f056de38c446d8d55c2c30435b6d4405edf7b022",
+    "test/partition/placement-admission-apply.test.js": "3a2d6417ed6f32a70efb7952a216174d7e73b44fc4e4f028a371e05f597ef26d",
+    "test/convergence/dt-placement-owner-formation-drain.test.js": "d43bcdd753be380dab33699a88b071b68aed97029a4395d331aac8733a43ed60"
+  },
+  "source": {
+    "base": "0970ab012f65456cad34cfadfa92fb420f7f09ef",
+    "branch": "candidate/reconciliation-20261119"
+  },
+  "generatedAt": "2026-11-19T15:50:30.000Z",
+  "receipts": [
+    {
+      "id": "committed-batch-recovery-witness",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/query/scenario-a-transaction-coordination-fast-path.test.js test/partition/partition-participant-transaction-apply.test.js",
+      "testFile": "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+      "detail": "P1: Ordered participant commands applied identically across [1, 1] and [2] batch boundaries through the production proposal codec and applyCommittedEntrySliceTransaction, file-backed SQLite reopen with fresh PartitionService owners and absent volatile history, and rollback atomicity at the real transaction boundary."
+    },
+    {
+      "id": "durable-prepared-conflict-authority",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/query/scenario-a-transaction-coordination-fast-path.test.js test/partition/partition-participant-transaction-apply.test.js",
+      "testFile": "test/query/scenario-a-transaction-coordination-fast-path.test.js",
+      "detail": "P2: Synchronous generation history update inside the SQLite apply transaction, afterRollback volatile history reset, durable reconstruction of STATE.PREPARED and STATE.COMMITTED footprints and prepare-time generations on reopen, preservation across leadership change and >1,024 history eviction, primary-key and secondary-UNIQUE conflict coverage (INSERT/UPDATE/DELETE), schema-change fencing, contradictory historical PREPARED rows on reopen, and 3-replica native rs-raft participant group convergence."
+    },
+    {
+      "id": "production-construction-and-binding",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/rebalancer/replica-placement-owner-core.test.js test/convergence/dt-placement-owner-formation-drain.test.js",
+      "testFile": "test/rebalancer/replica-placement-owner-core.test.js",
+      "detail": "P3: Collaborator validation in createReplicaPlacementOwner and attachReplicaPlacementOwner before side effects, fail-closed canAdmitRemove when workflowOwner is absent, and shared production binding via ControlPlaneSetup.attachReplicaPlacementOwner and PartitionService.setRebalancerLeadershipSink where detaching the binding breaks activation."
+    },
+    {
+      "id": "proposal-attempt-replay",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/rebalancer/replica-placement-owner-core.test.js test/partition/placement-admission-apply.test.js test/convergence/dt-placement-owner-formation-drain.test.js",
+      "testFile": "test/partition/placement-admission-apply.test.js",
+      "detail": "P4: Proposal identity minting via resolveEntryId(null), retaining one entryId and canonical body across OUTCOME_UNKNOWN and retryable pre-commit deferrals, new identity for new work and across owner reconstruction, SHA-256 command-fingerprint binding in _partition_statement_outcomes and in-flight pending map rejecting same-ID/different-command replay at both request and apply, and unresolved attempt reconciliation on leadership start."
+    },
+    {
+      "id": "runtime-contracts-and-owner-navigation",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/query/scenario-a-transaction-coordination-fast-path.test.js test/rebalancer/replica-placement-owner-core.test.js test/partition/placement-admission-apply.test.js",
+      "testFile": "test/rebalancer/replica-placement-owner-core.test.js",
+      "detail": "P5: ES6-only strict own-data boundary validation, deep cloning and freezing of caller-owned nested inputs and outputs, direct and transitive (reachable: true) dependency-cruiser rules with synthetic negative witnesses, and P5 owner headers with regenerated source owner indexes and import graph."
+    },
+    {
+      "id": "independent-verification",
+      "measured": true,
+      "passed": true,
+      "command": "node scripts/run-classified-test-files.js test/query/scenario-a-transaction-coordination-fast-path.test.js test/partition/partition-participant-transaction-apply.test.js test/rebalancer/replica-placement-owner-core.test.js test/partition/placement-admission-apply.test.js test/convergence/dt-placement-owner-formation-drain.test.js",
+      "testFile": "test/convergence/dt-placement-owner-formation-drain.test.js",
+      "detail": "Independent verification across P1-P5 by subagents 46ff33d8-eb27-4da1-bbf2-30a6752ea9f1, 28b525dc-a30b-43a1-88b1-c46a4d169e36, 3cd25c0e-8073-4377-a344-4a0246312509, and 21239293-3dcb-4494-b9b5-c0a57559b4b0."
+    }
+  ]
+}

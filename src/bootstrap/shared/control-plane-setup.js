@@ -52,6 +52,9 @@ import {
   RebalanceCoordinator,
 } from '../../rebalancer/rebalance-coordinator.js';
 import {
+  attachReplicaPlacementOwner,
+} from '../../rebalancer/replica-placement-owner.js';
+import {
   StorageAdmissionService,
 } from '../../rebalancer/storage-admission-service.js';
 import {
@@ -605,6 +608,30 @@ class ControlPlaneSetup {
     service.serviceLifecycleCommandOwner = controlPlane.serviceLifecycleCommandOwner;
     service.systemMetadataOwners = controlPlane.systemMetadataOwners;
     service.controlPlaneSystemTableGateway = controlPlane.controlPlaneSystemTableGateway;
+  }
+
+  /**
+   * Construct and bind the replica placement owner to replica_operations-p1's
+   * leadership sink using the node's shared control-plane collaborators.
+   * @param {Object} options - Wiring options.
+   * @return {Object} Frozen attachment handle ({owner, ledgerPartitionService, detach}).
+   */
+  static attachReplicaPlacementOwner(options = {}) {
+    const readiness = options.controlPlaneReadinessService;
+    const coordinator = options.rebalanceCoordinator;
+    return attachReplicaPlacementOwner({
+      nodeId: options.nodeId,
+      ledgerPartitionService: options.ledgerPartitionService,
+      nodeAuthority: readiness ? readiness.serveEligibilityOwner : null,
+      systemTableCache: options.systemTableCache,
+      workflowOwner: coordinator ? coordinator.workflowOwner : null,
+      storageAccountingService: options.storageAccountingService,
+      now: options.now,
+      logger: options.logger,
+      resyncIntervalMs: options.resyncIntervalMs,
+      setIntervalFn: options.setIntervalFn,
+      clearIntervalFn: options.clearIntervalFn,
+    });
   }
 
   /**

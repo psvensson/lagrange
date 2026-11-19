@@ -49,6 +49,9 @@
 import Database from 'better-sqlite3';
 import {EventEmitter} from 'node:events';
 import {
+  ControlPlaneSetup,
+} from '../../src/bootstrap/shared/control-plane-setup.js';
+import {
   INITIAL_MESSAGE_GROUP_ID,
   REPLICA_OPERATIONS_SCHEMA,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -69,14 +72,32 @@ import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {
   PLACEMENT_ADMIT_TYPE,
   PLACEMENT_RELEASE_HOLD_TYPE,
-  PLACEMENT_RESULT_FIELD,
 } from '../../src/partition/partition-placement-admission-constants.js';
 import {
+  buildPlacementCommand,
+} from '../../src/partition/partition-placement-admission-command.js';
+import {
   LEDGER_PARTITION_ID,
-  decideHoldRelease,
-  decidePlacementAdmission,
 } from '../../src/partition/partition-placement-admission-decision.js';
-import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
+import {
+  applyPlacementCommand,
+} from '../../src/partition/partition-placement-admission.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+} from '../../src/partition/partition-cdc-generator.js';
+import {
+  ensureCdcObligationLedger,
+} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {
+  committedStatementEntryKey,
+  createCommittedStatementOutcomeTable,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  openParticipantTransactionStore,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   EXECUTOR_OUTCOME_TYPE,
@@ -88,9 +109,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   PLACEMENT_COPY_CAPACITY,
-  PLACEMENT_OUTCOME,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
-import {ReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {createRoundDriver} from './formation-joint-admission-rounds.js';
@@ -192,12 +211,19 @@ function isPlacementTimer(timer) {
   return PLACEMENT_TIMER_SITES.some((site) => timer.armedBy.startsWith(site));
 }
 
-function createSimulatedLedgerPartitionService({seedHosts, cache}) {
+const LEDGER_STORE_BY_CACHE = new WeakMap();
+
+function getOrCreateSimulatedLedgerStore(cache) {
+  const existing = LEDGER_STORE_BY_CACHE.get(cache);
+  if (existing && existing.db.open) return existing;
   const db = new Database(':memory:');
   db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
   for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) {
     db.exec(indexSql);
   }
+  createCommittedStatementOutcomeTable(db);
+  openParticipantTransactionStore(db);
+  ensureCdcObligationLedger(db);
   const columns = REPLICA_OPERATIONS_SCHEMA.columns.map((c) => c.name);
   const placeholders = columns.map(() => '?').join(', ');
   const upsertStmt = db.prepare(
@@ -212,103 +238,115 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
     if (!row || !row[COLUMN.OPERATION_ID]) return;
     upsertStmt.run(...columns.map((col) => bindVal(row[col])));
   };
-  for (const existing of cache.getAll(TABLES.REPLICA_OPERATIONS)) {
-    syncRowToDb(existing);
+  for (const existingRow of cache.getAll(TABLES.REPLICA_OPERATIONS)) {
+    syncRowToDb(existingRow);
   }
-  const emitter = new EventEmitter();
-  let applyingPlacementCommand = false;
-  let logIndex = 0;
-
+  const store = {
+    db,
+    logIndex: 0,
+    applyingPlacementCommand: false,
+  };
   cache.onCacheApplyChange((tableName, operation, row) => {
-    if (tableName !== TABLES.REPLICA_OPERATIONS || applyingPlacementCommand) return;
+    if (tableName !== TABLES.REPLICA_OPERATIONS || store.applyingPlacementCommand) return;
     if (operation === CDC_OPERATION.DELETE) {
       if (row?.[COLUMN.OPERATION_ID]) deleteStmt.run(row[COLUMN.OPERATION_ID]);
     } else {
       syncRowToDb(row);
     }
   });
+  LEDGER_STORE_BY_CACHE.set(cache, store);
+  return store;
+}
+
+function createSimulatedLedgerPartitionService({seedHosts, cache}) {
+  const store = getOrCreateSimulatedLedgerStore(cache);
+  const {db} = store;
+  const emitter = new EventEmitter();
+  const resolvedWrites = new Map();
 
   const service = Object.assign(emitter, {
     partitionId: LEDGER_PARTITION_ID,
     tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
+    replicaId: `${LEDGER_PARTITION_ID}-r1`,
+    nodeId: seedHosts.nodeId,
     db,
-    close: () => {
-      if (db.open) db.close();
+    systemTableCache: cache,
+    timeSource: {now: seedHosts.now},
+    hlcClock: {now: () => `${seedHosts.now()}:0:${seedHosts.nodeId}`},
+    logger: QUIET_LOGGER,
+    cdcPipelineMetrics: {increment() {}},
+    isLeader: true,
+    isShutdown: false,
+    trackPendingCDCEvent() {},
+    cdcDelivery: {
+      driveCdcObligations: async () => {},
     },
+    getCommittedEntryKey: (command) => committedStatementEntryKey(command),
+    syncCDCGeneratorDependencies: () => ({
+      buildEvent: ({type, tableName, data, whereClause, entryId, timestamp}) => ({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+        cdcEvent: {
+          type,
+          tableName,
+          operation:
+            type === PARTITION_SERVICE_OPERATION.INSERT ?
+              CDC_OPERATION.INSERT :
+              CDC_OPERATION.UPDATE,
+          data,
+          whereClause,
+          entryId,
+          timestamp,
+        },
+      }),
+    }),
+    resolveCommittedWrite: (entryId, answer) => {
+      resolvedWrites.set(entryId, answer);
+    },
+    rejectCommittedWrite: (_entryId, error) => {
+      throw error;
+    },
+    rebalancerLeadershipSink: null,
+    setRebalancerLeadershipSink(sink) {
+      this.rebalancerLeadershipSink =
+        sink && typeof sink.setLeader === 'function' ? sink : null;
+    },
+    close: () => {},
   });
 
-  const admitPlacement = ({entryId, body}) => {
-    logIndex += 1;
-    const command = {
-      type: PLACEMENT_ADMIT_TYPE,
-      entryId,
-      partitionId: LEDGER_PARTITION_ID,
-      proposedBy: seedHosts.nodeId,
-      proposedAt: seedHosts.now(),
-      body,
-    };
-    const {result, rows} = decidePlacementAdmission(db, {
-      command,
-      statement: body,
-      index: logIndex,
-    });
-    applyingPlacementCommand = true;
+  const executePlacementCommand = (type, {entryId, body}) => {
+    const command = buildPlacementCommand(service, {type, entryId, body});
+    store.logIndex += 1;
+    const afterCommitEffects = [];
+    const afterRollbackEffects = [];
     try {
-      for (const row of rows) {
-        cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, CDC_OPERATION.INSERT, {...row});
-      }
-    } finally {
-      applyingPlacementCommand = false;
+      db.transaction(() => {
+        applyPlacementCommand(service, {
+          command,
+          index: store.logIndex,
+          term: 1,
+          afterCommit: (effect) => afterCommitEffects.push(effect),
+          afterRollback: (effect) => afterRollbackEffects.push(effect),
+        });
+      })();
+    } catch (error) {
+      for (const effect of afterRollbackEffects) effect();
+      throw error;
     }
-    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-      partitionId: LEDGER_PARTITION_ID,
-      command,
-    });
-    return {
-      success: result.outcome !== PLACEMENT_OUTCOME.REFUSED,
-      partitionId: LEDGER_PARTITION_ID,
-      committed: true,
-      logIndex,
-      term: 1,
-      [PLACEMENT_RESULT_FIELD]: result,
-    };
+    store.applyingPlacementCommand = true;
+    try {
+      for (const effect of afterCommitEffects) effect();
+    } finally {
+      store.applyingPlacementCommand = false;
+    }
+    const answer = resolvedWrites.get(command.entryId);
+    resolvedWrites.delete(command.entryId);
+    return answer;
   };
 
-  const releasePlacementHold = ({entryId, body}) => {
-    logIndex += 1;
-    const command = {
-      type: PLACEMENT_RELEASE_HOLD_TYPE,
-      entryId,
-      partitionId: LEDGER_PARTITION_ID,
-      proposedBy: seedHosts.nodeId,
-      proposedAt: seedHosts.now(),
-      body,
-    };
-    const {result, rows} = decideHoldRelease(db, {
-      command,
-      release: body,
-    });
-    applyingPlacementCommand = true;
-    try {
-      for (const row of rows) {
-        cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, CDC_OPERATION.UPDATE, {...row});
-      }
-    } finally {
-      applyingPlacementCommand = false;
-    }
-    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-      partitionId: LEDGER_PARTITION_ID,
-      command,
-    });
-    return {
-      success: result.outcome !== PLACEMENT_OUTCOME.REFUSED,
-      partitionId: LEDGER_PARTITION_ID,
-      committed: true,
-      logIndex,
-      term: 1,
-      [PLACEMENT_RESULT_FIELD]: result,
-    };
-  };
+  const admitPlacement = (payload) =>
+    executePlacementCommand(PLACEMENT_ADMIT_TYPE, payload);
+  const releasePlacementHold = (payload) =>
+    executePlacementCommand(PLACEMENT_RELEASE_HOLD_TYPE, payload);
 
   return {service, admitPlacement, releasePlacementHold};
 }
@@ -325,21 +363,23 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
 function mountPlacementDeciders({seedHosts, cache}) {
   const {service, admitPlacement, releasePlacementHold} =
     createSimulatedLedgerPartitionService({seedHosts, cache});
-  const owner = new ReplicaPlacementOwner({
+  service.admitPlacement = admitPlacement;
+  service.releasePlacementHold = releasePlacementHold;
+  const attachment = ControlPlaneSetup.attachReplicaPlacementOwner({
     nodeId: seedHosts.nodeId,
     ledgerPartitionService: service,
-    nodeAuthority: seedHosts.controlPlaneReadinessService.serveEligibilityOwner,
+    controlPlaneReadinessService: seedHosts.controlPlaneReadinessService,
+    rebalanceCoordinator: seedHosts.rebalanceCoordinator,
     systemTableCache: seedHosts.cache,
-    workflowOwner: seedHosts.rebalanceCoordinator.workflowOwner,
     storageAccountingService: seedHosts.storageAccountingService,
     now: seedHosts.now,
     logger: QUIET_LOGGER,
-    admitPlacement,
-    releasePlacementHold,
   });
-  const baseShutdown = owner.shutdown.bind(owner);
+  const {owner} = attachment;
+  owner.admitPlacement = admitPlacement;
+  owner.releasePlacementHold = releasePlacementHold;
   owner.shutdown = () => {
-    baseShutdown();
+    attachment.detach();
     service.close();
   };
   return new Map([[LEDGER_PARTITION_ID, owner]]);
@@ -509,7 +549,7 @@ function admissibleCopyCandidates(world, copySources, excludeOperationId) {
 // INSTRUMENTATION.
 // ---------------------------------------------------------------------------
 
-function createStepTracker(driver, afterStep) {
+function createStepTracker(world, driver, afterStep) {
   const stack = [];
   const tracker = {
     current: () => stack[stack.length - 1] || STEP.EVENT,
@@ -525,7 +565,19 @@ function createStepTracker(driver, afterStep) {
   };
   for (const [method, step] of Object.entries(DRIVER_STEP_METHODS)) {
     const original = driver[method].bind(driver);
-    driver[method] = (...args) => tracker.within(step, () => original(...args));
+    driver[method] = (...args) => tracker.within(step, async () => {
+      const result = await original(...args);
+      if (method === 'membershipDerivation' && !isSpreadPublished(world)) {
+        for (const hosts of world.hostsById.values()) {
+          if (!world.upNodeIds.has(hosts.nodeId)) continue;
+          hosts.membershipPublicationService.enqueueClusterMembershipReconcile(
+            STEP.MEMBERSHIP_TICK,
+          );
+        }
+        await driver.settle();
+      }
+      return result;
+    });
   }
   return tracker;
 }
@@ -911,7 +963,7 @@ async function runPlacementDrain(order, options = {}) {
   });
   const driver = createRoundDriver(world, {plannerPolling: false});
   const floorWatch = createFloorWatch(world);
-  const tracker = createStepTracker(driver, (step) => floorWatch.check(step));
+  const tracker = createStepTracker(world, driver, (step) => floorWatch.check(step));
   const {copySources, injected} = instrumentReplicaRuntime(world,
     {failFirstCreateOf: options.failFirstCreateOf || null});
   const ledger = observeLedger(world, driver, tracker, copySources);

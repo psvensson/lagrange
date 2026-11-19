@@ -1,13 +1,22 @@
 // The durable state of a partition's participant transactions (TX1 design
-// revision 10, sections 3.2, 5.1 and 5.2): the one owner of the
-// `_participant_transactions` row of each transaction, of the reservation a
-// PREPARED row places on the partition, of the partition's write generation
-// g, and of the outcome a row answers. Every write here runs inside the
-// application transaction of a committed command (the committed-entry
-// application's callback, raft-rs-application-transaction-owner.js), so a
-// row, g and the applied index move together or not at all; the tables are
-// created with the partition, outside any command, identically on every
-// replica, by the open hook the lifecycle owner runs on each connection.
+// revision 10, sections 3.2, 5.1 and 5.2; architecture/contracts/authority-and-recovery.md):
+// - Public entries: openParticipantTransactionStore, insertParticipantTransactionRow,
+//   updateParticipantTransactionDecided, readParticipantTransactionRow,
+//   readPreparedParticipantRows, readCommittedParticipantRows,
+//   countOrdinaryAppliedStatementsBeforeIndex, readTableFootprintMetadata,
+//   advancePartitionWriteGeneration, readPartitionWriteGeneration.
+// - Required collaborators: PartitionService SQLite `db` connection and
+//   RaftRsDurableStore (`_raft_rs_applied_state` in the same SQLite transaction).
+// - Durable authority & commit point: `_participant_transactions` and
+//   `_partition_write_generation` mutated strictly inside the committed-entry
+//   application transaction (raft-rs-application-transaction-owner.js).
+// - Permitted post-commit work: leader proposer notification, reservation
+//   release re-admission, and CDC delivery wake via `committed.afterCommit`.
+// - Recovery/wake entry: durable PREPARED and COMMITTED rows are read on
+//   reopen/demotion by `hydrateDurablePreparedAndCommittedState` and
+//   `canAdvancePreparedRowFromDurableStore`.
+// - Representative tests: test/partition/partition-participant-transaction-apply.test.js,
+//   test/query/scenario-a-transaction-coordination-fast-path.test.js.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
@@ -33,6 +42,20 @@ import {
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
+const ZERO = 0;
+const EMPTY_JSON_ARRAY_TEXT = '[]';
+const PRAGMA_SCHEMA_VERSION = 'schema_version';
+const BINARY_COLLATION = 'BINARY';
+const DOUBLE_QUOTE = '"';
+const ESCAPED_DOUBLE_QUOTE = '""';
+const FOOTPRINT_MEMO_KEY = Symbol('participantTableFootprintMemo');
+const EMPTY_FOOTPRINT_METADATA = Object.freeze({
+  pkCols: Object.freeze([]),
+  allCols: Object.freeze([]),
+  uniqueConstraintCols: Object.freeze([]),
+  hasUnscopedSchemaConstraints: false,
+  schemaVersion: ZERO,
+});
 // Databases known to have zero PREPARED rows track an owner-held state
 // (cleared when verified empty outside an open transaction, or closed).
 const PREPARED_STATE_KEY = Symbol('participantPreparedObservation');
@@ -328,6 +351,34 @@ function readPreparedParticipantIds(db) {
 }
 
 /**
+ * All PREPARED rows with their operationsText, validationText and prepareIndex.
+ * @param {Object} db - The partition's connection.
+ * @return {Array<Object>} Durable PREPARED rows.
+ */
+function readPreparedParticipantRows(db) {
+  if (canSkipPreparedRead(db)) {
+    return [];
+  }
+  const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_ROWS)
+    .all(STATE.PREPARED);
+  recordPreparedObservation(db, rows.length > 0);
+  return rows;
+}
+
+/**
+ * All COMMITTED rows ordered by decision_index for durable generation recovery.
+ * @param {Object} db - The partition's connection.
+ * @return {Array<Object>} Durable COMMITTED rows.
+ */
+function readCommittedParticipantRows(db) {
+  if (!db || db.open === false) {
+    return [];
+  }
+  return sqliteConnectionState(db).statement(SQL.SELECT_COMMITTED_ROWS)
+    .all(STATE.COMMITTED);
+}
+
+/**
  * The durable row of one participant transaction, or null.
  * @param {Object} db - The partition's connection.
  * @param {{transactionId: string, participantId: string}} identity - Its key.
@@ -454,6 +505,139 @@ function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
   };
 }
 
+function countOrdinaryAppliedStatementsBeforeIndex(db, originIndex, prepareIndex) {
+  if (!db || db.open !== true) return ZERO;
+  try {
+    const row = sqliteConnectionState(db)
+      .statement(SQL.SELECT_ORDINARY_APPLIED_COUNT_BETWEEN)
+      .get(originIndex, prepareIndex);
+    return Number(row?.count) || ZERO;
+  } catch {
+    return ZERO;
+  }
+}
+
+function hasNonEmptyOperationsText(operationsText) {
+  if (typeof operationsText !== 'string') return false;
+  const trimmed = operationsText.trim();
+  return trimmed.length > ZERO && trimmed !== EMPTY_JSON_ARRAY_TEXT;
+}
+
+function readDurablePrepareGeneration(db, prepareIndex) {
+  if (!db || db.open !== true || typeof prepareIndex !== 'number') return ZERO;
+  const origin = readPartitionWriteOrigin(db);
+  if (origin === null) return ZERO;
+  const ordinaryCount = countOrdinaryAppliedStatementsBeforeIndex(
+    db,
+    origin.originIndex,
+    prepareIndex,
+  );
+  const committedCount = readCommittedParticipantRows(db).filter((row) =>
+    typeof row.decisionIndex === 'number' &&
+    row.decisionIndex > origin.originIndex &&
+    row.decisionIndex < prepareIndex &&
+    hasNonEmptyOperationsText(row.operationsText)).length;
+  return ordinaryCount + committedCount;
+}
+
+function isSameColumnList(left, right) {
+  return left.length === right.length && left.every((col, idx) => col === right[idx]);
+}
+
+function isBinaryKeyColumn(col) {
+  return Number(col?.cid) >= ZERO &&
+    Boolean(col?.name) &&
+    String(col?.coll || BINARY_COLLATION).toUpperCase() === BINARY_COLLATION;
+}
+
+function readUniqueIndexColumns(db, indexName) {
+  const escaped = String(indexName).replaceAll(DOUBLE_QUOTE, ESCAPED_DOUBLE_QUOTE);
+  const xinfo = db.pragma(`index_xinfo("${escaped}")`);
+  if (!Array.isArray(xinfo)) return null;
+  const keyCols = xinfo
+    .filter((col) => Number(col?.key) === ONE_ROW)
+    .sort((a, b) => Number(a.seqno) - Number(b.seqno));
+  if (keyCols.length === ZERO || !keyCols.every(isBinaryKeyColumn)) {
+    return null;
+  }
+  return Object.freeze(keyCols.map((col) => String(col.name).toLowerCase()));
+}
+
+function inspectUniqueConstraints(db, tableName, pkCols) {
+  const indexList = db.pragma(`index_list(${tableName})`);
+  if (!Array.isArray(indexList)) {
+    return {uniqueConstraintCols: Object.freeze([]), hasUnscopedSchemaConstraints: false};
+  }
+  const uniqueConstraintCols = [];
+  for (const idx of indexList) {
+    if (Number(idx?.unique) !== ONE_ROW) continue;
+    if (Number(idx?.partial) === ONE_ROW) {
+      return {uniqueConstraintCols: Object.freeze([]), hasUnscopedSchemaConstraints: true};
+    }
+    const cols = readUniqueIndexColumns(db, idx.name);
+    if (cols === null) {
+      return {uniqueConstraintCols: Object.freeze([]), hasUnscopedSchemaConstraints: true};
+    }
+    if (!isSameColumnList(cols, pkCols)) {
+      uniqueConstraintCols.push(cols);
+    }
+  }
+  return {
+    uniqueConstraintCols: Object.freeze(uniqueConstraintCols),
+    hasUnscopedSchemaConstraints: false,
+  };
+}
+
+function computeTableFootprintMetadata(db, tableName) {
+  try {
+    const info = db.pragma(`table_info(${tableName})`);
+    if (!Array.isArray(info) || info.length === ZERO) return EMPTY_FOOTPRINT_METADATA;
+    const allCols = Object.freeze(info.map((col) => String(col.name).toLowerCase()));
+    const pkCols = Object.freeze(
+      info.filter((col) => Number(col.pk) > ZERO)
+        .sort((a, b) => Number(a.pk) - Number(b.pk))
+        .map((col) => String(col.name).toLowerCase()),
+    );
+    const {uniqueConstraintCols, hasUnscopedSchemaConstraints} =
+      inspectUniqueConstraints(db, tableName, pkCols);
+    return Object.freeze({
+      pkCols,
+      allCols,
+      uniqueConstraintCols,
+      hasUnscopedSchemaConstraints,
+    });
+  } catch {
+    return EMPTY_FOOTPRINT_METADATA;
+  }
+}
+
+function readTableFootprintMetadata(db, tableName) {
+  if (!db || db.open !== true || !tableName) {
+    return EMPTY_FOOTPRINT_METADATA;
+  }
+  let schemaVersion = ZERO;
+  try {
+    schemaVersion = Number(db.pragma(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
+  } catch {
+    schemaVersion = ZERO;
+  }
+  let byTable = db[FOOTPRINT_MEMO_KEY];
+  if (!byTable) {
+    byTable = new Map();
+    db[FOOTPRINT_MEMO_KEY] = byTable;
+  }
+  const memoized = byTable.get(tableName);
+  if (memoized && memoized.schemaVersion === schemaVersion) {
+    return memoized.meta;
+  }
+  const meta = Object.freeze({
+    ...computeTableFootprintMetadata(db, tableName),
+    schemaVersion,
+  });
+  byTable.set(tableName, {schemaVersion, meta});
+  return meta;
+}
+
 export {
   advancePartitionWriteGeneration,
   insertParticipantTransactionRow,
@@ -461,13 +645,17 @@ export {
   isPartitionReserved,
   openParticipantTransactionStore,
   participantOutcomeOf,
+  readCommittedParticipantRows,
+  readDurablePrepareGeneration,
   readParticipantTransactionRow,
   readPreparedParticipantIds,
+  readPreparedParticipantRows,
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
   readPartitionWriteOriginHistory,
   readPartitionWriteOriginIn,
   readParticipantTransactionCensusIn,
+  readTableFootprintMetadata,
   recordPartitionWriteOrigin,
   updateParticipantTransactionDecided,
 };

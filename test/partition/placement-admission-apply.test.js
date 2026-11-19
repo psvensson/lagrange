@@ -13,7 +13,7 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   '../../src/partition/partition-service-constants.js';
-import {PLACEMENT_RESULT_FIELD} from
+import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_RESULT_FIELD} from
   '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
@@ -163,7 +163,28 @@ test('F5: the same entryId committed twice replays the first answer, never a sec
     body: first.command.body});
   assert.equal(proposed.length, proposals);
   assert.deepEqual(resultOf(again), resultOf(first.answer));
+  assert.equal(Object.isFrozen(resultOf(again).operationIds), true);
   assert.equal(again.logIndex, first.answer.logIndex);
+  // P4: same-ID / different-command replay is rejected at both request and apply:
+  const collidedBody = placementStatement({partitionId: 'indices-p1', target: NODE.C});
+  const collidedAtRequest = await requestPlacementAdmission(leader, {
+    entryId: 'f5-move',
+    body: collidedBody,
+  });
+  assert.equal(collidedAtRequest.success, false);
+  assert.equal(collidedAtRequest.admitted, false);
+  assert.equal(collidedAtRequest.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
+  assert.equal(proposed.length, proposals);
+  const collidedCommand = buildPlacementCommand(leader, {
+    type: 'PLACEMENT_ADMIT',
+    entryId: 'f5-move',
+    body: collidedBody,
+  });
+  assert.equal(
+    applyCommitted(leader, collidedCommand),
+    PLACEMENT_ADMISSION_ERROR.BYTES,
+  );
+  assert.deepEqual(ledgerRows(leader), before);
   committed.stop();
 }));
 

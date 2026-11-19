@@ -7,14 +7,83 @@
 // node liveness projection and readNodeHostIdentity. Inputs are committed
 // node rows and replica descriptors written by the test.
 import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
+import Database from 'better-sqlite3';
+import {
+  ControlPlaneSetup,
+} from '../../src/bootstrap/shared/control-plane-setup.js';
+import {
+  REPLICA_OPERATIONS_SCHEMA,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
 import {COLUMN} from '../../src/constants/columns.js';
-import {SERVICE_STATUS} from '../../src/constants/index.js';
+import {
+  CDC_OPERATION,
+  SERVICE_STATUS,
+  TABLES,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
+import {
+  ServeEligibilityOwner,
+} from '../../src/control-plane/serve-eligibility-owner.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+} from '../../src/partition/partition-cdc-generator.js';
+import {
+  ensureCdcObligationLedger,
+} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {
+  committedStatementEntryKey,
+  createCommittedStatementOutcomeTable,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  openParticipantTransactionStore,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  buildPlacementCommand,
+} from '../../src/partition/partition-placement-admission-command.js';
+import {
+  PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_RELEASE_HOLD_TYPE,
+} from '../../src/partition/partition-placement-admission-constants.js';
+import {
+  LEDGER_PARTITION_ID,
+} from '../../src/partition/partition-placement-admission-decision.js';
+import {
+  applyPlacementCommand,
+} from '../../src/partition/partition-placement-admission.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
+import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+} from '../../src/partition/partition-write-kernel.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY, PLACEMENT_DEFICIT_KIND, PLACEMENT_FORMATION_STATE,
-  PLACEMENT_WAITING_REASON,
+  PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {
+  REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
+  createReplicaPlacementOwner,
+} from '../../src/rebalancer/replica-placement-owner.js';
+import {
+  applyCommitted,
+  clearFixtureSingletons,
+  resetFixtureSingletons,
+} from '../test-helpers/participant-transaction-fixture.js';
+import {
+  ledgerRows,
+  onLedgerLeader,
+} from '../partition/placement-admission-fixture.js';
+import {
+  PRESSURE_STATE,
+} from '../../src/rebalancer/storage-capacity-constants.js';
 import {
   classifyPlacementClass, formationWaitingReasonOf, orderPlacementCandidates,
 } from '../../src/rebalancer/replica-placement-owner-order.js';
@@ -91,7 +160,7 @@ test('within a class: severity, then fewest distinct hosts, then fewest voters, 
     candidate('code-p1', PLACEMENT_DEFICIT_KIND.HOST_SPREAD, 1, 2),
   ]).map((entry) => entry.partitionId);
   assert.deepEqual(ordered, ['replica_operations-p1', 'sql_transactions-p1', 'nodes-p1',
-    'logs-p1', 'services-p1', 'tables-p1', 'code-p1', 'config-p1', 'indices-p1']);
+    'logs-p1', 'code-p1', 'config-p1', 'services-p1', 'tables-p1', 'indices-p1']);
 });
 
 test('HOST_SPREAD on declared hosts: two nodes of one host are one host; the source ' +
@@ -236,4 +305,641 @@ test('the node and formation inputs come from one committed answer of the inject
   assert.deepEqual(readPlacementNodeInputs(reader({state: 'unavailable', reason: 'stale',
     nodeRows: []}), NOW_MS), {state: 'unavailable',
     reason: PLACEMENT_WAITING_REASON.NODE_AUTHORITY_UNAVAILABLE});
+});
+
+function createSimpleSystemCache(initialPartitions = [], initialServices = []) {
+  const listeners = new Set();
+  const rowsByTable = new Map([
+    [TABLES.PARTITIONS, [...initialPartitions]],
+    [TABLES.SERVICES, [...initialServices]],
+    [TABLES.REPLICA_OPERATIONS, []],
+  ]);
+  return {
+    getAll(tableName) {
+      return [...(rowsByTable.get(tableName) || [])];
+    },
+    onCacheApplyChange(fn) {
+      listeners.add(fn);
+    },
+    offCacheApplyChange(fn) {
+      listeners.delete(fn);
+    },
+    applySystemTableChange(tableName, operation, row) {
+      const list = rowsByTable.get(tableName) || [];
+      if (tableName === TABLES.REPLICA_OPERATIONS) {
+        const idx = list.findIndex((r) => r.operation_id === row.operation_id);
+        if (operation === CDC_OPERATION.DELETE) {
+          if (idx >= 0) list.splice(idx, 1);
+        } else if (idx >= 0) {
+          list[idx] = {...row};
+        } else {
+          list.push({...row});
+        }
+        rowsByTable.set(tableName, list);
+      }
+      for (const fn of listeners) fn(tableName, operation, row);
+    },
+  };
+}
+
+function createRealSqlLedgerHarness(cache, nodeId = 'n1') {
+  const db = new Database(':memory:');
+  db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) {
+    db.exec(indexSql);
+  }
+  createCommittedStatementOutcomeTable(db);
+  openParticipantTransactionStore(db);
+  ensureCdcObligationLedger(db);
+  let logIndex = 0;
+  const resolvedWrites = new Map();
+  const entryIdsSeen = [];
+  const emitter = new EventEmitter();
+  const service = Object.assign(emitter, {
+    partitionId: LEDGER_PARTITION_ID,
+    tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
+    replicaId: `${LEDGER_PARTITION_ID}-r1`,
+    nodeId,
+    db,
+    systemTableCache: cache,
+    timeSource: {now: () => NOW_MS},
+    hlcClock: {now: () => `${NOW_MS}:0:${nodeId}`},
+    logger: {debug() {}, info() {}, warn() {}, error() {}},
+    cdcPipelineMetrics: {increment() {}},
+    isLeader: true,
+    isShutdown: false,
+    trackPendingCDCEvent() {},
+    cdcDelivery: {driveCdcObligations: async () => {}},
+    getCommittedEntryKey: (command) => committedStatementEntryKey(command),
+    syncCDCGeneratorDependencies: () => ({
+      buildEvent: ({type, tableName, data, whereClause, entryId, timestamp}) => ({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+        cdcEvent: {
+          type,
+          tableName,
+          operation:
+            type === PARTITION_SERVICE_OPERATION.INSERT ?
+              CDC_OPERATION.INSERT :
+              CDC_OPERATION.UPDATE,
+          data,
+          whereClause,
+          entryId,
+          timestamp,
+        },
+      }),
+    }),
+    resolveCommittedWrite: (entryId, answer) => {
+      resolvedWrites.set(entryId, answer);
+    },
+    rejectCommittedWrite: (_entryId, error) => {
+      throw error;
+    },
+  });
+
+  const executeCommand = (type, {entryId, body}) => {
+    entryIdsSeen.push(entryId);
+    const command = buildPlacementCommand(service, {type, entryId, body});
+    logIndex += 1;
+    const afterCommit = [];
+    const afterRollback = [];
+    db.transaction(() => {
+      applyPlacementCommand(service, {
+        command,
+        index: logIndex,
+        term: 1,
+        afterCommit: (fn) => afterCommit.push(fn),
+        afterRollback: (fn) => afterRollback.push(fn),
+      });
+    })();
+    for (const fn of afterCommit) fn();
+    const answer = resolvedWrites.get(command.entryId);
+    resolvedWrites.delete(command.entryId);
+    return answer;
+  };
+
+  return {
+    db,
+    service,
+    entryIdsSeen,
+    admitPlacement: (payload) => executeCommand(PLACEMENT_ADMIT_TYPE, payload),
+    releasePlacementHold: (payload) => executeCommand(PLACEMENT_RELEASE_HOLD_TYPE, payload),
+  };
+}
+
+function seededPartitionRow(partitionId, leaderNodeId = 'n1') {
+  return {
+    [COLUMN.PARTITION_ID]: partitionId,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    replica_count: 3,
+    [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+  };
+}
+
+function seededServiceRows(partitionId, nodeId = 'n1') {
+  return [1, 2, 3].map((idx) => ({
+    [COLUMN.REPLICA_ID]: `${partitionId}-r${idx}`,
+    [COLUMN.PARTITION_ID]: partitionId,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.RAFT_ROLE]: idx === 1 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+  }));
+}
+
+test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions', async () => {
+  const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+  let currentPublication = null;
+  let allowRead = false;
+  const serveEligibilityOwner = new ServeEligibilityOwner({
+    now: () => NOW_MS,
+    readTimeoutMs: 5_000,
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+    isNodeLoadReady: () => true,
+    readCommittedRows: async (tableName) => {
+      if (!allowRead) return {success: false, error: 'not_ready_yet', rows: []};
+      if (tableName === TABLES.NODES) return {success: true, rows: threeNodes};
+      if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+        return {success: true, rows: currentPublication ? [currentPublication] : []};
+      }
+      return {success: false, error: 'unexpected', rows: []};
+    },
+  });
+
+  const partitions = [
+    seededPartitionRow('sql_transactions-p1'),
+    seededPartitionRow('nodes-p1'),
+    seededPartitionRow('services-p1'),
+    seededPartitionRow('tbl-orders-p1'),
+  ];
+  const services = [
+    ...seededServiceRows('sql_transactions-p1'),
+    ...seededServiceRows('nodes-p1'),
+    ...seededServiceRows('services-p1'),
+    ...seededServiceRows('tbl-orders-p1'),
+  ];
+  const cache = createSimpleSystemCache(partitions, services);
+  const ledger = createRealSqlLedgerHarness(cache, 'n1');
+  try {
+    const owner = createReplicaPlacementOwner({
+      nodeId: 'n1',
+      ledgerPartitionService: ledger.service,
+      nodeAuthority: serveEligibilityOwner,
+      systemTableCache: cache,
+      now: () => NOW_MS,
+      logger: ledger.service.logger,
+      admitPlacement: ledger.admitPlacement,
+      releasePlacementHold: ledger.releasePlacementHold,
+    });
+
+    // 1. UNAVAILABLE: before first committed read succeeds
+    assert.equal(
+      serveEligibilityOwner.answerCommittedNodes().formation.state,
+      PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+    );
+    owner.setLeader(true);
+    await owner.awaitCurrentWorkIdle();
+    assert.equal(
+      owner.lastPassSnapshot.reason,
+      PLACEMENT_WAITING_REASON.NODE_AUTHORITY_UNAVAILABLE,
+    );
+    assert.deepEqual(owner.lastPassSnapshot.admitted, []);
+
+    // 2. UNDECLARED: publication has no priority_partition_summary
+    allowRead = true;
+    currentPublication = {
+      publication_id: 'cluster_membership-1',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 1,
+      publisher_node_id: 'n1',
+      published_active_node_ids: JSON.stringify(['n1', 'n2', 'n3']),
+      required_ack_node_ids: JSON.stringify(['n1', 'n2', 'n3']),
+      acknowledged_node_ids: JSON.stringify(['n1', 'n2', 'n3']),
+      priority_partition_summary: null,
+      status: 'PUBLISHED',
+      created_at: NOW_MS,
+      updated_at: NOW_MS,
+    };
+    await serveEligibilityOwner.readServeEligibility();
+    await new Promise((resolve) => setImmediate(resolve));
+    await owner.awaitCurrentWorkIdle();
+    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
+      state: PLACEMENT_FORMATION_STATE.UNDECLARED,
+      latchEpoch: null,
+    });
+    // Only priority class (sql_transactions-p1) is admitted while UNDECLARED; classes 3-5 wait:
+    const rowsAfterUndeclared = ledger.db
+      .prepare('SELECT partition_id FROM replica_operations ORDER BY operation_id')
+      .all();
+    assert.deepEqual(
+      rowsAfterUndeclared.map((r) => r.partition_id),
+      ['sql_transactions-p1'],
+    );
+
+    // 3. FORMING: priority_partition_summary published with spreadGap > 0 (not satisfied)
+    currentPublication = {
+      ...currentPublication,
+      publication_id: 'cluster_membership-2',
+      publication_epoch: 2,
+      priority_partition_summary: JSON.stringify({
+        satisfied: false,
+        blockedPartitions: [{partitionId: 'sql_transactions-p1', spreadGap: 1}],
+      }),
+    };
+    serveEligibilityOwner.noteSourceChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      currentPublication,
+    );
+    await serveEligibilityOwner.readServeEligibility();
+    await new Promise((resolve) => setImmediate(resolve));
+    await owner.awaitCurrentWorkIdle();
+    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
+      state: PLACEMENT_FORMATION_STATE.FORMING,
+      latchEpoch: null,
+    });
+    assert.equal(
+      ledger.db.prepare('SELECT COUNT(*) AS c FROM replica_operations').get().c,
+      1,
+    );
+
+    // Move the priority operation out of copy phase (to ACTIVE removal phase)
+    // so sql_transactions-p1 stays busy while freeing copy-source slots on n1:
+    ledger.db.prepare(
+      'UPDATE replica_operations SET workflow_step = ?, status = ?',
+    ).run(WORKFLOW_STEP.ACTIVE, SERVICE_STATUS.ACTIVE);
+
+    // 4. FORMED: priority_partition_summary published satisfied at epoch 3
+    currentPublication = {
+      ...currentPublication,
+      publication_id: 'cluster_membership-3',
+      publication_epoch: 3,
+      priority_partition_summary: JSON.stringify({
+        satisfied: true,
+        blockedPartitions: [],
+      }),
+    };
+    serveEligibilityOwner.noteSourceChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      currentPublication,
+    );
+    await serveEligibilityOwner.readServeEligibility();
+    await new Promise((resolve) => setImmediate(resolve));
+    await owner.awaitCurrentWorkIdle();
+    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
+      state: PLACEMENT_FORMATION_STATE.FORMED,
+      latchEpoch: 3,
+    });
+    const allRows = ledger.db
+      .prepare('SELECT partition_id FROM replica_operations ORDER BY rowid')
+      .all()
+      .map((r) => r.partition_id);
+    // Admits nodes-p1, services-p1, and tbl-orders-p1 in priority order once FORMED:
+    assert.deepEqual(allRows, [
+      'sql_transactions-p1',
+      'nodes-p1',
+      'services-p1',
+      'tbl-orders-p1',
+    ]);
+    owner.shutdown();
+  } finally {
+    serveEligibilityOwner.shutdown();
+    ledger.db.close();
+  }
+});
+
+test('ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService', async () => {
+  const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+  const nodeAuthority = {
+    subscribe: () => () => {},
+    scheduleRefresh: () => {},
+    answerCommittedNodes: () => ({
+      state: 'ready',
+      epoch: {publicationEpoch: 5},
+      nodeRows: threeNodes,
+      formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 5},
+    }),
+  };
+  const cache = createSimpleSystemCache(
+    [seededPartitionRow('tables-p1')],
+    seededServiceRows('tables-p1'),
+  );
+  const ledger = createRealSqlLedgerHarness(cache, 'n1');
+  try {
+    let unknownPhase = 'before_commit';
+    let lastStatement = null;
+    const owner1 = createReplicaPlacementOwner({
+      nodeId: 'n1',
+      ledgerPartitionService: ledger.service,
+      nodeAuthority,
+      systemTableCache: cache,
+      now: () => NOW_MS,
+      logger: ledger.service.logger,
+      admitPlacement: async (payload) => {
+        lastStatement = payload.body;
+        if (unknownPhase === 'before_commit') {
+          unknownPhase = 'commit_then_lose_reply';
+          ledger.entryIdsSeen.push(payload.entryId);
+          return {
+            success: false,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          };
+        }
+        const answer = ledger.admitPlacement(payload);
+        if (unknownPhase === 'commit_then_lose_reply') {
+          unknownPhase = 'normal';
+          return {
+            success: false,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          };
+        }
+        return answer;
+      },
+      releasePlacementHold: ledger.releasePlacementHold,
+    });
+
+    owner1.setLeader(true);
+    await owner1.awaitCurrentWorkIdle();
+    assert.equal(ledger.entryIdsSeen.length, 1);
+    const firstAttemptEntryId = ledger.entryIdsSeen[0];
+    assert.equal(
+      ledger.db.prepare('SELECT COUNT(*) AS c FROM replica_operations').get().c,
+      0,
+    );
+
+    // 1. Retry pass after pre-commit OUTCOME_UNKNOWN reuses the exact same entryId,
+    // commits the row in SQLite, and loses the reply (commit_then_lose_reply):
+    owner1.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
+    await owner1.awaitCurrentWorkIdle();
+    assert.equal(ledger.entryIdsSeen.length, 2);
+    assert.equal(ledger.entryIdsSeen[1], firstAttemptEntryId);
+    assert.equal(
+      ledger.db.prepare('SELECT COUNT(*) AS c FROM replica_operations').get().c,
+      1,
+    );
+
+    // 2. Direct retry of the uncertain statement after commit + lost reply reuses the
+    // same entryId and replays the settled outcome without inserting a second row:
+    const replayAnswer = await owner1.submitAdmission(lastStatement);
+    assert.equal(replayAnswer.committed, true);
+    assert.equal(ledger.entryIdsSeen.length, 3);
+    assert.equal(ledger.entryIdsSeen[2], firstAttemptEntryId);
+    assert.equal(
+      ledger.db.prepare('SELECT COUNT(*) AS c FROM replica_operations').get().c,
+      1,
+    );
+    owner1.shutdown();
+
+    // Mark the first operation completed so tables-p1 needs its second spread move:
+    ledger.db.prepare(
+      'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ?',
+    ).run(WORKFLOW_STEP.REMOVED, SERVICE_STATUS.ACTIVE, NOW_MS);
+
+    // Reconstruct a brand-new ReplicaPlacementOwner on the same node ('n1') over the same
+    // durable SQLite ledger DB (which retains the settled _partition_statement_outcomes):
+    // Also attach storageAccountingService marking 'n2' as EXHAUSTED so 'n3' must be chosen!
+    const storageAccountingService = {
+      subscribeCapacitySemanticChanges: () => () => {},
+      getCapacitySemanticIdentity: (nodeId) => ({
+        generation: 1,
+        projection: {
+          capacity: {
+            nodeId,
+            budgetBytes: 1_000_000,
+            pressureState:
+              nodeId === 'n2' ? PRESSURE_STATE.EXHAUSTED : PRESSURE_STATE.NORMAL,
+          },
+        },
+      }),
+    };
+    const owner2 = createReplicaPlacementOwner({
+      nodeId: 'n1',
+      ledgerPartitionService: ledger.service,
+      nodeAuthority,
+      systemTableCache: cache,
+      storageAccountingService,
+      now: () => NOW_MS,
+      logger: ledger.service.logger,
+      admitPlacement: ledger.admitPlacement,
+      releasePlacementHold: ledger.releasePlacementHold,
+    });
+    owner2.setLeader(true);
+    await owner2.awaitCurrentWorkIdle();
+
+    assert.equal(ledger.entryIdsSeen.length, 4);
+    assert.notEqual(ledger.entryIdsSeen[3], firstAttemptEntryId);
+    const rows = ledger.db
+      .prepare('SELECT operation_id, target_node_id FROM replica_operations ORDER BY operation_id')
+      .all();
+    assert.equal(rows.length, 2);
+    // owner2 excluded storage-exhausted 'n2' and admitted the new move to 'n3':
+    assert.equal(rows[1].target_node_id, 'n3');
+    owner2.shutdown();
+  } finally {
+    ledger.db.close();
+  }
+});
+
+test('P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs', () => {
+  const cache = createSimpleSystemCache();
+  const ledger = createRealSqlLedgerHarness(cache, 'n1');
+  try {
+    const validOptions = {
+      nodeId: 'n1',
+      ledgerPartitionService: ledger.service,
+      nodeAuthority: {
+        answerCommittedNodes: () => ({state: 'unavailable', reason: 'init', nodeRows: []}),
+        scheduleRefresh: () => {},
+        subscribe: () => () => {},
+      },
+      systemTableCache: cache,
+      now: () => NOW_MS,
+      logger: ledger.service.logger,
+    };
+    const invalidCases = [
+      [{...validOptions, nodeId: ''}, 'nodeId'],
+      [{...validOptions, ledgerPartitionService: null}, 'ledgerPartitionService'],
+      [
+        {
+          ...validOptions,
+          ledgerPartitionService: {...ledger.service, partitionId: 'tables-p1'},
+        },
+        'ledgerPartitionService',
+      ],
+      [{...validOptions, nodeAuthority: {answerCommittedNodes: () => ({})}}, 'nodeAuthority'],
+      [{...validOptions, systemTableCache: {getAll: () => []}}, 'systemTableCache'],
+      [{...validOptions, now: null}, 'now'],
+      [{...validOptions, logger: {info() {}}}, 'logger'],
+      [{...validOptions, workflowOwner: {}}, 'workflowOwner'],
+      [{...validOptions, storageAccountingService: {}}, 'storageAccountingService'],
+      [{...validOptions, setIntervalFn: () => 1}, 'resyncTimer'],
+    ];
+    for (const [badOptions, expectedCollaborator] of invalidCases) {
+      assert.throws(
+        () => createReplicaPlacementOwner(badOptions),
+        (error) =>
+          error.code === REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID &&
+          error.collaborator === expectedCollaborator,
+      );
+    }
+
+    // P5: Mutating caller-owned nested inputs after building a statement or command
+    // cannot mutate the frozen statement or canonical command bytes:
+    const mutableCandidate = {
+      partitionId: 'config-p1',
+      placementClass: PLACEMENT_CLASS.SYSTEM,
+      repair: false,
+      move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'},
+    };
+    const mutableContext = {
+      sourceNodeId: 'n1',
+      repairWaitingSourceNodeIds: new Set(['n1']),
+      formationLatchEpoch: 3,
+      membershipPublicationEpoch: null,
+      positions: {nodesEpoch: 9},
+    };
+    const built = buildPlacementAdmissionStatement(mutableCandidate, mutableContext);
+    const mutableBody = structuredClone(built);
+    const cmd = buildPlacementCommand(ledger.service, {
+      type: PLACEMENT_ADMIT_TYPE,
+      entryId: 'p5-immut-1',
+      body: mutableBody,
+    });
+    const originalBodyText = cmd.bodyText;
+    mutableCandidate.move.targetNodeId = 'n99';
+    mutableContext.positions.nodesEpoch = 999;
+    mutableBody.moves[0].targetNodeId = 'n99';
+    assert.equal(built.moves[0].targetNodeId, 'n2');
+    assert.equal(built.positions.nodesEpoch, 9);
+    assert.equal(cmd.body.moves[0].targetNodeId, 'n2');
+    assert.equal(cmd.bodyText, originalBodyText);
+  } finally {
+    ledger.db.close();
+  }
+});
+
+test('P3 & P4: ControlPlaneSetup.attachReplicaPlacementOwner binds the real PartitionService leadership sink and requestPlacementAdmission path, fails closed on REMOVE without workflowOwner, and reconciles unresolved attempts on leadership start', async () => {
+  resetFixtureSingletons();
+  try {
+    const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+    const nodeAuthority = {
+      subscribe: () => () => {},
+      scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({
+        state: 'ready',
+        epoch: {publicationEpoch: 7},
+        nodeRows: threeNodes,
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 7},
+      }),
+    };
+    // Seed a SURPLUS partition (indices-p1 with 4 active voters) and an under-spread partition (tables-p1):
+    const surplusServices = [
+      {
+        [COLUMN.REPLICA_ID]: 'indices-p1-r1',
+        [COLUMN.PARTITION_ID]: 'indices-p1',
+        [COLUMN.NODE_ID]: 'n1',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      },
+      {
+        [COLUMN.REPLICA_ID]: 'indices-p1-r2',
+        [COLUMN.PARTITION_ID]: 'indices-p1',
+        [COLUMN.NODE_ID]: 'n2',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+      },
+      {
+        [COLUMN.REPLICA_ID]: 'indices-p1-r3',
+        [COLUMN.PARTITION_ID]: 'indices-p1',
+        [COLUMN.NODE_ID]: 'n3',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+      },
+      {
+        [COLUMN.REPLICA_ID]: 'indices-p1-r4',
+        [COLUMN.PARTITION_ID]: 'indices-p1',
+        [COLUMN.NODE_ID]: 'n3',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+      },
+    ];
+    const cache = createSimpleSystemCache(
+      [seededPartitionRow('tables-p1'), seededPartitionRow('indices-p1')],
+      [...seededServiceRows('tables-p1'), ...surplusServices],
+    );
+
+    await onLedgerLeader(async (leader) => {
+      leader.controllablePort.setProposeHandler(async (entry) => {
+        assert.equal(applyCommitted(leader, entry), null);
+      });
+
+      // 1. Without workflowOwner, REMOVE fails closed (indices-p1 is NOT admitted),
+      // while tables-p1 is admitted through the real PartitionService leadership sink
+      // and real requestPlacementAdmission -> proposePlacementCommand -> applyPlacementCommand path:
+      const attachment1 = ControlPlaneSetup.attachReplicaPlacementOwner({
+        nodeId: 'n1',
+        ledgerPartitionService: leader,
+        controlPlaneReadinessService: {
+          serveEligibilityOwner: nodeAuthority,
+        },
+        rebalanceCoordinator: {
+          workflowOwner: null,
+        },
+        systemTableCache: cache,
+        now: () => NOW_MS,
+        logger: leader.logger,
+      });
+      assert.equal(leader.rebalancerLeadershipSink, attachment1.owner);
+      assert.equal(attachment1.owner.isLeader, true);
+      await attachment1.owner.awaitCurrentWorkIdle();
+
+      const firstRows = ledgerRows(leader);
+      assert.deepEqual(
+        firstRows.map((r) => r.partition_id),
+        ['tables-p1'],
+      );
+
+      // 2. Negative control: detaching the production leadership sink removes the binding
+      // so leader.updateRebalancerLeadership() does not activate the detached owner:
+      attachment1.detach();
+      assert.equal(leader.rebalancerLeadershipSink, null);
+      assert.equal(attachment1.owner.isLeader, false);
+      leader.updateRebalancerLeadership();
+      assert.equal(attachment1.owner.isLeader, false);
+
+      // 3. Attach a new owner WITH workflowOwner so SURPLUS REMOVE on indices-p1 is admitted,
+      // while the existing unresolved tables-p1 operation in the ledger is reconciled as busy:
+      const workflowOwner = {
+        controlPlaneReadinessService: {
+          readServeEligibility: async () => {},
+          answerCommittedNodes: () => nodeAuthority.answerCommittedNodes(),
+        },
+        resolveTimeoutCheckNowMs: () => NOW_MS,
+        getCriticalReplicaRowsForSafety: async () => surplusServices,
+        isVoterReadyFloorCountableReplica: () => true,
+        isOperationReplicaRow: (row, op) => row[COLUMN.REPLICA_ID] === op.replicaId,
+        getCriticalMinReplicaCount: () => 3,
+      };
+      const attachment2 = ControlPlaneSetup.attachReplicaPlacementOwner({
+        nodeId: 'n1',
+        ledgerPartitionService: leader,
+        controlPlaneReadinessService: {
+          serveEligibilityOwner: nodeAuthority,
+        },
+        rebalanceCoordinator: {
+          workflowOwner,
+        },
+        systemTableCache: cache,
+        now: () => NOW_MS,
+        logger: leader.logger,
+      });
+      await attachment2.owner.awaitCurrentWorkIdle();
+      const secondRows = ledgerRows(leader);
+      assert.deepEqual(
+        secondRows.map((r) => `${r.partition_id}:${r.type}`).sort(),
+        ['indices-p1:REMOVE', 'tables-p1:REPLACE'],
+      );
+      attachment2.detach();
+    }, {systemTableCache: cache});
+  } finally {
+    clearFixtureSingletons();
+  }
 });
