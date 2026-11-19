@@ -511,17 +511,16 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     const recordContext = {
-      move,
-      normalizedMove,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-      dedupeKey,
-      criticalAddLikeIntentKey,
-      sourceNodeId,
+      move, normalizedMove, normalizedMoveType, entityType, entityId,
+      partitionId, dedupeKey, criticalAddLikeIntentKey, sourceNodeId,
       replaceIntentIdentity: creationContext.replaceIntentIdentity,
     };
+    if (this.placementAdmissionEnabled === true &&
+        entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      return this.createRuntimeServiceOperationViaPlacementAdmission(
+        recordContext,
+      );
+    }
     if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
       return this.createOperationWithinConcurrentCreateBudgetTurn(
         normalizedMoveType,

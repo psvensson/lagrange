@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 235,
-    "storage-raft": 154,
+    "storage-partition": 236,
+    "storage-raft": 156,
     "test-infrastructure": 166,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2688,
-  "digest": "fnv1a32-1b69e889",
+  "censusSize": 2691,
+  "digest": "fnv1a32-f077a4fa",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7d26ae3f",
+  "observationDigest": "fnv1a32-e5ebfdd0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1522,6 +1522,7 @@
     "test/partition/placement-admission-copy-occupancy.test.js": "storage-partition",
     "test/partition/placement-admission-found.test.js": "storage-partition",
     "test/partition/placement-admission-routed-cdc.test.js": "storage-partition",
+    "test/partition/placement-founding-and-runtime-service-admission.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
     "test/partition/proposal-queue-size-invariant.property.test.js": "storage-partition",
     "test/partition/proposal-queue.test.js": "storage-partition",
@@ -1791,6 +1792,8 @@
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/founding-growth-lifecycle-witnesses.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
@@ -14107,6 +14110,39 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/placement-founding-and-runtime-service-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/raft-leadership-stability.property.test.js": {
       "files": [
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -16124,6 +16160,32 @@
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-replace-owner.js",
         "src/rebalancer/rebalancer-constants.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/founding-growth-lifecycle-witnesses.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-backend/host-contract-citations.test.js": {

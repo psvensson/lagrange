@@ -25,6 +25,8 @@ const {
 
 // The commit-index floor of R-1a before any removal intent exists.
 const PRE_INTENT_COMMIT_INDEX_FLOOR = 0;
+const REPLACE_PROMOTION_IN_LOG_METADATA_KEY = 'promotionInLog';
+const REPLACE_PROMOTION_PROPOSED_METADATA_KEY = 'promotionProposed';
 
 /**
  * Whether this operation is a REPLACE of a partition replica (the C1/D2
@@ -49,6 +51,28 @@ function isPartitionReplace(operation) {
 function isReplaceRemovalIntentDurable(operation) {
   return isPartitionReplace(operation) &&
     operation?.workflowStep === WORKFLOW_STEP.STOPPING;
+}
+
+/**
+ * Whether a partition REPLACE has reached or recorded the point-of-no-return
+ * where its target promotion is in the Raft log (either past the durable
+ * removal-intent boundary or with promotionInLog/promotionProposed recorded
+ * in stepsHistory).
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isReplacePromotionInLog(operation) {
+  if (!isPartitionReplace(operation)) {
+    return false;
+  }
+  if (isReplaceRemovalIntentDurable(operation)) {
+    return true;
+  }
+  const steps = Array.isArray(operation?.stepsHistory) ?
+    operation.stepsHistory : [];
+  return steps.some((entry) =>
+    entry?.[REPLACE_PROMOTION_IN_LOG_METADATA_KEY] === true ||
+    entry?.[REPLACE_PROMOTION_PROPOSED_METADATA_KEY] === true);
 }
 
 // C0: the witness commit index recorded with the first removal intent. A
@@ -88,6 +112,7 @@ async function resolveIntentCommitIndex(owner, operation) {
 
 export {
   isPartitionReplace,
+  isReplacePromotionInLog,
   isReplaceRemovalIntentDurable,
   isSourceUnreachableAtIntent,
   resolveIntentCommitIndex,

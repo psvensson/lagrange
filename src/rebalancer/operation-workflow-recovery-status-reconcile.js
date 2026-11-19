@@ -13,6 +13,7 @@ import {
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
+  isReplacePromotionInLog,
   isReplaceRemovalIntentDurable,
   recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
@@ -66,7 +67,8 @@ async function reconcilePartitionReplaceTargetStatus(
       (!targetGone && reconciledStatus !== ReplicaStatus.FAILED)) {
     return false;
   }
-  if (isReplaceRemovalIntentDurable(operation)) {
+  if (isReplaceRemovalIntentDurable(operation) ||
+      isReplacePromotionInLog(operation)) {
     await owner.runReplaceStoppingOwner(operation);
     return true;
   }

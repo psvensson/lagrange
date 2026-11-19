@@ -3,10 +3,19 @@ import {AddressManager} from '../address/address-manager.js';
 import {
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,
+  admitGroupLearner,
   admitGroupPeer,
+  evaluateGroupLearnerCatchUp,
+  proposeGroupGrowthPromote,
+  proposeGroupRemoveLearner,
+  proposeGroupReplacePromote,
   reserveGroupPeerIdentity,
   takeGroupAdmissionsInFlight,
+  withdrawGroupPromotion,
 } from '../raft/raft-rs-group-membership-admission.js';
+import {
+  projectReplicaRole,
+} from '../raft/raft-rs-committed-membership-read.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
@@ -77,6 +86,27 @@ function groupRetiringRefusal(service) {
  * @param {Object} peer - {replicaIdentity, nodeId}.
  * @return {Object} The frozen admission record.
  */
+function resolvePartitionPeerEndpoint(peer) {
+  let nodeId = peer.nodeId ?? null;
+  if (!nodeId && peer.peerAddress) {
+    nodeId = AddressManager.getInstance()
+      .nodeIdOfProjectedAddress(peer.peerAddress);
+  }
+  let peerAddress = peer.peerAddress ?? null;
+  if (!peerAddress && nodeId) {
+    peerAddress = AddressManager.getInstance().format(
+      nodeId,
+      ENTITY_TYPE.PARTITION,
+      peer.replicaIdentity,
+    );
+  }
+  return {
+    replicaIdentity: peer.replicaIdentity,
+    nodeId,
+    peerAddress,
+  };
+}
+
 function admitPartitionRaftPeer(service, peer) {
   const retiring = groupRetiringRefusal(service);
   if (retiring) {
@@ -87,17 +117,129 @@ function admitPartitionRaftPeer(service, peer) {
       change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
     return refused;
   }
-  const nodeId = peer.nodeId ?? (peer.peerAddress ?
-    AddressManager.getInstance().nodeIdOfProjectedAddress(peer.peerAddress) :
-    null);
-  const peerAddress = peer.peerAddress ?? (nodeId ?
-    AddressManager.getInstance().format(nodeId,
-      ENTITY_TYPE.PARTITION, peer.replicaIdentity) : null);
-  return admitGroupPeer(service.raft, admissionGroupOf(service), {
-    replicaIdentity: peer.replicaIdentity,
-    nodeId,
-    peerAddress,
-  });
+  return admitGroupPeer(
+    service.raft,
+    admissionGroupOf(service),
+    resolvePartitionPeerEndpoint(peer),
+  );
+}
+
+/**
+ * Admit a learner replica into the partition's Raft configuration through the
+ * group-neutral admission owner (WP-P ADMIT).
+ * @param {Object} service - The partition service.
+ * @param {Object} peer - {replicaIdentity, nodeId, peerAddress?}.
+ * @return {Object} The frozen admission record.
+ */
+function admitPartitionRaftLearner(service, peer) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    const refused = Object.freeze({replicaIdentity: peer?.replicaIdentity,
+      ...admissionOfPortAnswer(retiring)});
+    service.logger?.warn?.(GROUP_RETIRING_LOG_MSG, {
+      partitionId: service.partitionId,
+      change: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, ...refused});
+    return refused;
+  }
+  if (peer?.replicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, peer.replicaIdentity);
+  }
+  return admitGroupLearner(
+    service.raft,
+    admissionGroupOf(service),
+    resolvePartitionPeerEndpoint(peer),
+  );
+}
+
+/**
+ * Evaluate the fixed-c0 learner catch-up predicate on the partition leader's
+ * Raft port (WP-P LEARNER_CAUGHT_UP).
+ * @param {Object} service - The partition service.
+ * @param {Object} request - {operationId, replicaIdentity, requestKind?}.
+ * @return {Object} The port answer.
+ */
+function evaluatePartitionLearnerCatchUp(service, request) {
+  if (request?.replicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, request.replicaIdentity);
+  }
+  return evaluateGroupLearnerCatchUp(service.raft, request);
+}
+
+/**
+ * Propose an odd-arity learner growth promotion on the partition leader's
+ * Raft port (WP-P GROWTH_PROMOTE).
+ * @param {Object} service - The partition service.
+ * @param {Object} request - {operationIds, promotions, expectedEpoch?}.
+ * @return {Object} The port turn or retiring refusal.
+ */
+function proposePartitionGrowthPromote(service, request) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    return settledTurn(retiring);
+  }
+  const promotions = Array.isArray(request?.promotions) ?
+    request.promotions : [];
+  for (const promotion of promotions) {
+    if (promotion?.replicaIdentity) {
+      reservePartitionRaftPeerIdentity(service, promotion.replicaIdentity);
+    }
+  }
+  return proposeGroupGrowthPromote(service.raft, request);
+}
+
+/**
+ * Propose a target learner promotion for an in-flight partition REPLACE
+ * (WP-P REPLACE_PROMOTE).
+ * @param {Object} service - The partition service.
+ * @param {Object} request - {operationId, targetReplicaIdentity,
+ *   sourceReplicaIdentity, targetVoterCount?}.
+ * @return {Object} The port turn or retiring refusal.
+ */
+function proposePartitionReplacePromote(service, request) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    return settledTurn(retiring);
+  }
+  if (request?.targetReplicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, request.targetReplicaIdentity);
+  }
+  if (request?.sourceReplicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, request.sourceReplicaIdentity);
+  }
+  return proposeGroupReplacePromote(service.raft, request);
+}
+
+/**
+ * Record a tenure withdrawal tombstone for an operation's learner promotion
+ * before deciding whether a promotion is already in the Raft log
+ * (WP-P WITHDRAW_PROMOTION).
+ * @param {Object} service - The partition service.
+ * @param {Object} request - {operationId, replicaIdentity}.
+ * @return {Object} The port answer.
+ */
+function withdrawPartitionPromotion(service, request) {
+  if (request?.replicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, request.replicaIdentity);
+  }
+  return withdrawGroupPromotion(service.raft, request);
+}
+
+/**
+ * Propose removal of a learner from the partition's Raft configuration,
+ * refusing NOT_LEARNER if the replica is a voter (WP-P REMOVE_LEARNER).
+ * @param {Object} service - The partition service.
+ * @param {Object} request - {operationId?, replicaIdentity}.
+ * @return {Object} The port turn or retiring refusal.
+ */
+function removePartitionRaftLearner(service, request) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    return settledTurn(retiring);
+  }
+  if (request?.replicaIdentity) {
+    reservePartitionRaftPeerIdentity(service, request.replicaIdentity);
+  }
+  return proposeGroupRemoveLearner(service.raft, request);
 }
 
 // The row-driven retirements (REMOVE_PEER) the port deferred, by the change
@@ -255,7 +397,9 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
     // id this replica has not reserved), so a reader can ask each voter to
     // corroborate the answer's term and leader (fix-f7, V1).
     voterReplicaIds: replicaIdentitiesOf(answer, answer.voters),
+    learnerReplicaIds: replicaIdentitiesOf(answer, answer.learners || []),
     votersOutgoingReplicaIds: replicaIdentitiesOf(answer, answer.votersOutgoing),
+    role: projectReplicaRole(answer, sourceReplicaIdentity),
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
   });
 }
@@ -320,12 +464,18 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 }
 
 export {
+  admitPartitionRaftLearner,
   admitPartitionRaftPeer,
+  evaluatePartitionLearnerCatchUp,
+  proposePartitionGrowthPromote,
+  proposePartitionReplacePromote,
+  proposePeerRetirement,
   readPartitionCommittedMembership,
   readPartitionReplicaMembership,
-  proposePeerRetirement,
+  removePartitionRaftLearner,
   reservePartitionRaftPeerIdentity,
   retirePartitionRaftPeer,
   takeAdmissionsInFlight,
   takeDeferredRetirements,
+  withdrawPartitionPromotion,
 };

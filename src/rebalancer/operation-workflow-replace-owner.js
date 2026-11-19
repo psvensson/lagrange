@@ -42,6 +42,7 @@ import {
 } from './operation-workflow-replace-owner-wake.js';
 import {
   isPartitionReplace,
+  isReplacePromotionInLog,
   isReplaceRemovalIntentDurable,
   isSourceUnreachableAtIntent,
   resolveIntentCommitIndex,
@@ -775,6 +776,7 @@ export {
   decideReplaceCompletion,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
+  isReplacePromotionInLog,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
