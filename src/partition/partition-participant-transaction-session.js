@@ -11,8 +11,8 @@ import {
 import {operationsOf, validationTextOf} from './partition-participant-transaction-bytes.js';
 import {
   isParticipantSessionPrepared, isPartitionReserved,
-  readDurablePrepareGeneration, readPartitionWriteGeneration,
-  readPartitionWriteGenerationHistoryRange, readPartitionWriteOrigin,
+  readDurablePrepareGeneration, readOrReconstructGenerationHistoryRange,
+  readPartitionWriteGeneration, readPartitionWriteOrigin,
   readPreparedParticipantIds, readPreparedParticipantRows, readTableFootprintMetadata,
   recordPartitionWriteGenerationFootprint,
 } from './partition-participant-transaction-store.js';
@@ -285,7 +285,8 @@ function applyHydratedGenerationRow(row, expectedGen, scopedGens, committedGenMa
 function hydrateCommittedHistoryFromStore(service, minGen, currentGen) {
   const delta = currentGen - minGen;
   if (delta <= 0 || service?.db?.open !== true) return false;
-  const rows = readPartitionWriteGenerationHistoryRange(service.db, minGen, currentGen);
+  const rows = readOrReconstructGenerationHistoryRange(service.db, minGen, currentGen,
+    (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
   if (rows.length !== delta) return false;
   const scopedGens = perServiceSet(SCOPED_COMMIT_GENERATIONS, service);
   const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
@@ -615,7 +616,8 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
   const currentGen = readPartitionWriteGeneration(service.db);
   if (baseGen === null || baseGen < 0 || baseGen > currentGen) return false;
   if (baseGen === currentGen) return true;
-  const rows = readPartitionWriteGenerationHistoryRange(service.db, baseGen, currentGen);
+  const rows = readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
+    (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
   if (rows.length !== currentGen - baseGen) return false;
   hydrateCommittedHistoryFromStore(service, baseGen, currentGen);
   for (let idx = 0; idx < rows.length; idx += 1) {

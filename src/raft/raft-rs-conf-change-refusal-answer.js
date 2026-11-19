@@ -196,15 +196,55 @@ function normalizeLearnerCaughtUp(change, registry) {
   };
 }
 
+function resolvePrimaryOperationId(change) {
+  if (nonEmptyString(change.operationId)) {
+    return change.operationId;
+  }
+  if (!Array.isArray(change.operationIds)) {
+    return null;
+  }
+  const [first] = change.operationIds;
+  return nonEmptyString(first) ? first : null;
+}
+
+function extractPromotionIdentity(item) {
+  if (nonEmptyString(item)) return item;
+  if (!item || typeof item !== 'object') return null;
+  if (nonEmptyString(item.replicaIdentity)) return item.replicaIdentity;
+  if (nonEmptyString(item.replicaId)) return item.replicaId;
+  return null;
+}
+
 function extractTargetIdentities(change) {
-  return change.promoteReplicaIds ??
-    change.replicaIdentities ??
-    change.targets ??
-    (nonEmptyString(change.replicaIdentity) ? [change.replicaIdentity] : null);
+  const listCandidate = [
+    change.promoteReplicaIds,
+    change.replicaIdentities,
+    change.promotions,
+    change.targets,
+  ].find((item) => Array.isArray(item));
+  if (Array.isArray(listCandidate)) {
+    return listCandidate.map(extractPromotionIdentity);
+  }
+  if (nonEmptyString(change.replicaIdentity)) {
+    return [change.replicaIdentity];
+  }
+  if (nonEmptyString(change.replicaId)) {
+    return [change.replicaId];
+  }
+  return null;
+}
+
+function resolveBaseConfigurationDigest(change) {
+  return firstNonEmptyString([
+    change.baseConfigurationDigest,
+    change.expectedBaseConfig,
+    change.expectedEpoch,
+  ]);
 }
 
 function normalizeGrowthPromote(change, registry) {
-  if (!nonEmptyString(change.operationId)) {
+  const operationId = resolvePrimaryOperationId(change);
+  if (operationId === null) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_OPERATION_ID};
   }
   const targets = resolvePeerIdList(
@@ -226,9 +266,9 @@ function normalizeGrowthPromote(change, registry) {
   return {
     typedOperation: deepFreeze({
       kind: RAFT_MEMBERSHIP_OPERATION.GROWTH_PROMOTE,
-      operationId: change.operationId,
+      operationId,
       promotePeerIds: Object.freeze(targets.peerIds),
-      baseConfigurationDigest: change.baseConfigurationDigest ?? null,
+      baseConfigurationDigest: resolveBaseConfigurationDigest(change),
       baseVoterPeerIds: baseVoters.peerIds === null ? null :
         Object.freeze(baseVoters.peerIds),
       workflowStep: change.workflowStep,
@@ -290,7 +330,8 @@ function normalizeReplacePromote(change, registry) {
 }
 
 function normalizeWithdrawPromotion(change, registry) {
-  if (!nonEmptyString(change.operationId)) {
+  const operationId = resolvePrimaryOperationId(change);
+  if (operationId === null) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_OPERATION_ID};
   }
   const targets = resolvePeerIdList(
@@ -304,7 +345,7 @@ function normalizeWithdrawPromotion(change, registry) {
   return {
     typedOperation: deepFreeze({
       kind: RAFT_MEMBERSHIP_OPERATION.WITHDRAW_PROMOTION,
-      operationId: change.operationId,
+      operationId,
       promotePeerIds: Object.freeze(targets.peerIds),
     }),
   };

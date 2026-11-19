@@ -661,9 +661,17 @@ function decideWithdrawPromotion({group, tenure, status, confState,
     };
   }
   const subjects = collectOperationSubjects(tenure, operation);
+  if (subjects.length === 0 &&
+      !tenure.proposedPromotions.has(operation.operationId)) {
+    return {
+      immediate: admissionRefusal(
+        RAFT_MEMBERSHIP_CHANGE_REFUSAL.TARGET_IDENTITY_REQUIRED, false),
+    };
+  }
   tenure.withdrawnOperationIds.add(operation.operationId);
   const learners = new Set((confState?.learners || []).map(String));
-  const allStillLearners = subjects.every((peerId) => learners.has(peerId));
+  const allStillLearners = subjects.length > 0 &&
+    subjects.every((peerId) => learners.has(peerId));
   const inLog = tenure.proposedPromotions.has(operation.operationId) ||
     isConfChangeBusy(status, confState) ||
     !allStillLearners;

@@ -1,5 +1,4 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {isTrafficReady} from '../bootstrap/traffic-readiness-utils.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {LEDGER_PARTITION_ID} from './partition-placement-admission-decision.js';
@@ -265,10 +264,7 @@ class PartitionServiceRebalancerMethods {
       });
       return;
     }
-    if (
-      this.rebalanceCoordinator?.placementAdmissionEnabled === true &&
-      classifySystemPartition({partitionId: this.partitionId}).systemTable === true
-    ) {
+    if (this.rebalanceCoordinator?.placementAdmissionEnabled === true) {
       return;
     }
     if (!backgroundReady || !this.isLeader) {

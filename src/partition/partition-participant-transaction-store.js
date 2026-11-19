@@ -34,7 +34,9 @@ import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
 import {
   PARTICIPANT_ORIGIN_HISTORY_REASON as ORIGIN_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE as ORIGIN_STATE,
+  PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
+  PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
@@ -48,6 +50,8 @@ const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const BINARY_COLLATION = 'BINARY';
 const DOUBLE_QUOTE = '"';
 const ESCAPED_DOUBLE_QUOTE = '""';
+const EVENT_KIND_PARTICIPANT = 'participant';
+const EVENT_KIND_STATEMENT = 'statement';
 const FOOTPRINT_MEMO_KEY = Symbol('participantTableFootprintMemo');
 const EMPTY_FOOTPRINT_METADATA = Object.freeze({
   pkCols: Object.freeze([]),
@@ -544,6 +548,14 @@ function countOrdinaryAppliedStatementsBeforeIndex(db, originIndex, prepareIndex
   }
 }
 
+function readOrdinaryAppliedStatementIndicesAfter(db, originIndex) {
+  return sqliteConnectionState(db)
+    .statement(SQL.SELECT_ORDINARY_APPLIED_INDICES_AFTER)
+    .all(originIndex)
+    .map((row) => Number(row.logIndex))
+    .filter((idx) => Number.isFinite(idx));
+}
+
 function hasNonEmptyOperationsText(operationsText) {
   if (typeof operationsText !== 'string') return false;
   const trimmed = operationsText.trim();
@@ -565,6 +577,53 @@ function readDurablePrepareGeneration(db, prepareIndex) {
     row.decisionIndex < prepareIndex &&
     hasNonEmptyOperationsText(row.operationsText)).length;
   return ordinaryCount + committedCount;
+}
+
+function buildReconstructedGenerationRow(generation, event, extractFootprint) {
+  if (event?.kind !== EVENT_KIND_PARTICIPANT) {
+    return Object.freeze({generation, scoped: ZERO, row_keys_text: EMPTY_JSON_ARRAY_TEXT});
+  }
+  const fp = extractFootprint(event.operationsText);
+  const keys = fp && fp.scoped === true && fp.hasUnscopedWrite !== true && fp.rowKeys ?
+    [...fp.rowKeys] : [];
+  return Object.freeze({
+    generation,
+    scoped: keys.length > ZERO ? ONE_ROW : ZERO,
+    row_keys_text: keys.length > ZERO ? JSON.stringify(keys) : EMPTY_JSON_ARRAY_TEXT,
+  });
+}
+
+function collectOrderedGenerationEventsAfterOrigin(db, originIndex) {
+  const events = [];
+  for (const row of readCommittedParticipantRows(db)) {
+    if (typeof row.decisionIndex === 'number' && row.decisionIndex > originIndex &&
+        hasNonEmptyOperationsText(row.operationsText)) {
+      events.push({kind: EVENT_KIND_PARTICIPANT, logIndex: row.decisionIndex,
+        operationsText: row.operationsText});
+    }
+  }
+  for (const logIndex of readOrdinaryAppliedStatementIndicesAfter(db, originIndex)) {
+    events.push({kind: EVENT_KIND_STATEMENT, logIndex, operationsText: null});
+  }
+  events.sort((a, b) => a.logIndex - b.logIndex);
+  return events;
+}
+
+function readOrReconstructGenerationHistoryRange(db, fromGen, toGen, extractFootprint) {
+  const stored = readPartitionWriteGenerationHistoryRange(db, fromGen, toGen);
+  if (toGen <= fromGen || stored.length === toGen - fromGen) return stored;
+  const origin = readPartitionWriteOrigin(db);
+  const currentGen = readPartitionWriteGeneration(db);
+  if (origin === null || fromGen < ZERO || toGen > currentGen) return stored;
+  const events = collectOrderedGenerationEventsAfterOrigin(db, origin.originIndex);
+  if (events.length !== currentGen) return stored;
+  const byGen = new Map(stored.map((row) => [Number(row.generation), row]));
+  const result = [];
+  for (let gen = fromGen + ONE_ROW; gen <= toGen; gen += ONE_ROW) {
+    result.push(byGen.get(gen) ??
+      buildReconstructedGenerationRow(gen, events[gen - ONE_ROW], extractFootprint));
+  }
+  return result;
 }
 
 function isSameColumnList(left, right) {
@@ -665,6 +724,39 @@ function readTableFootprintMetadata(db, tableName) {
   return meta;
 }
 
+function decisionRankOf(action) {
+  return action.decision === DECISION.ROLLBACK ? -ONE_ROW : ONE_ROW;
+}
+
+function buildContradictionAction(participantId, lookupCoordinatorRecord) {
+  const txId = String(participantId).split(BYTES.IDENTITY_SEPARATOR)[ZERO];
+  const rec = lookupCoordinatorRecord(txId);
+  const isCommitted = rec?.decision === DECISION.COMMIT || rec?.status === STATE.COMMITTED;
+  return Object.freeze({
+    participantId,
+    transactionId: txId,
+    decision: isCommitted ? DECISION.COMMIT : DECISION.ROLLBACK,
+  });
+}
+
+function isCommittedConflictPair(actionsById, pair) {
+  return actionsById.get(pair.leftParticipantId)?.decision === DECISION.COMMIT &&
+    actionsById.get(pair.rightParticipantId)?.decision === DECISION.COMMIT;
+}
+
+function resolveRetainedPreparedContradictionDisposition(inspection, lookupCoordinatorRecord) {
+  const ids = inspection?.contradictoryParticipantIds ?? [];
+  const actions = ids.map((id) => buildContradictionAction(id, lookupCoordinatorRecord));
+  const actionsById = new Map(actions.map((a) => [a.participantId, a]));
+  const pairs = inspection?.contradictions ?? [];
+  const unresolvable = pairs.some((pair) => isCommittedConflictPair(actionsById, pair));
+  actions.sort((a, b) => decisionRankOf(a) - decisionRankOf(b));
+  return Object.freeze({
+    resolvable: !unresolvable,
+    orderedDecisions: Object.freeze(actions),
+  });
+}
+
 export {
   advancePartitionWriteGeneration,
   insertParticipantTransactionRow,
@@ -674,6 +766,8 @@ export {
   participantOutcomeOf,
   readCommittedParticipantRows,
   readDurablePrepareGeneration,
+  readOrReconstructGenerationHistoryRange,
+  readOrdinaryAppliedStatementIndicesAfter,
   readParticipantTransactionRow,
   readPreparedParticipantIds,
   readPreparedParticipantRows,
@@ -686,5 +780,6 @@ export {
   readTableFootprintMetadata,
   recordPartitionWriteGenerationFootprint,
   recordPartitionWriteOrigin,
+  resolveRetainedPreparedContradictionDisposition,
   updateParticipantTransactionDecided,
 };

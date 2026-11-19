@@ -128,18 +128,25 @@ function checkApplicabilityApproval(applicability, diverged) {
   return null;
 }
 
+function collectDigestMismatches(root, digestMap) {
+  if (!digestMap || typeof digestMap !== 'object') return [];
+  return Object.entries(digestMap)
+    .map(([file, expectedDigest]) => fileDigestMismatch(root, file, expectedDigest))
+    .filter(Boolean);
+}
+
 function evidenceApplicabilityProblems(root, data) {
   if (!data || typeof data !== 'object') return [RECEIPT_DATA_MISSING];
-  if (!data.testFileDigests || typeof data.testFileDigests !== 'object') return [];
-
-  const diverged = Object.entries(data.testFileDigests)
-    .map(([testFile, expectedDigest]) => fileDigestMismatch(root, testFile, expectedDigest))
-    .filter(Boolean);
-
-  if (diverged.length === 0) return [];
-  const applicability = data.applicability || data.evidenceApplicability;
-  const problem = checkApplicabilityApproval(applicability, diverged);
-  return problem ? [problem] : [];
+  const prodDiverged = collectDigestMismatches(root, data.productionFileDigests);
+  const problems = prodDiverged.length > 0 ?
+    [`production files diverged from receipt: ${prodDiverged.join(LIST_SEPARATOR)}`] : [];
+  const diverged = collectDigestMismatches(root, data.testFileDigests);
+  if (diverged.length > 0) {
+    const applicability = data.applicability || data.evidenceApplicability;
+    const problem = checkApplicabilityApproval(applicability, diverged);
+    if (problem) problems.push(problem);
+  }
+  return problems;
 }
 
 function validateEvidenceApplicability(root, data) {

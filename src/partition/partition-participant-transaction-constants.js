@@ -299,8 +299,16 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
     'ORDER BY COALESCE(decision_index, 0) ASC, participant_id ASC',
   SELECT_ORDINARY_APPLIED_COUNT_BETWEEN:
     'SELECT COUNT(*) AS count FROM _partition_statement_outcomes ' +
-    'WHERE entry_key LIKE \'entry:%\' AND outcome = \'APPLIED\' ' +
-    'AND owner_result_text IS NULL AND log_index > ? AND log_index < ?',
+    'WHERE entry_key LIKE \'entry:%\' AND LOWER(outcome) = \'applied\' ' +
+    'AND (owner_result_text IS NULL OR ' +
+    'owner_result_text NOT LIKE \'%"outcome":"REFUSED"%\') ' +
+    'AND log_index > ? AND log_index < ?',
+  SELECT_ORDINARY_APPLIED_INDICES_AFTER:
+    'SELECT log_index AS logIndex FROM _partition_statement_outcomes ' +
+    'WHERE entry_key LIKE \'entry:%\' AND LOWER(outcome) = \'applied\' ' +
+    'AND (owner_result_text IS NULL OR ' +
+    'owner_result_text NOT LIKE \'%"outcome":"REFUSED"%\') ' +
+    'AND log_index > ? ORDER BY log_index ASC, entry_key ASC',
   GENERATION_HISTORY_TABLE: '_partition_write_generation_history',
   CREATE_GENERATION_HISTORY_TABLE: `
       CREATE TABLE IF NOT EXISTS _partition_write_generation_history (

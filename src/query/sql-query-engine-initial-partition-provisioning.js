@@ -711,7 +711,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       positions: {},
     });
     const answer = await coordinator.admitPlacementStatement({
-      entryId: context?.entryId || null,
       intentKey: `${FOUND_ENTRY_PREFIX}:${foundingIntentId}`,
       statement,
     });

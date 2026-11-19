@@ -139,7 +139,7 @@ documentClass: generated
 - [rebalance-coordinator-ledger-interlock-hold-state.js](rebalance-coordinator-ledger-interlock-hold-state.js) - No leading comment; first export: applyRebalanceCoordinatorLedgerInterlockHoldStateMethods. (importers: one)
 - [rebalance-coordinator-lifecycle.js](rebalance-coordinator-lifecycle.js) - Keep coordinator-extracted owners on one logger surface. (importers: one)
 - [rebalance-coordinator-operation-creation-admission.js](rebalance-coordinator-operation-creation-admission.js) - Fail closed at the one creation boundary: no ADD, REPLACE or REMOVE of a group its durable record retires as a unit... (importers: few)
-- [rebalance-coordinator-operation-creation-support.js](rebalance-coordinator-operation-creation-support.js) - Release the bootstrap-topology dispatch hold of one deterministic founding-cohort ADD and stamp its cohort topology,... (importers: one)
+- [rebalance-coordinator-operation-creation-support.js](rebalance-coordinator-operation-creation-support.js) - No leading comment; first export: applyRebalanceCoordinatorOperationCreationSupportMethods. (importers: one)
 - [rebalance-coordinator-operation-creation.js](rebalance-coordinator-operation-creation.js) - The runtime target claim refusal: when it is the spent retry bound (not a missing claim key or conflict id), one... (importers: few)
 - [rebalance-coordinator-operation-intent-methods.js](rebalance-coordinator-operation-intent-methods.js) - Normalize one move type to canonical upper-case enum representation. (importers: one)
 - [rebalance-coordinator-operation-persistence-collision.js](rebalance-coordinator-operation-persistence-collision.js) - Resolve the authoritative winner of a deterministic insert collision. (importers: few)

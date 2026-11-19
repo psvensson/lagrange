@@ -40,6 +40,7 @@ import {
 } from '../../src/partition/partition-participant-transaction-bytes.js';
 import {
   readPartitionWriteGeneration,
+  resolveRetainedPreparedContradictionDisposition,
 } from '../../src/partition/partition-participant-transaction-store.js';
 import {
   RaftRsDurableStore,
@@ -1010,15 +1011,54 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     );
     assert.deepEqual(snapWhileContradicted.userRows, []);
 
-    // Explicit ROLLBACK of txHist2 resolves the contradiction, allowing txHist1 to commit:
-    const rollbackHist2 = decisionCommandOf(
-      txHist2,
-      V3.DECISION.ROLLBACK,
-      prepHist2.preparedDigest,
+    // Explicit incident disposition against the coordinator's durable decision record:
+    // txHist1 has a COMMIT decision record in the coordinator table, while txHist2 has no
+    // COMMIT record; resolveRetainedPreparedContradictionDisposition orders ROLLBACK of
+    // txHist2 first, followed by COMMIT of txHist1:
+    const coordinatorGateway = createTransactionPersistenceGateway();
+    coordinatorGateway.seed('sql_transactions', {
+      transaction_id: txHist1.transactionId,
+      session_id: 'hist-sess-1',
+      status: 'COMMITTED',
+      transaction_mode: 'DISTRIBUTED',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE',
+      frozen_participant_count: 1,
+      decision: 'COMMIT',
+      created_at: 1000,
+      updated_at: 1000,
+    });
+    const disposition = resolveRetainedPreparedContradictionDisposition(
+      initialInspection,
+      (txId) =>
+        coordinatorGateway.db
+          .prepare('SELECT * FROM sql_transactions WHERE transaction_id = ?')
+          .get(txId) ?? null,
     );
+    assert.equal(disposition.resolvable, true);
+    assert.deepEqual(
+      disposition.orderedDecisions.map((a) => ({
+        participantId: a.participantId,
+        decision: a.decision,
+      })),
+      [
+        {participantId: txHist2.participantId, decision: 'ROLLBACK'},
+        {participantId: txHist1.participantId, decision: 'COMMIT'},
+      ],
+    );
+    const preparedByParticipantId = new Map([
+      [txHist1.participantId, {identity: txHist1, prep: prepHist1}],
+      [txHist2.participantId, {identity: txHist2, prep: prepHist2}],
+    ]);
+    const dispositionCommands = disposition.orderedDecisions.map((item) => {
+      const target = preparedByParticipantId.get(item.participantId);
+      return item.decision === 'COMMIT' ?
+        commitDecision(target.identity, target.prep) :
+        decisionCommandOf(target.identity, V3.DECISION.ROLLBACK, target.prep.preparedDigest);
+    });
     leader2.controllablePort.commitBatches(
-      [rollbackHist2, commitDecision(txHist1, prepHist1)],
-      [1, 1],
+      dispositionCommands,
+      dispositionCommands.map(() => 1),
     );
     const postRollbackInspection = inspectRetainedPreparedObligations(leader2);
     assert.equal(postRollbackInspection.healthy, true);
@@ -1242,6 +1282,112 @@ test('P2 (Finding 1): staging leader, session-less followers ([1, 1] and [2]), a
     );
   } finally {
     await shutdownAll(leader, followerSep, followerBatch, reopened);
+    clearFixtureSingletons();
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
+test('P2 (Review 2 Finding 3): 114bd420 -> current transition reconstructs exact generation history for retained PREPARED transactions across disjoint participant commits and fail-closes across 114bd420 ordinary writes', async () => {
+  resetFixtureSingletons();
+  const {directory, dbPath} = temporaryDbPath();
+  let leader1 = null;
+  let leader2 = null;
+  let leader3 = null;
+  try {
+    const started1 = await startLeader({dbPath});
+    leader1 = started1.leader;
+    leader1.concurrencyGranularity = 'row-key';
+    leader1.conflictSettleWaitMs = 50;
+
+    // 1. Disjoint transactions A (key-a) and B (key-b) both prepare at base generation N:
+    const baseGen = generationOf(leader1);
+    const txA = identityOf('a'.repeat(32), {sessionId: 'up-sess-a'});
+    const txB = identityOf('b'.repeat(32), {sessionId: 'up-sess-b'});
+    const prepA = prepareCommandOf(txA, [operationOf({id: 'up-key-a', value: 'val-a'})], baseGen);
+    const prepB = prepareCommandOf(txB, [operationOf({id: 'up-key-b', value: 'val-b'})], baseGen);
+    const commitA = commitDecision(txA, prepA);
+    leader1.controllablePort.commitBatches([prepA, prepB, commitA], [1, 1, 1]);
+    assert.equal(generationOf(leader1), baseGen + 1);
+
+    // Convert the database to the exact 114bd420 representation (where
+    // _partition_write_generation_history did not exist when A committed at N+1):
+    leader1.db.exec('DROP TABLE _partition_write_generation_history');
+    await shutdownAll(leader1);
+    leader1 = null;
+
+    // 2. Reopen under the current implementation (which creates an empty
+    // _partition_write_generation_history table) and deliver B's bound COMMIT decision:
+    const started2 = await startLeader({
+      dbPath,
+      generationOrigin: false,
+      releaseAdmission: false,
+    });
+    leader2 = started2.leader;
+    leader2.concurrencyGranularity = 'row-key';
+    leader2.conflictSettleWaitMs = 50;
+    discardParticipantSessions(leader2);
+    resetParticipantRowKeyHistory(leader2);
+
+    const commitB = commitDecision(txB, prepB);
+    leader2.controllablePort.commitBatches([commitB], [1]);
+
+    const snapAfterUpgrade = readDurablePartitionSnapshot(leader2.db);
+    assert.deepEqual(
+      snapAfterUpgrade.decisions.map((d) => ({
+        participantId: d.participant_id,
+        state: d.state,
+        refusalCause: d.refusal_cause,
+      })),
+      [
+        {participantId: txA.participantId, state: 'COMMITTED', refusalCause: null},
+        {participantId: txB.participantId, state: 'COMMITTED', refusalCause: null},
+      ],
+    );
+    assert.deepEqual(snapAfterUpgrade.userRows, [
+      {id: 'up-key-a', value: 'val-a'},
+      {id: 'up-key-b', value: 'val-b'},
+    ]);
+
+    // 3. Negative control on 114bd420 representation: if generation N+2 was an ordinary
+    // write W under 114bd420 (with _partition_write_generation_history empty/missing for N+2),
+    // a PREPARE sealed at N+1 before W must fail closed (REFUSED) after reopen:
+    const genBeforeW = generationOf(leader2);
+    const txD = identityOf('d'.repeat(32), {sessionId: 'up-sess-d'});
+    const prepD = prepareCommandOf(txD, [operationOf({id: 'up-key-d', value: 'val-d'})], genBeforeW);
+    const ordinaryW = {
+      type: PARTITION_SERVICE_OPERATION.QUERY,
+      entryId: 'up-ordinary-w',
+      sql: INSERT_SQL,
+      params: ['up-key-w', 'val-w'],
+      timestamp: '2000:0:node-1',
+      proposedBy: leader2.replicaId,
+      proposedAt: 2000,
+    };
+    leader2.controllablePort.commitBatches([ordinaryW], [1]);
+    leader2.db.exec('DROP TABLE _partition_write_generation_history');
+    await shutdownAll(leader2);
+    leader2 = null;
+
+    const started3 = await startLeader({
+      dbPath,
+      generationOrigin: false,
+      releaseAdmission: false,
+    });
+    leader3 = started3.leader;
+    leader3.concurrencyGranularity = 'row-key';
+    leader3.conflictSettleWaitMs = 50;
+    discardParticipantSessions(leader3);
+    resetParticipantRowKeyHistory(leader3);
+
+    leader3.controllablePort.commitBatches([prepD], [1]);
+    const snapAfterW = readDurablePartitionSnapshot(leader3.db);
+    const dRow = snapAfterW.decisions.find((d) => d.participant_id === txD.participantId);
+    assert.deepEqual(
+      {state: dRow?.state, refusalCause: dRow?.refusal_cause},
+      {state: 'REFUSED', refusalCause: 'conflict'},
+    );
+  } finally {
+    await shutdownAll(leader1, leader2, leader3);
     clearFixtureSingletons();
     fs.rmSync(directory, {recursive: true, force: true});
   }

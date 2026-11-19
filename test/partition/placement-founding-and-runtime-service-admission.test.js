@@ -1,11 +1,22 @@
-// Witness tests for WP-F (FOUND & RUNTIME_SERVICE production routing through
-// PLACEMENT_ADMIT on replica_operations-p1) and WP-C/WP-D partition/workflow
-// membership administration wiring.
+// Witness tests for WP-F (FOUND, RUNTIME_SERVICE, and ordinary PARTITION
+// production routing through PLACEMENT_ADMIT on replica_operations-p1) and
+// WP-C/WP-D partition/workflow membership administration wiring.
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {REBALANCE_COORDINATOR_SHARED} from
+  '../../src/rebalancer/rebalance-coordinator-shared.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from '../../src/rebalancer/replica-operation-update-disposition.js';
+import {
+  ReplicaOperationField,
+} from '../../src/rebalancer/replica-operation-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {
+  createPartitionServiceRebalancerMethods,
+} from '../../src/partition/partition-service-rebalancer-methods.js';
 import {
   PLACEMENT_OUTCOME,
   PLACEMENT_REFUSAL,
@@ -43,8 +54,10 @@ import {
   isReplacePromotionInLog,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
 import {
+  RAFT_CATCH_UP_REQUEST_KIND,
   RAFT_FOUNDING_GROWTH_OUTCOME,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
 import {
@@ -54,8 +67,9 @@ import {
   instantiateRaftRsCore,
   leaderOf,
   settleCluster,
+  turnChainValue,
 } from '../raft/raft-rs-backend/founding-growth-test-support.js';
-import {applyCommitted, awaitProposal, track} from
+import {applyCommitted} from
   '../test-helpers/participant-transaction-fixture.js';
 import {
   buildRuntimeServiceTargetClaimKey,
@@ -63,15 +77,62 @@ import {
 import {
   LEDGER_PARTITION_ID,
   NODE,
+  admitOnLeader,
+  commitLedgerStatement,
   ledgerRows,
   onLedgerLeader,
+  placementStatement,
   stepLedgerRow,
 } from './placement-admission-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 
+const {
+  OPERATION_METADATA_KEY,
+  createOperationRecord,
+} = REBALANCE_COORDINATOR_SHARED;
+
 const SERVICE_ID = 'transaction_coordinator';
 const USER_PARTITION_ID = 'orders-p1';
 const SCHEMA_JOB_ID = 'schema-job-found-1';
+
+function mapLedgerRowToOperation(row) {
+  if (!row) return null;
+  const stepsHistory = typeof row.steps_history === 'string' ?
+    JSON.parse(row.steps_history) : [];
+  const first = stepsHistory[0] || {};
+  const operation = createOperationRecord({
+    operationId: row.operation_id,
+    type: row.type,
+    partitionId: row.partition_id,
+    sourceNodeId: row.source_node_id,
+    targetNodeId: row.target_node_id,
+    replicaId: row.replica_id,
+    sourceReplicaId: row.source_replica_id || null,
+    membershipPublicationEpoch: row.membership_publication_epoch ?? null,
+  });
+  operation.entityType = row.entity_type;
+  operation.entityId = row.entity_id;
+  operation.targetClaimKey = row.target_claim_key || null;
+  operation.workflowStep = row.workflow_step;
+  operation.status = row.status;
+  operation.stepsHistory = stepsHistory;
+  operation.createdAt = row.created_at;
+  operation.updatedAt = row.updated_at;
+  operation.completedAt = row.completed_at ?? null;
+  if (first[OPERATION_METADATA_KEY.REPLICA_IDS]) {
+    operation[ReplicaOperationField.REPLICA_IDS] =
+      first[OPERATION_METADATA_KEY.REPLICA_IDS];
+  }
+  if (first[OPERATION_METADATA_KEY.PEER_ADDRESSES]) {
+    operation[ReplicaOperationField.PEER_ADDRESSES] =
+      first[OPERATION_METADATA_KEY.PEER_ADDRESSES];
+  }
+  if (first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]) {
+    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+      first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP];
+  }
+  return operation;
+}
 
 function attachAutoCommitLoop(leader, proposed) {
   let seen = proposed.length;
@@ -91,6 +152,63 @@ function attachAutoCommitLoop(leader, proposed) {
   return async () => {
     stopped = true;
     await loopPromise;
+  };
+}
+
+function createAuthoritativeLedgerRepository(leader) {
+  let casCounter = 0;
+  return {
+    getInFlightOperations: async () => [],
+    getExistingReplicaRows: async () => [],
+    queryIncompleteOperations: async () => [],
+    isOperationTerminal: () => false,
+    async queryAuthoritativeOperationById(operationId) {
+      const row = leader.db
+        .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(operationId);
+      return mapLedgerRowToOperation(row);
+    },
+    async compareAndSetPendingBootstrapTopologyRelease(
+      released,
+      expectedStepsHistory,
+    ) {
+      const current = leader.db
+        .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(released.operationId);
+      const expectedSerialized = JSON.stringify(expectedStepsHistory);
+      if (!current ||
+          current.workflow_step !== WORKFLOW_STEP.PENDING ||
+          current.steps_history !== expectedSerialized) {
+        return {
+          released: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.CONFLICT,
+        };
+      }
+      casCounter += 1;
+      commitLedgerStatement(
+        leader,
+        `cas-hold-release:${released.operationId}:${casCounter}`,
+        'UPDATE replica_operations SET steps_history = ?, updated_at = ? ' +
+          'WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?',
+        [
+          JSON.stringify(released.stepsHistory),
+          released.updatedAt,
+          released.operationId,
+          WORKFLOW_STEP.PENDING,
+          expectedSerialized,
+        ],
+      );
+      return {
+        released: true,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+      };
+    },
+    async persistOperationUpdate(released, options = {}) {
+      return this.compareAndSetPendingBootstrapTopologyRelease(
+        released,
+        options.expectedStepsHistory || [],
+      );
+    },
   };
 }
 
@@ -126,12 +244,7 @@ function createCoordinatorWithLedger(leader, options = {}) {
       }),
     },
   };
-  coordinator.repository = {
-    getInFlightOperations: async () => [],
-    getExistingReplicaRows: async () => [],
-    queryIncompleteOperations: async () => [],
-    isOperationTerminal: () => false,
-  };
+  coordinator.repository = createAuthoritativeLedgerRepository(leader);
   coordinator.assertLocalControlPlaneMutationReady = () => {};
   coordinator.enforceCreateAdmissionGates = async () => {};
   coordinator.ensureOperationLedgerSelfMoveSerialized = async () => {};
@@ -169,7 +282,7 @@ function createCoordinatorWithLedger(leader, options = {}) {
   return coordinator;
 }
 
-describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT', () => {
+describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEMENT_ADMIT', () => {
   it('routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
@@ -264,6 +377,80 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
     });
   });
 
+  it('suppresses per-partition UnifiedRebalancer for user partitions and routes user PARTITION moves through PLACEMENT_ADMIT with K_TGT enforcement (Finding 4)', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+
+        const rebalancerMethods = createPartitionServiceRebalancerMethods();
+        let initializeRebalancerCalled = false;
+        const userPartitionService = {
+          partitionId: 'orders_user-p1',
+          isShutdown: false,
+          isLeader: true,
+          rebalancer: null,
+          rebalanceCoordinator: coordinator,
+          systemTableCache: coordinator.systemTableCache,
+          isBackgroundWorkReady: () => true,
+          ensureReplicaPlacementOwnerAttached:
+            rebalancerMethods.ensureReplicaPlacementOwnerAttached,
+          driveRebalancerLeadershipSink: () => {},
+          buildRebalancerDependencyBundle: () => ({}),
+          initializeRebalancer: () => {
+            initializeRebalancerCalled = true;
+          },
+          maybeInitializeRebalancer:
+            rebalancerMethods.maybeInitializeRebalancer,
+        };
+        userPartitionService.maybeInitializeRebalancer();
+        assert.equal(initializeRebalancerCalled, false);
+        assert.equal(userPartitionService.rebalancer, null);
+
+        const op1 = await coordinator.createOperation({
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: 'orders_user-p1',
+          partitionId: 'orders_user-p1',
+          nodeId: NODE.B,
+          copySourceNodeId: NODE.A,
+        });
+        assert.ok(op1.operationId.startsWith('pl-orders_user-p1-'));
+
+        const op2 = await coordinator.createOperation({
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: 'items_user-p1',
+          partitionId: 'items_user-p1',
+          nodeId: NODE.B,
+          copySourceNodeId: NODE.C,
+        });
+        assert.ok(op2.operationId.startsWith('pl-items_user-p1-'));
+
+        await assert.rejects(
+          () => coordinator.createOperation({
+            type: OperationType.ADD,
+            entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+            entityId: 'payments_user-p1',
+            partitionId: 'payments_user-p1',
+            nodeId: NODE.B,
+            copySourceNodeId: NODE.D,
+          }),
+          (error) =>
+            error.failureCode === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY,
+        );
+
+        assert.equal(ledgerRows(leader).length, 2);
+        assert.ok(proposed.every(
+          (cmd) => cmd.body?.transitionKind ===
+            PLACEMENT_TRANSITION_KIND.PLACEMENT,
+        ));
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
   it('routes remote PLACEMENT_ADMIT via messageRouter when local node is not ledger leader', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
@@ -313,77 +500,104 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
     });
   });
 
-  it('retains entryId across OUTCOME_UNKNOWN retry for the same placement intent', async () => {
+  it('retains {entryId, statement} across OUTCOME_UNKNOWN retry and allocates fresh entryId when retained attempt settled as REFUSED and statement changed (Finding 5)', async () => {
     await onLedgerLeader(async (leader, proposed) => {
-      let firstCall = true;
-      const messageRouter = {
-        async sendToAddress(_address, message) {
-          if (firstCall) {
-            firstCall = false;
-            const pending = track(requestPlacementAdmission(leader, message));
-            const command = await awaitProposal(
-              proposed,
-              (entry) => entry.entryId === message.entryId,
-            );
-            applyCommitted(leader, command);
-            await pending.promise;
-            return {
-              success: false,
-              failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
-              error: 'Simulated transport timeout after commit',
-            };
-          }
-          return requestPlacementAdmission(leader, message);
-        },
-      };
-      const coordinator = createCoordinatorWithLedger(leader, {
-        registerLocalLeader: false,
-        messageRouter,
-        servicesRows: [{
-          partition_id: LEDGER_PARTITION_ID,
-          entity_id: LEDGER_PARTITION_ID,
-          node_id: NODE.B,
-          replica_id: `${LEDGER_PARTITION_ID}-r1`,
-          status: SERVICE_STATUS.ACTIVE,
-          raft_role: RAFT_ROLE.LEADER,
-          service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-        }],
-      });
-      const intentKey = 'found:retry-witness:orders-p1';
-      const firstResolved =
-        coordinator.resolvePlacementAdmissionEntryId(intentKey, null);
-      assert.ok(firstResolved.entryId.length > 0);
-
-      const engine = Object.create(SQLQueryEngine.prototype);
-      engine.nodeId = NODE.A;
-      engine.rebalanceCoordinator = coordinator;
-
-      await assert.rejects(
-        () => engine.tryProvisionFoundingSetViaPlacementAdmission({
-          partitionId: USER_PARTITION_ID,
-          targetNodeIds: [NODE.A, NODE.B, NODE.C],
-          context: {schemaJobId: 'retry-witness'},
+      // First: create an in-flight ledger move so FOUND attempt A commits as
+      // REFUSED (LEDGER_TRANSITION_UNRESOLVED).
+      const ledgerMove = await admitOnLeader(
+        leader,
+        proposed,
+        'seed-ledger-move',
+        placementStatement({
+          partitionId: LEDGER_PARTITION_ID,
+          type: OperationType.ADD,
+          target: NODE.D,
+          source: NODE.A,
         }),
       );
+      const [ledgerMoveOpId] = ledgerMove.answer.placementResult.operationIds;
 
-      const secondResolved =
-        coordinator.resolvePlacementAdmissionEntryId(intentKey, null);
-      assert.equal(secondResolved.entryId, firstResolved.entryId);
-
-      const retryOutcome =
-        await engine.tryProvisionFoundingSetViaPlacementAdmission({
-          partitionId: USER_PARTITION_ID,
-          targetNodeIds: [NODE.A, NODE.B, NODE.C],
-          context: {schemaJobId: 'retry-witness'},
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        let firstCall = true;
+        const sentEntries = [];
+        const messageRouter = {
+          async sendToAddress(_address, message) {
+            sentEntries.push({
+              entryId: message.entryId,
+              targets: message.body.moves.map((m) => m.targetNodeId),
+            });
+            const answer = await requestPlacementAdmission(leader, message);
+            if (firstCall) {
+              firstCall = false;
+              return {
+                success: false,
+                failureCode:
+                  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+                error: 'Simulated transport timeout after commit of REFUSED attempt A',
+              };
+            }
+            return answer;
+          },
+        };
+        const coordinator = createCoordinatorWithLedger(leader, {
+          registerLocalLeader: false,
+          messageRouter,
+          servicesRows: [{
+            partition_id: LEDGER_PARTITION_ID,
+            entity_id: LEDGER_PARTITION_ID,
+            node_id: NODE.B,
+            replica_id: `${LEDGER_PARTITION_ID}-r1`,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: RAFT_ROLE.LEADER,
+            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
+          }],
         });
-      assert.equal(retryOutcome.answer.entryId, firstResolved.entryId);
-      assert.equal(retryOutcome.result.outcome, PLACEMENT_OUTCOME.ADMITTED);
-      assert.equal(retryOutcome.operations.length, 3);
-      assert.equal(ledgerRows(leader).length, 3);
+
+        const engine = Object.create(SQLQueryEngine.prototype);
+        engine.nodeId = NODE.A;
+        engine.rebalanceCoordinator = coordinator;
+
+        // Attempt A with [NODE.A, NODE.B, NODE.C] commits as REFUSED while its
+        // response returns OUTCOME_UNKNOWN.
+        await assert.rejects(
+          () => engine.tryProvisionFoundingSetViaPlacementAdmission({
+            partitionId: USER_PARTITION_ID,
+            targetNodeIds: [NODE.A, NODE.B, NODE.C],
+            context: {schemaJobId: 'retry-witness'},
+          }),
+        );
+        assert.equal(sentEntries.length, 1);
+        const attemptAEntryId = sentEntries[0].entryId;
+
+        // Complete the blocking ledger move so a fresh attempt can succeed.
+        stepLedgerRow(leader, ledgerMoveOpId, WORKFLOW_STEP.ACTIVE);
+
+        // Retry with updated target set [NODE.A, NODE.B, NODE.D]: must first
+        // resolve attempt A using body_A (avoiding PLACEMENT_ADMISSION_ERROR.BYTES),
+        // observe that attempt A settled as REFUSED, allocate a fresh entryId,
+        // and commit body_B as ADMITTED!
+        const retryOutcome =
+          await engine.tryProvisionFoundingSetViaPlacementAdmission({
+            partitionId: USER_PARTITION_ID,
+            targetNodeIds: [NODE.A, NODE.B, NODE.D],
+            context: {schemaJobId: 'retry-witness'},
+          });
+        assert.equal(sentEntries.length, 3);
+        assert.equal(sentEntries[1].entryId, attemptAEntryId);
+        assert.deepEqual(sentEntries[1].targets, [NODE.A, NODE.B, NODE.C]);
+        assert.notEqual(sentEntries[2].entryId, attemptAEntryId);
+        assert.deepEqual(sentEntries[2].targets, [NODE.A, NODE.B, NODE.D]);
+        assert.equal(retryOutcome.answer.entryId, sentEntries[2].entryId);
+        assert.equal(retryOutcome.result.outcome, PLACEMENT_OUTCOME.ADMITTED);
+        assert.equal(retryOutcome.operations.length, 3);
+      } finally {
+        await stopAutoCommit();
+      }
     });
   });
 
-  it('provisions initial partition founding set via FOUND PLACEMENT_ADMIT, releases holds, and handles ALREADY_FOUNDED idempotently', async () => {
+  it('provisions initial partition founding set via FOUND PLACEMENT_ADMIT, refuses hold release without authoritative read (Finding 1), and handles ALREADY_FOUNDED idempotently', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
       try {
@@ -454,6 +668,60 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
           assert.equal(history[0].replicaIds.length, 3);
         }
 
+        // Finding 1 witness: admit a second partition's founding set, then
+        // simulate an authoritative read failure while a follower SQLite DB has
+        // the held row. releaseBootstrapTopologyDispatchHold must refuse
+        // (released: false, reason: 'operation_not_found') and must NOT mutate
+        // the local SQLite row.
+        const secondFounded =
+          await engine.tryProvisionFoundingSetViaPlacementAdmission({
+            partitionId: 'invoices-p1',
+            targetNodeIds: [NODE.A, NODE.B, NODE.C],
+            context: {schemaJobId: 'schema-job-found-2'},
+          });
+        const [heldOpId] = secondFounded.result.operationIds;
+        const beforeHoldRow = leader.db
+          .prepare('SELECT steps_history FROM replica_operations WHERE operation_id = ?')
+          .get(heldOpId);
+        assert.equal(
+          JSON.parse(beforeHoldRow.steps_history)[0]
+            .bootstrapTopologyDispatchDeferred,
+          true,
+        );
+
+        const realQuery =
+          coordinator.repository.queryAuthoritativeOperationById;
+        coordinator.repository.queryAuthoritativeOperationById =
+          async () => null;
+        const failedRelease =
+          await coordinator.releaseBootstrapTopologyDispatchHold(heldOpId, {
+            replicaIds: ['r1', 'r2', 'r3'],
+          });
+        assert.equal(failedRelease.released, false);
+        assert.equal(failedRelease.reason, 'operation_not_found');
+        assert.equal(failedRelease.operation, null);
+        const afterFailedReleaseRow = leader.db
+          .prepare('SELECT steps_history FROM replica_operations WHERE operation_id = ?')
+          .get(heldOpId);
+        assert.equal(
+          afterFailedReleaseRow.steps_history,
+          beforeHoldRow.steps_history,
+        );
+
+        // Restore authoritative repository path: first CAS release succeeds
+        // through committed Raft entry; second CAS release returns released: false.
+        coordinator.repository.queryAuthoritativeOperationById = realQuery;
+        const firstCas =
+          await coordinator.releaseBootstrapTopologyDispatchHold(heldOpId, {
+            replicaIds: ['inv-r1', 'inv-r2', 'inv-r3'],
+          });
+        assert.equal(firstCas.released, true);
+        const secondCas =
+          await coordinator.releaseBootstrapTopologyDispatchHold(heldOpId, {
+            replicaIds: ['inv-r1', 'inv-r2', 'inv-r3'],
+          });
+        assert.equal(secondCas.released, false);
+
         const replay = await engine.tryProvisionFoundingSetViaPlacementAdmission({
           partitionId: USER_PARTITION_ID,
           targetNodeIds: [NODE.A, NODE.B, NODE.C],
@@ -472,7 +740,7 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
     });
   });
 
-  it('wires partition membership administration and replace workflow promotion-in-log predicates to WP-P port operations', async () => {
+  it('wires partition membership administration, positive 2-learner odd-growth promotion, tenure-lost withdrawal refusal/roll-forward (Finding 6), and replace promotion-in-log predicates', async () => {
     await instantiateRaftRsCore();
     const cluster = createFoundingCluster(['p1-r1'], {partitionId: 'p1'});
     try {
@@ -517,6 +785,7 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
           catchUpR2 = evaluatePartitionLearnerCatchUp(service, {
             operationId: 'op-r2',
             replicaIdentity: 'p1-r2',
+            requestKind: RAFT_CATCH_UP_REQUEST_KIND.GROWTH_PROMOTE,
           });
           return catchUpR2.result.reason ===
             RAFT_FOUNDING_GROWTH_OUTCOME.CAUGHT_UP;
@@ -529,6 +798,20 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
       assert.equal(
         catchUpR2.result.reason,
         RAFT_FOUNDING_GROWTH_OUTCOME.CAUGHT_UP,
+      );
+
+      // Finding 6(a): operationId-only withdrawal for an unknown operation
+      // (after tenure reset / no tenure subjects) refuses TARGET_IDENTITY_REQUIRED.
+      const missingTargetWithdrawal = withdrawPartitionPromotion(service, {
+        operationId: 'op-unknown-after-tenure-loss',
+      });
+      assert.equal(
+        missingTargetWithdrawal.result.outcome,
+        RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      );
+      assert.equal(
+        missingTargetWithdrawal.result.reason,
+        RAFT_MEMBERSHIP_CHANGE_REFUSAL.TARGET_IDENTITY_REQUIRED,
       );
 
       const withdrawn = withdrawPartitionPromotion(service, {
@@ -544,6 +827,8 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
         RAFT_FOUNDING_GROWTH_OUTCOME.WITHDRAWN,
       );
 
+      // Finding 6: assert exact refusal reason PROMOTION_WOULD_BE_EVEN on
+      // 1-learner growth from 1 voter.
       const evenGrowth = proposePartitionGrowthPromote(service, {
         operationIds: ['op-r2'],
         promotions: [{operationId: 'op-r2', replicaIdentity: 'p1-r2'}],
@@ -551,6 +836,10 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
       assert.equal(
         evenGrowth.result.outcome,
         RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      );
+      assert.equal(
+        evenGrowth.result.reason,
+        RAFT_MEMBERSHIP_CHANGE_REFUSAL.PROMOTION_WOULD_BE_EVEN,
       );
 
       const badReplace = proposePartitionReplacePromote(service, {
@@ -564,13 +853,88 @@ describe('WP-F: RUNTIME_SERVICE & FOUND production routing via PLACEMENT_ADMIT',
         RAFT_OPERATION_OUTCOME.CORE_REFUSED,
       );
 
-      const removedLearner = removePartitionRaftLearner(service, {
+      // Finding 6: positive 2-learner odd-growth promotion through
+      // admitPartitionRaftLearner -> evaluatePartitionLearnerCatchUp ->
+      // proposePartitionGrowthPromote.
+      const admitR3 = admitPartitionRaftLearner(service, {
+        replicaIdentity: 'p1-r3',
+        nodeId: NODE.C,
+      });
+      assert.equal(
+        admitR3.outcome,
+        RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
+      );
+      await addLearnerReplicaToCluster(cluster, 'p1-r1', 'p1-r3');
+      assert.ok(
+        settleCluster(cluster, () =>
+          appliedStateOf(cluster, 'p1-r3').appliedIndex >=
+          appliedStateOf(cluster, 'p1-r1').appliedIndex),
+      );
+      assert.ok(
+        settleCluster(cluster, () => {
+          const c2 = evaluatePartitionLearnerCatchUp(service, {
+            operationId: 'op-grow-1-to-3',
+            replicaIdentity: 'p1-r2',
+            requestKind: RAFT_CATCH_UP_REQUEST_KIND.GROWTH_PROMOTE,
+          });
+          const c3 = evaluatePartitionLearnerCatchUp(service, {
+            operationId: 'op-grow-1-to-3',
+            replicaIdentity: 'p1-r3',
+            requestKind: RAFT_CATCH_UP_REQUEST_KIND.GROWTH_PROMOTE,
+          });
+          return c2.result.reason === RAFT_FOUNDING_GROWTH_OUTCOME.CAUGHT_UP &&
+            c3.result.reason === RAFT_FOUNDING_GROWTH_OUTCOME.CAUGHT_UP;
+        }),
+      );
+      const oddGrowth = turnChainValue(
+        proposePartitionGrowthPromote(service, {
+          operationIds: ['op-grow-1-to-3', 'op-grow-1-to-3-b'],
+          promotions: [
+            {operationId: 'op-grow-1-to-3', replicaIdentity: 'p1-r2'},
+            {operationId: 'op-grow-1-to-3-b', replicaIdentity: 'p1-r3'},
+          ],
+        }),
+      );
+      assert.equal(oddGrowth.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(
+        oddGrowth.reason,
+        RAFT_FOUNDING_GROWTH_OUTCOME.PROMOTION_PROPOSED,
+      );
+      assert.ok(
+        settleCluster(cluster, () =>
+          appliedStateOf(cluster, 'p1-r1').voters.length === 3 &&
+          appliedStateOf(cluster, 'p1-r1').votersOutgoing.length === 0),
+      );
+
+      // Finding 6(b): after p1-r2 and p1-r3 are voters, calling
+      // withdrawPartitionPromotion for a brand-new operationId (no tenure
+      // history for that operationId) with explicit target identity returns
+      // PROMOTION_IN_LOG, never WITHDRAWN.
+      const postCommitWithdraw = withdrawPartitionPromotion(service, {
+        operationId: 'op-tenure-lost-after-commit',
+        replicaIdentity: 'p1-r2',
+      });
+      assert.equal(
+        postCommitWithdraw.result.outcome,
+        RAFT_OPERATION_OUTCOME.CORE_OK,
+      );
+      assert.equal(
+        postCommitWithdraw.result.reason,
+        RAFT_FOUNDING_GROWTH_OUTCOME.PROMOTION_IN_LOG,
+      );
+
+      // Removing a voter via removePartitionRaftLearner is refused NOT_LEARNER.
+      const removeVoterAsLearner = removePartitionRaftLearner(service, {
         operationId: 'op-rem-r2',
         replicaIdentity: 'p1-r2',
       });
       assert.equal(
-        removedLearner.result.outcome,
-        RAFT_OPERATION_OUTCOME.CORE_OK,
+        removeVoterAsLearner.result.outcome,
+        RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      );
+      assert.equal(
+        removeVoterAsLearner.result.reason,
+        RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEARNER,
       );
 
       assert.equal(

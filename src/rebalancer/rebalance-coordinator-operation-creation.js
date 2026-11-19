@@ -516,8 +516,8 @@ class RebalanceCoordinatorOperationCreation {
       replaceIntentIdentity: creationContext.replaceIntentIdentity,
     };
     if (this.placementAdmissionEnabled === true &&
-        entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
-      return this.createRuntimeServiceOperationViaPlacementAdmission(
+        this.isPlacementAdmissionManagedEntityType(entityType)) {
+      return this.createOperationViaPlacementAdmission(
         recordContext,
       );
     }

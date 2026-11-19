@@ -133,7 +133,7 @@ documentClass: generated
 - [partition-service-raft-membership-administration.js](partition-service-raft-membership-administration.js) - The partition's one path to admitting a peer into its raft configuration, through the group-neutral admission owner:... (importers: hub)
 - [partition-service-raft-peer-cache-reconciliation.js](partition-service-raft-peer-cache-reconciliation.js) - Re-drive, whenever a configuration change settles (CONF_CHANGE_APPLIED) or this replica gains leadership (LEADER):... (importers: few)
 - [partition-service-raft-write-commit.js](partition-service-raft-write-commit.js) - Hand a write to consensus within the port's deferral budget. (importers: many)
-- [partition-service-rebalancer-methods.js](partition-service-rebalancer-methods.js) - Build a rebalancer dependency bundle from current PartitionService state. (importers: one)
+- [partition-service-rebalancer-methods.js](partition-service-rebalancer-methods.js) - Build a rebalancer dependency bundle from current PartitionService state. (importers: few)
 - [partition-service-remote-query-methods.js](partition-service-remote-query-methods.js) - Remote QUERY routing preserves the partition's ordinary read/write gates and delegates current transaction identity... (importers: many)
 - [partition-service-removal-serving-methods.js](partition-service-removal-serving-methods.js) - Replica removal's serving fence and drain consume only current request and participant owners. (importers: one)
 - [partition-service-row-owner.js](partition-service-row-owner.js) - No leading comment; first export: PartitionServiceRowOwner. (importers: many)

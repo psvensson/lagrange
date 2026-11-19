@@ -165,11 +165,68 @@ function evaluatePartitionLearnerCatchUp(service, request) {
   return evaluateGroupLearnerCatchUp(service.raft, request);
 }
 
+function extractPromotionItemIdentity(item) {
+  if (typeof item === 'string' && item.length > 0) return item;
+  if (!item || typeof item !== 'object') return null;
+  if (typeof item.replicaIdentity === 'string' &&
+      item.replicaIdentity.length > 0) {
+    return item.replicaIdentity;
+  }
+  if (typeof item.replicaId === 'string' && item.replicaId.length > 0) {
+    return item.replicaId;
+  }
+  return null;
+}
+
+function extractPartitionPromotionIdentities(request) {
+  const candidates = [];
+  const lists = [
+    request?.promoteReplicaIds,
+    request?.replicaIdentities,
+    request?.promotions,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const id = extractPromotionItemIdentity(item);
+      if (id) candidates.push(id);
+    }
+  }
+  const single = extractPromotionItemIdentity(request);
+  if (single) candidates.push(single);
+  return [...new Set(candidates)];
+}
+
+function resolvePartitionGrowthOperationIds(request) {
+  if (Array.isArray(request?.operationIds) && request.operationIds.length > 0) {
+    return request.operationIds;
+  }
+  if (typeof request?.operationId === 'string' &&
+      request.operationId.length > 0) {
+    return [request.operationId];
+  }
+  return [];
+}
+
+function resolvePartitionExpectedBaseConfig(request) {
+  if (typeof request?.expectedBaseConfig === 'string') {
+    return request.expectedBaseConfig;
+  }
+  if (typeof request?.expectedEpoch === 'string') {
+    return request.expectedEpoch;
+  }
+  if (typeof request?.baseConfigurationDigest === 'string') {
+    return request.baseConfigurationDigest;
+  }
+  return null;
+}
+
 /**
  * Propose an odd-arity learner growth promotion on the partition leader's
  * Raft port (WP-P GROWTH_PROMOTE).
  * @param {Object} service - The partition service.
- * @param {Object} request - {operationIds, promotions, expectedEpoch?}.
+ * @param {Object} request - {operationId?, operationIds?, promoteReplicaIds?,
+ *   promotions?, expectedBaseConfig?, expectedEpoch?}.
  * @return {Object} The port turn or retiring refusal.
  */
 function proposePartitionGrowthPromote(service, request) {
@@ -177,14 +234,20 @@ function proposePartitionGrowthPromote(service, request) {
   if (retiring) {
     return settledTurn(retiring);
   }
-  const promotions = Array.isArray(request?.promotions) ?
-    request.promotions : [];
-  for (const promotion of promotions) {
-    if (promotion?.replicaIdentity) {
-      reservePartitionRaftPeerIdentity(service, promotion.replicaIdentity);
-    }
+  const promoteReplicaIds = extractPartitionPromotionIdentities(request);
+  for (const replicaIdentity of promoteReplicaIds) {
+    reservePartitionRaftPeerIdentity(service, replicaIdentity);
   }
-  return proposeGroupGrowthPromote(service.raft, request);
+  const operationIds = resolvePartitionGrowthOperationIds(request);
+  const operationId = request?.operationId ?
+    request.operationId : (operationIds[0] || null);
+  return proposeGroupGrowthPromote(service.raft, {
+    ...request,
+    operationId,
+    operationIds,
+    promoteReplicaIds,
+    expectedBaseConfig: resolvePartitionExpectedBaseConfig(request),
+  });
 }
 
 /**
@@ -218,10 +281,14 @@ function proposePartitionReplacePromote(service, request) {
  * @return {Object} The port answer.
  */
 function withdrawPartitionPromotion(service, request) {
-  if (request?.replicaIdentity) {
-    reservePartitionRaftPeerIdentity(service, request.replicaIdentity);
+  const promoteReplicaIds = extractPartitionPromotionIdentities(request);
+  for (const replicaIdentity of promoteReplicaIds) {
+    reservePartitionRaftPeerIdentity(service, replicaIdentity);
   }
-  return withdrawGroupPromotion(service.raft, request);
+  return withdrawGroupPromotion(service.raft, {
+    ...request,
+    ...(promoteReplicaIds.length > 0 ? {promoteReplicaIds} : {}),
+  });
 }
 
 /**

@@ -2,7 +2,10 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {AddressManager} from '../address/address-manager.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
-import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission-constants.js';
+import {
+  PLACEMENT_ADMISSION_ERROR,
+  PLACEMENT_RESULT_FIELD,
+} from '../partition/partition-placement-admission-constants.js';
 import {
   requestPlacementAdmission,
   routePlacementAdmission,
@@ -17,8 +20,10 @@ import {
   PLACEMENT_OUTCOME,
 } from './replica-placement-owner-constants.js';
 import {
+  buildPlacementAdmissionStatement,
   buildRuntimeServiceAdmissionStatement,
 } from './replica-placement-owner-admission-statement.js';
+import {classifyPlacementClass} from './replica-placement-owner-order.js';
 import {
   placementReplicaIdOf,
 } from '../partition/partition-placement-admission-identity.js';
@@ -41,16 +46,7 @@ const DEFAULT_NODE_ID = 'node-1';
 const PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE =
   'PLACEMENT_LEDGER_LEADER_UNAVAILABLE';
 const PLACEMENT_ADMISSION_REFUSED_CODE = 'PLACEMENT_ADMISSION_REFUSED';
-const SELECT_OPERATION_BY_ID_SQL =
-  'SELECT * FROM replica_operations WHERE operation_id = ?';
-const UPDATE_HELD_BOOTSTRAP_OPERATION_SQL =
-  'UPDATE replica_operations SET steps_history = ?, updated_at = ? ' +
-  'WHERE operation_id = ? AND workflow_step = ?';
-const DEFINITE_PLACEMENT_OUTCOMES = Object.freeze(new Set([
-  PLACEMENT_OUTCOME.ADMITTED,
-  PLACEMENT_OUTCOME.REFUSED,
-  PLACEMENT_OUTCOME.RELEASED,
-]));
+const HOLD_RELEASE_NOT_FOUND_REASON = 'operation_not_found';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER =
@@ -66,13 +62,16 @@ const {
   OperationType,
   REBALANCE_COORDINATOR_EVENT,
   STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   createOperationRecord,
 } = REBALANCE_COORDINATOR_SHARED;
 
-// The founding-cohort stamp the hold releaser writes: each stamp field (named
-// as the operation field the decoded row carries) and the steps-history
-// metadata key the durable row stores it under.
+const MANAGED_PLACEMENT_ENTITY_TYPES = Object.freeze(new Set([
+  UNIFIED_SERVICE_TYPE.PARTITION,
+  UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+]));
+
 const BOOTSTRAP_TOPOLOGY_STAMP_FIELDS = Object.freeze([
   [ReplicaOperationField.REPLICA_IDS, OPERATION_METADATA_KEY.REPLICA_IDS],
   [ReplicaOperationField.PEER_ADDRESSES, OPERATION_METADATA_KEY.PEER_ADDRESSES],
@@ -90,10 +89,6 @@ const BOOTSTRAP_TOPOLOGY_STAMP_FIELDS = Object.freeze([
   ],
 ]);
 
-// The one state a hold release may start from: the durable row is PENDING,
-// non-terminal, and still carries the bootstrap-topology dispatch hold. Any
-// other row is held by another owner (a dispatch lane claimed it, a prior
-// attempt released it, it finished).
 function isHeldPendingBootstrapOperation(operation) {
   return Boolean(operation) &&
     operation.workflowStep === WORKFLOW_STEP.PENDING &&
@@ -101,17 +96,12 @@ function isHeldPendingBootstrapOperation(operation) {
     isBootstrapTopologyDispatchDeferred(operation);
 }
 
-// Build the released row from the DURABLE row the releaser read, never from a
-// caller's in-memory copy: the stamp lands on the creation step entry, the
-// hold leaves every entry, and the decoded operation fields mirror the stamp.
 function buildBootstrapTopologyReleasedOperation(durableOperation, stamp, now) {
   const released = structuredClone(durableOperation);
   const [creationEntry] = released.stepsHistory;
   for (const [operationField, metadataKey] of BOOTSTRAP_TOPOLOGY_STAMP_FIELDS) {
     const value = stamp[operationField];
-    if (value === null || value === undefined) {
-      continue;
-    }
+    if (value === null || value === undefined) continue;
     creationEntry[metadataKey] = structuredClone(value);
     released[operationField] = structuredClone(value);
   }
@@ -122,9 +112,14 @@ function buildBootstrapTopologyReleasedOperation(durableOperation, stamp, now) {
   return released;
 }
 
-function buildBootstrapTopologyHoldReleaseOutcome(released, operation) {
+function buildBootstrapTopologyHoldReleaseOutcome(
+  released,
+  operation,
+  reason = null,
+) {
   return Object.freeze({
     released,
+    ...(reason ? {reason} : {}),
     operation: operation ? structuredClone(operation) : null,
   });
 }
@@ -164,45 +159,12 @@ function wrapPlacementTransport(messageRouter) {
   };
 }
 
-function parseOperationStepsHistory(rawHistory) {
-  return typeof rawHistory === 'string' ? JSON.parse(rawHistory) : [];
-}
-
-function applyCreationMetadataToOperation(operation, creationStep) {
-  if (!creationStep) return;
-  for (const [operationField, metadataKey] of BOOTSTRAP_TOPOLOGY_STAMP_FIELDS) {
-    if (creationStep[metadataKey] !== undefined) {
-      operation[operationField] = creationStep[metadataKey];
-    }
+function isRetainedAttemptRefusedOrMismatched(answer) {
+  if (answer?.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES) {
+    return true;
   }
-}
-
-function mapLocalLedgerRowToOperation(row, repository) {
-  if (repository?.mapRowToOperation) {
-    return repository.mapRowToOperation(row);
-  }
-  const stepsHistory = parseOperationStepsHistory(row.steps_history);
-  const operation = createOperationRecord({
-    operationId: row.operation_id,
-    type: row.type,
-    partitionId: row.partition_id,
-    sourceNodeId: row.source_node_id,
-    targetNodeId: row.target_node_id,
-    replicaId: row.replica_id,
-    sourceReplicaId: row.source_replica_id || null,
-    membershipPublicationEpoch: row.membership_publication_epoch ?? null,
-  });
-  operation.entityType = row.entity_type;
-  operation.entityId = row.entity_id;
-  operation.targetClaimKey = row.target_claim_key || null;
-  operation.workflowStep = row.workflow_step;
-  operation.status = row.status;
-  operation.stepsHistory = stepsHistory;
-  operation.createdAt = row.created_at;
-  operation.updatedAt = row.updated_at;
-  operation.completedAt = row.completed_at ?? null;
-  applyCreationMetadataToOperation(operation, stepsHistory[0]);
-  return operation;
+  const result = answer?.[PLACEMENT_RESULT_FIELD];
+  return result?.outcome === PLACEMENT_OUTCOME.REFUSED;
 }
 
 function buildSynthesizedPlacementOperation(
@@ -242,21 +204,45 @@ function buildSynthesizedPlacementOperation(
   return operation;
 }
 
-function resolveRuntimeServiceIntentKey(
-  context,
-  operationReplicaId,
-) {
-  const {
-    move,
-    criticalAddLikeIntentKey,
-    dedupeKey,
-    entityId,
-    normalizedMoveType,
-  } = context;
+function resolveRuntimeServiceIntentKey(context, operationReplicaId) {
+  const {move, criticalAddLikeIntentKey, dedupeKey, entityId, normalizedMoveType} =
+    context;
   if (move.operationIntentId) return move.operationIntentId;
   if (criticalAddLikeIntentKey) return criticalAddLikeIntentKey;
   if (dedupeKey) return dedupeKey;
   return `runtime_service:${entityId}:${normalizedMoveType}:${move.nodeId}:${operationReplicaId}`;
+}
+
+function resolvePartitionPlacementIntentKey(context) {
+  const {move, criticalAddLikeIntentKey, dedupeKey, partitionId, normalizedMoveType} =
+    context;
+  if (move.operationIntentId) return move.operationIntentId;
+  if (criticalAddLikeIntentKey) return criticalAddLikeIntentKey;
+  if (dedupeKey) return dedupeKey;
+  return `partition:${partitionId}:${normalizedMoveType}:${move.nodeId}`;
+}
+
+function buildPartitionPlacementMove(move, normalizedMoveType, resolvedSourceNodeId) {
+  const isRemove = normalizedMoveType === OperationType.REMOVE;
+  const isReplace = normalizedMoveType === OperationType.REPLACE;
+  const replicaId = isRemove ? (move.replicaId || null) : null;
+  let sourceReplicaId = null;
+  if (isReplace) {
+    sourceReplicaId = move.sourceReplicaId ?
+      move.sourceReplicaId : (move.replicaId || null);
+  }
+  let copySourceNodeId = null;
+  if (!isRemove) {
+    copySourceNodeId = move.copySourceNodeId ?
+      move.copySourceNodeId : resolvedSourceNodeId;
+  }
+  return {
+    type: normalizedMoveType,
+    targetNodeId: move.nodeId,
+    replicaId,
+    sourceReplicaId,
+    copySourceNodeId,
+  };
 }
 
 function throwRuntimeServicePlacementError(entityId, answer, result) {
@@ -319,94 +305,104 @@ const operationCreationSupportMethods = {
     return DEFAULT_FORMATION_LATCH_EPOCH;
   },
 
-  resolvePlacementAdmissionEntryId(intentKey, explicitEntryId) {
-    if (!(this.placementAdmissionEntryIds instanceof Map)) {
-      this.placementAdmissionEntryIds = new Map();
+  ensureUncertainPlacementAttemptsMap() {
+    if (!(this.uncertainPlacementAdmissionAttempts instanceof Map)) {
+      this.uncertainPlacementAdmissionAttempts = new Map();
     }
-    const key = intentKey || explicitEntryId || null;
-    if (key && this.placementAdmissionEntryIds.has(key)) {
-      return {key, entryId: this.placementAdmissionEntryIds.get(key)};
-    }
+    return this.uncertainPlacementAdmissionAttempts;
+  },
+
+  allocatePlacementAdmissionEntryId(explicitEntryId = null) {
+    if (explicitEntryId) return explicitEntryId;
     const nodePrefix = this.nodeId || DEFAULT_NODE_ID;
-    const entryId = explicitEntryId ||
-      `${PLACEMENT_ENTRY_PREFIX}:${nodePrefix}:${resolveEntryId(null)}`;
-    if (key) {
-      this.placementAdmissionEntryIds.set(key, entryId);
+    return `${PLACEMENT_ENTRY_PREFIX}:${nodePrefix}:${resolveEntryId(null)}`;
+  },
+
+  resolvePlacementAdmissionEntryId(
+    intentKey,
+    explicitEntryId = null,
+    statement = null,
+  ) {
+    const attempts = this.ensureUncertainPlacementAttemptsMap();
+    const key = intentKey || explicitEntryId || null;
+    if (key && attempts.has(key)) {
+      const retained = attempts.get(key);
+      return {key, entryId: retained.entryId, statement: retained.statement};
     }
-    return {key, entryId};
+    const entryId = this.allocatePlacementAdmissionEntryId(explicitEntryId);
+    if (key) {
+      attempts.set(key, {entryId, statement});
+    }
+    return {key, entryId, statement};
+  },
+
+  async submitPlacementPayload(payload, timeoutMs) {
+    const localLeader = this.resolveActiveLocalLedgerLeaderService();
+    if (localLeader) {
+      return requestPlacementAdmission(localLeader, payload);
+    }
+    const leaderAddress = this.resolveRemoteLedgerLeaderAddress();
+    const transport = wrapPlacementTransport(this.messageRouter);
+    if (!leaderAddress || !transport) {
+      const error = new Error(
+        `Cannot route PLACEMENT_ADMIT: ledger leader unreachable (${LEDGER_PARTITION_ID})`,
+      );
+      error.code = PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE;
+      throw error;
+    }
+    return routePlacementAdmission(transport, leaderAddress, payload, {timeoutMs});
+  },
+
+  async resolveRetainedPlacementAttempt(intentKey, timeoutMs) {
+    const attempts = this.ensureUncertainPlacementAttemptsMap();
+    if (!intentKey || !attempts.has(intentKey)) return null;
+    const retained = attempts.get(intentKey);
+    if (!retained?.statement) return null;
+    const answer = await this.submitPlacementPayload(
+      {entryId: retained.entryId, body: retained.statement},
+      timeoutMs,
+    );
+    if (isWriteOutcomeUnknown(answer)) {
+      return {settled: false, answer: {...answer, entryId: retained.entryId}};
+    }
+    attempts.delete(intentKey);
+    if (isRetainedAttemptRefusedOrMismatched(answer)) {
+      return {settled: true, retryWithFreshEntry: true};
+    }
+    return {
+      settled: true,
+      retryWithFreshEntry: false,
+      answer: {...answer, entryId: retained.entryId},
+    };
   },
 
   async admitPlacementStatement({
-    entryId,
+    entryId = null,
     intentKey = null,
     statement,
     timeoutMs = DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS,
   }) {
-    const resolved = this.resolvePlacementAdmissionEntryId(intentKey, entryId);
-    const payload = {entryId: resolved.entryId, body: statement};
-    const localLeader = this.resolveActiveLocalLedgerLeaderService();
-    let answer;
-    if (localLeader) {
-      answer = await requestPlacementAdmission(localLeader, payload);
-    } else {
-      const leaderAddress = this.resolveRemoteLedgerLeaderAddress();
-      const transport = wrapPlacementTransport(this.messageRouter);
-      if (!leaderAddress || !transport) {
-        const error = new Error(
-          `Cannot route PLACEMENT_ADMIT: ledger leader unreachable (${LEDGER_PARTITION_ID})`,
-        );
-        error.code = PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE;
-        throw error;
-      }
-      answer = await routePlacementAdmission(
-        transport,
-        leaderAddress,
-        payload,
-        {timeoutMs},
-      );
+    const retainedResolution = await this.resolveRetainedPlacementAttempt(
+      intentKey,
+      timeoutMs,
+    );
+    if (retainedResolution && !retainedResolution.retryWithFreshEntry) {
+      return retainedResolution.answer;
     }
-    const result = answer?.[PLACEMENT_RESULT_FIELD];
-    if (resolved.key &&
-        !isWriteOutcomeUnknown(answer) &&
-        DEFINITE_PLACEMENT_OUTCOMES.has(result?.outcome)) {
-      this.placementAdmissionEntryIds.delete(resolved.key);
+    const explicitId = retainedResolution?.retryWithFreshEntry ? null : entryId;
+    const resolved = this.resolvePlacementAdmissionEntryId(
+      intentKey,
+      explicitId,
+      statement,
+    );
+    const answer = await this.submitPlacementPayload(
+      {entryId: resolved.entryId, body: statement},
+      timeoutMs,
+    );
+    if (resolved.key && !isWriteOutcomeUnknown(answer)) {
+      this.ensureUncertainPlacementAttemptsMap().delete(resolved.key);
     }
     return {...answer, entryId: resolved.entryId};
-  },
-
-  readOperationFromLocalLedgerDb(operationId) {
-    if (!(this.ledgerPartitionServices instanceof Set)) return null;
-    for (const service of this.ledgerPartitionServices) {
-      if (!service?.db?.open) continue;
-      const row = service.db
-        .prepare(SELECT_OPERATION_BY_ID_SQL)
-        .get(operationId);
-      if (row) {
-        return mapLocalLedgerRowToOperation(row, this.repository);
-      }
-    }
-    return null;
-  },
-
-  persistHeldBootstrapOperationInLocalLedgerDb(released) {
-    if (!(this.ledgerPartitionServices instanceof Set)) return false;
-    let updated = false;
-    const serializedSteps = JSON.stringify(released.stepsHistory);
-    for (const service of this.ledgerPartitionServices) {
-      if (!service?.db?.open) continue;
-      const info = service.db
-        .prepare(UPDATE_HELD_BOOTSTRAP_OPERATION_SQL)
-        .run(
-          serializedSteps,
-          released.updatedAt,
-          released.operationId,
-          WORKFLOW_STEP.PENDING,
-        );
-      if (info?.changes > 0) {
-        updated = true;
-      }
-    }
-    return updated;
   },
 
   async materializePlacementOperationById(operationId, descriptor = {}) {
@@ -415,8 +411,6 @@ const operationCreationSupportMethods = {
         await this.repository.queryAuthoritativeOperationById(operationId);
       if (authoritative) return authoritative;
     }
-    const localOperation = this.readOperationFromLocalLedgerDb(operationId);
-    if (localOperation) return localOperation;
     return buildSynthesizedPlacementOperation(
       operationId,
       descriptor,
@@ -452,18 +446,9 @@ const operationCreationSupportMethods = {
   },
 
   async resolveRuntimeServicePlacementIds(context) {
-    const {
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    } = context;
+    const {move, normalizedMoveType, entityType, entityId, partitionId} = context;
     if (normalizedMoveType === OperationType.REMOVE) {
-      return {
-        operationReplicaId: move.replicaId || null,
-        sourceReplicaId: null,
-      };
+      return {operationReplicaId: move.replicaId || null, sourceReplicaId: null};
     }
     if (normalizedMoveType === OperationType.ADD) {
       const operationReplicaId = move.replicaId || move.replicaIntentId ||
@@ -500,14 +485,67 @@ const operationCreationSupportMethods = {
     );
   },
 
-  async createRuntimeServiceOperationViaPlacementAdmission(context) {
-    const {
+  isPlacementAdmissionManagedEntityType(entityType) {
+    return MANAGED_PLACEMENT_ENTITY_TYPES.has(entityType);
+  },
+
+  async createOperationViaPlacementAdmission(context) {
+    if (context.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      return this.createRuntimeServiceOperationViaPlacementAdmission(context);
+    }
+    return this.createPartitionOperationViaPlacementAdmission(context);
+  },
+
+  async createPartitionOperationViaPlacementAdmission(context) {
+    const {move, normalizedMoveType, entityType, entityId, partitionId} = context;
+    const resolvedSourceNodeId = context.sourceNodeId ?
+      context.sourceNodeId : (this.nodeId || DEFAULT_NODE_ID);
+    const placementMove = buildPartitionPlacementMove(
       move,
       normalizedMoveType,
+      resolvedSourceNodeId,
+    );
+    const statement = buildPlacementAdmissionStatement(
+      {
+        partitionId,
+        placementClass: classifyPlacementClass(partitionId),
+        repair: Boolean(move.repair),
+        move: placementMove,
+      },
+      {
+        sourceNodeId: resolvedSourceNodeId,
+        repairWaitingSourceNodeIds: new Set(),
+        formationLatchEpoch: this.resolveFormationLatchEpochForPlacement(),
+        membershipPublicationEpoch: null,
+        positions: move?.positions || {},
+      },
+    );
+    const answer = await this.admitPlacementStatement({
+      entryId: move.entryId || null,
+      intentKey: resolvePartitionPlacementIntentKey(context),
+      statement,
+    });
+    const result = answer?.[PLACEMENT_RESULT_FIELD];
+    if (!isSingleOperationPlacementAccepted(result)) {
+      throwRuntimeServicePlacementError(partitionId, answer, result);
+    }
+    const [operationId] = result.operationIds;
+    const operation = await this.materializePlacementOperationById(operationId, {
+      type: normalizedMoveType,
+      partitionId,
       entityType,
       entityId,
-      partitionId,
-    } = context;
+      sourceNodeId: resolvedSourceNodeId,
+      targetNodeId: move.nodeId,
+      replicaId: placementMove.replicaId || placementReplicaIdOf(operationId),
+      sourceReplicaId: placementMove.sourceReplicaId,
+    });
+    await this.announcePlacementCreatedOperation(operation, context);
+    return operation;
+  },
+
+  async createRuntimeServiceOperationViaPlacementAdmission(context) {
+    const {move, normalizedMoveType, entityType, entityId, partitionId} = context;
     const {operationReplicaId, sourceReplicaId} =
       await this.resolveRuntimeServicePlacementIds(context);
     this.assertRuntimeServiceTargetIdentity(
@@ -557,10 +595,9 @@ const operationCreationSupportMethods = {
     await this.announcePlacementCreatedOperation(operation, context);
     return operation;
   },
+
   bindReplicaPlacementOwnerFactory(factory) {
-    if (typeof factory !== LOCAL_STR_FUNCTION) {
-      return;
-    }
+    if (typeof factory !== LOCAL_STR_FUNCTION) return;
     this.replicaPlacementOwnerFactory = factory;
     this.placementAdmissionEnabled = true;
   },
@@ -589,9 +626,7 @@ const operationCreationSupportMethods = {
     }
     const readiness = this.controlPlaneReadinessService;
     const nodeAuthority = readiness ? readiness.serveEligibilityOwner : null;
-    if (!nodeAuthority || !this.systemTableCache) {
-      return null;
-    }
+    if (!nodeAuthority || !this.systemTableCache) return null;
     this.registerLedgerPartitionService(ledgerPartitionService);
     if (this.replicaPlacementOwnerFactory) {
       return this.replicaPlacementOwnerFactory(ledgerPartitionService);
@@ -608,43 +643,29 @@ const operationCreationSupportMethods = {
     });
   },
 
-  /**
-   * Release the bootstrap-topology dispatch hold of one deterministic
-   * founding-cohort ADD and stamp its cohort topology, as ONE compare-and-set
-   * on the durable row: it applies only while the row is still PENDING and
-   * its steps history is exactly the held history this owner read. The hold
-   * is the dispatch token: while it is present only the hold's releaser may
-   * dispatch the row inline; once released, the coordinator's dispatch lanes
-   * own it. A caller whose release is refused never stamps or executes the
-   * row; it awaits the row's outcome.
-   *
-   * @param {string} operationId
-   * @param {Object} stamp replicaIds, peerAddresses, bootstrapMembership and
-   *   the optional bootstrapTableMetadata / bootstrapPartitionMetadata
-   * @return {Promise<{released: boolean, operation: (Object|null)}>} the
-   *   released row on success; the re-read durable row (a private copy) when
-   *   another owner holds it
-   */
   async releaseBootstrapTopologyDispatchHold(operationId, stamp) {
     return this.runReplicaOperationTransitionExclusive(
-      () => this.releaseBootstrapTopologyDispatchHoldUnderLane(
-        operationId,
-        stamp,
-      ),
+      () => this.releaseBootstrapTopologyDispatchHoldUnderLane(operationId, stamp),
       {operationId},
     );
   },
 
   async releaseBootstrapTopologyDispatchHoldUnderLane(operationId, stamp) {
-    let durableOperation = null;
-    let fromRepository = false;
-    if (this.repository?.queryAuthoritativeOperationById) {
-      durableOperation =
-        await this.repository.queryAuthoritativeOperationById(operationId);
-      fromRepository = Boolean(durableOperation);
+    if (!this.repository?.queryAuthoritativeOperationById) {
+      return buildBootstrapTopologyHoldReleaseOutcome(
+        false,
+        null,
+        HOLD_RELEASE_NOT_FOUND_REASON,
+      );
     }
+    const durableOperation =
+      await this.repository.queryAuthoritativeOperationById(operationId);
     if (!durableOperation) {
-      durableOperation = this.readOperationFromLocalLedgerDb(operationId);
+      return buildBootstrapTopologyHoldReleaseOutcome(
+        false,
+        null,
+        HOLD_RELEASE_NOT_FOUND_REASON,
+      );
     }
     if (!isHeldPendingBootstrapOperation(durableOperation)) {
       return buildBootstrapTopologyHoldReleaseOutcome(false, durableOperation);
@@ -654,27 +675,20 @@ const operationCreationSupportMethods = {
       stamp,
       this.timeSource ? this.timeSource.now() : Date.now(),
     );
-    if (!fromRepository || !this.repository?.persistOperationUpdate) {
-      const updated =
-        this.persistHeldBootstrapOperationInLocalLedgerDb(released);
-      return buildBootstrapTopologyHoldReleaseOutcome(
-        updated,
-        updated ? released : this.readOperationFromLocalLedgerDb(operationId),
-      );
-    }
-    const persistResult = await this.repository.persistOperationUpdate(
-      released,
-      {
-        expectedWorkflowStep: WORKFLOW_STEP.PENDING,
-        expectedStepsHistory: durableOperation.stepsHistory,
-        returnDisposition: true,
-      },
-    );
-    // Only a write that changed the held row is this caller's release. An
-    // idempotent replay or a refused CAS means another writer moved the row
-    // first; that writer, not this caller, owns its dispatch.
+    const persistResult =
+      this.repository.compareAndSetPendingBootstrapTopologyRelease ?
+        await this.repository.compareAndSetPendingBootstrapTopologyRelease(
+          released,
+          durableOperation.stepsHistory,
+        ) :
+        await this.repository.persistOperationUpdate(released, {
+          expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+          expectedStepsHistory: durableOperation.stepsHistory,
+          returnDisposition: true,
+        });
     if (
-      persistResult?.disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED
+      persistResult?.disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED &&
+      persistResult?.released !== true
     ) {
       return buildBootstrapTopologyHoldReleaseOutcome(
         false,
@@ -683,7 +697,6 @@ const operationCreationSupportMethods = {
     }
     return buildBootstrapTopologyHoldReleaseOutcome(true, released);
   },
-
 
   async queryExistingOperationAfterInsertConflict(context) {
     const {
