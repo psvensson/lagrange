@@ -30,9 +30,9 @@ const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
+const objectIs = Object.is;
 const objectPrototype = Object.prototype;
 const objectSeal = Object.seal;
-const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
 const utilIsProxy = nodeUtilTypes.isProxy;
 const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
@@ -44,19 +44,6 @@ const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
  * one CAS on the exact incarnation observed, and only when that incarnation
  * is older. So a late registration from an older incarnation can neither
  * overwrite nor lower a newer row.
- *
- * Outcomes:
- * - ACCEPTED: this incarnation was born, or advanced over an older one.
- * - CURRENT: this boot lifecycle's own row already holds this incarnation
- *   (idempotent; no write, so a terminal row of this incarnation is never
- *   resurrected).
- * - REFUSED_STALE: a newer incarnation owns the row, or a row at this same
- *   incarnation that this boot lifecycle never wrote (another storage's life
- *   of this node id: a wiped or restored data directory reserved the number
- *   again); never retried at this incarnation.
- * - UNRESOLVED: the authority could not confirm either way (unavailable, or
- *   the write did not apply and nothing newer holds the row). An unknown
- *   attempt is resolved by one authoritative reread; there is no retry loop.
  */
 const NODE_REGISTRATION_OUTCOME = objectFreeze({
   ACCEPTED: 'accepted',
@@ -85,16 +72,12 @@ const NODE_REGISTRATION_ISSUE_RECORD_REQUIRED =
   'NODE_REGISTRATION_ISSUE_RECORD_REQUIRED';
 const NODE_REGISTRATION_CLOCK_REQUIRED =
   'NODE_REGISTRATION_CLOCK_REQUIRED';
-// A live node elsewhere holds this node id: its row still carries a valid
-// READY lease and declares another host. Never superseded automatically; an
-// operator removes or renames one of the two.
 const NODE_IDENTITY_TWIN_SUSPECTED = 'NODE_IDENTITY_TWIN_SUSPECTED';
 const NODE_IDENTITY_TWIN_SUSPECTED_MESSAGE =
   'Node id is held by a live node on another host (valid READY lease, ' +
   'different declared host_id); an operator must remove or rename one of ' +
   'them';
 const NODE_REGISTRATION_NOT_APPLIED = 'Node registration write not applied';
-// Typed fields a failed mutation result carries onto its surfaced error.
 const FAILED_RESULT_ERROR_FIELDS = objectFreeze([
   'code',
   'errorCode',
@@ -102,6 +85,25 @@ const FAILED_RESULT_ERROR_FIELDS = objectFreeze([
   'deferRetry',
   'failureCode',
 ]);
+
+const NODE_INCARNATION_RELATION = objectFreeze({
+  ABSENT: 'absent',
+  OLDER: 'older',
+  CURRENT: 'current',
+  NEWER: 'newer',
+});
+
+const ISSUE_INDETERMINATE_MODE = objectFreeze({
+  AUTHORITATIVE: 'authoritative',
+  BLIND_BIRTH: 'blind_birth',
+});
+
+const ISSUE_RECORD_FIELD = objectFreeze({
+  ISSUED_AT: 'issuedAtIncarnation',
+  INDETERMINATE_AT: 'indeterminateAtIncarnation',
+  INDETERMINATE_MODE: 'indeterminateMode',
+  INDETERMINATE_ROW: 'indeterminateRow',
+});
 
 function incarnationOf(row) {
   return normalizeKnownNodeBootIncarnation(row?.[COLUMN.BOOT_INCARNATION]);
@@ -121,7 +123,10 @@ function requirePositiveBootIncarnation(bootIncarnation) {
 }
 
 function requireRegistrationClockReading(nowMs) {
-  if (typeof nowMs === 'number' && numberIsFinite(nowMs)) {
+  if (typeof nowMs === 'number' &&
+      numberIsSafeInteger(nowMs) &&
+      nowMs >= 0 &&
+      !objectIs(nowMs, -0)) {
     return nowMs;
   }
   const error = new Error(NODE_REGISTRATION_CLOCK_REQUIRED);
@@ -129,31 +134,26 @@ function requireRegistrationClockReading(nowMs) {
   throw error;
 }
 
-// How an observed NODES row relates to this boot's incarnation: the one
-// classification behind every registration and incarnation-advance decision
-// (absent -> birth, older -> one CAS advance, current -> no write, newer ->
-// refused).
-const NODE_INCARNATION_RELATION = objectFreeze({
-  ABSENT: 'absent',
-  OLDER: 'older',
-  CURRENT: 'current',
-  NEWER: 'newer',
-});
-
-const ISSUE_RECORD_INCARNATION_FIELD = 'issuedAtIncarnation';
-
 /**
- * One boot lifecycle's record of the registration write it issued: the
- * incarnation it confirmed or left genuinely indeterminate in consensus, or
- * null before any such write. Plain sealed data record; Proxy and accessor
- * shapes are rejected.
- * @return {{issuedAtIncarnation: (number|null)}}
+ * One boot lifecycle's record of the registration write it issued or left
+ * unsettled across an indeterminate network boundary:
+ * - issuedAtIncarnation: confirmed (or readback-promoted) incarnation, or null
+ * - indeterminateMode: 'authoritative' | 'blind_birth' | null
+ * - indeterminateAtIncarnation: incarnation of the unsettled attempt, or null
+ * - indeterminateRow: frozen {host_id, status, node_address} for authoritative
+ *   mode, or null
+ * @return {Object}
  */
 function createNodeRegistrationIssueRecord() {
-  return objectSeal({issuedAtIncarnation: null});
+  return objectSeal({
+    issuedAtIncarnation: null,
+    indeterminateAtIncarnation: null,
+    indeterminateMode: null,
+    indeterminateRow: null,
+  });
 }
 
-function isPlainIssueRecordObject(value) {
+function isPlainObject(value) {
   if (value === null || typeof value !== 'object' || utilIsProxy(value)) {
     return false;
   }
@@ -161,30 +161,181 @@ function isPlainIssueRecordObject(value) {
   return prototype === objectPrototype || prototype === null;
 }
 
-function readVerifiedIssueRecord(issueRecord) {
-  if (isPlainIssueRecordObject(issueRecord)) {
-    const descriptor = objectGetOwnPropertyDescriptor(
-      issueRecord,
-      ISSUE_RECORD_INCARNATION_FIELD,
-    );
-    if (descriptor &&
-        objectHasOwn(descriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) &&
-        descriptor.writable === true) {
-      const issued = descriptor.value;
-      if (issued === null || isPositiveSafeInteger(issued)) {
-        return {record: issueRecord, issuedAtIncarnation: issued};
-      }
-    }
+function readWritableDataDescriptor(target, property) {
+  const descriptor = objectGetOwnPropertyDescriptor(target, property);
+  if (!descriptor ||
+      !objectHasOwn(descriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) ||
+      descriptor.writable !== true) {
+    return null;
   }
+  return descriptor;
+}
+
+function readOptionalDataString(target, property) {
+  const descriptor = objectGetOwnPropertyDescriptor(target, property);
+  if (!descriptor) return {valid: true, value: undefined};
+  if (!objectHasOwn(descriptor, DATA_DESCRIPTOR_VALUE_PROPERTY)) {
+    return {valid: false, value: undefined};
+  }
+  const val = descriptor.value;
+  const ok = val === undefined || typeof val === 'string';
+  return {valid: ok, value: val};
+}
+
+function isValidIndeterminateRowSnapshot(snapshot) {
+  if (!isPlainObject(snapshot)) return false;
+  const host = readOptionalDataString(snapshot, COLUMN.HOST_ID);
+  const status = readOptionalDataString(snapshot, COLUMN.STATUS);
+  const addr = readOptionalDataString(snapshot, COLUMN.NODE_ADDRESS);
+  return host.valid && typeof host.value === 'string' && host.value.length > 0 &&
+    status.valid && addr.valid;
+}
+
+function isValidIndeterminateTuple(mode, inc, row) {
+  if (mode === null) {
+    return inc === null && row === null;
+  }
+  if (!isPositiveSafeInteger(inc)) return false;
+  if (mode === ISSUE_INDETERMINATE_MODE.BLIND_BIRTH) {
+    return row === null;
+  }
+  return mode === ISSUE_INDETERMINATE_MODE.AUTHORITATIVE &&
+    isValidIndeterminateRowSnapshot(row);
+}
+
+function throwIssueRecordRequired() {
   const error = new Error(NODE_REGISTRATION_ISSUE_RECORD_REQUIRED);
   error.code = NODE_REGISTRATION_ISSUE_RECORD_REQUIRED;
   throw error;
 }
 
-// An intact data directory reserves above every incarnation it issued (the
-// boot incarnation owner), so a row at this boot's own number that this
-// lifecycle never wrote was written by another storage's life of the node
-// id: it supersedes this lifecycle exactly as a newer row does.
+function readVerifiedIssueRecord(issueRecord) {
+  if (!isPlainObject(issueRecord)) throwIssueRecordRequired();
+  const issuedDesc = readWritableDataDescriptor(
+    issueRecord, ISSUE_RECORD_FIELD.ISSUED_AT);
+  const indetAtDesc = readWritableDataDescriptor(
+    issueRecord, ISSUE_RECORD_FIELD.INDETERMINATE_AT);
+  const indetModeDesc = readWritableDataDescriptor(
+    issueRecord, ISSUE_RECORD_FIELD.INDETERMINATE_MODE);
+  const indetRowDesc = readWritableDataDescriptor(
+    issueRecord, ISSUE_RECORD_FIELD.INDETERMINATE_ROW);
+  if (!issuedDesc || !indetAtDesc || !indetModeDesc || !indetRowDesc) {
+    throwIssueRecordRequired();
+  }
+  const issued = issuedDesc.value;
+  const indeterminateAt = indetAtDesc.value;
+  const indeterminateMode = indetModeDesc.value;
+  const indeterminateRow = indetRowDesc.value;
+  if ((issued !== null && !isPositiveSafeInteger(issued)) ||
+      !isValidIndeterminateTuple(
+        indeterminateMode, indeterminateAt, indeterminateRow)) {
+    throwIssueRecordRequired();
+  }
+  return {
+    record: issueRecord,
+    issuedAtIncarnation: issued,
+    indeterminateAtIncarnation: indeterminateAt,
+    indeterminateMode,
+    indeterminateRow,
+  };
+}
+
+function clearIndeterminateFields(record) {
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_AT] = null;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_MODE] = null;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_ROW] = null;
+}
+
+function clearIndeterminateRegistrationIssue(issueRecord) {
+  const {record} = readVerifiedIssueRecord(issueRecord);
+  clearIndeterminateFields(record);
+}
+
+function snapshotIndeterminateAttemptRow(attemptedRow) {
+  return objectFreeze({
+    [COLUMN.HOST_ID]: requireDeclaredNodeHostId(attemptedRow?.[COLUMN.HOST_ID]),
+    [COLUMN.STATUS]: attemptedRow?.[COLUMN.STATUS],
+    [COLUMN.NODE_ADDRESS]: attemptedRow?.[COLUMN.NODE_ADDRESS],
+  });
+}
+
+function recordAuthoritativeIndeterminateIssue(issueRecord, bootIncarnation,
+  attemptedRow) {
+  const incarnation = requirePositiveBootIncarnation(bootIncarnation);
+  const {record} = readVerifiedIssueRecord(issueRecord);
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_AT] = incarnation;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_MODE] =
+    ISSUE_INDETERMINATE_MODE.AUTHORITATIVE;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_ROW] =
+    snapshotIndeterminateAttemptRow(attemptedRow);
+}
+
+function recordBlindBirthIndeterminateIssue(issueRecord, bootIncarnation) {
+  const incarnation = requirePositiveBootIncarnation(bootIncarnation);
+  const {record} = readVerifiedIssueRecord(issueRecord);
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_AT] = incarnation;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_MODE] =
+    ISSUE_INDETERMINATE_MODE.BLIND_BIRTH;
+  record[ISSUE_RECORD_FIELD.INDETERMINATE_ROW] = null;
+}
+
+function hasPendingBlindBirthIssue(issueRecord, bootIncarnation) {
+  const incarnation = requirePositiveBootIncarnation(bootIncarnation);
+  const verified = readVerifiedIssueRecord(issueRecord);
+  return verified.indeterminateMode === ISSUE_INDETERMINATE_MODE.BLIND_BIRTH &&
+    verified.indeterminateAtIncarnation === incarnation;
+}
+
+function matchesIndeterminateAttemptRow(attemptedRow, rereadRow,
+  bootIncarnation) {
+  return Boolean(attemptedRow) &&
+    Boolean(rereadRow) &&
+    incarnationOf(rereadRow) === bootIncarnation &&
+    rereadRow[COLUMN.HOST_ID] === attemptedRow[COLUMN.HOST_ID] &&
+    (attemptedRow[COLUMN.STATUS] === undefined ||
+      rereadRow[COLUMN.STATUS] === attemptedRow[COLUMN.STATUS]) &&
+    (attemptedRow[COLUMN.NODE_ADDRESS] === undefined ||
+      rereadRow[COLUMN.NODE_ADDRESS] === attemptedRow[COLUMN.NODE_ADDRESS]);
+}
+
+/**
+ * Reconcile a successful authoritative NODES observation against any pending
+ * unsettled indeterminate attempt recorded on issueRecord.
+ * @param {Object} issueRecord
+ * @param {Object|null} observedRow
+ * @param {number} bootIncarnation
+ * @return {{promoted: boolean}}
+ */
+function reconcileAuthoritativeObservation(issueRecord, observedRow,
+  bootIncarnation) {
+  const incarnation = requirePositiveBootIncarnation(bootIncarnation);
+  const verified = readVerifiedIssueRecord(issueRecord);
+  if (verified.indeterminateMode === null) {
+    return {promoted: false};
+  }
+  if (verified.indeterminateAtIncarnation !== incarnation) {
+    clearIndeterminateFields(verified.record);
+    return {promoted: false};
+  }
+  if (verified.indeterminateMode === ISSUE_INDETERMINATE_MODE.AUTHORITATIVE) {
+    const matches = matchesIndeterminateAttemptRow(
+      verified.indeterminateRow, observedRow, incarnation);
+    clearIndeterminateFields(verified.record);
+    if (matches) {
+      verified.record[ISSUE_RECORD_FIELD.ISSUED_AT] = incarnation;
+      return {promoted: true};
+    }
+    return {promoted: false};
+  }
+  // BLIND_BIRTH: only an observed row at this exact incarnation keeps the
+  // blind-birth marker alive for writeIdentity replay; ABSENT/OLDER/NEWER
+  // proves no blind birth at this incarnation holds the row.
+  if (incarnationOf(observedRow) !== incarnation) {
+    clearIndeterminateFields(verified.record);
+  }
+  return {promoted: false};
+}
+
 function classifyNodeIncarnationRelation(observedRow, bootIncarnation,
   issueRecord) {
   const incarnation = requirePositiveBootIncarnation(bootIncarnation);
@@ -197,20 +348,13 @@ function classifyNodeIncarnationRelation(observedRow, bootIncarnation,
     NODE_INCARNATION_RELATION.CURRENT : NODE_INCARNATION_RELATION.NEWER;
 }
 
-// Record that this lifecycle's registration write applied (or reached
-// indeterminate consensus ownership of a matching row) at this incarnation.
 function recordNodeRegistrationIssue(issueRecord, bootIncarnation) {
   const incarnation = requirePositiveBootIncarnation(bootIncarnation);
   const {record} = readVerifiedIssueRecord(issueRecord);
-  record[ISSUE_RECORD_INCARNATION_FIELD] = incarnation;
+  record[ISSUE_RECORD_FIELD.ISSUED_AT] = incarnation;
+  clearIndeterminateFields(record);
 }
 
-/**
- * Authoritative read of one NODES row from its owner.
- * @param {Object} gateway
- * @param {string} nodeId
- * @return {Promise<{available: boolean, row: Object|null}>}
- */
 async function readAuthoritativeNodeRow(gateway, nodeId) {
   let result = null;
   try {
@@ -234,9 +378,6 @@ async function readAuthoritativeNodeRow(gateway, nodeId) {
   };
 }
 
-// One mutation attempt: applied per the canonical classifier - or because
-// the earlier instance of this same registration, resolved before this one
-// was issued, applied; a failure keeps its own error for the caller.
 async function attempt(write) {
   try {
     const result = await write();
@@ -270,18 +411,6 @@ function isAttemptOutcomeIndeterminate(attemptOutcome) {
   );
 }
 
-// Whether an authoritatively reread row at bootIncarnation is consistent with
-// having been written by this lifecycle's indeterminate attempt (same declared
-// host and non-contradicting status), never a concurrent twin or STOPPED row.
-function matchesIndeterminateAttemptRow(attemptedRow, rereadRow,
-  bootIncarnation) {
-  return Boolean(rereadRow) &&
-    incarnationOf(rereadRow) === bootIncarnation &&
-    rereadRow[COLUMN.HOST_ID] === attemptedRow[COLUMN.HOST_ID] &&
-    (attemptedRow[COLUMN.STATUS] === undefined ||
-      rereadRow[COLUMN.STATUS] === attemptedRow[COLUMN.STATUS]);
-}
-
 function failedResultError(result) {
   const error = new Error(typeof result.error === 'string' ?
     result.error : result.error?.message || NODE_REGISTRATION_NOT_APPLIED);
@@ -303,14 +432,18 @@ function registrationWriteIdentity(row, ...verb) {
     ...registrationWriteSubject(row), ...verb), pendingAppliedSettles: true};
 }
 
-// The one mutation an observation admits: birth when absent, one CAS on
-// the exact older incarnation observed, none otherwise.
+function buildBirthWrite(options, row) {
+  return () => options.insert(
+    row,
+    registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.BIRTH),
+  );
+}
+
 function planRegistration(options, row, observedRow, bootIncarnation) {
   const relation = classifyNodeIncarnationRelation(observedRow,
     bootIncarnation, options.issueRecord);
   if (relation === NODE_INCARNATION_RELATION.ABSENT) {
-    return () => options.insert(row,
-      registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.BIRTH));
+    return buildBirthWrite(options, row);
   }
   if (relation !== NODE_INCARNATION_RELATION.OLDER) return null;
   const observedValue = observedRow[COLUMN.BOOT_INCARNATION];
@@ -365,52 +498,65 @@ function settleRegistration(row, outcome) {
   return outcome;
 }
 
-function recordIndeterminateReadbackIfOwned(issueRecord, row, bootIncarnation,
-  attemptOutcome, read) {
-  if (read.available === true &&
-      isAttemptOutcomeIndeterminate(attemptOutcome) &&
-      matchesIndeterminateAttemptRow(row, read.row, bootIncarnation)) {
-    recordNodeRegistrationIssue(issueRecord, bootIncarnation);
-  }
-}
-
-async function replayBlindIndeterminateBirth(first, options, bootIncarnation,
-  reread) {
-  const replay = await attempt(first);
+async function replayBlindIndeterminateBirth(birthWrite, options,
+  bootIncarnation, observedRow) {
+  const replay = await attempt(birthWrite);
   if (replay.applied) {
     recordNodeRegistrationIssue(options.issueRecord, bootIncarnation);
     return freezeOutcome(
       NODE_REGISTRATION_OUTCOME.ACCEPTED,
-      reread.row,
+      observedRow,
       null,
       replay.result,
     );
   }
   if (isAttemptOutcomeIndeterminate(replay)) {
+    recordBlindBirthIndeterminateIssue(options.issueRecord, bootIncarnation);
     return freezeOutcome(
       NODE_REGISTRATION_OUTCOME.UNRESOLVED,
-      reread.row,
+      observedRow,
       replay.error,
       replay.result,
     );
   }
+  clearIndeterminateRegistrationIssue(options.issueRecord);
   return null;
 }
 
-/**
- * Register one node row at this boot incarnation.
- * @param {Object} options
- * @param {Object} options.row - NODES row (node_id and host_id required).
- * @param {number} options.bootIncarnation - This boot's reserved incarnation.
- * @param {number} options.nowMs - This node's finite clock reading.
- * @param {Function} options.observe - () => {available, row} authoritative.
- * @param {Function} options.insert - (row, identity) => mutation result.
- * @param {Function} options.advance - (whereClause, row, identity) =>
- *   mutation result.
- * @param {Object} options.issueRecord - This boot lifecycle's registration
- *   issue record (createNodeRegistrationIssueRecord); required, no default.
- * @return {Promise<Object>} Frozen {outcome, observedRow, error, originHlc}.
- */
+function recordUnappliedAttemptIssueState(options, row, bootIncarnation,
+  attemptOutcome, authoritative) {
+  if (!isAttemptOutcomeIndeterminate(attemptOutcome)) {
+    clearIndeterminateRegistrationIssue(options.issueRecord);
+    return;
+  }
+  if (authoritative) {
+    recordAuthoritativeIndeterminateIssue(
+      options.issueRecord, bootIncarnation, row);
+  } else {
+    recordBlindBirthIndeterminateIssue(options.issueRecord, bootIncarnation);
+  }
+}
+
+async function settleObservedReadback(options, row, bootIncarnation, read,
+  attemptOutcome) {
+  if (read.available !== true) return null;
+  if (hasPendingBlindBirthIssue(options.issueRecord, bootIncarnation) &&
+      incarnationOf(read.row) === bootIncarnation) {
+    return replayBlindIndeterminateBirth(
+      buildBirthWrite(options, row), options, bootIncarnation, read.row);
+  }
+  const {promoted} = reconcileAuthoritativeObservation(
+    options.issueRecord, read.row, bootIncarnation);
+  return promoted ?
+    freezeOutcome(
+      NODE_REGISTRATION_OUTCOME.ACCEPTED,
+      read.row,
+      null,
+      attemptOutcome?.result ?? null,
+    ) :
+    null;
+}
+
 async function writeNodeRegistrationAtIncarnation(options) {
   const bootIncarnation =
     requirePositiveBootIncarnation(options?.bootIncarnation);
@@ -423,10 +569,15 @@ async function writeNodeRegistrationAtIncarnation(options) {
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
   };
   const observed = await options.observe();
-  const authoritativeObservation = observed.available === true;
-  // Without an observation only a birth is attempted, and issuedAtIncarnation
-  // is never stamped unless that birth actually confirms applied.
-  const observedRow = authoritativeObservation ? observed.row : null;
+  const authoritative = observed.available === true;
+  if (authoritative) {
+    const priorSettled = await settleObservedReadback(
+      options, row, bootIncarnation, observed, null);
+    if (priorSettled !== null) {
+      return settleRegistration(row, priorSettled);
+    }
+  }
+  const observedRow = authoritative ? observed.row : null;
   const first = planRegistration(options, row, observedRow, bootIncarnation);
   if (first === null) {
     return settleRegistration(row, freezeOutcome(
@@ -436,61 +587,54 @@ async function writeNodeRegistrationAtIncarnation(options) {
   const firstAttempt = await attempt(first);
   if (firstAttempt.applied) {
     recordNodeRegistrationIssue(options.issueRecord, bootIncarnation);
-    return settleRegistration(row,
-      freezeOutcome(
-        NODE_REGISTRATION_OUTCOME.ACCEPTED,
-        observedRow,
-        null,
-        firstAttempt.result,
-      ));
+    return settleRegistration(row, freezeOutcome(
+      NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow, null,
+      firstAttempt.result));
   }
-  return settleRegistration(row, await resolveUnappliedRegistration(options,
-    row, bootIncarnation, firstAttempt, authoritativeObservation, first));
+  recordUnappliedAttemptIssueState(
+    options, row, bootIncarnation, firstAttempt, authoritative);
+  return settleRegistration(row, await resolveUnappliedRegistration(
+    options, row, bootIncarnation, firstAttempt));
 }
 
 async function resolveUnappliedRegistration(options, row, bootIncarnation,
-  firstAttempt, authoritativeObservation, first) {
+  firstAttempt) {
   const reread = await options.observe();
-  if (!authoritativeObservation &&
-      isAttemptOutcomeIndeterminate(firstAttempt) &&
-      reread.available === true &&
-      incarnationOf(reread.row) === bootIncarnation) {
-    const replayed = await replayBlindIndeterminateBirth(
-      first, options, bootIncarnation, reread);
-    if (replayed !== null) return replayed;
-  }
-  if (authoritativeObservation) {
-    recordIndeterminateReadbackIfOwned(
-      options.issueRecord, row, bootIncarnation, firstAttempt, reread);
-  }
+  const rereadSettled = await settleObservedReadback(
+    options, row, bootIncarnation, reread, firstAttempt);
+  if (rereadSettled !== null) return rereadSettled;
+
   const retry = reread.available === true && reread.row ?
     planRegistration(options, row, reread.row, bootIncarnation) : null;
-  const retryAttempt = retry === null ? null : await attempt(retry);
-  if (retryAttempt?.applied) {
-    recordNodeRegistrationIssue(options.issueRecord, bootIncarnation);
+  if (retry === null) {
     return freezeOutcome(
-      NODE_REGISTRATION_OUTCOME.ACCEPTED,
-      reread.row,
-      null,
-      retryAttempt.result,
+      classifyObservation(reread, bootIncarnation, true, options.issueRecord),
+      reread.row || null,
+      firstAttempt.error,
+      firstAttempt.result,
     );
   }
-  const settled = retryAttempt ? await options.observe() : reread;
-  if (retryAttempt) {
-    recordIndeterminateReadbackIfOwned(
-      options.issueRecord, row, bootIncarnation, retryAttempt, settled);
+  const retryAttempt = await attempt(retry);
+  if (retryAttempt.applied) {
+    recordNodeRegistrationIssue(options.issueRecord, bootIncarnation);
+    return freezeOutcome(
+      NODE_REGISTRATION_OUTCOME.ACCEPTED, reread.row, null,
+      retryAttempt.result);
   }
+  recordUnappliedAttemptIssueState(
+    options, row, bootIncarnation, retryAttempt, true);
+  const settled = await options.observe();
+  const afterRetry = await settleObservedReadback(
+    options, row, bootIncarnation, settled, retryAttempt);
+  if (afterRetry !== null) return afterRetry;
   return freezeOutcome(
     classifyObservation(settled, bootIncarnation, true, options.issueRecord),
     settled.row || null,
-    retryAttempt?.error || firstAttempt.error,
-    retryAttempt?.result || firstAttempt.result,
+    retryAttempt.error || firstAttempt.error,
+    retryAttempt.result || firstAttempt.result,
   );
 }
 
-// A superseding row that is currently READY (status=active and unexpired READY
-// lease per the canonical readiness owner) on another declared host is a live
-// twin configured with this node id, not an earlier life of this node.
 function isLiveTwinRow(observedRow, declaredHostId, nowMs) {
   const observedHost = readNodeHostIdentity(observedRow);
   return observedHost.state === NODE_HOST_IDENTITY_STATE.DECLARED &&
@@ -498,21 +642,6 @@ function isLiveTwinRow(observedRow, declaredHostId, nowMs) {
     isNodeRecordReady(observedRow, {now: nowMs});
 }
 
-/**
- * The typed error for a registration a superseding row refused. An earlier
- * life of this node id is superseded: a new boot lifecycle reserves above the
- * known incarnation (boot-incarnation-owner.js), so the join failure is
- * retryable by a new lifecycle, never by re-driving this one. A live twin on
- * another host is refused non-retryable for an operator and carries no
- * knownIncarnation (never raises the local incarnation floor).
- * @param {Object} options
- * @param {string} options.nodeId
- * @param {number} options.receivedIncarnation - This lifecycle's incarnation.
- * @param {Object|null} options.observedRow - The superseding NODES row.
- * @param {string} options.declaredHostId - This node's declared host id.
- * @param {number} options.nowMs - This node's finite clock reading.
- * @return {Error}
- */
 function buildSupersededRegistrationError(options) {
   const declaredHostId = requireDeclaredNodeHostId(options?.declaredHostId);
   const nowMs = requireRegistrationClockReading(options?.nowMs);
@@ -539,6 +668,7 @@ function buildSupersededRegistrationError(options) {
 }
 
 export {
+  ISSUE_INDETERMINATE_MODE,
   NODE_IDENTITY_TWIN_SUSPECTED,
   NODE_INCARNATION_RELATION,
   NODE_REGISTRATION_CLOCK_REQUIRED,
@@ -547,10 +677,15 @@ export {
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
   classifyNodeIncarnationRelation,
+  clearIndeterminateRegistrationIssue,
   createNodeRegistrationIssueRecord,
+  hasPendingBlindBirthIssue,
   isRegistrationAttemptIndeterminate,
   matchesIndeterminateAttemptRow,
   readAuthoritativeNodeRow,
+  reconcileAuthoritativeObservation,
+  recordAuthoritativeIndeterminateIssue,
+  recordBlindBirthIndeterminateIssue,
   recordNodeRegistrationIssue,
   requireRegistrationClockReading,
   writeNodeRegistrationAtIncarnation,
