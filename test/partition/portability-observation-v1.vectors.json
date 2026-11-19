@@ -1,0 +1,349 @@
+{
+  "schema": "portable-partition-observation-v1",
+  "scope": "logical-retained-committed-statement-observation-only",
+  "accepted": [
+    {
+      "id": "A01",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:alpha",
+        "outcome": "applied",
+        "logIndex": "1",
+        "term": "1",
+        "changes": "0",
+        "lastInsertRowid": null,
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A02",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:alpha:beta",
+        "outcome": "applied",
+        "logIndex": "9007199254740993",
+        "term": "2",
+        "changes": "3",
+        "lastInsertRowid": "9223372036854775807",
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A03",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:failed",
+        "outcome": "statement_failed",
+        "logIndex": "3",
+        "term": "9223372036854775807",
+        "changes": null,
+        "lastInsertRowid": null,
+        "failureCode": "SQLITE_CONSTRAINT",
+        "failureMessage": "primary key conflict",
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A04",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:negative-rowid",
+        "outcome": "applied",
+        "logIndex": "4",
+        "term": "3",
+        "changes": "1",
+        "lastInsertRowid": "-9223372036854775808",
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A05",
+      "value": {"kind": "unsettled", "entryKey": "entry:pending"}
+    },
+    {
+      "id": "A06",
+      "value": {
+        "kind": "unavailable",
+        "entryKey": "entry:pending",
+        "reason": "partition_retained_store_schema_unavailable"
+      }
+    },
+    {
+      "id": "A07",
+      "value": {
+        "kind": "unavailable",
+        "entryKey": "entry:pending",
+        "reason": "partition_retained_store_schema_contrary"
+      }
+    },
+    {
+      "id": "A08",
+      "value": {
+        "kind": "unavailable",
+        "entryKey": "entry:pending",
+        "reason": "partition_retained_store_row_contrary"
+      }
+    },
+    {
+      "id": "A09",
+      "value": {
+        "kind": "unknown",
+        "entryKey": "entry:submitted",
+        "reason": "partition_write_outcome_unknown"
+      }
+    },
+    {
+      "id": "A10",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:old-result",
+        "outcome": "applied",
+        "logIndex": "5",
+        "term": "3",
+        "changes": null,
+        "lastInsertRowid": null,
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A11",
+      "value": {
+        "kind": "settled",
+        "entryKey": "txop:transaction-1:partition-1:0",
+        "outcome": "applied",
+        "logIndex": "6",
+        "term": "3",
+        "changes": "2",
+        "lastInsertRowid": null,
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": null
+      }
+    },
+    {
+      "id": "A12",
+      "value": {
+        "kind": "settled",
+        "entryKey": "entry:coordinator-settlement",
+        "outcome": "applied",
+        "logIndex": "7",
+        "term": "3",
+        "changes": null,
+        "lastInsertRowid": null,
+        "failureCode": null,
+        "failureMessage": null,
+        "ownerResultText": "{\"outcome\":\"applied\"}"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "R01",
+      "expect": "invalid_decimal",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "01", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R02",
+      "expect": "out_of_range",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "0", "term": "1", "changes": "0", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R03",
+      "expect": "out_of_range",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "9223372036854775808", "term": "1", "changes": "0", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R04",
+      "expect": "invalid_decimal",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "0.0", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R05",
+      "expect": "invalid_decimal",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": "-0",
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R06",
+      "expect": "out_of_range",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "1",
+        "lastInsertRowid": "-9223372036854775809",
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R07",
+      "expect": "invalid_identity",
+      "value": {"kind": "unsettled", "entryKey": "entry:"}
+    },
+    {
+      "id": "R08",
+      "expect": "invalid_state",
+      "value": {"kind": "absent", "entryKey": "entry:a"}
+    },
+    {
+      "id": "R09",
+      "expect": "invalid_reason",
+      "value": {"kind": "unavailable", "entryKey": "entry:a", "reason": "not_found"}
+    },
+    {
+      "id": "R10",
+      "expect": "invalid_reason",
+      "value": {"kind": "unknown", "entryKey": "entry:a", "reason": "not_committed"}
+    },
+    {
+      "id": "R11",
+      "expect": "invalid_state",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "replayed",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R12",
+      "expect": "invalid_shape",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null,
+        "appendedAt": "fabricated"
+      }
+    },
+    {
+      "id": "R13",
+      "expect": "invalid_decimal",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": 1, "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R14",
+      "expect": "invalid_decimal",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": null, "changes": "1", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R15",
+      "expect": "invalid_outcome_fields",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": "SQLITE_CONSTRAINT", "failureMessage": "failure", "ownerResultText": null
+      }
+    },
+    {
+      "id": "R16",
+      "expect": "invalid_outcome_fields",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "statement_failed",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": "SQLITE_ERROR", "failureMessage": "failure", "ownerResultText": null
+      }
+    },
+    {
+      "id": "R17",
+      "expect": "invalid_outcome_fields",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "statement_failed",
+        "logIndex": "1", "term": "1", "changes": null, "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R18",
+      "expect": "invalid_insert_identity",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "0", "lastInsertRowid": "1",
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    },
+    {
+      "id": "R19",
+      "expect": "invalid_identity",
+      "value": {"kind": "unsettled", "entryKey": "txop:transaction-1:partition-1:00"}
+    },
+    {
+      "id": "R20",
+      "expect": "invalid_result",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": "1", "lastInsertRowid": null,
+        "failureCode": null, "failureMessage": null, "ownerResultText": "{\"outcome\":\"applied\"}"
+      }
+    },
+    {
+      "id": "R21",
+      "expect": "invalid_insert_identity",
+      "value": {
+        "kind": "settled", "entryKey": "entry:a", "outcome": "applied",
+        "logIndex": "1", "term": "1", "changes": null, "lastInsertRowid": "1",
+        "failureCode": null, "failureMessage": null, "ownerResultText": null
+      }
+    }
+  ],
+  "comparisons": [
+    {"id": "C01", "domain": "retained-log-index", "left": "9007199254740993", "right": "9007199254740992", "order": 1},
+    {"id": "C02", "domain": "retained-term", "left": "9223372036854775807", "right": "9223372036854775807", "order": 0},
+    {"id": "C03", "domain": "retained-term", "left": "2", "right": "3", "order": -1},
+    {"id": "C04", "domain": "sqlite-rowid", "left": "-9223372036854775808", "right": "0", "order": -1},
+    {"id": "C05", "domain": "sqlite-rowid", "left": "0", "right": "1", "order": -1}
+  ],
+  "epochs": [
+    {"id": "E01", "expected": 1, "actual": 1, "match": true},
+    {"id": "E02", "expected": 1, "actual": 2, "match": false},
+    {"id": "E03", "expected": 9007199254740991, "actual": 9007199254740991, "match": true},
+    {"id": "E04", "expected": 9007199254740991, "actual": 1, "match": false},
+    {"id": "E05", "expected": 7, "actual": 7, "match": true}
+  ],
+  "rejectedEpochs": [
+    {"id": "X01", "expected": 0, "actual": 1, "match": false, "expect": "invalid_epoch"},
+    {"id": "X02", "expected": 9007199254740992, "actual": 1, "match": false, "expect": "invalid_epoch"},
+    {"id": "X03", "expected": "1", "actual": 1, "match": true, "expect": "invalid_epoch"},
+    {"id": "X04", "expected": true, "actual": 1, "match": true, "expect": "invalid_epoch"},
+    {"id": "X05", "expected": 1.5, "actual": 1, "match": false, "expect": "invalid_epoch"},
+    {"id": "X06", "expected": 1, "match": false, "expect": "invalid_shape"}
+  ],
+  "identities": [
+    {"id": "I01", "left": "entry:alpha", "right": "entry:Alpha", "equal": false},
+    {"id": "I02", "left": "entry:café", "right": "entry:café", "equal": false},
+    {"id": "I03", "left": "txop:transaction-1:partition-1:0", "right": "txop:transaction-1:partition-1:1", "equal": false},
+    {"id": "I04", "left": "entry:alpha", "right": "entry:alpha", "equal": true},
+    {"id": "I05", "left": "entry:alpha", "right": "txop:transaction-1:partition-1:0", "equal": false}
+  ]
+}
