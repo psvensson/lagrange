@@ -126,6 +126,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_MOVE_TYPE,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -679,12 +680,113 @@ function createStepTracker(world, driver, afterStep) {
   return tracker;
 }
 
+function seedSingleVoterFounding(world) {
+  for (const row of world.cache.getAll(TABLES.SERVICES)) {
+    if (!row[COLUMN.PARTITION_ID]) continue;
+    if (row[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEADER) {
+      world.cache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.DELETE,
+        row,
+      );
+    }
+  }
+}
+
+function stepSingleVoterLearnerCatchUp(world) {
+  const nowMs = world.clock.now();
+  const syncingLearners = world.cache.getAll(TABLES.SERVICES)
+    .filter((row) =>
+      row[COLUMN.PARTITION_ID] &&
+      row[COLUMN.STATUS] === SYNCING_SERVICE_STATUS &&
+      row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEARNER);
+  for (const row of syncingLearners) {
+    const replicaId = row[COLUMN.REPLICA_ID];
+    world.cache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDC_OPERATION.UPDATE,
+      {
+        ...row,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+      },
+    );
+    const opRow = world.cache.getAll(TABLES.REPLICA_OPERATIONS)
+      .find((candidate) =>
+        isUnresolved(candidate) &&
+        candidate.type === OperationType.ADD &&
+        candidate[COLUMN.REPLICA_ID] === replicaId);
+    if (opRow) {
+      const history = typeof opRow.steps_history === 'string' && opRow.steps_history.length > 0 ?
+        JSON.parse(opRow.steps_history) : [];
+      const nextHistory = [...history, {step: WORKFLOW_STEP.ACTIVE, timestamp: nowMs}];
+      world.cache.applySystemTableChange(
+        TABLES.REPLICA_OPERATIONS,
+        CDC_OPERATION.UPDATE,
+        {
+          ...opRow,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+          updated_at: nowMs,
+          completed_at: nowMs,
+          steps_history: JSON.stringify(nextHistory),
+        },
+      );
+    }
+  }
+}
+
+function stepGrowthPromoteOperations(world) {
+  const nowMs = world.clock.now();
+  for (const row of world.cache.getAll(TABLES.REPLICA_OPERATIONS)) {
+    if (!isUnresolved(row) || row.type !== PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE) {
+      continue;
+    }
+    const history = typeof row.steps_history === 'string' && row.steps_history.length > 0 ?
+      JSON.parse(row.steps_history) : [];
+    if (history[0]?.dispatchHold) continue;
+    const promoteIds = Array.isArray(history[0]?.promoteReplicaIds) ?
+      history[0].promoteReplicaIds :
+      [row.replica_id, row.source_replica_id].filter(Boolean);
+    for (const replicaId of promoteIds) {
+      const serviceRow = world.cache.get(TABLES.SERVICES, replicaId);
+      if (serviceRow) {
+        world.cache.applySystemTableChange(
+          TABLES.SERVICES,
+          CDC_OPERATION.UPDATE,
+          {
+            ...serviceRow,
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          },
+        );
+      }
+    }
+    const nextHistory = [...history, {step: WORKFLOW_STEP.ACTIVE, timestamp: nowMs}];
+    world.cache.applySystemTableChange(
+      TABLES.REPLICA_OPERATIONS,
+      CDC_OPERATION.UPDATE,
+      {
+        ...row,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+        updated_at: nowMs,
+        completed_at: nowMs,
+        steps_history: JSON.stringify(nextHistory),
+      },
+    );
+  }
+}
+
 // The replica runtime boundary: the copy source of every CREATE, read from
 // the leader fixture when the CREATE arrives; and, when a scenario asks for
 // it, the first CREATE of one partition fails as the replica handler reports
 // a failed create (REPLICA_CREATE_FAILED to its own node's coordinator, an
 // error answer): no learner is registered, so membership is unchanged.
-function instrumentReplicaRuntime(world, {failFirstCreateOf = null} = {}) {
+function instrumentReplicaRuntime(
+  world,
+  {failFirstCreateOf = null, singleVoterFounding = false} = {},
+) {
   const copySources = new Map();
   const injected = {failure: null};
   const answer = world.replicaRuntime.answer.bind(world.replicaRuntime);
@@ -713,6 +815,14 @@ function instrumentReplicaRuntime(world, {failFirstCreateOf = null} = {}) {
     }
     return answer(nodeId, payload);
   };
+  if (singleVoterFounding) {
+    const baseStep = world.replicaRuntime.step.bind(world.replicaRuntime);
+    world.replicaRuntime.step = () => {
+      stepSingleVoterLearnerCatchUp(world);
+      baseStep();
+      stepGrowthPromoteOperations(world);
+    };
+  }
   return {copySources, injected};
 }
 
@@ -836,11 +946,15 @@ function observeLedger(world, driver, tracker, copySources) {
 // The voter-ready floor of every partition (ACTIVE or SYNCING voter rows on
 // READY nodes), checked after every driver step: no removal takes a
 // partition below min(VOTER_READY_FLOOR, the count it started from).
-function createFloorWatch(world) {
+function createFloorWatch(world, {singleVoterFounding = false} = {}) {
   const baseline = new Map();
   const violations = [];
+  const evenVoterViolations = [];
+  const colocationViolations = [];
   return {
     violations,
+    evenVoterViolations,
+    colocationViolations,
     check(step) {
       for (const placement of partitionPlacement(world)) {
         if (!baseline.has(placement.partitionId)) {
@@ -851,6 +965,34 @@ function createFloorWatch(world) {
         if (placement.voterReady < floor) {
           violations.push({step, partitionId: placement.partitionId,
             voterReady: placement.voterReady});
+        }
+      }
+      if (!singleVoterFounding) return;
+      const rowsByPartition = new Map();
+      for (const row of world.cache.getAll(TABLES.SERVICES)) {
+        const partitionId = row[COLUMN.PARTITION_ID];
+        if (!partitionId) continue;
+        const list = rowsByPartition.get(partitionId) || [];
+        list.push(row);
+        rowsByPartition.set(partitionId, list);
+      }
+      for (const [partitionId, rows] of rowsByPartition.entries()) {
+        const activeVoters = rows.filter((row) =>
+          row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE && isVoterRow(row));
+        if (activeVoters.length > 0 && activeVoters.length % 2 === 0) {
+          evenVoterViolations.push({
+            step,
+            partitionId,
+            voterCount: activeVoters.length,
+          });
+        }
+        const nodes = rows.map((row) => row[COLUMN.NODE_ID]);
+        if (new Set(nodes).size < nodes.length) {
+          colocationViolations.push({
+            step,
+            partitionId,
+            nodes,
+          });
         }
       }
     },
@@ -1055,15 +1197,21 @@ function retryOutcome(world, ledger, injected) {
  */
 async function runPlacementDrain(order, options = {}) {
   await runtimeBuildProvenance();
+  const singleVoterFounding = options.singleVoterFounding === true;
   const world = createFormationWorld({
     mountPlacementDeciders,
     platformClockIsWorldClock: true,
   });
+  if (singleVoterFounding) {
+    seedSingleVoterFounding(world);
+  }
   const driver = createRoundDriver(world, {plannerPolling: false});
-  const floorWatch = createFloorWatch(world);
+  const floorWatch = createFloorWatch(world, {singleVoterFounding});
   const tracker = createStepTracker(world, driver, (step) => floorWatch.check(step));
-  const {copySources, injected} = instrumentReplicaRuntime(world,
-    {failFirstCreateOf: options.failFirstCreateOf || null});
+  const {copySources, injected} = instrumentReplicaRuntime(world, {
+    failFirstCreateOf: options.failFirstCreateOf || null,
+    singleVoterFounding,
+  });
   const ledger = observeLedger(world, driver, tracker, copySources);
   const observer = createObserver(world, driver);
   const context = {world, driver, tracker, observer, copySources, ledger,
@@ -1104,6 +1252,10 @@ async function runPlacementDrain(order, options = {}) {
       retry: retryOutcome(world, ledger, injected),
       idleSources: context.idleSources,
       floorViolations: floorWatch.violations,
+      evenVoterViolations: floorWatch.evenVoterViolations,
+      colocationViolations: floorWatch.colocationViolations,
+      servicesSnapshot: world.cache.getAll(TABLES.SERVICES)
+        .filter((row) => Boolean(row[COLUMN.PARTITION_ID])),
       safety: observer.safety,
       messageGroup: {
         initial: initialMessageGroup,

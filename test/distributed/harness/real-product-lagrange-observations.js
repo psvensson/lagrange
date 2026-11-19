@@ -333,11 +333,21 @@ function nodeReady(ctx, host) {
   });
 }
 
+const FORMATION_STATE_FORMED = 'FORMED';
+
+function isFormationFactReady(facts) {
+  const formation = facts?.cluster?.formation;
+  return !formation || formation.state === FORMATION_STATE_FORMED;
+}
+
 function membershipReady(ctx, seedHost, nodeCount) {
   return readinessOf(ctx, 'lagrange-membership', async (pollContext) => {
     const answer = await getFacts(ctx, seedHost, pollContext);
+    const facts = answer.json?.facts;
     return {
-      ready: answer.json?.facts?.topology?.readyNodeCount === nodeCount,
+      ready:
+        facts?.topology?.readyNodeCount === nodeCount &&
+        isFormationFactReady(facts),
       diagnostic: answer,
     };
   });

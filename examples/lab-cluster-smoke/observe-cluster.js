@@ -102,7 +102,7 @@ async function fetchEndpoint(url, fetchFn) {
  * @param {Map<string, string>} knownNodeIdentities
  * @return {{passing: boolean, refusals: string[], nodeIds: string[]}}
  */
-function evaluateReadinessSample(memberResults, knownNodeIdentities) {
+function evaluateReadinessSample(memberResults, knownNodeIdentities, options = {}) {
   const refusals = [];
   const observedNodeIds = [];
 
@@ -154,6 +154,16 @@ function evaluateReadinessSample(memberResults, knownNodeIdentities) {
     if (uniqueIds.size !== memberResults.length) {
       refusals.push(`Duplicate nodeIds observed across members: ${observedNodeIds.join(', ')}`);
     }
+  }
+
+  const formation = options?.formation || null;
+  if (
+    formation &&
+    typeof formation === 'object' &&
+    typeof formation.state === 'string' &&
+    formation.state !== 'FORMED'
+  ) {
+    refusals.push(`cluster formation state '${formation.state}' !== 'FORMED'`);
   }
 
   return {
@@ -319,18 +329,34 @@ async function observeCluster(options = {}) {
       }),
     );
 
-    // Optional seed /bootstrap/ready diagnostic probe
+    // Optional seed /bootstrap/ready and /management/v1/facts probes
+    let seedFormationFact = null;
     if (seedMember) {
-      const bootstrapReadyRes = await fetchEndpoint(
-        `http://127.0.0.1:${seedMember.restPort}/bootstrap/ready`,
-        fetchFn,
-      );
+      const [bootstrapReadyRes, managementFactsRes] = await Promise.all([
+        fetchEndpoint(
+          `http://127.0.0.1:${seedMember.restPort}/bootstrap/ready`,
+          fetchFn,
+        ),
+        fetchEndpoint(
+          `http://127.0.0.1:${seedMember.restPort}/management/v1/facts`,
+          fetchFn,
+        ),
+      ]);
       if (bootstrapReadyRes.ok && bootstrapReadyRes.body) {
         seedBootstrapReadyDiagnostic = bootstrapReadyRes.body;
       }
+      if (managementFactsRes.ok && managementFactsRes.body) {
+        const factsBody =
+          managementFactsRes.body.facts || managementFactsRes.body;
+        seedFormationFact = factsBody?.cluster?.formation || null;
+      }
     }
 
-    const evaluation = evaluateReadinessSample(memberProbes, knownNodeIdentities);
+    const evaluation = evaluateReadinessSample(
+      memberProbes,
+      knownNodeIdentities,
+      {formation: seedFormationFact},
+    );
 
     if (evaluation.passing) {
       if (consecutivePassingSamples === 0) {

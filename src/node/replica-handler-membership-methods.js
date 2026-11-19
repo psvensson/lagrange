@@ -17,24 +17,38 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {
+  evaluatePartitionLearnerCatchUp,
+  proposePartitionGrowthPromote,
   readPartitionReplicaMembership,
+  removePartitionRaftLearner,
   retirePartitionRaftPeer,
+  withdrawPartitionPromotion,
 } from '../partition/partition-service-raft-membership-administration.js';
+import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_MEMBERSHIP_ERROR = Object.freeze({
   REQUIRED_FIELDS:
     'membership request requires partitionId, replicaId and sourceReplicaId',
+  PARTITION_REQUIRED: 'membership request requires partitionId',
   NOT_A_PARTITION_REPLICA: 'replica has no partition consensus port',
 });
 
+function readRequestField(request, field) {
+  return request?.[field] || null;
+}
+
 function membershipRequestOf(request) {
   return {
-    operationId: request?.[ReplicaOperationField.OPERATION_ID] || null,
-    partitionId: request?.[ReplicaOperationField.PARTITION_ID] || null,
-    replicaId: request?.[ReplicaOperationField.REPLICA_ID] || null,
+    operationId: readRequestField(request, ReplicaOperationField.OPERATION_ID),
+    partitionId: readRequestField(request, ReplicaOperationField.PARTITION_ID),
+    replicaId: readRequestField(request, ReplicaOperationField.REPLICA_ID),
     sourceReplicaId:
-      request?.[ReplicaOperationField.SOURCE_REPLICA_ID] || null,
+      readRequestField(request, ReplicaOperationField.SOURCE_REPLICA_ID),
+    promoteReplicaIds:
+      readRequestField(request, ReplicaOperationField.PROMOTE_REPLICA_IDS),
+    expectedBaseConfig:
+      readRequestField(request, ReplicaOperationField.EXPECTED_BASE_CONFIG),
   };
 }
 
@@ -114,6 +128,139 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
         {
           [ReplicaOperationField.PROPOSAL]: proposal,
           replicaId: witness.fields.replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+
+    findLocalPartitionService(partitionId, replicaId) {
+      if (replicaId) {
+        const direct = this.getTrackedService(replicaId);
+        if (direct && (!partitionId || direct.partitionId === partitionId)) {
+          return direct;
+        }
+      }
+      let firstMatch = null;
+      for (const service of this.localServices.values()) {
+        if (service?.partitionId !== partitionId) continue;
+        if (service.isLeader === true) return service;
+        if (!firstMatch) firstMatch = service;
+      }
+      return firstMatch;
+    }
+
+    resolvePartitionAdministrationTarget(request) {
+      const fields = membershipRequestOf(request);
+      if (!fields.partitionId) {
+        return {response: this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR,
+          {error: REPLICA_MEMBERSHIP_ERROR.PARTITION_REQUIRED,
+            nodeId: this.nodeId},
+        )};
+      }
+      const service = this.findLocalPartitionService(
+        fields.partitionId, fields.replicaId);
+      if (!service) {
+        return {response: this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.NOT_FOUND,
+          {partitionId: fields.partitionId, replicaId: fields.replicaId,
+            nodeId: this.nodeId},
+        )};
+      }
+      if (!service.raft) {
+        return {response: this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR,
+          {error: REPLICA_MEMBERSHIP_ERROR.NOT_A_PARTITION_REPLICA,
+            replicaId: service.replicaId, nodeId: this.nodeId},
+        )};
+      }
+      return {service, fields};
+    }
+
+    async handleEvaluateLearnerCatchUp(request) {
+      const target = this.resolvePartitionAdministrationTarget(request);
+      if (target.response) return target.response;
+      const catchUp = await turnChainValue(evaluatePartitionLearnerCatchUp(
+        target.service,
+        {
+          operationId: target.fields.operationId,
+          replicaIdentity: target.fields.replicaId,
+        },
+      ));
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {
+          [ReplicaOperationField.CATCH_UP]: catchUp,
+          partitionId: target.fields.partitionId,
+          replicaId: target.fields.replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+
+    async handleProposeGrowthPromote(request) {
+      const target = this.resolvePartitionAdministrationTarget(request);
+      if (target.response) return target.response;
+      const promoteReplicaIds = Array.isArray(target.fields.promoteReplicaIds) ?
+        target.fields.promoteReplicaIds :
+        [target.fields.replicaId, target.fields.sourceReplicaId].filter(Boolean);
+      const proposal = await turnChainValue(proposePartitionGrowthPromote(
+        target.service,
+        {
+          operationId: target.fields.operationId,
+          promoteReplicaIds,
+          expectedBaseConfig: target.fields.expectedBaseConfig,
+        },
+      ));
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.INITIATED,
+        {
+          [ReplicaOperationField.PROPOSAL]: proposal,
+          partitionId: target.fields.partitionId,
+          replicaId: target.service.replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+
+    async handleWithdrawPromotion(request) {
+      const target = this.resolvePartitionAdministrationTarget(request);
+      if (target.response) return target.response;
+      const proposal = await turnChainValue(withdrawPartitionPromotion(
+        target.service,
+        {
+          operationId: target.fields.operationId,
+          replicaIdentity: target.fields.replicaId,
+          promoteReplicaIds: target.fields.promoteReplicaIds,
+        },
+      ));
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {
+          [ReplicaOperationField.PROPOSAL]: proposal,
+          partitionId: target.fields.partitionId,
+          replicaId: target.service.replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+
+    async handleRemoveLearner(request) {
+      const target = this.resolvePartitionAdministrationTarget(request);
+      if (target.response) return target.response;
+      const proposal = await turnChainValue(removePartitionRaftLearner(
+        target.service,
+        {
+          operationId: target.fields.operationId,
+          replicaIdentity: target.fields.replicaId,
+        },
+      ));
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.INITIATED,
+        {
+          [ReplicaOperationField.PROPOSAL]: proposal,
+          partitionId: target.fields.partitionId,
+          replicaId: target.fields.replicaId,
           nodeId: this.nodeId,
         },
       );

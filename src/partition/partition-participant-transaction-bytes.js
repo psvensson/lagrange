@@ -322,12 +322,12 @@ function buildDecisionCommand(identity, binding, stamp) {
 }
 
 function buildGenerationOriginCommand(partitionId, stamp) {
-  return Object.freeze({
+  return {
     type: COMMAND.GENERATION_ORIGIN,
     entryId: generationOriginEntryIdOf(partitionId),
     partitionId,
     ...stampFieldsOf(stamp),
-  });
+  };
 }
 
 // The identity half of the pinned form, without a partition to compare with

@@ -51,28 +51,31 @@ async function dispatchCreateReplicaMessage(handler, payload) {
     invalidCreateOperationResponse(handler);
 }
 
+const DIRECT_REPLICA_MESSAGE_HANDLERS = Object.freeze({
+  [ReplicaOperationMessageType.REMOVE_REPLICA]: 'handleRemoveReplica',
+  [ReplicaOperationMessageType.STEP_DOWN_REPLICA]: 'handleStepDownReplica',
+  [ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP]: 'handleReadReplicaMembership',
+  [ReplicaOperationMessageType.RETIRE_REPLICA_PEER]: 'handleRetireReplicaPeer',
+  [ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP]: 'handleReadCommittedMembership',
+  [ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP]: 'handleClaimFailedCreateCleanup',
+  [ReplicaOperationMessageType.EVALUATE_LEARNER_CATCH_UP]: 'handleEvaluateLearnerCatchUp',
+  [ReplicaOperationMessageType.PROPOSE_GROWTH_PROMOTE]: 'handleProposeGrowthPromote',
+  [ReplicaOperationMessageType.WITHDRAW_PROMOTION]: 'handleWithdrawPromotion',
+  [ReplicaOperationMessageType.REMOVE_LEARNER]: 'handleRemoveLearner',
+});
+
 async function dispatchReplicaMessage(handler, type, payload) {
-  switch (type) {
-  case ReplicaOperationMessageType.CREATE_REPLICA:
+  if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
     return dispatchCreateReplicaMessage(handler, payload);
-  case ReplicaOperationMessageType.REMOVE_REPLICA:
-    return handler.handleRemoveReplica(payload);
-  case ReplicaOperationMessageType.STEP_DOWN_REPLICA:
-    return handler.handleStepDownReplica(payload);
-  case ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP:
-    return handler.handleReadReplicaMembership(payload);
-  case ReplicaOperationMessageType.RETIRE_REPLICA_PEER:
-    return handler.handleRetireReplicaPeer(payload);
-  case ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP:
-    return handler.handleReadCommittedMembership(payload);
-  case ReplicaOperationMessageType.CLAIM_FAILED_CREATE_CLEANUP:
-    return handler.handleClaimFailedCreateCleanup(payload);
-  default:
-    return handler.buildReplicaOperationResponse(
-      ReplicaOperationResponseStatus.ERROR,
-      {error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(type)},
-    );
   }
+  const methodName = DIRECT_REPLICA_MESSAGE_HANDLERS[type];
+  if (methodName) {
+    return handler[methodName](payload);
+  }
+  return handler.buildReplicaOperationResponse(
+    ReplicaOperationResponseStatus.ERROR,
+    {error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(type)},
+  );
 }
 
 function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {

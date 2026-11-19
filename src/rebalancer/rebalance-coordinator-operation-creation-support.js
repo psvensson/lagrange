@@ -291,6 +291,7 @@ function throwRuntimeServicePlacementError(entityId, answer, result) {
   );
   error.code = failureCode;
   error.failureCode = failureCode;
+  error.reasonCode = failureCode;
   error.entryId = answer?.entryId || null;
   error.placementResult = result || null;
   error.admissionAnswer = answer || null;

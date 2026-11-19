@@ -53,6 +53,7 @@ import {deliveryAnswerOf, deliveryTransportOf,
 import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
   '../raft/raft-committed-membership-constants.js';
 import {
+  admitPartitionRaftLearner,
   admitPartitionRaftPeer,
   readPartitionCommittedMembership,
   reservePartitionRaftPeerIdentity,
@@ -249,12 +250,18 @@ function operationRefusal(row, service, replicaIdentity) {
   return null;
 }
 
+function shouldAdmitAsLearner(service, row) {
+  return service?.learnerFirstAdmission === true || row?.as_learner === true;
+}
+
 // The answer the port's admission maps to, with the committed node.
 function admissionAnswer(service, replicaIdentity, row) {
   // The read yielded: leadership is decided again on the port's answer.
   reservePartitionRaftPeerIdentity(service, replicaIdentity);
-  const admission = admitPartitionRaftPeer(service, {
-    replicaIdentity, nodeId: row.target_node_id});
+  const peer = {replicaIdentity, nodeId: row.target_node_id};
+  const admission = shouldAdmitAsLearner(service, row) ?
+    admitPartitionRaftLearner(service, peer) :
+    admitPartitionRaftPeer(service, peer);
   return answer(PORT_OUTCOME_ANSWER[admission.outcome] ??
     REPLICA_ADMISSION_OUTCOME.REFUSED, {
     nodeId: row.target_node_id,
@@ -348,7 +355,15 @@ async function isOwnCommittedVoter(service) {
   ) {
     return false;
   }
-  return [...membership.voters, ...membership.votersOutgoing].some(
+  const peerIds = service?.learnerFirstAdmission === true ?
+    [
+      ...membership.voters,
+      ...membership.votersOutgoing,
+      ...(membership.learners || []),
+      ...(membership.learnersNext || []),
+    ] :
+    [...membership.voters, ...membership.votersOutgoing];
+  return peerIds.some(
     (peerId) => membership.identities[peerId] === service.replicaId,
   );
 }

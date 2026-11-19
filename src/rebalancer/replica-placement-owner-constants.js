@@ -25,6 +25,14 @@ const PLACEMENT_TRANSITION_KIND = Object.freeze({
   RUNTIME_SERVICE: 'RUNTIME_SERVICE',
 });
 
+const PLACEMENT_MOVE_TYPE = Object.freeze({
+  ADD: 'ADD',
+  REMOVE: 'REMOVE',
+  REPLACE: 'REPLACE',
+  PROMOTE: 'PROMOTE',
+  GROWTH_PROMOTE: 'GROWTH_PROMOTE',
+});
+
 // The one admission order (design section 2.6): the operation ledger, the
 // other priority control-plane partitions, then - after the formation latch
 // is FORMED - nodes-p1, the other system partitions and user partitions.
@@ -60,23 +68,30 @@ const PLACEMENT_SYSTEM_FIRST_PARTITION_IDS = Object.freeze([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.TABLES],
 ]);
 
-// Deficit kinds, in severity order (design section 2.6). The first two are
-// repair kinds: they may use all of K_src in every class.
+// Deficit kinds, in severity order (design section 2.6, founding-membership
+// section 2.7.1). Repair kinds may use all of K_src in every class.
 const PLACEMENT_DEFICIT_KIND = Object.freeze({
+  DEAD_LEARNER: 'DEAD_LEARNER',
   FAILED_OR_DEAD: 'FAILED_OR_DEAD',
+  PROMOTION_READY: 'PROMOTION_READY',
+  LEARNER_DEFICIT: 'LEARNER_DEFICIT',
   UNDER_REPLICATED: 'UNDER_REPLICATED',
   HOST_SPREAD: 'HOST_SPREAD',
   SURPLUS: 'SURPLUS',
   REBALANCE: 'REBALANCE',
 });
 const PLACEMENT_DEFICIT_SEVERITY = Object.freeze([
+  PLACEMENT_DEFICIT_KIND.DEAD_LEARNER,
   PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD,
+  PLACEMENT_DEFICIT_KIND.PROMOTION_READY,
+  PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT,
   PLACEMENT_DEFICIT_KIND.UNDER_REPLICATED,
   PLACEMENT_DEFICIT_KIND.HOST_SPREAD,
   PLACEMENT_DEFICIT_KIND.SURPLUS,
   PLACEMENT_DEFICIT_KIND.REBALANCE,
 ]);
 const PLACEMENT_REPAIR_DEFICIT_KINDS = Object.freeze(new Set([
+  PLACEMENT_DEFICIT_KIND.DEAD_LEARNER,
   PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD,
   PLACEMENT_DEFICIT_KIND.UNDER_REPLICATED,
 ]));
@@ -216,6 +231,7 @@ export {
   PLACEMENT_FORMATION_GATED_CLASSES,
   PLACEMENT_FORMATION_STATE,
   PLACEMENT_FULL_SOURCE_CAPACITY_CLASSES,
+  PLACEMENT_MOVE_TYPE,
   PLACEMENT_OPERATION_ID_PREFIX,
   PLACEMENT_OPERATION_ID_SEPARATOR,
   PLACEMENT_OUTCOME,

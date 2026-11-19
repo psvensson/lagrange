@@ -17,14 +17,23 @@ import {projectNodeLivenessSemantics} from
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
 import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
-import {COLUMN} from '../constants/columns.js';
+import {COLUMN, SERVICE_STATUS} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {OperationType} from './replica-operation-progress.js';
+import {ReplicaStatus} from './replica-status.js';
 import {
   PLACEMENT_DEFICIT_KIND as KIND,
+  PLACEMENT_MOVE_TYPE,
   PLACEMENT_REPAIR_DEFICIT_KINDS,
   PLACEMENT_WAITING_REASON as WAITING,
 } from './replica-placement-owner-constants.js';
-import {classifyPlacementClass} from './replica-placement-owner-order.js';
+import {classifyPlacementClass, resolveVoterTarget} from './replica-placement-owner-order.js';
+
+const IN_FLIGHT_LEARNER_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+]));
 
 const PLACEMENT_DEFICIT_STATE = Object.freeze({
   NONE: 'NONE',
@@ -83,6 +92,61 @@ function readPlacementNodeInputs(nodeAuthority, nowMs) {
   return Object.freeze({state: SERVE_ELIGIBILITY_STATE.READY, epoch: answer.epoch,
     formation: answer.formation,
     eligibility: buildPlacementNodeEligibility({nodeRows: answer.nodeRows, nowMs})});
+}
+
+function isLearnerReplica(replica) {
+  return replica.isLearner === true || replica.role === RAFT_ROLE.LEARNER;
+}
+
+function isVoterRole(role) {
+  return role === RAFT_ROLE.LEADER || role === RAFT_ROLE.FOLLOWER;
+}
+
+function shouldSkipServiceRow(row, isBusy) {
+  const status = row[COLUMN.STATUS];
+  if (status === ReplicaStatus.REMOVING || status === ReplicaStatus.REMOVED) {
+    return true;
+  }
+  const role = row[COLUMN.RAFT_ROLE];
+  return isBusy && (role === RAFT_ROLE.LEARNER || IN_FLIGHT_LEARNER_STATUSES.has(status));
+}
+
+function classifyServiceRow(row) {
+  const replicaId = row[COLUMN.REPLICA_ID];
+  const nodeId = row[COLUMN.NODE_ID];
+  if (typeof replicaId !== 'string' || typeof nodeId !== 'string') return null;
+  const role = row[COLUMN.RAFT_ROLE];
+  const status = row[COLUMN.STATUS];
+  const isLearner = role === RAFT_ROLE.LEARNER;
+  const activeVoter = status === SERVICE_STATUS.ACTIVE && isVoterRole(role);
+  const caughtUp = isLearner && status === SERVICE_STATUS.ACTIVE &&
+    row.caught_up !== false && row.caughtUp !== false;
+  const activeLearner = isLearner &&
+    (caughtUp || status === ReplicaStatus.SYNCING);
+  return {
+    replicaId,
+    nodeId,
+    role,
+    isLearner,
+    caughtUp,
+    failed: isLearner ? !activeLearner : !activeVoter,
+    isLeader: activeVoter && role === RAFT_ROLE.LEADER,
+  };
+}
+
+function buildPartitionReplicaRows(serviceRows, leaderNodeId, isBusy) {
+  const filtered = [];
+  for (const row of serviceRows) {
+    if (shouldSkipServiceRow(row, isBusy)) continue;
+    const classified = classifyServiceRow(row);
+    if (classified !== null) filtered.push(classified);
+  }
+  if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {
+    const leaderRow = filtered.find((r) =>
+      !r.failed && !r.isLearner && r.nodeId === leaderNodeId);
+    if (leaderRow) leaderRow.isLeader = true;
+  }
+  return filtered;
 }
 
 function liveReplicasOf(replicaRows, eligibility) {
@@ -153,10 +217,17 @@ function overRepresentedReplicaOf(live, eligibility) {
 }
 
 function moveOf(type, fields) {
-  return Object.freeze({type, targetNodeId: fields.targetNodeId,
+  const move = {
+    type,
+    targetNodeId: fields.targetNodeId,
     replicaId: fields.replicaId ?? null,
     sourceReplicaId: fields.sourceReplicaId ?? null,
-    copySourceNodeId: fields.copySourceNodeId ?? null});
+    copySourceNodeId: fields.copySourceNodeId ?? null,
+  };
+  if (Array.isArray(fields.promoteReplicaIds)) {
+    move.promoteReplicaIds = Object.freeze([...fields.promoteReplicaIds]);
+  }
+  return Object.freeze(move);
 }
 
 function candidateOf(context, deficitKind, move) {
@@ -173,7 +244,8 @@ function waitingOf(context, deficitKind, reason) {
 
 // A copy reads from the current leader; with no known leader it waits.
 function copyMoveOf(context, deficitKind, type, fields) {
-  const requireUnusedHost = deficitKind === KIND.HOST_SPREAD;
+  const requireUnusedHost =
+    deficitKind === KIND.HOST_SPREAD || deficitKind === KIND.LEARNER_DEFICIT;
   const anyTarget = findTargetNode(context.live, context.eligibility, {requireUnusedHost});
   if (anyTarget === null) return waitingOf(context, deficitKind, WAITING.NO_ELIGIBLE_TARGET);
   const storageExcludedNodeIds = context.storageExcludedTargets ?
@@ -204,13 +276,13 @@ function failedOrDeadDeficit(context) {
     return candidateOf(context, KIND.FAILED_OR_DEAD, moveOf(OperationType.REMOVE,
       {targetNodeId: dead.nodeId, replicaId: dead.replicaId}));
   }
-  return copyMoveOf(context, KIND.FAILED_OR_DEAD, OperationType.REPLACE,
-    {sourceReplicaId: dead.replicaId});
+  return copyMoveOf({...context, live: context.liveReplicas}, KIND.FAILED_OR_DEAD,
+    OperationType.REPLACE, {sourceReplicaId: dead.replicaId});
 }
 
 function spreadDeficit(context) {
   const source = overRepresentedReplicaOf(context.live, context.eligibility);
-  const others = context.live.filter((replica) => replica !== source);
+  const others = context.liveReplicas.filter((replica) => replica !== source);
   return copyMoveOf({...context, live: others}, KIND.HOST_SPREAD,
     OperationType.REPLACE, {sourceReplicaId: source.replicaId});
 }
@@ -221,29 +293,97 @@ function surplusDeficit(context) {
     {targetNodeId: removed.nodeId, replicaId: removed.replicaId}));
 }
 
+function promotableLearnersOf(liveLearners, liveVoters, eligibility) {
+  const voterHosts = new Set(liveVoters.map((r) =>
+    eligibility.hostOfNode.get(r.nodeId)));
+  const seenHosts = new Set();
+  const promotable = [];
+  for (const learner of liveLearners) {
+    if (learner.caughtUp === false) continue;
+    const hostId = eligibility.hostOfNode.get(learner.nodeId);
+    if (voterHosts.has(hostId) || seenHosts.has(hostId)) continue;
+    seenHosts.add(hostId);
+    promotable.push(learner);
+  }
+  return promotable;
+}
+
+function growthPromotionDeficit(context, voterTarget) {
+  if (context.live.length >= voterTarget) return null;
+  const neededForNextOdd = context.live.length % 2 === 1 ? 2 : 1;
+  if (context.live.length + neededForNextOdd > voterTarget) return null;
+  const promotable = promotableLearnersOf(
+    context.liveLearners, context.live, context.eligibility);
+  if (promotable.length < neededForNextOdd) return null;
+  if (context.leader === undefined) {
+    return waitingOf(context, KIND.PROMOTION_READY, WAITING.LEADER_UNKNOWN);
+  }
+  const toPromote = promotable.slice(0, neededForNextOdd);
+  return candidateOf(context, KIND.PROMOTION_READY, moveOf(
+    PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE,
+    {
+      targetNodeId: context.leader.nodeId,
+      replicaId: toPromote[0].replicaId,
+      sourceReplicaId: toPromote[1]?.replicaId ?? null,
+      promoteReplicaIds: toPromote.map((r) => r.replicaId),
+    },
+  ));
+}
+
+function underVoterTargetDeficit(context, requiredHosts) {
+  if (context.live.length % 2 === 1) {
+    const replicaHosts = hostCountsOf(context.liveReplicas, context.eligibility).size;
+    if (replicaHosts >= requiredHosts) return NONE;
+    return copyMoveOf(
+      {...context, live: context.liveReplicas},
+      KIND.LEARNER_DEFICIT,
+      OperationType.ADD,
+      {},
+    );
+  }
+  return copyMoveOf(
+    {...context, live: context.liveReplicas},
+    KIND.UNDER_REPLICATED,
+    OperationType.ADD,
+    {},
+  );
+}
+
 /**
  * The one deficit of a partition and its move, or why it waits.
  * @param {Object} input - {partitionId, replicationFactor, replicaRows:
- *   [{replicaId, nodeId, failed, isLeader}], eligibility}.
+ *   [{replicaId, nodeId, failed, isLeader, isLearner?, role?, caughtUp?}], eligibility}.
  * @return {Object} Frozen {state: NONE} | {state: CANDIDATE, candidate} |
  *   {state: WAITING, waiting}.
  */
 function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   eligibility, saturatedTargetNodeIds = null, storageExcludedTargets = null}) {
-  const live = liveReplicasOf(replicaRows, eligibility);
+  const voterRows = replicaRows.filter((r) => !isLearnerReplica(r));
+  const learnerRows = replicaRows.filter(isLearnerReplica);
+  const live = liveReplicasOf(voterRows, eligibility);
+  const liveLearners = liveReplicasOf(learnerRows, eligibility);
+  const liveReplicas = [...live, ...liveLearners];
   const distinctHostCount = hostCountsOf(live, eligibility).size;
-  const context = {replicaRows, live, eligibility, replicationFactor,
-    saturatedTargetNodeIds,
-    storageExcludedTargets,
+  const context = {replicaRows: voterRows, live, liveLearners, liveReplicas,
+    eligibility, replicationFactor, saturatedTargetNodeIds, storageExcludedTargets,
     leader: live.find((replica) => replica.isLeader === true),
     summary: Object.freeze({partitionId,
       placementClass: classifyPlacementClass(partitionId),
       distinctHostCount, voterCount: live.length})};
-  if (live.length < replicaRows.length) return failedOrDeadDeficit(context);
-  if (live.length < replicationFactor) {
-    return copyMoveOf(context, KIND.UNDER_REPLICATED, OperationType.ADD, {});
+  const deadLearner = learnerRows.find((r) => !liveLearners.includes(r));
+  if (deadLearner !== undefined) {
+    return candidateOf(context, KIND.DEAD_LEARNER, moveOf(OperationType.REMOVE,
+      {targetNodeId: deadLearner.nodeId, replicaId: deadLearner.replicaId}));
   }
-  const requiredHosts = Math.min(replicationFactor, eligibility.eligibleHostIds.size);
+  if (live.length < voterRows.length) return failedOrDeadDeficit(context);
+  const eligibleHostCount = eligibility.eligibleHostIds.size;
+  const voterTarget = resolveVoterTarget(replicationFactor, eligibleHostCount);
+  const requiredHosts = Math.min(replicationFactor, eligibleHostCount);
+  const promotion = growthPromotionDeficit(context, voterTarget);
+  if (promotion !== null) return promotion;
+  if (live.length < replicationFactor) {
+    return underVoterTargetDeficit(context, requiredHosts);
+  }
   if (distinctHostCount < requiredHosts) return spreadDeficit(context);
   return live.length > replicationFactor ? surplusDeficit(context) : NONE;
 }
@@ -264,6 +404,7 @@ function repairSourceNodeIdsOf(evaluations) {
 
 export {
   PLACEMENT_DEFICIT_STATE,
+  buildPartitionReplicaRows,
   buildPlacementNodeEligibility,
   evaluatePartitionDeficit,
   readPlacementNodeInputs,

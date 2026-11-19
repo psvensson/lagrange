@@ -52,7 +52,7 @@ documentClass: generated
 - [replica-handler-group-retirement-request-methods.js](replica-handler-group-retirement-request-methods.js) - Verify a REMOVE's group-retirement evidence against the durable workflow record before any removal work starts... (importers: one)
 - [replica-handler-leader-handoff-methods.js](replica-handler-leader-handoff-methods.js) - ReplicaHandler leader-handoff methods. (importers: many)
 - [replica-handler-lifecycle-methods.js](replica-handler-lifecycle-methods.js) - ReplicaHandler lifecycle + message dispatch methods. (importers: one)
-- [replica-handler-membership-methods.js](replica-handler-membership-methods.js) - Owner contract: Owner: the replica handler's witness seam for the REPLACE owner (quest replace-source-removal-owner,... (importers: one)
+- [replica-handler-membership-methods.js](replica-handler-membership-methods.js) - Owner contract: Owner: the replica handler's witness seam for the REPLACE owner (quest replace-source-removal-owner,... (importers: few)
 - [replica-handler-membership-relay.js](replica-handler-membership-relay.js) - Owner contract: Owner: the replica handler's tracked-service registry as the node's single relay of partition... (importers: few)
 - [replica-handler-participant-cutover.js](replica-handler-participant-cutover.js) - The release sequence runs at the existing replica lifecycle owner, using only per-attempt memory. (importers: few)
 - [replica-handler-participant-release.js](replica-handler-participant-release.js) - The lifecycle recipient survives a PartitionService replacement. (importers: one)

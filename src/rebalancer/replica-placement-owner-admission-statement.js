@@ -26,6 +26,7 @@ import {
   PLACEMENT_CLASS,
   PLACEMENT_FORMATION_GATED_CLASSES,
   PLACEMENT_FULL_SOURCE_CAPACITY_CLASSES,
+  PLACEMENT_MOVE_TYPE,
   PLACEMENT_TRANSITION_KIND as KIND,
 } from './replica-placement-owner-constants.js';
 
@@ -37,7 +38,14 @@ const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
 const KINDS = Object.freeze(new Set(Object.values(KIND)));
-const MOVE_TYPES = Object.freeze(new Set(Object.values(OperationType)));
+const MOVE_TYPES = Object.freeze(new Set([
+  ...Object.values(OperationType),
+  ...Object.values(PLACEMENT_MOVE_TYPE),
+]));
+const PROMOTE_MOVE_TYPES = Object.freeze(new Set([
+  PLACEMENT_MOVE_TYPE.PROMOTE,
+  PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE,
+]));
 const SINGLE_MOVE = 1;
 const PLACEMENT_STATEMENT_ERROR = Object.freeze({
   INVALID: 'placement_admission_statement_invalid',
@@ -89,18 +97,28 @@ function canonicalPositions(value) {
   return valid ? ordered(positions, names) : null;
 }
 
+function isValidMoveSourceReplica(move) {
+  if (move.type === OperationType.REPLACE) return isText(move.sourceReplicaId);
+  if (move.type === PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE) {
+    return move.sourceReplicaId === null || isText(move.sourceReplicaId);
+  }
+  return move.sourceReplicaId === null;
+}
+
 // What a move carries for its transition kind and type: a copy names its
 // copy source; a REMOVE names the replica it removes; a REPLACE names its
 // source replica; a new replica's identity is derived at apply, except a
 // runtime-service target, whose identity its owner supplies.
 function isMoveShapeValid(kind, move) {
   const runtimeService = kind === KIND.RUNTIME_SERVICE;
-  const copies = kind === KIND.PLACEMENT && move.type !== OperationType.REMOVE;
-  const identityGiven = move.type === OperationType.REMOVE || runtimeService;
+  const isPromote = PROMOTE_MOVE_TYPES.has(move.type);
+  const copies = kind === KIND.PLACEMENT &&
+    move.type !== OperationType.REMOVE && !isPromote;
+  const identityGiven =
+    move.type === OperationType.REMOVE || isPromote || runtimeService;
   return isText(move.targetNodeId) &&
     (identityGiven ? isText(move.replicaId) : move.replicaId === null) &&
-    (move.type === OperationType.REPLACE ? isText(move.sourceReplicaId) :
-      move.sourceReplicaId === null) &&
+    isValidMoveSourceReplica(move) &&
     (copies ? isText(move.copySourceNodeId) : move.copySourceNodeId === null) &&
     isNullOrPositiveInteger(move.targetNodeBootIncarnation) &&
     isNullOrPositiveInteger(move.targetNodeStorageIncarnation);
@@ -216,7 +234,10 @@ function isFullSourceCapacity(placementClass, repair) {
  *   repairWaitingSourceNodeIds (a Set), kSrc}.
  * @return {number} kSrcForClass.
  */
-const MOVE_ALLOWED_KEYS = Object.freeze(new Set(MOVE_FIELDS));
+const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
+  ...MOVE_FIELDS,
+  'promoteReplicaIds',
+]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
   'partitionId', 'placementClass', 'repair', 'move',
 ]);

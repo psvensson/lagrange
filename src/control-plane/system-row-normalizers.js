@@ -346,12 +346,15 @@ function serializeControlPlanePublicationRow(row) {
       row?.transitionHistory,
       normalizedRow.transitionHistory,
     ),
-    formation_record:
-      row?.formation_record !== undefined ?
-        row.formation_record :
-        row?.formationRecord !== undefined ?
-          row.formationRecord :
-          normalizedRow.formationRecord ?? null,
+    ...(row?.formation_record !== undefined ||
+    row?.formationRecord !== undefined ?
+      {
+        formation_record:
+          row?.formation_record !== undefined ?
+            row.formation_record :
+            row.formationRecord,
+      } :
+      {}),
   };
 }
 

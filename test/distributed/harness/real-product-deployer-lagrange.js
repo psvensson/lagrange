@@ -6,8 +6,8 @@
  * Product contracts read (owners cited):
  * - per-node readiness `GET :8080/readyz` -> 200 `{ready: true}`
  *   (src/bootstrap/owners/bootstrap-readiness-owner.js handleReadinessProbeRequest);
- * - membership and release `GET :8080/management/v1/facts` ->
- *   `topology.readyNodeCount`, `release.version`
+ * - membership, formation and release `GET :8080/management/v1/facts` ->
+ *   `topology.readyNodeCount`, `cluster.formation.state === 'FORMED'`, `release.version`
  *   (src/bootstrap/owners/management-v1-owner.js buildFacts);
  * - public PG wire `POST :8081/api/admin/services/sys-postgres-wire/scale`
  *   (src/admin/admin-owner-operations.js; the same desired state as

@@ -240,6 +240,7 @@ function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.
     }],
     [/\/health/u, '{"status":"healthy","ready":true}'],
     [/\/management\/v1\/facts/u, http(200, {facts: {release: {version: '0.4.0'},
+      cluster: {formation: {state: 'FORMED', declaredHostCount: hosts.length}},
       topology: {nodeCount: hosts.length, readyNodeCount: hosts.length}}})],
     [/sys-postgres-wire\/scale/u, http(200, {success: true, outcome: 'applied'})],
     [/\/api\/admin\/discovery\/services/u, http(200, {services: [{serviceIds: ['sys-postgres-wire'],

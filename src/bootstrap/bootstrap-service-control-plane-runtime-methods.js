@@ -396,6 +396,9 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         },
       );
       assertSeedReadyPublicationContract(this);
+      await this.membershipPublicationService
+        ?.evaluateAndLatchFormationIfEligible?.()
+        ?.catch?.(() => {});
       this.seedReadyPublicationPending = false;
     },
 

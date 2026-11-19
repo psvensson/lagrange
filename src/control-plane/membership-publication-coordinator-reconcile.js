@@ -370,7 +370,7 @@ class MembershipPublicationCoordinatorReconcile extends
           const normalizedPersistedRow =
             normalizeControlPlanePublicationRow(persistedRow);
           await this.evaluateAndLatchFormationIfEligible({
-            publicationRow: normalizedPersistedRow,
+            publicationRow: persistedRow,
           });
           return {
             candidate,

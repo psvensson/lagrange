@@ -5,6 +5,7 @@
 // system partitions (services, partitions, tables first) and user
 // partitions. Within a class: deficit severity, then the fewest distinct
 // declared hosts holding voters, then the fewest voters, then partition id.
+import {resolveVoterTarget} from '../bootstrap/replication-target-authority.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   PLACEMENT_CLASS,
@@ -89,4 +90,5 @@ export {
   classifyPlacementClass,
   formationWaitingReasonOf,
   orderPlacementCandidates,
+  resolveVoterTarget,
 };

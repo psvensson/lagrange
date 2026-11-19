@@ -23,8 +23,8 @@ import {buildCanonicalReplicaOperationRow} from
   '../rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {buildRuntimeServiceTargetClaimKey} from
   '../rebalancer/runtime-service-replica-identity.js';
-import {PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL as REFUSAL,
-  PLACEMENT_TRANSITION_KIND as KIND} from
+import {PLACEMENT_DISPATCH_HOLD, PLACEMENT_MOVE_TYPE, PLACEMENT_OUTCOME,
+  PLACEMENT_REFUSAL as REFUSAL, PLACEMENT_TRANSITION_KIND as KIND} from
   '../rebalancer/replica-placement-owner-constants.js';
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
@@ -182,6 +182,14 @@ function admissionMetadataOf(command, statement) {
     foundingIntentId: statement.foundingIntentId});
 }
 
+function promoteReplicaIdsOf(move) {
+  if (move.type !== PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE &&
+      move.type !== PLACEMENT_MOVE_TYPE.PROMOTE) {
+    return null;
+  }
+  return Object.freeze([move.replicaId, move.sourceReplicaId].filter(Boolean));
+}
+
 function operationOf(command, statement, move, identity) {
   const operation = createOperationAt({operationId: identity.operationId,
     type: move.type, partitionId: statement.partitionId,
@@ -201,6 +209,11 @@ function operationOf(command, statement, move, identity) {
     admissionMetadataOf(command, statement);
   if (statement.dispatchHold !== null) {
     first[OPERATION_METADATA_KEY.DISPATCH_HOLD] = statement.dispatchHold;
+  }
+  const promoteIds = promoteReplicaIdsOf(move);
+  if (promoteIds !== null) {
+    operation.sourceReplicaId = move.sourceReplicaId;
+    first.promoteReplicaIds = promoteIds;
   }
   return operation;
 }

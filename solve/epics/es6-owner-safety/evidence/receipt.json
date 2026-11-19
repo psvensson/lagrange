@@ -5,28 +5,28 @@
   "testFileDigests": {
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "bc3ff4cebf953d0393f744dca26ec2e1708fdc96f7f94b5cd6e1fef688781f3a",
     "test/partition/partition-participant-transaction-apply.test.js": "e831cd12a988324fb5ae9ab49139749b90236f41d44317830911850babe0789d",
-    "test/rebalancer/replica-placement-owner-core.test.js": "3a608df643407ef091e37ea3929811f4721835acffac3b0e24e840237eaff62d",
+    "test/rebalancer/replica-placement-owner-core.test.js": "7d422f0872ee130c3eff94bfa00bc117a52474aea7c114c6036f7dead69a8a75",
     "test/partition/placement-admission-apply.test.js": "e646bb234508cd8b33037292110e4947f9fcef3096a9af395f9fd85cf1398d56",
-    "test/convergence/dt-placement-owner-formation-drain.test.js": "d43bcdd753be380dab33699a88b071b68aed97029a4395d331aac8733a43ed60",
-    "test/convergence/formation-placement-drain-scenario.js": "5f2c66e7aa2e135c38f1a7379610ce8d5a1b65a744159d219d38be877c4138a0"
+    "test/convergence/dt-placement-owner-formation-drain.test.js": "027cd703d0077f0d0d193ea981d95149858a0f9797815c5e26d687625cff8df4",
+    "test/convergence/formation-placement-drain-scenario.js": "2cbcc49ba16d87c810101f7210d6e4359d3ab5274bac5d395add696c72787872"
   },
   "productionFileDigests": {
     "src/partition/partition-participant-transaction-constants.js": "0d1e2835f27331c41a9028cae80158b4046744737e1b3d4a7bc91ca0a99bce29",
     "src/partition/partition-participant-transaction-store.js": "9857fb37d10defe19dbda1a89874d2f7f41245a400eb9f7e6fbeb6383ebd19c7",
     "src/partition/partition-participant-transaction-session.js": "579980b24379cdb4592ef0fbd46b2c03bfc503e14f67b296840b9beffbfc4f68",
     "src/partition/partition-participant-transaction-apply.js": "492dc0de14c02b4796271041307ba47c2512bcf99d98bd429780a82d080387a4",
-    "src/partition/partition-participant-transaction-bytes.js": "a2b5a2146b7b0913d8729e7d4944740205f649efe2178f52f3639a528db3aacf",
+    "src/partition/partition-participant-transaction-bytes.js": "a04003b92a17ac2aba22546137525d5467d8badc579e0338729de573e49cd4f5",
     "src/partition/partition-placement-admission.js": "a497d308ecdcb8e4f25ac58c9dc822c0b85a09c19427404bfb3eaeffc5f33277",
     "src/partition/partition-placement-admission-command.js": "cc41a0e8e12eaf4e318b6407d39e5baba62b38c76087a3266437bbdbbca78df1",
-    "src/partition/partition-placement-admission-decision.js": "62dbf96a4e52d34caf00f4cb4bdb01aa0f9f3891190b04ccc32ebe48e6062ad9",
+    "src/partition/partition-placement-admission-decision.js": "79aee7adec2d63df5e62c84e23c100f8c000e0bf88a4b30f74b2cc555b8bc4e8",
     "src/partition/partition-service-rebalancer-methods.js": "e82296a44fdfb6e538af76d651497df8e282b758ef5360d98e12818c2a282213",
-    "src/rebalancer/replica-placement-owner.js": "789f9bd15172a550e7bf31908e133cb64ada96a6f01e921ba2e78686ee208475",
+    "src/rebalancer/replica-placement-owner.js": "b9b4843639502724573374244f566d38cf659098ef6a2d23124dff5e1296ceb3",
     "src/rebalancer/replica-placement-owner-attempts.js": "840ddb394c71442ccf858bb834d48ed4eaa2a67fe526a76ffce49bfc56f0c82d",
-    "src/rebalancer/replica-placement-owner-admission-statement.js": "2fa1b99a7e5c6e915b653baf98bf89df250ada05226be87decd0b625647dfdb4",
-    "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "b3f5c7e1ed38356d4cf594b0bbf40da7e6ab37ad81c102ba87b8f15e35e2c3aa",
+    "src/rebalancer/replica-placement-owner-admission-statement.js": "7d9654f62cb107229e6f8ef438b00da2f2c699caefcd247e6840cc7e0e8dfcce",
+    "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "6cb2795a73999542beb8cc9d312f1d038819401339988fa856e7c251c719893a",
     "src/rebalancer/replica-status.js": "da0d75bea5e3ba4c49b57663b2a66da25a6a0ee340361116f3a3d797f21f16d5",
     "src/bootstrap/shared/control-plane-setup.js": "969de0fdeee19b8ac7e0767ae7f9d051fb6b89f07d121783eaa2c911a08b66be",
-    "src/control-plane/membership-publication-coordinator-reconcile.js": "71c4760f50d2c5dfd2d8b6bb4c726973cf777b86d7facadf934e942d64c8c289",
+    "src/control-plane/membership-publication-coordinator-reconcile.js": "093052558e123888b332fb909a54753f915e293d190c9473d6d12e9e9aa16ff5",
     "dependency-cruiser.config.cjs": "e5edb028bdf55d736c6654a701c0e1c4b310ff713b8b633cbac5f1405ba55665"
   },
   "source": {
@@ -34,7 +34,7 @@
     "previousCandidate": "114bd4200bcdcb801752c410b8c644178e0a3ead",
     "branch": "candidate/reconciliation-20261119"
   },
-  "generatedAt": "2026-11-19T20:31:22.616Z",
+  "generatedAt": "2026-11-19T20:37:10.145Z",
   "receipts": [
     {
       "id": "committed-batch-recovery-witness",

@@ -631,41 +631,29 @@ class SeedRegistrationPhase {
       [COLUMN.UPDATED_AT]: now,
       [COLUMN.CREATED_AT]: now,
     });
-    await this.persistFormationDeclarationIfMissing();
+    await this.persistFormationDeclarationIfMissing(systemTableWriter);
   }
 
   /**
    * Transfer the founding formation declaration to control_plane_publications.
+   * @param {BootstrapSystemTableWriter|RoutedSqlSystemTableWriter} [writer]
    * @return {Promise<void>}
    */
-  async persistFormationDeclarationIfMissing() {
+  async persistFormationDeclarationIfMissing(writer = null) {
     const d = this.delegates;
     const preparation = d.getOriginalSeedPreparation?.();
     const formation = preparation?.formationDeclaration?.();
     if (!formation) {
       return;
     }
-    let publicationsPartition =
-      this.runtimeOwner.findLeaderPartition(
-        SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
-      );
-    if (!publicationsPartition && d.getPartitionServices?.()?.size > 0) {
-      await d.waitForPartitionLeadership?.({
-        partitionIds: [
-          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
-        ],
-      });
-      publicationsPartition =
-        this.runtimeOwner.findLeaderPartition(
-          SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
-        );
-    }
+    const publicationsPartition =
+      await this.resolvePublicationsLeaderPartition();
     if (!publicationsPartition) {
       return;
     }
     await publishOriginalSeedFormationDeclaration(
       preparation,
-      this.ensureSystemTableWriter(),
+      writer || this.ensureSystemTableWriter(),
       publicationsPartition,
       {
         clusterId: formation.clusterId,
@@ -673,6 +661,35 @@ class SeedRegistrationPhase {
         declaredByNodeId: formation.declaredByNodeId,
         declaredAt: formation.timestamp,
       },
+    );
+  }
+
+  async resolvePublicationsLeaderPartition() {
+    const existing = this.runtimeOwner.findLeaderPartition(
+      SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    );
+    if (existing || !this.hasPublicationsReplicaService()) {
+      return existing;
+    }
+    await this.delegates.waitForPartitionLeadership?.({
+      partitionIds: [
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+      ],
+    });
+    return this.runtimeOwner.findLeaderPartition(
+      SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    );
+  }
+
+  hasPublicationsReplicaService() {
+    const publicationsPartitionId =
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
+    const services =
+      Array.from(this.delegates.getPartitionServices?.()?.values?.() || []);
+    return services.some(
+      (service) =>
+        service?.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS ||
+        service?.partitionId === publicationsPartitionId,
     );
   }
 

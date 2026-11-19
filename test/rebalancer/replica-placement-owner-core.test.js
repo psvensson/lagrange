@@ -66,8 +66,15 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY, PLACEMENT_DEFICIT_KIND, PLACEMENT_FORMATION_STATE,
-  PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
+  PLACEMENT_MOVE_TYPE, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  assignReplicaHandlerMembershipMethods,
+} from '../../src/node/replica-handler-membership-methods.js';
 import {
   REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
   createReplicaPlacementOwner,
@@ -86,6 +93,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
   classifyPlacementClass, formationWaitingReasonOf, orderPlacementCandidates,
+  resolveVoterTarget,
 } from '../../src/rebalancer/replica-placement-owner-order.js';
 import {
   PLACEMENT_DEFICIT_STATE, buildPlacementNodeEligibility, evaluatePartitionDeficit,
@@ -1101,6 +1109,292 @@ test('P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via Partitio
       assert.equal(admittedRows[0].partition_id, 'tables-p1');
       attachment2.detach();
     }, {systemTableCache: cache});
+  } finally {
+    clearFixtureSingletons();
+  }
+});
+
+test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair', () => {
+  assert.equal(resolveVoterTarget(3, 0), 0);
+  assert.equal(resolveVoterTarget(3, 1), 1);
+  assert.equal(resolveVoterTarget(3, 2), 1);
+  assert.equal(resolveVoterTarget(3, 3), 3);
+  assert.equal(resolveVoterTarget(5, 4), 3);
+  assert.equal(resolveVoterTarget(5, 5), 5);
+
+  const oneHost = [nodeRow('n1', 'h1')];
+  const twoHosts = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2')];
+  const threeHosts = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+
+  // H = 1: 1 voter on seed is satisfied (V(3, 1) = 1 -> NONE):
+  const atH1 = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false}],
+    eligibility: buildPlacementNodeEligibility({nodeRows: oneHost, nowMs: NOW_MS}),
+  });
+  assert.equal(atH1.state, PLACEMENT_DEFICIT_STATE.NONE);
+
+  // H = 2 with 0 learners: LEARNER_DEFICIT ADD onto n2:
+  const atH2NoLearner = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false}],
+    eligibility: buildPlacementNodeEligibility({nodeRows: twoHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(atH2NoLearner.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(atH2NoLearner.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT);
+  assert.equal(atH2NoLearner.candidate.move.type, OperationType.ADD);
+  assert.equal(atH2NoLearner.candidate.move.targetNodeId, 'n2');
+
+  // H = 2 with 1 caught-up learner on n2: V(3, 2) = 1, distinctReplicaHostCount = 2 -> NONE (never promotes to 2 voters!):
+  const atH2WithLearner = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
+    ],
+    eligibility: buildPlacementNodeEligibility({nodeRows: twoHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(atH2WithLearner.state, PLACEMENT_DEFICIT_STATE.NONE);
+
+  // H = 3 with 1 learner on n2: LEARNER_DEFICIT ADD onto n3:
+  const atH3OneLearner = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
+    ],
+    eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(atH3OneLearner.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(atH3OneLearner.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT);
+  assert.equal(atH3OneLearner.candidate.move.type, OperationType.ADD);
+  assert.equal(atH3OneLearner.candidate.move.targetNodeId, 'n3');
+
+  // H = 3 with 2 learners where the second is still catching up (caughtUp: false): NONE until caught up:
+  const atH3SecondSyncing = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
+      {replicaId: 'config-p1-r3', nodeId: 'n3', isLearner: true, caughtUp: false, failed: false},
+    ],
+    eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(atH3SecondSyncing.state, PLACEMENT_DEFICIT_STATE.NONE);
+
+  // H = 3 with 2 caught-up learners on n2 and n3: PROMOTION_READY GROWTH_PROMOTE [r2, r3]:
+  const atH3TwoLearners = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
+      {replicaId: 'config-p1-r3', nodeId: 'n3', isLearner: true, caughtUp: true, failed: false},
+    ],
+    eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(atH3TwoLearners.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(atH3TwoLearners.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.PROMOTION_READY);
+  assert.deepEqual(atH3TwoLearners.candidate.move, {
+    type: PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE,
+    targetNodeId: 'n1',
+    replicaId: 'config-p1-r2',
+    sourceReplicaId: 'config-p1-r3',
+    copySourceNodeId: null,
+    promoteReplicaIds: ['config-p1-r2', 'config-p1-r3'],
+  });
+
+  // Dead learner (n2 lease expired): DEAD_LEARNER REMOVE on n2:
+  const expiredN2 = [
+    nodeRow('n1', 'h1'),
+    nodeRow('n2', 'h2', {leaseExpiresAt: NOW_MS - 1}),
+    nodeRow('n3', 'h3'),
+  ];
+  const deadLearnerResult = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: [
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
+    ],
+    eligibility: buildPlacementNodeEligibility({nodeRows: expiredN2, nowMs: NOW_MS}),
+  });
+  assert.equal(deadLearnerResult.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(deadLearnerResult.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.DEAD_LEARNER);
+  assert.equal(deadLearnerResult.candidate.repair, true);
+  assert.deepEqual(deadLearnerResult.candidate.move, {
+    type: OperationType.REMOVE,
+    targetNodeId: 'n2',
+    replicaId: 'config-p1-r2',
+    sourceReplicaId: null,
+    copySourceNodeId: null,
+  });
+});
+
+test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration', async () => {
+  resetFixtureSingletons();
+  try {
+    const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
+    const nodeAuthority = {
+      subscribe: () => () => {},
+      scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({
+        state: 'ready',
+        epoch: {publicationEpoch: 9},
+        nodeRows: threeNodes,
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 9},
+      }),
+    };
+    const singleVoterServices = [
+      {
+        [COLUMN.REPLICA_ID]: 'tables-p1-r1',
+        [COLUMN.PARTITION_ID]: 'tables-p1',
+        [COLUMN.NODE_ID]: 'n1',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      },
+    ];
+    const cache = createSimpleSystemCache(
+      [seededPartitionRow('tables-p1')],
+      singleVoterServices,
+    );
+    const ledger = createRealSqlLedgerHarness(cache, 'n1');
+    try {
+      const owner = createReplicaPlacementOwner({
+        nodeId: 'n1',
+        ledgerPartitionService: ledger.service,
+        nodeAuthority,
+        systemTableCache: cache,
+        now: () => NOW_MS,
+        logger: ledger.service.logger,
+        admitPlacement: ledger.admitPlacement,
+        releasePlacementHold: ledger.releasePlacementHold,
+      });
+
+      // Step 1: 1 voter on n1 -> admits first learner ADD on n2:
+      owner.setLeader(true);
+      await owner.awaitCurrentWorkIdle();
+      let ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
+      assert.equal(ops.length, 1);
+      assert.equal(ops[0].type, OperationType.ADD);
+      assert.equal(ops[0].target_node_id, 'n2');
+
+      // Complete first learner ADD on n2 as an ACTIVE caught-up LEARNER:
+      const firstLearnerId = ops[0].replica_id;
+      ledger.db.prepare(
+        'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ? WHERE operation_id = ?',
+      ).run(WORKFLOW_STEP.ACTIVE, SERVICE_STATUS.ACTIVE, NOW_MS, ops[0].operation_id);
+      singleVoterServices.push({
+        [COLUMN.REPLICA_ID]: firstLearnerId,
+        [COLUMN.PARTITION_ID]: 'tables-p1',
+        [COLUMN.NODE_ID]: 'n2',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+      });
+      cache. createServicesRow?.();
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, singleVoterServices[1]);
+      // Rebuild cache with updated services list:
+      const servicesList = cache.getAll(TABLES.SERVICES);
+      servicesList.push(singleVoterServices[1]);
+      const originalGetAll = cache.getAll.bind(cache);
+      cache.getAll = (tableName) =>
+        tableName === TABLES.SERVICES ? [...singleVoterServices] : originalGetAll(tableName);
+
+      // Step 2: 1 voter on n1 + 1 learner on n2 -> admits second learner ADD on n3:
+      owner.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
+      await owner.awaitCurrentWorkIdle();
+      ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
+      assert.equal(ops.length, 2);
+      assert.equal(ops[1].type, OperationType.ADD);
+      assert.equal(ops[1].target_node_id, 'n3');
+
+      // Complete second learner ADD on n3 as an ACTIVE caught-up LEARNER:
+      const secondLearnerId = ops[1].replica_id;
+      ledger.db.prepare(
+        'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ? WHERE operation_id = ?',
+      ).run(WORKFLOW_STEP.ACTIVE, SERVICE_STATUS.ACTIVE, NOW_MS, ops[1].operation_id);
+      singleVoterServices.push({
+        [COLUMN.REPLICA_ID]: secondLearnerId,
+        [COLUMN.PARTITION_ID]: 'tables-p1',
+        [COLUMN.NODE_ID]: 'n3',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+      });
+
+      // Step 3: 1 voter on n1 + 2 caught-up learners on n2 and n3 -> admits GROWTH_PROMOTE:
+      owner.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
+      await owner.awaitCurrentWorkIdle();
+      ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
+      assert.equal(ops.length, 3);
+      assert.equal(ops[2].type, PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE);
+      assert.equal(ops[2].target_node_id, 'n1');
+      assert.equal(ops[2].replica_id, firstLearnerId);
+      assert.equal(ops[2].source_replica_id, secondLearnerId);
+      const promoteHistory = JSON.parse(ops[2].steps_history);
+      assert.deepEqual(promoteHistory[0].promoteReplicaIds, [firstLearnerId, secondLearnerId]);
+
+      // Execute learner catch-up evaluation and GROWTH_PROMOTE through ReplicaHandler & PartitionService:
+      await onLedgerLeader(async (leaderService) => {
+        leaderService.learnerFirstAdmission = true;
+        const admitL1 = leaderService.admitRaftLearner({
+          replicaIdentity: firstLearnerId,
+          nodeId: 'n2',
+        });
+        const admitL2 = leaderService.admitRaftLearner({
+          replicaIdentity: secondLearnerId,
+          nodeId: 'n3',
+        });
+        assert.ok(admitL1.outcome);
+        assert.ok(admitL2.outcome);
+
+        class TestHandler {
+          constructor() {
+            this.nodeId = 'n1';
+            this.localServices = new Map([[leaderService.replicaId, leaderService]]);
+          }
+          getTrackedService(id) {
+            return this.localServices.get(id) || null;
+          }
+          buildReplicaOperationResponse(status, extra = {}) {
+            return {status, ...extra};
+          }
+        }
+        assignReplicaHandlerMembershipMethods(TestHandler);
+        const handler = new TestHandler();
+
+        const catchUpResp = await handler.handleEvaluateLearnerCatchUp({
+          [ReplicaOperationField.OPERATION_ID]: ops[0].operation_id,
+          [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
+          [ReplicaOperationField.REPLICA_ID]: firstLearnerId,
+        });
+        assert.equal(catchUpResp.status, ReplicaOperationResponseStatus.COMPLETED);
+        assert.ok(catchUpResp[ReplicaOperationField.CATCH_UP]);
+
+        const promoteResp = await handler.handleProposeGrowthPromote({
+          [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
+          [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
+          [ReplicaOperationField.PROMOTE_REPLICA_IDS]: [firstLearnerId, secondLearnerId],
+        });
+        assert.equal(promoteResp.status, ReplicaOperationResponseStatus.INITIATED);
+        assert.ok(promoteResp[ReplicaOperationField.PROPOSAL]);
+
+        const withdrawResp = await handler.handleWithdrawPromotion({
+          [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
+          [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
+          [ReplicaOperationField.PROMOTE_REPLICA_IDS]: [firstLearnerId, secondLearnerId],
+        });
+        assert.equal(withdrawResp.status, ReplicaOperationResponseStatus.COMPLETED);
+      });
+
+      owner.shutdown();
+    } finally {
+      ledger.db.close();
+    }
   } finally {
     clearFixtureSingletons();
   }

@@ -657,17 +657,9 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
 
     const outcome = await observeCluster({
       members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
-      windowMs: 2000,
-      minSamples: 2,
-      cadenceMs: 1000,
-      maxInterSampleGapMs: 2000,
-      overallTimeoutMs: 10000,
-      enablePg: true,
-      pgPort: 15432,
-      fetchFn: mockFetch,
-      runPgSmokeFn: mockRunPgSmoke,
-      nowFn,
-      sleepFn,
+      windowMs: 2000, minSamples: 2, cadenceMs: 1000, maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000, enablePg: true, pgPort: 15432,
+      fetchFn: mockFetch, runPgSmokeFn: mockRunPgSmoke, nowFn, sleepFn,
     });
 
     assert.equal(outcome.ok, true);
@@ -699,17 +691,9 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
 
     const outcome = await observeCluster({
       members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
-      windowMs: 2000,
-      minSamples: 2,
-      cadenceMs: 1000,
-      maxInterSampleGapMs: 2000,
-      overallTimeoutMs: 10000,
-      enablePg: true,
-      pgPort: 15432,
-      fetchFn: mockFetch,
-      runPgSmokeFn: mockRunPgSmokeFailing,
-      nowFn,
-      sleepFn,
+      windowMs: 2000, minSamples: 2, cadenceMs: 1000, maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000, enablePg: true, pgPort: 15432,
+      fetchFn: mockFetch, runPgSmokeFn: mockRunPgSmokeFailing, nowFn, sleepFn,
     });
 
     assert.equal(outcome.ok, false);
@@ -749,6 +733,36 @@ describe('observe-cluster.js: readiness predicates, stability window, and byte b
     assert.equal(outcome.pgSmoke?.status, 'PASSED');
     assert.equal(runPgSmokeCalledWithOptions?.oltpComparison, true);
     assert.deepEqual(outcome.pgSmoke?.oltpComparison, {mocked: true});
+  });
+
+  it('observeCluster waits while /management/v1/facts reports cluster.formation.state !== FORMED', async () => {
+    let simulatedTime = 1000;
+    let factsCalls = 0;
+    const nowFn = () => simulatedTime;
+    const sleepFn = async (ms) => {
+      simulatedTime += ms;
+    };
+    const mockFetch = async (url) => {
+      if (url.includes('/livez')) return {status: 200, json: async () => ({alive: true, nodeId: 'n1'})};
+      if (url.includes('/startupz')) return {status: 200, json: async () => ({started: true})};
+      if (url.includes('/readyz')) return {status: 200, json: async () => ({ready: true, phase: 'TRAFFIC_READY', state: 'join_ready'})};
+      if (url.includes('/management/v1/facts')) {
+        factsCalls += 1;
+        const state = factsCalls <= 2 ? 'FORMING' : 'FORMED';
+        const formation = {state, declaredHostCount: 3};
+        return {status: 200, json: async () => ({facts: {cluster: {formation}}})};
+      }
+      return {status: 200, json: async () => ({})};
+    };
+
+    const outcome = await observeCluster({
+      members: [{name: 'node-1', restPort: 18080, adminWsPort: 18081, transportWsPort: 18082}],
+      windowMs: 2000, minSamples: 2, cadenceMs: 1000, maxInterSampleGapMs: 2000,
+      overallTimeoutMs: 10000, enablePg: false, fetchFn: mockFetch, nowFn, sleepFn,
+    });
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.status, 'READY');
+    assert.ok(factsCalls >= 4, 'must wait through FORMING samples before completing stability window');
   });
 
   it('formatObserverReport preserves pgSmoke in boundedSummary and emits untruncated fullReport', () => {

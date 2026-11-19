@@ -22,6 +22,10 @@ const ReplicaOperationMessageType = Object.freeze({
   // read amendment 1, section 3.1).
   READ_COMMITTED_MEMBERSHIP: MESSAGE_TYPE.READ_COMMITTED_MEMBERSHIP,
   CLAIM_FAILED_CREATE_CLEANUP: MESSAGE_TYPE.CLAIM_FAILED_CREATE_CLEANUP,
+  EVALUATE_LEARNER_CATCH_UP: 'EVALUATE_LEARNER_CATCH_UP',
+  PROPOSE_GROWTH_PROMOTE: 'PROPOSE_GROWTH_PROMOTE',
+  WITHDRAW_PROMOTION: 'WITHDRAW_PROMOTION',
+  REMOVE_LEARNER: 'REMOVE_LEARNER',
 });
 
 const ReplicaOperationReason = Object.freeze({
@@ -96,6 +100,9 @@ const ReplicaOperationField = Object.freeze({
   // A committed-membership read's purpose when it is not a bootstrap read
   // (COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT only).
   READ_PURPOSE: 'readPurpose',
+  PROMOTE_REPLICA_IDS: 'promoteReplicaIds',
+  EXPECTED_BASE_CONFIG: 'expectedBaseConfig',
+  CATCH_UP: 'catchUp',
 });
 
 const ReplicaOperationResponseStatus = Object.freeze({

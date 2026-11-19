@@ -4,6 +4,14 @@ import {createPartitionServiceLearnerPromotionMethods} from './partition-service
 import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
 import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
 import * as replicaAdmission from './partition-replica-admission.js';
+import {
+  admitPartitionRaftLearner,
+  evaluatePartitionLearnerCatchUp,
+  proposePartitionGrowthPromote,
+  proposePartitionReplacePromote,
+  removePartitionRaftLearner,
+  withdrawPartitionPromotion,
+} from './partition-service-raft-membership-administration.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS} from
   './partition-service-participant-transaction-cadence-methods.js';
@@ -53,6 +61,24 @@ class PartitionService extends PartitionServiceSplitAccessorBase {
   }
   sendReplicaAdmissionRequest(request) {
     return replicaAdmission.sendReplicaAdmissionRequest(this, request);
+  }
+  admitRaftLearner(peer) {
+    return admitPartitionRaftLearner(this, peer);
+  }
+  evaluateLearnerCatchUp(request) {
+    return evaluatePartitionLearnerCatchUp(this, request);
+  }
+  proposeGrowthPromote(request) {
+    return proposePartitionGrowthPromote(this, request);
+  }
+  proposeReplacePromote(request) {
+    return proposePartitionReplacePromote(this, request);
+  }
+  withdrawPromotion(request) {
+    return withdrawPartitionPromotion(this, request);
+  }
+  removeRaftLearner(request) {
+    return removePartitionRaftLearner(this, request);
   }
 }
 

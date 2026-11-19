@@ -5,7 +5,7 @@
 // Recovery / wake entry: setLeader(true) and PLACEMENT_TRIGGER notifications rebuild pass state from readPlacementCensus and committed node/table authorities.
 // Representative production tests: test/rebalancer/replica-placement-owner-core.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
@@ -18,12 +18,10 @@ import {
   requestPlacementAdmission, requestPlacementHoldRelease,
 } from '../partition/partition-placement-admission.js';
 import {isWriteOutcomeUnknown, resolveEntryId} from '../partition/partition-write-kernel.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REMOVE_SAFETY_PROJECTION_STATE, buildRemoveSafetyProjectionInput, resolveRemoveSafetySimpleFloor,
 } from './operation-workflow-remove-safety-evaluator.js';
 import {OperationType} from './replica-operation-progress.js';
-import {ReplicaStatus} from './replica-status.js';
 import {PRESSURE_STATE} from './storage-capacity-constants.js';
 import {
   buildPlacementAdmissionStatement, resolveSourceCapacityForClass,
@@ -33,11 +31,13 @@ import {
   reconcilePlacementAttempts,
 } from './replica-placement-owner-attempts.js';
 import {
-  PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY, PLACEMENT_DISPATCH_HOLD,
-  PLACEMENT_OUTCOME, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
+  PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_DEFICIT_KIND, PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME,
+  PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
 } from './replica-placement-owner-constants.js';
 import {
-  PLACEMENT_DEFICIT_STATE, evaluatePartitionDeficit, readPlacementNodeInputs, repairSourceNodeIdsOf,
+  PLACEMENT_DEFICIT_STATE, buildPartitionReplicaRows, evaluatePartitionDeficit,
+  readPlacementNodeInputs, repairSourceNodeIdsOf,
 } from './replica-placement-owner-deficits.js';
 import {formationWaitingReasonOf, orderPlacementCandidates} from './replica-placement-owner-order.js';
 
@@ -48,11 +48,6 @@ const ENTRY_KIND_RELEASE = 'release';
 const ENTRY_KIND_ADMIT = 'admit';
 const SKIPPED_PARTITION_STATUSES = Object.freeze(new Set(['splitting', 'merging']));
 const COPY_MOVE_TYPES = Object.freeze(new Set([OperationType.ADD, OperationType.REPLACE]));
-const IN_FLIGHT_LEARNER_STATUSES = Object.freeze(new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-]));
 const COLLABORATOR = Object.freeze({
   OPTIONS: 'options',
   NODE_ID: 'nodeId',
@@ -152,42 +147,6 @@ function validateReplicaPlacementOwnerOptions(options, resyncIntervalMs) {
 
 function rowSignatureOf(row) {
   return `${row.workflow_step}:${row.status}:${row.steps_history}`;
-}
-
-function isVoterRole(role) {
-  return role === RAFT_ROLE.LEADER || role === RAFT_ROLE.FOLLOWER;
-}
-
-function shouldSkipServiceRow(row, isBusy) {
-  const status = row[COLUMN.STATUS];
-  if (status === ReplicaStatus.REMOVING || status === ReplicaStatus.REMOVED) {
-    return true;
-  }
-  const role = row[COLUMN.RAFT_ROLE];
-  return isBusy && (role === RAFT_ROLE.LEARNER || IN_FLIGHT_LEARNER_STATUSES.has(status));
-}
-
-function buildPartitionReplicaRows(serviceRows, leaderNodeId, isBusy) {
-  const filtered = [];
-  for (const row of serviceRows) {
-    if (shouldSkipServiceRow(row, isBusy)) continue;
-    const replicaId = row[COLUMN.REPLICA_ID];
-    const nodeId = row[COLUMN.NODE_ID];
-    if (typeof replicaId !== 'string' || typeof nodeId !== 'string') continue;
-    const role = row[COLUMN.RAFT_ROLE];
-    const activeVoter = row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE && isVoterRole(role);
-    filtered.push({
-      replicaId,
-      nodeId,
-      failed: !activeVoter,
-      isLeader: activeVoter && role === RAFT_ROLE.LEADER,
-    });
-  }
-  if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {
-    const leaderRow = filtered.find((r) => !r.failed && r.nodeId === leaderNodeId);
-    if (leaderRow) leaderRow.isLeader = true;
-  }
-  return filtered;
 }
 
 function summarizeCopyOccupancy(census) {
@@ -612,6 +571,7 @@ class ReplicaPlacementOwner {
       const {replicaRows} = inputsByPartition.get(candidate.partitionId);
       return replicaRows.find((r) => r.replicaId === candidate.move.sourceReplicaId).nodeId;
     }
+    if (!COPY_MOVE_TYPES.has(candidate.move.type)) return candidate.move.targetNodeId;
     return candidate.move.copySourceNodeId;
   }
 
@@ -636,7 +596,11 @@ class ReplicaPlacementOwner {
   }
 
   async isCandidateAdmissibleNow(candidate, repairWaitingSourceNodeIds, occupancy) {
-    if (candidate.move.type === OperationType.REMOVE) return this.canAdmitRemove(candidate);
+    if (candidate.move.type === OperationType.REMOVE) {
+      if (candidate.deficitKind === PLACEMENT_DEFICIT_KIND.DEAD_LEARNER) return true;
+      return this.canAdmitRemove(candidate);
+    }
+    if (!COPY_MOVE_TYPES.has(candidate.move.type)) return true;
     return isCopyWithinCapacity(candidate, repairWaitingSourceNodeIds, occupancy);
   }
 

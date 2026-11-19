@@ -341,7 +341,7 @@ class MembershipPublicationCoordinatorPersist extends
     if (this.publicationsPartitionService) {
       return this.publicationsPartitionService;
     }
-    const services = this.cdcIntegrationService?.partitionServices ?
+    const services = this.cdcIntegrationService ?
       resolveLocalSystemTableServices(
         this.cdcIntegrationService,
         TABLES.CONTROL_PLANE_PUBLICATIONS,
@@ -395,11 +395,8 @@ class MembershipPublicationCoordinatorPersist extends
       {latched: false, evaluation};
   }
 
-  attachFormationLatchTriggers() {
-    if (this._formationCacheTriggerListener) {
-      return;
-    }
-    if (this.systemTableCache) {
+  attachFormationLatchTriggers(options = {}) {
+    if (!this._formationCacheTriggerListener && this.systemTableCache) {
       this._formationCacheTriggerListener = (tableNameOrChange) => {
         if (
           this._projectingFormationRow === true ||
@@ -414,7 +411,10 @@ class MembershipPublicationCoordinatorPersist extends
         this._formationCacheTriggerListener,
       );
     }
-    const partitionService = this.getPublicationsLeaderPartitionService();
+    const partitionService =
+      options.resolvePartitionService === false ?
+        this.publicationsPartitionService || null :
+        this.getPublicationsLeaderPartitionService();
     if (partitionService && !this._formationPartitionEntryListener) {
       this._formationAttachedPartitionService = partitionService;
       this._formationPartitionEntryListener = (event) => {
