@@ -14,6 +14,7 @@ import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
   admitCommittedCommand,
   committedCommandRefusalResult,
+  registerFormationCommandValidator,
 } from '../partition/partition-committed-command-admission.js';
 import {
   PARTITION_CDC_ADMISSION_STATE,
@@ -54,6 +55,7 @@ import {
   buildFormationLatchBody,
   decodeFormationRecord,
   readFormationRecordIn,
+  registerFormationTransitionExecutor,
 } from './membership-publication-formation-record.js';
 
 const formationPartitionApplyHooks = {
@@ -508,24 +510,8 @@ function recordedAnswer(service, recorded) {
   });
 }
 
-async function ensureFormationPartitionApplyHooks() {
-  if (formationPartitionApplyHooks.startPartitionRaftWriteCommit) {
-    return formationPartitionApplyHooks;
-  }
-  const [mod, pauseMod] = await Promise.all([
-    import('../partition/partition-service-raft-write-commit.js'),
-    import('../partition/partition-participant-transaction-pause.js'),
-  ]);
-  registerFormationPartitionApplyHooks({
-    partitionWriteLeadershipRefusalOf: mod.partitionWriteLeadershipRefusalOf,
-    pausedWriteAnswerOf: pauseMod.pausedWriteAnswerOf,
-    startPartitionRaftWriteCommit: mod.startPartitionRaftWriteCommit,
-  });
-  return formationPartitionApplyHooks;
-}
-
 async function proposeFormationCommand(service, command) {
-  const hooks = await ensureFormationPartitionApplyHooks();
+  const hooks = formationPartitionApplyHooks;
   const leadership = hooks.partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) {
     return leadership;
@@ -756,6 +742,9 @@ function applyFormationTransitionCommand(service, committed) {
     throw error;
   }
 }
+
+registerFormationCommandValidator(isPinnedFormationTransitionCommand);
+registerFormationTransitionExecutor(executeFormationTransitionOnService);
 
 export {
   applyFormationTransitionCommand,

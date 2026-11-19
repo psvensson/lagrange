@@ -136,6 +136,22 @@ function isExplicitNonLeaderRaftRole(role) {
     setHas(EXPLICIT_NON_LEADER_RAFT_ROLES, normalized);
 }
 
+const ACTIVE_REPLICA_STATUS = 'active';
+const mapGet = Function.call.bind(Map.prototype.get);
+
+function isCaughtUpVoterReadyReplica(replicaRow, options = {}) {
+  if (!replicaRow || typeof replicaRow.status !== 'string' ||
+      stringToLowerCase(replicaRow.status) !== ACTIVE_REPLICA_STATUS ||
+      !replicaRow.address) {
+    return false;
+  }
+  const nodes = options?.committedNodeFloor?.nodeSemanticsById;
+  return isVoterRaftRole(replicaRow.raft_role) &&
+    nodes !== null &&
+    nodes !== undefined &&
+    mapGet(nodes, replicaRow.node_id)?.readyNow === true;
+}
+
 export {
   LOAD_ROUTABLE_RAFT_ROLES,
   RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC,
@@ -144,6 +160,7 @@ export {
   VOTER_RAFT_ROLES,
   VOTER_READINESS_SEMANTIC,
   isCatchupLearnerRaftRole,
+  isCaughtUpVoterReadyReplica,
   isExplicitNonLeaderRaftRole,
   isLoadRoutableRaftRole,
   isRepairOnlyRaftRole,

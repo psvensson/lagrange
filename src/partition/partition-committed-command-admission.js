@@ -30,6 +30,7 @@ import {
   PARTITION_COMMITTED_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_OPERATION,
 } from './partition-service-constants.js';
 import {
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
@@ -52,12 +53,14 @@ import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
 import {isPinnedPlacementCommand} from './partition-placement-admission-command.js';
 import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
-import {
-  FORMATION_REFUSAL_REASON,
-  FORMATION_TRANSITION_TYPE,
-} from '../control-plane/membership-publication-formation-record.js';
-import {isPinnedFormationTransitionCommand} from
-  '../control-plane/membership-publication-formation-transition-command.js';
+
+const FORMATION_ORIGIN_REFUSED_CODE = 'formation_transition_origin_refused';
+const FORMATION_INVALID_COMMAND_CODE = 'formation_transition_command_invalid';
+let registeredFormationCommandValidator = null;
+
+function registerFormationCommandValidator(validator) {
+  registeredFormationCommandValidator = validator;
+}
 
 // Who asks to propose a committed command. Participant commands enter only
 // from their transaction owner; a CDC_DELIVERED only from the CDC delivery
@@ -150,21 +153,16 @@ function placementCommandRefusal(command, origin) {
 
 function formationCommandRefusal(command, origin) {
   if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.FORMATION_OWNER) {
-    return refused(
-      FORMATION_REFUSAL_REASON.ORIGIN_REFUSED,
-      FORMATION_REFUSAL_REASON.ORIGIN_REFUSED,
-    );
+    return refused(FORMATION_ORIGIN_REFUSED_CODE, FORMATION_ORIGIN_REFUSED_CODE);
   }
-  return isPinnedFormationTransitionCommand(command) ?
+  return registeredFormationCommandValidator !== null &&
+      registeredFormationCommandValidator(command) ?
     ADMITTED :
-    refused(
-      FORMATION_REFUSAL_REASON.INVALID_COMMAND,
-      FORMATION_REFUSAL_REASON.INVALID_COMMAND,
-    );
+    refused(FORMATION_INVALID_COMMAND_CODE, FORMATION_INVALID_COMMAND_CODE);
 }
 
 function commandRefusalByKind(command, origin) {
-  if (command.type === FORMATION_TRANSITION_TYPE) {
+  if (command.type === PARTITION_SERVICE_OPERATION.FORMATION_TRANSITION) {
     return formationCommandRefusal(command, origin);
   }
   if (PLACEMENT_COMMAND_TYPES.includes(command.type)) {
@@ -234,4 +232,5 @@ export {
   committedCommandRefusalResult,
   isCommittedCommandType,
   isCommittedSqlCommandType,
+  registerFormationCommandValidator,
 };

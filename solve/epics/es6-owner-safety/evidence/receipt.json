@@ -34,7 +34,7 @@
     "previousCandidate": "114bd4200bcdcb801752c410b8c644178e0a3ead",
     "branch": "candidate/reconciliation-20261119"
   },
-  "generatedAt": "2026-11-19T19:43:25.961Z",
+  "generatedAt": "2026-11-19T19:56:12.521Z",
   "receipts": [
     {
       "id": "committed-batch-recovery-witness",

@@ -121,7 +121,7 @@ documentClass: generated
 - [membership-publication-coordinator-reconcile.js](membership-publication-coordinator-reconcile.js) - Owner-driven membership reconcile (Workstream A). (importers: many)
 - [membership-publication-coordinator.js](membership-publication-coordinator.js) - Owner contract: Owner: MembershipPublicationCoordinator owns membership publication transitions. (importers: hub)
 - [membership-publication-formation-record.js](membership-publication-formation-record.js) - Durable cluster formation declaration and latch record on control_plane_publications-p1 (publication_id =... (importers: many)
-- [membership-publication-formation-transition-command.js](membership-publication-formation-transition-command.js) - FORMATION_TRANSITION committed command builders, admission/proposal, and state-machine applier on... (importers: many)
+- [membership-publication-formation-transition-command.js](membership-publication-formation-transition-command.js) - FORMATION_TRANSITION committed command builders, admission/proposal, and state-machine applier on... (importers: few)
 - [membership-publication-lifecycle-summary.js](membership-publication-lifecycle-summary.js) - No leading comment; first export: areMembershipLifecycleSummariesEqual. (importers: one)
 - [membership-publication-normalizers.js](membership-publication-normalizers.js) - No leading comment; first export: normalizeMembershipPublicationStringList. (importers: few)
 - [membership-publication-planning-evidence.js](membership-publication-planning-evidence.js) - No leading comment; first export: MEMBERSHIP_PUBLICATION_PLANNING_HELPERS. (importers: many)

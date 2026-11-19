@@ -16,15 +16,15 @@ import {
 import {COLUMN, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {isCaughtUpVoterReadyReplica} from
-  '../rebalancer/priority-publication-safety-topology.js';
+  '../raft/replica-voter-readiness.js';
 import {PLACEMENT_FORMATION_STATE} from
   '../rebalancer/replica-placement-owner-constants.js';
 import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
 import {readUpperStateField} from '../utils/state-field-read.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {evaluateServeEligibilityNodeRow} from
-  './serve-eligibility-record-decision.js';
+import {projectNodeLivenessSemantics} from
+  './node-liveness-semantic-projection.js';
 
 const FORMATION_PUBLICATION_ID = 'cluster_formation';
 const FORMATION_PUBLICATION_KIND = 'cluster_formation';
@@ -356,7 +356,8 @@ function extractNodeDeclaredHost(row, publishedSet, floorMap, nowMs) {
       undefined;
   const evaluation =
     hostIdentity?.state === NODE_HOST_IDENTITY_STATE.DECLARED ?
-      (floorMap?.get(nodeId) || evaluateServeEligibilityNodeRow(row, nowMs)) :
+      (floorMap?.get(nodeId) ||
+        projectNodeLivenessSemantics({nodeRow: row, nowMs}).projection) :
       undefined;
   return evaluation?.readyNow === true ?
     {eligible: true, hostId: hostIdentity.hostId} :
@@ -700,6 +701,12 @@ function readFormationRecordIn(db) {
     null;
 }
 
+let registeredFormationTransitionExecutor = null;
+
+function registerFormationTransitionExecutor(executor) {
+  registeredFormationTransitionExecutor = executor;
+}
+
 async function requestFormationTransition(service, payload) {
   if (
     service?.tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS ||
@@ -715,10 +722,7 @@ async function requestFormationTransition(service, payload) {
   if (service.executeFormationTransition) {
     return service.executeFormationTransition(payload);
   }
-  const {executeFormationTransitionOnService} = await import(
-    './membership-publication-formation-transition-command.js'
-  );
-  return executeFormationTransitionOnService(service, payload);
+  return registeredFormationTransitionExecutor(service, payload);
 }
 
 function requestFormationDeclare(service, payload) {
@@ -748,6 +752,7 @@ export {
   decodeFormationRecord,
   evaluateFormationLatch,
   readFormationRecordIn,
+  registerFormationTransitionExecutor,
   requestFormationDeclare,
   requestFormationLatch,
   requestFormationTransition,
