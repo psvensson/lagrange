@@ -1,6 +1,10 @@
 import {
   SELECT_MERGE_MODE,
   assertSelectFanoutAdmissible,
+  unsupportedFeatureError,
+  holdsSqliteSemantics,
+  buildCollationScopeForSelect,
+  buildCollationScopeFromSchemas,
 } from '../coordinator-sql-admission.js';
 import {EXPR_TYPE} from '../parser-constants.js';
 import {resultColumnName} from '../sql-statement-renderer.js';
@@ -224,6 +228,9 @@ function collectAggregateSpecs(ast) {
     }
   }
   walkAggregates(ast.having, (expr) => register(expr, null));
+  if (ast.having && !expressionEvaluable(ast.having)) {
+    throw unsupportedFeatureError('HAVING clause expression is not evaluable at coordinator');
+  }
   walkAggregates(ast.orderBy, (expr) => register(expr, null));
   return specs;
 }
@@ -509,7 +516,7 @@ function buildOverfetchLimit(limit) {
  * @param {Array} specs - Aggregate specs from collectAggregateSpecs.
  * @return {{partitionAst: Object, combineSpec: Object}} Plan parts.
  */
-function buildPartialAggregateParts(ast, specs) {
+function buildPartialAggregateParts(ast, specs, options = {}) {
   const partitionAst = cloneAst(ast);
   const columns = [];
   const groupKeys = [];
@@ -586,8 +593,20 @@ function buildPartialAggregateParts(ast, specs) {
     ensureBareColumn(expr, outputKey, index, true);
   });
   collectOutsideColumnRefs(ast.having, (refExpr) => {
-    if (!groupKeyByShape.has(canonicalExpressionKey(refExpr))) {
-      ensureBareColumn(refExpr, refExpr.column, BARE_HAVING_KEY_TAG, false);
+    // Resolve alias to the underlying column expression.
+    const col = ast.columns.find(c => resultColumnName(c) === refExpr.column);
+    const expr = col ? (col.expression || col) : refExpr;
+    
+    // Check if the expression holds unsupported collation semantics
+    const schema = options.resolveTableSchema ? options.resolveTableSchema(refExpr.column) : null;
+    const scope = schema ? buildCollationScopeFromSchemas(schema) : buildCollationScopeForSelect(ast, options.resolveTableSchema || null);
+    
+    if (holdsSqliteSemantics(expr, scope)) {
+       throw unsupportedFeatureError('HAVING alias expression has unsupported collation');
+    }
+
+    if (!groupKeyByShape.has(canonicalExpressionKey(expr))) {
+      ensureBareColumn(expr, refExpr.column, BARE_HAVING_KEY_TAG, false);
     }
   });
 
@@ -739,6 +758,7 @@ function buildSelectFanoutPlan(ast, params, partitionCount, options = {}) {
   const {partitionAst, combineSpec} = buildPartialAggregateParts(
     workingAst,
     specs,
+    options,
   );
   combineSpec.having = substituteParameterLiterals(combineSpec.having, params);
   for (const expressionColumn of combineSpec.expressionColumns) {
