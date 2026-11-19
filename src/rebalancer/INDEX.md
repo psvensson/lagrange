@@ -121,7 +121,7 @@ documentClass: generated
 - [priority-publication-leader-safety.js](priority-publication-leader-safety.js) - No leading comment; first export: PriorityPublicationLeaderSafety. (importers: one)
 - [priority-publication-safety-rows.js](priority-publication-safety-rows.js) - Read the service rows owned by a non-partition rebalancer entity. (importers: many)
 - [priority-publication-safety-shared.js](priority-publication-safety-shared.js) - No leading comment; first export: OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED. (importers: many)
-- [priority-publication-safety-topology.js](priority-publication-safety-topology.js) - No leading comment; first export: PriorityPublicationSafetyTopology. (importers: few)
+- [priority-publication-safety-topology.js](priority-publication-safety-topology.js) - No leading comment; first export: PriorityPublicationSafetyTopology. (importers: many)
 - [priority-recovery-follow-up-operation-context-view.js](priority-recovery-follow-up-operation-context-view.js) - No leading comment; first export: buildPriorityRecoveryFollowUpOperationContexts. (importers: one)
 - [priority-recovery-observation.js](priority-recovery-observation.js) - No leading comment; first export: PriorityRecoveryObservation. (importers: one)
 - [priority-recovery-planning-read.js](priority-recovery-planning-read.js) - The single owner of priority-recovery planning READ POLICY. (importers: few)

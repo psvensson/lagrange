@@ -13,6 +13,12 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE,
 import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from
   '../cdc/cdc-integration-service-shared-constants.js';
 import {CLUSTER_ID_CONFIG_KEY} from './cluster-identity-constants.js';
+import {
+  FORMATION_PUBLICATION_ID,
+  buildFormationDeclareBody,
+  decodeFormationRecord,
+  requestFormationDeclare,
+} from '../control-plane/membership-publication-formation-record.js';
 
 const ORIGINAL_READ_AUTHORITY = buildControlPlaneReadAuthority({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
@@ -22,7 +28,10 @@ const ORIGINAL_READ_AUTHORITY = buildControlPlaneReadAuthority({
 const ORIGINAL_ROW_READ = Object.freeze({
   [SYSTEM_TABLE_NAME.SERVICES]: 'SELECT * FROM services WHERE service_id = ?',
   [SYSTEM_TABLE_NAME.CONFIG]: 'SELECT * FROM config WHERE config_key = ?',
+  [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]:
+    'SELECT * FROM control_plane_publications WHERE publication_id = ?',
 });
+const ORIGINAL_FORMATION_DECLARE_ENTRY_PREFIX = 'original-formation-declare:';
 
 async function observeOriginalRow(writer, tableName, key, expected) {
   const read = await readAuthoritativeControlPlaneRows(writer, tableName,
@@ -56,4 +65,62 @@ function publishOriginalSeedClusterIdentity(preparation, writer, row) {
       CLUSTER_ID_CONFIG_KEY, value)});
 }
 
-export {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity};
+async function observeOriginalFormationRow(writer, expected) {
+  const read = await readAuthoritativeControlPlaneRows(
+    writer,
+    SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    ORIGINAL_ROW_READ[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+    [FORMATION_PUBLICATION_ID],
+    {readAuthority: ORIGINAL_READ_AUTHORITY},
+  );
+  if (read?.success !== true || read.rows?.length !== 1) return false;
+  const decoded = decodeFormationRecord(read.rows[0], {
+    clusterId: expected.clusterId,
+  });
+  return (
+    decoded.clusterId === expected.clusterId &&
+    decoded.declaredHostCount === expected.declaredHostCount &&
+    decoded.declaredByNodeId === expected.declaredByNodeId &&
+    decoded.declaredAt === expected.declaredAt
+  );
+}
+
+function publishOriginalSeedFormationDeclaration(
+  preparation,
+  writer,
+  publicationsPartitionService,
+  declarationInput,
+) {
+  const formation = preparation.formationDeclaration();
+  const declareBody = buildFormationDeclareBody(declarationInput);
+  if (
+    declareBody === null ||
+    declareBody.clusterId !== formation.clusterId ||
+    declareBody.declaredHostCount !== formation.declaredHostCount ||
+    declareBody.declaredByNodeId !== formation.declaredByNodeId ||
+    declareBody.declaredAt !== formation.timestamp
+  ) {
+    throw originalAllocationError(REASON.IDENTITY, formation.replicaId);
+  }
+  return preparation.publishOriginalRight({
+    replicaId: formation.replicaId,
+    right: RIGHT.FORMATION_RIGHT,
+    value: declareBody,
+    submit: (value) => {
+      if (!publicationsPartitionService) {
+        throw originalAllocationError(REASON.AUTHORITY, formation.replicaId);
+      }
+      return requestFormationDeclare(publicationsPartitionService, {
+        entryId: `${ORIGINAL_FORMATION_DECLARE_ENTRY_PREFIX}${value.clusterId}`,
+        body: value,
+      });
+    },
+    observe: (value) => observeOriginalFormationRow(writer, value),
+  });
+}
+
+export {
+  originalSeedServiceRegistration,
+  publishOriginalSeedClusterIdentity,
+  publishOriginalSeedFormationDeclaration,
+};

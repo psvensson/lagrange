@@ -57,6 +57,28 @@ const WRITE_STATEMENT_TYPES = new Set([
   AST_TYPE.DROP_TABLE,
 ]);
 
+const FORMATION_ADMITTED_READ_STATEMENT_TYPES = new Set([
+  AST_TYPE.SELECT,
+  AST_TYPE.BEGIN_TRANSACTION,
+  AST_TYPE.COMMIT,
+  AST_TYPE.ROLLBACK,
+]);
+
+const FORMATION_SYSTEM_TABLE_DML_TYPES = new Set([
+  AST_TYPE.INSERT,
+  AST_TYPE.UPDATE,
+  AST_TYPE.DELETE,
+]);
+
+const FORMATION_STATE_FORMED = 'FORMED';
+const FORMATION_STATE_UNAVAILABLE = 'UNAVAILABLE';
+const FORMATION_WAIT_SUFFIX = '; writes and DDL wait for formation';
+const FORMATION_PENDING_HINT =
+  'start the missing hosts; if fewer hosts exist than declared, re-found ' +
+  'the cluster with the correct declared host count. Re-founding discards ' +
+  'state written during formation: artifact payloads, service definitions, ' +
+  'dynamic config, functions';
+
 const ADMITTED = objectFreeze({state: SYSTEM_TABLE_WRITE_ADMISSION.ADMITTED});
 
 /**
@@ -121,22 +143,120 @@ function admitClientSystemTableWrite(ast, options) {
 }
 
 /**
- * The one engine-entry refusal of an inadmissible client statement: the
- * embedded application's statement policy, then the system-table write
- * admission. Null when the statement may run.
+ * Resolve the formation answer passed directly or through execution options.
+ * @param {Object} options - SqlCore execution options.
+ * @param {Object|null|undefined} formation - Formation answer.
+ * @return {Object|null}
+ */
+function resolveFormationAnswer(options, formation) {
+  const candidate = formation ?? options?.formation ?? null;
+  return candidate &&
+    typeof candidate === 'object' &&
+    typeof candidate.state === LOCAL_STR_STRING ?
+    candidate :
+    null;
+}
+
+function buildFormationPendingMessage(formation) {
+  if (
+    Number.isSafeInteger(formation?.declaredHostCount) &&
+    Number.isSafeInteger(formation?.readyHostCount)
+  ) {
+    return (
+      `cluster formation pending: ${formation.readyHostCount} of ` +
+      `${formation.declaredHostCount} declared hosts ready` +
+      FORMATION_WAIT_SUFFIX
+    );
+  }
+  const stateLabel = formation?.state || FORMATION_STATE_UNAVAILABLE;
+  const reasonPart =
+    typeof formation?.reason === LOCAL_STR_STRING &&
+    formation.reason.length > 0 ?
+      ` (${formation.reason})` :
+      '';
+  return (
+    `${QUERY_ERROR_MSG.FORMATION_PENDING}: ${stateLabel}${reasonPart}` +
+    FORMATION_WAIT_SUFFIX
+  );
+}
+
+function buildFormationPendingRefusal(formation) {
+  return objectFreeze({
+    success: false,
+    error: buildFormationPendingMessage(formation),
+    errorCode: QUERY_ERROR_CODE.FORMATION_PENDING,
+    reasonCode: formation?.reason || formation?.state || null,
+    retryable: true,
+    formation,
+    detail: formation,
+    hint: FORMATION_PENDING_HINT,
+  });
+}
+
+/**
+ * Admit or refuse one parsed statement under the cluster formation latch.
+ * Evaluates independent of STATEMENT_INGRESS: reads and system-table DML are
+ * admitted while not FORMED; user-table writes, all DDL and unresolvable
+ * targets are refused with FORMATION_PENDING.
  * @param {Object} ast - Parsed statement.
  * @param {Object} options - SqlCore execution options.
+ * @param {Object|null|undefined} [formation] - Formation answer.
+ * @return {{state: string, failure?: Object}}
+ */
+function checkFormationStatementAdmission(ast, options, formation = undefined) {
+  const formationAnswer = resolveFormationAnswer(options, formation);
+  if (
+    formationAnswer === null ||
+    formationAnswer.state === FORMATION_STATE_FORMED
+  ) {
+    return ADMITTED;
+  }
+  if (FORMATION_ADMITTED_READ_STATEMENT_TYPES.has(ast?.type)) {
+    return ADMITTED;
+  }
+  if (FORMATION_SYSTEM_TABLE_DML_TYPES.has(ast?.type)) {
+    const target = ast.table ?? ast.tableName;
+    if (
+      typeof target === LOCAL_STR_STRING &&
+      target.length > 0 &&
+      isSystemTableName(target)
+    ) {
+      return ADMITTED;
+    }
+  }
+  return objectFreeze({
+    state: SYSTEM_TABLE_WRITE_ADMISSION.REFUSED,
+    failure: buildFormationPendingRefusal(formationAnswer),
+  });
+}
+
+/**
+ * The one engine-entry refusal of an inadmissible client statement: the
+ * embedded application's statement policy, the system-table write admission,
+ * then the cluster formation latch gate. Null when the statement may run.
+ * @param {Object} ast - Parsed statement.
+ * @param {Object} options - SqlCore execution options.
+ * @param {Object|null|undefined} [formation] - Formation answer.
  * @return {Object|null} The typed refusal, or null.
  */
-function resolveClientStatementRefusal(ast, options) {
+function resolveClientStatementRefusal(ast, options, formation = undefined) {
   const applicationDecision =
     enforceApplicationDatabaseStatementPolicy(ast, options);
   if (applicationDecision.allowed !== true) {
     return applicationDecision.failure;
   }
   const admission = admitClientSystemTableWrite(ast, options);
-  return admission.state === SYSTEM_TABLE_WRITE_ADMISSION.REFUSED ?
-    admission.failure : null;
+  if (admission.state === SYSTEM_TABLE_WRITE_ADMISSION.REFUSED) {
+    return admission.failure;
+  }
+  const formationAdmission = checkFormationStatementAdmission(
+    ast,
+    options,
+    formation,
+  );
+  return formationAdmission.state === SYSTEM_TABLE_WRITE_ADMISSION.REFUSED ?
+    formationAdmission.failure :
+    null;
 }
 
 /**

@@ -1,4 +1,9 @@
-import {readStateField} from '../utils/state-field-read.js';
+import {readStateField, readUpperStateField} from '../utils/state-field-read.js';
+import {TABLES} from '../constants/index.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from
+  '../cdc/cdc-integration-service-shared-constants.js';
+import {resolveLocalSystemTableServices} from
+  '../cdc/cdc-integration-service-local-system-table-routing.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   isControlPlaneWriterShutDown,
@@ -6,9 +11,24 @@ import {
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
 import {
+  MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
   PUBLICATION_WRITE_MAX_ATTEMPTS,
 } from './membership-publication-row-contract.js';
+import {
+  FORMATION_PUBLICATION_ID,
+  FORMATION_TRANSITION_ACTION,
+  FORMATION_TRANSITION_TYPE,
+  buildFormationLatchBody,
+  decodeFormationRecord,
+  evaluateFormationLatch,
+  readFormationRecordIn,
+  requestFormationLatch,
+} from './membership-publication-formation-record.js';
+import {shouldDeferMembershipReconcileToWriteLeader} from
+  './membership-publication-coordinator-reconcile-helpers.js';
+import {PARTITION_SERVICE_EVENT} from
+  '../partition/partition-service-constants.js';
 import {
   listEquals,
   normalizePositiveInteger,
@@ -72,6 +92,68 @@ const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
   VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
   FAIL: 'fail',
 });
+const LATCH_REASON_LEADER_PARTITION_UNAVAILABLE =
+  'LEADER_PARTITION_UNAVAILABLE';
+const LATCH_REASON_BODY_INVALID = 'LATCH_BODY_INVALID';
+const DEFAULT_FORMATION_LATCH_NODE_ID = 'publication-coordinator';
+const FORMATION_WATCHED_TABLES = new Set([
+  TABLES.CONTROL_PLANE_PUBLICATIONS,
+  TABLES.SERVICES,
+  TABLES.NODES,
+  TABLES.PARTITIONS,
+]);
+
+function readLeaderFormationRow(partitionService) {
+  const storage = partitionService?.db;
+  return storage ? readFormationRecordIn(storage) : undefined;
+}
+
+function syncCommittedFormationRow(coordinator, partitionService) {
+  const committedRow = readLeaderFormationRow(partitionService);
+  if (committedRow) {
+    coordinator.projectCommittedFormationRow(committedRow);
+  }
+  return committedRow;
+}
+
+async function submitFormationLatchCommand(
+  coordinator,
+  partitionService,
+  evaluation,
+  nowMs,
+) {
+  const latchBody = partitionService ?
+    buildFormationLatchBody({
+      clusterId: evaluation.clusterId,
+      declaredHostCount: evaluation.declaredHostCount,
+      formedAt: nowMs,
+      formedByNodeId: coordinator.nodeId || DEFAULT_FORMATION_LATCH_NODE_ID,
+      formedPublicationEpoch: evaluation.formedPublicationEpoch,
+      formedHostIds: evaluation.formedHostIds,
+      formedReadyNodeIds: evaluation.formedReadyNodeIds,
+      priorityPartitionVoters: evaluation.priorityPartitionVoters,
+    }) :
+    null;
+  if (!partitionService || !latchBody) {
+    return {
+      latched: false,
+      evaluation,
+      reason: !partitionService ?
+        LATCH_REASON_LEADER_PARTITION_UNAVAILABLE :
+        LATCH_REASON_BODY_INVALID,
+    };
+  }
+  const response = await requestFormationLatch(partitionService, {
+    entryId:
+      `formation-latch:${evaluation.clusterId}:` +
+      `${evaluation.formedPublicationEpoch}`,
+    body: latchBody,
+  });
+  if (response?.success === true) {
+    syncCommittedFormationRow(coordinator, partitionService);
+  }
+  return {latched: response?.success === true, evaluation, response};
+}
 
 function resolvePublicationWriteFailureNextStep(
   error,
@@ -180,7 +262,11 @@ class MembershipPublicationCoordinatorPersist extends
           buildPublicationReadOptions(publicationOptions),
         );
         if (publicationRowSatisfiesDesiredState(durableRow, persistedRow)) {
-          return serializeMembershipPublicationRow(mergePublicationRows(durableRow, persistedRow));
+          const finalRow = serializeMembershipPublicationRow(
+            mergePublicationRows(durableRow, persistedRow),
+          );
+          await this._maybeLatchFormationAfterPublicationWrite(finalRow);
+          return finalRow;
         }
         persistedRow = serializeMembershipPublicationRow(
           mergePublicationRows(durableRow, persistedRow),
@@ -192,7 +278,122 @@ class MembershipPublicationCoordinatorPersist extends
         row: persistedRow,
       });
     }
+    await this._maybeLatchFormationAfterPublicationWrite(persistedRow);
     return persistedRow;
+  }
+
+  async _maybeLatchFormationAfterPublicationWrite(publicationRow) {
+    if (
+      readUpperStateField(publicationRow?.status) ===
+      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      await this.evaluateAndLatchFormationIfEligible({
+        publicationRow,
+      });
+    }
+  }
+
+  getPublicationsLeaderPartitionService() {
+    if (this.publicationsPartitionService) {
+      return this.publicationsPartitionService;
+    }
+    const services = this.cdcIntegrationService?.partitionServices ?
+      resolveLocalSystemTableServices(
+        this.cdcIntegrationService,
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        {consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER},
+      ) :
+      undefined;
+    return services?.[0];
+  }
+
+  projectCommittedFormationRow(row) {
+    if (!row) {
+      return;
+    }
+    this.systemTableCache?.set?.(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      FORMATION_PUBLICATION_ID,
+      row,
+    );
+    const decoded = decodeFormationRecord(row);
+    const serveOwner =
+      this.controlPlaneReadinessService?.getServeEligibilityOwner?.();
+    serveOwner?.adoptFormationObservation?.(decoded);
+    serveOwner?.scheduleRefresh?.();
+  }
+
+  async evaluateAndLatchFormationIfEligible(context = {}) {
+    if (shouldDeferMembershipReconcileToWriteLeader(this)) {
+      return {latched: false, deferred: true};
+    }
+    const partitionService = this.getPublicationsLeaderPartitionService();
+    const committedFormationRow = syncCommittedFormationRow(
+      this,
+      partitionService,
+    );
+    const nowMs = this.now();
+    const evaluation = evaluateFormationLatch({
+      systemTableCache: this.systemTableCache,
+      ...(committedFormationRow !== undefined ?
+        {formationRow: committedFormationRow} :
+        {}),
+      publicationRow: context.publicationRow || null,
+      nowMs,
+    });
+    return evaluation.shouldLatch === true ?
+      submitFormationLatchCommand(this, partitionService, evaluation, nowMs) :
+      {latched: false, evaluation};
+  }
+
+  attachFormationLatchTriggers() {
+    if (this._formationCacheTriggerListener) {
+      return;
+    }
+    if (this.systemTableCache) {
+      this._formationCacheTriggerListener = (change) => {
+        if (!FORMATION_WATCHED_TABLES.has(change?.tableName)) {
+          return;
+        }
+        this.evaluateAndLatchFormationIfEligible().catch(() => {});
+      };
+      this.systemTableCache.onCacheApplyChange?.(
+        this._formationCacheTriggerListener,
+      );
+    }
+    const partitionService = this.getPublicationsLeaderPartitionService();
+    if (partitionService && !this._formationPartitionEntryListener) {
+      this._formationAttachedPartitionService = partitionService;
+      this._formationPartitionEntryListener = (event) => {
+        if (
+          event?.command?.type === FORMATION_TRANSITION_TYPE &&
+          event?.command?.body?.action === FORMATION_TRANSITION_ACTION.DECLARE
+        ) {
+          this.evaluateAndLatchFormationIfEligible().catch(() => {});
+        }
+      };
+      partitionService.on?.(
+        PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
+        this._formationPartitionEntryListener,
+      );
+    }
+  }
+
+  detachFormationLatchTriggers() {
+    if (this._formationCacheTriggerListener) {
+      this.systemTableCache?.offCacheApplyChange?.(
+        this._formationCacheTriggerListener,
+      );
+    }
+    this._formationCacheTriggerListener = null;
+    if (this._formationPartitionEntryListener) {
+      this._formationAttachedPartitionService?.off?.(
+        PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
+        this._formationPartitionEntryListener,
+      );
+    }
+    this._formationPartitionEntryListener = null;
+    this._formationAttachedPartitionService = null;
   }
 
   async acknowledgePublication(publicationId, nodeId, options = {}) {

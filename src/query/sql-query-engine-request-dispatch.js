@@ -162,7 +162,11 @@ class SQLQueryEngineRequestDispatch extends
       try {
         const parser = new SQLParser(query, {dialect: queryOptions.dialect});
         const ast = parser.parse();
-        const refusal = resolveClientStatementRefusal(ast, queryOptions);
+        const refusal = resolveClientStatementRefusal(
+          ast,
+          queryOptions,
+          this.resolveFormationAnswerForIngress?.(queryOptions),
+        );
         if (refusal !== null) {
           refusedResults.push(refusal);
         }
@@ -254,7 +258,11 @@ class SQLQueryEngineRequestDispatch extends
         },
       };
     }
-    const clientRefusal = resolveClientStatementRefusal(ast, queryOptions);
+    const clientRefusal = resolveClientStatementRefusal(
+      ast,
+      queryOptions,
+      this.resolveFormationAnswerForIngress?.(queryOptions),
+    );
     if (clientRefusal !== null) {
       return {allowed: false, refusal: clientRefusal};
     }

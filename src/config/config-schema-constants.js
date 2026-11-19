@@ -253,6 +253,19 @@ const CONFIG_SCHEMA = {
       },
       additionalProperties: false,
     },
+    formation: {
+      type: 'object',
+      properties: {
+        declaredHostCount: {
+          anyOf: [
+            {type: 'null'},
+            {type: 'integer', const: 1},
+            {type: 'integer', minimum: 3},
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
   },
   required: ['node'],
   additionalProperties: false,

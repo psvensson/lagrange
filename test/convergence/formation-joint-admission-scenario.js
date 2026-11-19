@@ -27,6 +27,7 @@ const EVENT = Object.freeze({
 });
 const ROUND_CAP = 60;
 const MEMBERSHIP_KIND = 'cluster_membership';
+const FORMATION_KIND = 'cluster_formation';
 const OUTCOME = Object.freeze({
   RELEASED: 'released',
   STUCK: 'stuck',
@@ -183,7 +184,8 @@ function clusterGates(driver) {
       .getPriorityControlPlaneRecoveryHealthSync(nodeId, now);
     readyz[nodeId] = formatReadyzHealth(health);
   }
-  return {serve, readyz};
+  const formation = readiness.answerFormation?.() || null;
+  return {serve, readyz, formation};
 }
 
 function joinerStates(driver) {
@@ -345,19 +347,23 @@ function latestMembership(world) {
   return membership[membership.length - 1] || null;
 }
 
-function isSpreadPublished(world) {
+function isSummaryPublished(world) {
   const latest = latestMembership(world);
   return latest?.status === 'PUBLISHED' && latest.spread?.satisfied === true;
 }
 
+function isSpreadPublished(world) {
+  const formationRow = world.cache.get(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    FORMATION_KIND,
+  );
+  return formationRow ?
+    formationRow.status === 'FORMED' :
+    isSummaryPublished(world);
+}
+
 function openClientGateLabels(answers) {
-  return [
-    ...Object.entries(answers.serve).filter(([, answer]) =>
-      answer.decision === 'eligible').map(([nodeId]) => `serve:${nodeId}`),
-    ...Object.entries(answers.readyz).filter(([, answer]) =>
-      answer.priorityControlPlaneRecoveryHealthy)
-      .map(([nodeId]) => `readyz:${nodeId}`),
-  ];
+  return answers.formation?.state === 'FORMED' ? ['formation:formed'] : [];
 }
 
 function recordSpreadSafety(world, safety, spreadPublished, open, label) {
@@ -365,6 +371,9 @@ function recordSpreadSafety(world, safety, spreadPublished, open, label) {
     for (const gate of open) {
       safety.openClusterGates.push({label, gate});
     }
+    return;
+  }
+  if (!isSummaryPublished(world)) {
     return;
   }
   const members = latestMembership(world).members.length;
@@ -546,7 +555,9 @@ function buildArrivalOrderReport({world, driver, observer, rounds, fixpoint}) {
     // the removed formation-release handoff wrote such rows.
     otherPublicationKinds: world.cache
       .getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)
-      .filter((row) => row.publication_kind !== MEMBERSHIP_KIND)
+      .filter((row) =>
+        row.publication_kind !== MEMBERSHIP_KIND &&
+        row.publication_kind !== FORMATION_KIND)
       .map((row) => row.publication_kind),
     nodes: nodeStates(world),
     planners: plannerStates(driver),
@@ -578,7 +589,9 @@ function buildArrivalOrderReport({world, driver, observer, rounds, fixpoint}) {
  * @return {Promise<object>} the report
  */
 async function runArrivalOrder(order, options = {}) {
-  const world = createFormationWorld();
+  const declaredHostCount =
+    options.declaredHostCount ?? (order.length === 0 ? 1 : 3);
+  const world = createFormationWorld({declaredHostCount});
   const driver = createRoundDriver(world);
   const observer = createObserver(world, driver);
   const observeSafety = observer.observe;
@@ -667,10 +680,6 @@ export {
   describeOrder,
   formatStuckReport,
   isSpreadPublished,
-  membershipRows,
-  nodeStates,
-  readAuthority,
-  revoke,
   runArrivalOrder,
   worldDigest,
 };

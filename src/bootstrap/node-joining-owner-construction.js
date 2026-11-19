@@ -68,6 +68,17 @@ const {
 } = NODE_JOINING_SERVICE_SHARED;
 
 const NODES_DATA_SUBDIR = 'nodes';
+const FORMATION_DECLARATION_SEED_ONLY_MSG =
+  'formation.declaredHostCount is a seed-only declaration and must not be set on a joiner';
+const FORMATION_DECLARATION_SEED_ONLY_CODE = 'FORMATION_DECLARATION_SEED_ONLY';
+
+function assertNoJoinerFormationDeclaration(declaredHostCount) {
+  if (declaredHostCount !== undefined && declaredHostCount !== null) {
+    const error = new Error(FORMATION_DECLARATION_SEED_ONLY_MSG);
+    error.code = FORMATION_DECLARATION_SEED_ONLY_CODE;
+    throw error;
+  }
+}
 
 function resolveNodeJoiningDataDir(options, nodeId) {
   if (typeof options.dataDir === 'string' && options.dataDir.length > 0) {
@@ -107,6 +118,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     // The declared host identity (topology/node-host-identity.js); the NODES
     // registration refuses without it.
     this.hostId = options.hostId;
+    assertNoJoinerFormationDeclaration(options.declaredHostCount);
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
     this.seedNodeAddresses =

@@ -36,6 +36,18 @@ const DANGEROUS_CONFIGURATION_KEY = Object.freeze({
   PROTOTYPE: 'prototype',
   PROTO_SETTER: '__proto__',
 });
+const MIN_MULTI_HOST_DECLARED_COUNT = 3;
+const FORMATION_DECLARED_HOST_COUNT_INVALID_SUFFIX = 'must be 1 or >= 3';
+const FORMATION_DECLARED_HOST_COUNT_INVALID_CODE =
+  'FORMATION_DECLARED_HOST_COUNT_INVALID';
+const TWO_HOSTS_HAVE_NO_MAJORITY_REASON = 'TWO_HOSTS_HAVE_NO_MAJORITY';
+const FORMATION_DECLARATION_SEED_ONLY_MSG =
+  'formation.declaredHostCount is a seed-only declaration and must not be set on a joiner';
+const FORMATION_DECLARATION_SEED_ONLY_CODE = 'FORMATION_DECLARATION_SEED_ONLY';
+const FORMATION_DECLARED_HOST_COUNT_EMPTY_MSG =
+  'formation.declaredHostCount must not be empty';
+const FORMATION_DECLARED_HOST_COUNT_REQUIRED_CODE =
+  'FORMATION_DECLARED_HOST_COUNT_REQUIRED';
 
 function isDangerousConfigurationKey(key) {
   return key === DANGEROUS_CONFIGURATION_KEY.PROTO_SETTER ||
@@ -164,6 +176,8 @@ class ConfigurationManager {
       this.config.node.id = uuidv4();
     }
 
+    this.validateFormationConfiguration();
+
     // Validate configuration
     const valid = this.validate(this.config);
     if (!valid) {
@@ -174,6 +188,34 @@ class ConfigurationManager {
     }
 
     this.initialized = true;
+  }
+
+  validateFormationConfiguration() {
+    const declaredHostCount = this.config.formation?.declaredHostCount;
+    if (declaredHostCount === null || declaredHostCount === undefined) {
+      return;
+    }
+    if (
+      !Number.isSafeInteger(declaredHostCount) ||
+      (declaredHostCount !== 1 &&
+        declaredHostCount < MIN_MULTI_HOST_DECLARED_COUNT)
+    ) {
+      const error = new Error(
+        `Invalid formation.declaredHostCount (${declaredHostCount}): ` +
+        FORMATION_DECLARED_HOST_COUNT_INVALID_SUFFIX,
+      );
+      error.code = FORMATION_DECLARED_HOST_COUNT_INVALID_CODE;
+      if (declaredHostCount === 2) {
+        error.reason = TWO_HOSTS_HAVE_NO_MAJORITY_REASON;
+      }
+      throw error;
+    }
+    const seedNodeAddress = this.config.node?.seedNodeAddress;
+    if (typeof seedNodeAddress === 'string' && seedNodeAddress.trim().length > 0) {
+      const error = new Error(FORMATION_DECLARATION_SEED_ONLY_MSG);
+      error.code = FORMATION_DECLARATION_SEED_ONLY_CODE;
+      throw error;
+    }
   }
 
   applyListenerPortModel(overrides) {
@@ -230,9 +272,27 @@ class ConfigurationManager {
     // Determine expected type from default config
     const defaultValue = this.getByPath(path, DEFAULT_CONFIG);
 
-    if (typeof defaultValue === 'number') {
+    if (
+      typeof defaultValue === 'number' ||
+      path === CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT
+    ) {
+      if (typeof value === 'string' && value.trim().length === 0) {
+        if (path === CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT) {
+          const error = new Error(FORMATION_DECLARED_HOST_COUNT_EMPTY_MSG);
+          error.code = FORMATION_DECLARED_HOST_COUNT_REQUIRED_CODE;
+          throw error;
+        }
+      }
       const parsed = Number(value);
       if (isNaN(parsed)) {
+        if (path === CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT) {
+          const error = new Error(
+            `${CONFIG_ERROR_MSG.INVALID_NUMBER_PREFIX}${path}` +
+            `${CONFIG_SEPARATOR.COLON_SPACE}${value}`,
+          );
+          error.code = FORMATION_DECLARED_HOST_COUNT_INVALID_CODE;
+          throw error;
+        }
         throw new Error(
           `${CONFIG_ERROR_MSG.INVALID_NUMBER_PREFIX}${path}` +
           `${CONFIG_SEPARATOR.COLON_SPACE}${value}`,

@@ -14,31 +14,19 @@ import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 // lease (CONTROL_PLANE_READY_LEASE), which bounds how long a deposed leader's
 // answer can grant.
 import {TABLES} from '../constants/index.js';
+import {PLACEMENT_FORMATION_STATE} from '../rebalancer/replica-placement-owner-constants.js';
+import {FORMATION_REFUSAL_REASON} from './membership-publication-formation-record.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
 import {
-  NO_REASONS,
-  OUTCOME,
-  SERVE_ELIGIBILITY_DECISION,
-  SERVE_ELIGIBILITY_STATE,
-  SERVE_ELIGIBILITY_UNAVAILABLE_REASON,
-  STALE_SIGNATURE,
-  UNAVAILABLE_FORMATION,
-  buildCommittedReadResult,
-  checkOwnerUnavailability,
-  decideServeEligibility,
-  evaluateCommittedFormation,
-  evaluateServeEligibilityRecordSignature,
-  hasAdvancedNodeLeaseOrHeartbeat,
-  isMembershipPublication,
-  isOlderNodeHeartbeatProjection,
-  isRegressedCommittedReadResult,
-  isRevokingNodeChange,
-  isServeEligibilityAnswerEligible,
-  readLeaseExpiresAtMs,
-  readNodeId,
-  shouldSupersedeOnPublicationChange,
-  unavailable,
+  NO_REASONS, OUTCOME, SERVE_ELIGIBILITY_DECISION, SERVE_ELIGIBILITY_STATE,
+  SERVE_ELIGIBILITY_UNAVAILABLE_REASON, STALE_SIGNATURE, UNAVAILABLE_FORMATION,
+  buildCommittedReadResult, checkOwnerUnavailability, decideServeEligibility,
+  evaluateServeEligibilityRecordSignature, hasAdvancedNodeLeaseOrHeartbeat,
+  isFormationPublicationRow, isMembershipPublication,
+  isOlderNodeHeartbeatProjection, isRegressedCommittedReadResult,
+  isRevokingNodeChange, isServeEligibilityAnswerEligible, readLeaseExpiresAtMs,
+  readNodeId, shouldSupersedeOnPublicationChange, unavailable,
   COMMITTED_READ_FAILED,
 } from './serve-eligibility-record-decision.js';
 
@@ -172,6 +160,8 @@ class ServeEligibilityOwner {
     this.clearTimeoutFn = options.clearTimeout;
     this.outcome = OUTCOME.PENDING;
     this.record = null;
+    this.observedFormation = null;
+    this.latchedFormation = null;
     this.minPublicationEpoch = null;
     this.superseded = false;
     this.triggerGeneration = 0;
@@ -419,6 +409,7 @@ class ServeEligibilityOwner {
     } else {
       this.outcome = result.outcome;
       this.record = result.outcome === OUTCOME.RECORD ? result.record : null;
+      this.adoptFormationObservation(result.formation || null);
       this.recordObservedPublicationEpoch(
         this.record?.epoch?.publicationEpoch ?? null,
       );
@@ -437,6 +428,26 @@ class ServeEligibilityOwner {
     this.notifyListeners();
   }
 
+  adoptFormationObservation(nextFormation) {
+    if (
+      this.latchedFormation !== null &&
+      nextFormation?.clusterId &&
+      nextFormation.clusterId !== this.latchedFormation.clusterId
+    ) {
+      this.observedFormation = Object.freeze({
+        state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+        reason: FORMATION_REFUSAL_REASON.CLUSTER_MISMATCH,
+        clusterId: nextFormation.clusterId,
+        expectedClusterId: this.latchedFormation.clusterId,
+      });
+      return;
+    }
+    this.observedFormation = nextFormation;
+    if (nextFormation?.state === PLACEMENT_FORMATION_STATE.FORMED) {
+      this.latchedFormation = nextFormation;
+    }
+  }
+
   // What consumers can observe: the decisions, or that the record is stale.
   answeredSignature() {
     return this.superseded ? STALE_SIGNATURE : this.decisionSignature;
@@ -453,6 +464,7 @@ class ServeEligibilityOwner {
       this.record,
       this.outcome,
       this.isNodeLoadReady,
+      this.answerFormation().state,
     );
   }
 
@@ -529,6 +541,12 @@ class ServeEligibilityOwner {
   }
 
   notePublicationSourceChange(row) {
+    if (isFormationPublicationRow(row)) {
+      if (this.answerFormation().status !== row?.status) {
+        this.markSuperseded();
+      }
+      return;
+    }
     const pub = normalizeControlPlanePublicationRow(row);
     if (!isMembershipPublication(pub)) return;
     // A membership publication row without a stated status is counted as
@@ -693,6 +711,40 @@ class ServeEligibilityOwner {
     });
   }
 
+  answerFormation() {
+    if (this.stopped) {
+      return Object.freeze({
+        state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+        reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.OWNER_STOPPED,
+        latchEpoch: null,
+      });
+    }
+    if (
+      this.observedFormation?.reason ===
+      FORMATION_REFUSAL_REASON.CLUSTER_MISMATCH
+    ) {
+      return this.observedFormation;
+    }
+    if (this.latchedFormation !== null) {
+      return this.latchedFormation;
+    }
+    if (this.outcome === OUTCOME.PENDING) {
+      return Object.freeze({
+        state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+        reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_PENDING,
+        latchEpoch: null,
+      });
+    }
+    if (this.outcome === OUTCOME.READ_FAILED && !this.observedFormation) {
+      return Object.freeze({
+        state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+        reason: SERVE_ELIGIBILITY_UNAVAILABLE_REASON.READ_FAILED,
+        latchEpoch: null,
+      });
+    }
+    return this.observedFormation || UNAVAILABLE_FORMATION;
+  }
+
   answerCommittedNodes() {
     const unavail = checkOwnerUnavailability(this);
     if (unavail) {
@@ -702,14 +754,17 @@ class ServeEligibilityOwner {
         epoch: unavail.epoch,
         retryAfterMs: unavail.retryAfterMs,
         nodeRows: Object.freeze([]),
-        formation: UNAVAILABLE_FORMATION,
+        formation:
+          this.latchedFormation !== null ?
+            this.answerFormation() :
+            UNAVAILABLE_FORMATION,
       });
     }
     return Object.freeze({
       state: SERVE_ELIGIBILITY_STATE.READY,
       epoch: this.record.epoch,
       nodeRows: Object.freeze(Array.from(this.record.nodeRowsById.values())),
-      formation: evaluateCommittedFormation(this.record.publication),
+      formation: this.answerFormation(),
     });
   }
 

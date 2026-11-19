@@ -326,6 +326,8 @@ const bootstrapApiServerMethods = {
         getClusterSnapshot: () => this.getManagementClusterSnapshot(),
         ...this.managementAdapters,
         getClusterId: () => this.getClusterId(),
+        getFormation: () =>
+          this.getControlPlaneReadinessService?.()?.answerFormation?.() ?? null,
       });
     }
     return this.managementV1Owner;

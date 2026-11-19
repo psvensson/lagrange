@@ -5,7 +5,7 @@
   "testFileDigests": {
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "1925f016ea1c3b018114f240d3418141915956017ab26a95af9c7764aa9205e7",
     "test/partition/partition-participant-transaction-apply.test.js": "e831cd12a988324fb5ae9ab49139749b90236f41d44317830911850babe0789d",
-    "test/rebalancer/replica-placement-owner-core.test.js": "4e4ba073b8a1fb6a3a1d13bd2ae5e395ff9320f8b0fc54596c67d38f424e93af",
+    "test/rebalancer/replica-placement-owner-core.test.js": "3a608df643407ef091e37ea3929811f4721835acffac3b0e24e840237eaff62d",
     "test/partition/placement-admission-apply.test.js": "e646bb234508cd8b33037292110e4947f9fcef3096a9af395f9fd85cf1398d56",
     "test/convergence/dt-placement-owner-formation-drain.test.js": "d43bcdd753be380dab33699a88b071b68aed97029a4395d331aac8733a43ed60",
     "test/convergence/formation-placement-drain-scenario.js": "5f2c66e7aa2e135c38f1a7379610ce8d5a1b65a744159d219d38be877c4138a0"
@@ -26,7 +26,7 @@
     "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "e93ec17085ccc6123993522952998f39580f2e692c27507022a41c9e0620e6fd",
     "src/rebalancer/replica-status.js": "da0d75bea5e3ba4c49b57663b2a66da25a6a0ee340361116f3a3d797f21f16d5",
     "src/bootstrap/shared/control-plane-setup.js": "969de0fdeee19b8ac7e0767ae7f9d051fb6b89f07d121783eaa2c911a08b66be",
-    "src/control-plane/membership-publication-coordinator-reconcile.js": "6a20cfc1a0e5cc73e02106e8a460599a09bed7441469b1c578b8a3aa23fe0e63",
+    "src/control-plane/membership-publication-coordinator-reconcile.js": "71c4760f50d2c5dfd2d8b6bb4c726973cf777b86d7facadf934e942d64c8c289",
     "dependency-cruiser.config.cjs": "e5edb028bdf55d736c6654a701c0e1c4b310ff713b8b633cbac5f1405ba55665"
   },
   "source": {
@@ -34,7 +34,7 @@
     "previousCandidate": "114bd4200bcdcb801752c410b8c644178e0a3ead",
     "branch": "candidate/reconciliation-20261119"
   },
-  "generatedAt": "2026-11-19T19:42:07.262Z",
+  "generatedAt": "2026-11-19T19:43:25.961Z",
   "receipts": [
     {
       "id": "committed-batch-recovery-witness",

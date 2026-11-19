@@ -46,6 +46,14 @@ import {applyPlacementCommand, requestPlacementAdmission} from
   './partition-placement-admission.js';
 import {PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
+import {
+  FORMATION_TRANSITION_TYPE,
+  requestFormationTransition,
+} from '../control-plane/membership-publication-formation-record.js';
+import {
+  applyFormationTransitionCommand,
+  registerFormationPartitionApplyHooks,
+} from '../control-plane/membership-publication-formation-transition-command.js';
 import {ensureSqlTransactionsDecisionColumns} from
   './partition-coordinator-table-columns.js';
 import {admitsParticipantSessionQueryDuringRemoval,
@@ -54,16 +62,48 @@ import {admitsParticipantSessionQueryDuringRemoval,
 import {
   applyCdcAcknowledgementCommand,
   isCdcCommandType,
+  recordCommittedOperationCdc,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
   './partition-cdc-owed-admission.js';
+import {
+  partitionWriteLeadershipRefusalOf,
+  startPartitionRaftWriteCommit,
+} from './partition-service-raft-write-commit.js';
+import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
+
+registerFormationPartitionApplyHooks({
+  partitionWriteLeadershipRefusalOf,
+  pausedWriteAnswerOf,
+  recordCommittedOperationCdc,
+  settleReservedCommittedStatement,
+  startPartitionRaftWriteCommit,
+});
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
 });
+
+const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
+  [COORDINATOR_SETTLEMENT_TYPE]: requestCoordinatorSettlement,
+  [PLACEMENT_ADMIT_TYPE]: requestPlacementAdmission,
+  [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
+});
+
+const NON_SQL_COMMITTED_APPLIERS = Object.freeze([
+  [(type) => type === COORDINATOR_SETTLEMENT_TYPE, applyCoordinatorSettlement],
+  [(type) => PLACEMENT_COMMAND_TYPES.includes(type), applyPlacementCommand],
+  [(type) => type === FORMATION_TRANSITION_TYPE, applyFormationTransitionCommand],
+  [isCdcCommandType, applyCdcAcknowledgementCommand],
+  [(type) => !isCommittedSqlCommandType(type), applyCommittedTransactionCommand],
+]);
+
+function findNonSqlCommittedEntryApplier(commandType) {
+  return NON_SQL_COMMITTED_APPLIERS.find(([matches]) => matches(commandType))?.[1];
+}
 
 const {
   PARTITION_SERVICE_COLUMN,
@@ -405,6 +445,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
     case COORDINATOR_SETTLEMENT_TYPE:
     case PLACEMENT_ADMIT_TYPE:
+    case FORMATION_TRANSITION_TYPE:
       return true;
     default:
       return false;
@@ -420,25 +461,21 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @private
    */
   async handleAdmittedApplicationMessage(payload) {
+    const ownerCommandHandler = OWNER_COMMITTED_COMMAND_HANDLERS[payload.type];
+    if (ownerCommandHandler) {
+      return ownerCommandHandler(this, payload);
+    }
     switch (payload.type) {
     case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
-      if (payload.operation) {
-        return this.applyWrite(payload.operation);
-      }
-      return {
-        success: false,
-        error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE,
-      };
+      return payload.operation ?
+        this.applyWrite(payload.operation) :
+        {success: false, error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE};
     case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
       return this.handleSystemTableWrite(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
       return this.handleRemoteQuery(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
       return this.handleTransactionMessage(payload);
-    case COORDINATOR_SETTLEMENT_TYPE:
-      return requestCoordinatorSettlement(this, payload);
-    case PLACEMENT_ADMIT_TYPE:
-      return requestPlacementAdmission(this, payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
@@ -663,26 +700,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       partitionId: this.partitionId,
       commandType,
     });
-    if (commandType === COORDINATOR_SETTLEMENT_TYPE) {
-      return applyCoordinatorSettlement(this, {command, index, term,
-        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
-        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
-    }
-    if (PLACEMENT_COMMAND_TYPES.includes(commandType)) {
-      // The placement owner's typed admission (and hold release): its owner.
-      return applyPlacementCommand(this, {command, index, term,
-        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
-        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
-    }
-    if (isCdcCommandType(commandType)) {
-      // The CDC delivery owner's committed acknowledgement: its owner.
-      return applyCdcAcknowledgementCommand(this, {command, index, term,
-        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
-        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
-    }
-    if (!isCommittedSqlCommandType(commandType)) {
-      // The gate has admitted a participant transaction command: its owner.
-      return applyCommittedTransactionCommand(this, {command, index, term,
+    const nonSqlApplier = findNonSqlCommittedEntryApplier(commandType);
+    if (nonSqlApplier) {
+      return nonSqlApplier(this, {command, index, term,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     }

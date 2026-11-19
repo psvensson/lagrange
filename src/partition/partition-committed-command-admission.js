@@ -52,6 +52,12 @@ import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
 import {isPinnedPlacementCommand} from './partition-placement-admission-command.js';
 import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
+import {
+  FORMATION_REFUSAL_REASON,
+  FORMATION_TRANSITION_TYPE,
+} from '../control-plane/membership-publication-formation-record.js';
+import {isPinnedFormationTransitionCommand} from
+  '../control-plane/membership-publication-formation-transition-command.js';
 
 // Who asks to propose a committed command. Participant commands enter only
 // from their transaction owner; a CDC_DELIVERED only from the CDC delivery
@@ -62,6 +68,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
   COORDINATOR_OWNER: 'coordinator-owner',
   PLACEMENT_OWNER: 'placement-owner',
+  FORMATION_OWNER: 'formation-owner',
 });
 
 // What a refused write is answered with.
@@ -141,7 +148,25 @@ function placementCommandRefusal(command, origin) {
     refused(PLACEMENT_ADMISSION_ERROR.BYTES, PLACEMENT_ADMISSION_ERROR.BYTES);
 }
 
+function formationCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.FORMATION_OWNER) {
+    return refused(
+      FORMATION_REFUSAL_REASON.ORIGIN_REFUSED,
+      FORMATION_REFUSAL_REASON.ORIGIN_REFUSED,
+    );
+  }
+  return isPinnedFormationTransitionCommand(command) ?
+    ADMITTED :
+    refused(
+      FORMATION_REFUSAL_REASON.INVALID_COMMAND,
+      FORMATION_REFUSAL_REASON.INVALID_COMMAND,
+    );
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === FORMATION_TRANSITION_TYPE) {
+    return formationCommandRefusal(command, origin);
+  }
   if (PLACEMENT_COMMAND_TYPES.includes(command.type)) {
     return placementCommandRefusal(command, origin);
   }

@@ -82,13 +82,15 @@ function verifyMemberBinding(db, declaration, member) {
   }
   if (row[COLUMN.SERVICE_RIGHT] !== STATE.UNUSED ||
       (member.replicaId === declaration.anchorReplicaId &&
-       row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED)) {
+       (row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED ||
+        row[COLUMN.FORMATION_RIGHT] !== STATE.UNUSED))) {
     throw originalAllocationError(REASON.SPENT, member.replicaId);
   }
-  // Only the declared anchor owns a cluster-identity publication right.
+  // Only the declared anchor owns a cluster-identity or formation publication right.
   // A non-anchor grant (including a spent or unknown value) is contrary data.
   if (member.replicaId !== declaration.anchorReplicaId &&
-      row[COLUMN.IDENTITY_RIGHT] !== null) {
+      (row[COLUMN.IDENTITY_RIGHT] !== null ||
+       row[COLUMN.FORMATION_RIGHT] !== null)) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
   const reservations = readRaftRsPeerIdentityReservations(db);
@@ -439,14 +441,27 @@ class RaftRsOriginalAllocationPreparation {
       clusterId: this.#declaration.clusterId, timestamp: this.#declaration.declaredAt});
   }
 
+  formationDeclaration() {
+    this.assertContinuation(this.#declaration?.anchorReplicaId);
+    return Object.freeze({
+      replicaId: this.#declaration.anchorReplicaId,
+      clusterId: this.#declaration.clusterId,
+      declaredHostCount: this.#declaration.declaredHostCount,
+      declaredByNodeId: this.#declaration.nodeId,
+      timestamp: this.#declaration.declaredAt,
+    });
+  }
+
   // The same live issuer retains a submitted operation's exact value. A later
   // invocation may only read it back. No failure, absent row or lost response
   // restores submission authority. Durable rights remain lifecycle-owned.
   async publishOriginalRight({replicaId, right, value, submit, observe}) {
     this.assertContinuation(replicaId);
     const record = this.#continuedMember(replicaId);
+    const isAnchorOnlyRight =
+      right === COLUMN.IDENTITY_RIGHT || right === COLUMN.FORMATION_RIGHT;
     if (right !== COLUMN.SERVICE_RIGHT &&
-        !(right === COLUMN.IDENTITY_RIGHT && replicaId === this.#declaration.anchorReplicaId)) {
+        !(isAnchorOnlyRight && replicaId === this.#declaration.anchorReplicaId)) {
       throw originalAllocationError(REASON.IDENTITY, replicaId);
     }
     if (right === COLUMN.SERVICE_RIGHT) this.assertServiceIdentity(replicaId, value);
@@ -454,7 +469,7 @@ class RaftRsOriginalAllocationPreparation {
     const expected = deepFreeze(structuredClone(value));
     const retained = this.#publications.get(key);
     if (retained) {
-      if (right === COLUMN.IDENTITY_RIGHT && !isDeepStrictEqual(retained.value, expected)) {
+      if (isAnchorOnlyRight && !isDeepStrictEqual(retained.value, expected)) {
         throw originalAllocationError(REASON.IDENTITY, replicaId);
       }
       // A leader change can alter a newly built SERVICES row's mutable role.
@@ -532,7 +547,8 @@ class RaftRsOriginalAllocationPreparation {
       const row = readOriginalAllocationRow({db, member});
       if (row[COLUMN.SERVICE_RIGHT] !== STATE.TRANSFERRED ||
           (member.replicaId === this.#declaration.anchorReplicaId &&
-           row[COLUMN.IDENTITY_RIGHT] !== STATE.TRANSFERRED)) {
+           (row[COLUMN.IDENTITY_RIGHT] !== STATE.TRANSFERRED ||
+            row[COLUMN.FORMATION_RIGHT] === STATE.SUBMITTED))) {
         throw originalAllocationError(REASON.INCOMPLETE, member.replicaId);
       }
     }

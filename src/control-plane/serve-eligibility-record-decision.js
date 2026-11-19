@@ -4,18 +4,25 @@ import {readLowerStateField} from '../utils/state-field-read.js';
 // runtime memo, refresh lifecycle and waiter coordination; this module holds
 // the stateless committed-record evaluation and source-change predicates.
 import {COLUMN, SERVICE_STATUS} from '../constants/index.js';
-import {CONTROL_PLANE_READINESS_REASON} from './control-plane-readiness-constants.js';
 import {MEMBERSHIP_PUBLICATION_KIND} from './membership-publication-row-contract.js';
 import {
   resolveLatestPublishedPublicationRow,
   resolvePublishedActiveNodeIds,
 } from './active-node-publication-snapshots.js';
-import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 import {indexCommittedNodeRows} from './committed-node-rows.js';
 import {projectNodeLivenessSemantics, readNodeLivenessRowFacts} from
   './node-liveness-semantic-projection.js';
 import {PLACEMENT_FORMATION_STATE} from
   '../rebalancer/replica-placement-owner-constants.js';
+import {
+  FORMATION_PUBLICATION_ID,
+  FORMATION_PUBLICATION_KIND,
+  decodeFormationRecord,
+} from './membership-publication-formation-record.js';
+import {
+  NODE_HOST_IDENTITY_STATE,
+  readNodeHostIdentity,
+} from '../topology/node-host-identity.js';
 
 const SERVE_ELIGIBILITY_STATE = Object.freeze({
   READY: 'ready',
@@ -47,9 +54,6 @@ const SERVE_ELIGIBILITY_REASON = Object.freeze({
   LOAD_NOT_READY: 'load_not_ready',
   NODE_NOT_PUBLISHED: 'node_not_published',
   PUBLICATION_NOT_ACKNOWLEDGED: 'publication_not_acknowledged',
-  PRIORITY_SPREAD_PENDING:
-    CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-  PRIORITY_SPREAD_UNSTATED: 'priority_spread_unstated',
 });
 
 const STALE_SIGNATURE = 'stale';
@@ -121,42 +125,28 @@ function isPublicationAcknowledged(publication) {
     acknowledged.has(nodeId));
 }
 
-function resolvePrioritySpreadReason(publication) {
-  const summary = publication.priorityPartitionSummary;
-  if (!summary || typeof summary !== 'object') {
-    return SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED;
-  }
-  return hasPriorityRecoverySpreadGap(summary) ?
-    SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING :
+function isFormationPublicationRow(row) {
+  return Boolean(
+    row &&
+      (row.publication_id === FORMATION_PUBLICATION_ID ||
+        row.publication_kind === FORMATION_PUBLICATION_KIND),
+  );
+}
+
+function findFormationRow(rows) {
+  return Array.isArray(rows) ?
+    rows.find((row) => isFormationPublicationRow(row)) || null :
     null;
+}
+
+function evaluateServeEligibilityNodeRow(nodeRow, nowMs) {
+  return projectNodeLivenessSemantics({nodeRow, nowMs}).projection;
 }
 
 const UNAVAILABLE_FORMATION = Object.freeze({
   state: PLACEMENT_FORMATION_STATE.UNAVAILABLE,
   latchEpoch: null,
 });
-const UNDECLARED_FORMATION = Object.freeze({
-  state: PLACEMENT_FORMATION_STATE.UNDECLARED,
-  latchEpoch: null,
-});
-const FORMING_FORMATION = Object.freeze({
-  state: PLACEMENT_FORMATION_STATE.FORMING,
-  latchEpoch: null,
-});
-
-function evaluateCommittedFormation(publication) {
-  const reason = resolvePrioritySpreadReason(publication);
-  if (reason === SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED) {
-    return UNDECLARED_FORMATION;
-  }
-  if (reason === SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING) {
-    return FORMING_FORMATION;
-  }
-  return Object.freeze({
-    state: PLACEMENT_FORMATION_STATE.FORMED,
-    latchEpoch: publication.publicationEpoch,
-  });
-}
 
 /**
  * The serve decision for one node from committed facts at one read instant.
@@ -199,16 +189,6 @@ const SERVE_ELIGIBILITY_CHECKS = Object.freeze([
   Object.freeze({
     reason: SERVE_ELIGIBILITY_REASON.PUBLICATION_NOT_ACKNOWLEDGED,
     fails: ({publication}) => !isPublicationAcknowledged(publication),
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
-    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
-      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_UNSTATED,
-  }),
-  Object.freeze({
-    reason: SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
-    fails: ({publication}) => resolvePrioritySpreadReason(publication) ===
-      SERVE_ELIGIBILITY_REASON.PRIORITY_SPREAD_PENDING,
   }),
 ]);
 
@@ -253,8 +233,6 @@ function isSamePublicationFacts(committedPub, changedPub, isPublished) {
     committedPub.publicationEpoch === changedPub.publicationEpoch &&
     isPublicationAcknowledged(committedPub) ===
       isPublicationAcknowledged(changedPub) &&
-    resolvePrioritySpreadReason(committedPub) ===
-      resolvePrioritySpreadReason(changedPub) &&
     isSameNodeList(
       committedPub.publishedActiveNodeIds,
       changedPub.publishedActiveNodeIds,
@@ -326,16 +304,71 @@ function rowsOf(result) {
 // result, the same one an unsuccessful read builds.
 const COMMITTED_READ_FAILED = Object.freeze({outcome: OUTCOME.READ_FAILED});
 
+function isFormingNodeReadyNow(nodeId, nodeRow, activeSet, readAtMs) {
+  const leaseExpiresAtMs = readLeaseExpiresAtMs(nodeRow);
+  return (
+    readStatus(nodeRow) === SERVICE_STATUS.ACTIVE &&
+    leaseExpiresAtMs !== null &&
+    leaseExpiresAtMs > readAtMs &&
+    (activeSet === null || activeSet.has(nodeId))
+  );
+}
+
+function enrichFormingFormation(formation, nodeRowsById, publication, readAtMs) {
+  if (formation?.state !== PLACEMENT_FORMATION_STATE.FORMING) {
+    return formation;
+  }
+  const activeSet =
+    publication && isPublicationAcknowledged(publication) ?
+      new Set(publication.publishedActiveNodeIds) :
+      null;
+  const readyHostSet = new Set();
+  const knownHostSet = new Set();
+  for (const [nodeId, nodeRow] of nodeRowsById.entries()) {
+    const hostIdentity = readNodeHostIdentity(nodeRow);
+    if (hostIdentity.state !== NODE_HOST_IDENTITY_STATE.DECLARED) {
+      continue;
+    }
+    knownHostSet.add(hostIdentity.hostId);
+    if (isFormingNodeReadyNow(nodeId, nodeRow, activeSet, readAtMs)) {
+      readyHostSet.add(hostIdentity.hostId);
+    }
+  }
+  const readyHosts = Object.freeze([...readyHostSet].sort());
+  const missingHosts = Object.freeze(
+    [...knownHostSet].filter((hostId) => !readyHostSet.has(hostId)).sort(),
+  );
+  return Object.freeze({
+    ...formation,
+    readyHostCount: readyHosts.length,
+    missingHostCount: Math.max(
+      0,
+      formation.declaredHostCount - readyHosts.length,
+    ),
+    readyHosts,
+    missingHosts,
+    publicationEpoch: publication ? publication.publicationEpoch : 0,
+  });
+}
+
 function buildCommittedReadResult(reads, readAtMs) {
   const nodeRowsById = reads === null ? null :
     indexCommittedNodeRows(reads.nodesResult?.rows);
   if (nodeRowsById === null) return {outcome: OUTCOME.READ_FAILED};
+  const publicationRows = rowsOf(reads.publicationsResult);
   const publication = reads === null ? null :
-    selectLatestPublishedMembership(rowsOf(reads.publicationsResult));
+    selectLatestPublishedMembership(publicationRows);
+  const formation = enrichFormingFormation(
+    decodeFormationRecord(findFormationRow(publicationRows)),
+    nodeRowsById,
+    publication,
+    readAtMs,
+  );
   const outcome = reads === null ? OUTCOME.READ_FAILED :
     publication === null ? OUTCOME.NO_RECORD : OUTCOME.RECORD;
-  return outcome !== OUTCOME.RECORD ? {outcome} : {
+  return outcome !== OUTCOME.RECORD ? {outcome, formation} : {
     outcome,
+    formation,
     record: Object.freeze({
       epoch: Object.freeze({
         publicationEpoch: publication.publicationEpoch,
@@ -343,6 +376,7 @@ function buildCommittedReadResult(reads, readAtMs) {
         readAtMs,
       }),
       publication,
+      formation,
       nodeRowsById,
       decisionsByNodeId: new Map(),
     }),
@@ -373,16 +407,22 @@ function evaluateServeEligibilityRecordSignature(
   record,
   outcome,
   isNodeLoadReady,
+  formationState = null,
 ) {
   if (!record) {
-    return outcome;
+    return formationState ? `${outcome}:${formationState}` : outcome;
   }
   const nodeIds = new Set([
     ...record.nodeRowsById.keys(),
     ...record.publication.publishedActiveNodeIds,
   ]);
-  const parts = [outcome, record.epoch.publicationEpoch,
-    record.epoch.publicationId];
+  const parts = [
+    outcome,
+    record.epoch.publicationEpoch,
+    record.epoch.publicationId,
+    formationState || PLACEMENT_FORMATION_STATE.UNAVAILABLE,
+    record.formation?.declaredHostCount ?? 0,
+  ];
   for (const nodeId of [...nodeIds].sort()) {
     const decided = decideServeEligibility({
       nodeId,
@@ -471,9 +511,10 @@ export {
   buildCommittedReadResult,
   checkOwnerUnavailability,
   decideServeEligibility,
-  evaluateCommittedFormation,
+  evaluateServeEligibilityNodeRow,
   evaluateServeEligibilityRecordSignature,
   hasAdvancedNodeLeaseOrHeartbeat,
+  isFormationPublicationRow,
   isMembershipPublication,
   isOlderNodeHeartbeatProjection,
   isRegressedCommittedReadResult,

@@ -1,4 +1,4 @@
-import {COLUMN, STRING} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {CONFIG_KEY} from './config-key-constants.js';
 import {LATENCY_PROPAGATION_MODE} from './config-latency-constants.js';
 import {CONFIG_SCHEMA} from './config-schema-constants.js';
@@ -17,6 +17,7 @@ const CONFIG_CATEGORY = Object.freeze({
   NODE: 'node',
   CONTROL_PLANE: 'controlPlane',
   LATENCY: 'latency',
+  FORMATION: 'formation',
 });
 
 const CONFIG_SUBSYSTEM = Object.freeze({
@@ -183,6 +184,7 @@ const ENV_MAPPINGS = {
   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
+  FORMATION_DECLARED_HOST_COUNT: CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT,
 };
 
 /**
@@ -230,5 +232,4 @@ export {
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
   LEGACY_ENV_ALIASES,
-  STRING,
 };

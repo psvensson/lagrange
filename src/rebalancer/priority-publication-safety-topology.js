@@ -17,6 +17,7 @@ const {
   RAFT_ROLE,
   REBALANCER_SKIP_REASON,
   ReplicaOperationResponseStatus,
+  ReplicaStatus,
   SERVICE_TYPE,
   STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES,
   SYSTEM_TABLE_NAME,
@@ -24,6 +25,36 @@ const {
   WORKFLOW_STEP,
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
+
+function isVoterReadyReplicaTopology(replicaRow) {
+  if (!replicaRow) {
+    return false;
+  }
+  if (!VOTER_READY_REPLICA_TOPOLOGY_STATUSES.has(replicaRow.status)) {
+    return false;
+  }
+  if (!replicaRow.address) {
+    return false;
+  }
+  return isVoterRaftRole(replicaRow.raft_role);
+}
+
+function isVoterReadyFloorCountableReplica(replicaRow, options = {}) {
+  const nodes = options?.committedNodeFloor?.nodeSemanticsById;
+  return (
+    isVoterReadyReplicaTopology(replicaRow) &&
+    nodes !== null &&
+    nodes !== undefined &&
+    mapPrototypeGet(nodes, replicaRow.node_id)?.readyNow === true
+  );
+}
+
+function isCaughtUpVoterReadyReplica(replicaRow, options = {}) {
+  return (
+    isVoterReadyFloorCountableReplica(replicaRow, options) &&
+    replicaRow?.status === ReplicaStatus.ACTIVE
+  );
+}
 
 class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecution {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
@@ -119,24 +150,17 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   isVoterReadyReplicaTopology(replicaRow) {
-    if (!replicaRow) {
-      return false;
-    }
-    if (!VOTER_READY_REPLICA_TOPOLOGY_STATUSES.has(replicaRow.status)) {
-      return false;
-    }
-    if (!replicaRow.address) {
-      return false;
-    }
-    return isVoterRaftRole(replicaRow.raft_role);
+    return isVoterReadyReplicaTopology(replicaRow);
   }
 
   // A floor sample comes from one committed-node owner read for this entire
   // evaluation. Strict participation remains a separate replacement guard.
   isVoterReadyFloorCountableReplica(replicaRow, options = {}) {
-    const nodes = options.committedNodeFloor?.nodeSemanticsById;
-    return this.isVoterReadyReplicaTopology(replicaRow) && nodes !== null &&
-      nodes !== undefined && mapPrototypeGet(nodes, replicaRow.node_id)?.readyNow === true;
+    return isVoterReadyFloorCountableReplica(replicaRow, options);
+  }
+
+  isCaughtUpVoterReadyReplica(replicaRow, options = {}) {
+    return isCaughtUpVoterReadyReplica(replicaRow, options);
   }
 
   isVoterReadyRoutableReplica(replicaRow, options = {}) {
@@ -273,4 +297,4 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 }
 
-export {PriorityPublicationSafetyTopology};
+export {PriorityPublicationSafetyTopology, isCaughtUpVoterReadyReplica};

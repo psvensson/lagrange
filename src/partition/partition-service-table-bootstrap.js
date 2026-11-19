@@ -191,6 +191,25 @@ function ensureEndpointTableColumns(service) {
     {tableName: service.tableName, partitionId: service.partitionId});
 }
 
+const FORMATION_RECORD_COLUMN = 'formation_record';
+const ADD_FORMATION_RECORD_SQL = 'ADD COLUMN formation_record TEXT';
+
+function ensureControlPlanePublicationsTableColumns(service) {
+  if (service.tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
+    return;
+  }
+  const hasFormationRecord = service.db
+    .prepare(`PRAGMA table_info(${service.tableName})`)
+    .all()
+    .some((col) => col.name === FORMATION_RECORD_COLUMN);
+  if (hasFormationRecord) {
+    return;
+  }
+  service.db.exec(
+    `ALTER TABLE ${service.tableName} ${ADD_FORMATION_RECORD_SQL}`,
+  );
+}
+
 function createPartitionServiceTable(service) {
   if (!service.schema || !service.schema.columns) {
     return;
@@ -200,6 +219,7 @@ function createPartitionServiceTable(service) {
   service.db.exec(sql);
   ensureNodesTableColumns(service);
   ensureEndpointTableColumns(service);
+  ensureControlPlanePublicationsTableColumns(service);
   service.ensureServicesTableColumns();
   service.ensureTablesTableColumns();
   service.ensureMessageGroupsTableColumns();

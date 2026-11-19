@@ -144,25 +144,18 @@ test('a committed expired lease is a committed negative even when the cache ' +
   t.end();
 });
 
-test('a node outside the published membership, an unacknowledged ' +
-  'publication, a pending or unstated priority spread are committed ' +
-  'negatives', async (t) => {
-  const cases = [
+test('a node outside the published membership or an unacknowledged ' +
+  'publication is a committed negative; pending or unstated priority spread ' +
+  'does not block serve eligibility', async (t) => {
+  const negativeCases = [
     ['not published', publicationRow({
       published_active_node_ids: JSON.stringify([NODE_A])}),
     'node_not_published'],
     ['publication not acknowledged', publicationRow({
       acknowledged_node_ids: JSON.stringify([NODE_A])}),
     'publication_not_acknowledged'],
-    ['priority spread pending', publicationRow({
-      priority_partition_summary: JSON.stringify({
-        satisfied: false, blockedPartitions: []})}),
-    'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
-    ['priority spread unstated', publicationRow({
-      priority_partition_summary: null}),
-    'priority_spread_unstated'],
   ];
-  for (const [label, publication, reason] of cases) {
+  for (const [label, publication, reason] of negativeCases) {
     const {readiness} = createReadiness({
       cacheNodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
       state: {nodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
@@ -171,6 +164,24 @@ test('a node outside the published membership, an unacknowledged ' +
     const answer = await answerAfterRead(readiness, NODE_B);
     t.equal(answer?.decision ?? null, 'not_eligible', `${label}: not eligible`);
     t.ok(answer?.reasons?.includes(reason), `${label}: reason ${reason}`);
+    readiness.shutdown();
+  }
+  const eligibleWhileFormingCases = [
+    ['priority spread pending', publicationRow({
+      priority_partition_summary: JSON.stringify({
+        satisfied: false, blockedPartitions: []})})],
+    ['priority spread unstated', publicationRow({
+      priority_partition_summary: null})],
+  ];
+  for (const [label, publication] of eligibleWhileFormingCases) {
+    const {readiness} = createReadiness({
+      cacheNodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
+      state: {nodes: [nodeRow(NODE_A), nodeRow(NODE_B)],
+        publications: [publication]},
+    });
+    const answer = await answerAfterRead(readiness, NODE_B);
+    t.equal(answer?.decision ?? null, 'eligible',
+      `${label}: serve eligibility stays eligible while forming`);
     readiness.shutdown();
   }
   t.end();

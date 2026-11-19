@@ -76,6 +76,33 @@ const ALLOCATING_HEADS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE,
 const INSERTING_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE]);
 const MAIN_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE, KEYWORD.UPDATE,
   KEYWORD.DELETE, KEYWORD.SELECT]);
+const PUBLICATIONS_TABLE_NAME = 'control_plane_publications';
+const PROTECTED_FORMATION_KEY = 'cluster_formation';
+const PROTECTED_FORMATION_SELECT_SQL =
+  'SELECT * FROM control_plane_publications ' +
+  'WHERE publication_id = ? OR publication_kind = ? ' +
+  'ORDER BY publication_id';
+
+function mentionsProtectedFormationKey(lexed, params) {
+  const tokenMatches = Array.isArray(lexed?.tokens) &&
+    lexed.tokens.some((token) =>
+      typeof token?.identifier === 'string' &&
+      asciiLower(token.identifier) === PROTECTED_FORMATION_KEY);
+  if (tokenMatches) {
+    return true;
+  }
+  return Array.isArray(params) &&
+    params.some((value) =>
+      typeof value === 'string' &&
+      asciiLower(value.trim()) === PROTECTED_FORMATION_KEY);
+}
+
+function readProtectedFormationSnapshotJson(db) {
+  return JSON.stringify(
+    db.prepare(PROTECTED_FORMATION_SELECT_SQL)
+      .all(PROTECTED_FORMATION_KEY, PROTECTED_FORMATION_KEY),
+  );
+}
 
 // The verb of a statement: its head, or for a WITH head the first verb after
 // the common table expressions (whose bodies are parenthesized).
@@ -266,6 +293,10 @@ function admitWrite(service, lexed, params, statement, path) {
   }
   const allocating = ALLOCATING_HEADS.has(lexed.head);
   const tableName = ownTableName(service);
+  const protectFormationRow = tableName === PUBLICATIONS_TABLE_NAME;
+  if (protectFormationRow && mentionsProtectedFormationKey(lexed, params)) {
+    return refusal(LAYER.FORMATION_RECORD_PROTECTED);
+  }
   if (allocating &&
       refusesKeyAllocation(service.db, lexed, Array.isArray(params) ? params : [],
         tableName)) {
@@ -279,7 +310,8 @@ function admitWrite(service, lexed, params, statement, path) {
     return refusal(LAYER.ROWID_CEILING);
   }
   return {admitted: true, kind: KIND.WRITE, statement, ceilingChecked: allocating,
-    ownShape, retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
+    protectFormationRow, ownShape,
+    retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
       !hasDoUpdateClause(lexed.tokens)};
 }
 
@@ -350,9 +382,15 @@ function statementRefusalError(refused) {
   return error;
 }
 
-function runBelowCeiling(admission, params) {
+function runBelowCeiling(service, admission, params) {
+  const beforeFormation = admission.protectFormationRow === true ?
+    readProtectedFormationSnapshotJson(service.db) : null;
   const info = admission.statement.run(...params);
-  if (isAtRowidCeiling(admission.ownShape)) {
+  if (beforeFormation !== null &&
+      readProtectedFormationSnapshotJson(service.db) !== beforeFormation) {
+    throw statementRefusalError(refusal(LAYER.FORMATION_RECORD_PROTECTED));
+  }
+  if (admission.ceilingChecked === true && isAtRowidCeiling(admission.ownShape)) {
     throw statementRefusalError(refusal(LAYER.ROWID_CEILING));
   }
   return info;
@@ -369,12 +407,12 @@ function runBelowCeiling(admission, params) {
  * @return {Object} {admitted: true, info} or the ceiling refusal.
  */
 function runAdmittedPartitionStatement(service, admission, params = []) {
-  if (admission.ceilingChecked !== true) {
+  if (admission.ceilingChecked !== true && admission.protectFormationRow !== true) {
     return {admitted: true, info: admission.statement.run(...params)};
   }
   try {
     return {admitted: true, info: service.db.transaction(() =>
-      runBelowCeiling(admission, params))()};
+      runBelowCeiling(service, admission, params))()};
   } catch (error) {
     if (error?.code === REFUSAL_CODE && error.refusal) {
       return error.refusal;

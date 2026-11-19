@@ -129,6 +129,7 @@ class MembershipPublicationCoordinatorReads {
         null;
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.replicaOperationRepository = options.replicaOperationRepository || null;
+    this.publicationsPartitionService = options.publicationsPartitionService;
     this.logger = options.logger || this.controlPlaneReadinessService?.logger || console;
     // FD-upgrade SWIM divergence probe: production bootstrap always wires a
     // runtime (default-on since the N=8 gate, commit b1434fe0; opt-out flag

@@ -48,6 +48,20 @@ const {
   reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
 
+const FORMATION_RECORD_ABSENT_REASON = 'FORMATION_RECORD_ABSENT';
+
+function isFormationGateActiveOnReadiness(readiness) {
+  if (!readiness) {
+    return false;
+  }
+  const owner = readiness.serveEligibilityOwner;
+  const observedReason = owner?.observedFormation?.reason;
+  const hasObservedFormation =
+    Boolean(owner?.latchedFormation) ||
+    (Boolean(observedReason) && observedReason !== FORMATION_RECORD_ABSENT_REASON);
+  return Boolean(readiness.enforceFormationGate) || hasObservedFormation;
+}
+
 // Typed parser refusals (statement count, unsupported statement form,
 // malformed transaction control) keep their own code; every other parse
 // failure is a syntax error.
@@ -306,8 +320,11 @@ class SQLQueryEngineStatementExecution extends
     const parseEndMs = Date.now();
     cancellationToken?.throwIfCancelled?.();
 
-    const clientStatementRefusal = resolveClientStatementRefusal(ast,
-      options);
+    const clientStatementRefusal = resolveClientStatementRefusal(
+      ast,
+      options,
+      this.resolveFormationAnswerForIngress(options),
+    );
     if (clientStatementRefusal !== null) {
       return clientStatementRefusal;
     }
@@ -631,6 +648,21 @@ class SQLQueryEngineStatementExecution extends
       throw new Error(QUERY_ERROR_MSG.MIGRATION_PIPELINE_UNAVAILABLE);
     }
     return this.migrationPipeline.handleAlterTable(ast, sessionId);
+  }
+
+  /**
+   * Resolve the cluster formation answer for the engine statement ingress gate.
+   * @param {Object} [options] - SqlCore execution options.
+   * @return {Object|null}
+   */
+  resolveFormationAnswerForIngress(options = {}) {
+    if (options.formation) {
+      return options.formation;
+    }
+    const readiness = this.controlPlaneReadinessService;
+    return isFormationGateActiveOnReadiness(readiness) ?
+      readiness.answerFormation?.() ?? null :
+      null;
   }
 
   /**

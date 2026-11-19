@@ -195,13 +195,43 @@ function buildReleaseSection(rel, supportEnvelope) {
   return supportEnvelope ? {...base, supportEnvelope} : base;
 }
 
+function buildFormationFacts(formation, configured) {
+  if (
+    !formation ||
+    typeof formation !== 'object' ||
+    typeof formation.state !== STRING_TYPE
+  ) {
+    return NULL_SNAPSHOT;
+  }
+  if (
+    isCount(configured) &&
+    isCount(formation.declaredHostCount) &&
+    configured !== formation.declaredHostCount
+  ) {
+    return Object.freeze({
+      ...formation,
+      declarationConfigDiffers: Object.freeze({
+        durable: formation.declaredHostCount,
+        configured,
+      }),
+    });
+  }
+  return formation;
+}
+
 function buildClusterSection(owner, incLin) {
   const identity = owner.getClusterId();
   const identityState = identity === NULL_CLUSTER_ID ?
     CLUSTER_FACTS_CONSTANTS.IDENTITY_UNKNOWN :
     CLUSTER_FACTS_CONSTANTS.IDENTITY_ESTABLISHED;
   const lin = owner.getRestoreLineage();
-  return lin && incLin ? {identity, identityState, restoredFrom: lin} : {identity, identityState};
+  const formation = owner.getFormationFacts();
+  return {
+    identity,
+    identityState,
+    ...(lin && incLin ? {restoredFrom: lin} : {}),
+    ...(formation ? {formation} : {}),
+  };
 }
 
 function buildFacts(owner, snap, incLin) {
@@ -274,6 +304,7 @@ function createBackupRestoreOwner(owner) {
     exportPartitionSnapshots: options.exportPartitionSnapshots ?? NULL_PORT,
     hydratePartitionSnapshots: options.hydratePartitionSnapshots ?? NULL_PORT,
     getClusterId: () => owner.getClusterId(),
+    getFormation: () => owner.getFormationFacts(),
     onSetClusterId: (id) => {
       owner.clusterId = id;
       options.onSetClusterId?.(id);
@@ -418,6 +449,13 @@ class ManagementV1Owner {
 
   getRestoreLineage() {
     return this.backupRestoreOwner?.getRestoredFrom?.() ?? NULL_RESTORE_LINEAGE;
+  }
+
+  getFormationFacts() {
+    return buildFormationFacts(
+      readSnapshotPort(this.options.getFormation),
+      readSnapshotPort(this.options.getConfiguredDeclaredHostCount),
+    );
   }
 
   hasActiveOperation() {

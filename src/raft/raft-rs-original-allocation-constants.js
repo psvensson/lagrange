@@ -42,7 +42,10 @@ const ORIGINAL_ALLOCATION_COLUMN = Object.freeze({
   ISSUE: 'original_allocation_issue',
   SERVICE_RIGHT: 'original_service_right',
   IDENTITY_RIGHT: 'original_identity_right',
+  FORMATION_RIGHT: 'original_formation_right',
 });
+
+const ORIGINAL_FORMATION_RIGHT = ORIGINAL_ALLOCATION_COLUMN.FORMATION_RIGHT;
 
 // Consumption is monotonic. TRANSFERRED has no successor, and a duplicate
 // submission must not authorize a second external INSERT.
@@ -67,5 +70,6 @@ function isOriginalAllocationHold(error, reason = undefined) {
 }
 
 export {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON,
-  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR, isOriginalAllocationHold,
+  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_FORMATION_RIGHT,
+  ORIGINAL_RIGHT_SUCCESSOR, isOriginalAllocationHold,
   originalAllocationError};

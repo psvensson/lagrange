@@ -447,7 +447,7 @@ function seededServiceRows(partitionId, nodeId = 'n1') {
 
 test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions', async () => {
   const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
-  let currentPublication = null;
+  let currentPublications = [];
   let allowRead = false;
   const serveEligibilityOwner = new ServeEligibilityOwner({
     now: () => NOW_MS,
@@ -459,7 +459,7 @@ test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -
       if (!allowRead) return {success: false, error: 'not_ready_yet', rows: []};
       if (tableName === TABLES.NODES) return {success: true, rows: threeNodes};
       if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
-        return {success: true, rows: currentPublication ? [currentPublication] : []};
+        return {success: true, rows: [...currentPublications]};
       }
       return {success: false, error: 'unexpected', rows: []};
     },
@@ -504,9 +504,9 @@ test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -
     );
     assert.deepEqual(owner.lastPassSnapshot.admitted, []);
 
-    // 2. UNDECLARED: publication has no priority_partition_summary
+    // 2. UNDECLARED: membership published, no cluster_formation row yet
     allowRead = true;
-    currentPublication = {
+    const membership1 = {
       publication_id: 'cluster_membership-1',
       publication_kind: 'cluster_membership',
       publication_epoch: 1,
@@ -519,13 +519,14 @@ test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -
       created_at: NOW_MS,
       updated_at: NOW_MS,
     };
+    currentPublications = [membership1];
     await serveEligibilityOwner.readServeEligibility();
     await new Promise((resolve) => setImmediate(resolve));
     await owner.awaitCurrentWorkIdle();
-    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
-      state: PLACEMENT_FORMATION_STATE.UNDECLARED,
-      latchEpoch: null,
-    });
+    assert.equal(
+      serveEligibilityOwner.answerCommittedNodes().formation.state,
+      PLACEMENT_FORMATION_STATE.UNDECLARED,
+    );
     // Only priority class (sql_transactions-p1) is admitted while UNDECLARED; classes 3-5 wait:
     const rowsAfterUndeclared = ledger.db
       .prepare('SELECT partition_id FROM replica_operations ORDER BY operation_id')
@@ -535,27 +536,47 @@ test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -
       ['sql_transactions-p1'],
     );
 
-    // 3. FORMING: priority_partition_summary published with spreadGap > 0 (not satisfied)
-    currentPublication = {
-      ...currentPublication,
-      publication_id: 'cluster_membership-2',
-      publication_epoch: 2,
-      priority_partition_summary: JSON.stringify({
-        satisfied: false,
-        blockedPartitions: [{partitionId: 'sql_transactions-p1', spreadGap: 1}],
+    // 3. FORMING: cluster_formation row is DECLARED
+    const declaredFormationRow = {
+      publication_id: 'cluster_formation',
+      publication_kind: 'cluster_formation',
+      publication_epoch: 0,
+      publisher_node_id: 'n1',
+      status: 'DECLARED',
+      created_at: NOW_MS,
+      updated_at: NOW_MS,
+      formation_record: JSON.stringify({
+        version: 1,
+        status: 'DECLARED',
+        clusterId: 'cluster-placement-test',
+        declaredHostCount: 3,
+        declaredByNodeId: 'n1',
+        declaredAt: NOW_MS,
+        formedAt: null,
+        formedByNodeId: null,
+        formedPublicationEpoch: null,
+        formedHostIds: null,
+        formedReadyNodeIds: null,
+        priorityPartitionVoters: null,
       }),
     };
+    const membership2 = {
+      ...membership1,
+      publication_id: 'cluster_membership-2',
+      publication_epoch: 2,
+    };
+    currentPublications = [membership2, declaredFormationRow];
     serveEligibilityOwner.noteSourceChange(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
-      currentPublication,
+      declaredFormationRow,
     );
     await serveEligibilityOwner.readServeEligibility();
     await new Promise((resolve) => setImmediate(resolve));
     await owner.awaitCurrentWorkIdle();
-    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
-      state: PLACEMENT_FORMATION_STATE.FORMING,
-      latchEpoch: null,
-    });
+    assert.equal(
+      serveEligibilityOwner.answerCommittedNodes().formation.state,
+      PLACEMENT_FORMATION_STATE.FORMING,
+    );
     assert.equal(
       ledger.db.prepare('SELECT COUNT(*) AS c FROM replica_operations').get().c,
       1,
@@ -567,27 +588,47 @@ test('real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -
       'UPDATE replica_operations SET workflow_step = ?, status = ?',
     ).run(WORKFLOW_STEP.ACTIVE, SERVICE_STATUS.ACTIVE);
 
-    // 4. FORMED: priority_partition_summary published satisfied at epoch 3
-    currentPublication = {
-      ...currentPublication,
-      publication_id: 'cluster_membership-3',
+    // 4. FORMED: cluster_formation row latched to FORMED at epoch 3
+    const formedFormationRow = {
+      ...declaredFormationRow,
       publication_epoch: 3,
-      priority_partition_summary: JSON.stringify({
-        satisfied: true,
-        blockedPartitions: [],
+      status: 'FORMED',
+      formation_record: JSON.stringify({
+        version: 1,
+        status: 'FORMED',
+        clusterId: 'cluster-placement-test',
+        declaredHostCount: 3,
+        declaredByNodeId: 'n1',
+        declaredAt: NOW_MS,
+        formedAt: NOW_MS + 10,
+        formedByNodeId: 'n1',
+        formedPublicationEpoch: 3,
+        formedHostIds: ['h1', 'h2', 'h3'],
+        formedReadyNodeIds: ['n1', 'n2', 'n3'],
+        priorityPartitionVoters: {},
       }),
     };
+    const membership3 = {
+      ...membership2,
+      publication_id: 'cluster_membership-3',
+      publication_epoch: 3,
+    };
+    currentPublications = [membership3, formedFormationRow];
     serveEligibilityOwner.noteSourceChange(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
-      currentPublication,
+      formedFormationRow,
     );
     await serveEligibilityOwner.readServeEligibility();
     await new Promise((resolve) => setImmediate(resolve));
     await owner.awaitCurrentWorkIdle();
-    assert.deepEqual(serveEligibilityOwner.answerCommittedNodes().formation, {
-      state: PLACEMENT_FORMATION_STATE.FORMED,
-      latchEpoch: 3,
-    });
+    assert.equal(
+      serveEligibilityOwner.answerCommittedNodes().formation.state,
+      PLACEMENT_FORMATION_STATE.FORMED,
+    );
+    assert.equal(
+      serveEligibilityOwner.answerCommittedNodes().formation.latchEpoch,
+      3,
+    );
     const allRows = ledger.db
       .prepare('SELECT partition_id FROM replica_operations ORDER BY rowid')
       .all()

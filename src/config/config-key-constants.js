@@ -216,6 +216,9 @@ const CONFIG_KEY = Object.freeze({
   LATENCY_PING_RETRY_COUNT: 'latency.pingRetryCount',
   LATENCY_SMOOTHING_ALPHA: 'latency.smoothingAlpha',
   LATENCY_PROPAGATION_MODE: 'latency.propagationMode',
+
+  // Founding cluster formation declaration (seed-only)
+  FORMATION_DECLARED_HOST_COUNT: 'formation.declaredHostCount',
 });
 
 export {CONFIG_KEY};

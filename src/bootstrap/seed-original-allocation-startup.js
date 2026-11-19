@@ -124,7 +124,10 @@ async function initializeOriginalSeedAttempt(service) {
     }
     preparation.prepare(createSeedOriginalAllocation({dataDir,
       nodeId: service.nodeId, buildDigest: build.digest,
-      now: service.nodeService.getTimeSource().now()}));
+      now: service.nodeService.getTimeSource().now(),
+      ...(service.declaredHostCount !== undefined ?
+        {declaredHostCount: service.declaredHostCount} :
+        {})}));
   } catch (error) {
     service.originalAllocationPreparation?.revoke();
     throw error;

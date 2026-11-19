@@ -60,7 +60,7 @@ documentClass: generated
 - [partition-cdc-obligation-progress.js](partition-cdc-obligation-progress.js) - The obligation lane's one metadata-only continuation. (importers: few)
 - [partition-cdc-obligation-range.js](partition-cdc-obligation-range.js) - The range one drive step of the CDC obligation lane ships (quest cdc-obligation-range-shipping; records S-1, S-2 and... (importers: one)
 - [partition-cdc-obligation.js](partition-cdc-obligation.js) - The committed-entry CDC hook and the committed CDC_DELIVERED application (TX1 design revision 10, section 8.3;... (importers: few)
-- [partition-cdc-owed-admission.js](partition-cdc-owed-admission.js) - Admission of work that can add durable CDC debt. (importers: few)
+- [partition-cdc-owed-admission.js](partition-cdc-owed-admission.js) - Admission of work that can add durable CDC debt. (importers: many)
 - [partition-cdc-parameterized-sql.js](partition-cdc-parameterized-sql.js) - Parameterized SQL helpers for PartitionCDCGenerator. (importers: few)
 - [partition-committed-command-admission.js](partition-committed-command-admission.js) - The one owner of "may this committed command enter consensus": every path in the partition that proposes a committed... (importers: many)
 - [partition-committed-log.js](partition-committed-log.js) - The partition's committed log, as the rs-raft durable store holds it. (importers: few)

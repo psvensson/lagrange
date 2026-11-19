@@ -11,8 +11,11 @@ import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
   '../seed-foundation-rows.js';
 import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../raft/raft-rs-original-allocation-constants.js';
-import {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity} from
-  '../seed-original-registration.js';
+import {
+  originalSeedServiceRegistration,
+  publishOriginalSeedClusterIdentity,
+  publishOriginalSeedFormationDeclaration,
+} from '../seed-original-registration.js';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
   CONFIG_SEED_SOURCE,
@@ -628,6 +631,49 @@ class SeedRegistrationPhase {
       [COLUMN.UPDATED_AT]: now,
       [COLUMN.CREATED_AT]: now,
     });
+    await this.persistFormationDeclarationIfMissing();
+  }
+
+  /**
+   * Transfer the founding formation declaration to control_plane_publications.
+   * @return {Promise<void>}
+   */
+  async persistFormationDeclarationIfMissing() {
+    const d = this.delegates;
+    const preparation = d.getOriginalSeedPreparation?.();
+    const formation = preparation?.formationDeclaration?.();
+    if (!formation) {
+      return;
+    }
+    let publicationsPartition =
+      this.runtimeOwner.findLeaderPartition(
+        SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      );
+    if (!publicationsPartition && d.getPartitionServices?.()?.size > 0) {
+      await d.waitForPartitionLeadership?.({
+        partitionIds: [
+          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+        ],
+      });
+      publicationsPartition =
+        this.runtimeOwner.findLeaderPartition(
+          SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        );
+    }
+    if (!publicationsPartition) {
+      return;
+    }
+    await publishOriginalSeedFormationDeclaration(
+      preparation,
+      this.ensureSystemTableWriter(),
+      publicationsPartition,
+      {
+        clusterId: formation.clusterId,
+        declaredHostCount: formation.declaredHostCount,
+        declaredByNodeId: formation.declaredByNodeId,
+        declaredAt: formation.timestamp,
+      },
+    );
   }
 
   /**

@@ -1,19 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import {
-  RAFT_OPERATION_OUTCOME,
-} from './raft-operation-port-constants.js';
-import {
-  COMMITTED_MEMBERSHIP_REFUSAL,
-} from './raft-committed-membership-constants.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from './raft-committed-membership-constants.js';
 import {commitDurably, RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {pendingTurn, settledTurn, turnChainValue} from './raft-rs-turn-answer.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
-import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
-  './raft-rs-opening-history-constants.js';
-import {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE} from
-  './raft-rs-replica-lifecycle-constants.js';
+import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from './raft-rs-opening-history-constants.js';
+import {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE} from './raft-rs-replica-lifecycle-constants.js';
 import {ORIGINAL_ALLOCATION as ORIGINAL, ORIGINAL_ALLOCATION_REASON as ORIGINAL_REASON,
   ORIGINAL_ALLOCATION_COLUMN as ORIGINAL_COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
   originalAllocationError} from './raft-rs-original-allocation-constants.js';
@@ -49,13 +43,9 @@ const LIFECYCLE_REASON = Object.freeze({
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
-  // A replica whose own history was proven lost while it ran (owner decision
-  // O4): retired with this reason, it is refused with it, also after a
-  // restart.
   RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
 });
 
-// The refusal a retired row answers: a reseed hold keeps its own reason.
 function retiredRefusalReason(reason) {
   return reason === LIFECYCLE_REASON.RESEED_REQUIRED ?
     LIFECYCLE_REASON.RESEED_REQUIRED : LIFECYCLE_REASON.RETIRED;
@@ -519,6 +509,8 @@ function prepareOriginalAllocationRow({db, declaration, member}) {
     [ORIGINAL_COLUMN.SERVICE_RIGHT]: ORIGINAL.UNUSED,
     [ORIGINAL_COLUMN.IDENTITY_RIGHT]: member.replicaId === declaration.anchorReplicaId ?
       ORIGINAL.UNUSED : null,
+    [ORIGINAL_COLUMN.FORMATION_RIGHT]: member.replicaId === declaration.anchorReplicaId ?
+      ORIGINAL.UNUSED : null,
     native_history_state: RAFT_RS_OPENING_HISTORY.NEVER_OPENED};
   commitOriginalWrite(db, member, () => db.prepare(`UPDATE ${REPLICA_LIFECYCLE_TABLE}
     SET ${ORIGINAL_COLUMNS.map((column) => `${column} = ?`).join(SQL_LIST_SEPARATOR)}
@@ -546,14 +538,18 @@ function markOriginalAllocationIssued({db, declaration, anchor}) {
       AND replica_identity = ? AND incarnation = ? AND state = 'active'
       AND ${ORIGINAL_COLUMN.DECLARATION} = ? AND ${ORIGINAL_COLUMN.MEMBER} = ?
       AND ${ORIGINAL_COLUMN.ISSUE} = ? AND native_history_state = ?
-      AND ${ORIGINAL_COLUMN.IDENTITY_RIGHT} = ? AND ${ORIGINAL_COLUMN.SERVICE_RIGHT} = ?`)
+      AND ${ORIGINAL_COLUMN.IDENTITY_RIGHT} = ?
+      AND ${ORIGINAL_COLUMN.FORMATION_RIGHT} = ?
+      AND ${ORIGINAL_COLUMN.SERVICE_RIGHT} = ?`)
     .run(ORIGINAL.ISSUED, anchor.groupId, anchor.peerId, anchor.replicaId,
       anchor.incarnation, declarationText, JSON.stringify(anchor), ORIGINAL.PREPARING,
-      RAFT_RS_OPENING_HISTORY.NEVER_OPENED, ORIGINAL.UNUSED, ORIGINAL.UNUSED),
+      RAFT_RS_OPENING_HISTORY.NEVER_OPENED,
+      ORIGINAL.UNUSED, ORIGINAL.UNUSED, ORIGINAL.UNUSED),
   (row) => hasOriginalFields(row, {[ORIGINAL_COLUMN.DECLARATION]: declarationText,
     [ORIGINAL_COLUMN.ISSUE]: ORIGINAL.ISSUED,
     native_history_state: RAFT_RS_OPENING_HISTORY.NEVER_OPENED,
     [ORIGINAL_COLUMN.IDENTITY_RIGHT]: ORIGINAL.UNUSED,
+    [ORIGINAL_COLUMN.FORMATION_RIGHT]: ORIGINAL.UNUSED,
     [ORIGINAL_COLUMN.SERVICE_RIGHT]: ORIGINAL.UNUSED}));
 }
 
@@ -567,7 +563,11 @@ function markOriginalAllocationIssued({db, declaration, anchor}) {
  * @param {Object} request - {db, member, right, from, to}.
  */
 function transitionOriginalRight({db, member, right, from, to}) {
-  if (right !== ORIGINAL_COLUMN.SERVICE_RIGHT && right !== ORIGINAL_COLUMN.IDENTITY_RIGHT) {
+  if (
+    right !== ORIGINAL_COLUMN.SERVICE_RIGHT &&
+    right !== ORIGINAL_COLUMN.IDENTITY_RIGHT &&
+    right !== ORIGINAL_COLUMN.FORMATION_RIGHT
+  ) {
     throw originalAllocationError(ORIGINAL_REASON.IDENTITY, member.replicaId);
   }
   if (!Object.hasOwn(ORIGINAL_RIGHT_SUCCESSOR, from) ||

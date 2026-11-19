@@ -2,17 +2,9 @@
  * Runtime and service system table schema definitions.
  */
 import {WASM_OPERATION_COL as WO_COL} from '../wasm-service/wasm-meta-models-constants.js';
-import {
-  SD_COL,
-  SERVICE_DEFINITION_COLUMN_LIST,
-} from '../wasm-service/wasm-service-models.js';
-import {
-  SERVICE_PARTITION_ACCESS_COL as SPA_COL,
-} from '../constants/service.js';
-import {
-  COLUMN_TYPE,
-  SYSTEM_TABLE_NAME,
-} from './system-table-schema-shared-constants.js';
+import {SD_COL, SERVICE_DEFINITION_COLUMN_LIST} from '../wasm-service/wasm-service-models.js';
+import {SERVICE_PARTITION_ACCESS_COL as SPA_COL} from '../constants/service.js';
+import {COLUMN_TYPE, SYSTEM_TABLE_NAME} from './system-table-schema-shared-constants.js';
 import {REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS} from
   './replica-operation-create-admission-schema-constants.js';
 import {REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
@@ -39,6 +31,7 @@ const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
     {name: 'published_at', type: COLUMN_TYPE.INTEGER},
     {name: 'closed_at', type: COLUMN_TYPE.INTEGER},
     {name: 'transition_history', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'formation_record', type: COLUMN_TYPE.TEXT},
   ],
   indices: [
     {

@@ -367,9 +367,14 @@ class MembershipPublicationCoordinatorReconcile extends
               },
             },
           );
+          const normalizedPersistedRow =
+            normalizeControlPlanePublicationRow(persistedRow);
+          await this.evaluateAndLatchFormationIfEligible({
+            publicationRow: normalizedPersistedRow,
+          });
           return {
             candidate,
-            publicationRow: normalizeControlPlanePublicationRow(persistedRow),
+            publicationRow: normalizedPersistedRow,
             workflow,
           };
         }),
@@ -409,6 +414,8 @@ class MembershipPublicationCoordinatorReconcile extends
       this.cdcIntegrationService,
     );
     const isLeader = leadership.isLeader;
+    const becameLeader =
+      this.ownerDriverPredicateSnapshot !== isLeader && isLeader === true;
     if (this.ownerDriverPredicateSnapshot !== isLeader) {
       this.ownerDriverPredicateSnapshot = isLeader;
       this.logger?.warn?.(OWNER_MEMBERSHIP_DRIVER_PREDICATE_MSG, {
@@ -425,6 +432,10 @@ class MembershipPublicationCoordinatorReconcile extends
       await this.refreshDeferredPublicationsCacheFromAuthority();
       await this.refreshDeferredPropagatedCachesFromAuthority();
       return false;
+    }
+    this.attachFormationLatchTriggers?.();
+    if (becameLeader) {
+      await this.evaluateAndLatchFormationIfEligible().catch(() => {});
     }
     this.assertSingleMembershipPartition();
     this.ownerMembershipReconcileInFlight = true;
@@ -480,6 +491,7 @@ class MembershipPublicationCoordinatorReconcile extends
           });
         }
         await this.refreshDeferredPublicationsCacheFromAuthority();
+        await this.evaluateAndLatchFormationIfEligible().catch(() => {});
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,
@@ -560,6 +572,7 @@ class MembershipPublicationCoordinatorReconcile extends
       return false;
     } finally {
       await this.refreshDeferredPropagatedCachesFromAuthority();
+      await this.evaluateAndLatchFormationIfEligible().catch(() => {});
       this.ownerMembershipReconcileInFlight = false;
     }
   }
@@ -611,6 +624,7 @@ class MembershipPublicationCoordinatorReconcile extends
     if (!enabled) {
       return;
     }
+    this.attachFormationLatchTriggers?.();
     const intervalMs =
       options.intervalMs || OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS;
     const timeSource = resolveTimeSource(options);
@@ -631,6 +645,7 @@ class MembershipPublicationCoordinatorReconcile extends
   }
 
   stopOwnerMembershipDriver() {
+    this.detachFormationLatchTriggers?.();
     if (this.ownerMembershipDriverTimer) {
       const clearIntervalFn =
         typeof this.ownerMembershipDriverClearInterval === 'function' ?

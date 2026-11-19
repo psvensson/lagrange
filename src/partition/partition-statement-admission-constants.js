@@ -98,6 +98,9 @@ const PARTITION_STATEMENT_REFUSAL_LAYER = Object.freeze({
   // transaction (the outcome row and the applied index would then be written
   // outside it).
   STATEMENT_CONFLICT: 'statement_conflict',
+  // A direct SQL write targeting publication_id = 'cluster_formation' or
+  // publication_kind = 'cluster_formation' on control_plane_publications.
+  FORMATION_RECORD_PROTECTED: 'formation_record_protected',
 });
 
 // What an admitted statement is.

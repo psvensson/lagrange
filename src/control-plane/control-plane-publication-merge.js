@@ -25,6 +25,8 @@ const LOCAL_STR_REASON_CODE = 'reason_code';
 const LOCAL_STR_REASONCODE = 'reasonCode';
 const LOCAL_STR_TRANSITION_HISTORY = 'transition_history';
 const LOCAL_STR_TRANSITIONHISTORY = 'transitionHistory';
+const FORMATION_PUBLICATION_ID = 'cluster_formation';
+const FORMATION_STATUS_FORMED = 'FORMED';
 
 const PUBLICATION_ROW_MERGE_MODE = Object.freeze({
   SAME_REVISION: 'same_revision',
@@ -221,6 +223,32 @@ function resolveMergedRevisionNodeIds(
   ]);
 }
 
+function isFormationPublicationPair(normalizedPrimary, normalizedSecondary) {
+  return (
+    normalizedPrimary.publicationId === FORMATION_PUBLICATION_ID ||
+    normalizedSecondary.publicationId === FORMATION_PUBLICATION_ID ||
+    normalizedPrimary.publicationKind === FORMATION_PUBLICATION_ID ||
+    normalizedSecondary.publicationKind === FORMATION_PUBLICATION_ID
+  );
+}
+
+function selectWinningFormationRow(
+  primaryRow,
+  secondaryRow,
+  normalizedPrimary,
+  normalizedSecondary,
+  latestRow,
+) {
+  if (normalizedPrimary.status === FORMATION_STATUS_FORMED) {
+    return serializeControlPlanePublicationRow(primaryRow);
+  }
+  return serializeControlPlanePublicationRow(
+    normalizedSecondary.status === FORMATION_STATUS_FORMED ?
+      secondaryRow :
+      latestRow,
+  );
+}
+
 function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   if (!primaryRow && !secondaryRow) {
     return null;
@@ -234,6 +262,15 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   const normalizedPrimary = normalizeControlPlanePublicationRow(primaryRow);
   const normalizedSecondary = normalizeControlPlanePublicationRow(secondaryRow);
   const latestRow = selectLatestRow(primaryRow, secondaryRow);
+  if (isFormationPublicationPair(normalizedPrimary, normalizedSecondary)) {
+    return selectWinningFormationRow(
+      primaryRow,
+      secondaryRow,
+      normalizedPrimary,
+      normalizedSecondary,
+      latestRow,
+    );
+  }
   const fallbackRow = latestRow === primaryRow ? secondaryRow : primaryRow;
   const normalizedLatest =
     latestRow === primaryRow ? normalizedPrimary : normalizedSecondary;
@@ -474,6 +511,5 @@ function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
 export {
   CONTROL_PLANE_PUBLICATION_STATUS,
   mergeControlPlanePublicationRows,
-  normalizePublicationNodeIdList,
   publicationRowSatisfiesDesiredState,
 };

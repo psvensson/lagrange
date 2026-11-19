@@ -742,6 +742,9 @@ class ControlPlaneReadinessService {
   answerCommittedNodes() {
     return serve.answerCommittedNodes(this);
   }
+  answerFormation() {
+    return serve.answerFormation(this);
+  }
   subscribeServeEligibility(listener) {
     return serve.subscribeServeEligibility(this, listener);
   }

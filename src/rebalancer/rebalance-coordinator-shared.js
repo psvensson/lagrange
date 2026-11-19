@@ -21,7 +21,7 @@ import {
   isOperationLedgerPartition as isOperationLedgerPartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
-import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {compactSnapshotSummary} from '../control-plane/control-plane-readiness-node-service-rows.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -250,7 +250,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   CONTROL_PLANE_WORKLOAD_CLASS,
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   ConfigurationManager,
-  ControlPlaneReadinessService,
+  ControlPlaneReadinessService: Object.freeze({compactSnapshotSummary}),
   DEFAULT_AMPLIFICATION_FACTOR,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   DurableWorkflowCoordinator,

@@ -93,6 +93,10 @@ function answerCommittedNodes(service) {
   return service.getServeEligibilityOwner().answerCommittedNodes();
 }
 
+function answerFormation(service) {
+  return service.getServeEligibilityOwner().answerFormation();
+}
+
 function subscribeServeEligibility(service, listener) {
   return service.getServeEligibilityOwner().subscribe(listener);
 }
@@ -112,6 +116,7 @@ export {
   answerServeEligibility,
   answerServeCohort,
   answerCommittedNodes,
+  answerFormation,
   subscribeServeEligibility,
   noteServeEligibilitySourceChange,
   shutdownServeEligibilityOwner,

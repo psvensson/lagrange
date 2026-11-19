@@ -7,7 +7,7 @@ import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
  * The coordinator facade delegates workflow progression to this owner.
  */
 
-import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {compactSnapshotSummary} from '../control-plane/control-plane-readiness-node-service-rows.js';
 import {
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   ControlPlaneField,
@@ -541,7 +541,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   ControlPlaneField,
   ControlPlaneMessageType,
-  ControlPlaneReadinessService,
+  ControlPlaneReadinessService: Object.freeze({compactSnapshotSummary}),
   DEFAULT_MIN_REPLICA_COUNT,
   DISPATCH_RETRY_DELAY_MS,
   DISPATCH_RETRY_MAX_DELAY_MS,

@@ -244,6 +244,12 @@ function normalizeControlPlanePublicationRow(row) {
       row?.transition_history,
       row?.transitionHistory,
     ),
+    formationRecord:
+      row?.formation_record !== undefined ?
+        row.formation_record :
+        row?.formationRecord !== undefined ?
+          row.formationRecord :
+          null,
   };
 }
 
@@ -340,6 +346,12 @@ function serializeControlPlanePublicationRow(row) {
       row?.transitionHistory,
       normalizedRow.transitionHistory,
     ),
+    formation_record:
+      row?.formation_record !== undefined ?
+        row.formation_record :
+        row?.formationRecord !== undefined ?
+          row.formationRecord :
+          normalizedRow.formationRecord ?? null,
   };
 }
 

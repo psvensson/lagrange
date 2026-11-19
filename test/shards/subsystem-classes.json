@@ -8,7 +8,7 @@
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
-    "convergence-topology": 86,
+    "convergence-topology": 87,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2689,
-  "digest": "fnv1a32-92628bb7",
+  "censusSize": 2690,
+  "digest": "fnv1a32-9543e106",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-00f1a0b3",
+  "observationDigest": "fnv1a32-21401094",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -758,6 +758,7 @@
     "test/convergence/baseline-discovered-regressions.test.js": "convergence-topology",
     "test/convergence/deterministic-convergence-harness.test.js": "convergence-topology",
     "test/convergence/dt-admin-event-loop-isolation-discriminator.test.js": "convergence-topology",
+    "test/convergence/dt-formation-declared-size-latch.test.js": "convergence-topology",
     "test/convergence/dt-formation-joint-admission-release-liveness.test.js": "convergence-topology",
     "test/convergence/dt-formation-priority-placement-before-active.test.js": "convergence-topology",
     "test/convergence/dt-ledger-completion-continuity-discriminator.test.js": "convergence-topology",
@@ -5832,6 +5833,33 @@
         "src/cache/read-only-system-table-cache.js",
         "src/cache/system-cache-key-descriptor.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/convergence/dt-formation-declared-size-latch.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/replica-dispatch-retry-scheduling.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-observed-progress-retention.js",
+        "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "src/storage/data-directory-manager.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/convergence/formation-joint-admission-world.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/convergence/dt-formation-joint-admission-release-liveness.test.js": {

@@ -349,6 +349,7 @@ function createRoundDriver(world, {plannerPolling = true} = {}) {
         hosts.rebalanceCoordinator.isShuttingDown = true;
         hosts.stopIntervals();
       }
+      world.publicationsPartitionService?.close?.();
     },
     async settle() {
       nextEvaluationInstant(world);
@@ -461,6 +462,7 @@ function createRoundDriver(world, {plannerPolling = true} = {}) {
       // publication of what the read captured.
       await seedReadiness.formationReleaseHandoffPublicationCoordinator
         ?.whenIdle();
+      await seedReadiness.readServeEligibility?.();
       await settleWorld(world);
       return authority;
     },

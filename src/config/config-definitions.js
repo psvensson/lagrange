@@ -192,6 +192,9 @@ const DEFAULT_CONFIG = {
     smoothingAlpha: 0.3,
     propagationMode: LATENCY_PROPAGATION_MODE.SAFE,
   },
+  formation: {
+    declaredHostCount: null,
+  },
 };
 
 /**

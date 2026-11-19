@@ -21,13 +21,44 @@
 // membership derivation, planning, admission, remove safety) is the
 // production owner's, over the rows below.
 
+import Database from 'better-sqlite3';
+import {EventEmitter} from 'node:events';
 import {
+  CONTROL_PLANE_PUBLICATIONS_SCHEMA,
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_SCHEMAS,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
+import {
+  buildFormationDeclareBody,
+  readFormationRecordIn,
+} from '../../src/control-plane/membership-publication-formation-record.js';
+import {
+  applyFormationTransitionCommand,
+  buildFormationTransitionCommand,
+} from '../../src/control-plane/membership-publication-formation-transition-command.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+} from '../../src/partition/partition-cdc-generator.js';
+import {
+  ensureCdcObligationLedger,
+} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {
+  committedStatementEntryKey,
+  createCommittedStatementOutcomeTable,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  openParticipantTransactionStore,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
 import {
   seedMessageGroupRow,
   seedPartitionRow,
@@ -168,6 +199,186 @@ const LEARNER_SERVICE = Object.freeze({getRole: () => RAFT_ROLE.LEARNER});
 const HANDOFF_PUBLICATION_KIND = 'formation_release_handoff';
 const PUBLICATION_KIND_COLUMN = 'publication_kind';
 const PUBLICATION_ID_COLUMN = 'publication_id';
+const PUBLICATIONS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[CONTROL_PLANE_PUBLICATIONS_SCHEMA.tableName];
+const DEFAULT_WORLD_CLUSTER_ID = 'formation-world-cluster';
+const DEFAULT_DECLARED_HOST_COUNT = 3;
+const QUIET_PARTITION_LOGGER = Object.freeze({
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  child() {
+    return QUIET_PARTITION_LOGGER;
+  },
+});
+
+function createSimulatedPublicationsPartitionService({
+  cache,
+  now,
+  nodeId = SEED_NODE_ID,
+}) {
+  const db = new Database(':memory:');
+  db.exec(generateCreateTableSQL(CONTROL_PLANE_PUBLICATIONS_SCHEMA));
+  for (const indexSql of generateCreateIndexSQL(
+    CONTROL_PLANE_PUBLICATIONS_SCHEMA,
+  )) {
+    db.exec(indexSql);
+  }
+  createCommittedStatementOutcomeTable(db);
+  openParticipantTransactionStore(db);
+  ensureCdcObligationLedger(db);
+  const columns = CONTROL_PLANE_PUBLICATIONS_SCHEMA.columns.map((c) => c.name);
+  const placeholders = columns.map(() => '?').join(', ');
+  const upsertStmt = db.prepare(
+    `INSERT OR REPLACE INTO ${CONTROL_PLANE_PUBLICATIONS_SCHEMA.tableName} ` +
+      `(${columns.join(', ')}) VALUES (${placeholders})`,
+  );
+  const deleteStmt = db.prepare(
+    `DELETE FROM ${CONTROL_PLANE_PUBLICATIONS_SCHEMA.tableName} ` +
+      'WHERE publication_id = ?',
+  );
+  const bindVal = (v) =>
+    typeof v === 'boolean' ?
+      Number(v) :
+      v === undefined ?
+        null :
+        v && typeof v === 'object' ?
+          JSON.stringify(v) :
+          v;
+  const syncRowToDb = (row) => {
+    if (!row || !row[PUBLICATION_ID_COLUMN]) return;
+    upsertStmt.run(...columns.map((col) => bindVal(row[col])));
+  };
+  for (const existingRow of cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS)) {
+    syncRowToDb(existingRow);
+  }
+  const store = {
+    db,
+    logIndex: 0,
+    applyingFormationCommand: false,
+  };
+  cache.onCacheApplyChange((tableName, operation, row) => {
+    if (
+      tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS ||
+      store.applyingFormationCommand
+    ) {
+      return;
+    }
+    if (operation === CDC_OPERATION.DELETE) {
+      if (row?.[PUBLICATION_ID_COLUMN]) {
+        deleteStmt.run(row[PUBLICATION_ID_COLUMN]);
+      }
+    } else {
+      syncRowToDb(row);
+    }
+  });
+
+  const emitter = new EventEmitter();
+  const resolvedWrites = new Map();
+  const service = Object.assign(emitter, {
+    partitionId: PUBLICATIONS_PARTITION_ID,
+    tableName: CONTROL_PLANE_PUBLICATIONS_SCHEMA.tableName,
+    replicaId: `${PUBLICATIONS_PARTITION_ID}-r1`,
+    nodeId,
+    db,
+    systemTableCache: cache,
+    timeSource: {now},
+    hlcClock: {now: () => `${now()}:0:${nodeId}`},
+    logger: QUIET_PARTITION_LOGGER,
+    cdcPipelineMetrics: {increment() {}},
+    isLeader: true,
+    isShutdown: false,
+    trackPendingCDCEvent() {},
+    cdcDelivery: {
+      driveCdcObligations: async () => {},
+    },
+    getCommittedEntryKey: (command) => committedStatementEntryKey(command),
+    syncCDCGeneratorDependencies: () => ({
+      buildEvent: ({
+        type,
+        tableName,
+        data,
+        whereClause,
+        entryId,
+        timestamp,
+      }) => ({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+        cdcEvent: {
+          type,
+          tableName,
+          operation:
+            type === PARTITION_SERVICE_OPERATION.INSERT ?
+              CDC_OPERATION.INSERT :
+              CDC_OPERATION.UPDATE,
+          data,
+          whereClause,
+          entryId,
+          timestamp,
+        },
+      }),
+    }),
+    resolveCommittedWrite: (entryId, answer) => {
+      resolvedWrites.set(entryId, answer);
+    },
+    rejectCommittedWrite: (_entryId, error) => {
+      throw error;
+    },
+    executeFormationTransition({entryId, body}) {
+      const command = buildFormationTransitionCommand(service, {entryId, body});
+      if (!command) {
+        return {
+          success: false,
+          committed: false,
+          partitionId: service.partitionId,
+          error: 'FORMATION_TRANSITION_COMMAND_INVALID',
+          formationResult: {
+            outcome: 'REFUSED',
+            reason: 'FORMATION_TRANSITION_COMMAND_INVALID',
+          },
+        };
+      }
+      store.logIndex += 1;
+      const afterCommitEffects = [];
+      const afterRollbackEffects = [];
+      try {
+        db.transaction(() => {
+          applyFormationTransitionCommand(service, {
+            command,
+            index: store.logIndex,
+            term: 1,
+            afterCommit: (effect) => afterCommitEffects.push(effect),
+            afterRollback: (effect) => afterRollbackEffects.push(effect),
+          });
+        })();
+      } catch (error) {
+        for (const effect of afterRollbackEffects) effect();
+        throw error;
+      }
+      store.applyingFormationCommand = true;
+      try {
+        const committedRow = readFormationRecordIn(db);
+        if (committedRow) {
+          insertStoredRow(
+            cache,
+            TABLES.CONTROL_PLANE_PUBLICATIONS,
+            committedRow,
+          );
+        }
+        for (const effect of afterCommitEffects) effect();
+      } finally {
+        store.applyingFormationCommand = false;
+      }
+      const answer = resolvedWrites.get(command.entryId);
+      resolvedWrites.delete(command.entryId);
+      return answer;
+    },
+    close: () => {
+      if (db.open) db.close();
+    },
+  });
+  return service;
+}
 
 function nodeAddressOf(nodeId) {
   return `${NODE_ADDRESS_PREFIX}${nodeId}${NODE_ADDRESS_SUFFIX}`;
@@ -810,6 +1021,8 @@ function mountPriorityPartitionPlanners({seedHosts}) {
 function createFormationWorld({
   mountPlacementDeciders = mountPriorityPartitionPlanners,
   platformClockIsWorldClock = false,
+  declaredHostCount = DEFAULT_DECLARED_HOST_COUNT,
+  clusterId = DEFAULT_WORLD_CLUSTER_ID,
 } = {}) {
   initializeTestEnvironment();
   const time = createWorldClock({platformClockIsWorldClock});
@@ -820,6 +1033,12 @@ function createFormationWorld({
     scheduleCacheChangeNotification: (callback) =>
       clock.setTimeout(callback, DUE_NOW_DELAY_MS),
   });
+  const publicationsPartitionService =
+    createSimulatedPublicationsPartitionService({
+      cache,
+      now: time.now,
+      nodeId: SEED_NODE_ID,
+    });
   const hostsById = new Map();
   const upNodeIds = new Set();
   const downLinks = new Set();
@@ -930,6 +1149,10 @@ function createFormationWorld({
     dispatchService.initialize();
     dispatchServiceByNodeId.set(nodeId, dispatchService);
     installStoredHandoffRows(hosts);
+    hosts.membershipPublicationService.publicationsPartitionService =
+      publicationsPartitionService;
+    hosts.membershipPublicationService.attachFormationLatchTriggers?.();
+    readiness.enforceFormationGate = true;
     hostsById.set(nodeId, hosts);
     lifecyclePublicationByNodeId.set(nodeId, nodeLifecyclePublication);
     upNodeIds.add(nodeId);
@@ -940,6 +1163,17 @@ function createFormationWorld({
   }
 
   seedSystemRows(cache, time.now());
+  if (declaredHostCount !== null) {
+    publicationsPartitionService.executeFormationTransition({
+      entryId: `formation-declare:${clusterId}`,
+      body: buildFormationDeclareBody({
+        clusterId,
+        declaredHostCount,
+        declaredByNodeId: SEED_NODE_ID,
+        declaredAt: time.now(),
+      }),
+    });
+  }
   const seed = startNode(SEED_NODE_ID, SEED_FENCE);
   const seedRebalancers = mountPlacementDeciders({seedHosts: seed, clock, cache});
 
@@ -1026,6 +1260,9 @@ function createFormationWorld({
 
   const world = {
     cache,
+    clusterId,
+    declaredHostCount,
+    publicationsPartitionService,
     // Joiner boot lifecycles a row of an earlier life superseded.
     supersededLifecycles: [],
     clock,
@@ -1132,6 +1369,7 @@ function createFormationWorld({
       insertStoredRow(cache, TABLES.NODES, {
         ...createNodeEntry(SEED_NODE_ID, {
           [COLUMN.NODE_ADDRESS]: nodeAddressOf(SEED_NODE_ID),
+          [COLUMN.HOST_ID]: simulatedHostIdOf(SEED_NODE_ID),
           [COLUMN.LAST_HEARTBEAT]: nextHb,
           [COLUMN.READY_LEASE_EXPIRES_AT]: nextHb + READY_LEASE_MS,
           [COLUMN.CREATED_AT]: existingSeed?.[COLUMN.CREATED_AT] ?? nextHb,

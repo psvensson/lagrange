@@ -610,6 +610,7 @@ class MembershipPublicationCoordinatorQueue extends
   MembershipPublicationCoordinatorReconcile {
   constructor(options = {}) {
     super(options);
+    this.attachFormationLatchTriggers?.();
     if (
       typeof this.reconcileQueue?.configureRetryPolicy === 'function'
     ) {

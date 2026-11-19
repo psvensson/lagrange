@@ -81,18 +81,64 @@ function originalSeedAnchor(dataDir) {
     dbPath: getPartitionDbPath(dataDir, groupId, replicaId)});
 }
 
+const MIN_MULTI_HOST_DECLARED_COUNT = 3;
+const FORMATION_DECLARED_HOST_COUNT_REQUIRED_MSG =
+  'formation.declaredHostCount is required on the founding seed';
+const FORMATION_DECLARED_HOST_COUNT_REQUIRED_CODE =
+  'FORMATION_DECLARED_HOST_COUNT_REQUIRED';
+const FORMATION_DECLARED_HOST_COUNT_INVALID_SUFFIX = 'must be 1 or >= 3';
+const FORMATION_DECLARED_HOST_COUNT_INVALID_CODE =
+  'FORMATION_DECLARED_HOST_COUNT_INVALID';
+const TWO_HOSTS_HAVE_NO_MAJORITY_REASON = 'TWO_HOSTS_HAVE_NO_MAJORITY';
+
+function isValidDeclaredHostCount(value) {
+  return Number.isSafeInteger(value) &&
+    (value === 1 || value >= MIN_MULTI_HOST_DECLARED_COUNT);
+}
+
+function requireDeclaredHostCount(declaredHostCount) {
+  if (
+    declaredHostCount === null ||
+    declaredHostCount === undefined ||
+    (typeof declaredHostCount === 'string' && declaredHostCount.trim().length === 0)
+  ) {
+    const error = new Error(FORMATION_DECLARED_HOST_COUNT_REQUIRED_MSG);
+    error.code = FORMATION_DECLARED_HOST_COUNT_REQUIRED_CODE;
+    throw error;
+  }
+  if (!isValidDeclaredHostCount(declaredHostCount)) {
+    const error = new Error(
+      `Invalid formation.declaredHostCount (${declaredHostCount}): ` +
+      FORMATION_DECLARED_HOST_COUNT_INVALID_SUFFIX,
+    );
+    error.code = FORMATION_DECLARED_HOST_COUNT_INVALID_CODE;
+    if (declaredHostCount === 2) {
+      error.reason = TWO_HOSTS_HAVE_NO_MAJORITY_REASON;
+    }
+    throw error;
+  }
+  return declaredHostCount;
+}
+
 /**
  * Declare the original allocation's draft: every founder and its birth
  * facts, without an incarnation (that is the lifecycle owner's to mint).
- * @param {Object} request {dataDir, nodeId, buildDigest, now}.
+ * @param {Object} request {dataDir, nodeId, buildDigest, now, declaredHostCount}.
  * @return {Object} Deep-frozen draft for the original-allocation preparation.
  */
-function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
+function createSeedOriginalAllocation({
+  dataDir,
+  nodeId,
+  buildDigest,
+  now,
+  declaredHostCount = 1,
+}) {
   if (!Number.isSafeInteger(now) || now < 0 ||
       typeof nodeId !== 'string' || nodeId.length === 0 ||
       typeof buildDigest !== 'string' || buildDigest.length === 0) {
     throw originalAllocationError(REASON.IDENTITY);
   }
+  const validatedDeclaredHostCount = requireDeclaredHostCount(declaredHostCount);
   const canonicalDataDir = path.resolve(dataDir);
   const members = originalSeedMemberDescriptors(canonicalDataDir).map((member) => ({
     ...member,
@@ -106,6 +152,7 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
   return deepFreeze({version: STATE.VERSION, ...clusterFormatRevisionClaim(),
     allocationId: randomUUID(),
     nodeId, dataDir: canonicalDataDir, buildDigest, declaredAt: now,
+    declaredHostCount: validatedDeclaredHostCount,
     catalogDigest: catalogDigest(), clusterId: randomUUID(),
     anchorReplicaId: originalSeedAnchor(canonicalDataDir).replicaId, members});
 }
@@ -180,7 +227,8 @@ function hasValidAllocationHeaderFields(declaration, nodeId, buildDigest) {
   return isCurrentClusterFormatDeclaration(declaration) &&
     isNonEmptyString(nodeId) && isNonEmptyString(buildDigest) &&
     isNonEmptyString(declaration?.allocationId) && isNonEmptyString(declaration?.clusterId) &&
-    Number.isSafeInteger(declaration?.declaredAt) && declaration.declaredAt >= 0;
+    Number.isSafeInteger(declaration?.declaredAt) && declaration.declaredAt >= 0 &&
+    isValidDeclaredHostCount(declaration?.declaredHostCount);
 }
 
 function assertAllocationHeader(declaration, {dataDir, nodeId, buildDigest}) {
@@ -233,6 +281,6 @@ function incarnationRefused(member, tokens, complete) {
     member.createAttemptToken === member.incarnation || tokens.has(member.incarnation);
 }
 
-export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, validateOriginalSeedDraft,
-  completeSeedOriginalAllocation, originalSeedAnchor,
-  originalSeedPeerAddresses, seedFounderNodeIds};
+export {assertAllocationHeader, createSeedOriginalAllocation, validateOriginalSeedDeclaration,
+  validateOriginalSeedDraft, completeSeedOriginalAllocation, originalSeedAnchor,
+  originalSeedPeerAddresses, requireDeclaredHostCount, seedFounderNodeIds};

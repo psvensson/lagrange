@@ -127,9 +127,12 @@ const QUERY_ERROR_CODE = Object.freeze({
   QUERY_MERGE_PARTIAL_OVERFLOW: 'QUERY_MERGE_PARTIAL_OVERFLOW',
   QUERY_ENGINE_MISMATCH: 'QUERY_ENGINE_MISMATCH',
   INTEGER_PRECISION_UNREPRESENTABLE: 'INTEGER_PRECISION_UNREPRESENTABLE',
+  FORMATION_PENDING: 'FORMATION_PENDING',
 });
 
 const QUERY_ERROR_MSG = Object.freeze({
+  FORMATION_PENDING:
+    'Cluster formation is not yet FORMED; user DDL and data writes are refused until the declared host target latches',
   SYSTEM_TABLE_NAME_RESERVED:
     'System table names are reserved for their bootstrap owners',
   SYSTEM_TABLE_WRITE_REFUSED:

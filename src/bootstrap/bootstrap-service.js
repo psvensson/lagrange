@@ -31,6 +31,9 @@ import {DataDirectoryManager as _DataDirectoryManager} from '../storage/data-dir
 import {NodeService} from '../node/node-service.js';
 import {ReplicaLifecycleOwner} from './shared/replica-handler-setup.js';
 import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
+import {requireDeclaredHostCount} from './seed-original-allocation-declaration.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {
   MessageGroupService as _MessageGroupService,
 } from '../message-group/message-group-service.js';
@@ -202,6 +205,22 @@ class BootstrapService extends EventEmitter {
     // The declared host identity (topology/node-host-identity.js); the seed's
     // NODES registration refuses without it.
     this.hostId = options.hostId;
+    const configuredDeclaredHostCount =
+      ConfigurationManager.getInstance().isInitialized() ?
+        ConfigurationManager.getInstance().get(
+          CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT,
+        ) :
+        null;
+    this.declaredHostCount =
+      options.declaredHostCount !== undefined ?
+        options.declaredHostCount :
+        configuredDeclaredHostCount !== null &&
+        configuredDeclaredHostCount !== undefined ?
+          configuredDeclaredHostCount :
+          undefined;
+    if (this.declaredHostCount !== undefined) {
+      requireDeclaredHostCount(this.declaredHostCount);
+    }
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.wsPort = options.wsPort || null;
     this.config = {...BOOTSTRAP_DEFAULT, ...options.config};

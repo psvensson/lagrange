@@ -17,6 +17,10 @@ import {PROPOSAL_QUEUE_ADMISSION_CLASS} from './proposal-queue-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
 import {placementCommandRowCount} from './partition-placement-admission-command.js';
 import {PLACEMENT_COMMAND_TYPES} from './partition-placement-admission-constants.js';
+import {FORMATION_TRANSITION_TYPE} from
+  '../control-plane/membership-publication-formation-record.js';
+import {formationTransitionRowCount} from
+  '../control-plane/membership-publication-formation-transition-command.js';
 
 const PARTITION_CDC_ADMISSION_STATE = Object.freeze({ADMITTED: 'admitted', REFUSED: 'refused'});
 const ADMITTED = Object.freeze({state: PARTITION_CDC_ADMISSION_STATE.ADMITTED});
@@ -48,6 +52,9 @@ function requiredCdcSlots(service, command) {
   // A placement command counts the rows it would insert or change.
   if (PLACEMENT_COMMAND_TYPES.includes(command.type)) {
     return placementCommandRowCount(command);
+  }
+  if (command.type === FORMATION_TRANSITION_TYPE) {
+    return formationTransitionRowCount();
   }
   if (!isCommittedSqlCommandType(command.type) ||
       command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||

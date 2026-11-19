@@ -44,7 +44,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
-import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {compactSnapshotSummary} from '../control-plane/control-plane-readiness-node-service-rows.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   isNodeReadyWithConnection,
@@ -259,7 +259,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
   CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
   ConfigurationManager,
-  ControlPlaneReadinessService,
+  ControlPlaneReadinessService: Object.freeze({compactSnapshotSummary}),
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   ENDPOINT_STATUS,

@@ -122,9 +122,45 @@ const DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT = (() => {
   return numberIsSafeInteger(column?.defaultValue) ? column.defaultValue : 0;
 })();
 
+function countDistinctDeclaredHosts(hosts) {
+  if (numberIsSafeInteger(hosts)) {
+    return hosts;
+  }
+  if (hosts instanceof Set) {
+    return hosts.size;
+  }
+  if (Array.isArray(hosts)) {
+    return new Set(hosts).size;
+  }
+  return 0;
+}
+
+/**
+ * Largest odd integer <= min(r, H) and >= 1, where H is the count of distinct
+ * declared hosts. Returns 0 when either r or H is non-positive or invalid.
+ *
+ * @param {number} replicationFactor desired replication factor r
+ * @param {number|Set<*>|Array<*>} hosts count or collection of distinct hosts
+ * @return {number} odd voter target in [1, min(r, H)] or 0 if invalid
+ */
+function resolveVoterTarget(replicationFactor, hosts) {
+  const hostCount = countDistinctDeclaredHosts(hosts);
+  if (
+    !numberIsSafeInteger(replicationFactor) ||
+    replicationFactor <= 0 ||
+    !numberIsSafeInteger(hostCount) ||
+    hostCount <= 0
+  ) {
+    return 0;
+  }
+  const capped = Math.min(replicationFactor, hostCount);
+  return capped % 2 === 1 ? capped : capped - 1;
+}
+
 export {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
   DECLARED_REPLICA_COUNT_DEFAULT,
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
+  resolveVoterTarget,
 };

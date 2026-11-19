@@ -171,6 +171,8 @@ const failCapabilityUnsupported = () => {
 const isFunction = (fn) => typeof fn === FUNCTION_TYPE;
 
 const genOpId = (id) => (id || `${CONTRACT.OPERATION_ID_PREFIX}${randomUUID()}`);
+const FORMATION_STATE_FORMED = 'FORMED';
+const FORMATION_PENDING_CODE = 'FORMATION_PENDING';
 
 class BackupRestoreOwner {
   /**
@@ -185,6 +187,7 @@ class BackupRestoreOwner {
     this.releaseVersion = opts.releaseVersion ?? CONTRACT.DEFAULT_RELEASE_VERSION;
     this.getClusterIdOption = opts.getClusterId;
     this.getReleaseVersionOption = opts.getReleaseVersion;
+    this.getFormationOption = opts.getFormation;
     this.onSetClusterId = opts.onSetClusterId;
     this.storageAdapter = opts.storageAdapter ?? UNSET;
     this.exportPartitionSnapshots =
@@ -207,6 +210,8 @@ class BackupRestoreOwner {
   };
   setClusterId = (id) => ((this.clusterId = id), this.onSetClusterId?.(id));
   getReleaseVersion = () => this.getReleaseVersionOption?.() || this.releaseVersion;
+  getFormation = () =>
+    isFunction(this.getFormationOption) ? this.getFormationOption() : UNSET;
   isRestoreInProgress = () => this.restoreInProgress === true;
   isRestoreAborted = () => this.restoreAborted === true;
   getRestoredFrom = () => this.restoredFrom;
@@ -300,6 +305,20 @@ class BackupRestoreOwner {
 
   async restoreFromBackup(options = {}) {
     if (!this.capabilitySupported) failCapabilityUnsupported();
+    const formation = this.getFormation();
+    if (
+      formation &&
+      typeof formation.state === STRING_TYPE &&
+      formation.state !== FORMATION_STATE_FORMED
+    ) {
+      throw Object.assign(new Error(FORMATION_PENDING_CODE), {
+        code: FORMATION_PENDING_CODE,
+        errorCode: FORMATION_PENDING_CODE,
+        reasonCode: formation.reason || formation.state,
+        retryable: true,
+        formation,
+      });
+    }
     const dest = options.destinationUri;
     const preserve = isPreserveIdentity(options);
     this.restoreInProgress = true;

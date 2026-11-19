@@ -78,13 +78,6 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
       this.buildPublicationMutationOptions(options),
     );
   }
-
-  async removePublication(publicationId, options = {}) {
-    return this.deleteByPrimaryKey(
-      publicationId,
-      this.buildPublicationMutationOptions(options),
-    );
-  }
 }
 
 export {ControlPlanePublicationsOwner};
