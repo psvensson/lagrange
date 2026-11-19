@@ -45,25 +45,49 @@ function rowRetainsClosedIdentity(current, row, createdAt) {
 }
 
 async function closeAdmissionRow(owner, row, createdAt, attemptToken) {
-  const result = await owner.gateway.updateSystemTableRow(
-    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    {
-      operation_id: row.operation_id,
-      create_admission_state: row.create_admission_state,
-      create_admission_token: row.create_admission_token,
-      create_admission_replica_created_at: createdAt,
-      create_admission_attempt_token: attemptToken,
-      create_admission_attempt_seq: row.create_admission_attempt_seq,
-    },
-    {
-      create_admission_state: CLOSED_ADMISSION_STATE,
-      create_admission_owner_incarnation: owner.ownerIncarnation,
-    },
-    {allowCoalescing: false, deliveryPriority: 'critical', workClass: 'critical'},
-  );
+  let result = null;
+  try {
+    result = await owner.gateway.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      {
+        operation_id: row.operation_id,
+        create_admission_state: row.create_admission_state,
+        create_admission_token: row.create_admission_token,
+        create_admission_replica_created_at: createdAt,
+        create_admission_attempt_token: attemptToken,
+        create_admission_attempt_seq: row.create_admission_attempt_seq,
+      },
+      {
+        create_admission_state: CLOSED_ADMISSION_STATE,
+        create_admission_owner_incarnation: owner.ownerIncarnation,
+      },
+      {allowCoalescing: false, deliveryPriority: 'critical',
+        workClass: 'critical'},
+    );
+  } catch (_error) {
+    // The answer may have been lost after apply: as for every CAS of this
+    // owner, the authoritative read below is the only decision.
+    result = null;
+  }
   if (classifyControlPlaneMutationResult(result).applied) return true;
   const current = await owner.readOperation(row.operation_id);
   return rowRetainsClosedIdentity(current, row, createdAt);
+}
+
+async function closeAdmissionRowInLane(
+  owner,
+  row,
+  createdAt,
+  attemptToken,
+  generation,
+) {
+  return owner.runExclusive(row.operation_id, async () => {
+    if (owner.activePhysicalWorkerOperationIds.has(row.operation_id) ||
+        hasReplicaCreatePhysicalWorkerForGeneration(owner, generation)) {
+      return false;
+    }
+    return closeAdmissionRow(owner, row, createdAt, attemptToken);
+  });
 }
 
 async function closeReplicaCreateAdmissionForLifecycle(owner, lifecycle) {
@@ -86,8 +110,8 @@ async function closeReplicaCreateAdmissionForLifecycle(owner, lifecycle) {
   if (matching.some((row) =>
     owner.activePhysicalWorkerOperationIds.has(row.operation_id))) return false;
   for (const row of matching) {
-    if (!await closeAdmissionRow(
-      owner, row, replicaCreatedAt, attemptToken)) return false;
+    if (!await closeAdmissionRowInLane(
+      owner, row, replicaCreatedAt, attemptToken, generation)) return false;
   }
   return true;
 }

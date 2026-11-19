@@ -4,11 +4,18 @@
  * that was never admitted into its partition's configuration. The failed
  * create's runtime was fenced, so it has no consensus port: the removal
  * completes through the exact claimed lifecycle generation without waiting
- * for a RemoveNode nobody proposes: the first pass either completes or leaves
- * typed retryable removal debt, and the cleanup owner's redelivery of the same
- * operation completes it (the row stays an operation-bound receipt until the
- * terminal REMOVE releases it, as for any failed-create cleanup).
+ * for a RemoveNode nobody proposes. The first pass completes: its completion
+ * is the operation-bound receipt (the row stays a receipt until the terminal
+ * REMOVE releases it, so it is never absent here), it reports
+ * REPLICA_REMOVE_COMPLETED and the replica leaves lifecycle tracking; a
+ * redelivery of the same operation answers COMPLETED from the receipt.
+ * (Pre-gate 219c27bfe, replace-replica-7951c147: the first pass required the
+ * row to be absent, so it always failed with "REMOVING row deletion deferred"
+ * after its receipt was already durable, and the REMOVE stayed in STOPPING.)
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -21,6 +28,8 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
 import {
   createLifecycleServiceRow,
   createLifecycleStateStore,
@@ -43,6 +52,7 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
       createAttemptToken: `create-attempt:${REPLICA_ID}:1`});
     const store = createLifecycleStateStore({services: [failed],
       partitions: [createPartitionRow({partitionId: 'partition-1', nodeId: NODE_ID})]});
+    const outcomes = [];
     const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
       systemTableCache: store.cache, controlPlaneSystemTableGateway: store.gateway,
       now: () => 200});
@@ -54,12 +64,21 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
       createAttemptToken: failed.create_attempt_token, createdAt: failed.created_at,
       durableVersionColumn: 'state_entered_at', durableVersion: failed.state_entered_at,
       durableUpdatedAt: failed.updated_at, authoritativeSnapshot: true});
+    const dataDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'lagrange-fresh-create-claimed-cleanup-'),
+    );
     const handler = new ReplicaHandler({nodeId: NODE_ID,
-      dataDir: '/tmp/fresh-create-claimed-cleanup-never-admitted',
+      dataDir,
       systemTableCache: store.cache, cdcIntegrationService: {},
       controlPlaneSystemTableGateway: store.gateway, replicaStateMachine: stateMachine,
       createPartitionService: async () => ({}),
-      executorOutcomeEmitter: {emitOutcome: () => {}}});
+      executorOutcomeEmitter: {emitOutcome: (type) => outcomes.push(type)}});
+    t.teardown(async () => {
+      await handler.shutdown();
+      fs.rmSync(dataDir, {recursive: true, force: true});
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    });
     // The fenced runtime of the failed create: no service, no consensus port.
     handler.localReplicas.set(REPLICA_ID, {replicaId: REPLICA_ID,
       partitionId: failed.partition_id, status: ReplicaStatus.FAILED, service: null});
@@ -73,9 +92,14 @@ test('a claimed failed create that was never admitted is removed as a typed no-o
     const accepted = await handler.handleRemoveReplica(request);
     t.equal(accepted.status, ReplicaOperationResponseStatus.INITIATED);
     const first = await outcome;
-    t.ok(first.removed || /deletion deferred/u.test(String(first.event?.error)),
-      'the first pass completes or leaves typed retryable removal debt ' +
-        '(no RemoveNode wait for a never-admitted replica)');
+    t.equal(first.removed, true,
+      'the first pass completes through its operation-bound receipt ' +
+        `(no RemoveNode wait for a never-admitted replica): ${
+          String(first.event?.error ?? '')}`);
+    t.same(outcomes, [EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED],
+      'the removal reports its completion, never a deferred failure');
+    t.equal(stateMachine.getState(REPLICA_ID), null,
+      'the removed replica leaves lifecycle tracking (no REMOVING residue)');
     const replay = await handler.handleRemoveReplica(request);
     t.equal(replay.status, ReplicaOperationResponseStatus.COMPLETED,
       'the cleanup owner redelivery completes the same operation, not an error');

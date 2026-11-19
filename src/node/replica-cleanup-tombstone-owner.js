@@ -344,10 +344,19 @@ class ReplicaCleanupTombstoneOwner {
       completed.ownerToken === authority.ownerToken ? completed : false;
   }
 
+  // One authoritative read answers both whether the authority answered and
+  // which cleanup authority (if any) its row carries: an unanswered read is
+  // never reported as "no receipt".
   async observeAuthority(replicaId) {
     const observation = await this.observeReplica(replicaId);
-    return observation.available === true ?
-      cleanupAuthorityFromRow(observation.row) : null;
+    if (observation.available !== true) {
+      return Object.freeze({available: false, row: null, authority: null});
+    }
+    return Object.freeze({
+      available: true,
+      row: observation.row,
+      authority: cleanupAuthorityFromRow(observation.row) || null,
+    });
   }
 
   async isReceiptOperationTerminal(authority) {

@@ -192,7 +192,8 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
      * member's own positive answer to its workflow owner, which completes
      * only on such answers. Its cleanup reconcile (e.g. the row already
      * released) stays the ordinary path's deferred debt; an ordinary REMOVE
-     * keeps answering that ERROR.
+     * keeps answering that ERROR, except the re-delivery of a removal this
+     * node completed (replica-removal-completion-record.js), which is done.
      * @param {Object} request - REMOVE_REPLICA request.
      * @param {Error} error - The cleanup reconcile's failure.
      * @return {Object} COMPLETED response.

@@ -752,8 +752,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const candidateValues = [
       errorLike.message,
       errorLike.errorMessage,
+      errorLike.error,
       errorLike.error?.message,
       errorLike.error?.errorMessage,
+      errorLike.details,
       errorLike.details?.message,
       errorLike.details?.errorMessage,
     ];

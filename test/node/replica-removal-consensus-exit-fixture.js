@@ -112,11 +112,15 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
- * @return {Object} {handler, service, outcomes, exits, removeRequest,
- *   dispose}.
+ * @param {string|null} [options.createAttemptToken] - The replica's create
+ *   attempt (its generation's CREATE admission is in replicaOperations).
+ * @param {Array<Object>} [options.replicaOperations] - replica_operations
+ *   rows served by the same lifecycle authority.
+ * @return {Object} {handler, service, outcomes, exits, lifecycleStore,
+ *   removeRequest, dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf}) {
+  cache, rowOf, createAttemptToken = null, replicaOperations = []}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
@@ -127,6 +131,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     status: ReplicaStatus.ACTIVE,
     createdAt: 1,
     stateEnteredAt: 1,
+    createAttemptToken,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
   const lifecycleStore = createLifecycleStateStore({
@@ -136,6 +141,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       leaderNodeId: null,
     })],
   });
+  lifecycleStore.durable.replica_operations = new Map(
+    replicaOperations.map((row) => [row.operation_id, {...row}]));
   const submitMutation = lifecycleStore.gateway.submitMutation.bind(
     lifecycleStore.gateway,
   );
@@ -212,11 +219,13 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   handler.localServices.set(replicaId, service);
   handler.localReplicas.set(replicaId, {replicaId, partitionId,
     status: ReplicaStatus.ACTIVE, service});
+  const restarted = [];
   return {
     handler,
     service,
     outcomes,
     exits,
+    lifecycleStore,
     removeRequest(operationId, reason = 'rebalancing') {
       return handler.handleRemoveReplica({
         [ReplicaOperationField.TYPE]:
@@ -227,7 +236,57 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
         [ReplicaOperationField.REASON]: reason,
       });
     },
+    /**
+     * The same node after a process restart: a new production handler and
+     * lifecycle owner over the SAME durable store and system-table cache,
+     * with nothing process-local carried over, initialized through the
+     * production startup path (its removed-cleanup admission barrier).
+     * @return {Object} {handler, outcomes, removeRequest}.
+     */
+    restart() {
+      const restartOutcomes = [];
+      const restartedStateMachine = new ReplicaStateMachine({
+        nodeId,
+        systemTableCache: lifecycleStore.cache,
+        controlPlaneSystemTableGateway: lifecycleStore.gateway,
+      });
+      const restartedHandler = new ReplicaHandler({
+        nodeId,
+        dataDir,
+        systemTableCache: cache,
+        cdcIntegrationService: {},
+        controlPlaneSystemTableGateway: lifecycleStore.gateway,
+        createPartitionService: () => {
+          throw new Error('this world creates no partition service');
+        },
+        replicaStateMachine: restartedStateMachine,
+        executorOutcomeEmitter: {
+          emitOutcome: (...args) => restartOutcomes.push(args),
+        },
+      });
+      restartedHandler.initialize();
+      restarted.push({handler: restartedHandler,
+        replicaStateMachine: restartedStateMachine});
+      return {
+        handler: restartedHandler,
+        outcomes: restartOutcomes,
+        removeRequest: (operationId, reason = 'rebalancing') =>
+          restartedHandler.handleRemoveReplica({
+            [ReplicaOperationField.TYPE]:
+              ReplicaOperationMessageType.REMOVE_REPLICA,
+            [ReplicaOperationField.OPERATION_ID]: operationId,
+            [ReplicaOperationField.PARTITION_ID]: partitionId,
+            [ReplicaOperationField.REPLICA_ID]: replicaId,
+            [ReplicaOperationField.REASON]: reason,
+          }),
+      };
+    },
     async dispose() {
+      for (const restart of restarted) {
+        restart.handler.shuttingDown = true;
+        await restart.handler.removedReplicaCleanupDebtSweepTask;
+        await restart.replicaStateMachine.clear();
+      }
       handler.shuttingDown = true;
       // The production shutdown boundary: close lifecycle admission and
       // advance every generation, so a removal still in flight cannot reach
