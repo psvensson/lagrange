@@ -14,6 +14,7 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+import {captureParticipantReleaseRecoveryDetail} from './participant-release-diagnostic-observation.js';
 import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 
@@ -172,7 +173,8 @@ function createParticipantReleaseRecovery(handler) {
     if (previous?.signature === signature &&
         now() - previous.at < BOUND.DRAIN_DEADLINE_MS) return;
     reported.set(partitionId, {signature, at: now()});
-    handler.logger.info(PARTICIPANT_RELEASE_LOG, {partitionId, ...fields});
+    handler.logger.info(PARTICIPANT_RELEASE_LOG,
+      {partitionId, ...fields, ...captureParticipantReleaseRecoveryDetail(answer)});
   }
 
   function settleNoLeader(partitionId, services, observed) {
