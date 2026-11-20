@@ -51,6 +51,8 @@ import {
 import {
   createDeterministicTimerQueue,
 } from './reservation-dispatch-gate-test-harness.js';
+import {buildPriorityDrainSupersededReadinessService} from
+  './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 const {
   PRIORITY_RECOVERY_BLOCKER_REASON,
@@ -68,7 +70,7 @@ const SQL_SCHEMAS = [
 ];
 const MUTATION_PLANNER = new ControlPlaneSystemTableGateway();
 
-function openCoordinator(file) {
+function openCoordinator(file, coordinatorOptions) {
   const database = new Database(file);
   for (const schema of SQL_SCHEMAS) {
     database.exec(generateCreateTableSQL(schema));
@@ -105,6 +107,7 @@ function openCoordinator(file) {
   };
   const timers = createDeterministicTimerQueue();
   const coordinator = createTestCoordinator({
+    ...coordinatorOptions,
     sqlQueryEngine: sqlEngine,
     controlPlaneSystemTableGateway: gateway,
     setTimeoutFn: timers.setTimeoutFn,
@@ -124,10 +127,10 @@ function openCoordinator(file) {
   };
 }
 
-function createFixture(t) {
+function createFixture(t, coordinatorOptions = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'strict-operation-outcomes-'));
   const file = path.join(directory, 'operations.sqlite');
-  let current = openCoordinator(file);
+  let current = openCoordinator(file, coordinatorOptions);
   t.teardown(async () => {
     try {
       await current.close();
@@ -142,7 +145,7 @@ function createFixture(t) {
     async reopen() {
       await current.close();
       current = null;
-      current = openCoordinator(file);
+      current = openCoordinator(file, coordinatorOptions);
       return current;
     },
   };
@@ -271,6 +274,48 @@ test('ADD terminal failure retains the operation during exact target read unavai
   t.equal(settled.committed, true);
   t.equal(terminal.workflowStep, WORKFLOW_STEP.FAILED);
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('priority ADD dispatch reports a refused failure as unsettled', async (t) => {
+  const partitionId = 'sql_transactions-p1';
+  const operationId = 'priority-add-dispatch-unsettled';
+  const fixture = createFixture(t, {
+    controlPlaneReadinessService: buildPriorityDrainSupersededReadinessService(
+      partitionId, operationId),
+  }).current;
+  const {coordinator, gateway} = fixture;
+  const operation = await seedOperation(t, fixture, operationId, {
+    partitionId, entityId: partitionId, replicaId: `${partitionId}-r3`,
+  });
+  const owner = coordinator.workflowOwner;
+  await owner.updateStep(operation, WORKFLOW_STEP.SENDING);
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  let targetReads = 0;
+  gateway.readAuthoritativeRows = async (tableName, sql, values, options) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        values[0] === operation.replicaId && ++targetReads > 1) {
+      return {success: false, error: 'target authority lost after supersession'};
+    }
+    return read(tableName, sql, values, options);
+  };
+
+  const refused = await coordinator.dispatchOperation(operation);
+  t.ok(targetReads > 1, 'dispatch observed absence before failure admission lost authority');
+  t.equal(refused.operationId, operationId);
+  t.equal(refused.skipped, true, 'dispatch reports the nonterminal refusal as a skip');
+  t.equal(refused.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+  const retained = await owner.repository.queryAuthoritativeOperationById(operationId);
+  t.equal(retained.workflowStep, WORKFLOW_STEP.SENDING);
+  t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.ACTIVE);
+
+  gateway.readAuthoritativeRows = read;
+  const settled = await coordinator.dispatchOperation(operation);
+  t.equal(settled.operationId, operationId);
+  t.equal(settled.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+  const durable = await owner.repository.queryAuthoritativeOperationById(operationId);
+  t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
+  t.match(durable.errorMessage, /eligible cohort/i);
+  t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.RELEASED);
 });
 
 // These are deliberately malformed negatives, not substituting ordinary fixture

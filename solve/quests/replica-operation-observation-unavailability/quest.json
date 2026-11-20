@@ -12,12 +12,14 @@
         "exact-target-unavailability-retains-add",
         "retained-uncommitted-add-revalidates-and-durable-replay-settles",
         "authoritative-superseded-target-observation",
+        "dispatch-consumes-durable-terminal-outcome",
         "independent-verification"
       ]
     }
   },
   "assignment": {
     "paths": [
+      "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
       "src/rebalancer/operation-workflow-owner-shared.js",
       "src/rebalancer/operation-workflow-priority-recovery-errors.js",
       "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",
