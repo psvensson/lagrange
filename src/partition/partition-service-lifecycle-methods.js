@@ -10,6 +10,7 @@ import {
 } from '../node/replica-transport-handler-identity.js';
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
+import {stopReplicaAdmission} from './partition-replica-admission.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -171,6 +172,7 @@ class PartitionServiceLifecycleMethods {
       return this.shutdownSettlement;
     }
     this.isShutdown = true;
+    stopReplicaAdmission(this);
     this.initialized = false;
     const {promise, resolve, reject} = Promise.withResolvers();
     this.shutdownSettlement = promise;

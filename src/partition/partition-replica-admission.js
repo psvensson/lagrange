@@ -53,6 +53,8 @@ import {deliveryAnswerOf, deliveryTransportOf,
   '../transport/transport-semantic-outcome.js';
 import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
   '../raft/raft-committed-membership-constants.js';
+import {isExactReplicaHandlerRegistered} from
+  '../node/replica-transport-handler-identity.js';
 import {
   admitPartitionRaftLearner,
   admitPartitionRaftPeer,
@@ -61,6 +63,7 @@ import {
 } from './partition-service-raft-membership-administration.js';
 
 const ADMIT_REPLICA_MESSAGE_TYPE = PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA;
+const REQUEST_DELIVERY = Symbol('replica admission delivery');
 const DEFAULT_TARGET_REPLICATION_FACTOR = 3;
 const UNAVAILABLE_CONF_CHANGE_STATE = Object.freeze({
   available: false,
@@ -538,17 +541,24 @@ function admissionLeaderOf(service, request) {
 // the held stamp's committed nodes in order, on this one cadence turn: the
 // stamp it now holds, or a typed unreadable answer kept for the next. No
 // cached row routes it.
-async function rereadCommittedStamp(service, request) {
+async function rereadCommittedStamp(service, request, signal) {
+  const transport = service.transport;
+  const messageRouter = {
+    deliver: (address, payload, options) =>
+      transport.deliver(address, payload, {...options, signal}),
+  };
   let refusal = null;
   for (const read of admissionStampReads(request.stamp)) {
     try {
-      request.stamp = await readCommittedMembershipStamp({
-        messageRouter: service.transport, nodeId: service.nodeId},
-      service.partitionId, read);
+      const stamp = await readCommittedMembershipStamp(
+        {messageRouter, nodeId: service.nodeId}, service.partitionId, read);
+      if (!isCurrentAdmissionRequest(service, request, signal)) return null;
+      request.stamp = stamp;
       request.leaderHint = null;
       request.rereadStamp = false;
       return null;
     } catch (error) {
+      if (!isCurrentAdmissionRequest(service, request, signal)) return null;
       refusal = error;
     }
   }
@@ -590,11 +600,28 @@ async function handleReplicaAdmissionRequest(service, payload) {
  * @return {Promise<Object>} The request record.
  */
 async function requestReplicaAdmission(service, operationId) {
-  service.replicaAdmissionRequest = {operationId,
-    state: REPLICA_ADMISSION_REQUEST_STATE.PENDING, lastOutcome: null,
-    stamp: committedStampOf(service.bootstrapMembership), leaderHint: null,
-    rereadStamp: false};
+  const previous = service.replicaAdmissionRequest;
+  if (service.isShutdown) return previous ?? null;
+  if (previous?.operationId !== operationId ||
+      previous?.state !== REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
+    service.replicaAdmissionRequest = {operationId,
+      state: REPLICA_ADMISSION_REQUEST_STATE.PENDING, lastOutcome: null,
+      stamp: committedStampOf(service.bootstrapMembership), leaderHint: null,
+      rereadStamp: false};
+    previous?.[REQUEST_DELIVERY]?.controller.abort();
+  }
   return service.driveReplicaAdmission();
+}
+
+function stopReplicaAdmission(service) {
+  service.replicaAdmissionRequest?.[REQUEST_DELIVERY]?.controller.abort();
+}
+
+function isCurrentAdmissionRequest(service, request, signal) {
+  return !signal.aborted && service.isShutdown !== true &&
+    service.replicaAdmissionRequest === request &&
+    (!service.transportHandler || isExactReplicaHandlerRegistered(
+      service.transport, service.unifiedAddress, service.transportHandler));
 }
 
 /**
@@ -609,15 +636,34 @@ async function driveReplicaAdmission(service) {
       service.isShutdown === true) {
     return request;
   }
-  if (UNCOMMITTED_ADMISSION_OUTCOMES.has(request.lastOutcome) &&
-      await isOwnCommittedVoter(service)) {
-    request.lastOutcome = REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER;
-    request.state = REPLICA_ADMISSION_REQUEST_STATE.ADMITTED;
-    return request;
+  if (!request[REQUEST_DELIVERY]) {
+    const controller = new AbortController();
+    const promise = Promise.resolve().then(() =>
+      runReplicaAdmissionDelivery(service, request, controller.signal))
+      .finally(() => {
+        request[REQUEST_DELIVERY] = null;
+      });
+    request[REQUEST_DELIVERY] = {controller, promise};
   }
-  const admission = (request.rereadStamp ?
-    await rereadCommittedStamp(service, request) : null) ??
-    await service.sendReplicaAdmissionRequest(request);
+  return request[REQUEST_DELIVERY].promise;
+}
+
+async function runReplicaAdmissionDelivery(service, request, signal) {
+  if (!isCurrentAdmissionRequest(service, request, signal)) return request;
+  if (UNCOMMITTED_ADMISSION_OUTCOMES.has(request.lastOutcome)) {
+    const committedVoter = await isOwnCommittedVoter(service);
+    if (!isCurrentAdmissionRequest(service, request, signal)) return request;
+    if (committedVoter) {
+      request.lastOutcome = REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER;
+      request.state = REPLICA_ADMISSION_REQUEST_STATE.ADMITTED;
+      return request;
+    }
+  }
+  let admission = request.rereadStamp ?
+    await rereadCommittedStamp(service, request, signal) : null;
+  if (!isCurrentAdmissionRequest(service, request, signal)) return request;
+  admission ??= await service.sendReplicaAdmissionRequest(request);
+  if (!isCurrentAdmissionRequest(service, request, signal)) return request;
   request.lastOutcome = admission.outcome;
   request.state = requestStateAfter(admission.outcome);
   if (request.state === REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
@@ -659,7 +705,10 @@ async function sendReplicaAdmissionRequest(service, request) {
       operationId: request.operationId,
     // The bound the promotion-proof delivery names on the same channel:
     // the router's message timeout (MESSAGE_TIMEOUT_MS), stated here.
-    }, {timeoutMs: service.resolveLearnerPromotionProofDeliveryTimeoutMs()});
+    }, {
+      timeoutMs: service.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+      signal: request[REQUEST_DELIVERY].controller.signal,
+    });
   } catch (error) {
     return answer(REPLICA_ADMISSION_OUTCOME.TRANSPORT_FAILED,
       {reason: error?.message ?? String(error)});
@@ -676,4 +725,5 @@ export {
   requestReplicaAdmission,
   sendReplicaAdmissionRequest,
   shouldAdmitAsLearner,
+  stopReplicaAdmission,
 };

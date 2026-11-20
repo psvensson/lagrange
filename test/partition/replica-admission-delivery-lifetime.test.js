@@ -88,22 +88,27 @@ function runLearnerCadenceTurn(learner) {
   return learner.checkLearnerPromotion();
 }
 
+function holdCommittedOperationRead(leader, operation) {
+  answerCommittedOperations(leader, [operation]);
+  const gateway = leader.controlPlaneSystemTableGateway;
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  const release = Promise.withResolvers();
+  const reads = [];
+  gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+    if (table === TABLES.REPLICA_OPERATIONS) {
+      reads.push(params[0]);
+      await release.promise;
+    }
+    return read(table, sql, params, options);
+  };
+  return {reads, release: release.resolve};
+}
+
 test('initial admission and the learner cadence share one leader decision',
   {timeout: TEST_TIMEOUT_MS}, async (t) => {
     const {leader, learner} = await withAdmissionGroup(t);
     const operation = committedAddOperation(PARTITION, [LEARNER, NODE]);
-    answerCommittedOperations(leader, [operation]);
-    const gateway = leader.controlPlaneSystemTableGateway;
-    const read = gateway.readAuthoritativeRows.bind(gateway);
-    const release = Promise.withResolvers();
-    const reads = [];
-    gateway.readAuthoritativeRows = async (table, sql, params, options) => {
-      if (table === TABLES.REPLICA_OPERATIONS) {
-        reads.push(params[0]);
-        await release.promise;
-      }
-      return read(table, sql, params, options);
-    };
+    const {reads, release} = holdCommittedOperationRead(leader, operation);
     const first = learner.requestReplicaAdmission(operation.operation_id);
     let cadence;
     let concurrentReads;
@@ -116,7 +121,7 @@ test('initial admission and the learner cadence share one leader decision',
       await turn();
       concurrentReads = reads.length;
     } finally {
-      release.resolve();
+      release();
       await Promise.all([first, cadence]);
     }
     assert.ok(['proposed', 'in_flight', 'already_member']
@@ -128,4 +133,33 @@ test('initial admission and the learner cadence share one leader decision',
       'the existing cadence must join the held admission delivery');
     assert.deepEqual(reads, [operation.operation_id],
       'only the held logical request reaches the leader operation read');
+  });
+
+test('learner shutdown detaches its admission delivery before the leader settles',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const {leader, learner} = await withAdmissionGroup(t);
+    const operation = committedAddOperation(PARTITION, [LEARNER, NODE]);
+    const {reads, release} = holdCommittedOperationRead(leader, operation);
+    let settled = false;
+    const first = learner.requestReplicaAdmission(operation.operation_id)
+      .then((request) => {
+        settled = true;
+        return request;
+      });
+    const original = learner.replicaAdmissionRequest;
+    try {
+      assert.equal(await waitForCondition(() => reads.length > 0,
+        OBSERVATION_BOUND_MS), true, 'the first request is inside the leader handler');
+      await learner.shutdown();
+      await turn();
+      assert.equal(settled, true, 'shutdown releases the target delivery wait');
+      assert.equal(original.lastOutcome, null, 'the stopped request receives no late outcome');
+    } finally {
+      release();
+      await first;
+    }
+    assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(
+      ({replicaIdentity}) => replicaIdentity === LEARNER),
+    OBSERVATION_BOUND_MS), true, 'the leader retains custody of its native decision');
+    assert.equal(original.lastOutcome, null);
   });

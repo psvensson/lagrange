@@ -73,25 +73,31 @@ function clearHandlerTimer(handler, timerId) {
   }
 }
 
-function awaitBoundedReplicaAdmissionDrive(handler, service, remainingMs) {
-  const safeWaitMs = Math.max(1, remainingMs);
-  const drivePromise = (async () => service.driveReplicaAdmission())();
-  drivePromise.catch(() => {});
+async function awaitBoundedReplicaAdmission(handler, work, deadlineAtMs) {
+  const remainingMs = deadlineAtMs - readHandlerNowMs(handler);
+  if (remainingMs <= 0) return false;
   let timerId = null;
   const timeoutPromise = new Promise((resolve) => {
     const onTimeout = () => {
       timerId = null;
-      resolve();
+      resolve(false);
     };
     if (handler?.timeSource?.setTimeout) {
-      timerId = handler.timeSource.setTimeout(onTimeout, safeWaitMs);
+      timerId = handler.timeSource.setTimeout(onTimeout, remainingMs);
     } else {
-      timerId = setTimeout(onTimeout, safeWaitMs);
+      timerId = setTimeout(onTimeout, remainingMs);
     }
   });
-  return Promise.race([drivePromise, timeoutPromise]).finally(() => {
+  try {
+    const completion = (async () => {
+      await work();
+      return true;
+    })();
+    const completed = await Promise.race([completion, timeoutPromise]);
+    return completed && readHandlerNowMs(handler) < deadlineAtMs;
+  } finally {
     clearHandlerTimer(handler, timerId);
-  });
+  }
 }
 
 function buildLearnerAdmissionWaitOutcome(
@@ -163,7 +169,7 @@ function reportVoterReadyActivationSpent(handler, spent) {
   reportWaitBoundSpent(handler.logger, {
     ...VOTER_READY_ACTIVATION_WAIT,
     boundMs: handler.syncTimeoutMs,
-    elapsedMs: Date.now() - spent.startedAtMs,
+    elapsedMs: readHandlerNowMs(handler) - spent.startedAtMs,
     // Observer: the cache and role reads run inside the reporter's guard,
     // so a failing read never replaces the voter-ready timeout error.
     lastObserved: () => observeVoterReadyActivation(handler, spent),
@@ -297,10 +303,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
      * Wait for replica to become non-learner and routable.
      * @param {string} replicaId - Replica ID.
      * @param {string} partitionId - Partition ID.
+     * @param {Object} options - Original deadline and expected CREATE service.
      * @return {Promise<void>}
      * @private
      */
-    async waitForVoterReadyActivation(replicaId, partitionId) {
+    async waitForVoterReadyActivation(replicaId, partitionId, options = {}) {
       this.logger.info(REPLICA_HANDLER_LOG_MSG.WAITING_VOTER_READY, {
         replicaId,
         partitionId,
@@ -308,11 +315,17 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         nodeId: this.nodeId,
       });
       this.throwIfShuttingDown();
-      const startedAtMs = Date.now();
-      const deadline = startedAtMs + this.syncTimeoutMs;
+      const {expectedService = null} = options;
+      const deadline = options.deadlineAtMs ??
+        readHandlerNowMs(this) + this.syncTimeoutMs;
+      const startedAtMs = deadline - this.syncTimeoutMs;
       let polls = 0;
-      while (Date.now() <= deadline) {
+      while (readHandlerNowMs(this) < deadline) {
         this.throwIfShuttingDown();
+        if (expectedService && (this.getTrackedService(replicaId) !== expectedService ||
+            expectedService.isShutdown === true)) {
+          return;
+        }
         polls += 1;
         if (this.isReplicaVoterReady(replicaId)) {
           // CL-035: seed the locally-decided voting role into the local
@@ -336,9 +349,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           });
           return;
         }
-        await new Promise((resolve) => {
-          setTimeout(resolve, VOTER_READY_CHECK_INTERVAL_MS);
-        });
+        const remainingMs = deadline - readHandlerNowMs(this);
+        if (remainingMs <= 0) break;
+        await sleepHandlerMs(this, Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs));
       }
       reportVoterReadyActivationSpent(this, {
         replicaId,
@@ -461,10 +474,10 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           !service.learnerPromotionTimer &&
           !service.learnerPromotionWake?.checkInFlight
         ) {
-          await awaitBoundedReplicaAdmissionDrive(
+          await awaitBoundedReplicaAdmission(
             this,
-            service,
-            deadline - nowBeforeDriveMs,
+            () => service.driveReplicaAdmission(),
+            deadline,
           );
           const currentService = this.getTrackedService(replicaId);
           if (
@@ -634,4 +647,6 @@ function isLearnerFirstGrowthAdd(
 export {
   LEARNER_ADMISSION_WAIT_OUTCOME,
   assignReplicaHandlerVoterReadinessMethods,
+  awaitBoundedReplicaAdmission,
+  readHandlerNowMs,
 };
