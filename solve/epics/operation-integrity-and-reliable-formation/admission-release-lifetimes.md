@@ -177,6 +177,25 @@ membership and origin records, not by transport status. These primary sources
 support the distinctions; they do not certify a Lagrange implementation or
 authorize adopting a new framework.
 
+The November 20 formation failure shows why sharing an in-flight read and
+retaining a successful answer have different lifetimes. The target froze
+the rejection of an authoritative startup read. A single target refusal then
+reached thirteen separate placement operations. Go's singleflight API
+shares the outcome of one concurrent call among its waiters. Lagrange also
+requires the first successful pre-admission token snapshot to stay frozen
+for the handler's lifetime. A failed read leaves that obligation with the
+existing CREATE recovery owner. [Go singleflight contract](https://pkg.go.dev/golang.org/x/sync/singleflight)
+
+A READY lease can lapse while a node is still processing other work.
+CockroachDB's documented rebalancing design distinguishes temporary
+unavailability from the evidence it uses to retire a replica. Lagrange's
+placement witness in `replica-placement-owner-core.test.js` explicitly
+requires DEAD_LEARNER removal for an expired lease. The placement owner
+must reconcile that contract with the observed transient expiry before
+changing retirement policy. The November 20 startup refusal has direct
+operation-bound evidence. Its connection to the earlier lease dips remains
+unproved. [CockroachDB repair design](https://www.cockroachlabs.com/blog/automated-rebalance-and-repair/)
+
 ## Next bounded witnesses and continuation
 
 The integration owner should freeze scope and proof under the existing Quest

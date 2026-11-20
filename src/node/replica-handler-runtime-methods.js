@@ -37,16 +37,20 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     path,
   } = options;
 
+  async function requireStorageCleanupAuthority(handler, replicaId, authority) {
+    handler.throwIfShuttingDown();
+    const current = await handler.getReplicaCleanupTombstoneOwner().requireCurrent(authority);
+    handler.throwIfShuttingDown();
+    if (!current) throw new Error(`Replica cleanup ownership changed for ${replicaId}`);
+  }
+
   async function removeEmptyPartitionDirectory(handler, partitionDir,
     replicaId, dbPath, storageAuthority) {
     try {
       if (!fs.existsSync(partitionDir)) return;
       const files = fs.readdirSync(partitionDir);
       if (files.length !== REPLICA_HANDLER_NUM.ZERO) return;
-      if (!await handler.getReplicaCleanupTombstoneOwner()
-        .requireCurrent(storageAuthority)) {
-        throw new Error(`Replica cleanup ownership changed for ${replicaId}`);
-      }
+      await requireStorageCleanupAuthority(handler, replicaId, storageAuthority);
       fs.rmdirSync(partitionDir);
       handler.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_EMPTY_DIR, {
         partitionDir,
@@ -142,12 +146,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         });
         await service.shutdown();
       }
-      if (storageAuthority?.kind === CLEANUP_STORAGE_AUTHORITY_KIND &&
-          !await this.getReplicaCleanupTombstoneOwner()
-            .requireCurrent(storageAuthority)) {
-        throw new Error(
-          `Replica cleanup ownership changed for ${replicaId}`,
-        );
+      if (storageAuthority?.kind === CLEANUP_STORAGE_AUTHORITY_KIND) {
+        await requireStorageCleanupAuthority(this, replicaId, storageAuthority);
       }
       await this.cleanupReplicaResources(
         partitionId,
@@ -168,6 +168,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           `Replica storage cleanup lacks authority for ${replicaId}`,
         );
       }
+      const requireAuthority = () => requireStorageCleanupAuthority(this, replicaId, storageAuthority);
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.CLEANUP_RESOURCES, {
         replicaId,
@@ -176,12 +177,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         nodeId: this.nodeId,
       });
       try {
-        if (!await this.getReplicaCleanupTombstoneOwner()
-          .requireCurrent(storageAuthority)) {
-          throw new Error(
-            `Replica cleanup ownership changed for ${replicaId}`,
-          );
-        }
+        await requireAuthority();
         this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
           replicaId);
         const installGeneration = {
@@ -199,35 +195,16 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           error.artifactOutcomes = installPreflight.outcomes;
           throw error;
         }
-        if (!await this.getReplicaCleanupTombstoneOwner()
-          .requireCurrent(storageAuthority)) {
-          throw new Error(
-            `Replica cleanup ownership changed for ${replicaId}`,
-          );
-        }
+        await requireAuthority();
         const removal = await removeReplicaStorageArtifacts(
           fs,
           dbPath,
-          async () => {
-            if (!await this.getReplicaCleanupTombstoneOwner()
-              .requireCurrent(storageAuthority)) {
-              throw new Error(
-                `Replica cleanup ownership changed for ${replicaId}`,
-              );
-            }
-          },
+          requireAuthority,
         );
         const installRemoval =
           await removeSnapshotInstallArtifactsForGeneration({
             ...installGeneration,
-            beforeRemove: async () => {
-              if (!await this.getReplicaCleanupTombstoneOwner()
-                .requireCurrent(storageAuthority)) {
-                throw new Error(
-                  `Replica cleanup ownership changed for ${replicaId}`,
-                );
-              }
-            },
+            beforeRemove: requireAuthority,
           });
         if (!removal.allAbsent || !installRemoval.allAbsent) {
           const error = new Error(

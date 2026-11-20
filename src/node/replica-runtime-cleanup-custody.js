@@ -120,6 +120,7 @@ function shutdownReplicaHandler(handler, options) {
     handler.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {nodeId: handler.nodeId});
     handler.replicaCreateAdmissionRecoveryRearmOwner.cancel();
     await Promise.allSettled([
+      handler.removedReplicaCleanupDebtSweepTask,
       handler.replicaCreateAdmissionRecoveryTask,
       handler.participantReleaseRecovery.shutdown(),
     ].filter(Boolean));
