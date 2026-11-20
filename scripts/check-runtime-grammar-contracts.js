@@ -237,6 +237,9 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
   'src/rebalancer/operation-workflow-owner-execution-lane.js': Object.freeze({
     forbiddenFragments: Object.freeze([
       'bypassSingleParticipantSystemWrite',
+      'confirmCommittedTransitionPersistence',
+      'confirmPersistence:',
+      'confirmReplicaOperationPersistence',
       'recoverTransitionExecutionSession',
       'transactionCoordinator',
     ]),
@@ -244,15 +247,87 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       Object.freeze({
         functionName: 'buildOperationTransitionPersistOptions',
         requiredFragments: Object.freeze([
-          'confirmPersistence: false',
           'disableSystemWriteSession: true',
         ]),
       }),
+    ]),
+  }),
+  // The repository confirms the exact stored-row result. The workflow only
+  // commits its mirror on that result and retains unresolved terminal effects.
+  'src/rebalancer/replica-operation-repository-mutation-update-methods.js': Object.freeze({
+    functionContracts: Object.freeze([
       Object.freeze({
-        functionName: 'confirmCommittedTransitionPersistence',
+        functionName: 'persistOperationUpdate',
         requiredFragments: Object.freeze([
+          'queryAuthoritativeOperationVisibilityObservation',
+          'assertOperationUpdateSubject(operation, terminalPreimage)',
+          'this.confirmPersistedOperationUpdate(operation, options)',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'confirmPersistenceThroughWitness',
+        requiredFragments: Object.freeze([
+          'recordOwnerPersistedTransitionVisibilityWitness',
           'confirmReplicaOperationPersistence',
-          'armTerminalTransitionRepair',
+          'visibility?.confirmationState !==\n' +
+            '          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'confirmPersistedOperationUpdate',
+        requiredFragments: Object.freeze([
+          'this.confirmPersistenceThroughWitness(operation)',
+          'REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED',
+          'assertOperationUpdateRecord(observed)',
+          'assertOperationUpdateSubject(operation, observed)',
+          'this.isReplicaOperationUpdateSatisfied(operation, observed)',
+          'operation: observed',
+          'error.operationWriteCommitted = true;\n        throw error;',
+        ]),
+      }),
+    ]),
+  }),
+  'src/rebalancer/operation-workflow-transition-orchestration.js': Object.freeze({
+    functionContracts: Object.freeze([
+      Object.freeze({
+        functionName: 'runAtomicTransitionUnderLane',
+        requiredFragments: Object.freeze([
+          'buildOperationTransitionOutcome(persistResult',
+          'if (outcome.committed)',
+          'markTransitionCommitted',
+          'removeWorkflow(operation.operationId);\n      throw error;',
+        ]),
+      }),
+    ]),
+  }),
+  'src/rebalancer/operation-workflow-transition-persistence.js': Object.freeze({
+    functionContracts: Object.freeze([
+      Object.freeze({
+        functionName: 'persistTerminalOperation',
+        requiredFragments: Object.freeze([
+          'requestedOperation: structuredClone(projectedOperation)',
+          'resolveNotCommittedTerminalTransition',
+          'armTerminalTransitionRepair(this, projectedOperation,',
+          'error.operationWriteCommitted === true',
+          'TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'resolveNotCommittedTerminalTransition',
+        requiredFragments: Object.freeze([
+          'shouldReleaseReservationForTerminalOutcome',
+          'releaseDurableTerminalOperation',
+          'armTerminalTransitionRepair(this, projectedOperation,',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'releaseDurableTerminalOperation',
+        requiredFragments: Object.freeze([
+          'shouldReleaseReservationForTerminalOutcome',
+          'TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING',
+          'await this.releaseReservationForOperation(operation)',
+          'const failed = operation.workflowStep === WORKFLOW_STEP.FAILED;',
+          'clearTerminalTransitionRepair',
         ]),
       }),
     ]),

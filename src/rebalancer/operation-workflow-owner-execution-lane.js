@@ -1,6 +1,5 @@
 import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
-import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -622,24 +621,6 @@ class OperationWorkflowOwnerExecutionLane
       return false;
     }
     return this.repository.touchOperationOwnerLease(operation);
-  }
-
-  /**
-   * Mirror a winning durable terminal outcome into the owner's live operation
-   * object after this owner lost the terminal CAS (audit finding 6): the
-   * loser must converge on the winner's terminal state, never re-assert its
-   * own.
-   * @param {Object} operation - The owner's live (losing) operation object.
-   * @param {Object} winningOperation - The authoritative winning terminal row.
-   * @return {void}
-   */
-  adoptWinningTerminalOperationOutcome(operation, winningOperation) {
-    if (!operation || !winningOperation) {
-      return;
-    }
-    assertOperationUpdateRecord(winningOperation, {terminal: true});
-    assertOperationUpdateSubject(operation, winningOperation);
-    Object.assign(operation, structuredClone(winningOperation));
   }
 }
 

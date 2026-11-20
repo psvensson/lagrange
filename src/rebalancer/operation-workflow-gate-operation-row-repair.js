@@ -13,9 +13,6 @@ import {operationCarriesMessageGroupMembership} from
 // re-insert is the canonical OR-IGNORE idempotent insert (the same
 // convergence the CL-017(b) divergence-reinsert relies on), so concurrent
 // repair attempts land on the same deterministic operation row.
-const OPERATION_GATE_REPAIR_INSERT_OPTIONS = Object.freeze({
-  confirmPersistence: false,
-});
 const GATE_REPAIR_ROW_FAILED_LOG =
   'Failed to repair operation row for gate-repaired reservation';
 
@@ -38,10 +35,7 @@ async function repairOperationRowForGateRepairedReservation(owner, operation) {
     return false;
   }
   try {
-    await owner.repository.persistNewOperation(
-      operation,
-      OPERATION_GATE_REPAIR_INSERT_OPTIONS,
-    );
+    await owner.repository.persistNewOperation(operation);
     return true;
   } catch (error) {
     owner.logger?.warn?.(
