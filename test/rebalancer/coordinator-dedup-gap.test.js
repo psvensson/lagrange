@@ -415,7 +415,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
     });
 
   t.test(
-    'critical REPLACE reuses one existing add-like recovery operation ' +
+    'critical REPLACE keeps one existing add-like recovery operation ' +
       'when authoritative entity reads miss and the planner switches target nodes',
     async (t) => {
       const coordinator = createTestCoordinator({
@@ -439,7 +439,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           enforceConcurrentOperationBudget: true,
         });
 
-        const second = await coordinator.createOperation({
+        await t.rejects(coordinator.createOperation({
           type: OperationType.REPLACE,
           partitionId: 'control_plane_publications-p1',
           entityType: 'partition',
@@ -448,13 +448,10 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           sourceNodeId: 'seed-node',
           replicaId: 'control_plane_publications-p1-r2',
           enforceConcurrentOperationBudget: true,
-        });
-
-        t.equal(
-          second.operationId,
-          first.operationId,
-          'critical partition replacement should reuse the in-flight add-like recovery operation across target-node changes',
-        );
+        }), {
+          rebalanceSkipReason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          conflictingOperationId: first.operationId,
+        }, 'critical replacement retains the incumbent and refuses the different target');
         t.equal(
           coordinator.stats.operationsCreated,
           1,
@@ -517,13 +514,14 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       });
 
       const originalQueryAuthoritativeOperationById =
-        coordinator.repository.queryAuthoritativeOperationById;
+        coordinator.repository.queryAuthoritativeOperationVisibilityObservation;
       const originalGetOperationsByEntityAuthoritativeObservation =
         coordinator.repository.getOperationsByEntityAuthoritativeObservation;
       const originalCreateOperationInternal = coordinator.createOperationInternal;
       let createdOperationCount = 0;
 
-      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.queryAuthoritativeOperationVisibilityObservation =
+        async () => ({operation: null, deferredOutcome: {retryAfterMs: 50}});
       coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
       coordinator.createOperationInternal = async () => {
@@ -534,20 +532,17 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       };
 
       try {
-        const result = await coordinator.createOperation(move);
-
-        t.equal(
-          result.operationId,
-          TEST_PRIORITY_RECENT_INTENT_OPERATION_ID,
-          'priority source-removal phase should keep reusing the in-flight replace while entity visibility stays deferred',
-        );
+        await t.rejects(coordinator.createOperation(move), {
+          rebalanceSkipReason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          conflictingOperationId: TEST_PRIORITY_RECENT_INTENT_OPERATION_ID,
+        }, 'the source-removal incumbent excludes a different target under pressure');
         t.equal(
           createdOperationCount,
           0,
           'deferred authoritative visibility must not mint a second add-like recovery operation during source removal',
         );
       } finally {
-        coordinator.repository.queryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationVisibilityObservation =
           originalQueryAuthoritativeOperationById;
         coordinator.repository.getOperationsByEntityAuthoritativeObservation =
           originalGetOperationsByEntityAuthoritativeObservation;
@@ -686,7 +681,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       });
 
       const originalQueryAuthoritativeOperationById =
-        coordinator.repository.queryAuthoritativeOperationById;
+        coordinator.repository.queryAuthoritativeOperationVisibilityObservation;
       const originalGetOperationsByEntityAuthoritativeObservation =
         coordinator.repository.getOperationsByEntityAuthoritativeObservation;
       const originalCreateOperationInternal = coordinator.createOperationInternal;
@@ -695,7 +690,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       let createdOperationCount = 0;
       const rearmedOperationIds = [];
 
-      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.queryAuthoritativeOperationVisibilityObservation =
+        async () => ({operation: null, deferredOutcome: {retryAfterMs: 50}});
       coordinator.repository.getOperationsByEntityAuthoritativeObservation =
         async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
       coordinator.createOperationInternal = async () => {
@@ -710,15 +706,12 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       };
 
       try {
-        const result = await coordinator.createOperation(move);
+        await t.rejects(coordinator.createOperation(move), {
+          rebalanceSkipReason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        }, 'a missing exact row cannot replay a remembered operation');
         const refreshedIntent =
           coordinator.recentOperationIntents.get(dedupeKey);
 
-        t.equal(
-          result.operationId,
-          'priority-op',
-          'priority create should reuse the cached in-flight intent when the authoritative dedupe read misses',
-        );
         t.equal(
           createdOperationCount,
           0,
@@ -726,15 +719,15 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         );
         t.same(
           rearmedOperationIds,
-          ['priority-op'],
-          'reused pending priority intent should be re-armed through the owner lane',
+          [],
+          'unconfirmed pending evidence cannot arm the owner lane',
         );
         t.ok(
           refreshedIntent?.expiresAt > Date.now() + 30_000,
-          'priority recent intent should extend its retention window under pressure',
+          'the existing recent-intent hint remains retained',
         );
       } finally {
-        coordinator.repository.queryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationVisibilityObservation =
           originalQueryAuthoritativeOperationById;
         coordinator.repository.getOperationsByEntityAuthoritativeObservation =
           originalGetOperationsByEntityAuthoritativeObservation;
@@ -1160,7 +1153,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   );
 
   t.test(
-    'cache-visible terminal intent must not suppress priority recovery rearm',
+    'a cache terminal hint with complete durable absence permits a fresh create',
     async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',

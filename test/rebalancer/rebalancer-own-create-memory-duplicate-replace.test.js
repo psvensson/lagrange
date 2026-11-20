@@ -27,17 +27,17 @@ function createSharedOperationGateway() {
 
   function read(tableName, sql, params = []) {
     if (!readable) {
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     }
     if (tableName === 'storage_reservations') {
       const row = reservations.get(params[0]);
-      return {success: true, rows: row ? [row] : []};
+      return {success: true, rows: row ? [row] : [], rowSetComplete: true};
     }
     if (sql.includes('operation_id = ?')) {
       const row = operations.get(params[0]);
-      return {success: true, rows: row ? [row] : []};
+      return {success: true, rows: row ? [row] : [], rowSetComplete: true};
     }
-    return {success: true, rows: Array.from(operations.values())};
+    return {success: true, rows: Array.from(operations.values()), rowSetComplete: true};
   }
 
   return {
@@ -231,7 +231,7 @@ test('a deterministic REPLACE successor rejects an identity cycle', (t) => {
   t.end();
 });
 
-test('persist-give-up plus critical target churn reuses the durable intent', async (t) => {
+test('persist-give-up suppresses target churn and recovers the original intent', async (t) => {
   const gateway = createSharedOperationGateway();
   const owner = createCoordinator('creator-one', gateway);
   t.teardown(async () => owner.coordinator.shutdown());
@@ -256,7 +256,10 @@ test('persist-give-up plus critical target churn reuses the durable intent', asy
   );
   t.equal(owner.coordinator.recentOperationIntents.size, 0,
     'the failed create has no coordinator intent memory');
-  const retry = await owner.coordinator.createOperation(buildMove('target-b'));
+  await t.rejects(owner.coordinator.createOperation(buildMove('target-b')),
+    {rebalanceSkipReason: 'budget_exceeded'},
+    'a different target cannot replay the committed winner');
+  const retry = await owner.coordinator.createOperation(buildMove('target-a'));
 
   t.equal(retry.targetNodeId, 'target-a',
     'the first durable target remains the lifecycle owner');
@@ -383,6 +386,16 @@ function createCommittedCreationFixture(t, {hideCensus = false} = {}) {
     setBeforeInsert(callback) {
       beforeInsert = callback;
     },
+    terminalize(operationId) {
+      const now = Date.now();
+      const result = ledger.execute(
+        `UPDATE replica_operations SET status = ?, workflow_step = ?, completed_at = ?,
+          updated_at = ?, steps_history = json_insert(steps_history, '$[#]', json(?))
+          WHERE operation_id = ?`,
+        ['failed', FAILED, now, now, JSON.stringify({step: FAILED, timestamp: now}), operationId],
+      );
+      t.equal(result.changes, 1, 'the original operation commits a terminal step in SQLite');
+    },
     rows() {
       return ledger.execute(
         'SELECT operation_id, target_node_id FROM replica_operations ORDER BY operation_id',
@@ -503,4 +516,10 @@ test('persistent collision retains the winner and only its physical subject can 
   t.equal(replay.targetNodeId, original.nodeId);
   t.same(fixture.rows(), [{operation_id: winner.operationId, target_node_id: original.nodeId}]);
   t.ok(fixture.insertCount > 1, 'SQLite evaluated the contention at the insert boundary');
+
+  fixture.terminalize(winner.operationId);
+  const successor = await coordinator.createOperation(buildMove('target-b'));
+  t.not(successor.operationId, winner.operationId, 'terminal predecessor permits a new generation');
+  t.equal(successor.targetNodeId, 'target-b', 'only the new generation owns the changed target');
+  t.equal(fixture.rows().length, 2, 'the terminal history and one successor remain durable');
 });

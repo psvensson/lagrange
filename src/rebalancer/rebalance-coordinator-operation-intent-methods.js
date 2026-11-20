@@ -155,6 +155,8 @@ class RebalanceCoordinatorOperationIntentMethods {
       this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
       (!move.operationIntentId || operation.operationId === move.operationIntentId) &&
       (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
+      (!Object.hasOwn(move, 'targetClaimKey') ||
+        operation.targetClaimKey === move.targetClaimKey) &&
       (!move.membershipPublicationEpoch ||
         operation.membershipPublicationEpoch === move.membershipPublicationEpoch) &&
       (moveType !== OperationType.REPLACE ||

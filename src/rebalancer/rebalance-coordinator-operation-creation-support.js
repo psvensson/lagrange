@@ -75,7 +75,6 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  createOperationRecord,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const MANAGED_PLACEMENT_ENTITY_TYPES = Object.freeze(new Set([
@@ -224,22 +223,6 @@ function isRetainedAttemptRefusedOrMismatched(answer) {
   return result?.outcome === PLACEMENT_OUTCOME.REFUSED;
 }
 
-function buildSynthesizedPlacementOperation(operationId, descriptor, defaultSourceNodeId) {
-  const sourceNodeId = descriptor.sourceNodeId ? descriptor.sourceNodeId : defaultSourceNodeId;
-  const replicaId = descriptor.replicaId ? descriptor.replicaId : placementReplicaIdOf(operationId);
-  const entityId = descriptor.entityId ? descriptor.entityId : descriptor.partitionId;
-  const {type = OperationType.ADD, entityType = SERVICE_TYPE.PARTITION} = descriptor;
-  const operation = createOperationRecord({
-    operationId, type, partitionId: descriptor.partitionId, sourceNodeId,
-    targetNodeId: descriptor.targetNodeId, replicaId,
-    sourceReplicaId: descriptor.sourceReplicaId || null, membershipPublicationEpoch: null,
-  });
-  operation.entityType = entityType;
-  operation.entityId = entityId;
-  operation.targetClaimKey = descriptor.targetClaimKey || null;
-  return operation;
-}
-
 function resolveRuntimeServiceIntentKey(context, operationReplicaId) {
   const {move, criticalAddLikeIntentKey, dedupeKey, entityId, normalizedMoveType} =
     context;
@@ -295,10 +278,13 @@ function throwRuntimeServicePlacementError(entityId, answer, result) {
   throw error;
 }
 
-function isSingleOperationPlacementAccepted(result) {
-  return result?.outcome === PLACEMENT_OUTCOME.ADMITTED &&
+function isSingleOperationPlacementAccepted(answer) {
+  const result = answer?.[PLACEMENT_RESULT_FIELD];
+  return answer?.committed === true &&
+    result?.outcome === PLACEMENT_OUTCOME.ADMITTED &&
     Array.isArray(result.operationIds) &&
-    result.operationIds.length > 0;
+    result.operationIds.length === 1 &&
+    typeof result.operationIds[0] === 'string' && result.operationIds[0].length > 0;
 }
 
 const operationCreationSupportMethods = {
@@ -395,15 +381,15 @@ const operationCreationSupportMethods = {
     if (!intentKey || !attempts.has(intentKey)) return null;
     const retained = attempts.get(intentKey);
     if (!retained?.statement) return null;
-    const answer = await this.submitPlacementPayload(
+    const answer = retained.admittedAnswer || await this.submitPlacementPayload(
       {entryId: retained.entryId, body: retained.statement},
       timeoutMs,
     );
     if (!isPlacementAttemptIdentitySettled(answer)) {
       return {settled: false, answer: {...answer, entryId: retained.entryId}};
     }
-    attempts.delete(intentKey);
     if (isRetainedAttemptRefusedOrMismatched(answer)) {
+      attempts.delete(intentKey);
       return {settled: true, retryWithFreshEntry: true};
     }
     return {
@@ -413,18 +399,37 @@ const operationCreationSupportMethods = {
     };
   },
 
+  async finishPlacementAdmissionAttempt(key, answer, confirmOperation) {
+    const attempts = this.ensureUncertainPlacementAttemptsMap();
+    if (!isPlacementAttemptIdentitySettled(answer)) return answer;
+    const retained = attempts.get(key);
+    if (!confirmOperation || answer[PLACEMENT_RESULT_FIELD]?.outcome !==
+        PLACEMENT_OUTCOME.ADMITTED) {
+      if (retained?.entryId === answer.entryId) attempts.delete(key);
+      return answer;
+    }
+    if (!isSingleOperationPlacementAccepted(answer)) return answer;
+    if (retained?.entryId === answer.entryId) retained.admittedAnswer = answer;
+    const [operationId] = answer[PLACEMENT_RESULT_FIELD].operationIds;
+    const operation = await confirmOperation(operationId);
+    if (attempts.get(key)?.entryId === answer.entryId) attempts.delete(key);
+    return {...answer, operation};
+  },
+
   async admitPlacementStatement({
     entryId = null,
     intentKey = null,
     statement,
     timeoutMs = DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS,
+    confirmOperation = null,
   }) {
     const retainedResolution = await this.resolveRetainedPlacementAttempt(
       intentKey,
       timeoutMs,
     );
     if (retainedResolution && !retainedResolution.retryWithFreshEntry) {
-      return retainedResolution.answer;
+      return this.finishPlacementAdmissionAttempt(intentKey,
+        retainedResolution.answer, confirmOperation);
     }
     const explicitId = retainedResolution?.retryWithFreshEntry ? null : entryId;
     const resolved = this.resolvePlacementAdmissionEntryId(
@@ -436,23 +441,20 @@ const operationCreationSupportMethods = {
       {entryId: resolved.entryId, body: statement},
       timeoutMs,
     );
-    if (resolved.key && isPlacementAttemptIdentitySettled(answer)) {
-      this.ensureUncertainPlacementAttemptsMap().delete(resolved.key);
-    }
-    return {...answer, entryId: resolved.entryId};
+    return this.finishPlacementAdmissionAttempt(resolved.key,
+      {...answer, entryId: resolved.entryId}, confirmOperation);
   },
 
-  async materializePlacementOperationById(operationId, descriptor = {}) {
-    if (this.repository?.queryAuthoritativeOperationById) {
-      const authoritative =
-        await this.repository.queryAuthoritativeOperationById(operationId);
-      if (authoritative) return authoritative;
+  async materializePlacementOperationById(operationId, move) {
+    const observation = await this.observeExactCreationOperation(operationId);
+    const operation = observation.operation;
+    if (!operation) {
+      throw this.createDeferredOperationVisibilityError(move.type, observation, move);
     }
-    return buildSynthesizedPlacementOperation(
-      operationId,
-      descriptor,
-      this.nodeId || DEFAULT_NODE_ID,
-    );
+    if (!this.operationMatchesCreationRequest(operation, move)) {
+      return this.refuseConflictingCreation(operation, move);
+    }
+    return operation;
   },
 
   async materializePlacementFoundingOperations({operationIds}) {
@@ -555,22 +557,22 @@ const operationCreationSupportMethods = {
       entryId: move.entryId || null,
       intentKey: resolvePartitionPlacementIntentKey(context),
       statement,
+      confirmOperation: (operationId) => this.materializePlacementOperationById(operationId, {
+        type: normalizedMoveType,
+        partitionId,
+        entityType,
+        entityId,
+        sourceNodeId: resolvedSourceNodeId,
+        nodeId: move.nodeId,
+        replicaId: placementMove.sourceReplicaId || placementMove.replicaId,
+        replicaIntentId: placementMove.replicaId || placementReplicaIdOf(operationId),
+        operationIntentId: operationId,
+      }),
     });
-    const result = answer?.[PLACEMENT_RESULT_FIELD];
-    if (!isSingleOperationPlacementAccepted(result)) {
-      throwRuntimeServicePlacementError(partitionId, answer, result);
+    if (!isSingleOperationPlacementAccepted(answer)) {
+      throwRuntimeServicePlacementError(partitionId, answer, answer?.[PLACEMENT_RESULT_FIELD]);
     }
-    const [operationId] = result.operationIds;
-    const operation = await this.materializePlacementOperationById(operationId, {
-      type: normalizedMoveType,
-      partitionId,
-      entityType,
-      entityId,
-      sourceNodeId: resolvedSourceNodeId,
-      targetNodeId: move.nodeId,
-      replicaId: placementMove.replicaId || placementReplicaIdOf(operationId),
-      sourceReplicaId: placementMove.sourceReplicaId,
-    });
+    const {operation} = answer;
     await this.announcePlacementCreatedOperation(operation, context);
     return operation;
   },
@@ -604,25 +606,24 @@ const operationCreationSupportMethods = {
       entryId: move.entryId || null,
       intentKey: resolveRuntimeServiceIntentKey(context, operationReplicaId),
       statement,
+      confirmOperation: (operationId) => this.materializePlacementOperationById(operationId, {
+        type: normalizedMoveType,
+        partitionId,
+        entityType,
+        entityId,
+        sourceNodeId: resolvedSourceNodeId,
+        nodeId: move.nodeId,
+        replicaId: sourceReplicaId || operationReplicaId,
+        replicaIntentId: operationReplicaId,
+        targetClaimKey: normalizedMoveType === OperationType.REMOVE ?
+          null : buildRuntimeServiceTargetClaimKey(operationReplicaId, entityId),
+        operationIntentId: operationId,
+      }),
     });
-    const result = answer?.[PLACEMENT_RESULT_FIELD];
-    if (!isSingleOperationPlacementAccepted(result)) {
-      throwRuntimeServicePlacementError(entityId, answer, result);
+    if (!isSingleOperationPlacementAccepted(answer)) {
+      throwRuntimeServicePlacementError(entityId, answer, answer?.[PLACEMENT_RESULT_FIELD]);
     }
-    const [operationId] = result.operationIds;
-    const targetClaimKey = normalizedMoveType !== OperationType.REMOVE ?
-      buildRuntimeServiceTargetClaimKey(operationReplicaId, entityId) : null;
-    const operation = await this.materializePlacementOperationById(operationId, {
-      type: normalizedMoveType,
-      partitionId,
-      entityType,
-      entityId,
-      sourceNodeId: resolvedSourceNodeId,
-      targetNodeId: move.nodeId,
-      replicaId: operationReplicaId,
-      sourceReplicaId,
-      targetClaimKey,
-    });
+    const {operation} = answer;
     await this.announcePlacementCreatedOperation(operation, context);
     return operation;
   },
