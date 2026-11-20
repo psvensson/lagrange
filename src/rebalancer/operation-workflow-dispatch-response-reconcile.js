@@ -22,7 +22,9 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
-import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
+import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} from
+  './operation-workflow-reconcile-outcome.js';
+import {repairStrandedRemoveAfterResponse} from './operation-workflow-stranded-remove-repair.js';
 import {
   applyGrowthPromoteRequestFields,
   isHeldGrowthPromoteOperation,
@@ -863,6 +865,14 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
         return retainedCreateDeliveryResolution.result;
       }
+      const corrected = await repairStrandedRemoveAfterResponse(this, operation, response);
+      if (corrected === OPERATION_RECONCILE_OUTCOME.FAILED) {
+        return this.buildFailedOperationResult(operation.operationId, operation.errorMessage);
+      }
+      if (corrected === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
+        return this.buildSuccessfulOperationResult(operation.operationId, {status: corrected});
+      }
+      if (corrected) return this.buildSkippedOperationResult(corrected, operation.operationId);
       const reconciled = await this._handleDispatchResponse(
         operation,
         response,

@@ -366,7 +366,8 @@ class OperationWorkflowTransitionPersistence
       // A failed reply can follow a durable commit. Retain the exact requested
       // effect until the repository resolves it; never promote the mirror.
       armTerminalTransitionRepair(this, projectedOperation,
-        error.operationWriteCommitted === true ? TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED :
+        error.operationWriteCommitted === true ?
+          TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED :
           TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
       throw error;
     }

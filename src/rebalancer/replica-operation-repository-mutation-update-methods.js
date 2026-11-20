@@ -341,6 +341,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           const error = new Error('Committed operation update confirmation is unresolved');
           error.code = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
           error.deferredOutcome = visibility?.deferredOutcome;
+          error.deferRetry = true;
+          error.retryAfterMs = visibility?.deferredOutcome?.retryAfterMs;
           throw error;
         }
         assertOperationUpdateRecord(observed);
@@ -423,7 +425,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     async recoverPersistedReplicaOperationUpdate(operation, errorResult) {
-      const observation = await this.observeRetryableReplicaOperationMutation(operation, errorResult);
+      const observation =
+        await this.observeRetryableReplicaOperationMutation(operation, errorResult);
       const observed = observation?.operation;
       if (!observed) return false;
       assertOperationUpdateRecord(observed);

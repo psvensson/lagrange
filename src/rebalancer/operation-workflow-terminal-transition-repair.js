@@ -458,12 +458,21 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         return;
       }
       const requestedOperation = structuredClone(heldState.projectedOperation);
-      const persistResult = await owner.repository.persistOperationUpdate(
-        heldState.projectedOperation, {
-          ...repairAdmission.persistOptions,
-          terminalTransition: true,
-          disableSystemWriteSession: true,
-        });
+      let persistResult;
+      try {
+        persistResult = await owner.repository.persistOperationUpdate(
+          heldState.projectedOperation, {
+            ...repairAdmission.persistOptions,
+            terminalTransition: true,
+            disableSystemWriteSession: true,
+          });
+      } catch (error) {
+        if (error.operationWriteCommitted === true) {
+          armTerminalTransitionRepair(owner, heldState.projectedOperation,
+            TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED, heldState.persistOptions);
+        }
+        throw error;
+      }
       const outcome = buildOperationTransitionOutcome(persistResult,
         {repository: owner.repository, requestedOperation});
       if (!isTerminalTransitionOutcomeSettled(outcome)) {

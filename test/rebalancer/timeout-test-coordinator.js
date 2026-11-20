@@ -1,4 +1,4 @@
-// Shared fixture: a real RebalanceCoordinator backed by an production-schema SQLite store with an observable
+// Shared fixture: a real RebalanceCoordinator backed by a production-schema SQLite store with an observable
 // replica_operations Map, used to exercise the real timeout -> FAILED transition. Extracted from
 // timeout-triggers-failure.property.test.js so the DT6 convergence harness can reuse it to drive the
 // real reconcileTimeoutOperation -> failOperation mutation on a virtual clock (options.timeSource).

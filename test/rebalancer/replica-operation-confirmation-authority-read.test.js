@@ -213,7 +213,9 @@ test(
     const projectedOperation = repository.rowToOperation(terminalRow);
     const owner = createRepairOwner(t, repository, projectedOperation);
 
-    await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
+    await t.rejects(runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId),
+      {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true},
+      'a changed-row answer with unavailable authority stays explicitly unresolved');
 
     t.equal(
       owner.terminalTransitionRepairStateByOperationId.has(projectedOperation.operationId),

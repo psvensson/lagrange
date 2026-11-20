@@ -66,7 +66,7 @@ test('completeOperation emits metrics.rebalance.operation with correct fields',
     const coordinator = createCoordinator(t, logger);
     const operation = createOperation();
 
-    await coordinator.repository.persistOperationInsert(operation);
+    await coordinator.repository.persistNewOperation(operation);
     await coordinator.completeOperation(operation);
 
     const metric = logger.calls.find(
@@ -87,7 +87,7 @@ test('completeOperation totalDurationMs reflects operation age',
     const coordinator = createCoordinator(t, logger);
     const operation = createOperation({createdAt: Date.now() - 3000});
 
-    await coordinator.repository.persistOperationInsert(operation);
+    await coordinator.repository.persistNewOperation(operation);
     await coordinator.completeOperation(operation);
 
     const metric = logger.calls.find(
@@ -111,7 +111,7 @@ test('failOperation emits metrics.rebalance.operation with correct fields',
       entityType: SERVICE_TYPE.MESSAGE_GROUP,
     });
 
-    await coordinator.repository.persistOperationInsert(operation);
+    await coordinator.repository.persistNewOperation(operation);
     await coordinator.failOperation(operation, 'timeout exceeded');
 
     const metric = logger.calls.find(
@@ -140,7 +140,7 @@ test('rebalance operation metrics use info level not debug',
     const coordinator = createCoordinator(t, logger);
     const operation = createOperation();
 
-    await coordinator.repository.persistOperationInsert(operation);
+    await coordinator.repository.persistNewOperation(operation);
     await coordinator.completeOperation(operation);
 
     const infoMetric = logger.calls.find(

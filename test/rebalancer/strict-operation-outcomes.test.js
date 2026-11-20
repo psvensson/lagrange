@@ -529,7 +529,8 @@ for (const corruptHistory of [false, true]) {
         if (corruptHistory && changedRows > 0) {
           fixture.database.prepare(
             'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
-          ).run(JSON.stringify([{step: WORKFLOW_STEP.FAILED, timestamp: 1}]), operation.operationId);
+          ).run(JSON.stringify([{step: WORKFLOW_STEP.FAILED, timestamp: 1}]),
+            operation.operationId);
         }
         const participant = {error: 'query_admission_deferred',
           errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', retryAfterMs: 250,
@@ -551,7 +552,7 @@ for (const corruptHistory of [false, true]) {
         t.throws(() => {
           attempted.outcome.operation.stepsHistory[0].step = 'MUTATED';
         }, TypeError,
-          'returned evidence snapshot cannot be mutated through nested history');
+        'returned evidence snapshot cannot be mutated through nested history');
       }
     });
 }
@@ -658,7 +659,8 @@ for (const history of ['{broken', '{}', 'null']) {
       'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
     ).run(history, operation.operationId);
     const reopened = await fixture.reopen();
-    const attempt = await observeAttempt(() => reopened.coordinator.workflowOwner.completeOperation(operation));
+    const attempt = await observeAttempt(() =>
+      reopened.coordinator.workflowOwner.completeOperation(operation));
     t.equal(attempt.error?.code, INVALID_OUTCOME_CODE);
     t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.ACTIVE);
     t.equal(reopened.database.prepare(

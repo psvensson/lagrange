@@ -323,7 +323,7 @@ test('rowToOperation rejects rows without canonical entity identity', async (t) 
   );
 });
 
-test('rowToOperation recovers from malformed steps_history', async (t) => {
+test('rowToOperation refuses malformed steps_history', async (t) => {
   const errors = [];
   const repo = createTestRepository({
     controlPlaneSystemTableGateway: {
@@ -340,9 +340,8 @@ test('rowToOperation recovers from malformed steps_history', async (t) => {
     },
   };
   const row = makeRow({steps_history: 'not-json'});
-  const op = repo.rowToOperation(row);
-
-  t.same(op.stepsHistory, []);
+  t.throws(() => repo.rowToOperation(row), {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'},
+    'corrupt durable history cannot become an invented empty history');
   t.ok(errors.length > 0, 'should log error for malformed JSON');
 });
 

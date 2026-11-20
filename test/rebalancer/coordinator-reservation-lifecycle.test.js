@@ -855,7 +855,7 @@ test('reservation ID is derived from operation ID', async (t) => {
 
 // --- Real size_bytes admission witness (audit findings 2+16) ---
 
-function createSizedPartitionCoordinator(options = {}) {
+function createSizedPartitionCoordinator(t, options = {}) {
   const admissionCalls = [];
   const sizedPartitionId = 'p-sized';
   const storageAdmissionService = options.storageAdmissionService || {
@@ -897,7 +897,7 @@ test('createOperation - reservation witness carries the real partition ' +
   initializeConfig();
   const partitionSizeBytes = NUM.BYTES_PER_MIB * 50;
   const {coordinator, sqlEngine, sizedPartitionId} =
-    createSizedPartitionCoordinator({partitionSizeBytes});
+    createSizedPartitionCoordinator(t, {partitionSizeBytes});
 
   await createSizedPartitionAdd(coordinator, sizedPartitionId);
 
@@ -919,7 +919,7 @@ test('createOperation - reservation estimate equals the admission-time ' +
   'estimate', async (t) => {
   initializeConfig();
   const {coordinator, sqlEngine, admissionCalls, sizedPartitionId} =
-    createSizedPartitionCoordinator({
+    createSizedPartitionCoordinator(t, {
       partitionSizeBytes: NUM.BYTES_PER_MIB * 25,
     });
 

@@ -69,7 +69,8 @@ function terminalCleanupRemoveOperation(operationId = 'cleanup-release-op') {
     entityId: PARTITION_ID,
     status: 'removed',
     workflowStep: WORKFLOW_STEP.REMOVED,
-    completedAt: 50,
+    createdAt: 10, updatedAt: 50, completedAt: 50,
+    stepsHistory: [{step: WORKFLOW_STEP.REMOVED, timestamp: 50}],
     [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: {
       cleanup_token: buildFailedCreateCleanupToken('create-release-op'),
       create_attempt_token: CREATE_ATTEMPT_TOKEN,
@@ -95,6 +96,7 @@ function terminalCleanupRepairOwner(
     terminalTransitionRepairTimerByOperationId: new Map(),
     repository,
     logger: {
+      debug() {},
       info(message, context) {
         logs.push({level: 'info', message, context});
       },

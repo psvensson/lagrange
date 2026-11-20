@@ -28,7 +28,7 @@
   "censusSize": 2698,
   "digest": "fnv1a32-ae28989b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-173fcb12",
+  "observationDigest": "fnv1a32-bebe46b8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17494,7 +17494,8 @@
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-operation-update-outcome.js",
         "src/rebalancer/replica-status.js",
-        "src/workflow/durable-workflow-coordinator.js"
+        "src/workflow/durable-workflow-coordinator.js",
+        "test/rebalancer/test-helpers.js"
       ]
     },
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": {
@@ -18404,7 +18405,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js"
       ]
     },
     "test/rebalancer/remove-safety-projection-input.test.js": {
@@ -18794,8 +18797,10 @@
     },
     "test/rebalancer/replica-operation-terminal-cas.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },

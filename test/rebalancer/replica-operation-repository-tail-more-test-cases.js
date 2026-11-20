@@ -510,14 +510,10 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         }),
       );
 
-      const result = await repo.persistOperationUpdate(op);
+      await t.rejects(repo.persistOperationUpdate(op),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true},
+        'a committed write without current authority cannot return a settled projection');
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
-
-      t.equal(
-        result.persisted,
-        true,
-        'a recent owner-persisted transition should defer instead of failing hard on one empty authoritative read boundary',
-      );
       t.equal(
         outcome?.confirmationState,
         VISIBILITY_CONFIRMATION_STATE_DEFERRED,
@@ -577,14 +573,10 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         }),
       );
 
-      const result = await repo.persistOperationUpdate(op);
+      await t.rejects(repo.persistOperationUpdate(op),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true},
+        'a committed write without current authority cannot return a settled projection');
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
-
-      t.equal(
-        result.persisted,
-        true,
-        'an older authoritative row for the same owner-persisted transition should defer instead of failing hard',
-      );
       t.equal(
         outcome?.confirmationState,
         VISIBILITY_CONFIRMATION_STATE_DEFERRED,

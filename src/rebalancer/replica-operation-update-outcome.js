@@ -51,6 +51,19 @@ function assertOperationData(value, visited = new Set()) {
   visited.delete(value);
 }
 
+function decodePersistedOperationHistory(raw) {
+  requireOutcome(typeof raw === 'string', 'persisted operation history is not JSON text');
+  let history;
+  try {
+    history = JSON.parse(raw);
+  } catch (_) {
+    throw invalidOperationPersistenceOutcome('persisted operation history is invalid JSON');
+  }
+  requireOutcome(Array.isArray(history), 'persisted operation history is not an array');
+  assertOperationData(history);
+  return history;
+}
+
 function copyOperationOutcomeData(operation) {
   assertOperationData(operation);
   const copy = structuredClone(operation);
@@ -155,6 +168,7 @@ export {
   INVALID_OPERATION_PERSISTENCE_OUTCOME,
   assertOperationData,
   copyOperationOutcomeData,
+  decodePersistedOperationHistory,
   assertOperationUpdateOutcome,
   assertOperationUpdateRecord,
   assertOperationUpdateSubject,
