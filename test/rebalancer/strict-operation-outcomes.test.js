@@ -23,6 +23,7 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
 import {
   generateCreateIndexSQL,
   generateCreateTableSQL,
@@ -243,7 +244,9 @@ function interruptServicesRead(fixture) {
     }
     return read(tableName, ...args);
   };
-  return () => { fixture.gateway.readAuthoritativeRows = read; };
+  return () => {
+    fixture.gateway.readAuthoritativeRows = read;
+  };
 }
 
 test('ADD terminal failure retains the operation during exact target read unavailability', async (t) => {
@@ -385,6 +388,98 @@ test('priority ADD dispatch reports a refused failure as unsettled', async (t) =
   t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
   t.match(durable.errorMessage, /eligible cohort/i);
   t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('priority REPLACE supersession races canonical target materialization', async (t) => {
+  for (const materialize of [false, true]) {
+    const partitionId = 'sql_transactions-p1';
+    const operationId = `priority-replace-target-race-${materialize}`;
+    const fixture = createFixture(t, {
+      nodeId: TARGET_NODE_ID,
+      controlPlaneReadinessService: buildPriorityDrainSupersededReadinessService(
+        partitionId, operationId),
+    }).current;
+    const {coordinator, gateway} = fixture;
+    const operation = await seedOperation(t, fixture, operationId, {
+      type: OperationType.REPLACE,
+      partitionId,
+      entityId: partitionId,
+      sourceReplicaId: `${partitionId}-r1`,
+      replicaId: `${partitionId}-r3`,
+    });
+    const owner = coordinator.workflowOwner;
+    await owner.updateStep(operation, WORKFLOW_STEP.SENDING);
+    const submit = gateway.submitMutation.bind(gateway);
+    const read = gateway.readAuthoritativeRows.bind(gateway);
+    const bootIncarnation = 17;
+    const admission = new ReplicaCreateAdmissionOwner({
+      nodeId: operation.targetNodeId,
+      ownerIncarnation: bootIncarnation,
+      gateway: {
+        readAuthoritativeRows(tableName, ...args) {
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
+            return {success: true, rows: [{
+              node_id: operation.targetNodeId, boot_incarnation: bootIncarnation,
+            }]};
+          }
+          return read(tableName, ...args);
+        },
+        updateSystemTableRow: gateway.cdcIntegrationService.updateSystemTableRow,
+      },
+    });
+    let raced = false;
+    gateway.submitMutation = async (mutation) => {
+      if (materialize && !raced &&
+          mutation.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+          mutation.whereClause?.operation_id === operationId &&
+          mutation.data?.workflow_step === WORKFLOW_STEP.FAILED) {
+        raced = true;
+        const attempt = await admission.claim({
+          operationId,
+          operationType: operation.type,
+          entityType: operation.entityType,
+          entityId: operation.entityId,
+          partitionId,
+          replicaId: operation.replicaId,
+          admissionToken: 'target-race-admission',
+          attemptToken: 'target-race-attempt',
+          attemptSeq: 1,
+          workflowUpdatedAt: operation.updatedAt,
+        });
+        const now = Date.now();
+        const inserted = await submit({
+          operation: 'insert',
+          tableName: SYSTEM_TABLE_NAME.SERVICES,
+          row: {
+            service_id: operation.replicaId,
+            replica_id: operation.replicaId,
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: partitionId,
+            node_id: operation.targetNodeId,
+            status: ReplicaStatus.CREATING,
+            create_attempt_token: attempt.attemptToken,
+            created_at: attempt.replicaCreatedAt,
+            updated_at: now,
+            state_entered_at: now,
+          },
+        });
+        t.equal(inserted.success, true, 'the admitted exact target materialized at terminal ingress');
+      }
+      return submit(mutation);
+    };
+    const result = await coordinator.dispatchOperation(operation);
+    const durable = await owner.repository.queryAuthoritativeOperationById(operationId);
+    t.equal(raced, materialize, 'inject materialization only at the guarded terminal mutation');
+    if (materialize) {
+      t.equal(result.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+      t.equal(durable.workflowStep, WORKFLOW_STEP.SENDING);
+      t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.ACTIVE);
+    } else {
+      t.equal(result.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+      t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
+      t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.RELEASED);
+    }
+  }
 });
 
 // These are deliberately malformed negatives, not substituting ordinary fixture
