@@ -92,29 +92,44 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         dataDir: this.dataDir,
       });
       this.initialized = true;
-      // Removal-cleanup debt owner (audit finding 12): a failed/stranded
-      // replica-removal cleanup must not orphan DB/WAL files indefinitely,
-      // so every startup reconciles the partitions directory against
-      // authoritative rows via the idempotent reconcile cleanup path.
-      this.removedReplicaCleanupAdmissionBarrier =
-        this.captureRemovedReplicaCleanupStartupAuthorities();
-      this.removedReplicaCleanupDebtSweepTask =
-        this.removedReplicaCleanupAdmissionBarrier.then(
-          (startupAuthorities) =>
-            this.sweepRemovedReplicaCleanupDebt(startupAuthorities),
-        ).finally(() => this.watchGroupRetiredTombstones?.()).catch((error) => {
-          this.logger.warn(
-            REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
-            {nodeId: this.nodeId, error: error.message},
-          );
-        });
       this.startReplicaCreateAdmissionRecovery();
+    }
+
+    // Freeze the first successful pre-admission read for this handler. All
+    // callers see the same in-flight or successful read. A deferred read
+    // stays closed until the existing startup recovery owner tries again.
+    captureStartupCleanupBeforeAdmission() {
+      if (this.removedReplicaCleanupAdmissionBarrier && !this.startupCleanupReadDeferred) {
+        return this.removedReplicaCleanupAdmissionBarrier;
+      }
+      this.startupCleanupReadDeferred = false;
+      const capture = this.captureRemovedReplicaCleanupStartupAuthorities().then(
+        (authorities) => {
+          this.throwIfShuttingDown();
+          return authorities;
+        },
+        (error) => {
+          this.startupCleanupReadDeferred = true;
+          throw error;
+        },
+      );
+      this.removedReplicaCleanupAdmissionBarrier = capture;
+      this.removedReplicaCleanupDebtSweepTask = capture.then((authorities) =>
+        this.sweepRemovedReplicaCleanupDebt(authorities).finally(() => {
+          if (!this.shuttingDown) this.watchGroupRetiredTombstones?.();
+        }),
+      ).catch((error) => {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
+          {nodeId: this.nodeId, error: error.message});
+      });
+      return capture;
     }
 
     startReplicaCreateAdmissionRecovery() {
       if (this.shuttingDown) return CREATE_ADMISSION_RECOVERY_NOT_STARTED;
       this.replicaCreateAdmissionRecoveryRearmOwner.cancel();
-      const barrier = this.recoverRetainedReplicaCreateAdmissions();
+      const barrier = this.captureStartupCleanupBeforeAdmission().then(() =>
+        this.recoverRetainedReplicaCreateAdmissions());
       this.replicaCreateAdmissionRecoveryBarrier = barrier;
       this.replicaCreateAdmissionRecoveryTask = barrier.catch((error) => {
         if (this.shuttingDown) return;

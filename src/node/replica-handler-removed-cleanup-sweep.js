@@ -128,6 +128,7 @@ async function resolveSweepCleanupAuthority(owner, startupAuthorities,
     startupAuthorities,
     {replicaId, partitionId, nodeId: handler.nodeId},
   );
+  handler.throwIfShuttingDown();
   if (resumed) return resumed;
   const acquired = await owner.acquire({
     replicaId,
@@ -142,9 +143,10 @@ async function resolveSweepCleanupAuthority(owner, startupAuthorities,
     acquired.authority : null;
 }
 
-async function completeSweepCleanup(owner, authority, fs, dbPath) {
+async function completeSweepCleanup(handler, owner, authority, fs, dbPath) {
   if (!replicaStorageArtifactsAbsent(fs, dbPath)) return false;
   if (!await owner.requireCurrent(authority)) return false;
+  handler.throwIfShuttingDown();
   if (isFailedCreateRemoveToken(authority.ownerToken)) {
     const completed = authority.kind ===
       REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE ?
@@ -152,6 +154,7 @@ async function completeSweepCleanup(owner, authority, fs, dbPath) {
     if (!completed || !await owner.isReceiptOperationTerminal(completed)) {
       return completed || false;
     }
+    handler.throwIfShuttingDown();
     return owner.release(completed, {artifactsAbsent: true});
   }
   return owner.release(authority, {artifactsAbsent: true});
@@ -234,6 +237,7 @@ async function sweepRemovedReplicaCleanupDebt(
       if (!authority || !await owner.requireCurrent(authority)) {
         throw new Error(`Cleanup ownership unavailable for ${replicaId}`);
       }
+      handler.throwIfShuttingDown();
       if (authority.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
         await handler.cleanupReplicaResources(
           partitionId,
@@ -243,6 +247,7 @@ async function sweepRemovedReplicaCleanupDebt(
       }
       const dbPath = path.join(partitionsDir, key);
       const completion = await completeSweepCleanup(
+        handler,
         owner,
         authority,
         fs,
