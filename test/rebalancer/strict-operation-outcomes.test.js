@@ -444,6 +444,9 @@ test('strict outcomes failed REPLACE repair releases before now-refused write ad
     t.equal(adopted.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED);
     t.equal(adopted.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
     t.same(adopted.operation, committed.operation);
+    const resumed = await reopened.coordinator.workflowOwner.runReplaceStoppingOwner(stale);
+    t.equal(resumed.success, false, 'STOPPING adapter cannot turn adopted failure into success');
+    t.equal(resumed.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
     t.same(await reopened.coordinator.repository.queryAuthoritativeOperationById(stale.operationId),
       committed.operation);
   });

@@ -953,9 +953,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
         );
       }
-      await this.completeOperation(operation);
-      return this.buildSuccessfulOperationResult(operation.operationId, {
-        status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation), {
+        operationId: operation.operationId, status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
       });
     }
     if (response.status === ReplicaOperationResponseStatus.COMPLETED) {
@@ -977,9 +976,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           ReplicaOperationResponseStatus.COMPLETED,
         );
       }
-      await this.completeOperation(operation);
-      return this.buildSuccessfulOperationResult(operation.operationId, {
-        status: ReplicaOperationResponseStatus.COMPLETED,
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation), {
+        operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
       });
     }
     if (

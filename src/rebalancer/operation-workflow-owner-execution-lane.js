@@ -1,3 +1,5 @@
+import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
@@ -491,6 +493,21 @@ class OperationWorkflowOwnerExecutionLane
       error,
       ...extra,
     };
+  }
+
+  buildTerminalOperationDispatchResult(transitionOutcome, extra = {}) {
+    const outcome = assertOperationTransitionOutcome(transitionOutcome);
+    const operationId = outcome.operation?.operationId || extra.operationId;
+    if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
+      return this.buildFailedOperationResult(operationId, outcome.operation.errorMessage,
+        {reconcileOutcome: outcome.reconcileOutcome});
+    }
+    if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
+      return this.buildSuccessfulOperationResult(operationId,
+        {...extra, reconcileOutcome: outcome.reconcileOutcome});
+    }
+    return this.buildSkippedOperationResult(outcome.reconcileOutcome, operationId,
+      {reconcileOutcome: outcome.reconcileOutcome});
   }
 
   /**

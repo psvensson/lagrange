@@ -1,5 +1,5 @@
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
-import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
+import {buildOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
@@ -660,18 +660,27 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @return {Promise<Object>}
    */
   async runReplaceStoppingOwner(operation) {
+    if (this.repository.isOperationTerminal(operation)) {
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation),
+        {operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED});
+    }
     const entryLevel = captureReplaceOwnerLevel(this, operation);
     const outcome = await reconcileReplaceStoppingOwner(
       this, operation, {entryLevel});
     if (outcome && typeof outcome === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return outcome;
     }
-    // Progress completed or failed the operation; a wait keeps its source
-    // removal in progress under the same owner.
+    if (this.repository.isOperationTerminal(operation)) {
+      if (terminalOperationReconcileOutcome(operation) === OPERATION_RECONCILE_OUTCOME.FAILED) {
+        return this.buildFailedOperationResult(operation.operationId, operation.errorMessage,
+          {reconcileOutcome: OPERATION_RECONCILE_OUTCOME.FAILED});
+      }
+      return this.buildSuccessfulOperationResult(operation.operationId,
+        {status: ReplicaOperationResponseStatus.COMPLETED,
+          reconcileOutcome: OPERATION_RECONCILE_OUTCOME.COMPLETED});
+    }
     return this.buildSuccessfulOperationResult(operation.operationId, {
-      status: outcome === true ?
-        ReplicaOperationResponseStatus.COMPLETED :
-        OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+      status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
     });
   }
 

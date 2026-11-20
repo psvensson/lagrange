@@ -93,7 +93,8 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
   'operation-workflow-growth-promote.js': 2,
-  'operation-workflow-recovery-reconcile.js': 1,
+  // Terminal STOPPING reentry now reconsults the same completion owner.
+  'operation-workflow-recovery-reconcile.js': 2,
   // M2: a refused failure of a partition ADD whose target is live completes
   // it (never a REPLACE: its post-intent refusal completes nothing).
   'operation-workflow-transition-persistence.js': 1,
