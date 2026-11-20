@@ -101,6 +101,11 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
       createAttemptToken: null,
     });
   }
+  const retained = handler.inProgressOperations.get(service.createAdmissionOperationId)
+    ?.retainedActivation;
+  if (retained?.work.openedService === service && retained.work.retained) {
+    retained.release();
+  }
   return true;
 }
 

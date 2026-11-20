@@ -6,6 +6,9 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_TYPE} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 /**
  * The exact-identity handler API over a handler map, for in-process transport
@@ -60,6 +63,20 @@ function createIdentityTransport() {
     },
     ...handlerIdentityApi(handlers),
   };
+}
+
+// Give a CREATE component fixture its real registration boundary and its
+// controlled answer from the external participant release owner.
+function registerCompletedFreshCreateReleaseFixture(handler) {
+  const transport = createIdentityTransport();
+  transport.deliver = async (_address, message) =>
+    message.type === PARTICIPANT_RELEASE_TYPE ?
+      buildDeliveryEnvelope({acknowledged: true}, {
+        [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER},
+      }) :
+      buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+  handler.registerWithRouter(transport);
+  return transport;
 }
 
 /**
@@ -122,6 +139,7 @@ function withRegisteredActivationHandler(stateMachine) {
 
 export {
   bindRegisteredReplicaHandler,
+  registerCompletedFreshCreateReleaseFixture,
   createIdentityTransport,
   createInProcessMockTransport,
   forwardHandlerRegistry,

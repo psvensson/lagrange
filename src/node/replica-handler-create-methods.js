@@ -26,6 +26,9 @@ import {
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
+import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
+import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
 import * as priorExistence from './replica-prior-existence.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
@@ -70,30 +73,14 @@ const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
 const RESTARTABLE_CREATE_STATUSES = new Set([
   ReplicaStatus.PENDING, ReplicaStatus.SYNCING]);
 
-function canReleaseFreshCreateOnActivation(
-  handler,
-  partitionService,
-  {skipLifecycleStatusPersistence, existed, createAdmissionEvidence},
-) {
-  if (
-    skipLifecycleStatusPersistence ||
-    existed !== false ||
-    !createAdmissionEvidence
-  ) {
-    return false;
-  }
+function requireFreshCreateReleaseRoute(handler) {
   const router = handler.messageRouter;
-  if (typeof router?.deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
-    return false;
+  if (typeof router?.deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
+      !isExactReplicaHandlerRegistered(router,
+        handler.nodeId + PARTICIPANT_RELEASE_ROUTE_SUFFIX, handler.registeredRouterHandler)) {
+    throw Object.assign(new Error('Fresh CREATE participant release route unavailable'),
+      {code: FRESH_CREATE_RELEASE_UNAVAILABLE});
   }
-  if (typeof router.getRegisteredHandler === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-    return (
-      router.getRegisteredHandler(`${handler.nodeId}/service/replica-handler`) !== null &&
-      partitionService?.db != null &&
-      typeof partitionService?.raft?.readStatus === REPLICA_HANDLER_TYPEOF.FUNCTION
-    );
-  }
-  return true;
 }
 
 function armCreateAdmissionRecoveryRearm(handler) {
@@ -767,10 +754,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         requireReplicaCreateWork(this, work);
         if (admissionWaitFailure) throw admissionWaitFailure;
-        const requiresParticipantRelease = canReleaseFreshCreateOnActivation(
-          this, partitionService, {
-            skipLifecycleStatusPersistence, existed, createAdmissionEvidence,
-          });
+        // A retained local identity, an ACTIVE-runtime repair, or bootstrap
+        // without operation admission already belongs to its own release
+        // owner. Fresh materialized CREATE always enters the release protocol.
+        const requiresParticipantRelease = !skipLifecycleStatusPersistence &&
+          existed === false && Boolean(createAdmissionEvidence);
         let participantReleased = !requiresParticipantRelease;
         const activate = async (deadlineAtMs) => {
           work.retained = false;
@@ -780,6 +768,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             // this caller cannot observe its reply. Only a current, timely
             // answer advances the local activation checkpoint.
             if (!participantReleased) {
+              requireFreshCreateReleaseRoute(this);
               await observeCreateActivation(this, work, deadlineAtMs, () =>
                 this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
                   createAdmissionEvidence, identityExisted: existed, deadlineAtMs,

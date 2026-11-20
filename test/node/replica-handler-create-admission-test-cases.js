@@ -2,7 +2,7 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -150,6 +150,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       });
       const first = makeHandler();
       const second = makeHandler();
+      registerCompletedFreshCreateReleaseFixture(first);
+      registerCompletedFreshCreateReleaseFixture(second);
       const completed = new Promise((resolve, reject) => {
         for (const handler of [first, second]) {
           handler.once('replicaCreated', resolve);

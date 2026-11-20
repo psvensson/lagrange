@@ -19,7 +19,7 @@ const CREATE_AUTHORITY_BUDGET_MS = 100;
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 
 async function withHeldActivationRead(t, run, {refuseRead = false,
-  loseReleaseReply = false, supersedeBeforeRead = false} = {}) {
+  loseReleaseReply = false, supersedeBeforeRead = false, unregisterReleaseRoute = false} = {}) {
   const row = operationRow();
   const clock = new VirtualTimeSource({startMs: 1000});
   const outcomes = [];
@@ -33,8 +33,10 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
   const entered = Promise.withResolvers();
   const held = Promise.withResolvers();
   const releaseRequests = [];
+  const releaseRouter = handler.messageRouter;
+  if (unregisterReleaseRoute) handler.unregisterFromRouter(releaseRouter);
   if (loseReleaseReply) {
-    handler.messageRouter = {async deliver(_address, payload) {
+    handler.messageRouter.deliver = async (_address, payload) => {
       assert.equal(payload.action, PARTICIPANT_RELEASE_ACTION.RELEASE);
       releaseRequests.push(payload);
       if (releaseRequests.length === 1) {
@@ -45,13 +47,16 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
       return buildDeliveryEnvelope({acknowledged: true}, {
         [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER},
       });
-    }};
+    };
   }
   let armed = false;
   const persist = handler.persistReplicaStatusWithRetry.bind(handler);
   handler.persistReplicaStatusWithRetry = async (replicaId, status, options) => {
     const result = await persist(replicaId, status, options);
-    if (status === ReplicaStatus.SYNCING) armed = true;
+    if (status === ReplicaStatus.SYNCING) {
+      if (unregisterReleaseRoute) entered.resolve();
+      else armed = true;
+    }
     return result;
   };
   const gateway = authority.gateway;
@@ -86,7 +91,7 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
     ]);
     assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
     await run({...fixture, row, clock, outcomes, worker, release: held.resolve,
-      changeOperation, releaseRequests,
+      changeOperation, releaseRequests, releaseRouter,
       currentStatus: () => fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
     });
   } finally {
@@ -165,6 +170,23 @@ it('lost fresh CREATE release reply retains and resumes the exact materialized w
     assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
     assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
   }, {loseReleaseReply: true}));
+
+it('fresh CREATE cannot activate while the exact participant release route is missing',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    await f.worker;
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    assert.ok(original);
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+    assert.equal(f.physicalShutdowns(), 0);
+    f.handler.registerWithRouter(f.releaseRouter);
+    f.handler.startReplicaCreateAdmissionRecovery();
+    await f.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.physicalStarts(), 1);
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+  }, {unregisterReleaseRoute: true}));
 
 for (const beforeRead of [true, false]) {
   it(`supersession ${beforeRead ? 'before' : 'during'} final CREATE authority retires the old work`,
