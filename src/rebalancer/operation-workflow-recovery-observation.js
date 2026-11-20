@@ -14,8 +14,7 @@ import {observeGrowthPromoteIncompleteState} from './operation-workflow-growth-p
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 
 function isTerminalPersistSettled(transitionOutcome) {
-  return transitionOutcome === undefined || transitionOutcome === true ||
-    isTerminalTransitionOutcomeSettled(transitionOutcome);
+  return isTerminalTransitionOutcomeSettled(transitionOutcome);
 }
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,

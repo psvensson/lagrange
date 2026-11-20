@@ -219,16 +219,19 @@ const GROWTH_SETTLEMENT_DISPOSITION_TABLE = Object.freeze({
   }),
 });
 
-function resolveGrowthSettlementDispositionPolicy(disposition, outcome) {
+const UNRECOGNIZED_GROWTH_SETTLEMENT_POLICY = Object.freeze({
+  isDurableTerminal: () => false,
+  resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.WAITING,
+});
+
+function resolveGrowthSettlementDispositionPolicy(disposition) {
   if (
     typeof disposition === 'string' &&
     Object.hasOwn(GROWTH_SETTLEMENT_DISPOSITION_TABLE, disposition)
   ) {
     return GROWTH_SETTLEMENT_DISPOSITION_TABLE[disposition];
   }
-  return outcome?.committed === true ?
-    GROWTH_SETTLEMENT_DISPOSITION_TABLE[REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED] :
-    GROWTH_SETTLEMENT_DISPOSITION_TABLE[REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED];
+  return UNRECOGNIZED_GROWTH_SETTLEMENT_POLICY;
 }
 
 function buildGrowthSettlementResult(phase, reconcileOutcome, committed, disposition) {

@@ -1,44 +1,42 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {EventEmitter} from 'node:events';
+import Database from 'better-sqlite3';
 import {
-  CDC_OPERATION,
-  WORKFLOW_STEP,
+  CDC_OPERATION, COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {assignReplicaHandlerCreateMethods} from '../../src/node/replica-handler-create-methods.js';
 import {
-  assignReplicaHandlerCreateMethods,
-} from '../../src/node/replica-handler-create-methods.js';
-import {
-  LEARNER_ADMISSION_WAIT_OUTCOME,
-  assignReplicaHandlerVoterReadinessMethods,
+  LEARNER_ADMISSION_WAIT_OUTCOME, assignReplicaHandlerVoterReadinessMethods,
 } from '../../src/node/replica-handler-voter-readiness-methods.js';
+import {
+  LEDGER_PARTITION_ID, readPlacementCensus,
+} from '../../src/partition/partition-placement-admission-decision.js';
 import {PartitionService} from '../../src/partition/partition-service-assembly.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
 import {
-  SYSTEM_TABLE_NAME,
+  REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  GROWTH_SETTLEMENT_PHASE,
-  OPERATION_RECONCILE_OUTCOME,
-  didOperationReconcileAdvanceOrComplete,
-  hasValidGrowthPromoteCompletionProvenance,
-  observeGrowthPromoteIncompleteState,
-  reconcileGrowthPromoteDispatchResponse,
-  reconcileGrowthPromoteLifecycle,
-  redirectGrowthPromoteTargetNode,
-  resolveGrowthPromoteTargetNodeId,
-  settleGrowthPromoteCompletion,
+  PLACEMENT_FORMATION_STATE, PLACEMENT_TRIGGER,
+} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
+import {
+  GROWTH_SETTLEMENT_PHASE, OPERATION_RECONCILE_OUTCOME,
+  didOperationReconcileAdvanceOrComplete, hasValidGrowthPromoteCompletionProvenance,
+  observeGrowthPromoteIncompleteState, reconcileGrowthPromoteDispatchResponse,
+  reconcileGrowthPromoteLifecycle, redirectGrowthPromoteTargetNode,
+  resolveGrowthPromoteTargetNodeId, settleGrowthPromoteCompletion,
 } from '../../src/rebalancer/operation-workflow-growth-promote.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {
-  ReplicaOperationField,
-  ReplicaOperationResponseStatus,
+  ReplicaOperationField, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
-  createOperation,
-  OperationType,
-  ReplicaStatus,
+  createOperation, OperationType, ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {createTestCoordinator} from './test-helpers.js';
 
@@ -72,14 +70,12 @@ function buildGrowthPromoteOperation(overrides = {}) {
   const stepEnteredAt = overrides.stepEnteredAt ?? operation.createdAt;
   operation.createdAt = stepEnteredAt;
   operation.updatedAt = stepEnteredAt;
-  operation.stepsHistory = [
-    {
-      step: operation.workflowStep,
-      timestamp: stepEnteredAt,
-      [ReplicaOperationField.PROMOTE_REPLICA_IDS]:
-        operation[ReplicaOperationField.PROMOTE_REPLICA_IDS],
-    },
-  ];
+  operation.stepsHistory = [{
+    step: operation.workflowStep,
+    timestamp: stepEnteredAt,
+    [ReplicaOperationField.PROMOTE_REPLICA_IDS]:
+      operation[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+  }];
   return Object.assign(operation, overrides);
 }
 
@@ -89,32 +85,13 @@ test(
     'replica provenance, never projected SERVICES.raft_role',
   async (t) => {
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      CDC_OPERATION.UPSERT,
-      {
-        service_id: TEST_LEARNER_1,
-        replica_id: TEST_LEARNER_1,
-        service_type: 'partition',
-        partition_id: TEST_PARTITION_ID,
-        node_id: 'node-2',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: RAFT_ROLE.FOLLOWER,
-      },
-    );
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      CDC_OPERATION.UPSERT,
-      {
-        service_id: TEST_LEARNER_2,
-        replica_id: TEST_LEARNER_2,
-        service_type: 'partition',
-        partition_id: TEST_PARTITION_ID,
-        node_id: 'node-3',
-        status: ReplicaStatus.ACTIVE,
-        raft_role: RAFT_ROLE.FOLLOWER,
-      },
-    );
+    for (const [id, nodeId] of [[TEST_LEARNER_1, 'node-2'], [TEST_LEARNER_2, 'node-3']]) {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: id, replica_id: id, service_type: 'partition',
+        partition_id: TEST_PARTITION_ID, node_id: nodeId,
+        status: ReplicaStatus.ACTIVE, raft_role: RAFT_ROLE.FOLLOWER,
+      });
+    }
 
     const coordinator = createTestCoordinator({
       nodeId: TEST_LEADER_NODE_1,
@@ -137,14 +114,8 @@ test(
       let completedCount = 0;
       let nextPersistDisposition = REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED;
       owner.completeOperation = async (op) => {
-        if (
-          nextPersistDisposition !==
-          REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED
-        ) {
-          return Object.freeze({
-            committed: false,
-            disposition: nextPersistDisposition,
-          });
+        if (nextPersistDisposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED) {
+          return Object.freeze({committed: false, disposition: nextPersistDisposition});
         }
         completedCount += 1;
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
@@ -171,9 +142,7 @@ test(
         'provenance check rejects mismatched partitionId',
       );
       const wrongPartitionResult = await reconcileGrowthPromoteDispatchResponse(
-        owner,
-        operation,
-        {
+        owner, operation, {
           committedVotersReached: true,
           partitionId: 'other_table-p9',
           promotedReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
@@ -202,9 +171,7 @@ test(
         'provenance check rejects voterReplicaIds missing a promoted learner',
       );
       const partialReplicaResult = await reconcileGrowthPromoteDispatchResponse(
-        owner,
-        operation,
-        {
+        owner, operation, {
           committedVotersReached: true,
           partitionId: TEST_PARTITION_ID,
           promotedReplicaIds: [TEST_LEARNER_1],
@@ -214,23 +181,22 @@ test(
       t.equal(completedCount, 0);
 
       // CORE_OK without committedVotersReached === true must defer to SYNCING
-      const unconfirmedProposalResult =
-        await reconcileGrowthPromoteDispatchResponse(owner, operation, {
+      const unconfirmedProposalResult = await reconcileGrowthPromoteDispatchResponse(
+        owner, operation, {
           [ReplicaOperationField.PROPOSAL]: {
             outcome: 'CORE_OK',
             promotedReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
           },
           committedVotersReached: false,
-        });
+        },
+      );
       t.equal(unconfirmedProposalResult.status, 'in_progress');
       t.equal(completedCount, 0);
 
       // Authoritative committedVotersReached === true with valid provenance completes
       nextPersistDisposition = REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED;
       const validResult = await reconcileGrowthPromoteDispatchResponse(
-        owner,
-        operation,
-        {
+        owner, operation, {
           committedVotersReached: true,
           partitionId: TEST_PARTITION_ID,
           [ReplicaOperationField.PROPOSAL]: {
@@ -258,9 +224,7 @@ test(
     'gate terminal completion on durable persistence disposition ' +
     '(deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)',
   async (t) => {
-    const coordinator = createTestCoordinator({
-      nodeId: TEST_LEADER_NODE_1,
-    });
+    const coordinator = createTestCoordinator({nodeId: TEST_LEADER_NODE_1});
     const owner = coordinator.workflowOwner;
 
     try {
@@ -270,7 +234,6 @@ test(
         workflowStep: WORKFLOW_STEP.SYNCING,
         completedAt: null,
       });
-
       const validCommittedResponse = {
         committedVotersReached: true,
         partitionId: TEST_PARTITION_ID,
@@ -281,71 +244,56 @@ test(
       };
 
       // 1. Deferred terminal persistence: dispatch response reports skipped/WAITING
-      // and reconcileOperationLifecycle returns WAITING (never COMPLETED)
       owner.completeOperation = async () =>
-        Object.freeze({
-          committed: false,
-          disposition: 'deferred',
-        });
+        Object.freeze({committed: false, disposition: 'deferred'});
       owner.executeOperationFromReconcilePath = async (targetOp) =>
-        reconcileGrowthPromoteDispatchResponse(
-          owner,
-          targetOp,
-          validCommittedResponse,
-        );
+        reconcileGrowthPromoteDispatchResponse(owner, targetOp, validCommittedResponse);
 
-      const deferredDispatchResult =
-        await reconcileGrowthPromoteDispatchResponse(
-          owner,
-          op,
-          validCommittedResponse,
-        );
+      const deferredDispatchResult = await reconcileGrowthPromoteDispatchResponse(
+        owner, op, validCommittedResponse,
+      );
       t.equal(deferredDispatchResult.skipped, true);
-      t.equal(
-        deferredDispatchResult.settlementPhase,
-        GROWTH_SETTLEMENT_PHASE.PERSISTING,
-      );
-      t.equal(
-        deferredDispatchResult.reconcileOutcome,
-        OPERATION_RECONCILE_OUTCOME.WAITING,
-      );
-      t.equal(
-        await owner.reconcileOperationLifecycle(op),
-        OPERATION_RECONCILE_OUTCOME.WAITING,
-      );
+      t.equal(deferredDispatchResult.settlementPhase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+      t.equal(deferredDispatchResult.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+      t.equal(await owner.reconcileOperationLifecycle(op), OPERATION_RECONCILE_OUTCOME.WAITING);
       t.equal(op.completedAt, null);
 
       // 2. Refused terminal persistence: reconcileOperationLifecycle returns REFUSED
-      owner.completeOperation = async () =>
-        Object.freeze({
-          committed: false,
-          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-        });
+      owner.completeOperation = async () => Object.freeze({
+        committed: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+      });
       const refusedSettlement = await settleGrowthPromoteCompletion(owner, op);
       t.equal(refusedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
-      t.equal(
-        refusedSettlement.reconcileOutcome,
-        OPERATION_RECONCILE_OUTCOME.REFUSED,
-      );
-      t.equal(
-        await owner.reconcileOperationLifecycle(op),
-        OPERATION_RECONCILE_OUTCOME.REFUSED,
-      );
+      t.equal(refusedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+      t.equal(await owner.reconcileOperationLifecycle(op), OPERATION_RECONCILE_OUTCOME.REFUSED);
 
-      // 3. Subsequent retry where completeOperation commits transitions to COMPLETED
+      // 2b. Unrecognized or missing disposition (even with committed: true) stays in
+      // PERSISTING / WAITING and does not release obligations or report COMPLETED
+      let holdReleasesOnUnrecognized = 0;
+      owner.releasePlacementHold = async () => {
+        holdReleasesOnUnrecognized += 1;
+      };
+      owner.completeOperation = async () => Object.freeze({
+        committed: true,
+        disposition: 'unrecognized_custom_disposition',
+      });
+      const unrecognizedSettlement = await settleGrowthPromoteCompletion(owner, op);
+      t.equal(unrecognizedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+      t.equal(unrecognizedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+      t.equal(holdReleasesOnUnrecognized, 0);
+
+      // 3. Subsequent retry where completeOperation commits with UPDATED transitions to COMPLETED
       owner.completeOperation = async (targetOp) => {
         targetOp.workflowStep = WORKFLOW_STEP.ACTIVE;
         targetOp.status = ReplicaStatus.ACTIVE;
         targetOp.completedAt = Date.now();
         return Object.freeze({
           committed: true,
-          disposition: 'committed',
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
         });
       };
-      t.equal(
-        await owner.reconcileOperationLifecycle(op),
-        OPERATION_RECONCILE_OUTCOME.COMPLETED,
-      );
+      t.equal(await owner.reconcileOperationLifecycle(op), OPERATION_RECONCILE_OUTCOME.COMPLETED);
       t.equal(op.workflowStep, WORKFLOW_STEP.ACTIVE);
       t.ok(Number.isFinite(op.completedAt));
     } finally {
@@ -360,19 +308,12 @@ test(
     'placement intent or ADD/REMOVE/REPLACE targetNodeId',
   async (t) => {
     const cache = new SystemTableCache();
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      CDC_OPERATION.UPSERT,
-      {
-        service_id: TEST_LEADER_REPLICA_2,
-        replica_id: TEST_LEADER_REPLICA_2,
-        service_type: 'partition',
-        partition_id: TEST_PARTITION_ID,
-        node_id: TEST_LEADER_NODE_2,
-        status: ReplicaStatus.ACTIVE,
-        raft_role: RAFT_ROLE.LEADER,
-      },
-    );
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, CDC_OPERATION.UPSERT, {
+      service_id: TEST_LEADER_REPLICA_2, replica_id: TEST_LEADER_REPLICA_2,
+      service_type: 'partition', partition_id: TEST_PARTITION_ID,
+      node_id: TEST_LEADER_NODE_2, status: ReplicaStatus.ACTIVE,
+      raft_role: RAFT_ROLE.LEADER,
+    });
     const coordinator = createTestCoordinator({
       nodeId: TEST_LEADER_NODE_1,
       systemTableCache: cache,
@@ -380,9 +321,7 @@ test(
     const owner = coordinator.workflowOwner;
 
     try {
-      const growthOp = buildGrowthPromoteOperation({
-        targetNodeId: '',
-      });
+      const growthOp = buildGrowthPromoteOperation({targetNodeId: ''});
       const initialRoute = resolveGrowthPromoteTargetNodeId(owner, growthOp);
       t.equal(initialRoute, TEST_LEADER_NODE_2);
       t.equal(growthOp.administrationRouteNodeId, TEST_LEADER_NODE_2);
@@ -393,9 +332,7 @@ test(
       growthOp.administrationRouteNodeId = TEST_LEADER_NODE_1;
       const redirected = redirectGrowthPromoteTargetNode(owner, growthOp, {
         [ReplicaOperationField.PROPOSAL]: {
-          outcome: 'CORE_REFUSED',
-          reason: 'not_leader',
-          retryable: true,
+          outcome: 'CORE_REFUSED', reason: 'not_leader', retryable: true,
         },
         leaderId: TEST_LEADER_REPLICA_2,
       });
@@ -406,8 +343,7 @@ test(
       t.equal(growthOp.replicaId, TEST_LEARNER_1);
       t.equal(growthOp.sourceReplicaId, TEST_LEARNER_2);
       t.same(growthOp[ReplicaOperationField.PROMOTE_REPLICA_IDS], [
-        TEST_LEARNER_1,
-        TEST_LEARNER_2,
+        TEST_LEARNER_1, TEST_LEARNER_2,
       ]);
 
       // ADD operation targetNodeId must never be overwritten by redirect helpers
@@ -422,10 +358,7 @@ test(
       t.equal(redirectGrowthPromoteTargetNode(owner, addOp, {
         leaderNodeId: TEST_LEADER_NODE_2,
       }), '');
-      t.equal(
-        resolveGrowthPromoteTargetNodeId(owner, addOp),
-        'node-physical-placement-target',
-      );
+      t.equal(resolveGrowthPromoteTargetNodeId(owner, addOp), 'node-physical-placement-target');
       t.equal(addOp.targetNodeId, 'node-physical-placement-target');
       t.equal(addOp.administrationRouteNodeId, undefined);
     } finally {
@@ -438,68 +371,32 @@ test(
   'D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit ' +
     'OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)',
   async (t) => {
-    const coordinator = createTestCoordinator({
-      nodeId: TEST_LEADER_NODE_1,
-    });
+    const coordinator = createTestCoordinator({nodeId: TEST_LEADER_NODE_1});
     const owner = coordinator.workflowOwner;
 
     try {
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.COMPLETED,
-        ),
-        true,
-      );
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.ADVANCED,
-        ),
-        true,
-      );
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.COMPLETED), true);
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.ADVANCED), true);
       t.equal(didOperationReconcileAdvanceOrComplete(true), true);
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.WAITING,
-        ),
-        false,
-      );
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.HELD,
-        ),
-        false,
-      );
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.REFUSED,
-        ),
-        false,
-      );
-      t.equal(
-        didOperationReconcileAdvanceOrComplete(
-          OPERATION_RECONCILE_OUTCOME.FAILED,
-        ),
-        false,
-      );
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.WAITING), false);
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.HELD), false);
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.REFUSED), false);
+      t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.FAILED), false);
       t.equal(didOperationReconcileAdvanceOrComplete(false), false);
       t.equal(didOperationReconcileAdvanceOrComplete(null), false);
 
       // 1. HELD operation returns HELD
       const heldOp = buildGrowthPromoteOperation({
-        status: ReplicaStatus.HELD,
-        workflowStep: WORKFLOW_STEP.PENDING,
+        status: ReplicaStatus.HELD, workflowStep: WORKFLOW_STEP.PENDING,
       });
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, heldOp),
         OPERATION_RECONCILE_OUTCOME.HELD,
       );
 
-      // 2. Already terminal ACTIVE operation before reconcile discharges obligations
-      // and returns COMPLETED; already terminal FAILED operation returns FAILED
+      // 2. Already terminal ACTIVE operation returns COMPLETED; FAILED returns FAILED
       const terminalOp = buildGrowthPromoteOperation({
-        status: ReplicaStatus.ACTIVE,
-        workflowStep: WORKFLOW_STEP.ACTIVE,
-        completedAt: Date.now(),
+        status: ReplicaStatus.ACTIVE, workflowStep: WORKFLOW_STEP.ACTIVE, completedAt: Date.now(),
       });
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, terminalOp),
@@ -507,9 +404,7 @@ test(
       );
       const failedTerminalOp = buildGrowthPromoteOperation({
         operationId: 'op-growth-promote-terminal-failed',
-        status: ReplicaStatus.FAILED,
-        workflowStep: WORKFLOW_STEP.FAILED,
-        completedAt: Date.now(),
+        status: ReplicaStatus.FAILED, workflowStep: WORKFLOW_STEP.FAILED, completedAt: Date.now(),
       });
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, failedTerminalOp),
@@ -518,12 +413,10 @@ test(
 
       // 3. In-place SYNCING retry (no step change, not terminal) returns WAITING
       const syncingOp = buildGrowthPromoteOperation({
-        status: ReplicaStatus.SYNCING,
-        workflowStep: WORKFLOW_STEP.SYNCING,
+        status: ReplicaStatus.SYNCING, workflowStep: WORKFLOW_STEP.SYNCING,
       });
       owner.executeOperationFromReconcilePath = async () => ({
-        success: true,
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+        success: true, status: ReplicaOperationResponseStatus.IN_PROGRESS,
       });
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, syncingOp),
@@ -532,16 +425,12 @@ test(
 
       // 4. Step transition (PENDING -> SYNCING) returns ADVANCED
       const pendingOp = buildGrowthPromoteOperation({
-        status: ReplicaStatus.PENDING,
-        workflowStep: WORKFLOW_STEP.PENDING,
+        status: ReplicaStatus.PENDING, workflowStep: WORKFLOW_STEP.PENDING,
       });
       owner.executeOperationFromReconcilePath = async (op) => {
         op.workflowStep = WORKFLOW_STEP.SYNCING;
         op.status = ReplicaStatus.SYNCING;
-        return {
-          success: true,
-          status: ReplicaOperationResponseStatus.IN_PROGRESS,
-        };
+        return {success: true, status: ReplicaOperationResponseStatus.IN_PROGRESS};
       };
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, pendingOp),
@@ -550,17 +439,13 @@ test(
 
       // 5. Completion returns COMPLETED
       const completingOp = buildGrowthPromoteOperation({
-        status: ReplicaStatus.SYNCING,
-        workflowStep: WORKFLOW_STEP.SYNCING,
+        status: ReplicaStatus.SYNCING, workflowStep: WORKFLOW_STEP.SYNCING,
       });
       owner.executeOperationFromReconcilePath = async (op) => {
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
         op.status = ReplicaStatus.ACTIVE;
         op.completedAt = Date.now();
-        return {
-          success: true,
-          status: ReplicaOperationResponseStatus.COMPLETED,
-        };
+        return {success: true, status: ReplicaOperationResponseStatus.COMPLETED};
       };
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, completingOp),
@@ -728,6 +613,7 @@ test(
         op.workflowStep = WORKFLOW_STEP.FAILED;
         op.status = ReplicaStatus.FAILED;
         op.completedAt = now;
+        return Object.freeze({committed: true, disposition: 'updated'});
       };
       await owner.reconcileTimeoutOperation(removeOp, now);
       t.equal(
@@ -816,6 +702,7 @@ test(
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
         op.status = ReplicaStatus.ACTIVE;
         op.completedAt = 3000;
+        return Object.freeze({committed: true, disposition: 'updated'});
       };
       const outcome = await owner.reconcileOperationLifecycle(addOp, {
         cause: 'progress',
@@ -1063,7 +950,8 @@ test(
       t.equal(opCompeting.status, ReplicaStatus.FAILED);
       t.equal(opCompeting.workflowStep, WORKFLOW_STEP.FAILED);
 
-      // Witness 6: Interrupted placement-hold release and recovery
+      // Witness 6: Re-entry on the same owner after durable terminal persistence
+      // when obligation discharge (releasePlacementHold) was interrupted during RELEASING
       const opInterruptedHold = await seedDurableGrowthOperation(
         'op-real-repo-interrupted-hold',
       );
@@ -1134,14 +1022,24 @@ test(
     assignReplicaHandlerCreateMethods(TestLearnerWaitReplicaHandler);
 
     let nowMs = 10_000;
+    let nextTimerId = 1;
+    const activeTimers = new Set();
     const virtualTimeSource = {
       now: () => nowMs,
       setTimeout: (fn, delayMs) => {
-        nowMs += delayMs;
-        queueMicrotask(fn);
-        return 1;
+        const id = nextTimerId++;
+        activeTimers.add(id);
+        setImmediate(() => {
+          if (!activeTimers.has(id)) return;
+          activeTimers.delete(id);
+          nowMs += delayMs;
+          fn();
+        });
+        return id;
       },
-      clearTimeout: () => {},
+      clearTimeout: (id) => {
+        activeTimers.delete(id);
+      },
     };
     const handler = new TestLearnerWaitReplicaHandler({
       syncTimeoutMs: 5000,
@@ -1236,6 +1134,73 @@ test(
     t.equal(deadlineOutcome.ready, false);
     t.equal(deadlineOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
     t.equal(deadlineOutcome.remainingBudgetMs, 0);
+
+    // 3a. Boundary witness 1: Already expired on entry (deadlineAtMs <= now)
+    // returns DEADLINE_EXCEEDED without calling driveReplicaAdmission (driveCalls === 0)
+    const expiredEntryService = makePrototypeService(
+      'user_orders-p1-r-expired-entry', 'op-admit-expired-entry',
+    );
+    let expiredEntryDriveCalls = 0;
+    expiredEntryService.raft = {
+      readStatus: () => ({
+        role: 'follower', memberRole: 'LEARNER', leaderAddress: '127.0.0.1:19001', peers: [],
+      }),
+    };
+    expiredEntryService.driveReplicaAdmission = async () => {
+      expiredEntryDriveCalls += 1;
+    };
+    handler.localServices.set(expiredEntryService.replicaId, expiredEntryService);
+    const expiredEntryOutcome = await handler.waitForLearnerAdmissionActivation(
+      expiredEntryService.replicaId, TEST_PARTITION_ID, {deadlineAtMs: nowMs},
+    );
+    t.equal(expiredEntryOutcome.ready, false);
+    t.equal(expiredEntryOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
+    t.equal(expiredEntryOutcome.remainingBudgetMs, 0);
+    t.equal(expiredEntryDriveCalls, 0);
+
+    // 3b. Boundary witness 2: Expiry during driveReplicaAdmission() delivery
+    // resolves DEADLINE_EXCEEDED when deadlineAtMs expires without waiting for a hung delivery
+    const hungDriveService = makePrototypeService(
+      'user_orders-p1-r-hung-drive', 'op-admit-hung-drive',
+    );
+    hungDriveService.raft = {
+      readStatus: () => ({
+        role: 'follower', memberRole: 'UNKNOWN', leaderAddress: '', peers: [],
+      }),
+    };
+    hungDriveService.sendReplicaAdmissionRequest = () => new Promise(() => {});
+    handler.localServices.set(hungDriveService.replicaId, hungDriveService);
+    const hungDriveOutcome = await handler.waitForLearnerAdmissionActivation(
+      hungDriveService.replicaId, TEST_PARTITION_ID, {deadlineAtMs: nowMs + 80},
+    );
+    t.equal(hungDriveOutcome.ready, false);
+    t.equal(hungDriveOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
+    t.equal(hungDriveOutcome.remainingBudgetMs, 0);
+
+    // 3c. Boundary witness 3: Late readiness arriving after expiry returns
+    // DEADLINE_EXCEEDED (never READY) even when driveReplicaAdmission mutates state=admitted
+    const lateReadyService = makePrototypeService(
+      'user_orders-p1-r-late-ready', 'op-admit-late-ready',
+    );
+    let lateReadyRaftStatus = {
+      role: 'follower', memberRole: 'UNKNOWN', leaderAddress: '', peers: [],
+    };
+    lateReadyService.raft = {readStatus: () => lateReadyRaftStatus};
+    lateReadyService.driveReplicaAdmission = async () => {
+      nowMs += 200;
+      lateReadyService.replicaAdmissionRequest.state = 'admitted';
+      lateReadyRaftStatus = {
+        role: 'follower', memberRole: 'LEARNER', leaderAddress: '127.0.0.1:19001', peers: [],
+      };
+      return lateReadyService.replicaAdmissionRequest;
+    };
+    handler.localServices.set(lateReadyService.replicaId, lateReadyService);
+    const lateReadyOutcome = await handler.waitForLearnerAdmissionActivation(
+      lateReadyService.replicaId, TEST_PARTITION_ID, {deadlineAtMs: nowMs + 100},
+    );
+    t.equal(lateReadyOutcome.ready, false);
+    t.equal(lateReadyOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
+    t.equal(lateReadyOutcome.remainingBudgetMs, 0);
 
     // 4. End-to-end createReplicaAsync integration: timeout fails before releaseFreshCreate;
     // success preserves remaining original CREATE budget into releaseFreshCreate
@@ -1353,5 +1318,137 @@ test(
     t.equal(releaseFreshCreateCalls.length, 1);
     t.equal(releaseFreshCreateCalls[0].deadlineAtMs, 35_000);
     t.equal(releaseFreshCreateCalls[0].remainingBudgetAtReleaseEntryMs, 3800);
+  },
+);
+
+test(
+  'Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row ' +
+    'in replica_operations-p1 classifies promoted replicas as voters in ' +
+    'ReplicaPlacementOwner while SERVICES cache rows still lag at learner',
+  async (t) => {
+    const db = new Database(':memory:');
+    db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+    const nowMs = 1_700_000_000_000;
+
+    const history = JSON.stringify([
+      {
+        step: WORKFLOW_STEP.PENDING,
+        timestamp: nowMs - 1000,
+        promoteReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
+      },
+      {
+        step: WORKFLOW_STEP.ACTIVE,
+        timestamp: nowMs,
+      },
+    ]);
+    db.prepare(
+      `INSERT INTO replica_operations (
+        operation_id, type, partition_id, entity_type, entity_id,
+        replica_id, source_node_id, target_node_id, source_replica_id,
+        status, workflow_step, created_at, updated_at, completed_at, steps_history
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'pl-user_orders-p1-10-0',
+      OperationType.GROWTH_PROMOTE,
+      TEST_PARTITION_ID,
+      'partition',
+      TEST_PARTITION_ID,
+      TEST_LEARNER_1,
+      TEST_LEADER_NODE_1,
+      TEST_LEADER_NODE_1,
+      TEST_LEARNER_2,
+      ReplicaStatus.ACTIVE,
+      WORKFLOW_STEP.ACTIVE,
+      nowMs - 1000,
+      nowMs,
+      nowMs,
+      history,
+    );
+
+    const census = readPlacementCensus(db);
+    t.equal(census.length, 1);
+    t.equal(census[0].type, OperationType.GROWTH_PROMOTE);
+    t.equal(census[0].incomplete, false);
+    t.equal(census[0].step, WORKFLOW_STEP.ACTIVE);
+    t.same(census[0].promoteReplicaIds, [TEST_LEARNER_1, TEST_LEARNER_2]);
+
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, {
+      [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+      [COLUMN.TABLE_NAME]: 'user_orders',
+      [COLUMN.REPLICA_COUNT]: 3,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.LEADER_NODE_ID]: 'n1',
+    });
+    // Seed 1 leader voter on n1 and 2 promoted replicas on n2, n3 whose SERVICES
+    // cache rows still lag at raft_role='learner'
+    for (const [rid, nodeId, role] of [
+      ['user_orders-p1-r1', 'n1', RAFT_ROLE.LEADER],
+      [TEST_LEARNER_1, 'n2', RAFT_ROLE.LEARNER],
+      [TEST_LEARNER_2, 'n3', RAFT_ROLE.LEARNER],
+    ]) {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        [COLUMN.SERVICE_ID]: rid,
+        [COLUMN.REPLICA_ID]: rid,
+        [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+        [COLUMN.NODE_ID]: nodeId,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.RAFT_ROLE]: role,
+      });
+    }
+
+    const admittedStatements = [];
+    const ledgerService = Object.assign(new EventEmitter(), {
+      partitionId: LEDGER_PARTITION_ID,
+      db,
+    });
+    const makeNodeRow = (nodeId, hostId) => ({
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.HOST_ID]: hostId,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.LAST_HEARTBEAT]: nowMs,
+      [COLUMN.LEASE_EXPIRES_AT]: nowMs + 60_000,
+    });
+    const placementOwner = createReplicaPlacementOwner({
+      nodeId: 'n1',
+      ledgerPartitionService: ledgerService,
+      nodeAuthority: {
+        subscribe: () => () => {},
+        scheduleRefresh: () => {},
+        answerCommittedNodes: () => ({
+          state: 'ready',
+          epoch: {publicationEpoch: 5},
+          nodeRows: [
+            makeNodeRow('n1', 'h1'),
+            makeNodeRow('n2', 'h2'),
+            makeNodeRow('n3', 'h3'),
+          ],
+          formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 5},
+        }),
+      },
+      systemTableCache: cache,
+      now: () => nowMs,
+      logger: {debug: () => {}, info: () => {}, warn: () => {}, error: () => {}},
+      admitPlacement: async (payload) => {
+        admittedStatements.push(payload);
+        return {committed: true, placementAdmission: {outcome: 'ADMITTED', operationIds: ['dup']}};
+      },
+    });
+
+    try {
+      placementOwner.setLeader(true);
+      placementOwner.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
+      await placementOwner.awaitCurrentWorkIdle();
+
+      t.same(
+        admittedStatements,
+        [],
+        'ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion',
+      );
+      t.same(placementOwner.lastPassSnapshot?.admitted, []);
+    } finally {
+      placementOwner.shutdown();
+      db.close();
+    }
   },
 );

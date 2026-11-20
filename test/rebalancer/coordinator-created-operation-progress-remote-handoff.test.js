@@ -122,6 +122,7 @@ test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry
   };
   owner.failOperation = async (op, msg) => {
     failedCalls.push({op, msg});
+    return Object.freeze({committed: true, disposition: 'updated'});
   };
   owner.clearExecutorOutcomeRetryIfNotAhead = () => true;
   owner.emitter = {emit: () => {}};

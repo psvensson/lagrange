@@ -64,6 +64,36 @@ function sleepHandlerMs(handler, delayMs) {
   });
 }
 
+function clearHandlerTimer(handler, timerId) {
+  if (timerId === null || timerId === undefined) return;
+  if (handler?.timeSource?.clearTimeout) {
+    handler.timeSource.clearTimeout(timerId);
+  } else {
+    clearTimeout(timerId);
+  }
+}
+
+function awaitBoundedReplicaAdmissionDrive(handler, service, remainingMs) {
+  const safeWaitMs = Math.max(1, remainingMs);
+  const drivePromise = (async () => service.driveReplicaAdmission())();
+  drivePromise.catch(() => {});
+  let timerId = null;
+  const timeoutPromise = new Promise((resolve) => {
+    const onTimeout = () => {
+      timerId = null;
+      resolve();
+    };
+    if (handler?.timeSource?.setTimeout) {
+      timerId = handler.timeSource.setTimeout(onTimeout, safeWaitMs);
+    } else {
+      timerId = setTimeout(onTimeout, safeWaitMs);
+    }
+  });
+  return Promise.race([drivePromise, timeoutPromise]).finally(() => {
+    clearHandlerTimer(handler, timerId);
+  });
+}
+
 function buildLearnerAdmissionWaitOutcome(
   ready,
   outcome,
@@ -406,6 +436,15 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
             readHandlerNowMs(this),
           );
         }
+        const nowBeforeDriveMs = readHandlerNowMs(this);
+        if (nowBeforeDriveMs >= deadline) {
+          return buildLearnerAdmissionWaitOutcome(
+            false,
+            LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED,
+            deadline,
+            deadline,
+          );
+        }
         if (
           isLearnerAdmittedToGroup(service, replicaId) ||
           this.isReplicaVoterReady(replicaId)
@@ -414,7 +453,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
             true,
             LEARNER_ADMISSION_WAIT_OUTCOME.READY,
             deadline,
-            readHandlerNowMs(this),
+            nowBeforeDriveMs,
           );
         }
         if (
@@ -422,7 +461,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           !service.learnerPromotionTimer &&
           !service.learnerPromotionWake?.checkInFlight
         ) {
-          await service.driveReplicaAdmission();
+          await awaitBoundedReplicaAdmissionDrive(
+            this,
+            service,
+            deadline - nowBeforeDriveMs,
+          );
           const currentService = this.getTrackedService(replicaId);
           if (
             !currentService ||
@@ -447,6 +490,15 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
               readHandlerNowMs(this),
             );
           }
+          const nowAfterDriveMs = readHandlerNowMs(this);
+          if (nowAfterDriveMs >= deadline) {
+            return buildLearnerAdmissionWaitOutcome(
+              false,
+              LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED,
+              deadline,
+              deadline,
+            );
+          }
           if (
             isLearnerAdmittedToGroup(currentService, replicaId) ||
             this.isReplicaVoterReady(replicaId)
@@ -455,7 +507,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
               true,
               LEARNER_ADMISSION_WAIT_OUTCOME.READY,
               deadline,
-              readHandlerNowMs(this),
+              nowAfterDriveMs,
             );
           }
         }

@@ -24,6 +24,37 @@ const SAMPLE_SUM = 30n;
 const INIT_SESSION_MSG_TYPE = 'INIT_SESSION';
 const MERGE_EXECUTION_STARTED_MSG_TYPE = 'MERGE_EXECUTION_STARTED';
 const SEND_FAIL_MESSAGE = 'IPC channel already closed';
+const EARLY_SETTLE_ERROR_MSG =
+  'Merge execution settled before MERGE_EXECUTION_STARTED observation';
+const OBSERVATION_TIMEOUT_ERROR_MSG =
+  'Timed out waiting for MERGE_EXECUTION_STARTED observation';
+
+async function awaitMergeExecutionStarted(
+  execPromise,
+  startedPromise,
+  timeoutMs = LONG_DEADLINE_OFFSET_MS,
+) {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(OBSERVATION_TIMEOUT_ERROR_MSG));
+    }, timeoutMs);
+  });
+  const earlySettlePromise = execPromise.then(() => {
+    throw new Error(EARLY_SETTLE_ERROR_MSG);
+  });
+  try {
+    return await Promise.race([
+      startedPromise,
+      earlySettlePromise,
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 function buildSimpleSumRequest(sessionOptions = {}) {
   return {
@@ -235,9 +266,13 @@ test('CoordinatorMergeProcessPool - active execution cancellation kills busy wor
       }),
     );
 
-    // Wait for the worker-originated observation emitted after the real
-    // SQLite VDBE iterator stepped row 1 inside sqlite3_step():
-    const observation = await executionStartedPromise;
+    // Wait for the bounded worker-originated observation emitted after the
+    // real child worker process has begun executing the SQLite query and
+    // retains an unfinished VDBE iterator (stmt.busy === true):
+    const observation = await awaitMergeExecutionStarted(
+      heavyPromise,
+      executionStartedPromise,
+    );
     t.equal(
       observation.type,
       MERGE_EXECUTION_STARTED_MSG_TYPE,
@@ -251,12 +286,12 @@ test('CoordinatorMergeProcessPool - active execution cancellation kills busy wor
     t.equal(
       observation.sqliteBusy,
       true,
-      'SQLite statement VDBE cursor is actively busy in sqlite3_step',
+      'child worker retains an open unfinished SQLite VDBE iterator (stmt.busy)',
     );
     t.equal(
       observation.firstRowStepped,
       true,
-      'SQLite stepped the first result row before emitting the observation',
+      'child worker stepped the first SQLite result row before observation',
     );
     controller.abort();
 
@@ -334,11 +369,14 @@ test('CoordinatorMergeProcessPool - shutdown() with active and queued work settl
       }),
     );
 
-    const observation = await executionStartedPromise;
+    const observation = await awaitMergeExecutionStarted(
+      activePromise,
+      executionStartedPromise,
+    );
     t.equal(
       observation.sqliteBusy,
       true,
-      'active worker is mid-execution inside SQLite before shutdown()',
+      'active worker has begun SQLite query execution with an unfinished VDBE iterator',
     );
     const [activeChild] = [...pool.activeWorkers];
 

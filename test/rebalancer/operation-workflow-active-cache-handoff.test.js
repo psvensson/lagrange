@@ -43,6 +43,10 @@ const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_SOURCE_NODE_ID = 'active-cache-handoff-source';
 const TEST_REPLACE_OPERATION_ID =
   'active-cache-handoff-replace-operation';
+const TEST_COMMITTED_OUTCOME = Object.freeze({
+  committed: true,
+  disposition: 'updated',
+});
 
 class ActiveCacheRefreshHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(ActiveCacheRefreshHost);
@@ -232,10 +236,10 @@ async function assertFailureSupersedesBlockedActive(
       }
       return activeHandoffReady;
     };
-  coordinator.workflowOwner.completeOperation =
-    async (completedOperation) => {
-      completedOperationIds.push(completedOperation.operationId);
-    };
+  coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+    completedOperationIds.push(completedOperation.operationId);
+    return TEST_COMMITTED_OUTCOME;
+  };
   coordinator.workflowOwner.reconcileReplaceActualActive =
     async (replaceOperation) => {
       sourceRetirementOperationIds.push(replaceOperation.operationId);
@@ -243,6 +247,7 @@ async function assertFailureSupersedesBlockedActive(
     };
   coordinator.workflowOwner.failOperation = async (failedOperation) => {
     failedOperationIds.push(failedOperation.operationId);
+    return TEST_COMMITTED_OUTCOME;
   };
 
   try {
@@ -475,10 +480,10 @@ test(
         deferredOutcome: null,
         retryAfterMs: null,
       });
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
+    };
 
     try {
       await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
@@ -600,12 +605,13 @@ test(
           retryAfterMs: null,
         };
       };
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
+    };
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
     };
     const activeOutcome = buildCreateOutcome(
       TEST_OPERATION_ID,
@@ -694,10 +700,10 @@ test(
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
+    };
     coordinator.workflowOwner.scheduleObservedProgressRetry =
       (operationId) => {
         scheduledOperationIds.push(operationId);
@@ -795,10 +801,9 @@ test(
     operation.entityId = TEST_PARTITION_ID;
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation = async (
-      completedOperation,
-    ) => {
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
       scheduledOperationIds.push(operationId);
@@ -860,10 +865,9 @@ test(
     });
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
-    coordinator.workflowOwner.completeOperation = async (
-      completedOperation,
-    ) => {
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
     };
 
     try {
@@ -1000,10 +1004,9 @@ test(
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation = async (
-      completedOperation,
-    ) => {
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
       scheduledOperationIds.push(operationId);
@@ -1043,10 +1046,10 @@ test(
     const operation = buildSyncingAddOperation();
     const completedOperationIds = [];
     const scheduledOperationIds = [];
-    coordinator.workflowOwner.completeOperation =
-      async (completedOperation) => {
-        completedOperationIds.push(completedOperation.operationId);
-      };
+    coordinator.workflowOwner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
+    };
     coordinator.workflowOwner.scheduleObservedProgressRetry =
       (operationId) => {
         scheduledOperationIds.push(operationId);
@@ -1194,6 +1197,7 @@ test(
     const sourceRetirementOperationIds = [];
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
+      return TEST_COMMITTED_OUTCOME;
     };
     coordinator.workflowOwner.reconcileReplaceActualActive = async (
       replaceOperation,
@@ -1304,6 +1308,7 @@ async function driveHandoffOverCachedTarget(
   const completedOperationIds = [];
   coordinator.workflowOwner.completeOperation = async (completedOperation) => {
     completedOperationIds.push(completedOperation.operationId);
+    return TEST_COMMITTED_OUTCOME;
   };
   try {
     await coordinator.workflowOwner

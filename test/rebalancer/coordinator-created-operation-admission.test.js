@@ -358,7 +358,7 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
   };
   owner.failOperation = async () => {
     failCalls += 1;
-    return {committed: true};
+    return Object.freeze({committed: true, disposition: 'updated'});
   };
 
   try {

@@ -225,7 +225,7 @@ function wireEpochDispatchProbe(coordinator) {
       operationId: failedOperation?.operationId,
       message,
     });
-    return {success: true, operationId: failedOperation?.operationId};
+    return Object.freeze({committed: true, disposition: 'updated'});
   };
   return {
     owner,

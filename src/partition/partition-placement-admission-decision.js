@@ -34,6 +34,7 @@ const SQL_PARAMETER = '?';
 const SQL_LIST_SEPARATOR = ', ';
 const LEDGER_PARTITION_ID = `${TABLE}-p1`;
 const CENSUS_SQL = 'SELECT operation_id, type, entity_type, entity_id, ' +
+  'replica_id, source_replica_id, ' +
   'target_node_id, copy_source_node_id, target_claim_key, workflow_step, ' +
   `steps_history FROM ${TABLE} WHERE workflow_step IN ` +
   `(${INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS.map(() => SQL_PARAMETER)
@@ -50,6 +51,18 @@ function parsedHistory(row) {
     memoizedParseStepsHistoryString(row.steps_history) : [];
 }
 
+function censusRowPromoteReplicaIdsOf(row, history) {
+  if (row.type !== OperationType.GROWTH_PROMOTE) return null;
+  const fromHistory = getOperationMetadataValue(
+    history,
+    ReplicaOperationField.PROMOTE_REPLICA_IDS,
+  );
+  if (Array.isArray(fromHistory) && fromHistory.length > 0) {
+    return Object.freeze(fromHistory.filter(Boolean));
+  }
+  return Object.freeze([row.replica_id, row.source_replica_id].filter(Boolean));
+}
+
 function censusRowOf(row) {
   const history = parsedHistory(row);
   const founder = isGenesisFoundingCreateOperation({type: row.type,
@@ -62,7 +75,8 @@ function censusRowOf(row) {
     incomplete: isIncompleteOperationRowStep(row.type, row.workflow_step),
     dispatchHold: getOperationMetadataValue(history, OPERATION_METADATA_KEY.DISPATCH_HOLD),
     admission: getOperationMetadataObject(history,
-      OPERATION_METADATA_KEY.PLACEMENT_ADMISSION)});
+      OPERATION_METADATA_KEY.PLACEMENT_ADMISSION),
+    promoteReplicaIds: censusRowPromoteReplicaIdsOf(row, history)});
 }
 
 /**

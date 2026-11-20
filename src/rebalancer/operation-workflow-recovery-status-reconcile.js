@@ -75,10 +75,8 @@ function reportOperationStepTimeoutSpent(owner, operation, spent) {
   });
 }
 
-function classifyTerminalPersistOutcome(owner, operation, outcome) {
-  if (outcome === undefined || outcome === true ||
-      isTerminalTransitionOutcomeSettled(outcome) ||
-      owner.repository?.isOperationTerminal?.(operation) === true) {
+function classifyTerminalPersistOutcome(_owner, _operation, outcome) {
+  if (isTerminalTransitionOutcomeSettled(outcome)) {
     return OPERATION_RECONCILE_OUTCOME.COMPLETED;
   }
   return outcome?.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED ?

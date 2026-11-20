@@ -138,11 +138,16 @@ function shouldSkipServiceRow(row, isBusy) {
   return isBusy && (isCatchupLearnerRaftRole(role) || IN_FLIGHT_LEARNER_STATUSES.has(status));
 }
 
-function classifyServiceRow(row) {
+function classifyServiceRow(row, promotedVoterReplicaIds = null) {
   const replicaId = row[COLUMN.REPLICA_ID];
   const nodeId = row[COLUMN.NODE_ID];
   if (typeof replicaId !== 'string' || typeof nodeId !== 'string') return null;
-  const role = row[COLUMN.RAFT_ROLE];
+  const rawRole = row[COLUMN.RAFT_ROLE];
+  const role =
+    promotedVoterReplicaIds?.has(replicaId) === true &&
+    isCatchupLearnerRaftRole(rawRole) ?
+      RAFT_ROLE.FOLLOWER :
+      rawRole;
   const status = row[COLUMN.STATUS];
   const isLearner = isCatchupLearnerRaftRole(role) ||
     (!isVoterRole(role) && IN_FLIGHT_LEARNER_STATUSES.has(status));
@@ -162,11 +167,16 @@ function classifyServiceRow(row) {
   };
 }
 
-function buildPartitionReplicaRows(serviceRows, leaderNodeId, isBusy) {
+function buildPartitionReplicaRows(
+  serviceRows,
+  leaderNodeId,
+  isBusy,
+  promotedVoterReplicaIds = null,
+) {
   const filtered = [];
   for (const row of serviceRows) {
     if (shouldSkipServiceRow(row, isBusy)) continue;
-    const classified = classifyServiceRow(row);
+    const classified = classifyServiceRow(row, promotedVoterReplicaIds);
     if (classified !== null) filtered.push(classified);
   }
   if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {

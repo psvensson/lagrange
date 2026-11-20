@@ -12,8 +12,7 @@ import {
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 
 function isExecutorTerminalPersistSettled(transitionOutcome) {
-  return transitionOutcome === undefined || transitionOutcome === true ||
-    isTerminalTransitionOutcomeSettled(transitionOutcome);
+  return isTerminalTransitionOutcomeSettled(transitionOutcome);
 }
 
 const {

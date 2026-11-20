@@ -5,7 +5,7 @@
 // Recovery / wake entry: setLeader(true) and PLACEMENT_TRIGGER notifications rebuild pass state from readPlacementCensus and committed node/table authorities.
 // Representative production tests: test/rebalancer/replica-placement-owner-core.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {COLUMN, TABLES} from '../constants/index.js';
+import {COLUMN, TABLES, WORKFLOW_STEP} from '../constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
@@ -222,6 +222,20 @@ function shouldStopPlacementPass(isLeader, candidate, state) {
 function moveIntentKeyOf(partitionId, move) {
   return `${partitionId}:${move.type}:${move.targetNodeId}:` +
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
+}
+
+function promotedVoterReplicaIdsOf(census) {
+  const promoted = new Set();
+  for (const row of census) {
+    if (row.type !== OperationType.GROWTH_PROMOTE || row.incomplete ||
+        row.step !== WORKFLOW_STEP.ACTIVE || !Array.isArray(row.promoteReplicaIds)) {
+      continue;
+    }
+    for (const replicaId of row.promoteReplicaIds) {
+      if (typeof replicaId === 'string' && replicaId.length > 0) promoted.add(replicaId);
+    }
+  }
+  return promoted;
 }
 
 class ReplicaPlacementOwner {
@@ -533,7 +547,10 @@ class ReplicaPlacementOwner {
     return excluded;
   }
 
-  evaluateAllPartitions(nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets) {
+  evaluateAllPartitions(
+    nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
+    promotedVoterReplicaIds = null,
+  ) {
     const servicesByPartition = new Map();
     for (const row of this.systemTableCache.getAll(TABLES.SERVICES)) {
       const partitionId = row[COLUMN.PARTITION_ID];
@@ -554,6 +571,7 @@ class ReplicaPlacementOwner {
         servicesByPartition.get(partitionId) || [],
         partitionRow[COLUMN.LEADER_NODE_ID],
         isBusy,
+        promotedVoterReplicaIds,
       );
       inputsByPartition.set(partitionId, {replicationFactor, replicaRows});
       const evaluation = evaluatePartitionDeficit({
@@ -606,9 +624,11 @@ class ReplicaPlacementOwner {
 
   preparePassOrderedCandidates(
     nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
+    promotedVoterReplicaIds = null,
   ) {
     const {evaluations, inputsByPartition} = this.evaluateAllPartitions(
       nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
+      promotedVoterReplicaIds,
     );
     const repairWaitingSourceNodeIds = repairSourceNodeIdsOf(
       evaluations.filter((e) => !e.isBusy).map((e) => e.evaluation),
@@ -715,9 +735,11 @@ class ReplicaPlacementOwner {
     const occupancy = summarizeCopyOccupancy(census);
     const saturatedTargets = saturatedTargetsOf(occupancy.byTarget);
     const storageExcludedTargets = this.readStorageExcludedTargets(nodeInput, nowMs);
+    const promotedVoterReplicaIds = promotedVoterReplicaIdsOf(census);
     const {ordered, inputsByPartition, repairWaitingSourceNodeIds} =
       this.preparePassOrderedCandidates(
-        nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets);
+        nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
+        promotedVoterReplicaIds);
     const admitted = await this.admitOrderedCandidates({
       ordered, inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,

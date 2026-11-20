@@ -259,7 +259,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       coordinator.workflowOwner.reconcileReservations = async () => {
         return {expired: 0, orphansReleased: 0};
       };
-      coordinator.workflowOwner.failOperation = async () => {};
+      coordinator.workflowOwner.failOperation = async () =>
+        Object.freeze({committed: true, disposition: 'updated'});
       const expectedReconciledOperationIds = Object.freeze([
         'op-replace-target-owner',
         'op-local-owner',
@@ -446,6 +447,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     };
     coordinator.workflowOwner.failOperation = async () => {
       failOperationCalls += 1;
+      return Object.freeze({committed: true, disposition: 'updated'});
     };
 
     try {
@@ -905,6 +907,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         operation.status = 'failed';
         operation.completedAt = nowMs;
         operation.updatedAt = nowMs;
+        return Object.freeze({committed: true, disposition: 'updated'});
       };
 
       try {

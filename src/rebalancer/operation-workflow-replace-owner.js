@@ -58,11 +58,7 @@ import {
 } from './operation-workflow-terminal-reservation-release.js';
 
 function isReplaceTerminalPersistSettled(transitionOutcome) {
-  return (
-    transitionOutcome === undefined ||
-    transitionOutcome === true ||
-    isTerminalTransitionOutcomeSettled(transitionOutcome)
-  );
+  return isTerminalTransitionOutcomeSettled(transitionOutcome);
 }
 import {
   deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
