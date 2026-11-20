@@ -41,10 +41,13 @@ const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
 const TEST_FIRST_CONNECTION_COUNT = 1;
 const TEST_QUERY_RESULT_COUNT = 1;
 
-async function withTestAdminWebSocketNode(onConnection, options, callback) {
+async function withTestAdminWebSocketNode(
+  onConnection, options, callback, serverOptions = {},
+) {
   const server = new WebSocketServer({
     host: TEST_ADMIN_HOST,
     port: TEST_ADMIN_PORT_ANY,
+    ...serverOptions,
   });
   await new Promise((resolve, reject) => {
     server.once('listening', resolve);
@@ -80,6 +83,140 @@ async function withTestAdminWebSocketNode(onConnection, options, callback) {
     });
   }
 }
+
+const CONNECTION_BUDGET_MS = 5000;
+const PEER_BUDGET_MS = 10000;
+
+function observeAdminQueries(socket, onQuery) {
+  socket.on('message', (data) => {
+    const query = JSON.parse(data.toString());
+    onQuery(query, () => socket.send(JSON.stringify({
+      type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+      queryId: query.queryId,
+      results: [{sql: query.sql}],
+    })));
+  });
+}
+
+test('Unit: NodeHandle refuses to send after a shared handshake spends its request deadline',
+  async () => {
+    const opening = Promise.withResolvers();
+    const forwarded = [];
+    await withTestAdminWebSocketNode((socket) => {
+      observeAdminQueries(socket, (query, answer) => {
+        forwarded.push({sql: query.sql, timeoutMs: query.timeoutMs});
+        answer();
+      });
+    }, {}, async (node) => {
+      const realNow = Date.now;
+      const startedAt = realNow();
+      let elapsedMs = 0;
+      Date.now = () => startedAt + elapsedMs;
+      try {
+        const results = Promise.allSettled([
+          node.queryWithTimeout('SELECT expired', [], {timeoutMs: CONNECTION_BUDGET_MS}),
+          node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS}),
+        ]);
+        const open = await opening.promise;
+        // Run the actual opening callback after the short budget has expired
+        // while its real timer is still queued for the future.
+        elapsedMs = CONNECTION_BUDGET_MS + 1;
+        open(true);
+        const [expired, peer] = await results;
+        assert.equal(expired.status, 'rejected');
+        assert.match(expired.reason.message, /timed out/i);
+        assert.equal(peer.status, 'fulfilled');
+        assert.deepEqual(peer.value.rows, [{sql: 'SELECT peer'}]);
+        assert.deepEqual(forwarded, [{
+          sql: 'SELECT peer',
+          timeoutMs: PEER_BUDGET_MS - elapsedMs,
+        }]);
+        const expiry = node.getAdminQueryTraceSnapshot()
+          .find(({statementPreview}) => statementPreview === 'SELECT expired');
+        assert.equal(expiry.outcome, 'timeout');
+        assert.equal(expiry.sentAtMs, null);
+      } finally {
+        Date.now = realNow;
+      }
+    }, {verifyClient: (_request, open) => opening.resolve(open)});
+  });
+
+test('Unit: NodeHandle rejects an actual delivered response after its original deadline',
+  async () => {
+    const sent = Promise.withResolvers();
+    const held = new Map();
+    await withTestAdminWebSocketNode((socket) => {
+      observeAdminQueries(socket, (query, answer) => {
+        held.set(query.sql, answer);
+        if (held.size === 2) sent.resolve();
+      });
+    }, {}, async (node) => {
+      const realNow = Date.now;
+      const startedAt = realNow();
+      let elapsedMs = 0;
+      Date.now = () => startedAt + elapsedMs;
+      try {
+        const results = Promise.allSettled([
+          node.queryWithTimeout('SELECT late', [], {timeoutMs: CONNECTION_BUDGET_MS}),
+          node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS}),
+        ]);
+        await sent.promise;
+        elapsedMs = CONNECTION_BUDGET_MS + 1;
+        held.get('SELECT late')();
+        held.get('SELECT peer')();
+        const [late, peer] = await results;
+        assert.equal(late.status, 'rejected');
+        assert.match(late.reason.message, /timed out/i);
+        assert.equal(peer.status, 'fulfilled');
+        assert.deepEqual(peer.value.rows, [{sql: 'SELECT peer'}]);
+        const expiry = node.getAdminQueryTraceSnapshot()
+          .find(({statementPreview}) => statementPreview === 'SELECT late');
+        assert.equal(expiry.outcome, 'timeout');
+        assert.ok(Number.isFinite(expiry.sentAtMs));
+        assert.equal(expiry.resolvedAtMs, null);
+      } finally {
+        Date.now = realNow;
+      }
+    });
+  });
+
+test('Unit: NodeHandle request timer detaches only the expired query on a shared lane',
+  async () => {
+    const sent = Promise.withResolvers();
+    const held = new Map();
+    let connections = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      connections += 1;
+      observeAdminQueries(socket, (query, answer) => {
+        if (query.sql === 'SELECT warm' || query.sql === 'SELECT followup') {
+          answer();
+        } else {
+          held.set(query.sql, answer);
+          if (held.size === 2) sent.resolve();
+        }
+      });
+    }, {}, async (node) => {
+      await node.query('SELECT warm');
+      const short = assert.rejects(node.queryWithTimeout('SELECT expired', [], {
+        timeoutMs: ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+      }), /timed out/i);
+      const peer = node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS});
+      // Preserve its rejection on the known-bad implementation while checking
+      // the independent request timer and then permitting the peer to reply.
+      const peerOutcome = Promise.allSettled([peer]);
+      await sent.promise;
+      await short;
+      held.get('SELECT expired')();
+      held.get('SELECT peer')();
+      const [survivor] = await peerOutcome;
+      assert.equal(survivor.status, 'fulfilled');
+      assert.deepEqual(survivor.value.rows, [{sql: 'SELECT peer'}]);
+      assert.deepEqual((await node.query('SELECT followup')).rows,
+        [{sql: 'SELECT followup'}]);
+      assert.equal(connections, 1);
+      assert.equal(node._getPendingQueries('default').size, 0);
+    });
+  });
 
 test('Unit: NodeHandle reads process memory from the node diagnostics owner',
   async () => {
