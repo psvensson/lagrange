@@ -455,7 +455,11 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         return;
       }
       const repairAdmission = await admitReplaceTerminalRepair(owner,
-        heldState.projectedOperation, heldState.persistOptions);
+        heldState.projectedOperation, heldState.persistOptions, observation.operation);
+      if (repairAdmission.completeInstead) {
+        await owner.completeOperation(structuredClone(observation.operation));
+        return;
+      }
       if (!repairAdmission.admitted) {
         rearmTerminalTransitionRepairIfHeld(owner, operationId);
         return;

@@ -31,6 +31,7 @@ import {
 } from './rebalancer-entity-identity.js';
 
 const {
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -229,10 +230,10 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   /**
    * @param {Object} operation
    * @param {Object|null} priorityRecoveryContext
-   * @return {string|null}
+   * @return {Promise<string|null>}
    * @private
    */
-  getPriorityRecoverySupersededTargetErrorFromContext(
+  async getPriorityRecoverySupersededTargetErrorFromContext(
     operation,
     priorityRecoveryContext,
   ) {
@@ -240,6 +241,18 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       this,
       operation,
       priorityRecoveryContext,
+    );
+  }
+
+  observePriorityRecoveryTarget(operation) {
+    const options = this.isLearnerTargetAddOperation(operation) ?
+      {...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS, allowActiveLearner: true} :
+      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
+    return this.repository.getActualReplicaObservation(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+      options,
     );
   }
 

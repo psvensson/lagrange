@@ -754,7 +754,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
     priorityRecoveryContext.completion ||
     null;
   const supersededTargetError =
-    owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+    await owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
       operation,
       priorityRecoveryContext,
     );

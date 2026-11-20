@@ -1,3 +1,7 @@
+import {
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+  readAuthoritativeReplicaLifecycleObservationState,
+} from './replica-operation-repository-observation-methods.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 /**
  * OperationWorkflowOwner — single-flight owner keys, transition/claim
@@ -275,6 +279,7 @@ const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE = Object.freeze({
   EVIDENCE_UNAVAILABLE: 'evidence_unavailable',
   MATERIALIZED: 'materialized',
   UNMATERIALIZED: 'unmaterialized',
+  OBSERVED_NONMATERIALIZED: 'observed_nonmaterialized',
 });
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
@@ -439,32 +444,24 @@ function isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep) {
     PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS.has(workflowStep);
 }
 
-function isPriorityRecoveryPreSyncReplaceTargetStatusMissing(status) {
-  return status === null || typeof status === 'undefined';
-}
-
 function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
-  evidence = {},
+  {operation, targetObservation},
 ) {
-  const operation = evidence.operation;
   const workflowStep = readOperationRecordWorkflowStep(operation);
-  const targetLifecycleStatus = evidence.targetLifecycleStatus;
   if (!isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep)) {
     return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE;
   }
-  if (
-    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
-      targetLifecycleStatus,
-    )
-  ) {
-    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
-  }
-  if (isPriorityRecoveryPreSyncReplaceTargetStatusMissing(
-    targetLifecycleStatus,
-  )) {
+  const state = readAuthoritativeReplicaLifecycleObservationState(targetObservation);
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT) {
     return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED;
   }
-  return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.EVIDENCE_UNAVAILABLE;
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE) {
+    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.EVIDENCE_UNAVAILABLE;
+  }
+  return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
+    targetObservation.lifecycleStatus,
+  ) ? PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED :
+    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.OBSERVED_NONMATERIALIZED;
 }
 
 /**

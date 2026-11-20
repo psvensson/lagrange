@@ -1,4 +1,5 @@
 import {SERVICE_TYPE} from '../constants/service.js';
+import {isValidStatus} from './replica-status.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
@@ -10,6 +11,20 @@ import {runtimeServiceReplicaBelongsToEntity} from
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 const NO_REPLICA_LIFECYCLE_PRECONDITION = Object.freeze({});
+
+const AUTHORITATIVE_REPLICA_OBSERVATION_STATE = Object.freeze({
+  OBSERVED: 'observed',
+  ABSENT: 'absent',
+  UNAVAILABLE: 'unavailable',
+});
+
+function readAuthoritativeReplicaLifecycleObservationState(observation) {
+  const state = observation?.state;
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT) return state;
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED &&
+      isValidStatus(observation.lifecycleStatus)) return state;
+  return AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+}
 
 function readCanonicalRowString(row, primaryField, aliasField) {
   const primary = row?.[primaryField];
@@ -495,13 +510,13 @@ function assignReplicaOperationRepositoryObservationMethods(
         contradictingLifecycle !== ReplicaStatus.FAILED
       ) {
         return Object.freeze({
-          state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+          state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL
             .AUTHORITATIVE_ABSENT_CACHE_BLOCKING,
         });
       }
       return Object.freeze({
-        state: REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT,
+        state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT,
         source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
       });
     }
@@ -534,7 +549,7 @@ function assignReplicaOperationRepositoryObservationMethods(
       if (observedRow) {
         const decoded = decodeCanonicalObservedReplicaRow(observedRow);
         return Object.freeze({
-          state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
+          state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
           lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
             observedRow,
@@ -560,8 +575,8 @@ function assignReplicaOperationRepositoryObservationMethods(
         );
       }
       return Object.freeze({
-        state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
-        source: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+        state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+        source: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
       });
     }
     /**
@@ -585,7 +600,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         targetNodeId,
         readOptions,
       );
-      return observation.state === REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED ?
+      return observation.state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED ?
         observation.lifecycleStatus :
         null;
     }
@@ -651,4 +666,8 @@ function assignReplicaOperationRepositoryObservationMethods(
   }
 }
 
-export {assignReplicaOperationRepositoryObservationMethods};
+export {
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+  assignReplicaOperationRepositoryObservationMethods,
+  readAuthoritativeReplicaLifecycleObservationState,
+};

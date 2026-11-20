@@ -54,6 +54,15 @@ const {
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 const NO_CONCURRENT_CREATE_ADMISSION_WINNER = false;
+const CREATE_TARGET_LIFECYCLE_UNAVAILABLE = 'create_target_lifecycle_unavailable';
+const CREATE_FAILURE_LIFECYCLE_UNAVAILABLE = Object.freeze({
+  ...buildOperationTransitionOutcome({
+    persisted: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+    operation: null,
+  }),
+  refusal: CREATE_TARGET_LIFECYCLE_UNAVAILABLE,
+});
 
 // A failure no post-intent boundary applies to: written as it is.
 const UNBOUNDED_FAILURE_ADMISSION = Object.freeze({
@@ -511,6 +520,14 @@ class OperationWorkflowTransitionPersistence
           terminalAdmission},
         stepMetadata: admission.stepMetadata});
     }
+    if (admission.unavailable) {
+      this.logger.warn('Create failure deferred while target lifecycle is unavailable', {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+      });
+      return Object.freeze({refused: true, unavailable: true});
+    }
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
       {
@@ -551,6 +568,7 @@ class OperationWorkflowTransitionPersistence
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
     if (failureAdmission.refused) {
+      if (failureAdmission.unavailable) return CREATE_FAILURE_LIFECYCLE_UNAVAILABLE;
       return failureAdmission.completeInstead ?
         this.completeOperation(operation) : buildReplaceFailureRefusal();
     }
