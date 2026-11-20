@@ -310,6 +310,18 @@ for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
       } else {
         assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
         assert.equal(pending.completedAt, null);
+        // The pre-cutover sender may already have emitted this generic
+        // request. Deliver that exact old shape to the real receiving owner.
+        const heldReply = await source.handler.handleMessage({payload: {
+          type: ReplicaOperationMessageType.REMOVE_REPLICA,
+          operationType: OperationType.REMOVE,
+          operationId: historical.operation_id,
+          partitionId: cluster.partitionId,
+          replicaId: initial.replica_id,
+        }, correlationId: historical.operation_id});
+        assert.equal(heldReply.status, ReplicaOperationResponseStatus.ERROR);
+        assert.equal(heldReply.deferRetry, true);
+        assert.equal(heldReply.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED');
       }
       assert.equal(coordinator.stats.operationsFailed, 0);
       assert.equal(coordinator.stats.operationsCompleted, 0);

@@ -1,3 +1,4 @@
+import {REPLICA_OPERATION_SUPERSEDED_STATUS} from './replica-operation-progress.js';
 import {releaseCompletedLearnerRetirementCleanup} from
   './operation-workflow-placement-learner-retirement.js';
 import {releaseOperationLedgerSelfMoveHoldAfterTerminal} from './operation-workflow-dispatch-ledger-self-move-gate.js';
@@ -509,7 +510,7 @@ class OperationWorkflowTransitionPersistence
     const projectedOperation = {
       ...operation,
       workflowStep: finalStep,
-      status: ReplicaStatus.SUPERSEDED,
+      status: REPLICA_OPERATION_SUPERSEDED_STATUS,
       updatedAt: now,
       completedAt: now,
       errorMessage: null,

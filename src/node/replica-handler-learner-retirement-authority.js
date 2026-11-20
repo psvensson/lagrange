@@ -1,4 +1,4 @@
-import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP} from '../constants/index.js';
 import {
   NODE_LIFECYCLE_AUTHORITATIVE_READ,
   SELECT_NODE_ROW_SQL,
@@ -77,6 +77,19 @@ async function admitsLearnerRetirement(handler, scope) {
     ADMITTED_SCOPE.every((field) => admission.learnerRetirement?.[field] === scope[field]);
 }
 
+async function allowsUnscopedPlacementSourceRemoval(handler, scope) {
+  // REPLACE owns a separate effect. Its request intentionally carries no
+  // REMOVE-generation scope: the replica named here is its source.
+  if (scope.operationType !== OperationType.REPLACE) return false;
+  const row = await readOne(handler, TABLES.REPLICA_OPERATIONS, SELECT_OPERATION, scope.operationId);
+  if (row?.operation_id !== scope.operationId || row.type !== OperationType.REPLACE ||
+      row.partition_id !== scope.partitionId || row.completed_at !== null ||
+      (row.workflow_step !== WORKFLOW_STEP.ACTIVE && row.workflow_step !== WORKFLOW_STEP.STOPPING) ||
+      typeof row.steps_history !== 'string') return false;
+  const first = memoizedParseStepsHistoryString(row.steps_history)[0];
+  return first?.[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] === scope.replicaId;
+}
+
 async function installsPlacementVoterRetirementGeneration(handler, scope) {
   if (handler.ownerIncarnation !== scope.nodeBootIncarnation) return false;
   const admission = await readAdmittedRemoval(handler, scope);
@@ -129,6 +142,6 @@ async function claimNativeLearnerRetirement(handler, scope) {
 }
 
 export {
-  admitsLearnerRetirement, claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
+  admitsLearnerRetirement, allowsUnscopedPlacementSourceRemoval, claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
   installsPlacementVoterRetirementGeneration,
 };
