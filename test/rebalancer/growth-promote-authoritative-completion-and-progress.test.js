@@ -9,6 +9,7 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  GROWTH_SETTLEMENT_PHASE,
   OPERATION_RECONCILE_OUTCOME,
   didOperationReconcileAdvanceOrComplete,
   hasValidGrowthPromoteCompletionProvenance,
@@ -17,7 +18,11 @@ import {
   reconcileGrowthPromoteLifecycle,
   redirectGrowthPromoteTargetNode,
   resolveGrowthPromoteTargetNodeId,
+  settleGrowthPromoteCompletion,
 } from '../../src/rebalancer/operation-workflow-growth-promote.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
@@ -117,11 +122,25 @@ test(
       );
 
       let completedCount = 0;
+      let nextPersistDisposition = REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED;
       owner.completeOperation = async (op) => {
+        if (
+          nextPersistDisposition !==
+          REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED
+        ) {
+          return Object.freeze({
+            committed: false,
+            disposition: nextPersistDisposition,
+          });
+        }
         completedCount += 1;
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
         op.status = ReplicaStatus.ACTIVE;
         op.completedAt = Date.now();
+        return Object.freeze({
+          committed: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+        });
       };
       owner.updateStep = async (op, nextStep) => {
         op.workflowStep = nextStep;
@@ -194,6 +213,7 @@ test(
       t.equal(completedCount, 0);
 
       // Authoritative committedVotersReached === true with valid provenance completes
+      nextPersistDisposition = REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED;
       const validResult = await reconcileGrowthPromoteDispatchResponse(
         owner,
         operation,
@@ -207,12 +227,114 @@ test(
         },
       );
       t.equal(validResult.status, ReplicaOperationResponseStatus.COMPLETED);
+      t.equal(validResult.settlementPhase, GROWTH_SETTLEMENT_PHASE.SETTLED);
       t.equal(completedCount, 1);
       t.equal(
         observeGrowthPromoteIncompleteState(owner, operation),
         'COMPLETE_ACTIVE',
         'durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE',
       );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle ' +
+    'gate terminal completion on durable persistence disposition ' +
+    '(deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)',
+  async (t) => {
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_LEADER_NODE_1,
+    });
+    const owner = coordinator.workflowOwner;
+
+    try {
+      const op = buildGrowthPromoteOperation({
+        operationId: 'op-growth-settlement-1',
+        status: ReplicaStatus.SYNCING,
+        workflowStep: WORKFLOW_STEP.SYNCING,
+        completedAt: null,
+      });
+
+      const validCommittedResponse = {
+        committedVotersReached: true,
+        partitionId: TEST_PARTITION_ID,
+        [ReplicaOperationField.PROPOSAL]: {
+          outcome: 'CORE_OK',
+          promotedReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
+        },
+      };
+
+      // 1. Deferred terminal persistence: dispatch response reports skipped/WAITING
+      // and reconcileOperationLifecycle returns WAITING (never COMPLETED)
+      owner.completeOperation = async () =>
+        Object.freeze({
+          committed: false,
+          disposition: 'deferred',
+        });
+      owner.executeOperationFromReconcilePath = async (targetOp) =>
+        reconcileGrowthPromoteDispatchResponse(
+          owner,
+          targetOp,
+          validCommittedResponse,
+        );
+
+      const deferredDispatchResult =
+        await reconcileGrowthPromoteDispatchResponse(
+          owner,
+          op,
+          validCommittedResponse,
+        );
+      t.equal(deferredDispatchResult.skipped, true);
+      t.equal(
+        deferredDispatchResult.settlementPhase,
+        GROWTH_SETTLEMENT_PHASE.PERSISTING,
+      );
+      t.equal(
+        deferredDispatchResult.reconcileOutcome,
+        OPERATION_RECONCILE_OUTCOME.WAITING,
+      );
+      t.equal(
+        await owner.reconcileOperationLifecycle(op),
+        OPERATION_RECONCILE_OUTCOME.WAITING,
+      );
+      t.equal(op.completedAt, null);
+
+      // 2. Refused terminal persistence: reconcileOperationLifecycle returns REFUSED
+      owner.completeOperation = async () =>
+        Object.freeze({
+          committed: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+        });
+      const refusedSettlement = await settleGrowthPromoteCompletion(owner, op);
+      t.equal(refusedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+      t.equal(
+        refusedSettlement.reconcileOutcome,
+        OPERATION_RECONCILE_OUTCOME.REFUSED,
+      );
+      t.equal(
+        await owner.reconcileOperationLifecycle(op),
+        OPERATION_RECONCILE_OUTCOME.REFUSED,
+      );
+
+      // 3. Subsequent retry where completeOperation commits transitions to COMPLETED
+      owner.completeOperation = async (targetOp) => {
+        targetOp.workflowStep = WORKFLOW_STEP.ACTIVE;
+        targetOp.status = ReplicaStatus.ACTIVE;
+        targetOp.completedAt = Date.now();
+        return Object.freeze({
+          committed: true,
+          disposition: 'committed',
+        });
+      };
+      t.equal(
+        await owner.reconcileOperationLifecycle(op),
+        OPERATION_RECONCILE_OUTCOME.COMPLETED,
+      );
+      t.equal(op.workflowStep, WORKFLOW_STEP.ACTIVE);
+      t.ok(Number.isFinite(op.completedAt));
     } finally {
       await coordinator.shutdown();
     }
@@ -531,8 +653,9 @@ test(
         'skipped EXECUTE_ACTIVE_REPLACE must report WAITING',
       );
 
-      // Counterexample 1c (EXECUTE_REMOVE_DISPATCH without advancement): returns WAITING
-      // and reconcileTimeoutOperation fails the timed-out REMOVE operation
+      // Counterexample 1c & Finding 6 (EXECUTE_REMOVE_DISPATCH skipped with deferred_retry_pending):
+      // returns WAITING (reconcileOperationProgress returns false) and reconcileTimeoutOperation
+      // fails the timed-out REMOVE operation instead of returning early
       const removeOp = createOperation({
         operationId: 'op-remove-stuck-dispatch',
         type: OperationType.REMOVE,
@@ -548,16 +671,25 @@ test(
       removeOp.stepsHistory = [
         {step: WORKFLOW_STEP.PENDING, timestamp: staleEnteredAt},
       ];
+      owner.isOperationDeferredRetryActive = () => true;
       owner.executeOperationFromReconcilePath = async () => ({
         success: false,
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+        skipped: true,
+        reason: 'deferred_retry_pending',
       });
       t.equal(
         await owner.reconcileOperationLifecycle(removeOp, {
           cause: 'timeout',
         }),
         OPERATION_RECONCILE_OUTCOME.WAITING,
-        'non-advancing EXECUTE_REMOVE_DISPATCH must report WAITING',
+        'skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING',
+      );
+      t.equal(
+        await owner.reconcileOperationProgress(removeOp, {
+          cause: 'timeout',
+        }),
+        false,
+        'reconcileOperationProgress must return false when dispatch is skipped',
       );
 
       const failedOperations = [];
@@ -571,7 +703,7 @@ test(
       t.equal(
         failedOperations.length,
         1,
-        'WAITING reconcile outcome must not suppress step timeout in reconcileTimeoutOperation',
+        'WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation',
       );
       t.equal(failedOperations[0].operationId, removeOp.operationId);
       t.match(failedOperations[0].reason, /Timeout in pending step/i);

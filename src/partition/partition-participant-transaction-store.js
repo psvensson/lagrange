@@ -335,7 +335,7 @@ function advancePartitionWriteGeneration(db) {
  * @return {boolean} Whether some transaction is PREPARED here.
  */
 function isPartitionReserved(db) {
-  if (canSkipPreparedRead(db)) {
+  if (!db || db.open === false || canSkipPreparedRead(db)) {
     return false;
   }
   const reserved = sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION)
@@ -345,13 +345,13 @@ function isPartitionReserved(db) {
 }
 
 function isParticipantSessionPrepared(db, sessionId) {
-  if (canSkipPreparedRead(db)) return false;
+  if (!db || db.open === false || canSkipPreparedRead(db)) return false;
   return sqliteConnectionState(db).statement(SQL.SELECT_SESSION_PREPARED)
     .get(sessionId, STATE.PREPARED) !== undefined;
 }
 
 function readPreparedParticipantIds(db) {
-  if (canSkipPreparedRead(db)) return [];
+  if (!db || db.open === false || canSkipPreparedRead(db)) return [];
   const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_PARTICIPANTS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);
@@ -359,7 +359,7 @@ function readPreparedParticipantIds(db) {
 }
 
 function readPreparedParticipantRows(db) {
-  if (canSkipPreparedRead(db)) return [];
+  if (!db || db.open === false || canSkipPreparedRead(db)) return [];
   const rows = sqliteConnectionState(db).statement(SQL.SELECT_PREPARED_ROWS)
     .all(STATE.PREPARED);
   recordPreparedObservation(db, rows.length > 0);

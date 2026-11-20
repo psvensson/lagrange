@@ -262,54 +262,76 @@ export async function runGrowthPromoteProductionWitness({
         return {rows: [], changes: info.changes};
       },
     };
-    const coordinator = new RebalanceCoordinator({
-      nodeId: 'n1',
-      systemTableCache: cache,
-      messageRouter,
-      controlPlaneReadinessService: {
-        serveEligibilityOwner: nodeAuthority,
-        getNodeReadinessSync: () => ({ready: true}),
-        getPriorityRecoveryPlanningSnapshotSync: () => null,
-      },
-      cdcIntegrationService: {
+    const createTestCoordinator = () => {
+      const instance = new RebalanceCoordinator({
+        nodeId: 'n1',
+        systemTableCache: cache,
+        messageRouter,
+        controlPlaneReadinessService: {
+          serveEligibilityOwner: nodeAuthority,
+          getNodeReadinessSync: () => ({ready: true}),
+          getPriorityRecoveryPlanningSnapshotSync: () => null,
+        },
+        cdcIntegrationService: {
+          sqlQueryEngine,
+          registerTableChangeCallback: () => {},
+          unregisterTableChangeCallback: () => {},
+        },
+        tablePolicyService: {getReplicationFactor: () => 3},
         sqlQueryEngine,
-        registerTableChangeCallback: () => {},
-        unregisterTableChangeCallback: () => {},
-      },
-      tablePolicyService: {getReplicationFactor: () => 3},
-      sqlQueryEngine,
-      transactionCoordinator: {
-        begin: async () => ({
-          execute: async (sql, params = []) => sqlQueryEngine.execute(sql, params),
-          commit: async () => {},
-          rollback: async () => {},
-        }),
-      },
-    });
-    coordinator.repository.persistOperationUpdate = async (projected, options = {}) => {
-      leaderService.db.prepare(
-        `UPDATE replica_operations
-            SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-                error_message = ?, steps_history = ?
-          WHERE operation_id = ?`,
-      ).run(
-        projected.status,
-        projected.workflowStep,
-        projected.updatedAt ?? NOW_MS,
-        projected.completedAt ?? null,
-        projected.errorMessage ?? null,
-        JSON.stringify(projected.stepsHistory ?? []),
-        projected.operationId,
-      );
-      syncCacheFromDb();
-      return options.returnDisposition ?
-        {persisted: true, disposition: 'applied'} :
-        true;
+        transactionCoordinator: {
+          begin: async () => ({
+            execute: async (sql, params = []) => sqlQueryEngine.execute(sql, params),
+            commit: async () => {},
+            rollback: async () => {},
+          }),
+        },
+      });
+      instance.repository.persistOperationUpdate = async (projected, options = {}) => {
+        const expectedStep = options.expectedCurrentStep ?? null;
+        const result = expectedStep ?
+          leaderService.db.prepare(
+            `UPDATE replica_operations
+                SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+                    error_message = ?, steps_history = ?
+              WHERE operation_id = ? AND workflow_step = ?`,
+          ).run(
+            projected.status,
+            projected.workflowStep,
+            projected.updatedAt ?? NOW_MS,
+            projected.completedAt ?? null,
+            projected.errorMessage ?? null,
+            JSON.stringify(projected.stepsHistory ?? []),
+            projected.operationId,
+            expectedStep,
+          ) :
+          leaderService.db.prepare(
+            `UPDATE replica_operations
+                SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+                    error_message = ?, steps_history = ?
+              WHERE operation_id = ?`,
+          ).run(
+            projected.status,
+            projected.workflowStep,
+            projected.updatedAt ?? NOW_MS,
+            projected.completedAt ?? null,
+            projected.errorMessage ?? null,
+            JSON.stringify(projected.stepsHistory ?? []),
+            projected.operationId,
+          );
+        syncCacheFromDb();
+        const applied = result.changes > 0;
+        return options.returnDisposition ?
+          {persisted: applied, disposition: applied ? 'applied' : 'stale_or_missing'} :
+          applied;
+      };
+      instance.initialize();
+      instance.workflowOwner.releasePlacementHold = async () => {
+        releasedHoldCount += 1;
+      };
+      return instance;
     };
-    coordinator.initialize();
-    coordinator.workflowOwner.releasePlacementHold = async () => {
-      releasedHoldCount += 1;
-    };
+    const coordinator = createTestCoordinator();
     coordinator.bindReplicaPlacementOwnerFactory((service) =>
       ControlPlaneSetup.attachReplicaPlacementOwner({
         nodeId: 'n1',
@@ -472,15 +494,23 @@ export async function runGrowthPromoteProductionWitness({
     );
     assert.equal(afterInterruptedRow.workflow_step, WORKFLOW_STEP.SYNCING);
     assert.equal(afterInterruptedRow.completed_at, null);
+
+    // Proof Limit 1 witness: shut down the original coordinator/workflowOwner and
+    // construct a fresh RebalanceCoordinator/OperationWorkflowOwner instance over
+    // the durable SQLite ledger so restart recovery is proven without any volatile
+    // in-memory state from the interrupted owner.
+    attachment.detach();
+    await coordinator.shutdown();
+    const recoveredCoordinator = createTestCoordinator();
     const decodedInterruptedOp =
-      coordinator.repository.rowToOperation(afterInterruptedRow);
+      recoveredCoordinator.repository.rowToOperation(afterInterruptedRow);
     assert.equal(decodedInterruptedOp.sourceReplicaId, secondLearnerId);
     assert.deepEqual(
       decodedInterruptedOp[ReplicaOperationField.PROMOTE_REPLICA_IDS],
       [firstLearnerId, secondLearnerId],
     );
     assert.equal(
-      coordinator.workflowOwner.observeIncompleteOperationState(decodedInterruptedOp),
+      recoveredCoordinator.workflowOwner.observeIncompleteOperationState(decodedInterruptedOp),
       'REPLAY_DISPATCH',
     );
 
@@ -553,7 +583,7 @@ export async function runGrowthPromoteProductionWitness({
     // While in joint consensus (votersOutgoing non-empty), learner role observations
     // do not promote learners early, and even if SERVICES rows report FOLLOWER,
     // GROWTH_PROMOTE stays in SYNCING with its placement hold retained:
-    const jointReconciled = await coordinator.workflowOwner.reconcileOperationLifecycle(
+    const jointReconciled = await recoveredCoordinator.workflowOwner.reconcileOperationLifecycle(
       decodedInterruptedOp,
       {cause: 'recovery'},
     );
@@ -574,8 +604,8 @@ export async function runGrowthPromoteProductionWitness({
       [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
     });
     const jointWithFollowerServices =
-      await coordinator.workflowOwner.reconcileOperationLifecycle(
-        coordinator.repository.rowToOperation(
+      await recoveredCoordinator.workflowOwner.reconcileOperationLifecycle(
+        recoveredCoordinator.repository.rowToOperation(
           cache.get(TABLES.REPLICA_OPERATIONS, promoteRow.operation_id),
         ),
         {cause: 'recovery'},
@@ -594,8 +624,8 @@ export async function runGrowthPromoteProductionWitness({
     // membership is non-joint, learners transition to FOLLOWER (clearing isJoiningExistingGroup),
     // and GROWTH_PROMOTE completes and releases its placement hold:
     jointPhase = false;
-    const reconciled = await coordinator.workflowOwner.reconcileOperationLifecycle(
-      coordinator.repository.rowToOperation(stillJointRow),
+    const reconciled = await recoveredCoordinator.workflowOwner.reconcileOperationLifecycle(
+      recoveredCoordinator.repository.rowToOperation(stillJointRow),
       {cause: 'recovery'},
     );
     assert.equal(reconciled, 'completed');
@@ -625,15 +655,14 @@ export async function runGrowthPromoteProductionWitness({
     assert.equal(finalPromoteRow.status, ReplicaStatus.ACTIVE);
     assert.ok(Number.isFinite(finalPromoteRow.completed_at));
     assert.equal(
-      coordinator.workflowOwner.observeIncompleteOperationState(
-        coordinator.repository.rowToOperation(finalPromoteRow),
+      recoveredCoordinator.workflowOwner.observeIncompleteOperationState(
+        recoveredCoordinator.repository.rowToOperation(finalPromoteRow),
       ),
       'COMPLETE_ACTIVE',
     );
     assert.ok(releasedHoldCount >= 1);
 
-    attachment.detach();
-    await coordinator.shutdown();
+    await recoveredCoordinator.shutdown();
   }, {systemTableCache: cache});
 }
 

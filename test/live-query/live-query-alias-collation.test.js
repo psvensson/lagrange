@@ -15,6 +15,7 @@ import {
   LiveQueryService,
   buildProbeTableDefinitions,
   compilePredicate,
+  extractReferencedTables,
   extractTableBindings,
   normalizeWhereAstForRenderer,
 } from '../../src/live-query/live-query-service.js';
@@ -27,6 +28,7 @@ const TABLES_TABLE = 'tables';
 const PARTITIONS_TABLE = 'partitions';
 const USERS_TABLE = 'users';
 const ORDERS_TABLE = 'orders';
+const PHYSICAL_T_TABLE = 't';
 
 const USERS_SCHEMA = Object.freeze({
   tableName: USERS_TABLE,
@@ -53,10 +55,20 @@ const ORDERS_SCHEMA = Object.freeze({
   tableConstraints: [],
 });
 
+const PHYSICAL_T_SCHEMA = Object.freeze({
+  tableName: PHYSICAL_T_TABLE,
+  columns: [
+    {name: 'id', type: 'INTEGER', collation: 'BINARY', primaryKey: true, notNull: false},
+  ],
+  primaryKey: ['id'],
+  tableConstraints: [],
+});
+
 function createBackingStore() {
   const db = new Database(':memory:');
   db.exec(renderTableDefinitionSql(USERS_TABLE, USERS_SCHEMA));
   db.exec(renderTableDefinitionSql(ORDERS_TABLE, ORDERS_SCHEMA));
+  db.exec(renderTableDefinitionSql(PHYSICAL_T_TABLE, PHYSICAL_T_SCHEMA));
 
   db.prepare(
     'INSERT INTO users (id, name, tag, code, score) VALUES (?, ?, ?, ?, ?)',
@@ -71,6 +83,8 @@ function createBackingStore() {
   db.prepare(
     'INSERT INTO orders (id, user_id, code, amount) VALUES (?, ?, ?, ?)',
   ).run(101, 2, 'ORD-BETA', 75);
+
+  db.prepare('INSERT INTO t (id) VALUES (?)').run(10);
 
   const tableRecords = new Map([
     [
@@ -93,6 +107,16 @@ function createBackingStore() {
         active_partition_version: 1,
       },
     ],
+    [
+      PHYSICAL_T_TABLE,
+      {
+        table_name: PHYSICAL_T_TABLE,
+        tableName: PHYSICAL_T_TABLE,
+        schema: PHYSICAL_T_SCHEMA,
+        schema_definition: JSON.stringify(PHYSICAL_T_SCHEMA),
+        active_partition_version: 1,
+      },
+    ],
   ]);
 
   const partitionRecords = [
@@ -112,6 +136,17 @@ function createBackingStore() {
       partitionId: 'orders-p0',
       table_name: ORDERS_TABLE,
       tableName: ORDERS_TABLE,
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
+    {
+      partition_id: 't-p0',
+      partitionId: 't-p0',
+      table_name: PHYSICAL_T_TABLE,
+      tableName: PHYSICAL_T_TABLE,
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
@@ -489,15 +524,6 @@ test('5. ambiguous unqualified column reference in multi-binding scope is refuse
       'LiveQueryService',
       () => new LiveQueryService({parsedQuery: ambiguousAst, systemCache}),
     ],
-    [
-      'QueryGroup',
-      () => new QueryGroup({
-        parsedQuery: ambiguousAst,
-        rawSql: ambiguousSql,
-        systemCache,
-        sqlQueryEngine,
-      }),
-    ],
   ]) {
     let caught = null;
     try {
@@ -517,6 +543,20 @@ test('5. ambiguous unqualified column reference in multi-binding scope is refuse
       `${label} surfaces SQLite ambiguous column name diagnostics`,
     );
   }
+
+  // Tier 2 QueryGroup delegates validation and execution to the full-query SQL owner:
+  const ambiguousGroup = new QueryGroup({
+    parsedQuery: ambiguousAst,
+    rawSql: ambiguousSql,
+    systemCache,
+    sqlQueryEngine,
+  });
+  t.teardown(() => ambiguousGroup.cleanup());
+  await t.rejects(
+    ambiguousGroup.executeInitialQuery(),
+    /ambiguous column name: code/i,
+    'Tier 2 QueryGroup full-query SQL execution refuses ambiguous unqualified column reference',
+  );
 
   // Unambiguous unqualified column (user_id exists only on orders, not on users) succeeds:
   const unambiguousSql =
@@ -672,5 +712,158 @@ test('6. QueryGroup Tier 1 vs Tier 2 lifecycle closes Tier 1 SQLite handle on cl
     resets[2].rows,
     [{id: 1, name: 'Alice', code: 'ORD-ALPHA', amount: 120}],
     'Tier 2 refresh reflects deleted row removal',
+  );
+});
+
+test('7. lexical CTE scope isolation in derived subqueries vs compound branches and Tier 2 CTE full-refresh with overlapping base columns', async (t) => {
+  const {db, systemCache, sqlQueryEngine} = createBackingStore();
+  t.teardown(() => db.close());
+
+  // Witness A: Nested CTE inside derived subquery must not leak into sibling UNION ALL branch
+  const nestedCteUnionSql =
+    'SELECT a.id FROM (WITH t AS (SELECT id FROM users) SELECT id FROM t) AS a ' +
+    'UNION ALL SELECT id FROM t';
+  const nestedCteUnionAst = new SQLParser(nestedCteUnionSql).parse();
+
+  t.same(
+    extractReferencedTables(nestedCteUnionAst),
+    ['users', 't'],
+    'nested CTE t in derived subquery does not suppress physical table t in sibling UNION ALL branch',
+  );
+  t.same(
+    extractTableBindings(nestedCteUnionAst),
+    [
+      {
+        occurrenceId: 'nested:1:0:users:users',
+        queryScope: 'nested:1',
+        tableName: 'users',
+        alias: null,
+        effectiveName: 'users',
+      },
+      {
+        occurrenceId: 'nested:2:0:t:t',
+        queryScope: 'nested:2',
+        tableName: 't',
+        alias: null,
+        effectiveName: 't',
+      },
+    ],
+    'extractTableBindings emits users from nested CTE and physical table t from sibling branch',
+  );
+
+  const nestedCteGroup = new QueryGroup({
+    parsedQuery: nestedCteUnionAst,
+    rawSql: nestedCteUnionSql,
+    systemCache,
+    sqlQueryEngine,
+  });
+  t.teardown(() => nestedCteGroup.cleanup());
+
+  const subscribedPartitions = [];
+  const unionResets = [];
+  nestedCteGroup.addClient({
+    id: 'client-nested-cte-union',
+    send: (msg) => unionResets.push(JSON.parse(msg)),
+  });
+
+  const initialUnionRows = await nestedCteGroup.initialize({
+    subscribeToPartition: async (partitionId) => {
+      subscribedPartitions.push(partitionId);
+      return {streamVersion: 1};
+    },
+  });
+  t.same(
+    subscribedPartitions.sort(),
+    ['t-p0', 'users-p0'],
+    'QueryGroup subscribes to partitions for both users and physical table t',
+  );
+  t.same(
+    initialUnionRows,
+    [{id: 1}, {id: 2}, {id: 10}],
+    'initial UNION ALL snapshot includes rows from users and physical table t',
+  );
+
+  // Mutate physical table `t` and deliver CDC event on `t-p0`:
+  db.prepare('INSERT INTO t (id) VALUES (?)').run(20);
+  await nestedCteGroup.handleCDCEvent(
+    {
+      operation: LIVE_QUERY_OPERATION.INSERT,
+      data: {id: 20},
+      hlc_timestamp: '3000:1',
+      logIndex: 2,
+    },
+    't-p0',
+  );
+  t.equal(unionResets.length, 1, 'mutation to physical table t triggers live-query refresh');
+  t.equal(unionResets[0].type, LIVE_QUERY_EVENT.RESET);
+  t.same(
+    unionResets[0].rows,
+    [{id: 1}, {id: 2}, {id: 10}, {id: 20}],
+    'refreshed UNION ALL rows include new row from physical table t',
+  );
+
+  // Witness B: Top-level WITH spanning compound UNION ALL branches still scopes over both branches
+  const topLevelCteUnionSql =
+    'WITH cte AS (SELECT id FROM users) SELECT id FROM cte UNION ALL SELECT id FROM cte';
+  const topLevelCteUnionAst = new SQLParser(topLevelCteUnionSql).parse();
+  t.same(
+    extractReferencedTables(topLevelCteUnionAst),
+    ['users'],
+    'top-level WITH cte is recognized across both compound branches without treating cte as a physical table',
+  );
+
+  // Witness C: Tier 2 CTE query with overlapping base table columns (users.id and orders.id)
+  // registers and refreshes cleanly without calling Tier 1 compilePredicate
+  const cteJoinWhereSql =
+    'WITH q AS (SELECT u.id FROM users AS u JOIN orders AS o ON o.user_id = u.id) ' +
+    'SELECT id FROM q WHERE id = ?';
+  const cteJoinWhereAst = new SQLParser(cteJoinWhereSql).parse();
+  const cteJoinGroup = new QueryGroup({
+    parsedQuery: cteJoinWhereAst,
+    rawSql: cteJoinWhereSql,
+    params: [1],
+    systemCache,
+    sqlQueryEngine,
+  });
+  t.teardown(() => cteJoinGroup.cleanup());
+
+  t.equal(cteJoinGroup.isComplex, true, 'CTE JOIN query is classified as Tier 2 complex');
+  t.equal(cteJoinGroup.predicate.isOpen, false, 'Tier 2 CTE query does not open Tier 1 SQLite predicate');
+
+  const cteJoinResets = [];
+  cteJoinGroup.addClient({
+    id: 'client-cte-join',
+    send: (msg) => cteJoinResets.push(JSON.parse(msg)),
+  });
+
+  const initialCteJoinRows = await cteJoinGroup.initialize({
+    subscribeToPartition: async () => ({streamVersion: 1}),
+  });
+  t.same(
+    initialCteJoinRows,
+    [{id: 1}],
+    'initial snapshot for CTE JOIN with WHERE id = ? succeeds without ambiguous column error',
+  );
+
+  db.prepare('INSERT INTO orders (id, user_id, code, amount) VALUES (?, ?, ?, ?)').run(
+    105,
+    1,
+    'ORD-DELTA',
+    60,
+  );
+  await cteJoinGroup.handleCDCEvent(
+    {
+      operation: LIVE_QUERY_OPERATION.INSERT,
+      data: {id: 105, user_id: 1, code: 'ORD-DELTA', amount: 60},
+      hlc_timestamp: '3000:2',
+      logIndex: 3,
+    },
+    'orders-p0',
+  );
+  t.equal(cteJoinResets.length, 1, 'Tier 2 CTE JOIN query refreshes on CDC INSERT');
+  t.same(
+    cteJoinResets[0].rows,
+    [{id: 1}, {id: 1}],
+    'Tier 2 CTE JOIN refresh returns updated joined rows for id = 1',
   );
 });

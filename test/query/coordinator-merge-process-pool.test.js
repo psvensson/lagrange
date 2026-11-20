@@ -24,7 +24,30 @@ const SAMPLE_ROW_A = 10n;
 const SAMPLE_ROW_B = 20n;
 const SAMPLE_SUM = 30n;
 const INIT_SESSION_MSG_TYPE = 'INIT_SESSION';
+const EXECUTE_MERGE_MSG_TYPE = 'EXECUTE_MERGE';
 const SEND_FAIL_MESSAGE = 'IPC channel already closed';
+
+function waitForExecuteMergeEntered(pool) {
+  const originalSendAndWait = pool.sendAndWait.bind(pool);
+  let resolveEntered = null;
+  const enteredPromise = new Promise((resolve) => {
+    resolveEntered = resolve;
+  });
+  pool.sendAndWait = function(child, payload, timeoutMs, sessionOptions) {
+    const resultPromise = originalSendAndWait(
+      child,
+      payload,
+      timeoutMs,
+      sessionOptions,
+    );
+    if (payload?.type === EXECUTE_MERGE_MSG_TYPE) {
+      pool.sendAndWait = originalSendAndWait;
+      setTimeout(resolveEntered, SHORT_WAIT_MS);
+    }
+    return resultPromise;
+  };
+  return enteredPromise;
+}
 
 function buildSimpleSumRequest(sessionOptions = {}) {
   return {
@@ -213,12 +236,15 @@ test('CoordinatorMergeProcessPool - handoff-boundary cancellation skips cancelle
 test('CoordinatorMergeProcessPool - active execution cancellation kills busy worker via SIGKILL and respawns cleanly', async (t) => {
   const pool = new CoordinatorMergeProcessPool({maxWorkers: 1});
   try {
-    const warmWorker = await pool.acquireWorker(
-      Date.now() + LONG_DEADLINE_OFFSET_MS,
-    );
+    // Complete a full warm-up merge first so the child worker has finished
+    // spawning, loading Node/SQLite, and returning to idleWorkers:
+    const warmResult = await pool.execute(buildSimpleSumRequest());
+    t.same(warmResult.rows, [{total: SAMPLE_SUM}], 'warm-up merge succeeds');
+    t.equal(pool.idleWorkers.length, 1, 'warm worker is in idleWorkers');
+    const warmWorker = pool.idleWorkers[0];
     const initialPid = warmWorker.pid;
-    pool.releaseWorker(warmWorker, true);
 
+    const executeMergeEntered = waitForExecuteMergeEntered(pool);
     const controller = new AbortController();
     const heavyPromise = pool.execute(
       buildHeavyJoinRequest({
@@ -227,9 +253,10 @@ test('CoordinatorMergeProcessPool - active execution cancellation kills busy wor
       }),
     );
 
-    setTimeout(() => {
-      controller.abort();
-    }, SHORT_WAIT_MS);
+    // Wait until INIT_SESSION + INGEST_CHUNK have been ACKed by the warm
+    // worker and EXECUTE_MERGE has been dispatched into SQLite execution:
+    await executeMergeEntered;
+    controller.abort();
 
     await t.rejects(
       heavyPromise,
@@ -291,18 +318,16 @@ test('CoordinatorMergeProcessPool - sendAndWait handles synchronous and callback
 test('CoordinatorMergeProcessPool - shutdown() with active and queued work settles all waiters and kills all workers', async (t) => {
   const pool = new CoordinatorMergeProcessPool({maxWorkers: 1});
   try {
+    await pool.execute(buildSimpleSumRequest());
+    const executeMergeEntered = waitForExecuteMergeEntered(pool);
     const activePromise = pool.execute(
       buildHeavyJoinRequest({
         deadlineMs: Date.now() + LONG_DEADLINE_OFFSET_MS,
       }),
     );
 
-    // Wait until the worker is spawned and active inside execute():
-    while (pool.activeWorkers.size === 0) {
-      await new Promise((resolve) => setTimeout(resolve, SHORT_WAIT_MS));
-    }
+    await executeMergeEntered;
     const [activeChild] = [...pool.activeWorkers];
-    await new Promise((resolve) => setTimeout(resolve, SHORT_WAIT_MS));
 
     const queuedToken = createManualCancellationToken(false);
     const queuedPromise = pool.execute(

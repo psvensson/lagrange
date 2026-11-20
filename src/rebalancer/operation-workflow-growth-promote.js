@@ -61,6 +61,12 @@ const OPERATION_RECONCILE_OUTCOME = Object.freeze({
   HELD: 'held',
   REFUSED: 'refused',
 });
+const GROWTH_SETTLEMENT_PHASE = Object.freeze({
+  RECONCILING: 'reconciling',
+  PERSISTING: 'persisting',
+  RELEASING: 'releasing',
+  SETTLED: 'settled',
+});
 const LOCAL_STR_CORE_OK = 'CORE_OK';
 const LOCAL_STR_GROWTH_PROMOTE_REFUSED = 'growth_promote_refused';
 const LOCAL_STR_LEADER = 'leader';
@@ -128,11 +134,57 @@ async function deferGrowthPromoteToSyncing(owner, operation) {
   });
 }
 
-async function completeAndBuildGrowthPromoteResult(owner, operation) {
-  await owner.completeOperation(operation);
-  return owner.buildSuccessfulOperationResult(operation.operationId, {
-    status: ReplicaOperationResponseStatus.COMPLETED,
+async function settleGrowthPromoteCompletion(owner, operation) {
+  const completionOutcome = await owner.completeOperation(operation);
+  const disposition = readLowerStateField(completionOutcome?.disposition);
+  const idempotentSettled =
+    disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY &&
+    (isNormalizedGrowthPromoteCompleted(operation) ||
+      observeGrowthPromoteIncompleteState(owner, operation) ===
+        GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE);
+  let phase = GROWTH_SETTLEMENT_PHASE.PERSISTING;
+  let reconcileOutcome = OPERATION_RECONCILE_OUTCOME.WAITING;
+  if (completionOutcome?.committed === true || idempotentSettled) {
+    phase = GROWTH_SETTLEMENT_PHASE.SETTLED;
+    reconcileOutcome = OPERATION_RECONCILE_OUTCOME.COMPLETED;
+  } else if (disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED) {
+    reconcileOutcome = OPERATION_RECONCILE_OUTCOME.REFUSED;
+  }
+  return Object.freeze({
+    phase,
+    reconcileOutcome,
+    committed: completionOutcome?.committed === true,
+    disposition,
   });
+}
+
+async function completeAndBuildGrowthPromoteResult(owner, operation) {
+  const settlement = await settleGrowthPromoteCompletion(owner, operation);
+  if (settlement.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
+    return owner.buildSuccessfulOperationResult(operation.operationId, {
+      status: ReplicaOperationResponseStatus.COMPLETED,
+      settlementPhase: settlement.phase,
+      reconcileOutcome: settlement.reconcileOutcome,
+      disposition: settlement.disposition,
+    });
+  }
+  if (settlement.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.WAITING) {
+    owner.scheduleObservedProgressRetry?.(
+      operation.operationId,
+      SYSTEM_TABLE_NAME.SERVICES,
+      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+    );
+  }
+  return owner.buildSkippedOperationResult(
+    settlement.reconcileOutcome,
+    operation.operationId,
+    {
+      status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+      settlementPhase: settlement.phase,
+      reconcileOutcome: settlement.reconcileOutcome,
+      disposition: settlement.disposition,
+    },
+  );
 }
 
 function resolveOwnerSystemTableCache(owner) {
@@ -563,6 +615,13 @@ async function completeGrowthPromoteOperation(owner, operation) {
     },
   );
   if (!transitionOutcome?.committed) {
+    if (isNormalizedGrowthPromoteCompleted(operation)) {
+      await owner.releasePlacementHoldIfNeeded(operation);
+      return Object.freeze({
+        committed: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      });
+    }
     await owner.resolveNotCommittedTerminalTransition(
       operation,
       projectedOperation,
@@ -605,6 +664,12 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
   const previousStep = operation.workflowStep;
   const replayResult = await owner.executeOperationFromReconcilePath(operation);
   if (
+    replayResult?.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.REFUSED ||
+    replayResult?.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.WAITING
+  ) {
+    return replayResult.reconcileOutcome;
+  }
+  if (
     owner.repository.isOperationTerminal(operation) ||
     replayResult?.status === ReplicaOperationResponseStatus.COMPLETED
   ) {
@@ -617,6 +682,7 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
 }
 
 export {
+  GROWTH_SETTLEMENT_PHASE,
   OPERATION_RECONCILE_OUTCOME,
   applyGrowthPromoteRequestFields,
   completeGrowthPromoteOperation,
@@ -629,4 +695,5 @@ export {
   redirectGrowthPromoteTargetNode,
   resolveGrowthPromoteReplicaIds,
   resolveGrowthPromoteTargetNodeId,
+  settleGrowthPromoteCompletion,
 };

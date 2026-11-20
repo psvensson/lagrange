@@ -1243,35 +1243,16 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
   });
 
   // Failed pre-voter create row (status: 'failed', raft_role: null) and
-  // partition_cleanup tombstone are excluded from buildPartitionReplicaRows so
-  // evaluatePartitionDeficit admits LEARNER_DEFICIT ADD instead of same-node REPLACE:
+  // partition_cleanup tombstone are excluded from buildPartitionReplicaRows:
   const rowsWithFailedCreate = buildPartitionReplicaRows([
-    {
-      [COLUMN.REPLICA_ID]: 'replica_operations-p1-r1',
-      [COLUMN.NODE_ID]: 'n1',
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-    },
-    {
-      [COLUMN.REPLICA_ID]: 'replace-replica-learner-n2',
-      [COLUMN.NODE_ID]: 'n2',
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
-    },
-    {
-      [COLUMN.REPLICA_ID]: 'replace-replica-failed-create-n3',
-      [COLUMN.NODE_ID]: 'n3',
-      [COLUMN.STATUS]: 'failed',
-      [COLUMN.RAFT_ROLE]: null,
-      previous_state: 'pending',
-    },
-    {
-      [COLUMN.REPLICA_ID]: 'replace-replica-cleanup-tombstone-n3',
-      [COLUMN.NODE_ID]: 'n3',
-      service_type: 'partition_cleanup',
-      [COLUMN.STATUS]: 'owned',
-      [COLUMN.RAFT_ROLE]: null,
-    },
+    {[COLUMN.REPLICA_ID]: 'replica_operations-p1-r1', [COLUMN.NODE_ID]: 'n1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER},
+    {[COLUMN.REPLICA_ID]: 'replace-replica-learner-n2', [COLUMN.NODE_ID]: 'n2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER},
+    {[COLUMN.REPLICA_ID]: 'replace-replica-failed-create-n3', [COLUMN.NODE_ID]: 'n3',
+      [COLUMN.STATUS]: 'failed', [COLUMN.RAFT_ROLE]: null, previous_state: 'pending'},
+    {[COLUMN.REPLICA_ID]: 'replace-replica-cleanup-tombstone-n3', [COLUMN.NODE_ID]: 'n3',
+      service_type: 'partition_cleanup', [COLUMN.STATUS]: 'owned', [COLUMN.RAFT_ROLE]: null},
   ], 'n1', false);
   const afterFailedCreate = evaluatePartitionDeficit({
     partitionId: 'replica_operations-p1',
@@ -1283,6 +1264,35 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
   assert.equal(afterFailedCreate.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT);
   assert.equal(afterFailedCreate.candidate.move.type, OperationType.ADD);
   assert.equal(afterFailedCreate.candidate.move.targetNodeId, 'n3');
+
+  // Finding 4 regression witness: a committed voter that failed while campaigning
+  // (status: 'failed', raft_role: 'candidate', previous_state: 'active', cleanup_token: null)
+  // is retained as a failed voter row and produces a FAILED_OR_DEAD REPLACE:
+  const rowsWithFailedCandidateVoter = buildPartitionReplicaRows([
+    {[COLUMN.REPLICA_ID]: 'config-p1-r1', [COLUMN.NODE_ID]: 'n1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER},
+    {[COLUMN.REPLICA_ID]: 'config-p1-r2', [COLUMN.NODE_ID]: 'n2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER},
+    {[COLUMN.REPLICA_ID]: 'config-p1-r3', [COLUMN.NODE_ID]: 'n3',
+      [COLUMN.STATUS]: 'failed', [COLUMN.RAFT_ROLE]: RAFT_ROLE.CANDIDATE,
+      previous_state: 'active', cleanup_token: null},
+  ], 'n1', false);
+  const failedCandidateEval = evaluatePartitionDeficit({
+    partitionId: 'config-p1',
+    replicationFactor: 3,
+    replicaRows: rowsWithFailedCandidateVoter,
+    eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(failedCandidateEval.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(failedCandidateEval.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD);
+  assert.equal(failedCandidateEval.candidate.repair, true);
+  assert.deepEqual(failedCandidateEval.candidate.move, {
+    type: OperationType.REPLACE,
+    targetNodeId: 'n3',
+    replicaId: null,
+    sourceReplicaId: 'config-p1-r3',
+    copySourceNodeId: 'n1',
+  });
 });
 
 test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration', async () => {
@@ -1299,19 +1309,14 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 9},
       }),
     };
-    const singleVoterServices = [
-      {
-        [COLUMN.REPLICA_ID]: 'tables-p1-r1',
-        [COLUMN.PARTITION_ID]: 'tables-p1',
-        [COLUMN.NODE_ID]: 'n1',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-      },
-    ];
-    const cache = createSimpleSystemCache(
-      [seededPartitionRow('tables-p1')],
-      singleVoterServices,
-    );
+    const singleVoterServices = [{
+      [COLUMN.REPLICA_ID]: 'tables-p1-r1',
+      [COLUMN.PARTITION_ID]: 'tables-p1',
+      [COLUMN.NODE_ID]: 'n1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    }];
+    const cache = createSimpleSystemCache([seededPartitionRow('tables-p1')], singleVoterServices);
     const ledger = createRealSqlLedgerHarness(cache, 'n1');
     try {
       const owner = createReplicaPlacementOwner({
@@ -1324,8 +1329,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         admitPlacement: ledger.admitPlacement,
         releasePlacementHold: ledger.releasePlacementHold,
       });
-
-      // Step 1: 1 voter on n1 -> admits first learner ADD on n2:
       owner.setLeader(true);
       await owner.awaitCurrentWorkIdle();
       let ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
@@ -1333,7 +1336,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
       assert.equal(ops[0].type, OperationType.ADD);
       assert.equal(ops[0].target_node_id, 'n2');
 
-      // Complete first learner ADD on n2 as an ACTIVE caught-up LEARNER:
       const firstLearnerId = ops[0].replica_id;
       ledger.db.prepare(
         'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ? WHERE operation_id = ?',
@@ -1345,16 +1347,12 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
       });
-      cache. createServicesRow?.();
       cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, singleVoterServices[1]);
-      // Rebuild cache with updated services list:
-      const servicesList = cache.getAll(TABLES.SERVICES);
-      servicesList.push(singleVoterServices[1]);
+      cache.getAll(TABLES.SERVICES).push(singleVoterServices[1]);
       const originalGetAll = cache.getAll.bind(cache);
       cache.getAll = (tableName) =>
         tableName === TABLES.SERVICES ? [...singleVoterServices] : originalGetAll(tableName);
 
-      // Step 2: 1 voter on n1 + 1 learner on n2 -> admits second learner ADD on n3:
       owner.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
       await owner.awaitCurrentWorkIdle();
       ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
@@ -1362,7 +1360,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
       assert.equal(ops[1].type, OperationType.ADD);
       assert.equal(ops[1].target_node_id, 'n3');
 
-      // Complete second learner ADD on n3 as an ACTIVE caught-up LEARNER:
       const secondLearnerId = ops[1].replica_id;
       ledger.db.prepare(
         'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ? WHERE operation_id = ?',
@@ -1375,7 +1372,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
       });
 
-      // Step 3: 1 voter on n1 + 2 caught-up learners on n2 and n3 -> admits GROWTH_PROMOTE:
       owner.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
       await owner.awaitCurrentWorkIdle();
       ops = ledger.db.prepare('SELECT * FROM replica_operations ORDER BY operation_id').all();
@@ -1387,20 +1383,12 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
       const promoteHistory = JSON.parse(ops[2].steps_history);
       assert.deepEqual(promoteHistory[0].promoteReplicaIds, [firstLearnerId, secondLearnerId]);
 
-      // Execute learner catch-up evaluation and GROWTH_PROMOTE through ReplicaHandler & PartitionService:
       await onLedgerLeader(async (leaderService) => {
         leaderService.learnerFirstAdmission = true;
-        const admitL1 = leaderService.admitRaftLearner({
-          replicaIdentity: firstLearnerId,
-          nodeId: 'n2',
-        });
-        const admitL2 = leaderService.admitRaftLearner({
-          replicaIdentity: secondLearnerId,
-          nodeId: 'n3',
-        });
+        const admitL1 = leaderService.admitRaftLearner({replicaIdentity: firstLearnerId, nodeId: 'n2'});
+        const admitL2 = leaderService.admitRaftLearner({replicaIdentity: secondLearnerId, nodeId: 'n3'});
         assert.ok(admitL1.outcome);
         assert.ok(admitL2.outcome);
-
         class TestHandler {
           constructor() {
             this.nodeId = 'n1';
@@ -1415,7 +1403,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         }
         assignReplicaHandlerMembershipMethods(TestHandler);
         const handler = new TestHandler();
-
         const catchUpResp = await handler.handleEvaluateLearnerCatchUp({
           [ReplicaOperationField.OPERATION_ID]: ops[0].operation_id,
           [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
@@ -1423,7 +1410,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         });
         assert.equal(catchUpResp.status, ReplicaOperationResponseStatus.COMPLETED);
         assert.ok(catchUpResp[ReplicaOperationField.CATCH_UP]);
-
         const promoteResp = await handler.handleProposeGrowthPromote({
           [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
           [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
@@ -1431,7 +1417,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         });
         assert.equal(promoteResp.status, ReplicaOperationResponseStatus.INITIATED);
         assert.ok(promoteResp[ReplicaOperationField.PROPOSAL]);
-
         const withdrawResp = await handler.handleWithdrawPromotion({
           [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
           [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
@@ -1439,7 +1424,6 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         });
         assert.equal(withdrawResp.status, ReplicaOperationResponseStatus.COMPLETED);
       });
-
       owner.shutdown();
     } finally {
       ledger.db.close();

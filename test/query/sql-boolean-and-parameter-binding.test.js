@@ -9,7 +9,9 @@ import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {
   renderExpression,
+  renderExpressionWithParameters,
   renderSelect,
+  renderSelectWithParameters,
 } from '../../src/query/sql-statement-renderer.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -434,5 +436,149 @@ test('Counterexample 4: PostgreSQL $N _paramMapping is applied exactly once acro
   } finally {
     clearAllReservations();
     gateway.db.close();
+  }
+});
+
+test('Finding 1 regression: aggregate-local ORDER BY binds argument parameters before ORDER BY parameters across Aggregate, FunctionCall, DISTINCT, and write subqueries', () => {
+  const executor = createExecutor();
+  const db = new Database(':memory:');
+  try {
+    db.exec('CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)');
+    const insert = db.prepare('INSERT INTO t (id, val) VALUES (?, ?)');
+    insert.run(1, 'a');
+    insert.run(2, 'b');
+    insert.run(3, 'c');
+
+    const resolveFrom = (params) => (node) => params[node.index];
+
+    // 1. Aggregate node: SELECT SUM(? ORDER BY id + ?) AS total FROM t with unequal [2n, 100n]
+    const sumAst = new SQLParser('SELECT SUM(? ORDER BY id + ?) AS total FROM t').parse();
+    const sumRendered = renderSelectWithParameters(sumAst, resolveFrom([2n, 100n]));
+    assert.equal(sumRendered.sql, 'SELECT SUM(? ORDER BY (id + ?) ASC) AS total FROM t');
+    assert.deepEqual(sumRendered.params, [2n, 100n]);
+    const sumRow = db.prepare(sumRendered.sql).safeIntegers(true).get(...sumRendered.params);
+    assert.equal(sumRow.total, 6n);
+
+    // 2. DISTINCT Aggregate node: SELECT SUM(DISTINCT ? ORDER BY id + ?) AS total FROM t
+    const distinctSumAst = new SQLParser(
+      'SELECT SUM(DISTINCT ? ORDER BY id + ?) AS total FROM t',
+    ).parse();
+    const distinctSumRendered = renderSelectWithParameters(
+      distinctSumAst,
+      resolveFrom([7n, 100n]),
+    );
+    assert.equal(
+      distinctSumRendered.sql,
+      'SELECT SUM(DISTINCT ? ORDER BY (id + ?) ASC) AS total FROM t',
+    );
+    assert.deepEqual(distinctSumRendered.params, [7n, 100n]);
+    const distinctSumRow = db
+      .prepare(distinctSumRendered.sql)
+      .safeIntegers(true)
+      .get(...distinctSumRendered.params);
+    assert.equal(distinctSumRow.total, 7n);
+
+    // 3. Single-arg GROUP_CONCAT(? ORDER BY id + ?) (FunctionCall node) and hand-constructed Aggregate shape
+    const gcSingleAst = new SQLParser(
+      'SELECT GROUP_CONCAT(? ORDER BY id + ?) AS joined FROM t',
+    ).parse();
+    const gcSingleRendered = renderSelectWithParameters(
+      gcSingleAst,
+      resolveFrom(['item', 100n]),
+    );
+    assert.deepEqual(gcSingleRendered.params, ['item', 100n]);
+    const gcSingleRow = db.prepare(gcSingleRendered.sql).get(...gcSingleRendered.params);
+    assert.equal(gcSingleRow.joined, 'item,item,item');
+
+    const gcAggregateShape = {
+      type: EXPR_TYPE.AGGREGATE,
+      function: 'GROUP_CONCAT',
+      argument: {type: EXPR_TYPE.PARAMETER, index: 0},
+      distinct: false,
+      orderBy: [
+        {
+          expression: {
+            type: EXPR_TYPE.BINARY,
+            operator: '+',
+            left: {type: EXPR_TYPE.COLUMN_REF, table: null, column: 'id'},
+            right: {type: EXPR_TYPE.PARAMETER, index: 1},
+          },
+          direction: 'ASC',
+        },
+      ],
+    };
+    const gcAggRendered = renderExpressionWithParameters(
+      gcAggregateShape,
+      resolveFrom(['agg-item', 200n]),
+    );
+    assert.equal(gcAggRendered.sql, 'GROUP_CONCAT(? ORDER BY (id + ?) ASC)');
+    assert.deepEqual(gcAggRendered.params, ['agg-item', 200n]);
+
+    // 4. Multi-arg FunctionCall: GROUP_CONCAT(val || ?, ? ORDER BY id + ?)
+    const gcMultiAst = new SQLParser(
+      'SELECT GROUP_CONCAT(val || ?, ? ORDER BY id + ?) AS joined FROM t',
+    ).parse();
+    const gcMultiRendered = renderSelectWithParameters(
+      gcMultiAst,
+      resolveFrom(['!', '|', 100n]),
+    );
+    assert.equal(
+      gcMultiRendered.sql,
+      'SELECT GROUP_CONCAT((val || ?), ? ORDER BY (id + ?) ASC) AS joined FROM t',
+    );
+    assert.deepEqual(gcMultiRendered.params, ['!', '|', 100n]);
+    const gcMultiRow = db.prepare(gcMultiRendered.sql).get(...gcMultiRendered.params);
+    assert.equal(gcMultiRow.joined, 'a!|b!|c!');
+
+    // 5. Subquery & mutation consumer through renderSelectWithParameters & buildUpdateSQL
+    const selectWithSubqueries = new SQLParser(
+      'SELECT (SELECT SUM(? ORDER BY id + ?) FROM t) AS sub_sum, ' +
+      '(SELECT GROUP_CONCAT(val || ?, ? ORDER BY id + ?) FROM t) AS sub_gc ' +
+      'FROM t WHERE id = ?',
+    ).parse();
+    const subRendered = renderSelectWithParameters(
+      selectWithSubqueries,
+      resolveFrom([2n, 100n, '!', ':', 200n, 1n]),
+    );
+    assert.deepEqual(subRendered.params, [2n, 100n, '!', ':', 200n, 1n]);
+    const subRow = db.prepare(subRendered.sql).safeIntegers(true).get(...subRendered.params);
+    assert.deepEqual(subRow, {sub_sum: 6n, sub_gc: 'a!:b!:c!'});
+
+    const innerSubqueryAst = new SQLParser(
+      'SELECT GROUP_CONCAT(val || ?, ? ORDER BY id + ?) AS joined FROM t',
+    ).parse();
+    const updateWithAggSubquery = {
+      type: 'UPDATE',
+      table: 't',
+      assignments: [
+        {
+          column: 'val',
+          value: {
+            type: PG_EXPR_TYPE.SUBQUERY,
+            query: innerSubqueryAst,
+          },
+        },
+      ],
+      where: {
+        type: EXPR_TYPE.BINARY,
+        operator: '=',
+        left: {type: EXPR_TYPE.COLUMN_REF, table: null, column: 'id'},
+        right: {type: EXPR_TYPE.PARAMETER, index: 3},
+      },
+    };
+    const updateParams = ['!', ':', 100n, 1];
+    const updateSql = executor.buildUpdateSQL(updateWithAggSubquery, updateParams);
+    assert.equal(
+      updateSql,
+      'UPDATE t SET val = (SELECT GROUP_CONCAT((val || ?), ? ORDER BY (id + 100) ASC) AS joined FROM t) WHERE (id = ?)',
+    );
+    assert.deepEqual(updateParams, ['!', ':', 1]);
+    db.prepare(updateSql).run(...updateParams);
+    assert.equal(
+      db.prepare('SELECT val FROM t WHERE id = 1').get().val,
+      'a!:b!:c!',
+    );
+  } finally {
+    db.close();
   }
 });

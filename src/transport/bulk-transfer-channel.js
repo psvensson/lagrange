@@ -39,6 +39,13 @@ const BULK_CHANNEL_SEND_OUTCOME = Object.freeze({
   CLOSED: 'closed',
 });
 
+const ENTRY_STATE = Object.freeze({
+  QUEUED: 'queued',
+  ACTIVE: 'active',
+  SETTLED: 'settled',
+  CANCELLED: 'cancelled',
+});
+
 const NO_OP_LOGGER = Object.freeze({
   debug() {},
   info() {},
@@ -47,7 +54,10 @@ const NO_OP_LOGGER = Object.freeze({
 });
 
 function frozenSendResult(outcome) {
-  return Object.freeze({outcome});
+  return Object.freeze({
+    outcome,
+    delivered: outcome === BULK_CHANNEL_SEND_OUTCOME.SENT,
+  });
 }
 
 const SEND_RESULT = Object.freeze({
@@ -199,11 +209,52 @@ function createBulkTransferConnection(context) {
   // forever. Listeners fire exactly once, after the registry eviction.
   const closeListeners = [];
   let closeNotified = false;
-  let sendChain = Promise.resolve();
+  const sendQueue = [];
+  let activeSendEntry = null;
+  let drainLoopPromise = null;
   // Self-reference handed to onClosed so the registry can guard against a
   // STALE socket's async close event evicting a live replacement connection
   // for the same peer (verifier MF-1).
   let connectionSelf = null;
+
+  const cancelQueuedOnClose = () => {
+    while (sendQueue.length > 0) {
+      const queuedEntry = sendQueue.shift();
+      queuedEntry.settle(
+        ENTRY_STATE.CANCELLED,
+        SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED],
+      );
+    }
+  };
+
+  const runDrainLoop = async () => {
+    while (sendQueue.length > 0) {
+      const nextEntry = sendQueue.shift();
+      if (!nextEntry || nextEntry.state !== ENTRY_STATE.QUEUED) {
+        continue;
+      }
+      activeSendEntry = nextEntry;
+      try {
+        await nextEntry.execute();
+      } finally {
+        if (activeSendEntry === nextEntry) {
+          activeSendEntry = null;
+        }
+      }
+    }
+  };
+
+  const ensureDrainLoop = () => {
+    if (drainLoopPromise !== null) {
+      return;
+    }
+    drainLoopPromise = runDrainLoop().finally(() => {
+      drainLoopPromise = null;
+      if (sendQueue.length > 0) {
+        ensureDrainLoop();
+      }
+    });
+  };
 
   const notifyClosed = () => {
     if (closeNotified) {
@@ -222,6 +273,7 @@ function createBulkTransferConnection(context) {
   });
   ws.on(TRANSPORT_EVENT.CLOSE, () => {
     state.open = false;
+    cancelQueuedOnClose();
     onClosed(nodeId, connectionSelf);
     notifyClosed();
   });
@@ -262,84 +314,119 @@ function createBulkTransferConnection(context) {
       ws.send(JSON.stringify(message));
       return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT];
     },
-    async sendChunkFrame(frame, sendOptions = {}) {
+    sendChunkFrame(frame, sendOptions = {}) {
       const signal = sendOptions.signal;
       if (signal?.aborted) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
+        return Promise.resolve(SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED]);
       }
       if (!state.open) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
+        return Promise.resolve(SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED]);
       }
       if (state.pendingSends >= maxPendingSends) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT];
+        return Promise.resolve(SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT]);
       }
       state.pendingSends += 1;
-      let startedTurn = false;
-      let resolveQueueWait = null;
-      let onQueueAbort = null;
-      const detachQueueAbort = () => {
-        if (onQueueAbort !== null) {
-          signal?.removeEventListener(SIGNAL_ABORT_EVENT, onQueueAbort);
-          onQueueAbort = null;
-        }
-      };
-      const queueTurnReady = new Promise((resolve) => {
-        resolveQueueWait = resolve;
+      return new Promise((resolve) => {
+        let payloadFrame = frame;
+        let onQueueAbort = null;
+        const entry = {
+          state: ENTRY_STATE.QUEUED,
+          cleanup() {
+            if (onQueueAbort !== null) {
+              signal?.removeEventListener(SIGNAL_ABORT_EVENT, onQueueAbort);
+              onQueueAbort = null;
+            }
+            payloadFrame = null;
+          },
+          settle(nextState, result) {
+            if (
+              entry.state === ENTRY_STATE.SETTLED ||
+              entry.state === ENTRY_STATE.CANCELLED
+            ) {
+              return;
+            }
+            entry.state = nextState;
+            entry.cleanup();
+            state.pendingSends -= 1;
+            resolve(result);
+          },
+          async execute() {
+            if (entry.state !== ENTRY_STATE.QUEUED) {
+              return;
+            }
+            if (onQueueAbort !== null) {
+              signal?.removeEventListener(SIGNAL_ABORT_EVENT, onQueueAbort);
+              onQueueAbort = null;
+            }
+            if (signal?.aborted) {
+              entry.settle(
+                ENTRY_STATE.CANCELLED,
+                SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED],
+              );
+              return;
+            }
+            if (!state.open) {
+              entry.settle(
+                ENTRY_STATE.SETTLED,
+                SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED],
+              );
+              return;
+            }
+            entry.state = ENTRY_STATE.ACTIVE;
+            const activeFrame = payloadFrame;
+            state.inFlightBytes = activeFrame.length;
+            try {
+              const grant = await tokenBucket.acquire(
+                activeFrame.length,
+                {signal},
+              );
+              if (!grant.acquired || signal?.aborted) {
+                entry.settle(
+                  ENTRY_STATE.CANCELLED,
+                  SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED],
+                );
+                return;
+              }
+              if (!state.open) {
+                entry.settle(
+                  ENTRY_STATE.SETTLED,
+                  SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED],
+                );
+                return;
+              }
+              ws.send(activeFrame);
+              entry.settle(
+                ENTRY_STATE.SETTLED,
+                SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT],
+              );
+            } finally {
+              state.inFlightBytes = 0;
+            }
+          },
+        };
         if (signal) {
           onQueueAbort = () => {
-            detachQueueAbort();
-            resolve(false);
+            if (entry.state !== ENTRY_STATE.QUEUED) {
+              return;
+            }
+            const idx = sendQueue.indexOf(entry);
+            if (idx !== -1) {
+              sendQueue.splice(idx, 1);
+            }
+            entry.settle(
+              ENTRY_STATE.CANCELLED,
+              SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED],
+            );
           };
           signal.addEventListener(SIGNAL_ABORT_EVENT, onQueueAbort, {once: true});
         }
+        sendQueue.push(entry);
+        ensureDrainLoop();
       });
-      const prevChain = sendChain;
-      let releaseTurn = null;
-      const turnDone = new Promise((resolve) => {
-        releaseTurn = resolve;
-      });
-      sendChain = turnDone;
-      prevChain.then(() => {
-        detachQueueAbort();
-        resolveQueueWait(true);
-      });
-      try {
-        const turnGranted = await queueTurnReady;
-        if (turnGranted) {
-          startedTurn = true;
-        }
-        if (!turnGranted || signal?.aborted) {
-          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
-        }
-        if (!state.open) {
-          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
-        }
-        state.inFlightBytes = frame.length;
-        try {
-          const grant = await tokenBucket.acquire(frame.length, {signal});
-          if (!grant.acquired || signal?.aborted) {
-            return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
-          }
-          if (!state.open) {
-            return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
-          }
-          ws.send(frame);
-          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT];
-        } finally {
-          state.inFlightBytes = 0;
-        }
-      } finally {
-        detachQueueAbort();
-        state.pendingSends -= 1;
-        if (startedTurn) {
-          releaseTurn();
-        } else {
-          prevChain.then(releaseTurn);
-        }
-      }
     },
     close() {
       state.open = false;
+      cancelQueuedOnClose();
       try {
         ws.close();
       } catch (error) {
@@ -351,6 +438,7 @@ function createBulkTransferConnection(context) {
         nodeId,
         open: state.open,
         pendingSends: state.pendingSends,
+        retainedQueueEntries: sendQueue.length + (activeSendEntry ? 1 : 0),
         inFlightBytes: state.inFlightBytes,
         maxPendingSends,
       });

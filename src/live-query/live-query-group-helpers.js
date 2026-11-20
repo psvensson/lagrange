@@ -311,8 +311,9 @@ function resolveSchemasForTables(tables, resolveTableSchema) {
 /**
  * Compile WHERE clause predicate from parsed AST using in-memory SQLite.
  * For Tier 2 complex queries (`isComplexQuery(parsedAst) === true`), validates
- * admissibility and WHERE compilation while immediately closing the temporary
- * SQLite database so no unused `:memory:` connection remains open.
+ * admissibility and returns a closed no-op predicate handle without calling
+ * `compilePredicate`, so complex queries are validated and evaluated by the
+ * full-query SQL owner and no unused `:memory:` connection is opened.
  * @param {Object} parsedAst
  * @param {Array|Object} [params]
  * @param {Function|null} [resolveTableSchema]
@@ -324,27 +325,22 @@ function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null, opt
   const rawWhere = parsedAst?.where ?? null;
   assertLiveQueryPredicateAdmissible(rawWhere);
   const whereClause = rawWhere ? normalizeWhereAstForRenderer(rawWhere) : null;
-  const tables = extractReferencedTables(parsedAst);
-  const schemas = resolveSchemasForTables(tables, resolveTableSchema);
   const isComplex = options?.isComplex ?? isComplexQuery(parsedAst);
-  const compileOptions = {
-    tableName: tables[0] || null,
-    tableBindings: extractTableBindings(parsedAst),
-    parsedQuery: parsedAst,
-  };
   if (isComplex) {
-    if (whereClause) {
-      const compiled = compilePredicate(whereClause, params, schemas, compileOptions);
-      compiled.close?.();
-    }
     return {
       whereClause,
       predicate: createClosedNoOpPredicate(),
     };
   }
+  const tables = extractReferencedTables(parsedAst);
+  const schemas = resolveSchemasForTables(tables, resolveTableSchema);
   return {
     whereClause,
-    predicate: compilePredicate(whereClause, params, schemas, compileOptions),
+    predicate: compilePredicate(whereClause, params, schemas, {
+      tableName: tables[0] || null,
+      tableBindings: extractTableBindings(parsedAst),
+      parsedQuery: parsedAst,
+    }),
   };
 }
 

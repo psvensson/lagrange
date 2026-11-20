@@ -589,6 +589,138 @@ t.test('sendChunkFrame settles pre-start and queued sendChain cancellation ' +
   }
 });
 
+t.test('repeated queued cancellations behind a blocked head remove entries ' +
+  'physically without growing retainedQueueEntries and preserve FIFO order',
+async (t) => {
+  const maxPendingForChurn = 4;
+  const repeatedCancelCycles = 24;
+  let headBlocked = true;
+  let unblockHead = null;
+  const gateBucket = {
+    acquire() {
+      if (headBlocked) {
+        return new Promise((resolve) => {
+          unblockHead = () => {
+            headBlocked = false;
+            resolve(Object.freeze({acquired: true}));
+          };
+        });
+      }
+      return Promise.resolve(Object.freeze({acquired: true}));
+    },
+    depthBytes: () => 0,
+    pendingCount: () => (headBlocked ? 1 : 0),
+    dispose() {
+      if (unblockHead) {
+        unblockHead();
+      }
+    },
+  };
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+    tokenBucket: gateBucket,
+    maxPendingSends: maxPendingForChurn,
+  });
+  const pair = createInProcWebSocketPair();
+  const deliveredPayloads = [];
+  pair.a.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+    deliveredPayloads.push(Buffer.from(data).toString('utf8'));
+  });
+  const channel = registry.adoptIncomingSocket({
+    nodeId: TEST_PEER_NODE_ID,
+    ws: pair.b,
+  });
+
+  try {
+    const headPromise = channel.sendChunkFrame(Buffer.from('head'));
+    t.equal(channel.getStats().pendingSends, 1, 'head send is active');
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      1,
+      'only the active head send occupies retainedQueueEntries',
+    );
+
+    for (let cycle = 0; cycle < repeatedCancelCycles; cycle += 1) {
+      const controller = new AbortController();
+      const cancelledSendPromise = channel.sendChunkFrame(
+        Buffer.from(`cancelled-${cycle}`),
+        {signal: controller.signal},
+      );
+      t.equal(
+        channel.getStats().retainedQueueEntries,
+        2,
+        `cycle ${cycle}: queued entry appears while pending`,
+      );
+      controller.abort();
+      const cancelledOutcome = await cancelledSendPromise;
+      t.same(
+        cancelledOutcome,
+        {
+          outcome: BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+          delivered: false,
+        },
+        `cycle ${cycle}: cancelled send resolves promptly with delivered: false`,
+      );
+      t.equal(
+        channel.getStats().pendingSends,
+        1,
+        `cycle ${cycle}: pendingSends returns to 1`,
+      );
+      t.equal(
+        channel.getStats().retainedQueueEntries,
+        1,
+        `cycle ${cycle}: cancelled entry is physically removed from queue`,
+      );
+    }
+
+    const survivor1Promise = channel.sendChunkFrame(Buffer.from('survivor-1'));
+    const survivor2Promise = channel.sendChunkFrame(Buffer.from('survivor-2'));
+    t.equal(channel.getStats().pendingSends, 3, 'head + 2 survivors pending');
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      3,
+      'head + 2 survivors retained',
+    );
+
+    unblockHead();
+    const [headOut, surv1Out, surv2Out] = await Promise.all([
+      headPromise,
+      survivor1Promise,
+      survivor2Promise,
+    ]);
+    await flushDeliveries();
+
+    t.same(
+      headOut,
+      {outcome: BULK_CHANNEL_SEND_OUTCOME.SENT, delivered: true},
+      'head send delivered after unblocking',
+    );
+    t.same(
+      surv1Out,
+      {outcome: BULK_CHANNEL_SEND_OUTCOME.SENT, delivered: true},
+      'first surviving send delivered',
+    );
+    t.same(
+      surv2Out,
+      {outcome: BULK_CHANNEL_SEND_OUTCOME.SENT, delivered: true},
+      'second surviving send delivered',
+    );
+    t.same(
+      deliveredPayloads,
+      ['head', 'survivor-1', 'survivor-2'],
+      'head and surviving sends arrive in strict FIFO order without cancelled frames',
+    );
+    t.equal(channel.getStats().pendingSends, 0, 'pendingSends drains to 0');
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      0,
+      'retainedQueueEntries drains to 0',
+    );
+  } finally {
+    registry.closeAll();
+  }
+});
+
 t.test('dial handles error-before-abort, abort-before-error, post-OPEN abort, ' +
   'and replacement dial without evicting live replacement', async (t) => {
   const dialFailureMessage = 'ECONNREFUSED simulated dial error';

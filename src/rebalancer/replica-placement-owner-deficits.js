@@ -25,8 +25,9 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   isCatchupLearnerRaftRole,
-  isLoadRoutableRaftRole,
+  isVoterRaftRole,
 } from '../raft/replica-voter-readiness.js';
+import {STATE_ABSENT, readLowerStateField} from '../utils/state-field-read.js';
 import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
 import {OperationType} from './replica-operation-progress.js';
 import {ReplicaStatus} from './replica-status.js';
@@ -108,14 +109,22 @@ function isLearnerReplica(replica) {
 }
 
 function isVoterRole(role) {
-  return isLoadRoutableRaftRole(role);
+  return isVoterRaftRole(role);
 }
 
-function isFailedNonVoterCreateRow(row, status, role) {
+function isFailedNonVoterCreateRow(row) {
+  const status = readLowerStateField(row?.[COLUMN.STATUS]);
   if (status !== ReplicaStatus.FAILED) return false;
-  return !isVoterRole(role) ||
-    isFailedCreateCleanupToken(row.cleanup_token) ||
-    IN_FLIGHT_LEARNER_STATUSES.has(row.previous_state);
+  const role = readLowerStateField(row?.[COLUMN.RAFT_ROLE]);
+  if (isVoterRaftRole(role)) return false;
+  const previousState = readLowerStateField(row?.previous_state);
+  return (
+    isFailedCreateCleanupToken(row?.cleanup_token) ||
+    IN_FLIGHT_LEARNER_STATUSES.has(previousState) ||
+    (previousState !== SERVICE_STATUS.ACTIVE &&
+      !isCatchupLearnerRaftRole(role) &&
+      role === STATE_ABSENT)
+  );
 }
 
 function shouldSkipServiceRow(row, isBusy) {
@@ -125,7 +134,7 @@ function shouldSkipServiceRow(row, isBusy) {
     return true;
   }
   const role = row[COLUMN.RAFT_ROLE];
-  if (isFailedNonVoterCreateRow(row, status, role)) return true;
+  if (isFailedNonVoterCreateRow(row)) return true;
   return isBusy && (isCatchupLearnerRaftRole(role) || IN_FLIGHT_LEARNER_STATUSES.has(status));
 }
 

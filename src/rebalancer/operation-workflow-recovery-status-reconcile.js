@@ -78,9 +78,12 @@ function classifyReconcileExecutionOutcome(owner, operation, previousStep, execu
       executionResult?.status === ReplicaOperationResponseStatus.COMPLETED) {
     return OPERATION_RECONCILE_OUTCOME.COMPLETED;
   }
-  if (operation?.workflowStep !== previousStep ||
-      executionResult?.skipped === true ||
-      owner.isOperationDeferredRetryActive?.(operation?.operationId) === true) {
+  if (executionResult?.skipped === true) {
+    return OPERATION_RECONCILE_OUTCOME.WAITING;
+  }
+  if (previousStep !== null &&
+      previousStep !== undefined &&
+      operation?.workflowStep !== previousStep) {
     return OPERATION_RECONCILE_OUTCOME.ADVANCED;
   }
   return OPERATION_RECONCILE_OUTCOME.WAITING;
@@ -477,8 +480,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       const resumeRes = await this.executeOperationFromReconcilePath(operation);
       if (resumeRes?.skipped === true) {
         this.ensurePriorityActiveReplaceRetryArmed(operation);
-        return classifySystemPartition({partitionId: operation?.partitionId}).priorityControlPlane ?
-          OPERATION_RECONCILE_OUTCOME.ADVANCED : OPERATION_RECONCILE_OUTCOME.WAITING;
       }
       return classifyReconcileExecutionOutcome(this, operation, previousStep, resumeRes);
     }

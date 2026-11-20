@@ -201,5 +201,63 @@ test('WP2/WP7 differential oracle D2: multi-parameter JOIN pushdown, emitted pla
       assert.deepEqual(res1.rows, [{id: 30, x: 'one'}]);
       assert.deepEqual(res2.rows, [{id: 30, x: 'one'}]);
     });
+
+    await t.test(`layout ${layout}: aggregate-local ORDER BY binds argument parameters before ORDER BY parameters (SUM, SUM DISTINCT, GROUP_CONCAT)`, async () => {
+      const orderedAggCases = [
+        {
+          id: 'sum-param-order-by-param',
+          sql: 'SELECT SUM(? ORDER BY id + ?) AS total FROM t',
+          params: [2n, 100n],
+          expectedFirstCell: '8',
+        },
+        {
+          id: 'sum-distinct-param-order-by-param',
+          sql: 'SELECT SUM(DISTINCT ? ORDER BY id + ?) AS total FROM t',
+          params: [2n, 100n],
+          expectedFirstCell: '2',
+        },
+        {
+          id: 'group-concat-single-arg-order-by-param',
+          sql: 'SELECT GROUP_CONCAT(? ORDER BY id + ?) AS joined FROM t',
+          params: ['v', 100n],
+          expectedFirstCell: 'v,v,v,v',
+        },
+        {
+          id: 'group-concat-multi-arg-order-by-param',
+          sql: 'SELECT GROUP_CONCAT(x || ?, ? ORDER BY id + ?) AS joined FROM t',
+          params: ['!', '|', 100n],
+          expectedFirstCell: 'zero!|one!|two!|neg!',
+        },
+        {
+          id: 'group-concat-distinct-arg-order-by-param',
+          sql: 'SELECT GROUP_CONCAT(DISTINCT c || ? ORDER BY id + ?) AS joined FROM t',
+          params: ['?', 100n],
+          expectedFirstCell: 'FALSE?,TRUE?',
+        },
+      ];
+
+      for (const aggCase of orderedAggCases) {
+        const {expected, actual, delivered} = await cluster.run(
+          aggCase.sql,
+          aggCase.params,
+        );
+        const verdict = compareOutcomes(expected, actual, {ordered: true});
+        assert.ok(
+          verdict.equal,
+          describeDivergence({
+            scope: 'D2-agg-order-by',
+            caseId: aggCase.id,
+            layout,
+            sql: aggCase.sql,
+            params: aggCase.params,
+            delivered,
+            expected,
+            actual,
+            reasons: verdict.reasons,
+          }),
+        );
+        assert.equal(actual.rows[0][0].v, aggCase.expectedFirstCell);
+      }
+    });
   }
 });

@@ -26,10 +26,47 @@ import {
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_PLACEMENT_ADMISSION_KEY = '"placementAdmission"';
 const DEFAULT_TARGET_REPLICATION_FACTOR = 3;
+const LEARNER_ADMISSION_WAIT_TOKEN = Object.freeze({
+  ROLE_LEADER: 'leader',
+  STATE_ADMITTED: 'admitted',
+  STATE_PENDING: 'pending',
+  OUTCOME_IN_FLIGHT: 'in_flight',
+  OUTCOME_PROPOSED: 'proposed',
+});
 const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS',
   awaited: 'local replica promoted to a routable voter (voter-ready activation)',
 });
+
+function isLearnerAdmittedToGroup(service, replicaId) {
+  const raftSnapshot = service?.raft?.readStatus?.();
+  const hasLeader =
+    raftSnapshot?.role === LEARNER_ADMISSION_WAIT_TOKEN.ROLE_LEADER ||
+    (typeof raftSnapshot?.leaderAddress === REPLICA_HANDLER_TYPEOF.STRING &&
+      raftSnapshot.leaderAddress.length > 0);
+  if (!hasLeader) return false;
+  const inCohort =
+    Array.isArray(raftSnapshot?.peers) &&
+    raftSnapshot.peers.some((peer) => peer?.replicaIdentity === replicaId);
+  const requestRecord = service?.replicaAdmissionRequest;
+  const currentState = readStateField(requestRecord?.state);
+  return (
+    inCohort ||
+    currentState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_ADMITTED ||
+    !requestRecord
+  );
+}
+
+function shouldRedrivePendingLearnerAdmission(service) {
+  const requestRecord = service?.replicaAdmissionRequest;
+  const currentState = readStateField(requestRecord?.state);
+  const lastOutcome = readStateField(requestRecord?.lastOutcome);
+  return (
+    currentState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_PENDING &&
+    lastOutcome !== LEARNER_ADMISSION_WAIT_TOKEN.OUTCOME_IN_FLIGHT &&
+    lastOutcome !== LEARNER_ADMISSION_WAIT_TOKEN.OUTCOME_PROPOSED
+  );
+}
 
 /**
  * The role, services-row status and address the handler last observed for
@@ -251,6 +288,52 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
       throw new Error(
         `Replica ${replicaId} did not become voter-ready within ${this.syncTimeoutMs}ms`,
       );
+    }
+    /**
+     * Check whether this ReplicaHandler is running with real Raft services.
+     * @param {string|null} [replicaId=null] - Optional replica ID.
+     * @return {boolean}
+     * @private
+     */
+    isRealRaftMode(replicaId = null) {
+      if (this.realRaftMode === false || !this.messageRouter) {
+        return false;
+      }
+      if (!replicaId) {
+        return true;
+      }
+      const service = this.getTrackedService(replicaId);
+      return Boolean(service?.raft);
+    }
+    /**
+     * Wait for a learner joining an existing Raft group to be admitted and
+     * discover the group leader before releasing fresh-create activation.
+     * @param {string} replicaId - Replica ID.
+     * @param {string} _partitionId - Partition ID.
+     * @return {Promise<void>}
+     * @private
+     */
+    async waitForLearnerAdmissionActivation(replicaId, _partitionId) {
+      if (!this.isRealRaftMode(replicaId)) return;
+      this.throwIfShuttingDown();
+      const deadline = Date.now() + this.syncTimeoutMs;
+      while (Date.now() <= deadline) {
+        this.throwIfShuttingDown();
+        const service = this.getTrackedService(replicaId);
+        if (!service || service.isShutdown === true) return;
+        if (
+          isLearnerAdmittedToGroup(service, replicaId) ||
+          this.isReplicaVoterReady(replicaId)
+        ) {
+          return;
+        }
+        if (shouldRedrivePendingLearnerAdmission(service)) {
+          await service.drivePendingReplicaAdmission?.();
+        }
+        await new Promise((resolve) => {
+          setTimeout(resolve, VOTER_READY_CHECK_INTERVAL_MS);
+        });
+      }
     }
     /**
      * Check if a local replica is voter-ready and routable.

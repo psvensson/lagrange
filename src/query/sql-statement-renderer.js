@@ -217,10 +217,11 @@ function renderOverClause(over) {
 
 function renderAggregate(expr) {
   const distinct = expr.distinct ? SQL.DISTINCT : '';
+  const argument = renderExpression(expr.argument);
   const orderBy = Array.isArray(expr.orderBy) && expr.orderBy.length > 0 ?
     SQL.ORDER_BY + renderOrderByTerms(expr.orderBy) :
     '';
-  return expr.function + parenthesize(distinct + renderExpression(expr.argument) + orderBy) +
+  return expr.function + parenthesize(distinct + argument + orderBy) +
     renderOverClause(expr.over);
 }
 
@@ -239,10 +240,11 @@ function renderCase(expr) {
 // written without an argument list, as SQLite spells it.
 function renderFunctionCall(expr) {
   if (expr.keyword === true) return expr.name;
+  const args = renderList(expr.args || []);
   const orderBy = Array.isArray(expr.orderBy) && expr.orderBy.length > 0 ?
     SQL.ORDER_BY + renderOrderByTerms(expr.orderBy) :
     '';
-  return expr.name + parenthesize(renderList(expr.args || []) + orderBy) +
+  return expr.name + parenthesize(args + orderBy) +
     renderOverClause(expr.over);
 }
 

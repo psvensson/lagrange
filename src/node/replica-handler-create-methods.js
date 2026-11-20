@@ -508,6 +508,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
+        } else if (isJoiningExistingGroup && !skipLifecycleStatusPersistence) {
+          await this.waitForLearnerAdmissionActivation(replicaId, partitionId);
         }
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same

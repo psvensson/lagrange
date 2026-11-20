@@ -41,6 +41,13 @@ import {
 } from '../../transport/node-address-resolution.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {ReplicaStatus} from '../../rebalancer/replica-status.js';
+
+const NON_ROUTABLE_SNAPSHOT_REPLICA_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+  ReplicaStatus.FAILED,
+]));
 
 const SNAPSHOT_WIRING_LOG_MSG = Object.freeze({
   DISPATCH_FAILED: 'Snapshot catch-up dispatch failed',
@@ -159,13 +166,28 @@ function wrapPartitionServiceFactoryWithSnapshotCatchup(context) {
   };
 }
 
+function isRetiringOrFailedLocalReplica(replicaHandler, service) {
+  if (service.removalServingAdmissionFenced === true) {
+    return true;
+  }
+  if (replicaHandler.hasInProgressReplicaRemoval?.(service.replicaId) === true) {
+    return true;
+  }
+  const localReplica = replicaHandler.getLocalReplica?.(service.replicaId);
+  return NON_ROUTABLE_SNAPSHOT_REPLICA_STATUSES.has(localReplica?.status);
+}
+
 // raftGroupId === partitionId: the live (non-shutdown) local service for
 // that partition, resolved late so replicas registered after arming still
 // route.
 function resolveLocalReplicaService(replicaHandler, raftGroupId) {
   for (const service of replicaHandler.localServices.values()) {
-    if (service && service.partitionId === raftGroupId &&
-        service.isShutdown !== true) {
+    if (
+      service &&
+      service.partitionId === raftGroupId &&
+      service.isShutdown !== true &&
+      !isRetiringOrFailedLocalReplica(replicaHandler, service)
+    ) {
       return service;
     }
   }

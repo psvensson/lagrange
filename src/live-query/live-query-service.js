@@ -115,17 +115,24 @@ function collectDirectNestedSelects(queryNode) {
   return nested;
 }
 
-function visitQueryScopeBindings(queryNode, queryScope, bindings, traversalState) {
+function visitQueryScopeBindings(
+  queryNode,
+  queryScope,
+  bindings,
+  traversalState,
+  inheritedCteNames = new Set(),
+) {
   if (!queryNode || typeof queryNode !== 'object') return;
+  const localCteNames = new Set(inheritedCteNames);
   for (const cte of queryNode.ctes || []) {
     if (typeof cte?.name === 'string' && cte.name.length > 0) {
-      traversalState.cteNames.add(cte.name.toLowerCase());
+      localCteNames.add(cte.name.toLowerCase());
     }
   }
   let occurrenceCount = 0;
   const addBinding = (tableName, alias) => {
     if (typeof tableName === 'string' && tableName &&
-        !traversalState.cteNames.has(tableName.toLowerCase())) {
+        !localCteNames.has(tableName.toLowerCase())) {
       bindings.push(makeTableBinding(queryScope, occurrenceCount++, tableName, alias));
     }
   };
@@ -143,16 +150,14 @@ function visitQueryScopeBindings(queryNode, queryScope, bindings, traversalState
   }
   for (const nestedQuery of collectDirectNestedSelects(queryNode)) {
     const nestedScope = `${NESTED_QUERY_SCOPE_PREFIX}${traversalState.nextNestedIndex++}`;
-    visitQueryScopeBindings(nestedQuery, nestedScope, bindings, traversalState);
+    visitQueryScopeBindings(nestedQuery, nestedScope, bindings, traversalState, localCteNames);
   }
 }
 
 function extractTableBindings(parsedQuery) {
   if (!parsedQuery || typeof parsedQuery !== 'object') return [];
   const bindings = [];
-  visitQueryScopeBindings(parsedQuery, ROOT_QUERY_SCOPE, bindings, {
-    nextNestedIndex: 0, cteNames: new Set(),
-  });
+  visitQueryScopeBindings(parsedQuery, ROOT_QUERY_SCOPE, bindings, {nextNestedIndex: 0});
   return bindings;
 }
 
