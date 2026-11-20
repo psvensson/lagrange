@@ -16,6 +16,8 @@ import {scenarioStampingReplicaHandler} from
   './replica-handler-bootstrap-stamps.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {registerCompletedFreshCreateReleaseFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const ScenarioStampingReplicaHandler =
   scenarioStampingReplicaHandler(ProductionReplicaHandler);
@@ -79,6 +81,7 @@ class OwnerPathReplicaHandler extends ScenarioStampingReplicaHandler {
       controlPlaneSystemTableGateway: gateway,
     });
     this.ownerPathOperationRows = operationRows;
+    registerCompletedFreshCreateReleaseFixture(this);
   }
 
   prepareOwnerPathCreatePayload(payload) {

@@ -10,6 +10,7 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {runRetryableControlPlaneWrite} from '../bootstrap/shared/retryable-control-plane-write.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_LOG_MSG,
@@ -116,6 +117,12 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
      * @private
      */
     async updateReplicaStatus(replicaId, newStatus, additionalData = {}) {
+      const {isCreateCurrent} = additionalData;
+      if (isCreateCurrent?.() === false) {
+        throw Object.assign(new Error(`CREATE status superseded for ${replicaId}`), {
+          code: CREATE_ADMISSION_ERROR_CODE.STALE,
+        });
+      }
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS, {
         replicaId,
         newStatus,
@@ -124,6 +131,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
       const previousLocalReplica = this.localReplicas.has(replicaId) ?
         {...this.localReplicas.get(replicaId)} :
         null;
+      let stagedReplica = null;
       try {
         const existing = this.systemTableCache.get(
           SYSTEM_TABLE_NAME.SERVICES,
@@ -140,6 +148,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           status: newStatus,
           service: localService,
         });
+        stagedReplica = this.localReplicas.get(replicaId);
         const trackedState =
           this.replicaStateMachine?.getState?.(replicaId) || null;
         const transitionContext = {
@@ -165,8 +174,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           // stays registered through the activation effect boundary, and the
           // runtime retires it through this lifecycle owner (the create path
           // passes resolveHandlerRetirementLane) (owner decision N2, S-F2).
-          isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
-            additionalData.activationService, this.replicaStateMachine),
+          isEffectHandlerCurrent: () => isCreateCurrent?.() !== false &&
+            isReplicaServiceHandlerBound(
+              additionalData.activationService, this.replicaStateMachine),
         };
         const requiresAuthoritativeAdmission = !trackedState &&
           newStatus !== ReplicaStatus.PENDING && existing &&
@@ -233,7 +243,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             `Replica state transition rejected for ${replicaId}: ${newStatus}`,
           );
         }
-        if (newStatus === ReplicaStatus.ACTIVE) {
+        if (newStatus === ReplicaStatus.ACTIVE && isCreateCurrent?.() !== false) {
           this.seedLocalPriorityServiceRow?.(
             replicaId,
             partitionId,
@@ -247,10 +257,13 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           });
         }
       } catch (error) {
-        if (previousLocalReplica) {
-          this.localReplicas.set(replicaId, previousLocalReplica);
-        } else {
-          this.localReplicas.delete(replicaId);
+        if (stagedReplica && this.localReplicas.get(replicaId) === stagedReplica &&
+            isCreateCurrent?.() !== false) {
+          if (previousLocalReplica) {
+            this.localReplicas.set(replicaId, previousLocalReplica);
+          } else {
+            this.localReplicas.delete(replicaId);
+          }
         }
         this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
           replicaId,

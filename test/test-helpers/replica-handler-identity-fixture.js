@@ -5,7 +5,11 @@
  * that runs the activation, and handler removal is exact-identity only.
  */
 
+import assert from 'node:assert/strict';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_RELEASE_TYPE} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 /**
  * The exact-identity handler API over a handler map, for in-process transport
@@ -60,6 +64,34 @@ function createIdentityTransport() {
     },
     ...handlerIdentityApi(handlers),
   };
+}
+
+// For fixtures whose partition factory cannot perform a native transaction
+// cutover, supply that external effect at the registered responder. Exercise
+// actual route selection, accepted delivery, and result decoding. Native
+// release witnesses use the production responder without this decorator.
+function registerCompletedFreshCreateReleaseFixture(handler,
+  {transport = createInProcessMockTransport(), rpcClient} = {}) {
+  const handleMessage = handler.handleMessage.bind(handler);
+  handler.handleMessage = (envelope) => {
+    const request = envelope.payload;
+    if (request?.type !== PARTICIPANT_RELEASE_TYPE ||
+        request.action !== PARTICIPANT_RELEASE_ACTION.RELEASE ||
+        request.trigger !== PARTICIPANT_RELEASE_TRIGGER.FRESH_CREATE) {
+      return handleMessage(envelope);
+    }
+    const identity = request.createAdmissionIdentity;
+    const service = handler.getTrackedService(identity.replicaId);
+    assert.ok(service, 'fresh release reached the handler of the materialized service');
+    assert.equal(identity.targetNodeId, handler.nodeId);
+    assert.equal(request.partitionId, service.partitionId);
+    assert.equal(identity.operationId, service.createAdmissionOperationId);
+    assert.equal(identity.admissionToken, service.createAdmissionToken);
+    assert.equal(identity.attemptToken, service.createAttemptToken);
+    return {[PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER}};
+  };
+  handler.registerWithRouter(transport, {rpcClient});
+  return transport;
 }
 
 /**
@@ -122,6 +154,7 @@ function withRegisteredActivationHandler(stateMachine) {
 
 export {
   bindRegisteredReplicaHandler,
+  registerCompletedFreshCreateReleaseFixture,
   createIdentityTransport,
   createInProcessMockTransport,
   forwardHandlerRegistry,

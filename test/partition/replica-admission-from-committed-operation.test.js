@@ -26,6 +26,8 @@
  *       answers ALREADY_MEMBER and proposes nothing more (R14)
  */
 
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -511,14 +513,13 @@ function createTarget({answers}) {
     bootstrapMembership: committedCreationStamp(),
   }));
   const sent = [];
-  partition.transport = {
-    async deliver(address, payload) {
-      sent.push({address, payload});
-      const admission = answers.shift();
-      return buildDeliveryEnvelope({acknowledged: true}, {
-        partitionId: PARTITION_ID, replicaIdentity: TARGET_REPLICA,
-        operationId: OPERATION_ID, admission});
-    },
+  bindRegisteredReplicaHandler(partition, {nodeId: TARGET_NODE});
+  partition.transport.deliver = async (address, payload) => {
+    sent.push({address, payload});
+    const admission = answers.shift();
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      partitionId: PARTITION_ID, replicaIdentity: TARGET_REPLICA,
+      operationId: OPERATION_ID, admission});
   };
   return {partition, sent};
 }

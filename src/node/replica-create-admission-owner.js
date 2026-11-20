@@ -20,7 +20,8 @@ import {
   reserveReplicaCreateAdmissionGeneration,
 } from './replica-create-admission-evidence.js';
 import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
-  commitReplicaCreateSnapshotInstall, releaseReplicaCreatePhysicalWorker,
+  commitReplicaCreateSnapshotInstall, ownsReplicaCreatePhysicalWorker,
+  releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker, rowMatchesAdmissionBasis,
   runReplicaCreateExclusive, advanceReplicaCreatePhysicalWorker,
@@ -353,6 +354,10 @@ class ReplicaCreateAdmissionOwner {
   async revalidatePhysicalWorker(claim, expectedEvidence = null) {
     return revalidateReplicaCreatePhysicalWorker(
       this, claim, expectedEvidence);
+  }
+
+  ownsPhysicalWorker(claim) {
+    return ownsReplicaCreatePhysicalWorker(this, claim);
   }
 
   snapshotInstallAuthority(claim, expectedEvidence = null) {

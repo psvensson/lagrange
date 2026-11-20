@@ -1,13 +1,235 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
+import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {buildDeliveryEnvelope, deliveryAnswerOf} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {createHandlerFixture, operationRow, routedCreateRequest,
   sqlOperationsAuthority, targetLifecycle, waitForCreateCompletion, waitForPhysicalStart,
 } from '../test-helpers/replica-create-admission-recovery-fixture.js';
+
+const CREATE_AUTHORITY_BUDGET_MS = 100;
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+
+async function withHeldActivationRead(t, run, {refuseRead = false,
+  loseReleaseReply = false, supersedeBeforeRead = false, unregisterReleaseRoute = false} = {}) {
+  const row = operationRow();
+  const clock = new VirtualTimeSource({startMs: 1000});
+  const outcomes = [];
+  const fixture = await createHandlerFixture({
+    row, targetRow: targetLifecycle(row), timeSource: clock,
+    authorityFor: (cache) => sqlOperationsAuthority(cache, [row]),
+    executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
+  });
+  const {handler, authority} = fixture;
+  handler.syncTimeoutMs = CREATE_AUTHORITY_BUDGET_MS;
+  const entered = Promise.withResolvers();
+  const held = Promise.withResolvers();
+  const releaseRequests = [];
+  const releaseRouter = handler.messageRouter;
+  if (unregisterReleaseRoute) handler.unregisterFromRouter(releaseRouter);
+  if (loseReleaseReply) {
+    const deliver = releaseRouter.deliver.bind(releaseRouter);
+    releaseRouter.deliver = async (address, payload) => {
+      assert.equal(payload.action, PARTICIPANT_RELEASE_ACTION.RELEASE);
+      releaseRequests.push(payload);
+      const delivered = await deliver(address, payload);
+      assert.equal(deliveryAnswerOf(delivered)?.[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome,
+        PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER, 'the registered performer answered before reply loss');
+      if (releaseRequests.length === 1) {
+        entered.resolve();
+        await held.promise;
+        return buildDeliveryEnvelope({acknowledged: false, error: 'release reply lost'});
+      }
+      return delivered;
+    };
+  }
+  let armed = false;
+  const persist = handler.persistReplicaStatusWithRetry.bind(handler);
+  handler.persistReplicaStatusWithRetry = async (replicaId, status, options) => {
+    const result = await persist(replicaId, status, options);
+    if (status === ReplicaStatus.SYNCING) {
+      if (unregisterReleaseRoute) entered.resolve();
+      else armed = true;
+    }
+    return result;
+  };
+  const gateway = authority.gateway;
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  const changeOperation = (data) => gateway.updateSystemTableRow(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, {operation_id: row.operation_id}, data);
+  gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+    if (armed && !loseReleaseReply && table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+        sql.includes('WHERE operation_id = ?') && params[0] === row.operation_id) {
+      armed = false;
+      if (supersedeBeforeRead) {
+        await changeOperation({create_admission_state: CREATE_ADMISSION_STATE.CLOSED});
+      }
+      entered.resolve();
+      await held.promise;
+      if (refuseRead) return {success: false, error: 'held authority became unavailable'};
+    }
+    return read(table, sql, params, options);
+  };
+  handler.initialize();
+  await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+  await waitForPhysicalStart(fixture);
+  assert.equal(fixture.physicalStarts(), 1);
+  const worker = Promise.all([...handler.operationTasks]);
+  try {
+    fixture.releaseFactory();
+    await Promise.race([
+      entered.promise,
+      worker.then(() => {
+        throw new Error('CREATE left before its authoritative activation read');
+      }),
+    ]);
+    assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
+    await run({...fixture, row, clock, outcomes, worker, release: held.resolve,
+      changeOperation, releaseRequests, releaseRouter,
+      currentStatus: () => fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
+    });
+  } finally {
+    held.resolve();
+    await worker;
+    await handler.shutdown();
+    authority.close();
+  }
+}
+
+it('unavailable final CREATE authority retains the live work for existing admission recovery',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    f.release();
+    await f.worker;
+    assert.equal(f.physicalShutdowns(), 0, 'unknown authority is not a FAILED create');
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.equal(f.authority.read(f.row.operation_id).create_admission_state,
+      CREATE_ADMISSION_STATE.MATERIALIZED);
+    assert.ok(f.handler.replicaCreateAdmissionRecoveryRearmOwner.current());
+    f.handler.startReplicaCreateAdmissionRecovery();
+    await f.handler.replicaCreateAdmissionRecoveryTask;
+    await Promise.all([...f.handler.operationTasks]);
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.physicalStarts(), 1, 'recovery finishes the same already-open runtime');
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+  }, {refuseRead: true}));
+
+it('original CREATE wait ends before a held matching authority reply and the reply publishes nothing',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    f.clock.advance(CREATE_AUTHORITY_BUDGET_MS);
+    const settled = await Promise.race([f.worker.then(() => true), turn().then(() => false)]);
+    f.release();
+    await f.worker;
+    assert.equal(settled, true, 'the original worker stops waiting while the read is still held');
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING],
+      'the late current reply cannot publish advisory ACTIVE');
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.equal(f.authority.read(f.row.operation_id).create_admission_state,
+      CREATE_ADMISSION_STATE.MATERIALIZED);
+  }));
+
+it('matching final CREATE authority can publish before the original deadline',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    f.clock.advance(CREATE_AUTHORITY_BUDGET_MS - 1);
+    f.release();
+    await f.worker;
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.equal(f.physicalShutdowns(), 0);
+  }));
+
+it('lost fresh CREATE release reply retains and resumes the exact materialized work',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    f.clock.advance(CREATE_AUTHORITY_BUDGET_MS / 2);
+    f.release();
+    await f.worker;
+    assert.equal(f.physicalShutdowns(), 0, 'the actual release client uncertainty retains its target');
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+    assert.equal(f.releaseRequests.length, 1);
+    f.handler.startReplicaCreateAdmissionRecovery();
+    await f.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(f.releaseRequests.length, 2);
+    assert.deepEqual(f.releaseRequests[1].createAdmissionIdentity,
+      f.releaseRequests[0].createAdmissionIdentity);
+    assert.equal(f.releaseRequests[1].deadlineAtMs, f.releaseRequests[0].deadlineAtMs);
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.physicalStarts(), 1);
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+  }, {loseReleaseReply: true}));
+
+it('fresh CREATE cannot activate while the exact participant release route is missing',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    await f.worker;
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    assert.ok(original);
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+    assert.equal(f.physicalShutdowns(), 0);
+    f.handler.registerWithRouter(f.releaseRouter);
+    f.handler.startReplicaCreateAdmissionRecovery();
+    await f.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.physicalStarts(), 1);
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+  }, {unregisterReleaseRoute: true}));
+
+for (const beforeRead of [true, false]) {
+  it(`supersession ${beforeRead ? 'before' : 'during'} final CREATE authority retires the old work`,
+    async (t) => withHeldActivationRead(t, async (f) => {
+      if (!beforeRead) {
+        await f.changeOperation({create_admission_owner_incarnation: 103});
+      }
+      f.release();
+      await f.worker;
+      assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+      assert.equal(f.physicalShutdowns(), 1);
+      assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+      assert.equal(f.handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+    }, {supersedeBeforeRead: beforeRead}));
+}
+
+for (const disposition of [
+  {name: 'terminal success', status: ReplicaStatus.ACTIVE, step: WORKFLOW_STEP.ACTIVE,
+    allowed: true},
+  {name: 'terminal failure', status: ReplicaStatus.FAILED, step: WORKFLOW_STEP.FAILED,
+    allowed: false},
+  {name: 'retired target', status: ReplicaStatus.REMOVED, step: WORKFLOW_STEP.REMOVED,
+    allowed: false},
+  {name: 'conflicting terminal effect', status: ReplicaStatus.ACTIVE, step: WORKFLOW_STEP.FAILED,
+    allowed: false},
+]) {
+  it(`final CREATE authority distinguishes ${disposition.name}`, async (t) =>
+    withHeldActivationRead(t, async (f) => {
+      await f.changeOperation({
+        completed_at: 21, status: disposition.status, workflow_step: disposition.step,
+      });
+      f.release();
+      await f.worker;
+      assert.deepEqual(f.outcomes, disposition.allowed ?
+        [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE] : [WORKFLOW_STEP.SYNCING]);
+      assert.equal(f.physicalShutdowns(), disposition.allowed ? 0 : 1);
+      assert.equal(f.currentStatus(), disposition.allowed ?
+        ReplicaStatus.ACTIVE : ReplicaStatus.SYNCING);
+    }));
+}
 
 // A message-group REPLACE admission retained by an older boot (FreshMG B1).
 function messageGroupAdmissionRow(operationId, replicaId, state) {

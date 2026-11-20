@@ -3,6 +3,9 @@ import {
   isReplicaCreateInstallAuthority,
   replicaCreateInstallAuthority,
 } from './replica-create-admission-evidence.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {isTerminalReplicaOperationRecord, OperationType, ReplicaStatus} from
+  '../rebalancer/replica-status.js';
 
 const SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR =
   'snapshot install mutation must answer a boolean synchronously';
@@ -120,10 +123,40 @@ function claimReplicaCreatePhysicalWorker(owner, evidence) {
 
 function rowMatchesActivePhysicalWorker(row, evidence) {
   return rowMatchesPhysicalWorkerEvidence(row, evidence) &&
+    nullableSafeInteger(row?.create_admission_owner_incarnation) ===
+      evidence.ownerIncarnation &&
     row?.create_admission_attempt_token === evidence.attemptToken &&
     nullableSafeInteger(row?.create_admission_attempt_seq) ===
       evidence.attemptSeq &&
-    row?.create_admission_state !== CLOSED_ADMISSION_STATE;
+    row?.create_admission_state !== CLOSED_ADMISSION_STATE &&
+    rowAllowsExistingPhysicalCreate(row);
+}
+
+function rowAllowsExistingPhysicalCreate(row) {
+  if (row.status === ReplicaStatus.FAILED || row.workflow_step === WORKFLOW_STEP.FAILED) {
+    return false;
+  }
+  if (row.type === OperationType.ADD &&
+      (row.status === ReplicaStatus.REMOVED || row.workflow_step === WORKFLOW_STEP.REMOVED)) {
+    return false;
+  }
+  if (row.completed_at == null && !isTerminalReplicaOperationRecord(row)) return true;
+  // Existing materialized work retains its own lifetime after ordinary
+  // success. The ordinary terminal tuple must agree at both endpoints.
+  if (row.type === OperationType.ADD) {
+    return row.status === ReplicaStatus.ACTIVE && row.workflow_step === WORKFLOW_STEP.ACTIVE;
+  }
+  return row.type === OperationType.REPLACE &&
+    row.status === ReplicaStatus.REMOVED && row.workflow_step === WORKFLOW_STEP.REMOVED;
+}
+
+function ownsReplicaCreatePhysicalWorker(owner, claim, expectedEvidence = null) {
+  const evidence = replicaCreatePhysicalWorkerEvidence(claim);
+  return evidence !== null &&
+    (!expectedEvidence || evidence === expectedEvidence) &&
+    evidence.admissionState !== CLOSED_ADMISSION_STATE &&
+    matchesPhysicalWorkerOwner(owner, evidence) &&
+    owner.activePhysicalWorkerOperationIds.get(evidence.operationId) === claim;
 }
 
 async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
@@ -151,17 +184,9 @@ async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
 async function validatePhysicalWorkerClaimInMemory(owner, claim,
   expectedEvidence = null) {
   const evidence = replicaCreatePhysicalWorkerEvidence(claim);
-  if (!isPhysicalWorkerClaim(claim) ||
-      expectedEvidence && evidence !== expectedEvidence ||
-      evidence?.admissionState === CLOSED_ADMISSION_STATE ||
-      !matchesPhysicalWorkerOwner(owner, evidence) ||
-      owner.activePhysicalWorkerOperationIds.get(evidence.operationId) !==
-        claim) {
-    return false;
-  }
+  if (!ownsReplicaCreatePhysicalWorker(owner, claim, expectedEvidence)) return false;
   await owner.requireCurrentBootIncarnation();
-  return owner.activePhysicalWorkerOperationIds.get(evidence.operationId) ===
-    claim && replicaCreatePhysicalWorkerEvidence(claim) === evidence;
+  return ownsReplicaCreatePhysicalWorker(owner, claim, evidence);
 }
 
 async function revalidateReplicaCreatePhysicalWorker(owner, claim,
@@ -321,6 +346,7 @@ export {
   commitReplicaCreateSnapshotInstall,
   hasReplicaCreatePhysicalWorkerForGeneration,
   isReplicaCreateProgressRowSuperseded,
+  ownsReplicaCreatePhysicalWorker,
   releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker,

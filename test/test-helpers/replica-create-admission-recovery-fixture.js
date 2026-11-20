@@ -22,7 +22,7 @@ import {
 import {
   createLifecycleControlPlaneGatewayForCache,
 } from './lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
   './replica-handler-identity-fixture.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import Database from 'better-sqlite3';
@@ -294,6 +294,7 @@ async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
       }, factoryOptions);
     },
   });
+  registerCompletedFreshCreateReleaseFixture(handler);
   return {
     authority,
     cache,

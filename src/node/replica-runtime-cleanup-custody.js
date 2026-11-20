@@ -101,6 +101,11 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
       createAttemptToken: null,
     });
   }
+  const retained = handler.inProgressOperations.get(service.createAdmissionOperationId)
+    ?.retainedActivation;
+  if (retained?.work.openedService === service && retained.work.retained) {
+    retained.release();
+  }
   return true;
 }
 
@@ -158,6 +163,9 @@ function shutdownReplicaHandler(handler, options) {
         exactFailureIterable(errors), RUNTIME_SHUTDOWN_FAILED);
     }
     handler.creationProgressByReplica.clear();
+    for (const operation of handler.inProgressOperations.values()) {
+      operation.retainedActivation?.release();
+    }
     handler.inProgressOperations.clear();
     handler.localServices.clear();
     handler.localReplicas.clear();

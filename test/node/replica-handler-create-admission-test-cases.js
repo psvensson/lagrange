@@ -2,9 +2,10 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {buildFailedCreateCleanupToken} from
@@ -149,6 +150,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       });
       const first = makeHandler();
       const second = makeHandler();
+      registerCompletedFreshCreateReleaseFixture(first);
+      registerCompletedFreshCreateReleaseFixture(second);
       const completed = new Promise((resolve, reject) => {
         for (const handler of [first, second]) {
           handler.once('replicaCreated', resolve);
@@ -200,15 +203,27 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         ].sort(),
         'duplicate handler joins the admitted in-progress work',
       );
-      operationRow.completed_at = workflowUpdatedAt + 1;
+      Object.assign(operationRow, {
+        completed_at: workflowUpdatedAt + 1,
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+      });
       releasePhysicalStart();
-      await completed;
-      t.equal(
-        operationRow.create_admission_state,
-        'ACTIVE',
-        'admission-first work reaches ACTIVE after ordinary terminal settlement',
-      );
-      await Promise.all([first.shutdown(), second.shutdown()]);
+      try {
+        await Promise.race([
+          completed,
+          Promise.all([...first.operationTasks, ...second.operationTasks]).then(() => {
+            throw new Error('shared physical worker settled without a CREATE outcome');
+          }),
+        ]);
+        t.equal(
+          operationRow.create_admission_state,
+          'ACTIVE',
+          'admission-first work reaches ACTIVE after ordinary terminal settlement',
+        );
+      } finally {
+        await Promise.all([first.shutdown(), second.shutdown()]);
+      }
     },
   );
 

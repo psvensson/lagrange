@@ -33,6 +33,7 @@ const RELEASE_RECOVERY_ERROR = Object.freeze({
   FRESH_AUTHORITY: 'Fresh replica release authority unavailable',
   OPERATOR_DEADLINE: 'Operator participant release deadline unavailable',
 });
+const FRESH_CREATE_RELEASE_UNAVAILABLE = 'FRESH_CREATE_RELEASE_UNAVAILABLE';
 
 const PRE_CANDIDATE_RAFT_STATE = 3;
 const PRE_CANDIDATE_ROLE = RAFT_RS_ROLE[PRE_CANDIDATE_RAFT_STATE];
@@ -280,7 +281,8 @@ function createParticipantReleaseRecovery(handler) {
       }
       const deadline = options.deadlineAtMs;
       if (!Number.isSafeInteger(deadline) || deadline <= now()) {
-        throw new Error(RELEASE_RECOVERY_ERROR.FRESH_DEADLINE);
+        throw Object.assign(new Error(RELEASE_RECOVERY_ERROR.FRESH_DEADLINE),
+          {code: FRESH_CREATE_RELEASE_UNAVAILABLE});
       }
       // The create identity is a lookup key: the answering leader decides the
       // release authority from the committed founding create operation.
@@ -291,12 +293,19 @@ function createParticipantReleaseRecovery(handler) {
       if (createAdmissionIdentity === null) {
         throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
       }
-      const {answer, completed} = await completeParticipantRelease(handler, {partitionId,
-        targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-        deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
+      const {answer, completed, outcome, retryAfterMs} =
+        await completeParticipantRelease(handler, {partitionId,
+          targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+          deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
       if (completed) return answer;
-      throw new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
+      const error = new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
         JSON.stringify({partitionId, answer}));
+      error.participantReleaseAnswer = answer;
+      if (outcome === OUTCOME.UNAVAILABLE || outcome === OUTCOME.NOT_LEADER ||
+          (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0)) {
+        error.code = FRESH_CREATE_RELEASE_UNAVAILABLE;
+      }
+      throw error;
     },
     async releaseOperator({partitionId, targetBuildDigest, deadlineAtMs}) {
       if (!Number.isSafeInteger(deadlineAtMs) || deadlineAtMs <= now()) {
@@ -321,4 +330,4 @@ function createParticipantReleaseRecovery(handler) {
   });
 }
 
-export {createParticipantReleaseRecovery};
+export {FRESH_CREATE_RELEASE_UNAVAILABLE, createParticipantReleaseRecovery};

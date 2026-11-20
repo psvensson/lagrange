@@ -167,10 +167,11 @@ function trackedLifecycleState(handler, replicaId) {
  * @param {string} replicaId - The replica.
  * @param {string} partitionId - Its partition.
  * @param {Object|null} record - The pending identity record, if any.
+ * @param {Function} isCreateCurrent - The CREATE worker's local owner check.
  * @return {Promise<void>}
  */
 async function recordReplicaIdentity(handler, replicaId, partitionId,
-  record) {
+  record, isCreateCurrent) {
   if (record === null &&
       trackedLifecycleState(handler, replicaId) === ReplicaStatus.SYNCING) {
     // A create resumed on its own durable SYNCING row: the fact is written.
@@ -179,7 +180,7 @@ async function recordReplicaIdentity(handler, replicaId, partitionId,
   const startedAt = Date.now();
   try {
     await handler.persistReplicaStatusWithRetry(replicaId,
-      ReplicaStatus.SYNCING, {partitionId});
+      ReplicaStatus.SYNCING, {partitionId, isCreateCurrent});
   } catch (error) {
     if (record !== null) {
       reportIdentityWaitSpent(handler.logger,

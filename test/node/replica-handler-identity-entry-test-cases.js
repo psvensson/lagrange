@@ -44,6 +44,8 @@ import {CREATE_ADMISSION_STATE} from
   '../../src/node/replica-create-admission-owner.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {registerCompletedFreshCreateReleaseFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {
   NODE_ID,
@@ -106,7 +108,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
   // a restart) and the data directory.
   function startNode({directory, cache, store = null, beforeMutation = null,
     overridesFor = undefined, operationRows = new Map(),
-    ownerIncarnation = 1, initialize = true}) {
+    ownerIncarnation = 1, initialize = true, campaign = (port) => port.campaign()}) {
     const opened = [];
     const outcomes = [];
     const lifecycleGateway = createLifecycleControlPlaneGatewayForCache(cache, {
@@ -158,8 +160,18 @@ export async function registerReplicaHandlerIdentityEntryTests({
         return mutationResult(applied);
       },
     };
-    const createPartitionService =
-      realPortFactory(directory, opened, overridesFor);
+    const openPartitionService = realPortFactory(directory, opened, overridesFor);
+    const createPartitionService = async (options) => {
+      const service = await openPartitionService(options);
+      const requestAdmission = service.requestReplicaAdmission.bind(service);
+      service.requestReplicaAdmission = (operationId) => {
+        // The entry invokes admission after releasing the durable SYNCING
+        // gate. Native ports open with election deferred in these fixtures.
+        campaign(service.raft);
+        return requestAdmission(operationId);
+      };
+      return service;
+    };
     const handler = new ReplicaHandler({
       nodeId: NODE_ID,
       dataDir: directory,
@@ -175,6 +187,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
       emitOutcome: (type, operationId, step, options) =>
         outcomes.push({type, operationId, step, options}),
     };
+    registerCompletedFreshCreateReleaseFixture(handler);
     if (initialize) handler.initialize();
     const drive = async (replicaId, operationId) => {
       if (!handler.initialized) handler.initialize();
@@ -344,11 +357,11 @@ export async function registerReplicaHandlerIdentityEntryTests({
     nodes}) {
     const life = {record: null, node: null};
     life.node = startNode({directory, cache, overridesFor: group.overridesFor,
+      campaign: () => group.peer.campaign(),
       beforeMutation: async (mutation) => {
         if (!statusWrite(mutation, ReplicaStatus.ACTIVE) || life.record) {
           return;
         }
-        group.peer.campaign();
         await within(() => group.peer.readStatus().role === 'leader', 5000);
         group.peer.propose('k3-acked-entry');
         await within(() =>

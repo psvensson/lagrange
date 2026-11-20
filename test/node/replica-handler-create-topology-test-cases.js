@@ -10,7 +10,8 @@ import {
   genesisStampFor,
   withBootstrapStamp,
 } from './replica-handler-bootstrap-stamps.js';
-import {bindRegisteredReplicaHandler} from
+import {bindRegisteredReplicaHandler, createInProcessMockTransport,
+  registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
@@ -495,17 +496,16 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const factoryCalled = new Promise((resolve) => {
         resolveFactoryCalled = resolve;
       });
+      const transport = createInProcessMockTransport();
+      transport.getConnectionState = (nodeId) =>
+        nodeId === 'dead-node' ? 'disconnected' : 'connected';
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         ownerIncarnation,
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
-        messageRouter: {
-          getConnectionState(nodeId) {
-            return nodeId === 'dead-node' ? 'disconnected' : 'connected';
-          },
-        },
+        messageRouter: transport,
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
@@ -526,6 +526,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         },
       });
 
+      registerCompletedFreshCreateReleaseFixture(handler, {transport});
       handler.initialize();
       const created = waitForReplicaEvent(
         handler,
@@ -796,6 +797,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         },
       });
 
+      registerCompletedFreshCreateReleaseFixture(handler);
       handler.initialize();
       const created = waitForReplicaEvent(
         handler,
