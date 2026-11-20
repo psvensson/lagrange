@@ -105,19 +105,34 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
   t.equal(ownerValidateRequest, validateManagementV1OperationRequest);
 });
 
-// Exercise the plan/recovery state machine after the new-operation admission boundary.
+// Historical rows can carry a safety obligation without admitting forward
+// progress. Tests exercise those safety checks without fabricating support.
+function retainLegacyUpgrade(opId, snap, parameters, ports,
+  step = L4_UPGRADE_NODE_STEP.AWAITING_RESTART) {
+  const nodePlan = snap.nodeIds.map((nodeId, index) => ({
+    nodeId, step: index === 0 ? step : L4_UPGRADE_NODE_STEP.PENDING,
+    startedAtMs: 100, targetVersion: parameters.targetVersion,
+  }));
+  return new RollingUpgradeOwner({...ports, initialPersistedState: {
+    currentVersion: C.DEFAULT_RELEASE_VERSION,
+    currentArtifactDigest: C.DEFAULT_ARTIFACT_DIGEST,
+    activeOperation: {operationId: opId, lagrangeOperationId: opId,
+      kind: MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE,
+      state: MANAGEMENT_OPERATION_STATE.IN_PROGRESS, nodePlan, parameters},
+    nodePlan,
+  }});
+}
+
 function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
-  const haltSafetyOwner = new RollingUpgradeOwner(upgradePorts());
-  haltSafetyOwner.initiatePlan(`op-safety-halt-${idx}`, null, p, snap, 100);
+  const haltSafetyOwner = retainLegacyUpgrade(`op-safety-halt-${idx}`, snap, p, upgradePorts());
   const safetyOpts = badQuorum === undefined ? {nowMs: 120} :
     {nowMs: 120, quorumHealthy: badQuorum};
   const safetyRes = haltSafetyOwner.checkTimeoutsAndSafety(safetyOpts);
   t.equal(safetyRes.state, MANAGEMENT_OPERATION_STATE.FAILED);
   t.equal(safetyRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
 
-  const qOwner = new RollingUpgradeOwner(upgradePorts());
-  qOwner.initiatePlan(`op-qs-${idx}`, null, p, snap, 100);
-  qOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
+  const qOwner = retainLegacyUpgrade(`op-qs-${idx}`, snap, p, upgradePorts(),
+    L4_UPGRADE_NODE_STEP.CATCHING_UP);
   const catchUpOpts = badQuorum === undefined ? {nowMs: 120, underReplicatedPartitionCount: 0} :
     {nowMs: 120, underReplicatedPartitionCount: 0, quorumHealthy: badQuorum};
   const catchUpRes = qOwner.completeNodeCatchUp('node-1', catchUpOpts);
@@ -125,31 +140,25 @@ function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
   t.equal(catchUpRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
 
   let nextDrains = 0;
-  const drainGateOwner = new RollingUpgradeOwner({
+  const drainGateOwner = retainLegacyUpgrade(`op-drain-gate-${idx}`, snap, p, {
     onDrainNodeLeadership: () => {
       nextDrains += 1;
     },
     onTriggerNodeRestart: () => {},
-  });
-  drainGateOwner.initiatePlan(`op-drain-gate-${idx}`, null, p, snap, 100);
-  drainGateOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
-  drainGateOwner.completeNodeCatchUp('node-1', {
-    nowMs: 120, quorumHealthy: true, underReplicatedPartitionCount: 0,
-  });
-  nextDrains = 0;
+  }, L4_UPGRADE_NODE_STEP.PENDING);
   const drainRes = badQuorum === undefined ?
     drainGateOwner.beginNextNodeDrain(130) :
     drainGateOwner.beginNextNodeDrain(130, {quorumHealthy: badQuorum});
   t.equal(drainRes.state, MANAGEMENT_OPERATION_STATE.FAILED);
   t.equal(drainRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
-  t.equal(nextDrains, 0, 'beginNextNodeDrain refuses to drain node-2 without explicit quorum');
+  t.equal(nextDrains, 0, 'beginNextNodeDrain refuses to drain without explicit quorum');
 }
 
 function assertRollingUpgradeQuorumSafetyGates(t, snap, p) {
   for (const [idx, missingQuorum] of [false, null, undefined, 1, 'true'].entries()) {
     let effects = 0;
     const rejOwner = new RollingUpgradeOwner({
-        onDrainNodeLeadership: () => {
+      onDrainNodeLeadership: () => {
         effects += 1;
       },
       onSetNodeReadyz: () => {
@@ -175,7 +184,7 @@ function assertRollingUpgradeQuorumSafetyGates(t, snap, p) {
   }
 }
 
-test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (t) => {
+test('L4 Rolling Upgrade: preflight, safety halt and retained unqualified recovery', async (t) => {
   const snap = {
     nodeIds: ['node-1', 'node-2'], readyNodeIds: ['node-1', 'node-2'],
     underReplicatedPartitionCount: 0, hasPartitionQuorum: true,
@@ -237,68 +246,34 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
 
   assertRollingUpgradeQuorumSafetyGates(t, snap, p);
 
-  const toOwner = new RollingUpgradeOwner(upgradePorts({nodeUpgradeTimeoutMs: 50}));
-  toOwner.initiatePlan('op-to-1', null, p, snap, 100);
+  const toOwner = retainLegacyUpgrade('op-to-1', snap, p,
+    upgradePorts({nodeUpgradeTimeoutMs: 50}));
   t.equal(toOwner.checkTimeoutsAndSafety({nowMs: 200, quorumHealthy: true}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.NODE_UPGRADE_TIMEOUT);
 
-  const mOwner = new RollingUpgradeOwner(upgradePorts());
-  mOwner.initiatePlan('op-mv-1', null, p, snap, 100);
+  const mOwner = retainLegacyUpgrade('op-mv-1', snap, p, upgradePorts());
   t.equal(mOwner.recordNodeRestarted('node-1', {version: '0.8.0'}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.MIXED_VERSION_INVARIANT_VIOLATED);
 
-  const [drained, readyzCalls, restarts] = [[], [], []];
-  const uOwner = new RollingUpgradeOwner({
-    currentVersion: '0.4.0',
-    onDrainNodeLeadership: (id) => drained.push(id),
-    onSetNodeReadyz: (id, val) => readyzCalls.push({id, val}),
-    onTriggerNodeRestart: (id, v, d) => restarts.push({id, v, d}),
+  const effects = [];
+  const ports = {
+    onDrainNodeLeadership: (id) => effects.push(['drain', id]),
+    onSetNodeReadyz: (id, value) => effects.push(['ready', id, value]),
+    onTriggerNodeRestart: (id) => effects.push(['restart', id]),
+  };
+  const held = retainLegacyUpgrade('op-legacy', snap, p, ports,
+    L4_UPGRADE_NODE_STEP.CATCHING_UP);
+  const recovered = new RollingUpgradeOwner(ports);
+  recovered.resumeFromPersistedState(held.pauseUpgrade(1250));
+  const hold = recovered.completeNodeCatchUp('node-1', {
+    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1300,
   });
-  const nodes = ['node-1', 'node-2', 'node-3'];
-  uOwner.initiatePlan('op-roll-1', null, p, {...snap, nodeIds: nodes}, 1000);
-
-  t.equal(drained[0], 'node-1');
-  t.same(readyzCalls[0], {id: 'node-1', val: false});
-  t.equal(restarts[0].id, 'node-1');
-  t.same(uOwner.getDrainingNodeIds(), ['node-1']);
-
-  uOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 1100});
-  t.ok(uOwner.isVersionSkewActive() && !uOwner.isFeatureGateEnabled('0.5.0'));
-
-  const lagRes = uOwner.completeNodeCatchUp('node-1', {
-    quorumHealthy: true, underReplicatedPartitionCount: 2, nowMs: 1150,
-  });
-  t.equal(lagRes.state, MANAGEMENT_OPERATION_STATE.IN_PROGRESS);
-  t.equal(uOwner.getActiveNode().nodeId, 'node-1');
-
-  uOwner.completeNodeCatchUp('node-1', {
-    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1160,
-  });
-  t.same(readyzCalls[1], {id: 'node-1', val: true});
-  t.ok(uOwner.isVersionSkewActive() && !uOwner.isFeatureGateEnabled('0.5.0'));
-
-  uOwner.beginNextNodeDrain(1200, {quorumHealthy: true});
-  t.equal(drained[1], 'node-2');
-  t.same(readyzCalls[2], {id: 'node-2', val: false});
-
-  const recovered = new RollingUpgradeOwner(upgradePorts());
-  recovered.resumeFromPersistedState(uOwner.pauseUpgrade(1250));
-  t.ok(recovered.currentNodeIndex === 1 && recovered.nodeVersions['node-1'] === '0.5.0' &&
-    recovered.nodeVersions['node-2'] === '0.4.0' && recovered.hasActiveUpgrade());
-
-  recovered.recordNodeRestarted('node-2', {version: '0.5.0', nowMs: 1300});
-  recovered.completeNodeCatchUp('node-2', {
-    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1350,
-  });
-  recovered.beginNextNodeDrain(1400, {quorumHealthy: true});
-  recovered.recordNodeRestarted('node-3', {version: '0.5.0', nowMs: 1450});
-  const finalStatus = recovered.completeNodeCatchUp('node-3', {
-    quorumHealthy: true, underReplicatedPartitionCount: 0, nowMs: 1500,
-  });
-
-  t.equal(finalStatus.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED);
-  t.ok(recovered.currentVersion === '0.5.0' && !recovered.isVersionSkewActive() &&
-    recovered.isFeatureGateEnabled('0.5.0') && !recovered.getReleaseFacts().versionSkew);
+  t.equal(hold.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
+  t.equal(recovered.getOperationStatus('op-legacy').state, MANAGEMENT_OPERATION_STATE.IN_PROGRESS);
+  t.equal(recovered.getActiveNode().step, L4_UPGRADE_NODE_STEP.CATCHING_UP);
+  t.same(effects, []);
+  t.equal(recovered.getReleaseFacts().rollingUpgrade,
+    CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
 });
 
 async function assertStreamBackupRejectsMissingQuorum(t, validOwner) {

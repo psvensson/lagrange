@@ -16,6 +16,7 @@ const ARTIFACT_DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const MAX_REQUIRED_WRITES = 100_000;
 const MAX_RECORDED_LOG_BYTES = 8 * 1024 * 1024;
 const ZERO = 0;
+const arrayIsArray = Array.isArray;
 
 function recordedCertifications(logPath) {
   const stat = lstatSync(logPath);
@@ -117,12 +118,14 @@ function acknowledgedWritesPreserved(observation) {
 
 function drillMeasured(observation, policy, availability) {
   if (!observation || !Number.isSafeInteger(observation.startedAtMs) ||
-    !Number.isSafeInteger(observation.completedAtMs) || observation.startedAtMs < ZERO) return false;
+    !Number.isSafeInteger(observation.completedAtMs) ||
+    observation.startedAtMs < ZERO) return false;
   const elapsedMs = observation.completedAtMs - observation.startedAtMs;
   return elapsedMs > ZERO && elapsedMs <= policy.rebuildEnvelope.maxRebuildDurationMs &&
     availability.includes(observation.availability?.outcome) &&
     Number.isSafeInteger(observation.availability.durationMs) &&
-    observation.availability.durationMs >= ZERO && observation.availability.durationMs <= elapsedMs &&
+    observation.availability.durationMs >= ZERO &&
+    observation.availability.durationMs <= elapsedMs &&
     acknowledgedWritesPreserved(observation);
 }
 
@@ -151,7 +154,8 @@ function drillEffectObserved(drillId, effect, requirements, policy, execution, n
       sameArtifact(effect.afterCutoff.retained, execution.target);
   case ids.ONE_NODE_FAILURE_RECOVERY:
     return nodeIds.has(effect.failedNodeId) &&
-      effect.failedNodeId === effect.recoveredNodeId && sameArtifact(effect.recovered, execution.target);
+      effect.failedNodeId === effect.recoveredNodeId &&
+      sameArtifact(effect.recovered, execution.target);
   case ids.WIPED_REPLICA_REBUILD:
     return nodeIds.has(effect.nodeId) &&
       typeof effect.wipedReplicaId === 'string' && Boolean(effect.wipedReplicaId) &&
@@ -203,7 +207,8 @@ function readSupportEnvelopeExecution(policy, execution, requirements) {
   }
   const {sourceVersion, targetVersion} = policy.versionPair;
   if (execution.source?.version !== sourceVersion || execution.target?.version !== targetVersion ||
-    !ARTIFACT_DIGEST.test(execution.source.digest) || !ARTIFACT_DIGEST.test(execution.target.digest) ||
+    !ARTIFACT_DIGEST.test(execution.source.digest) ||
+    !ARTIFACT_DIGEST.test(execution.target.digest) ||
     execution.source.digest === execution.target.digest) {
     throw new Error('original certification artifact identities do not match support policy');
   }
@@ -228,4 +233,24 @@ function readSupportEnvelopeExecution(policy, execution, requirements) {
   };
 }
 
-export {readSupportEnvelopeExecution};
+function executionBinding(policyDigest, observation) {
+  return {
+    policyDigest,
+    executionReferences: [...observation.executionReferences],
+    sourceArtifactDigest: observation.sourceArtifactDigest,
+    targetArtifactDigest: observation.targetArtifactDigest,
+    nodeCount: observation.nodeCount,
+  };
+}
+
+function sameExecutionBinding(retained, current) {
+  return retained?.policyDigest === current.policyDigest &&
+    retained.sourceArtifactDigest === current.sourceArtifactDigest &&
+    retained.targetArtifactDigest === current.targetArtifactDigest &&
+    retained.nodeCount === current.nodeCount &&
+    arrayIsArray(retained.executionReferences) &&
+    retained.executionReferences.length === current.executionReferences.length &&
+    current.executionReferences.every((ref, index) => retained.executionReferences[index] === ref);
+}
+
+export {executionBinding, readSupportEnvelopeExecution, sameExecutionBinding};

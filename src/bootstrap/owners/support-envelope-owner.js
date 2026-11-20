@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
-import {readSupportEnvelopeExecution} from './support-envelope-execution-evidence.js';
+import {executionBinding, readSupportEnvelopeExecution, sameExecutionBinding} from
+  './support-envelope-execution-evidence.js';
 
 const arrayFrom = Array.from; const arrayIsArray = Array.isArray;
 const jsonStringify = JSON.stringify; const numberIsFinite = Number.isFinite;
@@ -332,8 +333,8 @@ function uncertifiedEnvelopeRefusalMessage(formatRefusal, validation) {
 }
 
 function decideVersionPairAdmission(envelope, options = {}, execution = null) {
-  const {sourceVersion, targetVersion, nodeCount, sourceArtifactDigest, targetArtifactDigest} =
-    options;
+  const {sourceVersion, targetVersion, nodeCount, sourceArtifactDigest, targetArtifactDigest,
+    retainedBinding = null} = options;
   const snap = snapshotEnvelopeRecord(envelope);
   const validation = validateEnvelopeSnapshot(snap, {}, execution);
   const pair = readEnvelopeVersionPair(snap.snapshot);
@@ -343,6 +344,11 @@ function decideVersionPairAdmission(envelope, options = {}, execution = null) {
     typeof targetVersion === 'string' &&
     sourceVersion === pair.sourceVersion && targetVersion === pair.targetVersion;
   const topology = readOwnObjectProperty(snap.snapshot, ENVELOPE_FIELD.TOPOLOGY);
+  const measured = validation.valid && nodeCount === execution.observation.nodeCount &&
+    sourceArtifactDigest === execution.observation.sourceArtifactDigest &&
+    targetArtifactDigest === execution.observation.targetArtifactDigest;
+  const binding = measured ?
+    executionBinding(validation.actualDigest, execution.observation) : null;
   if (validation.policyValid && nodeCount !== undefined &&
       (!numberIsSafeInteger(nodeCount) || nodeCount < topology.minNodes ||
         nodeCount > topology.maxNodes)) {
@@ -351,14 +357,11 @@ function decideVersionPairAdmission(envelope, options = {}, execution = null) {
       message: 'Cluster node count is outside the declared support topology.',
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.TOPOLOGY_OUTSIDE_ENVELOPE,
     };
-  }
-  const measuredBinding = validation.valid && nodeCount === execution.observation.nodeCount &&
-    sourceArtifactDigest === execution.observation.sourceArtifactDigest &&
-    targetArtifactDigest === execution.observation.targetArtifactDigest;
-  if (exactMatch && measuredBinding) {
+  } else if (exactMatch && binding &&
+      (retainedBinding === null || sameExecutionBinding(retainedBinding, binding))) {
     return {
       admitted: true,
-      binding: executionBinding(validation.actualDigest, execution.observation),
+      binding,
       message: `Version pair ${sourceVersion} -> ${targetVersion} is certified for these artifacts.`,
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OK,
     };
@@ -422,8 +425,10 @@ function decideRollbackEligibility(
   const phaseEligible = !schemaFinalized &&
     isRollbackPhaseEligible(rollbackSection.eligiblePhases, currentPhase, cutoffExceeded);
   const eligibleBinding = validation.valid &&
-    sameExecutionBinding(activeBinding, executionBinding(validation.actualDigest, execution.observation)) &&
-    [activeBinding.sourceArtifactDigest, activeBinding.targetArtifactDigest].includes(currentArtifactDigest);
+    sameExecutionBinding(activeBinding,
+      executionBinding(validation.actualDigest, execution.observation)) &&
+    [activeBinding.sourceArtifactDigest, activeBinding.targetArtifactDigest]
+      .includes(currentArtifactDigest);
   const state = resolveRollbackDecisionState({
     policyValid: validation.policyValid, validEnvelope: eligibleBinding,
     targetMatchesSource, phaseEligible,
@@ -484,7 +489,8 @@ function decideMixedVersionNodeAdmission(
     [certified.sourceVersion, observations?.sourceArtifactDigest],
     [certified.targetVersion, observations?.targetArtifactDigest],
   ]);
-  const artifactsMatch = validation.valid && localArtifactDigest === artifactIdentities.get(localVersion) &&
+  const artifactsMatch = validation.valid &&
+    localArtifactDigest === artifactIdentities.get(localVersion) &&
     peerArtifactDigest === artifactIdentities.get(peerVersion);
   const state = resolveMixedAdmissionState({
     policyValid: validation.policyValid, validEnvelope: artifactsMatch,
@@ -673,26 +679,6 @@ function validateEnvelopeSnapshot(snap, options = {}, execution = null) {
     policyValid: policy.valid,
     evidenceReasonCode,
   };
-}
-
-function executionBinding(policyDigest, observation) {
-  return {
-    policyDigest,
-    executionReferences: [...observation.executionReferences],
-    sourceArtifactDigest: observation.sourceArtifactDigest,
-    targetArtifactDigest: observation.targetArtifactDigest,
-    nodeCount: observation.nodeCount,
-  };
-}
-
-function sameExecutionBinding(retained, current) {
-  return retained?.policyDigest === current.policyDigest &&
-    retained.sourceArtifactDigest === current.sourceArtifactDigest &&
-    retained.targetArtifactDigest === current.targetArtifactDigest &&
-    retained.nodeCount === current.nodeCount &&
-    arrayIsArray(retained.executionReferences) &&
-    retained.executionReferences.length === current.executionReferences.length &&
-    current.executionReferences.every((ref, index) => retained.executionReferences[index] === ref);
 }
 
 function loadExecutionEvidence(record, executionEvidence) {

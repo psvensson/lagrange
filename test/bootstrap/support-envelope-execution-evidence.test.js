@@ -272,3 +272,24 @@ test('an uncertified retained operation can still halt for observed quorum loss'
   assert.equal(failure.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
   assert.deepEqual(effects, []);
 });
+
+test('retained scope cannot replace installed release identity or be displaced by refusal', () => {
+  const retained = retainedUpgrade(undefined);
+  retained.currentVersion = DEFAULT_TARGET_VERSION;
+  retained.currentArtifactDigest = TARGET_ARTIFACT_DIGEST;
+  const {effects, ports} = observedPorts();
+  const owner = new RollingUpgradeOwner({...ports,
+    currentVersion: DEFAULT_SOURCE_VERSION,
+    initialPersistedState: retained,
+    supportEnvelopeOwner: new SupportEnvelopeOwner({envelope: buildSupportEnvelopeRecord()}),
+  });
+  assert.equal(owner.getReleaseFacts().version, DEFAULT_SOURCE_VERSION);
+  assert.equal(owner.getReleaseFacts().artifactDigest,
+    MANAGEMENT_V1_CONTRACT.DEFAULT_ARTIFACT_DIGEST);
+  const declined = owner.startUpgrade({operationId: 'not-a-replacement',
+    parameters: RECOVERY_PARAMETERS, clusterSnapshot: SNAPSHOT, nowMs: 3});
+  assert.equal(declined.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE);
+  assert.equal(owner.getPersistedState().activeOperation.operationId,
+    retained.activeOperation.operationId);
+  assert.deepEqual(effects, []);
+});
