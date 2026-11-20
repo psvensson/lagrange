@@ -190,6 +190,7 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     this.assertLocalControlPlaneMutationReady(move);
+    this.assertCreationRequestEpoch(move);
 
     const {entityType, entityId} = normalizeRebalancerEntityIdentity(move);
     const partitionId = move.partitionId ?? entityId;

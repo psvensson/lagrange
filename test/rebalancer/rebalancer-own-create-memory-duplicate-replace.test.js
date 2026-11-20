@@ -336,7 +336,9 @@ function createCommittedCreationFixture(t, {hideCensus = false} = {}) {
         insertCount++;
         await beforeInsert?.();
       }
-      return ledger.execute(sql, params);
+      const result = ledger.execute(sql, params);
+      return Number.isSafeInteger(result.changes) ?
+        {...result, affectedRows: result.changes} : result;
     },
     queryExecutor: {
       async executeOnPartition(partitionId, sql, params) {
@@ -510,7 +512,7 @@ test('persistent collision retains the winner and only its physical subject can 
 
   const conflict = await captureCreation(coordinator.createOperation(buildMove('target-b')));
   t.notOk(conflict.operation, 'a durable insert collision cannot adopt another target');
-  t.ok(conflict.error?.rebalanceSkipReason, 'the collision reports typed contention');
+  t.equal(conflict.error?.rebalanceSkipReason, 'budget_exceeded', conflict.error?.message);
   const replay = await coordinator.createOperation(original);
   t.equal(replay.operationId, winner.operationId);
   t.equal(replay.targetNodeId, original.nodeId);
@@ -522,4 +524,21 @@ test('persistent collision retains the winner and only its physical subject can 
   t.not(successor.operationId, winner.operationId, 'terminal predecessor permits a new generation');
   t.equal(successor.targetNodeId, 'target-b', 'only the new generation owns the changed target');
   t.equal(fixture.rows().length, 2, 'the terminal history and one successor remain durable');
+});
+
+test('exact creation distinguishes a bound zero publication epoch from malformed input', async (t) => {
+  const fixture = createCommittedCreationFixture(t);
+  const {coordinator} = fixture;
+  const original = buildMove('target-a', {membershipPublicationEpoch: 0});
+  const winner = await coordinator.createOperation(original);
+  const replay = await coordinator.createOperation(original);
+  t.equal(replay.operationId, winner.operationId);
+  t.equal(replay.membershipPublicationEpoch, 0);
+  await t.rejects(coordinator.createOperation({
+    ...original, membershipPublicationEpoch: 1,
+  }), {rebalanceSkipReason: 'budget_exceeded'});
+  await t.rejects(coordinator.createOperation({
+    ...original, membershipPublicationEpoch: '0',
+  }), {code: 'INVALID_MEMBERSHIP_PUBLICATION_EPOCH_BINDING'});
+  t.equal(fixture.rows().length, 1);
 });

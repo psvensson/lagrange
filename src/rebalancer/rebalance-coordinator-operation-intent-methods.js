@@ -1,5 +1,10 @@
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {getOperationMetadataObject} from './replica-status.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
@@ -13,6 +18,7 @@ const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   NUM,
+  OPERATION_METADATA_KEY,
   OperationType,
   PRIORITY_RECENT_INTENT_TTL_MS,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -140,25 +146,50 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
 
     if (moveType === OperationType.REPLACE) {
-      return this.getReplaceSourceReplicaId(operation) === move.replicaId;
+      return this.getReplaceSourceReplicaId(operation) ===
+        (move.sourceReplicaId || move.replicaId);
     }
 
     return true;
   }
 
-  operationMatchesCreationRequest(operation, move) {
+  assertCreationRequestEpoch(move) {
+    return assertMembershipPublicationEpochBinding(move.membershipPublicationEpoch, {
+      source: 'coordinator creation request',
+      operationId: move.operationIntentId,
+    });
+  }
+
+  buildPlacementCreationIntent(operation, move) {
+    const metadata = getOperationMetadataObject(
+      operation?.stepsHistory, OPERATION_METADATA_KEY.PLACEMENT_ADMISSION,
+    );
+    return typeof metadata?.entryId === 'string' ? Object.freeze({
+      entryId: metadata.entryId,
+      operationIntentId: move.operationIntentId || null,
+    }) : null;
+  }
+
+  operationMatchesCreationRequest(operation, move, placementIntent = null) {
     const moveType = this.normalizeMoveType(move.type);
     const explicitTargetReplicaId = moveType === OperationType.ADD ?
       move.replicaId || move.replicaIntentId :
-      move.replicaIntentId;
+      move.replicaIntentId || (move.sourceReplicaId ? move.replicaId : null);
+    const epoch = this.assertCreationRequestEpoch(move);
+    const placementEntry = this.buildPlacementCreationIntent(operation, move);
+    const exactPlacementIntent = placementIntent && placementEntry &&
+      placementEntry.entryId === placementIntent.entryId &&
+      placementIntent.operationIntentId === (move.operationIntentId || null);
     return operation.partitionId === move.partitionId &&
       this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
-      (!move.operationIntentId || operation.operationId === move.operationIntentId) &&
+      (!move.entryId || placementEntry?.entryId === move.entryId) &&
+      (!move.operationIntentId || operation.operationId === move.operationIntentId ||
+        exactPlacementIntent) &&
       (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
       (!Object.hasOwn(move, 'targetClaimKey') ||
         operation.targetClaimKey === move.targetClaimKey) &&
-      (!move.membershipPublicationEpoch ||
-        operation.membershipPublicationEpoch === move.membershipPublicationEpoch) &&
+      (epoch.state === MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND ||
+        operation.membershipPublicationEpoch === epoch.epoch) &&
       (moveType !== OperationType.REPLACE ||
         operation.sourceNodeId === (move.sourceNodeId || this.nodeId));
   }
@@ -177,6 +208,7 @@ class RebalanceCoordinatorOperationIntentMethods {
   async resolveKnownCreationOperation(candidate, move, {
     allowAbsent = false,
     retireRecentHint = false,
+    placementIntent = null,
   } = {}) {
     if (!candidate) return null;
     const observation = await this.observeExactCreationOperation(candidate.operationId);
@@ -186,7 +218,9 @@ class RebalanceCoordinatorOperationIntentMethods {
       try {
         assertOperationUpdateSubject(candidate, operation);
         sameSubject = operation.createdAt === candidate.createdAt &&
-          operation.replicaId === candidate.replicaId;
+          operation.replicaId === candidate.replicaId &&
+          (operation.membershipPublicationEpoch ?? null) ===
+            (candidate.membershipPublicationEpoch ?? null);
       } catch {
         // A foreign row cannot settle this caller's request.
       }
@@ -202,7 +236,7 @@ class RebalanceCoordinatorOperationIntentMethods {
             );
           }
         }
-        if (!this.operationMatchesCreationRequest(operation, move)) {
+        if (!this.operationMatchesCreationRequest(operation, move, placementIntent)) {
           return this.refuseConflictingCreation(operation, move);
         }
         return operation;
@@ -219,7 +253,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         }
       }
     }
-    if (!this.operationMatchesCreationRequest(candidate, move)) {
+    if (!this.operationMatchesCreationRequest(candidate, move, placementIntent)) {
       return this.refuseConflictingCreation(candidate, move);
     }
     throw this.createDeferredOperationVisibilityError(
@@ -236,16 +270,22 @@ class RebalanceCoordinatorOperationIntentMethods {
         factoryRan = true;
         let attemptedOperation = null;
         try {
-          const recent = await this.getRecentOperationIntent(dedupeKey) ||
-            (criticalAddLikeIntentKey &&
-              await this.getRecentOperationIntent(criticalAddLikeIntentKey));
-          const reusable = await this.resolveKnownCreationOperation(recent, canonicalMove, {
-            retireRecentHint: true,
-          });
-          if (reusable) {
-            this.rememberOperationIntents([dedupeKey, criticalAddLikeIntentKey], reusable);
+          for (const key of new Set([dedupeKey, criticalAddLikeIntentKey])) {
+            if (!key) continue;
+            const recent = await this.getRecentOperationIntent(key);
+            const reusable = await this.resolveKnownCreationOperation(
+              recent?.operation, canonicalMove, {
+                retireRecentHint: true,
+                placementIntent: recent?.placementIntent,
+              },
+            );
+            if (!reusable) continue;
+            const {placementIntent} = recent;
+            this.rememberOperationIntents(
+              [dedupeKey, criticalAddLikeIntentKey], reusable, placementIntent,
+            );
             const operation = await this.maybeRearmReusedPendingOperation(reusable);
-            return {operation, attemptedOperation, error: null};
+            return {operation, attemptedOperation, placementIntent, error: null};
           }
           const operation =
             await this.runOperationLedgerInterlockAccountedCreate(moveForCreate, () =>
@@ -257,7 +297,8 @@ class RebalanceCoordinatorOperationIntentMethods {
                 },
               }),
             );
-          return {operation, attemptedOperation, error: null};
+          const placementIntent = this.buildPlacementCreationIntent(operation, canonicalMove);
+          return {operation, attemptedOperation, placementIntent, error: null};
         } catch (error) {
           return {operation: null, attemptedOperation, error};
         }
@@ -268,7 +309,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       }
       const existing = await this.resolveKnownCreationOperation(
         result.operation || result.attemptedOperation, canonicalMove,
-        {allowAbsent: result.error !== null},
+        {allowAbsent: result.error !== null, placementIntent: result.placementIntent},
       );
       if (existing) {
         if (result.error) await this.ensureReservationForOperation(existing);
@@ -285,7 +326,7 @@ class RebalanceCoordinatorOperationIntentMethods {
   /**
    * Get a recently remembered operation intent.
    * @param {string} dedupeKey - Intent key.
-   * @return {Object|null} Cached operation or null.
+   * @return {Object|null} Recent operation hint or null.
    * @private
    */
   getRecentOperationIntent(dedupeKey) {
@@ -296,7 +337,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
-    return cached.operation;
+    return cached;
   }
 
   observeExactCreationOperation(operationId) {
@@ -392,15 +433,17 @@ class RebalanceCoordinatorOperationIntentMethods {
    * it back out to the next re-creating caller.
    * @param {string} dedupeKey - Intent key.
    * @param {Object} operation - Operation payload.
+   * @param {Object|null} placementIntent - Confirmed placement entry and request key.
    * @private
    */
-  rememberOperationIntent(dedupeKey, operation) {
+  rememberOperationIntent(dedupeKey, operation, placementIntent) {
     if (!operation || this.isRecentOperationIntentTerminal(operation)) {
       this.recentOperationIntents.delete(dedupeKey);
       return;
     }
     this.recentOperationIntents.set(dedupeKey, {
       operation: structuredClone(operation),
+      placementIntent,
       expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
   }
@@ -433,9 +476,10 @@ class RebalanceCoordinatorOperationIntentMethods {
    * Remember one operation under one or more intent keys.
    * @param {string[]|Set<string>} intentKeys
    * @param {Object} operation
+   * @param {Object|null} [placementIntent]
    * @private
    */
-  rememberOperationIntents(intentKeys, operation) {
+  rememberOperationIntents(intentKeys, operation, placementIntent = null) {
     const keys = Array.isArray(intentKeys) ?
       intentKeys :
       Array.from(intentKeys || []);
@@ -443,7 +487,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       if (typeof key !== LOCAL_STR_STRING || key.length === 0) {
         continue;
       }
-      this.rememberOperationIntent(key, operation);
+      this.rememberOperationIntent(key, operation, placementIntent);
     }
   }
 

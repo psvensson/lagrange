@@ -521,6 +521,9 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
       try {
         const coordinator = createCoordinatorWithLedger(leader);
+        coordinator.recentOperationIntents = new Map();
+        delete coordinator.getRecentOperationIntent;
+        delete coordinator.rememberOperationIntents;
         const submit = coordinator.submitPlacementPayload.bind(coordinator);
         const attempts = [];
         coordinator.submitPlacementPayload = async (request, timeoutMs) => {
@@ -546,8 +549,11 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         };
         const conflicting = {...original, nodeId: NODE.C};
 
-        await assert.rejects(() => coordinator.createOperation(original),
-          {failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
+        await assert.rejects(
+          () => coordinator.createOperation(original),
+          (error) => error.admissionAnswer?.failureCode ===
+            PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+        );
         const [held] = ledgerRows(leader);
         assert.equal(held.target_node_id, original.nodeId);
         await assert.rejects(() => coordinator.createOperation(conflicting),
@@ -560,6 +566,11 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         const resolved = await coordinator.createOperation(original);
         assert.equal(resolved.operationId, held.operation_id);
         assert.equal(resolved.targetNodeId, original.nodeId);
+        const replay = await coordinator.createOperation(original);
+        assert.equal(replay.operationId, held.operation_id);
+        await assert.rejects(() => coordinator.createOperation({
+          ...original, operationIntentId: 'different-placement-intent',
+        }), {rebalanceSkipReason: 'budget_exceeded'});
         assert.deepEqual(attempts, [attempts[0], attempts[0]],
           'settled retained admission needs owner visibility, without another proposal');
         assert.deepEqual(ledgerRows(leader), [held]);

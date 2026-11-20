@@ -516,6 +516,7 @@ const operationCreationSupportMethods = {
     this.rememberOperationIntents?.(
       [context.dedupeKey, context.criticalAddLikeIntentKey],
       operation,
+      this.buildPlacementCreationIntent(operation, context.requestedMove),
     );
     this.emit?.(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
     await this.armCoordinatorCreatedOperationProgress(
