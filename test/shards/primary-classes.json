@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2342,
+    "unit": 2343,
     "integration": 124,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2699,
-  "digest": "fnv1a32-f7d1d470",
+  "censusSize": 2700,
+  "digest": "fnv1a32-728eefaa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1407,6 +1407,7 @@
     "test/partition/participant-release-build-provenance.test.js": "unit",
     "test/partition/participant-release-caller-lifetimes.test.js": "unit",
     "test/partition/participant-release-control-three-member.test.js": "unit",
+    "test/partition/participant-release-current-control-replay.test.js": "unit",
     "test/partition/participant-release-deadline-recovery.test.js": "unit",
     "test/partition/participant-release-delivery-recorder.test.js": "unit",
     "test/partition/participant-release-first-prepare-native.test.js": "unit",
