@@ -148,7 +148,7 @@ async function resolveAmbiguousCreateDeliveryFailure(
     deferWhenCreateAdmissionWins: true,
   });
   if (terminalOutcome?.createAdmissionWon === true) {
-    Object.assign(operation, terminalOutcome.operation);
+    Object.assign(operation, terminalOutcome.createAdmissionOperation);
     return buildRetainedCreateDelivery(operation, errorMsg, owner);
   }
   if (Number.isFinite(operation.completedAt)) {

@@ -22,6 +22,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+
 import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
   '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -558,16 +561,12 @@ test('divergence-arm-keeps-reservation: unresolved terminal divergence ' +
   // Unresolved divergence: the terminal persist wins zero rows and the
   // authority row is still NON-terminal — the operation is live and
   // re-driveable, so its reservation must survive.
-  owner.repository.persistOperationUpdate = async (operation, options) => {
-    if (options?.returnDisposition === true) {
-      return Object.freeze({
-        persisted: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-        operation: null,
-      });
-    }
-    return false;
-  };
+  seedAuthoritativeOperation(sqlEngine, buildStorageIncreasingOperation());
+  owner.repository.persistOperationUpdate = async () => buildOperationUpdateOutcome({
+    persisted: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+    operation: null,
+  });
 
   try {
     await owner.completeOperation(buildStorageIncreasingOperation());
@@ -605,7 +604,8 @@ test('divergence-arm-keeps-reservation: losing to a DIFFERENT durable ' +
   const owner = coordinator.workflowOwner;
   // Lost-to-other-terminal: a DIFFERENT durable terminal already won; the
   // winning terminal owns the operation, so the reservation is released.
-  owner.repository.persistOperationUpdate = async (operation, options) => {
+  seedAuthoritativeOperation(sqlEngine, buildStorageIncreasingOperation());
+  owner.repository.persistOperationUpdate = async (operation) => {
     const winningTerminal = {
       ...operation,
       status: ReplicaStatus.FAILED,
@@ -613,14 +613,11 @@ test('divergence-arm-keeps-reservation: losing to a DIFFERENT durable ' +
       completedAt: Date.now(),
       errorMessage: 'winning terminal',
     };
-    if (options?.returnDisposition === true) {
-      return Object.freeze({
-        persisted: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
-        operation: winningTerminal,
-      });
-    }
-    return false;
+    return buildOperationUpdateOutcome({
+      persisted: false,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+      operation: winningTerminal,
+    });
   };
 
   try {

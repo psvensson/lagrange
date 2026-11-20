@@ -1,15 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
-  '../../src/rebalancer/replica-operation-update-disposition.js';
-
-// completeOperation/failOperation report a typed transition outcome
-// ({committed, disposition}); termination stubs return the committed
-// shape so the drain's truthful-progress propagation sees a settled
-// terminal (quest terminal-write-refusal-retry-ownership).
-const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
-  committed: true,
-  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-});
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests({
   test,
@@ -1288,11 +1278,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           };
         workflowOwner.completeOperation = async (operation) => {
           completedOperationIds.push(operation.operationId);
-          return TEST_COMMITTED_TRANSITION_OUTCOME;
+          return buildTerminalOperationFixtureOutcome(operation);
         };
         workflowOwner.failOperation = async (operation) => {
           failedOperationIds.push(operation.operationId);
-          return TEST_COMMITTED_TRANSITION_OUTCOME;
+          return buildTerminalOperationFixtureOutcome(operation, {failed: true});
         };
         workflowOwner.isPriorityRecoveryDrainOwnerUnavailable = () => true;
 

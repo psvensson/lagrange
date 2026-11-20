@@ -1,5 +1,16 @@
+import Database from 'better-sqlite3';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
+import {REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
@@ -15,6 +26,38 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+
+// The owner emits conditional SQL; SQLite, not a parameter-count double,
+// decides whether it changed a row. Read authority/readiness remain fixtures.
+function createOperationRows(t) {
+  const database = new Database(':memory:');
+  database.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  for (const sql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) database.exec(sql);
+  t.teardown(() => database.close());
+  const planner = new ControlPlaneSystemTableGateway();
+  return {
+    get(operationId) {
+      return database.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(operationId);
+    },
+    set(_operationId, row) {
+      const {sql, params} = planner.buildSqlMutationPlan({
+        operation: 'insert', tableName: 'replica_operations', row,
+      });
+      database.prepare(sql).run(...params);
+    },
+    async executeQuery(sql, params = []) {
+      try {
+        const statement = database.prepare(sql);
+        return statement.reader ?
+          {success: true, rows: statement.all(...params), rowSetComplete: true} :
+          {success: true, changes: statement.run(...params).changes};
+      } catch (error) {
+        return {success: false, error: error.message, errorCode: error.code};
+      }
+    },
+  };
+}
 
 const TEST_CRITICAL_CREATED_OPERATION_ID = 'critical-created-op';
 const TEST_CRITICAL_CREATED_PARTITION_ID = 'sql_write_operations-p1';
@@ -174,7 +217,7 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
 test('createOperation primes coordinator-created local operations through ' +
   'the owner transition lane before external observation arrives',
 async (t) => {
-  const operationRows = new Map();
+  const operationRows = createOperationRows(t);
   const persistedOperationUpdates = [];
 
   const authoritativeRead = async (tableName, sql, params = []) => {
@@ -199,64 +242,7 @@ async (t) => {
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
-    const normalizedSql = String(sql);
-    if (normalizedSql.includes('WHERE operation_id = ?')) {
-      const row = operationRows.get(params[0]) || null;
-      return {
-        success: true,
-        rows: row ? [{...row}] : [],
-        affectedRows: row ? 1 : 0,
-      };
-    }
-    if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    if (normalizedSql.includes('WHERE (') &&
-        normalizedSql.includes('entity_type = ?') &&
-        normalizedSql.includes('entity_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        normalizedSql.includes('VALUES')) {
-      const row = {
-        operation_id: params[0],
-        type: params[1],
-        partition_id: params[2],
-        replica_id: params[3],
-        target_claim_key: params[4],
-        source_node_id: params[5],
-        target_node_id: params[6],
-        status: params[7],
-        workflow_step: params[8],
-        created_at: params[9],
-        updated_at: params[10],
-        completed_at: params[11],
-        error_message: params[12],
-        steps_history: params[13],
-        entity_type: params[14],
-        entity_id: params[15],
-      };
-      operationRows.set(row.operation_id, row);
-      return {success: true, affectedRows: 1};
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
-    return {success: true, rows: [], affectedRows: 0};
-  };
+  const executeQuery = (sql, params = []) => operationRows.executeQuery(sql, params);
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
@@ -397,7 +383,7 @@ async (t) => {
 
 test('createOperation defers retryable participant-pressure failures and ' +
   'resumes owner-lane priming', async (t) => {
-  const operationRows = new Map();
+  const operationRows = createOperationRows(t);
   const deferredTimers = [];
   const deliveries = [];
 
@@ -443,64 +429,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
       readAuthorityWitness,
     };
   };
-  const executeQuery = async (sql, params = []) => {
-    const normalizedSql = String(sql);
-    if (normalizedSql.includes('WHERE operation_id = ?')) {
-      const row = operationRows.get(params[0]) || null;
-      return {
-        success: true,
-        rows: row ? [{...row}] : [],
-        affectedRows: row ? 1 : 0,
-      };
-    }
-    if (normalizedSql.includes('WHERE partition_id = ? AND target_node_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    if (normalizedSql.includes('WHERE (') &&
-        normalizedSql.includes('entity_type = ?') &&
-        normalizedSql.includes('entity_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        normalizedSql.includes('VALUES')) {
-      const row = {
-        operation_id: params[0],
-        type: params[1],
-        partition_id: params[2],
-        replica_id: params[3],
-        target_claim_key: params[4],
-        source_node_id: params[5],
-        target_node_id: params[6],
-        status: params[7],
-        workflow_step: params[8],
-        created_at: params[9],
-        updated_at: params[10],
-        completed_at: params[11],
-        error_message: params[12],
-        steps_history: params[13],
-        entity_type: params[14],
-        entity_id: params[15],
-      };
-      operationRows.set(row.operation_id, row);
-      return {success: true, affectedRows: 1};
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
-    return {success: true, rows: [], affectedRows: 0};
-  };
+  const executeQuery = (sql, params = []) => operationRows.executeQuery(sql, params);
 
   // The universal remove-safety floor (audit finding 1) fails closed on an
   // empty replica-row read ("safety check unavailable"). This fixture tests
@@ -668,7 +597,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
 
 test('dispatchOperation defers priority claim misses when durable ' +
   'PENDING compare-and-set cannot commit yet', async (t) => {
-  const operationRows = new Map();
+  const operationRows = createOperationRows(t);
   const deferredTimers = [];
   const deliveries = [];
   const operationId = 'priority-claim-miss-op';
@@ -716,38 +645,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
-    const normalizedSql = String(sql);
-    if (normalizedSql.includes('WHERE operation_id = ?')) {
-      const row = operationRows.get(params[0]) || null;
-      return {
-        success: true,
-        rows: row ? [{...row}] : [],
-        affectedRows: row ? 1 : 0,
-      };
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
-    if (normalizedSql.includes('WHERE (') &&
-        normalizedSql.includes('entity_type = ?') &&
-        normalizedSql.includes('entity_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    return {success: true, rows: [], affectedRows: 0};
-  };
+  const executeQuery = (sql, params = []) => operationRows.executeQuery(sql, params);
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
@@ -830,19 +728,9 @@ test('dispatchOperation defers priority claim misses when durable ' +
           options.expectedWorkflowStep === WORKFLOW_STEP.PENDING) {
         if (!injectedCompareAndSetMiss) {
           injectedCompareAndSetMiss = true;
-          return false;
+          return buildOperationUpdateOutcome({persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
         }
-        const row = operationRows.get(operationId);
-        if (row) {
-          row.status = operation.status;
-          row.workflow_step = operation.workflowStep;
-          row.updated_at = operation.updatedAt;
-          row.completed_at = operation.completedAt;
-          row.error_message = operation.errorMessage;
-          row.steps_history = JSON.stringify(operation.stepsHistory || []);
-          row.replica_id = operation.replicaId;
-        }
-        return true;
       }
       return originalPersistOperationUpdate(operation, options);
     };
@@ -1182,7 +1070,7 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
 test('priority deferred dispatch retry rehydrates from the authoritative ' +
   'operation row when the local query path misses',
 async (t) => {
-  const operationRows = new Map();
+  const operationRows = createOperationRows(t);
   const deferredTimers = [];
   const deliveries = [];
   const operationId = 'priority-deferred-authoritative-op';
@@ -1232,38 +1120,7 @@ async (t) => {
       readAuthorityWitness: buildMockPolicyAuthorityWitness(`${tableName}-p1`),
     };
   };
-  const executeQuery = async (sql, params = []) => {
-    const normalizedSql = String(sql);
-    if (normalizedSql.includes('WHERE operation_id = ?')) {
-      const row = operationRows.get(params[0]) || null;
-      return {
-        success: true,
-        rows: row ? [{...row}] : [],
-        affectedRows: row ? 1 : 0,
-      };
-    }
-    if (normalizedSql.includes('replica_operations') &&
-        Array.isArray(params) &&
-        params.length === 8) {
-      const row = operationRows.get(params[7]);
-      if (row) {
-        row.status = params[0];
-        row.workflow_step = params[1];
-        row.updated_at = params[2];
-        row.completed_at = params[3];
-        row.error_message = params[4];
-        row.steps_history = params[5];
-        row.replica_id = params[6];
-      }
-      return {success: true, affectedRows: row ? 1 : 0};
-    }
-    if (normalizedSql.includes('WHERE (') &&
-        normalizedSql.includes('entity_type = ?') &&
-        normalizedSql.includes('entity_id = ?')) {
-      return {success: true, rows: [], affectedRows: 0};
-    }
-    return {success: true, rows: [], affectedRows: 0};
-  };
+  const executeQuery = (sql, params = []) => operationRows.executeQuery(sql, params);
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
@@ -1346,19 +1203,9 @@ async (t) => {
           options.expectedWorkflowStep === WORKFLOW_STEP.PENDING) {
         if (!injectedCompareAndSetMiss) {
           injectedCompareAndSetMiss = true;
-          return false;
+          return buildOperationUpdateOutcome({persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
         }
-        const row = operationRows.get(operationId);
-        if (row) {
-          row.status = operation.status;
-          row.workflow_step = operation.workflowStep;
-          row.updated_at = operation.updatedAt;
-          row.completed_at = operation.completedAt;
-          row.error_message = operation.errorMessage;
-          row.steps_history = JSON.stringify(operation.stepsHistory || []);
-          row.replica_id = operation.replicaId;
-        }
-        return true;
       }
       return originalPersistOperationUpdate(operation, options);
     };

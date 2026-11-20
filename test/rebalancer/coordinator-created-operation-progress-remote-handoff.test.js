@@ -1,3 +1,4 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EXECUTOR_OUTCOME_FIELD, EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
@@ -95,13 +96,13 @@ test('RUNTIME_SERVICE_CREATE_FAILED wakes remote operation owner via TARGET_EXEC
   );
 });
 
-test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry and allows CREATING re-dispatch for partitionless runtime_service operations', async (t) => {
+test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry and allows CREATING re-dispatch for logical runtime_service operations', async (t) => {
   const runtimeOperation = {
     operationId: 'op-runtime-defer-1',
     type: OperationType.ADD,
     entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
     entityId: 'sys-postgres-wire',
-    partitionId: null,
+    partitionId: 'sys-postgres-wire',
     replicaId: 'sys-postgres-wire-r1',
     targetNodeId: 'node-1',
     workflowStep: WORKFLOW_STEP.CREATING,
@@ -122,7 +123,7 @@ test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry
   };
   owner.failOperation = async (op, msg) => {
     failedCalls.push({op, msg});
-    return Object.freeze({committed: true, disposition: 'updated'});
+    return buildTerminalOperationFixtureOutcome(op, {failed: true});
   };
   owner.clearExecutorOutcomeRetryIfNotAhead = () => true;
   owner.emitter = {emit: () => {}};
@@ -131,12 +132,12 @@ test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry
   t.equal(
     owner.isCreateRearmDispatchPhase(runtimeOperation),
     true,
-    'partitionless runtime_service operation at CREATING must be eligible for create re-arm dispatch',
+    'logical runtime_service operation at CREATING must be eligible for create re-arm dispatch',
   );
   t.equal(
     owner.isDispatchRetryableWorkflowStep(runtimeOperation),
     true,
-    'partitionless runtime_service operation at CREATING must be dispatch-retryable',
+    'logical runtime_service operation at CREATING must be dispatch-retryable',
   );
 
   const retryableError = owner.buildExecutorFailureOutcomeErrorLike(

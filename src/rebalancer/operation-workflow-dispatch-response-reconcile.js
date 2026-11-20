@@ -1,3 +1,4 @@
+import {CREATE_ADMISSION_STATE} from '../node/replica-create-admission-owner.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {
@@ -21,9 +22,11 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {
-  applyGrowthPromoteRequestFields, didOperationReconcileAdvanceOrComplete,
-  isHeldGrowthPromoteOperation, reconcileGrowthPromoteDispatchResponse,
+  applyGrowthPromoteRequestFields,
+  isHeldGrowthPromoteOperation,
+  reconcileGrowthPromoteDispatchResponse,
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 const {
@@ -142,13 +145,17 @@ function buildCreateDispatchRefreshDeferred(operation, observation) {
 
 function hasDurableCreateDispatchTuple(operation) {
   return [
-    typeof operation?.createAdmissionState === 'string',
-    typeof operation?.createAdmissionToken === 'string',
+    Object.values(CREATE_ADMISSION_STATE).includes(operation?.createAdmissionState),
+    typeof operation?.createAdmissionToken === 'string' &&
+      operation.createAdmissionToken.length > 0,
     Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt),
-    typeof operation?.createAdmissionAttemptToken === 'string',
-    Number.isSafeInteger(operation?.createAdmissionAttemptSeq),
+    typeof operation?.createAdmissionAttemptToken === 'string' &&
+      operation.createAdmissionAttemptToken.length > 0,
+    Number.isSafeInteger(operation?.createAdmissionAttemptSeq) &&
+      operation.createAdmissionAttemptSeq > 0,
     Number.isSafeInteger(operation?.createAdmissionWorkflowUpdatedAt),
-    Number.isSafeInteger(operation?.createAdmissionOwnerIncarnation),
+    Number.isSafeInteger(operation?.createAdmissionOwnerIncarnation) &&
+      operation.createAdmissionOwnerIncarnation > 0,
   ].every(Boolean);
 }
 
@@ -178,10 +185,6 @@ function resolveObservedCreateDispatchAuthority(
 ) {
   const current = observation?.operation || null;
   if (!current) {
-    if (!observation?.deferredOutcome &&
-        hasDurableCreateDispatchTuple(operation)) {
-      return allowCreateDispatchAuthority(operation);
-    }
     throw buildCreateDispatchRefreshDeferred(operation, observation);
   }
   if (!sameCreateDispatchIdentity(operation, current)) {
@@ -191,11 +194,12 @@ function resolveObservedCreateDispatchAuthority(
   if (owner.repository.isOperationTerminal(current) && !hasCurrentTuple) {
     return REFUSED_CREATE_DISPATCH_AUTHORITY;
   }
-  return allowCreateDispatchAuthority(
-    !hasCurrentTuple && hasDurableCreateDispatchTuple(operation) ?
-      operation :
-      current,
-  );
+  if (!hasCurrentTuple && hasDurableCreateDispatchTuple(operation)) {
+    // Retain the admitted attempt while its authoritative publication is
+    // unavailable; a mutable caller snapshot cannot authorize delivery.
+    throw buildCreateDispatchRefreshDeferred(operation, observation);
+  }
+  return allowCreateDispatchAuthority(current);
 }
 
 async function refreshCreateDispatchAuthority(
@@ -489,7 +493,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (
       !replaceRemoveDispatchPhase &&
       !removeRedriveDispatchPhase &&
-      !createRearmDispatchPhase
+      !createRearmDispatchPhase &&
+      !(isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) &&
+        hasDurableCreateDispatchTuple(operation))
     ) {
       if (operation.workflowStep === WORKFLOW_STEP.PENDING) {
         const claimedOperation =
@@ -503,8 +509,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           );
         }
         operation = claimedOperation;
-      } else {
-        await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+      } else if (operation.workflowStep !== WORKFLOW_STEP.SENDING) {
+        const progress = await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+        if (!didOperationReconcileAdvanceOrComplete(progress)) {
+          return this.buildSkippedOperationResult(progress, operation.operationId);
+        }
       }
     }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
@@ -907,7 +916,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       ) {
         nextStep = WORKFLOW_STEP.STOPPING;
       }
-      await this.updateStep(operation, nextStep);
+      const progress = await this.updateStep(operation, nextStep);
+      if (!didOperationReconcileAdvanceOrComplete(progress)) {
+        return this.buildSkippedOperationResult(progress, operation.operationId);
+      }
       return this.buildSuccessfulOperationResult(operation.operationId, {
         status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
       });

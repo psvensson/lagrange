@@ -1,3 +1,4 @@
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
@@ -175,7 +176,9 @@ async function bindReplaceCreateTargetReplicaId(
       expectedWorkflowStep: operation.workflowStep,
     },
   );
-  if (persisted !== true) return null;
+  const outcome = buildOperationTransitionOutcome(persisted,
+    {repository: owner.repository, requestedOperation: projectedOperation});
+  if (!outcome.committed) return null;
   operation.replicaId = replicaId;
   return ensurePlacementCreateBootstrapTopology(
     owner,

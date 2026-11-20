@@ -8,6 +8,7 @@
  * durable suite may supply a real engine (e.g. SQLite-backed) instead.
  */
 
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -225,7 +226,8 @@ function wireEpochDispatchProbe(coordinator) {
       operationId: failedOperation?.operationId,
       message,
     });
-    return Object.freeze({committed: true, disposition: 'updated'});
+    return buildTerminalOperationFixtureOutcome(
+      {...failedOperation, errorMessage: message}, {failed: true});
   };
   return {
     owner,

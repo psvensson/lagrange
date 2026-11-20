@@ -13,8 +13,11 @@
 // post-intent no-fail guard (shared with REPLACE) completes it instead -
 // even when the SYNCING step timer fires after the promotion.
 
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
@@ -81,17 +84,16 @@ function terminalCleanupRepairOwner(
   options = {},
 ) {
   const scheduled = [];
+  const repository = new ReplicaOperationRepository({nodeId: TARGET_NODE});
+  repository.queryReplicaOperationPersistenceAuthorityOperation = async () => operation;
+  repository.queryTerminalFailedCreateCleanupOperations = async () => [operation];
   return {
     isShuttingDown: false,
     isInitialized: true,
     operationOwnershipFenceEpoch: 0,
     terminalTransitionRepairStateByOperationId: new Map(),
     terminalTransitionRepairTimerByOperationId: new Map(),
-    repository: {
-      queryReplicaOperationPersistenceAuthorityOperation: async () =>
-        operation,
-      queryTerminalFailedCreateCleanupOperations: async () => [operation],
-    },
+    repository,
     logger: {
       info(message, context) {
         logs.push({level: 'info', message, context});
@@ -1102,7 +1104,7 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
       t.equal(
         await owner.reconcileObservedTargetProgressDuringTransitionGrace(
           replaceOp, Date.now()),
-        false,
+        OPERATION_RECONCILE_OUTCOME.WAITING,
         'unclaimed pre-runtime FAILED does not break active transition retry grace',
       );
       const reconciledPreSync = await owner.getReconciledReplicaStatus(

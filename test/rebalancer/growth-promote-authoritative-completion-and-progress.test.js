@@ -1,3 +1,6 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
+import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'node:events';
 import Database from 'better-sqlite3';
@@ -22,12 +25,16 @@ import {
   PLACEMENT_FORMATION_STATE, PLACEMENT_TRIGGER,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
+import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {
-  GROWTH_SETTLEMENT_PHASE, OPERATION_RECONCILE_OUTCOME,
-  didOperationReconcileAdvanceOrComplete, hasValidGrowthPromoteCompletionProvenance,
-  observeGrowthPromoteIncompleteState, reconcileGrowthPromoteDispatchResponse,
-  reconcileGrowthPromoteLifecycle, redirectGrowthPromoteTargetNode,
-  resolveGrowthPromoteTargetNodeId, settleGrowthPromoteCompletion,
+  GROWTH_SETTLEMENT_PHASE,
+  hasValidGrowthPromoteCompletionProvenance,
+  observeGrowthPromoteIncompleteState,
+  reconcileGrowthPromoteDispatchResponse,
+  reconcileGrowthPromoteLifecycle,
+  redirectGrowthPromoteTargetNode,
+  resolveGrowthPromoteTargetNodeId,
+  settleGrowthPromoteCompletion,
 } from '../../src/rebalancer/operation-workflow-growth-promote.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
@@ -115,20 +122,19 @@ test(
       let nextPersistDisposition = REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED;
       owner.completeOperation = async (op) => {
         if (nextPersistDisposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED) {
-          return Object.freeze({committed: false, disposition: nextPersistDisposition});
+          return buildOperationTransitionOutcome(buildOperationUpdateOutcome({persisted: false,
+            disposition: nextPersistDisposition, operation: null}));
         }
         completedCount += 1;
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
         op.status = ReplicaStatus.ACTIVE;
         op.completedAt = Date.now();
-        return Object.freeze({
-          committed: true,
-          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        });
+        return buildTerminalOperationFixtureOutcome(op, {completedAt: op.completedAt});
       };
       owner.updateStep = async (op, nextStep) => {
         op.workflowStep = nextStep;
-        return true;
+        op.status = ReplicaStatus.SYNCING;
+        return OPERATION_RECONCILE_OUTCOME.ADVANCED;
       };
 
       // Mismatched partitionId provenance must not complete GROWTH_PROMOTE
@@ -243,9 +249,10 @@ test(
         },
       };
 
-      // 1. Deferred terminal persistence: dispatch response reports skipped/WAITING
-      owner.completeOperation = async () =>
-        Object.freeze({committed: false, disposition: 'deferred'});
+      // 1. Reinsertion is a recognized unresolved result, never terminal settlement.
+      owner.completeOperation = async () => buildOperationTransitionOutcome(
+        buildOperationUpdateOutcome({persisted: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED, operation: op}));
       owner.executeOperationFromReconcilePath = async (targetOp) =>
         reconcileGrowthPromoteDispatchResponse(owner, targetOp, validCommittedResponse);
 
@@ -259,39 +266,33 @@ test(
       t.equal(op.completedAt, null);
 
       // 2. Refused terminal persistence: reconcileOperationLifecycle returns REFUSED
-      owner.completeOperation = async () => Object.freeze({
-        committed: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-      });
+      owner.completeOperation = async () => buildOperationTransitionOutcome(
+        buildOperationUpdateOutcome({persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null}));
       const refusedSettlement = await settleGrowthPromoteCompletion(owner, op);
       t.equal(refusedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
       t.equal(refusedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
       t.equal(await owner.reconcileOperationLifecycle(op), OPERATION_RECONCILE_OUTCOME.REFUSED);
 
-      // 2b. Unrecognized or missing disposition (even with committed: true) stays in
-      // PERSISTING / WAITING and does not release obligations or report COMPLETED
-      let holdReleasesOnUnrecognized = 0;
-      owner.releasePlacementHold = async () => {
-        holdReleasesOnUnrecognized += 1;
+      // 2b. Deliberately malformed input must fail at the result boundary.
+      let releasesOnUnrecognized = 0;
+      owner.releaseReservationForOperation = async () => {
+        releasesOnUnrecognized += 1;
       };
       owner.completeOperation = async () => Object.freeze({
-        committed: true,
-        disposition: 'unrecognized_custom_disposition',
+        committed: true, disposition: 'unrecognized_custom_disposition',
       });
-      const unrecognizedSettlement = await settleGrowthPromoteCompletion(owner, op);
-      t.equal(unrecognizedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
-      t.equal(unrecognizedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
-      t.equal(holdReleasesOnUnrecognized, 0);
+      await t.rejects(settleGrowthPromoteCompletion(owner, op),
+        {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+      t.equal(releasesOnUnrecognized, 0);
 
       // 3. Subsequent retry where completeOperation commits with UPDATED transitions to COMPLETED
       owner.completeOperation = async (targetOp) => {
         targetOp.workflowStep = WORKFLOW_STEP.ACTIVE;
         targetOp.status = ReplicaStatus.ACTIVE;
         targetOp.completedAt = Date.now();
-        return Object.freeze({
-          committed: true,
-          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        });
+        return buildTerminalOperationFixtureOutcome(targetOp,
+          {completedAt: targetOp.completedAt});
       };
       t.equal(await owner.reconcileOperationLifecycle(op), OPERATION_RECONCILE_OUTCOME.COMPLETED);
       t.equal(op.workflowStep, WORKFLOW_STEP.ACTIVE);
@@ -377,7 +378,7 @@ test(
     try {
       t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.COMPLETED), true);
       t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.ADVANCED), true);
-      t.equal(didOperationReconcileAdvanceOrComplete(true), true);
+      t.equal(didOperationReconcileAdvanceOrComplete(true), false);
       t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.WAITING), false);
       t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.HELD), false);
       t.equal(didOperationReconcileAdvanceOrComplete(OPERATION_RECONCILE_OUTCOME.REFUSED), false);
@@ -398,6 +399,7 @@ test(
       const terminalOp = buildGrowthPromoteOperation({
         status: ReplicaStatus.ACTIVE, workflowStep: WORKFLOW_STEP.ACTIVE, completedAt: Date.now(),
       });
+      await owner.repository.persistNewOperation(terminalOp);
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, terminalOp),
         OPERATION_RECONCILE_OUTCOME.COMPLETED,
@@ -406,6 +408,7 @@ test(
         operationId: 'op-growth-promote-terminal-failed',
         status: ReplicaStatus.FAILED, workflowStep: WORKFLOW_STEP.FAILED, completedAt: Date.now(),
       });
+      await owner.repository.persistNewOperation(failedTerminalOp);
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, failedTerminalOp),
         OPERATION_RECONCILE_OUTCOME.FAILED,
@@ -569,7 +572,7 @@ test(
       );
 
       // Counterexample 1c & Finding 6 (EXECUTE_REMOVE_DISPATCH skipped with deferred_retry_pending):
-      // returns WAITING (reconcileOperationProgress returns false) and reconcileTimeoutOperation
+      // returns WAITING (reconcileOperationLifecycle returns false) and reconcileTimeoutOperation
       // fails the timed-out REMOVE operation instead of returning early
       const removeOp = createOperation({
         operationId: 'op-remove-stuck-dispatch',
@@ -600,11 +603,11 @@ test(
         'skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING',
       );
       t.equal(
-        await owner.reconcileOperationProgress(removeOp, {
+        await owner.reconcileOperationLifecycle(removeOp, {
           cause: 'timeout',
         }),
-        false,
-        'reconcileOperationProgress must return false when dispatch is skipped',
+        OPERATION_RECONCILE_OUTCOME.WAITING,
+        'reconcileOperationLifecycle reports WAITING when dispatch is skipped',
       );
 
       const failedOperations = [];
@@ -613,7 +616,10 @@ test(
         op.workflowStep = WORKFLOW_STEP.FAILED;
         op.status = ReplicaStatus.FAILED;
         op.completedAt = now;
-        return Object.freeze({committed: true, disposition: 'updated'});
+        op.entityType = 'partition';
+        op.entityId = op.partitionId;
+        return buildTerminalOperationFixtureOutcome(op,
+          {failed: true, completedAt: op.completedAt});
       };
       await owner.reconcileTimeoutOperation(removeOp, now);
       t.equal(
@@ -702,7 +708,7 @@ test(
         op.workflowStep = WORKFLOW_STEP.ACTIVE;
         op.status = ReplicaStatus.ACTIVE;
         op.completedAt = 3000;
-        return Object.freeze({committed: true, disposition: 'updated'});
+        return buildTerminalOperationFixtureOutcome(op, {completedAt: op.completedAt});
       };
       const outcome = await owner.reconcileOperationLifecycle(addOp, {
         cause: 'progress',
@@ -719,23 +725,13 @@ test(
   'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
     '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
     'IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate ' +
-    'reconciliation, and interrupted releasePlacementHold recovery',
+    'reconciliation, and interrupted terminal reply recovery',
   async (t) => {
     const coordinator = createTestCoordinator({
       nodeId: TEST_LEADER_NODE_1,
       enableTimeouts: false,
     });
     const owner = coordinator.workflowOwner;
-
-    let releasedHoldIds = [];
-    let failNextHoldRelease = false;
-    owner.releasePlacementHold = async (op) => {
-      if (failNextHoldRelease) {
-        failNextHoldRelease = false;
-        throw new Error('transient placement hold release failure');
-      }
-      releasedHoldIds.push(op.operationId);
-    };
 
     const releasedReservationIds = [];
     const baseReleaseReservation =
@@ -800,7 +796,6 @@ test(
       t.equal(updatedResult.settlementPhase, GROWTH_SETTLEMENT_PHASE.SETTLED);
       t.equal(updatedResult.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
       t.equal(updatedResult.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED);
-      t.ok(releasedHoldIds.includes(op1.operationId));
       t.ok(releasedReservationIds.includes(op1.operationId));
       const durableOp1 =
         await coordinator.repository.queryAuthoritativeOperationById(op1.operationId);
@@ -853,7 +848,6 @@ test(
           opCompeting.operationId,
         ],
       );
-      releasedHoldIds = [];
       releasedReservationIds.length = 0;
       scheduledProgressRetryIds.length = 0;
 
@@ -872,7 +866,6 @@ test(
       t.equal(opCompeting.completedAt, 99_000);
       t.equal(opCompeting.errorMessage, 'competing step timeout failure');
       t.same(scheduledProgressRetryIds, []);
-      t.same(releasedHoldIds, [opCompeting.operationId]);
       t.same(releasedReservationIds, [opCompeting.operationId]);
       const durableCompeting =
         await coordinator.repository.queryAuthoritativeOperationById(opCompeting.operationId);
@@ -889,7 +882,6 @@ test(
       coordinator.systemTableCache.delete(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, opReinserted.operationId,
       );
-      releasedHoldIds = [];
       releasedReservationIds.length = 0;
 
       const reinsertedSettlement = await settleGrowthPromoteCompletion(
@@ -899,7 +891,6 @@ test(
       t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
       t.equal(reinsertedSettlement.committed, false);
       t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
-      t.same(releasedHoldIds, []);
       t.same(releasedReservationIds, []);
 
       const opRefused = await seedDurableGrowthOperation('op-real-repo-refused', {
@@ -922,7 +913,6 @@ test(
       coordinator.systemTableCache.delete(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, opRefused.operationId,
       );
-      releasedHoldIds = [];
       releasedReservationIds.length = 0;
 
       const refusedSettlement = await settleGrowthPromoteCompletion(
@@ -932,7 +922,6 @@ test(
       t.equal(refusedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
       t.equal(refusedSettlement.committed, false);
       t.equal(refusedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED);
-      t.same(releasedHoldIds, []);
       t.same(releasedReservationIds, []);
 
       // Witness 5: Duplicate reconciliation after settlement preserves terminal status
@@ -950,21 +939,23 @@ test(
       t.equal(opCompeting.status, ReplicaStatus.FAILED);
       t.equal(opCompeting.workflowStep, WORKFLOW_STEP.FAILED);
 
-      // Witness 6: Re-entry on the same owner after durable terminal persistence
-      // when obligation discharge (releasePlacementHold) was interrupted during RELEASING
-      const opInterruptedHold = await seedDurableGrowthOperation(
-        'op-real-repo-interrupted-hold',
-      );
-      releasedHoldIds = [];
-      failNextHoldRelease = true;
-
-      await t.rejects(
-        reconcileGrowthPromoteDispatchResponse(
-          owner, opInterruptedHold, validCommittedResponse,
-        ),
-        /transient placement hold release failure/,
-      );
-      t.same(releasedHoldIds, []);
+      // Witness 6: actual persistence reply loss after the durable terminal write.
+      // Growth occupancy clears through the terminal census row. There is no
+      // production workflow placement-release callback or storage reservation.
+      const opInterruptedHold = await seedDurableGrowthOperation('op-real-repo-lost-reply');
+      const persist = owner.repository.persistOperationUpdate.bind(owner.repository);
+      let interruptReply = true;
+      owner.repository.persistOperationUpdate = async (...args) => {
+        const result = await persist(...args);
+        if (interruptReply) {
+          interruptReply = false;
+          throw new Error('lost reply after durable growth terminal');
+        }
+        return result;
+      };
+      await t.rejects(reconcileGrowthPromoteDispatchResponse(
+        owner, opInterruptedHold, validCommittedResponse),
+      /lost reply after durable growth terminal/);
       const durableAfterInterruptedRelease =
         await coordinator.repository.queryAuthoritativeOperationById(
           opInterruptedHold.operationId,
@@ -973,11 +964,6 @@ test(
       t.equal(durableAfterInterruptedRelease.status, ReplicaStatus.ACTIVE);
       t.ok(Number.isFinite(durableAfterInterruptedRelease.completedAt));
 
-      const recoveredOutcome = await reconcileGrowthPromoteLifecycle(
-        owner, opInterruptedHold,
-      );
-      t.equal(recoveredOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
-      t.same(releasedHoldIds, [opInterruptedHold.operationId]);
       const recoveredSettlement = await settleGrowthPromoteCompletion(
         owner, opInterruptedHold,
       );

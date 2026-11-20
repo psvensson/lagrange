@@ -1025,7 +1025,7 @@ async function enterOwnerAfter(world, advanceMs) {
   await settleTurns();
   await world.coordinator.reconcileOrphanedOperations();
   await settleTurns();
-  await world.coordinator.reconcileOperationProgress(await readPersisted(world));
+  await world.coordinator.reconcileOperationLifecycle(await readPersisted(world));
   await settleTurns();
 }
 

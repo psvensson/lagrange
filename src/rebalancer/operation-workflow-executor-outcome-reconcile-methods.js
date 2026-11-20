@@ -1,3 +1,4 @@
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -661,11 +662,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 
     if (mapping.action === EXECUTOR_OUTCOME_ACTION.UPDATE_STEP) {
       if (!this.isExecutorOutcomeStepBehindOperation(operation, workflowStep)) {
-        await this.updateStep(
-          operation,
-          workflowStep,
-          OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME,
-        );
+        const progress = await this.updateStep(operation, workflowStep,
+          OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME);
+        if (!didOperationReconcileAdvanceOrComplete(progress)) {
+          this.scheduleExecutorOutcomeRetry(outcome);
+          return false;
+        }
       }
       await this.reconcileExecutorStepUpdateOutcome(
         operation,

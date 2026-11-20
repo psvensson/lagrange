@@ -1,3 +1,5 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 export function registerReplicaOperationRepositoryTailMoreTests({
   test,
   createTestRepository,
@@ -80,7 +82,10 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       }),
     );
 
-    await repo.persistOperationUpdate(op);
+    const recovered = await repo.persistOperationUpdate(op);
+    t.equal(recovered.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED,
+      'the exact authoritative write is recovered after reply failure');
+    t.same(recovered.operation, op, 'recovery carries the complete matching operation');
 
     t.equal(
       readCalls,
@@ -446,7 +451,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
 
       t.equal(
-        result,
+        result.persisted,
         true,
         'a recent owner-persisted transition should defer instead of failing hard on one retryable authoritative confirmation failure',
       );
@@ -509,7 +514,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
 
       t.equal(
-        result,
+        result.persisted,
         true,
         'a recent owner-persisted transition should defer instead of failing hard on one empty authoritative read boundary',
       );
@@ -576,7 +581,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
 
       t.equal(
-        result,
+        result.persisted,
         true,
         'an older authoritative row for the same owner-persisted transition should defer instead of failing hard',
       );
