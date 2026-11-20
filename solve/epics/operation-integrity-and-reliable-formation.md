@@ -212,11 +212,30 @@ profile. Backup, restore and PITR retain their later milestone allocation.
   recovery owner already re-arms after a failed read. At `1fcac4b05`, both
   use that recovery owner. The successful result stays frozen, and shutdown
   joins the admitted sweep. Four managed suites passed 339 assertions. A
-  fresh three-host run on that source tests the effect on formation.
+  second three-host trial on that source reached the original deadline with
+  operations still in flight. The last snapshot 4.488 seconds before expiry
+  recorded 68 completed ADDs and 33 promotions. Across the 46 original
+  system partitions, 13 still lacked a completed promotion at that sample.
+  The exact counts at expiry are unknown. The startup snapshot refusal did
+  not recur in the retained logs.
+- In that trial, `e068cbdc`, SQL CREATE and COUNT succeeded after the
+  formation deadline. The public PostgreSQL INSERT and readback succeeded,
+  but INSERT failed through two nodes. The observer recorded six read
+  failures. The three trial containers were removed. The release owner must
+  trace the shared control-partition stalls across the leader change, and
+  the SQL owner must locate the first failed per-node write. Preserve the
+  original deadline, quiet window and per-node checks.
+  [Original report, logs, snapshots and configuration](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-e068cbdc-nov20.tar.gz)
 - A separate native counterexample at `bd2c33ec5` found that the clean
   dependent release path could reopen after control authority shut down.
-  The healthy control passed. The participant release owner is moving the
-  final control check to the resume point used by both paths.
+  The healthy control passed. At `b217da7ec` both release paths recheck
+  control authority at resume. The four focused suites for release and
+  startup cleanup passed 100 assertions on adam-laptop.
+- All 38 reviewed strict-outcome source and witness digests match
+  `8281e61d2` and `b217da7ec`. The broader 22-file fixture sweep on
+  adams-gamla passed 15 files and failed seven on `b217da7ec`. The
+  workflow, reservation and proof owners must reconcile those failures
+  against the actual repository and conditional writes before integration.
 - The integration owner must obtain three consecutive 420-second physical
   formation passes on one composition, then a successful lab smoke. The
   GCP comparison owner retains the Lagrange measurement.
