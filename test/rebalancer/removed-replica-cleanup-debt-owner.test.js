@@ -27,13 +27,24 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import Database from 'better-sqlite3';
+import {generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
+import {SERVICES_SCHEMA, REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway, CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {REPLICA_CLEANUP_ERROR_CODE} from
+  '../../src/node/replica-cleanup-constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ExecutorOutcomeEmitter} from
   '../../src/rebalancer/executor-outcome-emitter.js';
 import {
@@ -361,3 +372,184 @@ test('removed-replica cleanup debt owner', async (t) => {
     },
   );
 });
+
+// The authority below executes generated production schemas and the gateway's
+// mutation SQL. Only read availability/delivery and the existing timer's wake
+// are controlled. Public dispatch proves admission reopening, not Raft creation.
+const STARTUP_OBSERVATION_BOUND_MS = 2000;
+
+async function boundedStartupObservation(promise) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('startup witness did not settle')),
+        STARTUP_OBSERVATION_BOUND_MS);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function startupRecoveryFixture(t) {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({});
+  LoggingService.getInstance().initialize({level: 'error'});
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'startup-cleanup-live-'));
+  fs.mkdirSync(path.join(dataDir, STORAGE_DEFAULT.PARTITIONS_DIRNAME));
+  const db = new Database(path.join(dataDir, 'authority.sqlite'));
+  for (const schema of [SERVICES_SCHEMA, REPLICA_OPERATIONS_SCHEMA]) {
+    db.exec(generateCreateTableSQL(schema));
+  }
+  const planner = new ControlPlaneSystemTableGateway();
+  const state = {available: true, snapshotReads: 0, sweepCalls: 0,
+    beforeSnapshot: null, wake: null, wakeArms: 0, readOptions: []};
+  const gateway = {
+    async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          params[0] === 'partition_cleanup') {
+        state.snapshotReads++;
+        state.readOptions.push(options);
+        await state.beforeSnapshot?.();
+        if (!state.available) return {success: false, error: 'owner unavailable'};
+      }
+      return {success: true, rows: db.prepare(sql).all(...params)};
+    },
+    async submitMutation(mutation) {
+      const {sql, params} = planner.buildSqlMutationPlan(mutation);
+      const {changes} = db.prepare(sql).run(...params);
+      return {success: true, partitionResult: {affectedRows: changes}};
+    },
+  };
+  const handler = new ReplicaHandler({nodeId: TEST_NODE_ID, ownerIncarnation: 1, dataDir,
+    systemTableCache: createHandlerCache(), cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: gateway,
+    createPartitionService: createMockPartitionServiceFactory(),
+    executorOutcomeEmitter: new ExecutorOutcomeEmitter({logger: console})});
+  const sweep = handler.sweepRemovedReplicaCleanupDebt.bind(handler);
+  handler.sweepRemovedReplicaCleanupDebt = async (authorities) => {
+    state.sweepCalls++;
+    return sweep(authorities);
+  };
+  const rearm = handler.replicaCreateAdmissionRecoveryRearmOwner;
+  const arm = rearm.arm.bind(rearm);
+  rearm.arm = (callback, delay) => {
+    state.wake = callback;
+    state.wakeArms++;
+    return arm(callback, delay);
+  };
+  t.teardown(async () => {
+    await boundedStartupObservation(handler.shutdown());
+    db.close();
+    fs.rmSync(dataDir, {recursive: true, force: true});
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+  return {handler, dataDir, db, state};
+}
+
+function dispatchMembershipObservation(handler) {
+  return handler.handleMessage({correlationId: TEST_CORRELATION_ID,
+    payload: {type: ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP,
+      partitionId: TEST_PARTITION_ID}});
+}
+
+async function acquireStartupMarker(handler, replicaId = TEST_ORPHAN_REPLICA_ID) {
+  return handler.getReplicaCleanupTombstoneOwner().acquire({replicaId,
+    partitionId: TEST_ORPHAN_PARTITION_ID, nodeId: TEST_NODE_ID});
+}
+
+test('ReplicaHandler.initialize recovers a refused cleanup snapshot through ' +
+  'one CREATE recovery wake without restarting or borrowing authority', async (t) => {
+  const {handler, state} = startupRecoveryFixture(t);
+  state.available = false;
+  handler.initialize();
+  await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+  await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
+  await t.rejects(boundedStartupObservation(handler.handleMessage({
+    correlationId: TEST_CORRELATION_ID,
+    payload: {type: ReplicaOperationMessageType.CREATE_REPLICA,
+      operationType: OperationType.ADD, operationId: TEST_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID, replicaId: TEST_REPLICA_ID},
+  })), {code: REPLICA_CLEANUP_ERROR_CODE.CLEANUP_OWNER_DEFERRED,
+    deferRetry: true}, 'unavailable authority refuses promptly with its typed cause');
+  t.equal(state.sweepCalls, 0, 'no filesystem sweep on unavailable authority');
+  t.equal(state.snapshotReads, 1, 'requests share the first failed observation');
+  t.equal(state.wakeArms, 1, 'existing CREATE recovery owner retains one wake');
+  t.type(state.wake, 'function', 'startup failure is owned for live recovery');
+  if (typeof state.wake !== 'function') return;
+
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  state.available = true;
+  state.beforeSnapshot = async () => { entered.resolve(); await release.promise; };
+  handler.replicaCreateAdmissionRecoveryRearmOwner.cancel();
+  state.wake();
+  await boundedStartupObservation(entered.promise);
+  const requests = [dispatchMembershipObservation(handler),
+    dispatchMembershipObservation(handler)];
+  release.resolve();
+  const replies = await boundedStartupObservation(Promise.all(requests));
+  await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
+  await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+  t.equal(state.snapshotReads, 2, 'one recovery observation is shared by both callers');
+  t.equal(state.sweepCalls, 1, 'successful snapshot runs exactly one real sweep');
+  for (const reply of replies) {
+    t.equal(reply.status, ReplicaOperationResponseStatus.COMPLETED,
+      'public dispatch reaches the real membership handler after recovery');
+    t.equal(reply.membership.reason, COMMITTED_MEMBERSHIP_REFUSAL.NOT_HOSTED,
+      'the handler reports truthful absent membership, not invented creation');
+    t.equal(reply.correlationId, TEST_CORRELATION_ID);
+  }
+  t.ok(state.readOptions.every((options) => options.authoritativeReadMode ===
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED),
+  'retry preserves the original required authority');
+  t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+    'successful recovery leaves no retry timer');
+});
+
+test('successful startup capture stays frozen across later CREATE recovery wakes',
+  async (t) => {
+    const {handler, state, dataDir, db} = startupRecoveryFixture(t);
+    handler.initialize();
+    await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+    await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
+    const {authority} = await acquireStartupMarker(handler);
+    t.ok(authority, 'another cleanup claimant owns a real durable marker');
+    const dbPath = seedOrphanFiles(dataDir, TEST_ORPHAN_PARTITION_ID,
+      TEST_ORPHAN_REPLICA_ID);
+    await boundedStartupObservation(handler.startReplicaCreateAdmissionRecovery());
+    await boundedStartupObservation(dispatchMembershipObservation(handler));
+    t.equal(state.snapshotReads, 1, 'successful capture is never refreshed');
+    t.equal(state.sweepCalls, 1, 'a later wake does not repeat startup deletion');
+    t.ok(fs.existsSync(dbPath), 'post-capture claimant retains its database');
+    t.ok(fs.existsSync(`${dbPath}-wal`), 'post-capture claimant retains its WAL');
+    t.equal(db.prepare('SELECT cleanup_token FROM services WHERE service_id = ?')
+      .get(TEST_ORPHAN_REPLICA_ID).cleanup_token, authority.ownerToken,
+    'late token is neither borrowed nor released');
+  });
+
+test('shutdown fences a late successful startup snapshot before filesystem cleanup',
+  async (t) => {
+    const {handler, state, dataDir, db} = startupRecoveryFixture(t);
+    const {authority} = await acquireStartupMarker(handler);
+    const dbPath = seedOrphanFiles(dataDir, TEST_ORPHAN_PARTITION_ID,
+      TEST_ORPHAN_REPLICA_ID);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    state.beforeSnapshot = async () => { entered.resolve(); await release.promise; };
+    handler.initialize();
+    await boundedStartupObservation(entered.promise);
+    const shutdown = handler.shutdown();
+    release.resolve();
+    await boundedStartupObservation(shutdown);
+    await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+    t.equal(state.sweepCalls, 0, 'late capture cannot begin a sweep after shutdown');
+    t.ok(fs.existsSync(dbPath), 'shutdown preserves the retained database obligation');
+    t.ok(fs.existsSync(`${dbPath}-wal`), 'shutdown preserves retained sidecar debt');
+    t.equal(db.prepare('SELECT cleanup_token FROM services WHERE service_id = ?')
+      .get(TEST_ORPHAN_REPLICA_ID)?.cleanup_token, authority.ownerToken,
+    'the exact cleanup token remains for the next incarnation');
+    t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'shutdown retains no rearmed recovery timer');
+  });
