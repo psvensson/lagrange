@@ -28,7 +28,7 @@
   "censusSize": 2700,
   "digest": "fnv1a32-61baca94",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2dd82863",
+  "observationDigest": "fnv1a32-2597d4f1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6142,7 +6142,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/test-helpers.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js": {
@@ -6151,7 +6152,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/storage-reservation-authority.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/test-helpers.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": {
@@ -6175,7 +6177,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/test-helpers.js"
       ]
     },
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": {
@@ -12615,6 +12618,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/partition/committed-operation-gateway-fixture.js",
@@ -20710,9 +20714,12 @@
         "src/node/replica-handler-remove-request-methods.js",
         "src/rebalancer/move-planner-move-calculation-methods.js",
         "src/rebalancer/operation-workflow-owner-execution-lane.js",
+        "src/rebalancer/operation-workflow-transition-orchestration.js",
+        "src/rebalancer/operation-workflow-transition-persistence.js",
         "src/rebalancer/priority-publication-handoff.js",
         "src/rebalancer/priority-publication-leader-safety.js",
         "src/rebalancer/priority-publication-safety-topology.js",
+        "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
         "src/rebalancer/unified-rebalancer-lifecycle-base.js",
         "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
         "test/distributed/harness/assertions-consistency-comparison.js",

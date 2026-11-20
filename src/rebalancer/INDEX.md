@@ -203,7 +203,7 @@ documentClass: generated
 - [replica-operation-repository-mutation-row-methods.js](replica-operation-repository-mutation-row-methods.js) - The one replica_operations row of an operation record: the repository's persisted row and the placement admission... (importers: few)
 - [replica-operation-repository-mutation-transition-methods.js](replica-operation-repository-mutation-transition-methods.js) - No leading comment; first export: assignReplicaOperationRepositoryMutationTransitionMethods. (importers: one)
 - [replica-operation-repository-mutation-update-methods.js](replica-operation-repository-mutation-update-methods.js) - Resolve existing durable truth before a workflow prepares a new effect. (importers: one)
-- [replica-operation-repository-observation-methods.js](replica-operation-repository-observation-methods.js) - Normalize one observed services row into workflow replica lifecycle. (importers: one)
+- [replica-operation-repository-observation-methods.js](replica-operation-repository-observation-methods.js) - Normalize one observed services row into workflow replica lifecycle. (importers: few)
 - [replica-operation-repository-read-methods.js](replica-operation-repository-read-methods.js) - The authoritative read retry window is spent with the read still failing retryably: one wait_bound_spent ERROR; the... (importers: one)
 - [replica-operation-repository-row-methods.js](replica-operation-repository-row-methods.js) - Translate a raw SQL/cache row into a normalized operation object. (importers: few)
 - [replica-operation-repository-visibility-methods.js](replica-operation-repository-visibility-methods.js) - Bound retryable SQL backoff for replica_operations owner reads. (importers: one)
