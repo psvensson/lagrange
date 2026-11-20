@@ -632,6 +632,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.DEFERRED) {
       const reason = REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
       this.scheduleDeferredSafetyRetry(operation, reason, learnerRetirement.state);
+      registerReplaceOwnerWaiter(this, operation, readinessEntryLevel);
       return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
         operation.operationId, {deferReason: reason, error: learnerRetirement.state});
     }
@@ -679,6 +680,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     };
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEARED) {
       request[ReplicaOperationField.LEARNER_RETIREMENT] = learnerRetirement.scope;
+      registerReplaceOwnerWaiter(this, operation, readinessEntryLevel);
     }
     if (operation.type === OperationType.GROWTH_PROMOTE) {
       applyGrowthPromoteRequestFields(request, operation);

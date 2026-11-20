@@ -103,4 +103,8 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
   return reachMembershipOwner(owner, operation, handlerType, scoped, canPropose);
 }
 
-export {evaluatePlacementLearnerRetirement};
+function isScopedPlacementLearnerRetirement(operation) {
+  return scopedOperationAdmission(operation)?.learnerRetirement !== undefined;
+}
+
+export {evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement};
