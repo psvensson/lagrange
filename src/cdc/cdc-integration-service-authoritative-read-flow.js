@@ -612,7 +612,9 @@ async function executeAuthoritativeSystemTableRead(
     },
   });
 
-  await readLocalAuthoritativeRows();
+  if (!requireOwnerRpcRead) {
+    await readLocalAuthoritativeRows();
+  }
 
   const shouldConfirmEmptyLocalReadWithOwnerRpc =
     authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc === true &&
