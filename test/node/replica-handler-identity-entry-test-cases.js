@@ -44,6 +44,8 @@ import {CREATE_ADMISSION_STATE} from
   '../../src/node/replica-create-admission-owner.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {registerCompletedFreshCreateReleaseFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {
   NODE_ID,
@@ -175,6 +177,7 @@ export async function registerReplicaHandlerIdentityEntryTests({
       emitOutcome: (type, operationId, step, options) =>
         outcomes.push({type, operationId, step, options}),
     };
+    registerCompletedFreshCreateReleaseFixture(handler);
     if (initialize) handler.initialize();
     const drive = async (replicaId, operationId) => {
       if (!handler.initialized) handler.initialize();

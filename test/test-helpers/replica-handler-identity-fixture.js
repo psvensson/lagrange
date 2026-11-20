@@ -5,9 +5,10 @@
  * that runs the activation, and handler removal is exact-identity only.
  */
 
+import assert from 'node:assert/strict';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_RESULT_FIELD,
-  PARTICIPANT_RELEASE_TYPE} from
+import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 /**
@@ -65,17 +66,31 @@ function createIdentityTransport() {
   };
 }
 
-// Give a CREATE component fixture its real registration boundary and its
-// controlled answer from the external participant release owner.
-function registerCompletedFreshCreateReleaseFixture(handler) {
-  const transport = createIdentityTransport();
-  transport.deliver = async (_address, message) =>
-    message.type === PARTICIPANT_RELEASE_TYPE ?
-      buildDeliveryEnvelope({acknowledged: true}, {
-        [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER},
-      }) :
-      buildDeliveryEnvelope({acknowledged: false, noHandler: true});
-  handler.registerWithRouter(transport);
+// For fixtures whose partition factory cannot perform a native transaction
+// cutover, supply that external effect at the registered responder. Exercise
+// actual route selection, accepted delivery, and result decoding. Native
+// release witnesses use the production responder without this decorator.
+function registerCompletedFreshCreateReleaseFixture(handler, options = {}) {
+  const transport = createInProcessMockTransport();
+  const handleMessage = handler.handleMessage.bind(handler);
+  handler.handleMessage = (envelope) => {
+    const request = envelope.payload;
+    if (request?.type !== PARTICIPANT_RELEASE_TYPE ||
+        request.action !== PARTICIPANT_RELEASE_ACTION.RELEASE ||
+        request.trigger !== PARTICIPANT_RELEASE_TRIGGER.FRESH_CREATE) {
+      return handleMessage(envelope);
+    }
+    const identity = request.createAdmissionIdentity;
+    const service = handler.getTrackedService(identity.replicaId);
+    assert.ok(service, 'fresh release reached the handler of the materialized service');
+    assert.equal(identity.targetNodeId, handler.nodeId);
+    assert.equal(request.partitionId, service.partitionId);
+    assert.equal(identity.operationId, service.createAdmissionOperationId);
+    assert.equal(identity.admissionToken, service.createAdmissionToken);
+    assert.equal(identity.attemptToken, service.createAttemptToken);
+    return {[PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER}};
+  };
+  handler.registerWithRouter(transport, options);
   return transport;
 }
 

@@ -9,7 +9,8 @@ import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
   PARTICIPANT_RELEASE_RESULT_FIELD} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {buildDeliveryEnvelope, deliveryAnswerOf} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {createHandlerFixture, operationRow, routedCreateRequest,
   sqlOperationsAuthority, targetLifecycle, waitForCreateCompletion, waitForPhysicalStart,
@@ -36,17 +37,19 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
   const releaseRouter = handler.messageRouter;
   if (unregisterReleaseRoute) handler.unregisterFromRouter(releaseRouter);
   if (loseReleaseReply) {
-    handler.messageRouter.deliver = async (_address, payload) => {
+    const deliver = releaseRouter.deliver.bind(releaseRouter);
+    releaseRouter.deliver = async (address, payload) => {
       assert.equal(payload.action, PARTICIPANT_RELEASE_ACTION.RELEASE);
       releaseRequests.push(payload);
+      const delivered = await deliver(address, payload);
+      assert.equal(deliveryAnswerOf(delivered)?.[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome,
+        PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER, 'the registered performer answered before reply loss');
       if (releaseRequests.length === 1) {
         entered.resolve();
         await held.promise;
         return buildDeliveryEnvelope({acknowledged: false, error: 'release reply lost'});
       }
-      return buildDeliveryEnvelope({acknowledged: true}, {
-        [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER},
-      });
+      return delivered;
     };
   }
   let armed = false;

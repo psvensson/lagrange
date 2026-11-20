@@ -49,7 +49,7 @@ import {registerReplicaHandlerIdentityEntryTests} from
   './replica-handler-identity-entry-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
@@ -584,6 +584,8 @@ test('ReplicaHandler', async (t) => {
       createPartitionService: createMockPartitionServiceFactory(),
     });
 
+    const router = registerCompletedFreshCreateReleaseFixture(handler);
+    const receive = router.getRegisteredHandler('test-node/service/replica-handler');
     handler.initialize();
 
     const created = waitForReplicaEvent(
@@ -618,7 +620,7 @@ test('ReplicaHandler', async (t) => {
       },
     };
 
-    const createResponse = await handler.handleMessage(createEnvelope);
+    const createResponse = await receive(createEnvelope);
     t.equal(createResponse.correlationId, 'corr-1', 'correlationId preserved');
     t.equal(createResponse.status, ReplicaOperationResponseStatus.INITIATED,
       'create initiated');
@@ -636,7 +638,7 @@ test('ReplicaHandler', async (t) => {
       },
     };
 
-    const removeResponse = await handler.handleMessage(removeEnvelope);
+    const removeResponse = await receive(removeEnvelope);
     t.equal(removeResponse.correlationId, 'corr-2', 'correlationId preserved');
     t.equal(removeResponse.status, ReplicaOperationResponseStatus.NOT_FOUND,
       'not found');
@@ -649,7 +651,7 @@ test('ReplicaHandler', async (t) => {
       },
     };
 
-    const unknownResponse = await handler.handleMessage(unknownEnvelope);
+    const unknownResponse = await receive(unknownEnvelope);
     t.equal(unknownResponse.status, ReplicaOperationResponseStatus.ERROR,
       'error for unknown');
 

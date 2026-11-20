@@ -1,4 +1,5 @@
-import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {handlerIdentityApi, registerCompletedFreshCreateReleaseFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -113,9 +114,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
       'replicaCreationFailed',
     );
 
-    const {router: mockRouter, registeredHandlers} = createMockRouter();
-
-    handler.registerWithRouter(mockRouter);
+    const {handlers: registeredHandlers} = registerCompletedFreshCreateReleaseFixture(handler);
 
     // Check handler was registered at correct address
     t.ok(
@@ -142,7 +141,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
 
     await created;
 
-    handler.shutdown();
+    await handler.shutdown();
   });
 
   t.test('unregisterFromRouter removes handler', async (t) => {
@@ -210,9 +209,9 @@ async function registerReplicaHandlerRouterAdmissionTests({
       },
     };
 
-    const {router: mockRouter, registeredHandlers} = createMockRouter();
-
-    handler.registerWithRouter(mockRouter, {rpcClient: mockRpcClient});
+    const {handlers: registeredHandlers} = registerCompletedFreshCreateReleaseFixture(
+      handler, {rpcClient: mockRpcClient},
+    );
 
     // Test the registered handler notifies RPC client
     const registeredHandler = registeredHandlers.get('test-node/service/replica-handler');
@@ -234,7 +233,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
     t.equal(rpcResponses[0].response.status,
       ReplicaOperationResponseStatus.INITIATED, 'correct status');
 
-    handler.shutdown();
+    await handler.shutdown();
   });
 }
 
