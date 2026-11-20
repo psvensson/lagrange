@@ -16,7 +16,7 @@
     "query-sql": 194,
     "release-packaging": 15,
     "runtime-primitives": 23,
-    "services-runtime": 160,
+    "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 228,
     "storage-raft": 151,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-e4e31b18",
+  "censusSize": 2662,
+  "digest": "fnv1a32-1da38a90",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8172836",
+  "observationDigest": "fnv1a32-a25ec349",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2441,6 +2441,7 @@
     "test/service/call-cell-public-outcome.test.js": "services-runtime",
     "test/service/call-cell-routing-contract.test.js": "services-runtime",
     "test/service/call-cell-statement-adapter.test.js": "services-runtime",
+    "test/service/call-finite-json-portability-v1.test.js": "services-runtime",
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
     "test/service/data-local-owner-boundaries.test.js": "services-runtime",
     "test/service/external-service-manifest.test.js": "services-runtime",
@@ -21876,6 +21877,12 @@
     "test/service/call-cell-statement-adapter.test.js": {
       "files": [
         "src/service/call-cell-statement-adapter.js"
+      ]
+    },
+    "test/service/call-finite-json-portability-v1.test.js": {
+      "files": [
+        "test/service/call-finite-json-portability-reference.py",
+        "test/service/call-finite-json-portability-v1.vectors.json"
       ]
     },
     "test/service/data-local-owner-boundaries.test.js": {

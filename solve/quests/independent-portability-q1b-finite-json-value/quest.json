@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "independent-portability-q1b-finite-json-value",
+  "epic": "core-architecture-convergence",
+  "statement": "Independently reproduce the bounded Call Cell lagrange.partial.v1 finite-JSON value representation using a source-free Python-stdlib encoder/decoder, canonical positive and rejected-wire vectors, inverse mutation controls and a focused source-path witness. This Q1b scope is the value-only encoding, parsing, Unicode, numeric and default limit contract; it excludes versioned partial envelopes, semantic group-key transport, schema matching, HLC, Raft, mixed-node/on-disk behavior and public-service certification.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q1b-finite-json-value-conformance.js --metric",
+      "target": 0,
+      "artifacts": [
+        "test/service/call-finite-json-portability-v1.vectors.json",
+        "test/service/call-finite-json-portability-reference.py",
+        "test/service/call-finite-json-portability-v1.test.js"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-value-owner",
+      "statement": "The existing Call Cell canonical-partial codec and service reference own value semantics. This Quest adds only language-neutral documentation, vectors and independent proof; it creates no alternate runtime codec or owner."
+    },
+    {
+      "id": "source-bound-values-only",
+      "statement": "No src changes, public transport/wire envelope or group-key equivalence, cross-version or same-disk compatibility, HLC representation, Raft arithmetic, guest runtime replacement, cutover-gate expansion, legacy path or fallback."
+    },
+    {
+      "id": "independent-inverse-proof",
+      "statement": "The reference must compute outputs from inputs, not echo expected vectors; negative control mutations must turn the checker red, novel Python-only values must exercise the same grammar, and the real source codec is exercised separately through its focused test."
+    }
+  ],
+  "sealedAt": "4585c318139c4e81edabb5f0002a4c1f8d5e8d5c"
+}

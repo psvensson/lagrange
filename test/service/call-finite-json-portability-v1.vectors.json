@@ -1,0 +1,53 @@
+{
+  "schema": "lagrange-portability-finite-json-value-v1",
+  "scope": "value-only",
+  "status": "wip-not-conformance-proof",
+  "defaultLimits": {
+    "maxDepth": 16,
+    "maxArrayLength": 1024,
+    "maxRecordFields": 128,
+    "maxStringBytes": 16384,
+    "maxContributionBytes": 65536
+  },
+  "encode": [
+    {"id": "null", "inputJson": "null", "wire": "null"},
+    {"id": "true", "inputJson": "true", "wire": "true"},
+    {"id": "false", "inputJson": "false", "wire": "false"},
+    {"id": "negative-zero", "inputJson": "-0", "wire": "0"},
+    {"id": "fraction", "inputJson": "2.5", "wire": "2.5"},
+    {"id": "safe-positive-integer", "inputJson": "9007199254740991", "wire": "9007199254740991"},
+    {"id": "safe-negative-integer", "inputJson": "-9007199254740991", "wire": "-9007199254740991"},
+    {"id": "decimal-small", "inputJson": "1e-6", "wire": "0.000001"},
+    {"id": "exponent-negative", "inputJson": "1e-7", "wire": "1e-7"},
+    {"id": "smallest-subnormal", "inputJson": "5e-324", "wire": "5e-324"},
+    {"id": "empty-array", "inputJson": "[]", "wire": "[]"},
+    {"id": "empty-record", "inputJson": "{}", "wire": "{}"},
+    {"id": "record-sort", "inputJson": "{\"z\":2,\"a\":1}", "wire": "{\"a\":1,\"z\":2}"},
+    {"id": "nested-value", "inputJson": "{\"z\":[null,true,\"ok\"],\"a\":{\"b\":2}}", "wire": "{\"a\":{\"b\":2},\"z\":[null,true,\"ok\"]}"},
+    {"id": "utf16-key-order", "inputJson": "{\"\\uE000\":3,\"😀\":4,\"z\":2,\"a\":1}", "wire": "{\"a\":1,\"z\":2,\"😀\":4,\"\uE000\":3}"},
+    {"id": "escape-normalization", "inputJson": "\"\\u000a\"", "wire": "\"\\n\""},
+    {"id": "escaped-slash-normalization", "inputJson": "\"\\/\"", "wire": "\"/\""},
+    {"id": "primitive-unicode", "inputJson": "\"café 😀\"", "wire": "\"café 😀\""}
+  ],
+  "rejectWire": [
+    {"id": "duplicate-key", "wire": "{\"a\":1,\"a\":2}", "code": "duplicate_object_key"},
+    {"id": "duplicate-escaped-key", "wire": "{\"a\":1,\"\\u0061\":2}", "code": "duplicate_object_key"},
+    {"id": "out-of-order-keys", "wire": "{\"z\":1,\"a\":2}", "code": "non_canonical_partial_wire"},
+    {"id": "negative-zero-wire", "wire": "-0", "code": "non_canonical_partial_wire"},
+    {"id": "redundant-exponent", "wire": "2e0", "code": "non_canonical_partial_wire"},
+    {"id": "unsafe-decimal-expanded", "wire": "1e20", "code": "unsafe_integer_value"},
+    {"id": "unsafe-exponent-positive", "wire": "1e21", "code": "unsafe_integer_value"},
+    {"id": "uppercase-exponent-overflow", "wire": "1E+21", "code": "unsafe_integer_value"},
+    {"id": "unnecessary-space", "wire": "{\"a\": 1}", "code": "non_canonical_partial_wire"},
+    {"id": "unnecessary-escape", "wire": "\"\\/\"", "code": "non_canonical_partial_wire"},
+    {"id": "unpaired-high-surrogate", "wire": "\"\\ud800\"", "code": "invalid_unicode_string"},
+    {"id": "unpaired-low-surrogate-key", "wire": "{\"\\udc00\":1}", "code": "invalid_unicode_string"},
+    {"id": "unsafe-positive-integer", "wire": "9007199254740992", "code": "unsafe_integer_value"},
+    {"id": "unsafe-negative-integer", "wire": "-9007199254740992", "code": "unsafe_integer_value"},
+    {"id": "nonfinite-overflow", "wire": "1e309", "code": "invalid_partial_value"},
+    {"id": "nan-token", "wire": "NaN", "code": "malformed_partial_wire"},
+    {"id": "infinity-token", "wire": "Infinity", "code": "malformed_partial_wire"},
+    {"id": "invalid-json", "wire": "{\"a\":", "code": "malformed_partial_wire"},
+    {"id": "trailing-comma", "wire": "[1,]", "code": "malformed_partial_wire"}
+  ]
+}

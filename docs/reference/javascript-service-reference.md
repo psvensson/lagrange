@@ -178,6 +178,38 @@ Partials are intermediate structured or numeric values emitted by `run()` across
      emit('orders', { count: rows.length, revenueCents: totalCents });
      ```
 
+### Portable finite-JSON value representation (Q1b contract slice)
+
+The **value-only** representation of `lagrange.partial.v1` is defined below so
+an independent implementation can construct and reject the same values. This
+section does not define the versioned envelope, semantic group-key encoding,
+`partialSchema` validation, transport delivery identity, same-disk storage or
+mixed-implementation cluster compatibility. Those concerns keep their existing
+owners and require separate conformance claims.
+
+| Value domain | Canonical value and refusal rule |
+| --- | --- |
+| `null`, boolean | Serialize as the JSON tokens `null`, `true`, `false`. |
+| Number | Only finite IEEE-754 binary64 values are admitted. Integral values must lie in the exact safe-integer range. Normalize negative zero to `0`; serialize using ECMAScript Number-to-string decimal formatting (including its exponent rules), not the host language's default float formatting. |
+| String | Accept well-formed Unicode scalar sequences only. Refuse unpaired UTF-16 surrogates. Serialize with ECMAScript JSON string escaping and count limits in UTF-8 bytes. |
+| Array | Accept only dense, ordinary arrays of own data elements; preserve element order. Refuse holes, inherited/accessor elements, cyclic nesting and over-limit length. |
+| Record | Accept only plain or null-prototype records of own enumerable string-key data properties. Refuse accessor and symbol properties, exotic prototypes and cycles. Sort keys by UTF-16 code-unit order before serialization, not UTF-8 byte order or locale collation. |
+
+Serialization contains no insignificant whitespace and no alternate numeric or
+string spellings. A decoder must reject duplicate record keys, noncanonical
+escape spellings, noncanonical numeric spellings, and any wire string not equal
+to the canonical serialization of its decoded value. Empty arrays and records
+are valid. Container nesting depth counts opened arrays/records, not scalar
+leaves. The default value-codec ceilings are 16 nested containers, 1,024
+elements per array, 128 fields per record, 16,384 UTF-8 bytes per string and
+65,536 UTF-8 bytes for the serialized contribution. Explicit limit overrides
+remain a separate caller policy and cannot relax the closed value grammar.
+
+This is a **contract checkpoint, not Q1b conformance evidence**. Q1b requires
+a second-language decoder with positive, refusal and inverse-mutation vectors
+that does not import the production codec. Until that proof has landed, the
+target contract above does not certify independent portability.
+
 ## Unsupported Behaviors and Fail-Closed Guarantees
 
 The following capabilities are deliberately unsupported in the guest sandbox and fail closed:
