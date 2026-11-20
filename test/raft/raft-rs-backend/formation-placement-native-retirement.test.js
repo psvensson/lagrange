@@ -17,6 +17,7 @@ import {PARTITION_SERVICE_EVENT} from '../../../src/partition/partition-service-
 import {relayPartitionConsensusObservations} from
   '../../../src/partition/partition-service-raft-lifecycle-wiring.js';
 import {ledgerRows} from '../../partition/placement-admission-fixture.js';
+import {createLifecycleServiceRow} from '../../test-helpers/lifecycle-state-store.js';
 import {
   createMockCache, createMockPolicyService, createTestCoordinator,
 } from '../../rebalancer/test-helpers.js';
@@ -86,13 +87,23 @@ function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
     cache: createMockCache({services: [row], partitions: [{partition_id: row.partition_id,
       leader_node_id: SEED}]}),
     createdAt: row.created_at, ownerIncarnation,
-    rowOf: (status) => ({...row, status}), replicaOperations: operations});
+    rowOf: (status) => ({...row, status, raftRole: row.raft_role,
+      stateEnteredAt: row.state_entered_at, updatedAt: row.updated_at}),
+    replicaOperations: operations});
 }
 
 function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
   const services = leader.lifecycleStore.durable.services;
   services.set(sourceRow.replica_id,
-    source?.lifecycleStore.durable.services.get(sourceRow.replica_id) ?? sourceRow);
+    source?.lifecycleStore.durable.services.get(sourceRow.replica_id) ??
+    createLifecycleServiceRow({
+      serviceId: sourceRow.service_id, serviceType: sourceRow.service_type,
+      replicaId: sourceRow.replica_id, nodeId: sourceRow.node_id,
+      partitionId: sourceRow.partition_id, address: sourceRow.address,
+      status: sourceRow.status, raftRole: sourceRow.raft_role,
+      createdAt: sourceRow.created_at, stateEnteredAt: sourceRow.state_entered_at,
+      updatedAt: sourceRow.updated_at,
+    }));
   if (source) source.lifecycleStore.durable.services = services;
   const gateway = leader.lifecycleStore.gateway;
   const read = gateway.readAuthoritativeRows.bind(gateway);
