@@ -147,12 +147,9 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
   FUNCTION: 'function',
   CRITICAL: 'critical',
   WRITE: 'write',
-  OBSERVED: 'observed',
   CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE: 'cache_fallback_after_authoritative_failure',
   CACHE: 'cache',
   AUTHORITATIVE: 'authoritative',
-  ABSENT: 'absent',
-  UNAVAILABLE: 'unavailable',
   AUTHORITATIVE_ABSENT_CACHE_BLOCKING: 'authoritative_absent_cache_blocking',
 });
 const SQL = Object.freeze({

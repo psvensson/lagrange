@@ -835,7 +835,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     operation,
     sourceState,
   ) {
-    if (completion.state !== PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
+    if (completion.state !== PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED ||
+        sourceState ===
+          PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.TARGET_EVIDENCE_UNAVAILABLE) {
       return mappedState;
     }
     if (

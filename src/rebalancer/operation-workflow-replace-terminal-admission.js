@@ -28,6 +28,10 @@ import {
 } from './operation-workflow-replace-owner.js';
 
 import {isLiveCreateTargetStatus} from './replica-status.js';
+import {
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+  readAuthoritativeReplicaLifecycleObservationState,
+} from './replica-operation-repository-observation-methods.js';
 import {buildFailedCreateCleanupToken} from
   './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
@@ -69,7 +73,8 @@ const CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS = Object.freeze([
 
 // The ADD target's lifecycle is read from the authority only: a cache row
 // that lags is no evidence either way. A positive live row completes instead;
-// absent, unavailable and non-live evidence preserve ordinary settlement.
+// confirmed absence or a known non-live status permits ordinary settlement.
+// Unavailability leaves the operation and its reservation pending.
 const ADD_TARGET_LIVENESS_READ = EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
 
 // A failure no post-intent boundary applies to (not a partition create).
@@ -145,14 +150,12 @@ async function observeCreateTarget(owner, operation) {
   const readOptions = allowActiveLearner ?
     {...ADD_TARGET_LIVENESS_READ, allowActiveLearner: true} :
     ADD_TARGET_LIVENESS_READ;
-  return typeof owner.repository?.getActualReplicaObservation ===
-    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    owner.repository.getActualReplicaObservation(
-      operation.replicaId,
-      operation.partitionId,
-      operation.targetNodeId,
-      readOptions,
-    ) : null;
+  return owner.repository.getActualReplicaObservation(
+    operation.replicaId,
+    operation.partitionId,
+    operation.targetNodeId,
+    readOptions,
+  );
 }
 
 /**
@@ -195,14 +198,50 @@ async function admitAddTerminalFailure(owner, operation) {
     observeCreateTarget(owner, operation),
     readReplaceDurableStep(owner, operation),
   ]);
-  const live = observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL
+  const observationState =
+    readAuthoritativeReplicaLifecycleObservationState(observation);
+  const live = observationState === AUTHORITATIVE_REPLICA_OBSERVATION_STATE
     .OBSERVED && isLiveCreateTargetStatus(observation.lifecycleStatus);
+  const unavailable = observationState ===
+    AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
   return Object.freeze({
-    admitted: !live,
+    admitted: !unavailable && !live,
     expectedWorkflowStep: durableStep,
     completeInstead: live,
+    unavailable,
     stepMetadata: null,
     requiresRevalidation: true,
+  });
+}
+
+async function admitFailedAddTerminalRepair(
+  owner,
+  operation,
+  projectedOperation,
+  persistOptions,
+) {
+  const admission = await admitAddTerminalFailure(owner, operation);
+  const expectedWorkflowStep = persistOptions.expectedWorkflowStep;
+  const cleanupClaimKey =
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION;
+  const retainedAdmission = {
+    ...admission,
+    stepMetadata: {
+      [cleanupClaimKey]: getOperationMetadataObject(
+        projectedOperation.stepsHistory,
+        cleanupClaimKey,
+      ),
+    },
+  };
+  return Object.freeze({
+    admitted: admission.admitted &&
+      admission.expectedWorkflowStep === expectedWorkflowStep,
+    completeInstead: admission.completeInstead,
+    persistOptions: {
+      ...persistOptions,
+      terminalAdmission: () => revalidateCreateTerminalFailure(
+        owner, operation, retainedAdmission),
+    },
   });
 }
 
@@ -477,17 +516,25 @@ async function revalidateCreateTerminalFailure(
  * projection later; for a partition REPLACE it is never a second route to a
  * terminal. A retained REMOVED is re-decided by R-1a now; a retained FAILED
  * is written only as the step CAS it was admitted with, while the durable
- * row still holds that step.
+ * row still holds that step. A retained FAILED ADD also revalidates the exact
+ * target lifecycle before every new write.
  * The repair's admission and the options its write carries. A retained
  * FAILED armed without admission options (an older arm) is admitted again
  * now, from the durable step, exactly as failOperation admits it.
  * @param {Object} owner
  * @param {Object} projectedOperation
  * @param {Object} persistOptions
+ * @param {Object|null} durableOperation - Current authoritative operation.
  * @return {Promise<Object>} Frozen {admitted, persistOptions}.
  */
 async function admitReplaceTerminalRepair(owner, projectedOperation,
-  persistOptions = {}) {
+  persistOptions = {}, durableOperation = null) {
+  if (isPartitionAdd(projectedOperation) &&
+      projectedOperation.workflowStep === WORKFLOW_STEP.FAILED) {
+    if (!durableOperation) return Object.freeze({admitted: false, persistOptions});
+    return admitFailedAddTerminalRepair(
+      owner, durableOperation, projectedOperation, persistOptions);
+  }
   if (!isPartitionReplace(projectedOperation)) {
     return Object.freeze({admitted: true, persistOptions});
   }

@@ -35,9 +35,9 @@ function buildPriorityRecoverySupersededTargetError(
  * @param {Object} context - Segment/Class context instance.
  * @param {Object} operation
  * @param {Object|null} priorityRecoveryContext
- * @returns {string|null}
+ * @returns {Promise<string|null>}
  */
-function getPriorityRecoverySupersededTargetErrorFromContext(
+async function getPriorityRecoverySupersededTargetErrorFromContext(
   context,
   operation,
   priorityRecoveryContext,
@@ -55,32 +55,18 @@ function getPriorityRecoverySupersededTargetErrorFromContext(
     return null;
   }
 
-  const targetReadiness =
-    typeof context.controlPlaneReadinessService?.getNodeReadinessSync ===
-      'function' ?
-      context.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-        decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-        participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-      }) :
-      null;
-  const targetLifecycleStatus =
-    context.repository &&
-    typeof context.repository.getObservedReplicaStatusFromCache ===
-      'function' ?
-      context.repository.getObservedReplicaStatusFromCache(
-        operation.replicaId,
-        operation.partitionId,
-        targetNodeId,
-        context.buildObservedTargetReplicaObservationOptions(operation),
-      ) :
-      null;
-
+  const targetReadiness = context.controlPlaneReadinessService.getNodeReadinessSync(
+    targetNodeId, {
+      decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+      participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+    },
+  );
   const supersededTargetDecision =
-    resolvePriorityRecoverySupersededTargetDecision({
+    await resolvePriorityRecoverySupersededTargetDecision({
       operation,
       priorityRecoveryContext,
       targetReadiness,
-      targetLifecycleStatus,
+      observeTarget: () => context.observePriorityRecoveryTarget(operation),
     });
   if (!supersededTargetDecision.isFailure) {
     return null;

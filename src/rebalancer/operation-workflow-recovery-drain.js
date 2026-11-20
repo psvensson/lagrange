@@ -161,7 +161,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+  async resolvePriorityRecoveryRemoteSupersededTargetDrainError(
     operation,
     priorityRecoveryContext,
   ) {
@@ -197,10 +197,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       return null;
     }
     const targetState =
-      this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation);
+      await this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation);
     if (
-      targetState ===
-      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED
+      targetState !== PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED &&
+      targetState !==
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.OBSERVED_NONMATERIALIZED
     ) {
       return null;
     }
@@ -335,35 +336,21 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       evidence.operation);
   }
 
-  resolvePriorityRecoveryPreSyncReplaceTargetState(operation) {
+  async resolvePriorityRecoveryPreSyncReplaceTargetState(operation) {
     if (
       operation?.type !== OperationType.REPLACE ||
       !this.isPreSyncStep(operation.workflowStep)
     ) {
       return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE;
     }
-    if (
-      !this.repository ||
-      typeof this.repository.getObservedReplicaStatusFromCache !==
-        'function'
-    ) {
-      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE
-        .EVIDENCE_UNAVAILABLE;
-    }
-    const observedTargetStatus =
-      this.repository.getObservedReplicaStatusFromCache(
-        operation.replicaId,
-        operation.partitionId,
-        operation.targetNodeId,
-        this.buildObservedTargetReplicaObservationOptions(operation),
-      );
+    const targetObservation = await this.observePriorityRecoveryTarget(operation);
     return resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
       operation,
-      targetLifecycleStatus: observedTargetStatus,
+      targetObservation,
     });
   }
 
-  buildPriorityRecoveryPreSyncReplaceDrainEvidence(
+  async buildPriorityRecoveryPreSyncReplaceDrainEvidence(
     operation,
     completionState,
   ) {
@@ -373,7 +360,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
           completionState,
         ),
       targetState:
-        this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation),
+        await this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation),
       stepStale: this.isPriorityRecoveryOperationDrainStepStale(operation),
     });
   }
@@ -387,11 +374,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
+  async resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
     operation,
     completionState,
   ) {
-    const evidence = this.buildPriorityRecoveryPreSyncReplaceDrainEvidence(
+    const evidence = await this.buildPriorityRecoveryPreSyncReplaceDrainEvidence(
       operation,
       completionState,
     );
@@ -465,7 +452,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       );
     }
     const preSyncReplaceDrainSourceState =
-      this.resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
+      await this.resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
         operation,
         completionState,
       );
@@ -626,7 +613,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     const completion = this.buildPriorityRecoveryCompletionForOperation(
       operation, planningSnapshot) || priorityRecoveryContext?.completion || null;
     const supersededTargetError =
-      this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+      await this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
         operation, priorityRecoveryContext);
     const supersededTargetState = supersededTargetError ?
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET : null;

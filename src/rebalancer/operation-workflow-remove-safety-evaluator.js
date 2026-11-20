@@ -164,7 +164,7 @@ async function evaluatePriorityRecoveryCompletionRemoveSafety(
       planningSnapshot,
     );
   const supersededTargetError =
-    context.getPriorityRecoverySupersededTargetErrorFromContext(
+    await context.getPriorityRecoverySupersededTargetErrorFromContext(
       operation,
       priorityRecoveryContext,
     );
@@ -230,7 +230,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   }
 
   const supersededTargetError =
-    context.getPriorityRecoverySupersededTargetErrorFromContext(
+    await context.getPriorityRecoverySupersededTargetErrorFromContext(
       operation,
       priorityRecoveryContext,
     );

@@ -6,6 +6,8 @@ import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
+  '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 // Initial item 02 witness: the production coordinator constructs the repository
 // and workflow owner. Their SQL executes in SQLite using production schemas and
 // the gateway's mutation planner. Only persistence reply delivery is corrupted.
@@ -28,6 +30,7 @@ import {
 import {
   PARTITIONS_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
+  SERVICES_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -48,7 +51,14 @@ import {
 import {
   createDeterministicTimerQueue,
 } from './reservation-dispatch-gate-test-harness.js';
+import {buildPriorityDrainSupersededReadinessService} from
+  './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
+const {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE,
+} = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
 const PARTITION_ID = 'strict-outcomes-p1';
 const TARGET_NODE_ID = 'test-node-2';
 const RESERVATION_LIFETIME_MS = 60_000;
@@ -56,10 +66,11 @@ const INVALID_OUTCOME_CODE = 'INVALID_OPERATION_PERSISTENCE_OUTCOME';
 const LOST_REPLY_MESSAGE = 'injected loss after real SQLite persistence';
 const SQL_SCHEMAS = [
   REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA, PARTITIONS_SCHEMA,
+  SERVICES_SCHEMA,
 ];
 const MUTATION_PLANNER = new ControlPlaneSystemTableGateway();
 
-function openCoordinator(file) {
+function openCoordinator(file, coordinatorOptions) {
   const database = new Database(file);
   for (const schema of SQL_SCHEMAS) {
     database.exec(generateCreateTableSQL(schema));
@@ -96,6 +107,7 @@ function openCoordinator(file) {
   };
   const timers = createDeterministicTimerQueue();
   const coordinator = createTestCoordinator({
+    ...coordinatorOptions,
     sqlQueryEngine: sqlEngine,
     controlPlaneSystemTableGateway: gateway,
     setTimeoutFn: timers.setTimeoutFn,
@@ -115,10 +127,10 @@ function openCoordinator(file) {
   };
 }
 
-function createFixture(t) {
+function createFixture(t, coordinatorOptions = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'strict-operation-outcomes-'));
   const file = path.join(directory, 'operations.sqlite');
-  let current = openCoordinator(file);
+  let current = openCoordinator(file, coordinatorOptions);
   t.teardown(async () => {
     try {
       await current.close();
@@ -133,7 +145,7 @@ function createFixture(t) {
     async reopen() {
       await current.close();
       current = null;
-      current = openCoordinator(file);
+      current = openCoordinator(file, coordinatorOptions);
       return current;
     },
   };
@@ -171,7 +183,8 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
       entity_type: operation.entityType,
       entity_id: operation.entityId,
       partition_id: operation.partitionId,
-      target_node_id: TARGET_NODE_ID,
+      target_node_id: operation.targetNodeId,
+      reason_code: fixture.coordinator.getReservationReasonCode(operation.type),
       estimated_bytes: 1,
       amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
@@ -220,6 +233,90 @@ test('strict outcomes positive: real nonterminal update and terminal release', a
   t.ok(Number.isFinite(durable.completedAt));
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED,
     'real terminal release updates only its reservation through the coordinator');
+});
+
+function interruptServicesRead(fixture) {
+  const read = fixture.gateway.readAuthoritativeRows.bind(fixture.gateway);
+  fixture.gateway.readAuthoritativeRows = async (tableName, ...args) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+      return {success: false, error: 'injected SERVICES authority outage'};
+    }
+    return read(tableName, ...args);
+  };
+  return () => { fixture.gateway.readAuthoritativeRows = read; };
+}
+
+test('ADD terminal failure retains the operation during exact target read unavailability', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'add-target-read-unavailable');
+  const owner = fixture.coordinator.workflowOwner;
+  await owner.updateStep(operation, WORKFLOW_STEP.SYNCING);
+  const restoreServicesRead = interruptServicesRead(fixture);
+
+  const observation = await owner.repository.getActualReplicaObservation(
+    operation.replicaId, operation.partitionId, operation.targetNodeId);
+  t.equal(observation.state, 'unavailable',
+    'the real repository classifies the failed authoritative read');
+  const refused = await owner.failOperation(operation, 'Create timed out');
+  const retained = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(refused.committed, false, 'failure is refused without exact lifecycle');
+  t.equal(retained.workflowStep, WORKFLOW_STEP.SYNCING);
+  t.equal(retained.completedAt, null);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+
+  restoreServicesRead();
+  const restored = await owner.repository.getActualReplicaObservation(
+    operation.replicaId, operation.partitionId, operation.targetNodeId);
+  t.equal(restored.state, 'absent', 'the restored exact SQL read confirms absence');
+  const settled = await owner.failOperation(operation, 'Create timed out');
+  const terminal = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(settled.committed, true);
+  t.equal(terminal.workflowStep, WORKFLOW_STEP.FAILED);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('priority ADD dispatch reports a refused failure as unsettled', async (t) => {
+  const partitionId = 'sql_transactions-p1';
+  const operationId = 'priority-add-dispatch-unsettled';
+  const fixture = createFixture(t, {
+    controlPlaneReadinessService: buildPriorityDrainSupersededReadinessService(
+      partitionId, operationId),
+  }).current;
+  const {coordinator, gateway} = fixture;
+  const operation = await seedOperation(t, fixture, operationId, {
+    partitionId, entityId: partitionId, replicaId: `${partitionId}-r3`,
+  });
+  const owner = coordinator.workflowOwner;
+  await owner.updateStep(operation, WORKFLOW_STEP.SENDING);
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  let targetReads = 0;
+  gateway.readAuthoritativeRows = async (tableName, sql, values, options) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        values[0] === operation.replicaId && ++targetReads > 1) {
+      return {success: false, error: 'target authority lost after supersession'};
+    }
+    return read(tableName, sql, values, options);
+  };
+
+  const refused = await coordinator.dispatchOperation(operation);
+  t.ok(targetReads > 1, 'dispatch observed absence before failure admission lost authority');
+  t.equal(refused.operationId, operationId);
+  t.equal(refused.skipped, true, 'dispatch reports the nonterminal refusal as a skip');
+  t.equal(refused.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+  const retained = await owner.repository.queryAuthoritativeOperationById(operationId);
+  t.equal(retained.workflowStep, WORKFLOW_STEP.SENDING);
+  t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.ACTIVE);
+
+  gateway.readAuthoritativeRows = read;
+  const settled = await coordinator.dispatchOperation(operation);
+  t.equal(settled.operationId, operationId);
+  t.equal(settled.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+  const durable = await owner.repository.queryAuthoritativeOperationById(operationId);
+  t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
+  t.match(durable.errorMessage, /eligible cohort/i);
+  t.equal(reservationStatus(fixture, operationId), RESERVATION_STATUS.RELEASED);
 });
 
 // These are deliberately malformed negatives, not substituting ordinary fixture
@@ -367,13 +464,17 @@ test('strict outcomes reopened SQLite: fresh owner recovers exact terminal and r
 // Terminal witnesses seed the decision through the real conditional UPDATE;
 // only the release interruption is injected. No workflow or SQL authority is
 // replaced during replay, competing-intent adoption or owner reconstruction.
-async function persistTerminalWitness(fixture, operation, {failed = false} = {}) {
+function terminalWitnessProjection(operation, failed) {
   const now = Date.now();
   const step = failed ? WORKFLOW_STEP.FAILED : WORKFLOW_STEP.ACTIVE;
-  const projected = {...operation, workflowStep: step,
+  return {...operation, workflowStep: step,
     status: failed ? ReplicaStatus.FAILED : ReplicaStatus.ACTIVE,
     updatedAt: now, completedAt: now, errorMessage: failed ? 'durable winner' : null,
     stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
+}
+
+async function persistTerminalWitness(fixture, operation, {failed = false} = {}) {
+  const projected = terminalWitnessProjection(operation, failed);
   const answer = await fixture.coordinator.repository.persistOperationUpdate(projected,
     {terminalTransition: true, confirmPersistence: false});
   const outcome = buildOperationTransitionOutcome(answer,
@@ -381,6 +482,110 @@ async function persistTerminalWitness(fixture, operation, {failed = false} = {})
   return {outcome, operation: await fixture.coordinator.repository
     .queryAuthoritativeOperationById(operation.operationId)};
 }
+
+test('retained FAILED ADD repair waits for exact target authority before a new write', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'retained-add-target-unavailable');
+  const owner = fixture.coordinator.workflowOwner;
+  const projected = terminalWitnessProjection(operation, true);
+  const restoreServicesRead = interruptServicesRead(fixture);
+  armTerminalTransitionRepair(owner, projected,
+    TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+  await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+  const retained = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(retained.workflowStep, WORKFLOW_STEP.PENDING);
+  t.equal(retained.completedAt, null);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+  t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), true);
+
+  restoreServicesRead();
+  await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+  const settled = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(settled.workflowStep, WORKFLOW_STEP.FAILED);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('retained durable FAILED ADD releases during a target authority outage', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'durable-add-target-unavailable');
+  const owner = fixture.coordinator.workflowOwner;
+  const winner = await persistTerminalWitness(fixture, operation, {failed: true});
+  t.equal(winner.outcome.committed, true);
+  interruptServicesRead(fixture);
+  armTerminalTransitionRepair(owner, winner.operation,
+    TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+  await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+  const settled = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.same(settled, winner.operation);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('priority superseded-target failure requires an exact authoritative observation', async (t) => {
+  const partitionId = 'sql_transactions-p1';
+  const operationId = 'superseded-target-authority';
+  const fixture = createFixture(t, {
+    controlPlaneReadinessService: buildPriorityDrainSupersededReadinessService(
+      partitionId, operationId),
+  }).current;
+  const operation = await seedOperation(t, fixture, operationId, {
+    type: OperationType.REPLACE,
+    partitionId, entityId: partitionId,
+    sourceReplicaId: `${partitionId}-r1`,
+    replicaId: `${partitionId}-r2`,
+  });
+  const owner = fixture.coordinator.workflowOwner;
+  const priorityContext = {
+    priorityPartitionSummary: {satisfied: false},
+    effectiveEligibleNodeIds: ['current-cohort-node'],
+    decisionSnapshot: {
+      blockerReasons: [PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED],
+    },
+  };
+  const decide = () => owner.getPriorityRecoverySupersededTargetErrorFromContext(
+    operation, priorityContext);
+  const decideRemotely = () => owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+    operation, priorityContext);
+  const clockBase = Date.now();
+  owner.timeSource = {now: () => clockBase + 3_600_000};
+  const staleDrainSource = () => owner.buildPriorityRecoveryOperationDrainSourceSnapshot(
+    operation, PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED);
+  const staleState = PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.RETIREMENT_UNPROVEN_STALE;
+  const restoreServicesRead = interruptServicesRead(fixture);
+  t.equal(await decide(), null, 'unavailable target authority defers supersession');
+  t.equal(await decideRemotely(), null, 'remote supersession also defers');
+  t.not((await staleDrainSource()).state, staleState,
+    'unavailable target authority cannot infer stale, unmaterialized failure');
+  restoreServicesRead();
+  t.match(await decide(), /eligible cohort/i, 'genuine absence still permits supersession');
+  t.match(await decideRemotely(), /eligible cohort/i, 'remote drain accepts genuine absence');
+  t.equal((await staleDrainSource()).state, staleState, 'genuine absence can be stale');
+
+  const now = Date.now();
+  const inserted = await fixture.gateway.submitMutation({
+    operation: 'insert',
+    tableName: SYSTEM_TABLE_NAME.SERVICES,
+    row: {
+      service_id: operation.replicaId,
+      replica_id: operation.replicaId,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: operation.partitionId,
+      node_id: operation.targetNodeId,
+      status: ReplicaStatus.CREATING,
+      created_at: now,
+      updated_at: now,
+    },
+  });
+  t.equal(inserted.success, true);
+  t.equal(await decide(), null, 'a materialized SQL target defers despite an empty cache');
+  t.equal(await decideRemotely(), null, 'remote drain defers a materialized SQL target');
+  t.not((await staleDrainSource()).state, staleState,
+    'a materialized SQL target cannot enter the stale-target failure lane');
+});
 
 for (const type of [OperationType.ADD, OperationType.GROWTH_PROMOTE]) {
   test(`strict outcomes fresh ${type} completion adopts exact reopened winner`, async (t) => {

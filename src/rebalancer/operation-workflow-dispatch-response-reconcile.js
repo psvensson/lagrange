@@ -236,6 +236,14 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
 const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
   new Set([ReplicaStatus.SYNCING]),
 );
+async function settleDispatchFailure(owner, operation, error, options) {
+  const outcome = await owner.failOperation(operation, error, options);
+  return owner.buildTerminalOperationDispatchResult(outcome, {
+    operationId: operation.operationId,
+    status: ReplicaOperationResponseStatus.COMPLETED,
+  });
+}
+
 // A replica-operation answer may carry a nested error object; its fields
 // read as the error (this is the answer's shape, never a transport one).
 function resolveDispatchDeliveryErrorLike(response) {
@@ -484,13 +492,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         await this.getPriorityRecoverySupersededTargetError(operation) :
         null;
     if (supersededPriorityRecoveryError) {
-      await this.failOperation(operation, supersededPriorityRecoveryError, {
+      return settleDispatchFailure(this, operation, supersededPriorityRecoveryError, {
         logLevel: FAILURE_LOG_LEVEL.WARN,
       });
-      return this.buildFailedOperationResult(
-        operation.operationId,
-        supersededPriorityRecoveryError,
-      );
     }
     if (
       !replaceRemoveDispatchPhase &&
@@ -560,15 +564,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             this.resolveRemoveSafetyHandoffFailureError(
               removeSafetyEvaluation,
             );
-          await this.failOperation(operation, handoffFailureError, {
+          return settleDispatchFailure(this, operation, handoffFailureError, {
             logLevel: FAILURE_LOG_LEVEL.WARN,
             logMessage:
               REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
           });
-          return this.buildFailedOperationResult(
-            operation.operationId,
-            handoffFailureError,
-          );
         }
         if (!removeSafetyEvaluation?.error) {
           this.clearDeferredSafetyBlockState(operation.operationId);
@@ -604,15 +604,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
       }
       if (removeSafetyEvaluation?.error) {
-        await this.failOperation(operation, removeSafetyEvaluation.error, {
+        return settleDispatchFailure(this, operation, removeSafetyEvaluation.error, {
           logLevel: FAILURE_LOG_LEVEL.WARN,
           logMessage:
             REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
         });
-        return this.buildFailedOperationResult(
-          operation.operationId,
-          removeSafetyEvaluation.error,
-        );
       }
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -653,11 +649,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       const replaceSourceMissing =
         'Missing source replica for REPLACE operation ' +
         operation.operationId;
-      await this.failOperation(operation, replaceSourceMissing);
-      return this.buildFailedOperationResult(
-        operation.operationId,
-        replaceSourceMissing,
-      );
+      return settleDispatchFailure(this, operation, replaceSourceMissing);
     }
     const target = `${dispatchNodeId}/service/${handlerType}`;
     const request = {
@@ -803,8 +795,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         );
       }
       if (!retainedCreateDeliveryResolution) {
-        await this.failOperation(operation, errorMsg);
-        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+        return settleDispatchFailure(this, operation, errorMsg);
       }
     }
     if (
@@ -847,8 +838,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         );
       }
       if (!retainedCreateDeliveryResolution) {
-        await this.failOperation(operation, errorMsg);
-        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+        return settleDispatchFailure(this, operation, errorMsg);
       }
     }
     while (true) {
@@ -1011,8 +1001,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         },
       );
     }
-    await this.failOperation(operation, errorMsg);
-    return this.buildFailedOperationResult(operation.operationId, errorMsg);
+    return settleDispatchFailure(this, operation, errorMsg);
   },
   buildCreateSatisfiedReplaceResumeDecision(operation) {
     const operationId = operation?.operationId || null;

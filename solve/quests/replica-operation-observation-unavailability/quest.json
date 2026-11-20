@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-operation-observation-unavailability",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Priority recovery superseded-target and partition ADD terminal-failure decisions consume the exact authoritative replica observation. Unavailable target lifecycle retains the ADD operation and reservation and defers superseded-target failure. Preserve authoritative absence, observed lifecycle, retained uncommitted repair and durable terminal replay.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-operation-observation-unavailability/evidence/receipt.json",
+      "requiredReceipts": [
+        "exact-target-unavailability-retains-add",
+        "retained-uncommitted-add-revalidates-and-durable-replay-settles",
+        "authoritative-superseded-target-observation",
+        "dispatch-consumes-durable-terminal-outcome",
+        "independent-verification"
+      ]
+    }
+  },
+  "assignment": {
+    "paths": [
+      "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+      "src/rebalancer/operation-workflow-owner-shared.js",
+      "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",
+      "src/rebalancer/operation-workflow-recovery-drain.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+      "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+      "src/rebalancer/operation-workflow-recovery-timeout.js",
+      "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+      "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+      "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+      "src/rebalancer/operation-workflow-transition-persistence.js",
+      "src/rebalancer/priority-recovery-superseded-target.js",
+      "src/rebalancer/replica-operation-repository-observation-methods.js",
+      "src/rebalancer/replica-operation-repository.js",
+      "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js",
+      "test/rebalancer/strict-operation-outcomes.test.js"
+    ],
+    "authority": "Operator continuation of bounded current fallback repair under operation-integrity-and-reliable-formation"
+  }
+}

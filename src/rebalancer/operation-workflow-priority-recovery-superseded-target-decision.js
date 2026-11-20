@@ -1,3 +1,7 @@
+import {
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+  readAuthoritativeReplicaLifecycleObservationState,
+} from './replica-operation-repository-observation-methods.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -35,7 +39,8 @@ const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
-    matches: (evidence) => evidence.materializedPreSyncTarget === true,
+    matches: (evidence) => evidence.targetObservationUnavailable ||
+      evidence.materializedPreSyncTarget,
   }),
   Object.freeze({
     state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
@@ -79,7 +84,6 @@ function buildPriorityRecoverySupersededTargetEvidence({
   priorityPartitionSummary,
   eligibleNodeIds,
   targetReadiness,
-  targetLifecycleStatus,
 }) {
   const targetNodeId = String(operation?.targetNodeId || '').trim();
   const blockedPartitionIds = priorityPartitionSummary ?
@@ -111,13 +115,7 @@ function buildPriorityRecoverySupersededTargetEvidence({
       false ||
     dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] ===
       false;
-  const materializedPreSyncTarget =
-    resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
-      operation,
-      targetLifecycleStatus,
-    }) === PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
   return Object.freeze({
-    materializedPreSyncTarget,
     targetOutsideEligibleCohort,
     transientReadinessBlockerPresent:
       transientReasonCodePresent || transientDimensionBlockerPresent,
@@ -134,11 +132,11 @@ function decidePriorityRecoverySupersededTarget(evidence) {
   });
 }
 
-function resolvePriorityRecoverySupersededTargetDecision({
+async function resolvePriorityRecoverySupersededTargetDecision({
   operation,
   priorityRecoveryContext,
   targetReadiness,
-  targetLifecycleStatus,
+  observeTarget,
 }) {
   const targetNodeId = String(operation?.targetNodeId || '').trim();
   if (!operation || targetNodeId.length === 0) {
@@ -169,10 +167,23 @@ function resolvePriorityRecoverySupersededTargetDecision({
     priorityPartitionSummary,
     eligibleNodeIds,
     targetReadiness,
-    targetLifecycleStatus,
   });
-  const supersededTargetDecision =
-    decidePriorityRecoverySupersededTarget(supersededTargetEvidence);
+  const targetObservation = supersededTargetEvidence.targetOutsideEligibleCohort &&
+    !supersededTargetEvidence.transientReadinessBlockerPresent ?
+    await observeTarget() : null;
+  const targetObservationUnavailable =
+    readAuthoritativeReplicaLifecycleObservationState(targetObservation) ===
+      AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+  const materializedPreSyncTarget =
+    resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
+      operation,
+      targetObservation,
+    }) === PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
+  const supersededTargetDecision = decidePriorityRecoverySupersededTarget({
+    ...supersededTargetEvidence,
+    targetObservationUnavailable,
+    materializedPreSyncTarget,
+  });
   return Object.freeze({
     isFailure:
       supersededTargetDecision.state ===
