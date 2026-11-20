@@ -88,7 +88,7 @@ const RELEASE_PARAMS = Object.freeze({
   targetVersion: '0.5.0', targetArtifactDigest: `sha256:${'5'.repeat(64)}`,
 });
 const RELEASE_POLICY = buildSupportEnvelopeRecord({versionPair: {
-  sourceVersion: MANAGEMENT_V1_CONTRACT.DEFAULT_RELEASE_VERSION,
+  sourceVersion: C.DEFAULT_RELEASE_VERSION,
   targetVersion: RELEASE_PARAMS.targetVersion,
 }});
 
