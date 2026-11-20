@@ -43,7 +43,7 @@ import {
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {
   createMockControlPlaneSystemTableGateway,
-  createTestCoordinator,
+  createTestCoordinator, createTestRebalancer,
 } from './test-helpers.js';
 import {
   createDeterministicTimerQueue,
@@ -667,4 +667,90 @@ for (const history of ['{broken', '{}', 'null']) {
       'SELECT steps_history FROM replica_operations WHERE operation_id = ?',
     ).get(operation.operationId).steps_history, history, 'corrupt evidence is preserved');
   });
+}
+
+
+for (const count of [true, '1', 1.5, -1, null]) {
+  test(`strict outcomes malformed changed count ${String(count)} cannot prove new progress`,
+    async (t) => {
+      const fixture = createFixture(t).current;
+      const operation = await seedOperation(t, fixture, `strict-count-${String(count)}`);
+      const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+      fixture.gateway.submitMutation = async (mutation, options) => {
+        const result = await submit(mutation, options);
+        return mutation.operation === 'update' && mutation.data?.workflow_step ?
+          {success: true, changes: count} : result;
+      };
+      const outcome = await fixture.coordinator.workflowOwner.completeOperation(operation);
+      t.equal(outcome.committed, false);
+      t.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+      t.equal(fixture.coordinator.stats.operationsCompleted, 0,
+        'a separately observed replay does not manufacture local commit credit');
+      t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+    });
+}
+
+test('strict outcomes interrupted release eventually wakes real terminal subscribers', async (t) => {
+  const fixture = createFixture(t).current;
+  const partitionId = 'replica_operations-p1';
+  const operation = await seedOperation(t, fixture, 'strict-release-wake',
+    {partitionId, entityId: partitionId});
+  const {coordinator} = fixture;
+  const rebalancer = createTestRebalancer({entityId: partitionId,
+    entityType: SERVICE_TYPE.PARTITION, rebalanceCoordinator: coordinator});
+  rebalancer.isLeader = true;
+  const wakes = [];
+  rebalancer.enqueueRebalanceCheck = (reason) => {
+    wakes.push(['rebalance', reason]);
+  };
+  rebalancer.enqueueMembershipPublicationReconcile = (reason) => {
+    wakes.push(['membership', reason]);
+  };
+  rebalancer.bindCoordinatorProgressListeners(coordinator);
+  t.teardown(() => rebalancer.unbindCoordinatorProgressListeners());
+  const key = coordinator.buildOperationIntentKey({type: operation.type,
+    nodeId: operation.targetNodeId, replicaId: operation.replicaId},
+  operation.entityType, operation.entityId);
+  coordinator.rememberOperationIntents([key], operation);
+  const read = fixture.gateway.readAuthoritativeRows.bind(fixture.gateway);
+  let interrupted = false;
+  fixture.gateway.readAuthoritativeRows = async (table, ...args) => {
+    if (table === SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS && !interrupted) {
+      interrupted = true;
+      return {success: false, error: 'interrupted release before terminal wake'};
+    }
+    return read(table, ...args);
+  };
+  const first = await observeAttempt(() => coordinator.workflowOwner.completeOperation(operation));
+  t.equal(first.error?.code, 'RESERVATION_RELEASE_UNCONFIRMED');
+  t.equal(wakes.length, 0, 'dependent terminal subscribers remain asleep while release is held');
+  t.equal(coordinator.recentOperationIntents.has(key), true);
+  t.equal(coordinator.stats.operationsCompleted, 1, 'the real committed result receives one credit');
+  await runTerminalTransitionRepairAttempt(coordinator.workflowOwner, operation.operationId);
+  t.same(wakes.map(([kind]) => kind), ['rebalance', 'membership']);
+  t.equal(coordinator.recentOperationIntents.has(key), false, 'actual intent pruner receives the wake');
+  t.equal(coordinator.stats.operationsCompleted, 1, 'repair does not recount the committed result');
+  await coordinator.workflowOwner.completeOperation(operation);
+  t.equal(coordinator.stats.operationsCompleted, 1, 'idempotent replay never adds commit credit');
+  t.equal(coordinator.workflowOwner.terminalTransitionRepairStateByOperationId.size, 0,
+    'notification credit state ends with its release obligation');
+});
+
+for (const deferred of [false, true]) {
+  test(`strict outcomes reservation sweeps retain malformed/deferred terminal evidence: ${deferred}`,
+    async (t) => {
+      const fixture = createFixture(t).current;
+      const operation = await seedOperation(t, fixture, `strict-sweep-${deferred}`);
+      fixture.database.prepare('UPDATE storage_reservations SET expires_at = 0').run();
+      fixture.coordinator.repository.getOperationByIdVisibilityObservation = async () => ({
+        operation: {...operation, workflowStep: WORKFLOW_STEP.FAILED,
+          status: ReplicaStatus.FAILED, completedAt: deferred ? Date.now() : null},
+        deferredOutcome: deferred ? {reasonCode: 'authority unavailable'} : null,
+      });
+      const attempt = await observeAttempt(() => fixture.coordinator.reconcileReservations());
+      if (!deferred) t.equal(attempt.error?.code, INVALID_OUTCOME_CODE);
+      else t.equal(attempt.error, null);
+      t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE,
+        'neither expiry nor orphan sweep discharges unproved terminal evidence');
+    });
 }

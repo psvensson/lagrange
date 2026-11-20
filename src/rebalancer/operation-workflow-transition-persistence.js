@@ -344,11 +344,25 @@ class OperationWorkflowTransitionPersistence
     // re-enter this same release phase without asking admission for another write.
     armTerminalTransitionRepair(this, outcome.operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
+    const releaseState = this.terminalTransitionRepairStateByOperationId.get(operation.operationId);
+    if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
+      if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
+      else this.stats.operationsCompleted++;
+      releaseState.commitCounted = true;
+      releaseState.pendingCommitCredit = false;
+    }
     releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
     await this.releaseReservationForOperation(operation);
     this.clearTerminalOperationRetryState(operation);
     this.clearTransitionRetry(operation.operationId);
     this.clearDeferredSafetyBlockState(operation.operationId);
+    // Terminal observations wake idempotent pruning/rebalance subscribers after
+    // release, including lost replies and reconstructed owners. No permanent
+    // event history is retained; only new committed results earn stats credit.
+    const failed = operation.workflowStep === WORKFLOW_STEP.FAILED;
+    this.emitter.emit(failed ? REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED :
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+    failed ? {operation, errorMessage: operation.errorMessage} : {operation});
     clearTerminalTransitionRepair(this, operation.operationId);
     armFailedCreateCleanupRelease(this, operation);
   }
@@ -436,8 +450,6 @@ class OperationWorkflowTransitionPersistence
       projectedOperation, OPERATION_TRANSITION_REASON.OPERATION_COMPLETED, persistOptions);
     if (!transitionOutcome.committed) return transitionOutcome;
 
-    this.stats.operationsCompleted++;
-
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
       operationId: operation.operationId,
       type: operation.type,
@@ -445,9 +457,6 @@ class OperationWorkflowTransitionPersistence
       targetNodeId: operation.targetNodeId,
     });
 
-    this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
-      operation,
-    });
     armFailedCreateCleanupRelease(this, operation);
 
     try {
@@ -606,8 +615,6 @@ class OperationWorkflowTransitionPersistence
       return transitionOutcome;
     }
 
-    this.stats.operationsFailed++;
-
     const logPayload = {
       operationId: operation.operationId,
       type: operation.type,
@@ -624,10 +631,6 @@ class OperationWorkflowTransitionPersistence
 
     logMethod(logMessage, logPayload);
 
-    this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {
-      operation,
-      errorMessage: normalizedError,
-    });
 
     try {
       this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {

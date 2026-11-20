@@ -536,17 +536,18 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         return null;
       }
       return this.queryAuthoritativeOperationVisibilityObservation(
-          operation.operationId,
-          {
-            authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            allowPriorityRecoveryDeferredVisibility: false,
-          },
-        );
+        operation.operationId,
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          allowPriorityRecoveryDeferredVisibility: false,
+        },
+      );
     }
 
     async recoverPersistedReplicaOperationMutation(operation, errorResult) {
-      const observation = await this.observeRetryableReplicaOperationMutation(operation, errorResult);
+      const observation =
+        await this.observeRetryableReplicaOperationMutation(operation, errorResult);
       if (
         !this.isReplicaOperationVisibilitySatisfied(
           operation,

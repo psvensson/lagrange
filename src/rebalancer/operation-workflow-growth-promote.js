@@ -18,7 +18,7 @@ import {
 
 const {
   OPERATION_TRANSITION_REASON, OPERATION_WORKFLOW_OWNER_LITERAL, OperationType,
-  REBALANCE_COORDINATOR_EVENT, REBALANCE_COORDINATOR_LOG_MSG, ReplicaStatus, WORKFLOW_STEP,
+  REBALANCE_COORDINATOR_LOG_MSG, ReplicaStatus, WORKFLOW_STEP,
 } = SHARED;
 
 const {
@@ -526,12 +526,10 @@ async function completeGrowthPromoteOperation(owner, operation) {
     OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
     {...owner.buildOperationTransitionPersistOptions(), terminalTransition: true});
   if (outcome.committed) {
-    owner.stats.operationsCompleted++;
     owner.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
       operationId: operation.operationId, type: operation.type,
       partitionId: operation.partitionId, targetNodeId: operation.targetNodeId,
     });
-    owner.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {operation});
   }
   return outcome;
 }

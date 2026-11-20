@@ -722,13 +722,22 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     extractMutationChangeCount(result) {
-      const candidate = Number(
-        result?.changes ??
-          result?.affectedRows ??
-          result?.partitionResult?.changes ??
-          result?.partitionResult?.affectedRows,
-      );
-      return Number.isFinite(candidate) ? candidate : null;
+      if (!result || typeof result !== 'object') return null;
+      const partitionDescriptor = Object.getOwnPropertyDescriptor(result, 'partitionResult');
+      if (partitionDescriptor && !Object.hasOwn(partitionDescriptor, 'value')) return null;
+      const records = [result, partitionDescriptor?.value];
+      const counts = [];
+      for (const record of records) {
+        if (!record || typeof record !== 'object') continue;
+        for (const field of ['changes', 'affectedRows']) {
+          const descriptor = Object.getOwnPropertyDescriptor(record, field);
+          if (!descriptor) continue;
+          if (!Object.hasOwn(descriptor, 'value') ||
+              !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return null;
+          counts.push(descriptor.value);
+        }
+      }
+      return counts.length > 0 && counts.every((count) => count === counts[0]) ? counts[0] : null;
     }
   }
 

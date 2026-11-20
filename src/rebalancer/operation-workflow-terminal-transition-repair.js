@@ -276,6 +276,9 @@ function buildTerminalTransitionRepairState(
     cleanupRelease: Boolean(existingState?.cleanupRelease) || cleanupOnly,
     writeCommitted: Boolean(existingState?.writeCommitted) || releaseOnly ||
       cause === TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
+    pendingCommitCredit: Boolean(existingState?.pendingCommitCredit) ||
+      cause === TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
+    commitCounted: Boolean(existingState?.commitCounted),
     persistenceRepair: !releaseOnly && !retainRelease &&
       (cause === TERMINAL_TRANSITION_REPAIR_CAUSE.REPAIR_UNCONFIRMED ?
         existingState.persistenceRepair :
