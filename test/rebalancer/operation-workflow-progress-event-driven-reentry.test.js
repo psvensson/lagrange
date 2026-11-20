@@ -4,7 +4,7 @@ import {
 } from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NUM, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -1618,8 +1618,8 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
       () => completion;
     coordinator.workflowOwner.buildPriorityRecoveryAssessmentContextForOperation =
       () => priorityRecoveryContext;
-    coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
-      () => ReplicaStatus.ACTIVE;
+    const activeTarget = buildFixtureActiveTargetRow(operation);
+    coordinator.workflowOwner.repository.systemTableCache.upsert(TABLES.SERVICES, activeTarget);
 
     const completedWithLiveOwnerAndCacheProjectionOnly =
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
@@ -1650,12 +1650,7 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     );
     restoreRead();
     installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
-      (_sql, [replicaId]) => completeServicesFixtureRead([{
-        service_id: replicaId, replica_id: replicaId, service_type: 'partition',
-        partition_id: operation.partitionId, node_id: operation.targetNodeId,
-        status: ReplicaStatus.ACTIVE, raft_role: 'follower', address: 'node-2:1',
-        created_at: 1, state_entered_at: 1,
-      }]));
+      () => completeServicesFixtureRead([activeTarget]));
     const completed = await coordinator.workflowOwner
       .reconcilePriorityRecoveryOperationDrain(operation);
     t.equal(
@@ -2664,6 +2659,21 @@ test(
 // target ACTIVE. An available owner completes its own ADD. Without the
 // operation-fact arm a dead-owner ADD (orphan adoption skips priority
 // partitions) would wait for its step timeout.
+function buildFixtureActiveTargetRow(operation) {
+  return {
+    service_id: operation.replicaId,
+    replica_id: operation.replicaId,
+    service_type: 'partition',
+    partition_id: operation.partitionId,
+    node_id: operation.targetNodeId,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: 'follower',
+    address: operation.targetNodeId + ':1',
+    created_at: 1,
+    state_entered_at: 1,
+  };
+}
+
 async function runIntermediateAddDrain(
   t,
   {ownerUnavailable, locallyOwned, authoritativeTargetRow},
@@ -2731,22 +2741,17 @@ async function runIntermediateAddDrain(
     owner.repository.isOperationLocallyOwned = () => locallyOwned;
     owner.repository.resolveOperationOwnerNodeId = () => 'node-owner';
     owner.isPriorityRecoveryDrainOwnerUnavailable = () => ownerUnavailable;
-    owner.repository.getObservedReplicaStatusFromCache = () => ReplicaStatus.ACTIVE;
-    const defaultVoterTargetRow = {
-      service_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
-      replica_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
-      service_type: 'partition', partition_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
-      node_id: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID, status: ReplicaStatus.ACTIVE,
-      raft_role: 'follower', address: 'node-target:1', created_at: 1, state_entered_at: 1,
-    };
+    const defaultVoterTargetRow = buildFixtureActiveTargetRow(operation);
+    owner.repository.systemTableCache.upsert(TABLES.SERVICES, defaultVoterTargetRow);
     const resolvedRow = authoritativeTargetRow === undefined ?
       defaultVoterTargetRow : authoritativeTargetRow;
-    // The real status read (authoritative row -> lifecycle normalization).
+    const readActual = owner.repository.getActualReplicaObservation.bind(owner.repository);
+    owner.repository.getActualReplicaObservation = (replicaId, partitionId, nodeId, options) => {
+      authoritativeReads.push([replicaId, partitionId, nodeId]);
+      return readActual(replicaId, partitionId, nodeId, options);
+    };
     installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
-      (_sql, [replicaId]) => {
-        authoritativeReads.push([replicaId, operation.partitionId, operation.targetNodeId]);
-        return completeServicesFixtureRead(resolvedRow === null ? [] : [resolvedRow]);
-      });
+      () => completeServicesFixtureRead(resolvedRow === null ? [] : [resolvedRow]));
     const drainSnapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     const settled =
