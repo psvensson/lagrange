@@ -332,8 +332,15 @@ The same public journey on composed source `af9fd5d0a` failed after
 active addressed services, and two remote ADD operations timed out in
 CREATING. The reported write failure followed the routing failure. A
 November 5 trial of this same probe also failed to provision its partition.
-The creation and workflow owners must account for the first missing state
-transition on one identified replica before changing admission or release.
+The same two ADDs timed out in CREATING at `58ec69a2a`, before the CDC
+change was integrated. In a focused native run at `729de1b2e`, the join
+factory initialized its new partition service and registered it in the
+handler. CREATE then compared the new instance with its prior empty slot,
+and emitted neither SYNCING nor ACTIVE. The CREATE and join owners are
+repairing this handoff. It must admit its own service, preserve a genuine
+replacement, and retire an unfinished open under its exact identity.
+[Intermediate public run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-formation-58ec-nov20.tar.gz)
+and [original native factory failure](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--native-join-open-729de-original-nov20.tar.gz).
 The management guard recorded zero calls on each node. Physical formation,
 the subsequent smoke and the Lagrange GCP measurement remain open.
 [Original failed public journey and worker logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-formation-af9-nov20.tar.gz).
