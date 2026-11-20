@@ -161,3 +161,8 @@ test('the range is printed with its source and an empty one is warned about', ()
   assert.deepEqual(outcome.warnings,
     rangeWarnings({range: outcome.range, changedJs: outcome.changedJs}));
 });
+
+test('fast static refuses a declared range Git cannot read', () => {
+  assert.throws(() => runFastStatic({base: '0'.repeat(40)}),
+    /Invalid revision range/u);
+});

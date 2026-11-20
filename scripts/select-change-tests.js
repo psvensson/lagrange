@@ -158,22 +158,6 @@ function requireValidSafetySpine(value) {
   return tests;
 }
 
-// Both sides of a rename and the vanished side of a deletion: a change that
-// removed src/raft/x.js must still prove storage-raft, and a rename that
-// crosses a subsystem boundary must prove BOTH owners.
-export function changedPathsBetween(base, head, gitRoot = root) {
-  const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? null : semanticPaths(records);
-}
-
-// Which of those paths this change REMOVED. Kept separate from the path list
-// because the selector needs both: a vanished test is not unclassified, while
-// a vanished source file must still prove its former owner.
-export function vanishedPathsBetween(base, head, gitRoot = root) {
-  const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? createOrderedStringSet() : vanishedPaths(records);
-}
-
 // Which top-level package.json keys differ between the two states. Computed
 // here because it needs both; the selector stays a pure function of what it is
 // told, and refuses when this cannot be determined.
@@ -368,17 +352,16 @@ export function lockfileDependencyGraphChanged(base, head, gitRoot = root) {
 }
 
 // The plan for a committed range plus the working tree: what `npm test` and
-// the push gate both execute. null when the range cannot be diffed.
+// the push gate both execute. Git errors abort before a proof is planned.
 export function planChangeProof({base = null, head = null,
   planRoot = root} = {}) {
   const headRevision = head || DEFAULT_HEAD;
-  const changedPaths = changedPathsBetween(base, headRevision, planRoot);
-  if (changedPaths === null) return null;
+  const records = changedRecords({root: planRoot, base, head: headRevision});
   return buildExecutionPlan({
-    changedPaths,
+    changedPaths: semanticPaths(records),
     packageFields: changedPackageFields(base, head, planRoot),
     lockfileGraphChanged: lockfileDependencyGraphChanged(base, head, planRoot),
-    vanished: vanishedPathsBetween(base, headRevision, planRoot),
+    vanished: vanishedPaths(records),
     planRoot,
   });
 }
@@ -639,7 +622,6 @@ function parseInvocation(argv) {
     valid: !(base.present && !base.value) && !(head.present && !head.value),
     base: resolvedCheckBase(base.value, process.env, root),
     head: head.value,
-    headRevision: head.value || DEFAULT_HEAD,
     explain: arrayIncludes(argv, EXPLAIN_FLAG),
     list: arrayIncludes(argv, LIST_FLAG),
   };
@@ -684,13 +666,6 @@ async function main() {
     return;
   }
   const plan = planChangeProof({base: invocation.base, head: invocation.head});
-  if (plan === null) {
-    process.stderr.write(
-      `cannot diff ${invocation.base}..${invocation.headRevision}${NEWLINE}`);
-    process.exitCode = 1;
-    return;
-  }
-
   if (invocation.explain) {
     process.stdout.write(renderExplain(plan));
     if (plan.kind === SELECTION_REFUSED) process.exitCode = 1;

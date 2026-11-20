@@ -90,7 +90,6 @@ const WORKTREE_RANGE_LABEL = 'working tree';
 const PERCENT = 100;
 const EXIT_FAILURE = 1;
 const EXIT_SUCCESS = 0;
-const CANNOT_DIFF_PROBLEM = 'cannot diff the proof range';
 // The same digest-pinned dataset prerequisite CI's gate workflow provisions
 // before npm test (.github/workflows/full-gate.yml); the materialised gate
 // checkout has no gitignored data/ tree, so the stage provisions it here.
@@ -539,11 +538,6 @@ function main() {
   const explain = arrayIncludes(process.argv, EXPLAIN_FLAG);
   const range = resolvedCheckRange(null, process.env, root);
   const plan = planChangeProof({base: range.base});
-  if (plan === null) {
-    process.stderr.write(`${LOG_PREFIX} ${CANNOT_DIFF_PROBLEM}${NEWLINE}`);
-    process.exitCode = EXIT_FAILURE;
-    return;
-  }
   const decision = decidePushProof({
     plan, corpusSize: classifiedCorpusSize(root), rangeSource: range.source,
   });
