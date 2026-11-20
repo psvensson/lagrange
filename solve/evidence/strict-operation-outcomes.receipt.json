@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "strict-operation-outcomes",
   "status": "fail",
-  "generatedAt": "2026-11-20T21:18:22.258Z",
+  "generatedAt": "2026-11-20T23:47:36.654Z",
   "testFileDigests": {
     "test/rebalancer/strict-operation-outcomes.test.js": "737871bfe14dabe95c72c4c1d3e5be94ff86590bdeceaea521d97de31aec53b1"
   },
@@ -294,6 +294,8 @@
         "version": "3.49.2",
         "sourceId": "2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1"
       },
+      "bootId": "1ec87088-2652-4439-9aee-f4daefc92b46",
+      "hostname": "peter-RB102",
       "compileOptions": [
         {
           "compile_options": "ATOMIC_INTRINSICS=1"
@@ -547,6 +549,58 @@
       "helperRed": "6ef416aa65a9a652a876eebb0149b8a136f7a452",
       "helperPositive": "0081b7dfa8620fcf242930db14430f80fb81cbe3"
     },
+    "nativeHistoricalControls": {
+      "asset": "strict-operation-outcomes--strict-native-historical-controls-5491-5493-nov20.tar.gz",
+      "sha256": "bf8c1c1503548c75c0c8bd8100bc1cfdf49b0abf2b696cf7b6a6f0e795e97b97",
+      "bytes": 99527,
+      "runs": [
+        {
+          "sourceCommit": "0081b7dfa8620fcf242930db14430f80fb81cbe3",
+          "sourceTree": "cd8cdc0b45683e027df95d5d99b97b8c40f5eda7",
+          "requestId": "0176a673-60bf-4de6-b4b4-741ec478e1b5",
+          "originalDigests": {
+            "status.json": "c03d55ebc73d4138a56309e4b02861f5256e2b3d6d240efb5edfcce21d66f645",
+            "manifest.json": "de75253df4f9d36686626a49d7dc4475a614253f6d1095809c2ae84b463da049",
+            "artifacts-0.json": "c988bad85a67208d4c4928f184dae00c8d2e7041b8762ca6ad6c58d6754a1bb5"
+          },
+          "runId": "2277577-1795209852715",
+          "testPid": 2277608,
+          "exitStatus": 0,
+          "assertions": 532,
+          "leafFailures": 0
+        },
+        {
+          "sourceCommit": "0a00e855fba84d73af6a3b0939844aa7497f542a",
+          "sourceTree": "cc636b925e3dad8a40d69a5f4bcca6b11fe1edfd",
+          "requestId": "9cfdf172-c08f-4f1c-a1b2-b95cc292f3d8",
+          "originalDigests": {
+            "status.json": "601a218fdd02d612ccd0e0ffd2bb182366912d53f21d83e5fe5142286805b5ff",
+            "manifest.json": "316df8501dad7ff5af4a51f7d540f9277725b6bf1f14ab710845fd224905831e",
+            "artifacts-0.json": "b9da579e9c0ec8f63d286af9826445cd421aaf8fc6440a754f1a709f1076370c"
+          },
+          "runId": "2279752-1795210085440",
+          "testPid": 2279783,
+          "exitStatus": 1,
+          "assertions": 516,
+          "leafFailures": 73
+        },
+        {
+          "sourceCommit": "6ef416aa65a9a652a876eebb0149b8a136f7a452",
+          "sourceTree": "dc76caf7f1e3fb16a9bfde0070d8ae3579a9a502",
+          "requestId": "11dfe7c6-e4f5-44e9-89f4-f0f23bd98c02",
+          "originalDigests": {
+            "status.json": "2f22effa287433e15a7024e57bf812ad8d55b1e1059ffe191c1226ff741f6850",
+            "manifest.json": "8d495bc7533701a12faa28ae886fb316476e405470b2844cd0f86336557d2627",
+            "artifacts-0.json": "f7118059dd05100a82639bdc05a3229a4fb06ec42f33f161338dfbda6cdbfced"
+          },
+          "runId": "2281964-1795210164971",
+          "testPid": 2281995,
+          "exitStatus": 1,
+          "assertions": 532,
+          "leafFailures": 3
+        }
+      ]
+    },
     "ceiling": "Single-file native SQLite production-owner composition on tv-dator. Controller, nested runner and actual test-process records describe different scopes. The original records are unsigned. Classified consumers, physical fleet, and applicability to a later candidate remain outside this measurement."
   },
   "receipts": [
@@ -570,8 +624,9 @@
     },
     {
       "id": "permissive-path-negative-controls",
-      "passed": false,
-      "failure": "Historical placement retains engaged mutant failures but only an aggregate for the paired release-boundary positive, and no test-process native identity for the three controls."
+      "passed": true,
+      "testFile": "test/rebalancer/strict-operation-outcomes.test.js",
+      "evidence": "strict-operation-outcomes--strict-native-historical-controls-5491-5493-nov20.tar.gz"
     },
     {
       "id": "classified-consumer-closure",
