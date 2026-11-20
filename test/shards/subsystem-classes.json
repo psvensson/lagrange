@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 237,
     "storage-raft": 156,
-    "test-infrastructure": 166,
+    "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2700,
-  "digest": "fnv1a32-61baca94",
+  "censusSize": 2701,
+  "digest": "fnv1a32-09df5946",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2597d4f1",
+  "observationDigest": "fnv1a32-6a888470",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2455,6 +2455,7 @@
     "test/scripts/static-audit-input-triggers.test.js": "test-infrastructure",
     "test/scripts/steering-diet.test.js": "test-infrastructure",
     "test/scripts/stop-distributed-harness-containers.test.js": "test-infrastructure",
+    "test/scripts/strict-operation-outcomes-evidence.test.js": "test-infrastructure",
     "test/scripts/summarize-distributed-failure-report.test.js": "test-infrastructure",
     "test/scripts/summarize-representative-evidence.test.js": "test-infrastructure",
     "test/scripts/test-placement-lab-split.test.js": "test-infrastructure",
@@ -22708,6 +22709,11 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/run.js",
         "test/distributed/validate-node-join-under-load.js"
+      ]
+    },
+    "test/scripts/strict-operation-outcomes-evidence.test.js": {
+      "files": [
+        "scripts/quest-evidence/strict-operation-outcomes.js"
       ]
     },
     "test/scripts/summarize-distributed-failure-report.test.js": {

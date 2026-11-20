@@ -2,138 +2,586 @@
   "schema": "test-receipt/1",
   "quest": "strict-operation-outcomes",
   "status": "fail",
-  "generatedAt": "2026-11-20T19:24:19.390Z",
+  "generatedAt": "2026-11-20T21:18:22.258Z",
   "testFileDigests": {
-    "test/rebalancer/strict-operation-outcomes.test.js": "6339350d3c4e4c2658f5ecf1215b073c1bc2c7a287a98a5801780c57cd9ac3ad"
+    "test/rebalancer/strict-operation-outcomes.test.js": "737871bfe14dabe95c72c4c1d3e5be94ff86590bdeceaea521d97de31aec53b1"
   },
   "productionFileDigests": {
-    "src/rebalancer/operation-workflow-transition-orchestration.js": "48b5fc8df8043f41770968b62b8d68387d80b9353f236281caaf5481c097f65e",
-    "src/rebalancer/operation-workflow-transition-persistence.js": "397650a31da0c6e5f63223f121367b6debaee46078c88c6a7803484481a13355",
-    "src/rebalancer/operation-workflow-terminal-reservation-release.js": "ca02b6fb14e3dc4d939313cda313772face6811ec153c080791e5034b7d2e8c1",
-    "src/rebalancer/replica-operation-repository-mutation-update-methods.js": "f3c03789c98d548d6ab133c839ef228971d6098edfb83db02eb3858c80c7faad",
+    "src/rebalancer/operation-workflow-transition-orchestration.js": "0675c661cfd128ce1f2881977e48b77d6a187f641a1ee659884b8480f136cb29",
+    "src/rebalancer/operation-workflow-transition-persistence.js": "ed4022d3371b9ea8bd20194de03e34e4189ae5618320efec95bee65ba3d174b5",
+    "src/rebalancer/operation-workflow-terminal-reservation-release.js": "c561d8ad3e3c6d8fdb54158332e3cc6d63ebfe735de8390fa74af166cf1826ed",
+    "src/rebalancer/replica-operation-repository-mutation-update-methods.js": "9d850c661f54d23a05abdd478b91aa2675d3843de19eae205eae5b6c5c88fee5",
     "src/rebalancer/rebalance-coordinator-lifecycle.js": "89ef4c794529e248f58d0a66dbddb592dfe88d2d9c46b7532eda284749f7b506",
-    "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js": "9d237f353c32918bcb5dcf7408f3858d8e2624b8b39f2cea4fb15a41cae341a7"
+    "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js": "10603424ddca6877c0c9100a383449f3ebc28b5b4bcc10f16d76a6fe372c419c",
+    "src/rebalancer/operation-workflow-ambiguous-create-delivery.js": "35fa02bc821fee155112c7f268d3de17d44026cdf0804254bef80f522c58fe64",
+    "src/rebalancer/operation-workflow-dispatch-epoch-gate.js": "883cb52749938f1184edb6521bd6c5ffc33a455386b058edd8b7bf3f58b42d50",
+    "src/rebalancer/operation-workflow-dispatch-execution.js": "f12f1f889bea4f9bdb5183ea2d4b2da574c5d4c6d49158ef80fe6ad9354bad74",
+    "src/rebalancer/operation-workflow-dispatch-response-reconcile.js": "753bf608351fefe7c915a07203d19624de5ec2c0844683918a5a5fafc57e3fb8",
+    "src/rebalancer/operation-workflow-dispatch-wake-preemption.js": "aac402179da66936be7931a07e53d3c0c06c6737774ca6ea4f5a8195facfc7b5",
+    "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js": "2aff161cc62cf8098f98657fe5555f4ad5528d1db046c7049c8cd38b55c9d673",
+    "src/rebalancer/operation-workflow-growth-promote.js": "539da52e64921331ddc84e43cc7e10037ae3dd75a4994b12519de5550aa3a7b7",
+    "src/rebalancer/operation-workflow-owner-adapter.js": "e5d388eb61b4ecb2362638dedf00722f33291b35d3fcddc3b1d8481a19afa55b",
+    "src/rebalancer/operation-workflow-owner-execution-lane.js": "f05fa6e7458fdbaec3d128218f269382346d945478f738731e846acdca17c24f",
+    "src/rebalancer/operation-workflow-owner-ports.js": "b327034d50a00bfc146dfdf339430ed4ff6790dda29de86d9c45e766f2af6b79",
+    "src/rebalancer/operation-workflow-owner.js": "d61a3bee3b470ac019e359ff679dfd9483e6daea089ad0c2fcf6860beaf0fa19",
+    "src/rebalancer/operation-workflow-persistence.js": "a3e21b56d0e4904e893c300d68ab3c739e63b0d66e0e9721a5eed76b39a61ab7",
+    "src/rebalancer/operation-workflow-reconcile-outcome.js": "7c8ff266825d976aaaed92f5a061c356e598f7d0d245d5b485e32d47de6e59c8",
+    "src/rebalancer/operation-workflow-recovery-drain.js": "9845b02a638f5de16fd3ba7699b936e573cb9bab59a98647d235ca0b969cf7c0",
+    "src/rebalancer/operation-workflow-recovery-observation.js": "023b95d374cdb4b94b734a5c4947ab673c63ad60eb67da484d07b3343eecda86",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js": "e0047227f521b62cf1191033178468b873557448ae8426205e88fb904af04721",
+    "src/rebalancer/operation-workflow-recovery-status-reconcile.js": "64b8a4f8f36cc4be79745f6ec9eaf4f3c2c6ad28d092cdc5027e75113b342eb7",
+    "src/rebalancer/operation-workflow-replace-owner.js": "edef76f6c0427ed182cc7013eefc5d5b1c5b89bed2ce9edaaca9b46a01764f73",
+    "src/rebalancer/operation-workflow-replace-target-binding.js": "edc40113374f9cdf9bfebcc6c6d4c661d866d7c7abba9fb95148242346092715",
+    "src/rebalancer/operation-workflow-stranded-remove-repair.js": "c54845acadc97b141f00419f66703d64269914801a57c4154e2904b7ffc2f741",
+    "src/rebalancer/operation-workflow-terminal-transition-repair.js": "a1bb159c4e88c0d92b8f7ef09a23a66d4e488c5925479e34222bce32cccb99c9",
+    "src/rebalancer/operation-workflow-transition-outcome.js": "dbdf6a4df111eb2a0aa5fa124f5d7d2e8a937e424e2596e520fbc0c08fbbada5",
+    "src/rebalancer/priority-publication-safety-topology.js": "fb7ff238b3e4d8b881cc9f2ee801b53b8b0a3e91b2c580fb0db59bdcea1d0f16",
+    "src/rebalancer/priority-recovery-superseded-target.js": "a31383ddbe4a8e843b9ed36489dc255526dbfc6385e5c9e30a782bf89656c025",
+    "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "85093be806bf931488c8c1a69bdfc4243312266ee8cb423deb79103c82118e8d",
+    "src/rebalancer/rebalance-coordinator-recovery-budget-bindings.js": "0a2205a1478132140876047af03bd62de613336f52a2edf01378364f426a8594",
+    "src/rebalancer/rebalance-coordinator-recovery-helper.js": "fd2985d884831f906623cf15d7c8df2b464ab8baec7ee03dc4f6b146b3de24ac",
+    "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js": "1119532e0ba3c5ebe37d203671a40ef64f3a8669c6bf0b18e7008d44c5c7815c",
+    "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js": "f777e9aa83cfe53797d349fd8655158cabded001f04450ce24eb5bd484dffbfd",
+    "src/rebalancer/replica-operation-repository-row-methods.js": "af4a8709840e6cbe08540b7dc3256af577171526cdad14a0f562e73a6cfb3f3f",
+    "src/rebalancer/replica-operation-update-disposition.js": "9b38095fa90e37023f4f161b4835c89cda3ac8b7c963dff83a3e9bc80c9afa13",
+    "src/rebalancer/replica-operation-update-outcome.js": "714ccefa87af70ef4c73cb72bcebd54e187b7d74b93faf98adab6ba2cf30bd9d",
+    "package-lock.json": "ed4eb66117aa8a847faf2ad99a36876b05f95d7a6874d50ff545c7a257bab560"
   },
   "evidence": {
-    "requestId": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
-    "sourceCommit": "58a2080337b56b4e5f97bcb54da59f57b94e6611",
+    "requestId": "2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a",
+    "sourceCommit": "8281e61d2b0a1c67583d7cd1790467268efa932e",
+    "sourceTree": "d602ead8be437bc51208a459efd5bd7a44cb70b9",
     "executionHost": "tv-dator",
     "controllerStatus": {
       "docker_create_attempted": false,
-      "elapsed_s": 50.556,
+      "elapsed_s": 40.611,
       "execution_scope_closed": true,
-      "exit_code": 1,
-      "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
-      "host": "local-workstation",
-      "intentDigest": "eadc9db8dffebd453c17741012ec30116bbad3de73116391382989c735d46a95",
-      "job_id": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
+      "exit_code": 0,
+      "generation": "51a47f3e-71ed-4429-a6c9-fff56f959d37",
+      "host": "tv-dator",
+      "intentDigest": "7d5cd84e6ff5893753282d496febc7c605452ed9bedfeac2d7ad1f4d05007280",
+      "job_id": "2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a",
       "reason": null,
-      "source_execution_started": false,
-      "state": "FAILED",
-      "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-3883b67b2d12459ca08ed8a5f64b4ebe.service",
+      "source": {
+        "ref": "refs/heads/wip/strict-operation-composition-20261120",
+        "repo": "psvensson/lagrange",
+        "sha": "8281e61d2b0a1c67583d7cd1790467268efa932e"
+      },
+      "source_execution_started": true,
+      "state": "COMPLETE",
+      "unit": "lagrange-lab3-51a47f3e71ed4429a6c9fff56f959d37-2378f3a83dc24ddf982bd8d13b6efe3a.service",
       "workload_started": true
     },
-    "originalArchive": {
-      "sha256": "4a7c9cf32d07c3612d138ea174f313d642cd84e8c3a2b589ccf804a4448ca4b7",
-      "bytes": 13962,
-      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz"
-    },
-    "originalDirectory": "/tmp/lagrange-takeover-20261120/red-originals",
+    "originalDirectory": "/tmp/lagrange-strict-managed-originals-20261120/2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a",
     "originalDigests": {
-      "manifest.json": "570c36bd83803e38ee614afdad95e0a9749fe1be48b0d59055914d8673429eb6",
-      "status.json": "dbb3f3b7fdb897f4f971450281bb09bbd9d1bee2a7202c11e2ba236a7abd8072",
-      "artifacts.json": "5c87b352f70da83e6c7819916fd1eeb029bdd0c9605c7c9a831718a09628b553",
-      "discovery-inventory.json": "636b00c53bf9d3c7c899ea95c6f7e7c05eaa3822aa9dc4710b3edbce89383d73",
-      "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.log": "b18852b15ffb462aa0b60451f7f9303a147d105de2aae160e0a01eb8bd5aa915",
-      "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.err": "0536083c874c4c570966411dc4f15d5138873aa72211f03c07417ae48c2c2422",
-      "outcome/selection.json": "bceb59c5160b8ef3df3706054443c7c41042ae1c489a042d5ecf0328990777c7",
-      "outcome/test-results.ndjson": "a87d4fb62623d5f18c99f4995da6498b473931a59ba91c1ec27061d5cedde423"
+      "status.json": "0e63b826f125d9c50f3f61c86c5d787fae34a63b27682429ff80a2ead784819a",
+      "manifest.json": "18a6c35bec8716eb6dbe4b53971c9f6881cd96acda2c8c8b1f6fbd1ebd47ace1",
+      "artifacts-0.json": "bf18daba99fdca19f6af0503e1770ab073b04a51df7ddea70a32924cc9078db8"
     },
-    "selection": {
-      "sha": "58a2080337b56b4e5f97bcb54da59f57b94e6611",
-      "host": "tv-dator",
-      "files": [
+    "originalArtifacts": [
+      {
+        "name": "cache-readiness.json",
+        "bytes": 1574,
+        "sha256": "c398433bf49a84058a08cde10d7e2e5ade7caa20e0a3596686695a8247e4ef4e"
+      },
+      {
+        "name": "cache-source.json",
+        "bytes": 319,
+        "sha256": "b800e0fe626182ff7353047a764f93f21bf0526ccb8f2afe3a1f98886397df09"
+      },
+      {
+        "name": "candidate-readiness.json",
+        "bytes": 1481,
+        "sha256": "1d5ee23bab3085f5c4a5777c1c4e0a65c5a74c038d21f44cdaf8a5d870498dbc"
+      },
+      {
+        "name": "checkout.json",
+        "bytes": 269,
+        "sha256": "30bee27104f869597bcf04fe00be4866462d75c2835932ba7b403be2acba50a4"
+      },
+      {
+        "name": "command-result.json",
+        "bytes": 53,
+        "sha256": "5be607aa6069756a424013851e837a1d6719ca60a53323cc1dcdd74f0dd1cb8a"
+      },
+      {
+        "name": "execution-report.json",
+        "bytes": 1602,
+        "sha256": "57ee4603f4fb88cff5207fd604a6851a4c18f4625f5b424820f3b8c7767fdf16"
+      },
+      {
+        "name": "execution-sections.ndjson",
+        "bytes": 677,
+        "sha256": "c54a327388edb963377d46061f142aedf3b02afbda3ea52c2e53b58144230a97"
+      },
+      {
+        "name": "execution-validation.json",
+        "bytes": 306,
+        "sha256": "8ac2e001a910376520d6688453a5ec423b6ad06351d35fb9e80b826c1cd9ba76"
+      },
+      {
+        "name": "invocation.json",
+        "bytes": 1968,
+        "sha256": "f55a07b6ab329d31f3521fd56e4c737336c5cd1a723f28e0238950200eed2676"
+      },
+      {
+        "name": "native-after.json",
+        "bytes": 5169,
+        "sha256": "fd30493f9ce96314dcdc14e9ccb250a32452401fe8fd814063dad88e2bfbe209"
+      },
+      {
+        "name": "native-before.json",
+        "bytes": 5169,
+        "sha256": "fd30493f9ce96314dcdc14e9ccb250a32452401fe8fd814063dad88e2bfbe209"
+      },
+      {
+        "name": "payload.mjs",
+        "bytes": 12271,
+        "sha256": "262da21c05e18de993306af14b9884976db3ebf6a2915083453ee1e29432456b"
+      },
+      {
+        "name": "preparation.json",
+        "bytes": 76,
+        "sha256": "962da071a6234046c9af8b8cf1d7d1aa42700bb1e55d574d41e7b49554924d12"
+      },
+      {
+        "name": "process-identity.cjs",
+        "bytes": 2873,
+        "sha256": "cae15d51819238486f70bcf0c31fe62fd165881c6ff0f1bfdcbec3219af2e78e"
+      },
+      {
+        "name": "process-identity/2269453-00cf6dc5-618c-44aa-9f7c-25d80da163fe.end.json",
+        "bytes": 2387,
+        "sha256": "6896e07aa0d1b3161914d770aa6d8f5654ca43ff9d29560a424d6202e81d5a2a"
+      },
+      {
+        "name": "process-identity/2269453-00cf6dc5-618c-44aa-9f7c-25d80da163fe.start.json",
+        "bytes": 1752,
+        "sha256": "f62869ba8662b4d850ad5ecd18ffc0dbc4b911c8bc2eb85cddcae43cced8bc51"
+      },
+      {
+        "name": "process-identity/2269461-61b1c4d2-668b-495d-9672-61bde72aafd1.end.json",
+        "bytes": 2437,
+        "sha256": "e84029cf94dce14f733b50935c478ae1600341d91cfc28c93241fd9342e38ef5"
+      },
+      {
+        "name": "process-identity/2269461-61b1c4d2-668b-495d-9672-61bde72aafd1.start.json",
+        "bytes": 1799,
+        "sha256": "a5125d4a85350ca56623522d79cd84fde036f6f97392643db7dac6ea2ec099da"
+      },
+      {
+        "name": "process-identity/2269492-a6e69d3e-8d29-4830-82de-4084d5ac5ffd.end.json",
+        "bytes": 2937,
+        "sha256": "8dfb0dafb9c5617e9002a3c4de2939e04c60d7f06ae863ffc1859d27be3b6730"
+      },
+      {
+        "name": "process-identity/2269492-a6e69d3e-8d29-4830-82de-4084d5ac5ffd.start.json",
+        "bytes": 1967,
+        "sha256": "9adf76a15948312b3a78f6c791ea66f6f4193adc44398ccd0b0dd77039a556a5"
+      },
+      {
+        "name": "raw-tap/test/rebalancer/strict-operation-outcomes.test.js.tap",
+        "bytes": 74560,
+        "sha256": "0733af1dfbb9e3376c5ffd8d01f224fc0234e1fdba92d325a9bd59895db988bb"
+      },
+      {
+        "name": "raw-tap/test/rebalancer/strict-operation-outcomes.test.js.tap.stderr",
+        "bytes": 77386,
+        "sha256": "2826134f5b0c8582f974b4aab2eff5ae662631ba31e42ab8130105d969e1e6fb"
+      },
+      {
+        "name": "runner.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "runner.stdout",
+        "bytes": 265,
+        "sha256": "bbbd921988fc89ccc06986342049734da5e7f6fbe77c6f8c497467446e3119a9"
+      },
+      {
+        "name": "selected-files.txt",
+        "bytes": 50,
+        "sha256": "01316f2eda190c5ecc92b00f66476ddefd9c0253bcc0e3e7d767691710c1e3be"
+      },
+      {
+        "name": "source-after.json",
+        "bytes": 143,
+        "sha256": "c5dc17d590bce39117880c3c47f0c38689399316c20835633ca7d3cf19e9d625"
+      },
+      {
+        "name": "source-before.json",
+        "bytes": 143,
+        "sha256": "c5dc17d590bce39117880c3c47f0c38689399316c20835633ca7d3cf19e9d625"
+      }
+    ],
+    "run": {
+      "runId": "2269461-1795208732623",
+      "complete": true,
+      "checkout": {
+        "head": "8281e61d2b0a1c67583d7cd1790467268efa932e",
+        "tree": "d602ead8be437bc51208a459efd5bd7a44cb70b9",
+        "clean": true,
+        "root": "/home/peter/.local/state/lagrange-lab3-worker/runs/51a47f3e-71ed-4429-a6c9-fff56f959d37/2378f3a83dc24ddf982bd8d13b6efe3a/source"
+      },
+      "argv": [
+        "--jobs=4",
         "test/rebalancer/strict-operation-outcomes.test.js"
       ],
-      "plan": [
+      "planned": [
+        "test/rebalancer/strict-operation-outcomes.test.js"
+      ],
+      "results": [
         {
-          "files": [
-            "test/rebalancer/strict-operation-outcomes.test.js"
-          ],
-          "jobs": 4,
-          "resourceClass": "ordinary"
+          "file": "test/rebalancer/strict-operation-outcomes.test.js",
+          "ok": true,
+          "assertions": 521,
+          "attempts": [
+            {
+              "attempt": 1,
+              "ok": true,
+              "assertions": 521,
+              "reasons": []
+            }
+          ]
         }
-      ]
+      ],
+      "exitStatus": 0
     },
-    "runnerResult": {
-      "file": "test/rebalancer/strict-operation-outcomes.test.js",
-      "attempt": 1,
-      "ok": false,
-      "assertions": 140,
-      "durationMs": 2509,
-      "retriedOnce": false,
-      "firstFailureLine": "not ok 4 - malformed repository answer is a contract error, never terminal success"
+    "native": {
+      "testPid": 2269492,
+      "runnerPid": 2269461,
+      "classifiedPid": 2269453,
+      "node": {
+        "execPath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+        "sha256": "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327",
+        "versions": {
+          "node": "22.23.2",
+          "acorn": "8.16.0",
+          "ada": "2.9.2",
+          "amaro": "1.1.8",
+          "ares": "1.34.6",
+          "brotli": "1.1.0",
+          "cjs_module_lexer": "2.2.0",
+          "cldr": "48.0",
+          "icu": "78.2",
+          "llhttp": "9.4.3",
+          "modules": "127",
+          "napi": "10",
+          "nbytes": "0.1.3",
+          "ncrypto": "0.0.1",
+          "nghttp2": "1.69.0",
+          "openssl": "3.5.7",
+          "simdjson": "4.5.0",
+          "simdutf": "6.4.2",
+          "sqlite": "3.51.3",
+          "tz": "2026a",
+          "undici": "6.28.0",
+          "unicode": "17.0",
+          "uv": "1.51.0",
+          "uvwasi": "0.0.23",
+          "v8": "12.4.254.21-node.56",
+          "zlib": "1.3.1-e00f703",
+          "zstd": "1.5.7"
+        }
+      },
+      "addon": {
+        "path": "/home/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+        "sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
+      },
+      "package": "11.10.0",
+      "sqlite": {
+        "version": "3.49.2",
+        "sourceId": "2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1"
+      },
+      "compileOptions": [
+        {
+          "compile_options": "ATOMIC_INTRINSICS=1"
+        },
+        {
+          "compile_options": "COMPILER=gcc-10.2.1 20210110"
+        },
+        {
+          "compile_options": "DEFAULT_AUTOVACUUM"
+        },
+        {
+          "compile_options": "DEFAULT_CACHE_SIZE=-16000"
+        },
+        {
+          "compile_options": "DEFAULT_FILE_FORMAT=4"
+        },
+        {
+          "compile_options": "DEFAULT_FOREIGN_KEYS"
+        },
+        {
+          "compile_options": "DEFAULT_JOURNAL_SIZE_LIMIT=-1"
+        },
+        {
+          "compile_options": "DEFAULT_MEMSTATUS=0"
+        },
+        {
+          "compile_options": "DEFAULT_MMAP_SIZE=0"
+        },
+        {
+          "compile_options": "DEFAULT_PAGE_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_PCACHE_INITSZ=20"
+        },
+        {
+          "compile_options": "DEFAULT_RECURSIVE_TRIGGERS"
+        },
+        {
+          "compile_options": "DEFAULT_SECTOR_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_SYNCHRONOUS=2"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_SYNCHRONOUS=1"
+        },
+        {
+          "compile_options": "DEFAULT_WORKER_THREADS=0"
+        },
+        {
+          "compile_options": "DIRECT_OVERFLOW_READ"
+        },
+        {
+          "compile_options": "DQS=0"
+        },
+        {
+          "compile_options": "ENABLE_COLUMN_METADATA"
+        },
+        {
+          "compile_options": "ENABLE_DBSTAT_VTAB"
+        },
+        {
+          "compile_options": "ENABLE_FTS3"
+        },
+        {
+          "compile_options": "ENABLE_FTS3_PARENTHESIS"
+        },
+        {
+          "compile_options": "ENABLE_FTS4"
+        },
+        {
+          "compile_options": "ENABLE_FTS5"
+        },
+        {
+          "compile_options": "ENABLE_GEOPOLY"
+        },
+        {
+          "compile_options": "ENABLE_MATH_FUNCTIONS"
+        },
+        {
+          "compile_options": "ENABLE_RTREE"
+        },
+        {
+          "compile_options": "ENABLE_STAT4"
+        },
+        {
+          "compile_options": "ENABLE_UPDATE_DELETE_LIMIT"
+        },
+        {
+          "compile_options": "LIKE_DOESNT_MATCH_BLOBS"
+        },
+        {
+          "compile_options": "MALLOC_SOFT_LIMIT=1024"
+        },
+        {
+          "compile_options": "MAX_ATTACHED=10"
+        },
+        {
+          "compile_options": "MAX_COLUMN=2000"
+        },
+        {
+          "compile_options": "MAX_COMPOUND_SELECT=500"
+        },
+        {
+          "compile_options": "MAX_DEFAULT_PAGE_SIZE=8192"
+        },
+        {
+          "compile_options": "MAX_EXPR_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_FUNCTION_ARG=1000"
+        },
+        {
+          "compile_options": "MAX_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_LIKE_PATTERN_LENGTH=50000"
+        },
+        {
+          "compile_options": "MAX_MMAP_SIZE=0x7fff0000"
+        },
+        {
+          "compile_options": "MAX_PAGE_COUNT=0xfffffffe"
+        },
+        {
+          "compile_options": "MAX_PAGE_SIZE=65536"
+        },
+        {
+          "compile_options": "MAX_SQL_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_TRIGGER_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_VARIABLE_NUMBER=32766"
+        },
+        {
+          "compile_options": "MAX_VDBE_OP=250000000"
+        },
+        {
+          "compile_options": "MAX_WORKER_THREADS=8"
+        },
+        {
+          "compile_options": "MUTEX_PTHREADS"
+        },
+        {
+          "compile_options": "OMIT_DEPRECATED"
+        },
+        {
+          "compile_options": "OMIT_PROGRESS_CALLBACK"
+        },
+        {
+          "compile_options": "OMIT_SHARED_CACHE"
+        },
+        {
+          "compile_options": "OMIT_TCL_VARIABLE"
+        },
+        {
+          "compile_options": "SOUNDEX"
+        },
+        {
+          "compile_options": "SYSTEM_MALLOC"
+        },
+        {
+          "compile_options": "TEMP_STORE=1"
+        },
+        {
+          "compile_options": "THREADSAFE=2"
+        },
+        {
+          "compile_options": "USE_URI"
+        }
+      ],
+      "lockfile": "ed4eb66117aa8a847faf2ad99a36876b05f95d7a6874d50ff545c7a257bab560",
+      "installedLockfile": "378757cc0b06c467feec40eb8bd5eeccc0d0bf6feb93b6185130ffcc8114a94e"
     },
     "measured": {
-      "parents": 11,
-      "leaves": 129,
-      "passedLeaves": 96,
-      "failedLeaves": 33,
-      "positiveControls": [
+      "parents": 51,
+      "leaves": 470,
+      "assertions": 521,
+      "cases": [
         "strict outcomes positive: real nonterminal update and terminal release",
+        "strict outcomes malformed undefined: no commit or release; same-owner retry",
+        "strict outcomes malformed null: no commit or release; same-owner retry",
+        "strict outcomes malformed bare true: no commit or release; same-owner retry",
+        "strict outcomes malformed bare false: no commit or release; same-owner retry",
+        "strict outcomes malformed missing fields: no commit or release; same-owner retry",
+        "strict outcomes malformed missing operation: no commit or release; same-owner retry",
+        "strict outcomes malformed missing history: no commit or release; same-owner retry",
+        "strict outcomes malformed invalid timestamp: no commit or release; same-owner retry",
+        "strict outcomes malformed unknown disposition: no commit or release; same-owner retry",
+        "strict outcomes malformed contradictory updated: no commit or release; same-owner retry",
+        "strict outcomes malformed failed without completion: no commit or release; same-owner retry",
+        "strict outcomes malformed terminal on creating: no commit or release; same-owner retry",
+        "strict outcomes malformed wrong status: no commit or release; same-owner retry",
+        "strict outcomes malformed wrong entity: no commit or release; same-owner retry",
+        "strict outcomes malformed wrong requested replica: no commit or release; same-owner retry",
+        "strict outcomes malformed adopted different replica: no commit or release; same-owner retry",
+        "strict outcomes malformed refusal with payload: no commit or release; same-owner retry",
         "strict outcomes thrown post-write reply: same-owner retry re-enters repository",
-        "strict outcomes reopened SQLite: fresh owner recovers exact terminal and retained release"
-      ],
-      "malformedCases": [
-        "undefined",
-        "null",
-        "bare true",
-        "bare false",
-        "missing fields",
-        "missing operation",
-        "unknown disposition",
-        "contradictory updated"
+        "strict outcomes reopened SQLite: fresh owner recovers exact terminal and retained release",
+        "strict outcomes fresh ADD completion adopts exact reopened winner",
+        "strict outcomes fresh GROWTH_PROMOTE completion adopts exact reopened winner",
+        "strict outcomes failed REPLACE repair releases before now-refused write admission",
+        "strict outcomes accessor corruption is rejected without evaluating the getter",
+        "strict outcomes runtime service preserves its encoded logical entity identity",
+        "strict outcomes real SQLite refusal and reinsertion retain obligations",
+        "strict outcomes recovered real write checks exact history: corrupt=false",
+        "strict outcomes recovered real write checks exact history: corrupt=true",
+        "strict outcomes real storage release malformed-read retains or proves its exact obligation",
+        "strict outcomes real storage release zero-change retains or proves its exact obligation",
+        "strict outcomes real storage release lost-release-reply retains or proves its exact obligation",
+        "strict outcomes uncounted success consults actual SQL: effect=false",
+        "strict outcomes uncounted success consults actual SQL: effect=true",
+        "strict outcomes queued terminal writers return the exact durable winner",
+        "strict outcomes reject corrupt durable history {broken",
+        "strict outcomes reject corrupt durable history {}",
+        "strict outcomes reject corrupt durable history null",
+        "strict outcomes malformed changed count true cannot prove new progress",
+        "strict outcomes malformed changed count 1 cannot prove new progress",
+        "strict outcomes malformed changed count 1.5 cannot prove new progress",
+        "strict outcomes malformed changed count -1 cannot prove new progress",
+        "strict outcomes malformed changed count null cannot prove new progress",
+        "strict outcomes interrupted release eventually wakes real terminal subscribers",
+        "strict outcomes reservation sweeps retain malformed/deferred terminal evidence: false",
+        "strict outcomes reservation sweeps retain malformed/deferred terminal evidence: true",
+        "strict outcomes owner-unavailable release cannot consume a local empty fallback",
+        "strict outcomes crash after release before notification resumes through owner rebind",
+        "strict outcomes known terminal preimage cannot become recovered progress after zero-effect reply loss",
+        "strict outcomes competing terminal writer between preimage and SQL cannot be overwritten",
+        "strict outcomes priority claim consumes the exact confirmed operation",
+        "strict outcomes unreadable terminal preimage cannot earn recovered credit from a later row"
       ]
     },
-    "preflight": {
-      "nodeVersion": "v22.23.2",
-      "lockGraphSha256": "b529c1d729f95683aa94049998b23508836a8fdcc5e5ec4d92f2284b9f4abdf1",
-      "observedAt": 1795201775911
+    "originalRed": {
+      "requestId": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
+      "sourceCommit": "58a2080337b56b4e5f97bcb54da59f57b94e6611",
+      "archive": {
+        "sha256": "4a7c9cf32d07c3612d138ea174f313d642cd84e8c3a2b589ccf804a4448ca4b7",
+        "bytes": 13962,
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz"
+      }
     },
-    "ceiling": "Initial local SQLite composition red only. Host preflight records Node and lock identity; original native binary and SQLite build hashes were not captured. The managed controller reports source_execution_started:false; original placement source and TAP establish the child execution. No physical fleet, full repair, green admission or later-source applicability is certified. Original summaries are not an attestation."
+    "historicalControls": {
+      "archive": "strict-operation-outcomes--strict-historical-outcome-controls-nov20.tar.gz",
+      "sha256": "9960f3250d659f28ec78d47cbeaa8ac8c12eba64edf37895a90b4108a4670d87",
+      "adapterRed": "0a00e855fba84d73af6a3b0939844aa7497f542a",
+      "helperRed": "6ef416aa65a9a652a876eebb0149b8a136f7a452",
+      "helperPositive": "0081b7dfa8620fcf242930db14430f80fb81cbe3"
+    },
+    "ceiling": "Single-file native SQLite production-owner composition on tv-dator. Controller, nested runner and actual test-process records describe different scopes. The original records are unsigned. Classified consumers, physical fleet, and applicability to a later candidate remain outside this measurement."
   },
   "receipts": [
     {
       "id": "strict-persistence-positive-and-malformed-negative",
-      "passed": false,
+      "passed": true,
       "testFile": "test/rebalancer/strict-operation-outcomes.test.js",
-      "failure": "Measured baseline: eight malformed reply cases fail the strict outcome contract; ordinary, thrown-reply and reopened-owner positive controls pass.",
-      "evidence": "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.log"
+      "evidence": "raw-tap/test/rebalancer/strict-operation-outcomes.test.js.tap"
     },
     {
       "id": "terminal-dispositions-and-failure-meaning",
-      "passed": false,
-      "failure": "Outstanding; not measured or admitted by this red adapter."
+      "passed": true,
+      "testFile": "test/rebalancer/strict-operation-outcomes.test.js",
+      "evidence": "raw-tap/test/rebalancer/strict-operation-outcomes.test.js.tap"
     },
     {
       "id": "reconstruction-and-interrupted-release",
-      "passed": false,
-      "failure": "Outstanding; not measured or admitted by this red adapter."
+      "passed": true,
+      "testFile": "test/rebalancer/strict-operation-outcomes.test.js",
+      "evidence": "raw-tap/test/rebalancer/strict-operation-outcomes.test.js.tap"
     },
     {
       "id": "permissive-path-negative-controls",
       "passed": false,
-      "failure": "Outstanding; not measured or admitted by this red adapter."
+      "failure": "Historical placement retains engaged mutant failures but only an aggregate for the paired release-boundary positive, and no test-process native identity for the three controls."
     },
     {
       "id": "classified-consumer-closure",
       "passed": false,
-      "failure": "Outstanding; not measured or admitted by this red adapter."
+      "failure": "Classified consumer closure remains red outside this single-file run."
     },
     {
       "id": "independent-verification",
       "passed": false,
-      "failure": "Outstanding; not measured or admitted by this red adapter."
+      "failure": "Composed candidate and original-run admission require independent verification."
     }
   ]
 }

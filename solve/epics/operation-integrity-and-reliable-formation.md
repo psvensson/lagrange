@@ -240,6 +240,39 @@ profile. Backup, restore and PITR retain their later milestone allocation.
   formation passes on one composition, then a successful lab smoke. The
   GCP comparison owner retains the Lagrange measurement.
 
+### Current continuation after the third physical diagnostic
+
+The public candidate `edbf84c2d` carries the corrected Quest continuations.
+The integration branch `wip/core-runtime-composed-20261120` carries the
+runtime repairs. For the two original malformed-outcome and synthetic-support
+findings, this distinction determines which source an agent should reproduce.
+
+- At `8281e61d2`, managed request `2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a`
+  passed 521 runner assertions through the real SQLite strict-outcome witness.
+  Its reviewed partial receipt admits three of six obligations. The receiver
+  still owes broad fixture coverage, historical controls and final composed
+  review. At `f4a1df473`, six of the seven previously failing suites passed.
+  The remaining CL-029 check compared the successful workflow result with a
+  bare Boolean. The same run reached durable STOPPING and dispatched REMOVE.
+  The fixture owner must check the exact typed CAS result and rerun the suite.
+- Physical run `57e4db30-f269-468b-931e-46ce809818a5` measured `1bd94e2b3`
+  on tv-dator, adam-laptop and adams-gamla. The last sample inside 420 seconds
+  still had three incomplete operations. Eleven observation reads failed. A
+  timeout on one admin request reset other requests on the same lane. The user
+  table CREATE reported a schema-operations participant timeout and COUNT
+  could not obtain routing metadata. All three trial containers were removed.
+  The native control drain in this run cleared approximately 1.3 seconds after
+  its refusal. Its timing alone cannot explain the missing formation progress.
+  [Original report and node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz)
+- The lifetime owner must measure the NodeHandle connect/response budget and
+  independent use of a shared socket, then verify the initial CREATE delivery
+  and late completion against the exact service. The placement owner must fence
+  absent-target evidence through persistence. The support owner must distinguish
+  verified execution scope at management and upgrade admission. The integration
+  owner composes these changes and runs the affected suites before the next
+  physical gate. The passing formation streak is zero. Lab smoke and the GCP
+  Lagrange arm follow a successful physical gate.
+
 ### Programme adoption and dependency order
 
 Content reconciliation of main's recent extracted repairs is source-only:
