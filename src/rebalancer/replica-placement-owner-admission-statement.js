@@ -17,7 +17,7 @@ import {
   copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
-import {OperationType} from './replica-operation-progress.js';
+import {OPERATION_METADATA_KEY, OperationType} from './replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
   decodeMembershipPublicationEpochBinding,
@@ -403,6 +403,7 @@ function buildRuntimeServiceAdmissionStatement(input) {
 
 function matchesCommittedSinglePlacementStatement(operation, requested, admitted) {
   const [move] = requested.moves;
+  const operationAdmission = operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
   const replicaId = move.replicaId ?? placementReplicaIdOf(operation.operationId);
   const claimKey =
     requested.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
@@ -416,7 +417,9 @@ function matchesCommittedSinglePlacementStatement(operation, requested, admitted
     operation.replicaId === replicaId &&
     (operation.targetNodeBootIncarnation ?? null) === move.targetNodeBootIncarnation &&
     (operation.targetNodeStorageIncarnation ?? null) === move.targetNodeStorageIncarnation &&
-    (operation.targetClaimKey ?? null) === claimKey;
+    (operation.targetClaimKey ?? null) === claimKey &&
+    isDeepStrictEqual(operationAdmission?.learnerRetirement, move.learnerRetirement) &&
+    isDeepStrictEqual(operationAdmission?.voterRetirement, move.voterRetirement);
 }
 
 export {
