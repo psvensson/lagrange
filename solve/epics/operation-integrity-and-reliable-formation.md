@@ -124,17 +124,24 @@ product features.
 
 | Decision | Current evidence | Next owner action |
 | --- | --- | --- |
-| Which service may CREATE publish or retire? | Both native factories hand over the exact instance before initialization. At `369c45e64`, the three-process public SQL journey passed in 37.808 seconds on tv-dator. | The integration owner reruns the public journey after composing placement changes. |
-| Which operation may a caller replay? | On `d1422529e` direct replay, native placement, reservations and public table provisioning passed six files, 292 assertions. Independent review found that some replay exits still omit caller-supplied copy source and target incarnations. Opaque aliases cannot be recovered from an entry that never stored them. | The creation owner must apply one request identity comparison to coalesced, remembered, reconstructed and freshly committed results. |
-| When may placement retire an existing learner? | On `91ea370b8`, 15 native cases ordered rejoin and removal on the same durable row and distinguished committed membership absence from outstanding disk cleanup. | The placement and cleanup owners must settle superseded work truthfully, reconcile old unscoped REMOVE, and release a completed cleanup receipt when terminal persistence comes last. |
-| Does the whole cluster meet the service goal? | On `549500b23`, the composed suite passed 52 of 53 files. The runtime-service reservation check passed subsequently on the creation branch. Neither recorded physical trial achieved the required quiet window. | Recheck the composed suite, public SQL and full changed-range static gate. Measure three successive clean formations on the named hosts within 420 seconds, then run the comparative smoke. |
+| Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
+| Which operation may a caller replay? | At `5b36d3ba6` four managed files passed the native, identity, reservation and deduplication checks. Review found that a malformed optional identity could reach an earlier replay exit. | The creation owner is validating the request once before lane selection and all reuse. Compare the same cold and replay requests with the actual native and SQL provisioning callers. |
+| When may placement retire an existing learner? | At `46f3ac3f5` four managed files passed the restart and receipt controls. On `1a6d97c57` late promotion preserved the replica but labeled the removal FAILED. An unscoped, undispatched removal also remained open. The control for an uncertain dispatched removal retained its obligation. | Verify the durable SUPERSEDED disposition across status, replay, recensus and cleanup. A genuine successful REMOVE still requires its own effect. |
+| Does the whole cluster meet the service goal? | The unchanged 53-file selection passed 52 on `268d439b2`. The outstanding REPLACE test found an additional completion caller. On `9e7184a3b`, five placement files passed. Full-range static job #5504 found seven dependency violations, four lint errors and one oversized source file. | The integration owner pins the repaired composition and checks the complete selection and full-range static. Run the three physical formations within 420 seconds, then the comparative smoke. |
 
-The physical trials had distinct amounts of useful work and one had no
-REMOVE admissions. Compare distinct admitted and completed operations and
-their time waiting for authority on the next run. Keep the original quiet
-window and count every failed operation. The comparison owner retains the
-separate GCP run; the release, snapshot, backup and PITR allocations below
-continue in their assigned order.
+The prior three-host runs shared a failure to reach global quiet. Within
+the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
+zero REMOVE admissions. `57e4db30` completed 39 of 43 and admitted one
+REMOVE. Both had repeated deliveries for the same logical ADD before the
+first recorded admission-authority read timeout. The faster run had more
+repeat deliveries and more unavailable control-owner replies. The
+integration owner traces a delayed ADD by operation and target generation
+through CREATE custody, committed-ledger read and control cutover. Credit
+fresh work, joined work and committed clearing events only where the
+originals identify them. The formation Quest retains the original reports
+and the acceptance predicates. GCP comparison follows the physical
+formation and smoke gates. Snapshot, backup and PITR keep their existing
+milestone allocations.
 
 ## Current integration summary (20 November 2026 - reliability and agent usability)
 

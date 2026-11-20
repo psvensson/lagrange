@@ -249,6 +249,33 @@ class ReplicaCleanupTombstoneOwner {
     return authorities;
   }
 
+  async completedLearnerCleanupReceipts() {
+    const result = await readAuthoritativeControlPlaneRows(this.gateway, TABLES.SERVICES,
+      'SELECT service_id, service_type, node_id, partition_id, status, ' +
+        'cleanup_token, created_at, create_attempt_token, updated_at ' +
+        'FROM services WHERE service_type = ? AND status = ?',
+      [REPLICA_CLEANUP_SERVICE_TYPE, REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE], {
+        authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+        deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
+        workClass: REPLICA_CLEANUP_CRITICAL_WORK,
+      });
+    if (result?.success !== true || result.rowSetComplete !== true ||
+        result.partial === true || !Array.isArray(result.rows)) {
+      throw cleanupDeferredError(REPLICA_CLEANUP_STARTUP_SNAPSHOT_ID);
+    }
+    const receipts = new Map();
+    for (const row of result.rows) {
+      const authority = cleanupAuthorityFromRow(row);
+      const operationId = learnerRetirementOperationId(authority?.ownerToken);
+      if (operationId === null || authority.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
+        continue;
+      }
+      receipts.set(operationId, receipts.has(operationId) ? null : authority);
+    }
+    return receipts;
+  }
+
   async resumePersistedAtStartup(
     startupAuthorities,
     {replicaId, partitionId, nodeId},
@@ -518,5 +545,6 @@ export {
   cleanupDeferredError,
   cleanupReceiptOperationId,
   isCleanupTombstoneRow,
+  matchesScopedLearnerCleanup,
   observeScopedLearnerCleanup,
 };

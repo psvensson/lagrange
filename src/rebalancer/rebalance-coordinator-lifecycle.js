@@ -29,9 +29,9 @@ const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
 const FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER =
   'failed_create_cleanup_release';
 
-function startFailedCreateCleanupReleaseRecovery(coordinator) {
+function startReplicaCleanupReleaseRecovery(coordinator) {
   const recovery = coordinator.workflowOwner
-    ?.recoverFailedCreateCleanupReleaseDebt?.({
+    ?.recoverReplicaCleanupReleaseDebt?.({
       onQueryFailure(error) {
         coordinator.logQueryOperationsFailure(error, {
           recoveryOwner: FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER,
@@ -572,6 +572,8 @@ class RebalanceCoordinatorLifecycle {
       REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
       this._boundTerminalOperationIntentPruner,
     );
+    this.on(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
+      this._boundTerminalOperationIntentPruner);
   }
 
   /**
@@ -590,6 +592,8 @@ class RebalanceCoordinatorLifecycle {
       REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
       this._boundTerminalOperationIntentPruner,
     );
+    this.removeListener(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
+      this._boundTerminalOperationIntentPruner);
   }
 
   /**
@@ -626,7 +630,7 @@ class RebalanceCoordinatorLifecycle {
     }
 
     this.initialized = true;
-    startFailedCreateCleanupReleaseRecovery(this);
+    startReplicaCleanupReleaseRecovery(this);
   }
 
   /**

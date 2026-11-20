@@ -52,7 +52,7 @@ documentClass: generated
 - [replica-handler-group-retired-tombstone-methods.js](replica-handler-group-retired-tombstone-methods.js) - ReplicaHandler methods of the member-owned `group retired` tombstone (group-retired-tombstone-store.js; owner ruling... (importers: one)
 - [replica-handler-group-retirement-request-methods.js](replica-handler-group-retirement-request-methods.js) - Verify a REMOVE's group-retirement evidence against the durable workflow record before any removal work starts... (importers: one)
 - [replica-handler-leader-handoff-methods.js](replica-handler-leader-handoff-methods.js) - ReplicaHandler leader-handoff methods. (importers: many)
-- [replica-handler-learner-retirement-authority.js](replica-handler-learner-retirement-authority.js) - No leading comment; first export: claimNativeLearnerRetirement. (importers: few)
+- [replica-handler-learner-retirement-authority.js](replica-handler-learner-retirement-authority.js) - No leading comment; first export: admitsLearnerRetirement. (importers: few)
 - [replica-handler-lifecycle-methods.js](replica-handler-lifecycle-methods.js) - ReplicaHandler lifecycle + message dispatch methods. (importers: one)
 - [replica-handler-membership-methods.js](replica-handler-membership-methods.js) - Owner contract: Owner: the replica handler's witness seam for the REPLACE owner (quest replace-source-removal-owner,... (importers: few)
 - [replica-handler-membership-relay.js](replica-handler-membership-relay.js) - Owner contract: Owner: the replica handler's tracked-service registry as the node's single relay of partition... (importers: many)

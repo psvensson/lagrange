@@ -8,6 +8,8 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   admitReplaceTerminalRepair,
 } from './operation-workflow-replace-terminal-admission.js';
+import {recoverCompletedLearnerRetirementCleanup} from
+  './operation-workflow-placement-learner-retirement.js';
 import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
@@ -109,7 +111,7 @@ function armFailedCreateCleanupRelease(owner, operation) {
   return true;
 }
 
-function isFailedCreateCleanupRecoveryOwnerCurrent(
+function isReplicaCleanupRecoveryOwnerCurrent(
   owner,
   ownershipFenceEpoch,
 ) {
@@ -119,47 +121,50 @@ function isFailedCreateCleanupRecoveryOwnerCurrent(
     owner.getOperationOwnershipFenceEpoch() === ownershipFenceEpoch;
 }
 
-function reportFailedCreateCleanupRecoveryQueryFailure(options, error) {
+function reportReplicaCleanupRecoveryQueryFailure(options, error) {
   if (typeof options.onQueryFailure === 'function') {
     options.onQueryFailure(error);
   }
 }
 
-async function runFailedCreateCleanupReleaseRecoveryScan(
+async function runReplicaCleanupReleaseRecoveryScan(
   owner,
   ownershipFenceEpoch,
   options,
 ) {
-  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+  if (!isReplicaCleanupRecoveryOwnerCurrent(
     owner,
     ownershipFenceEpoch,
   )) return 0;
   let operations;
+  let released;
+  const isCurrent = () => isReplicaCleanupRecoveryOwnerCurrent(owner, ownershipFenceEpoch);
   try {
-    operations = await owner.repository
-      .queryTerminalFailedCreateCleanupOperations();
+    operations = await owner.repository.queryTerminalReplicaCleanupOperations();
+    if (!isCurrent()) return 0;
+    released = await recoverCompletedLearnerRetirementCleanup(owner, operations, isCurrent);
   } catch (error) {
-    if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+    if (!isReplicaCleanupRecoveryOwnerCurrent(
       owner,
       ownershipFenceEpoch,
     )) return 0;
-    scheduleFailedCreateCleanupRecoveryScan(owner, ownershipFenceEpoch);
-    reportFailedCreateCleanupRecoveryQueryFailure(options, error);
+    scheduleReplicaCleanupRecoveryScan(owner, ownershipFenceEpoch);
+    reportReplicaCleanupRecoveryQueryFailure(options, error);
     throw error;
   }
-  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+  if (!isReplicaCleanupRecoveryOwnerCurrent(
     owner,
     ownershipFenceEpoch,
   )) return 0;
-  clearFailedCreateCleanupRecoveryScan(owner);
-  let armed = 0;
+  clearReplicaCleanupRecoveryScan(owner);
+  let armed = released;
   for (const operation of operations) {
     if (armFailedCreateCleanupRelease(owner, operation)) armed += 1;
   }
   return armed;
 }
 
-function recoverFailedCreateCleanupReleaseDebt(owner, options = {}) {
+function recoverReplicaCleanupReleaseDebt(owner, options = {}) {
   const ownershipFenceEpoch = Number.isInteger(
     options.operationOwnershipFenceEpoch,
   ) ?
@@ -170,7 +175,7 @@ function recoverFailedCreateCleanupReleaseDebt(owner, options = {}) {
   );
   return owner.operationWorkflowRunExclusive(
     ownerKey,
-    () => runFailedCreateCleanupReleaseRecoveryScan(
+    () => runReplicaCleanupReleaseRecoveryScan(
       owner,
       ownershipFenceEpoch,
       options,
@@ -178,7 +183,7 @@ function recoverFailedCreateCleanupReleaseDebt(owner, options = {}) {
   );
 }
 
-function clearFailedCreateCleanupRecoveryScan(owner) {
+function clearReplicaCleanupRecoveryScan(owner) {
   const timer = owner.terminalTransitionRepairTimerByOperationId.get(
     FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
   );
@@ -198,11 +203,11 @@ function unrefNativeRetryTimer(owner, timer) {
   }
 }
 
-function scheduleFailedCreateCleanupRecoveryScan(
+function scheduleReplicaCleanupRecoveryScan(
   owner,
   ownershipFenceEpoch,
 ) {
-  if (!isFailedCreateCleanupRecoveryOwnerCurrent(owner, ownershipFenceEpoch) ||
+  if (!isReplicaCleanupRecoveryOwnerCurrent(owner, ownershipFenceEpoch) ||
       owner.terminalTransitionRepairTimerByOperationId
         .has(FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY)) return;
   const previous = owner.terminalTransitionRepairStateByOperationId.get(
@@ -221,7 +226,7 @@ function scheduleFailedCreateCleanupRecoveryScan(
     owner.terminalTransitionRepairTimerByOperationId.delete(
       FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
     );
-    return recoverFailedCreateCleanupReleaseDebt(owner, {
+    return recoverReplicaCleanupReleaseDebt(owner, {
       operationOwnershipFenceEpoch: ownershipFenceEpoch,
       onQueryFailure(error) {
         owner.logger.warn(
@@ -531,6 +536,6 @@ export {
   armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
   clearTerminalTransitionRepair,
-  recoverFailedCreateCleanupReleaseDebt,
+  recoverReplicaCleanupReleaseDebt,
   runTerminalTransitionRepairAttempt,
 };

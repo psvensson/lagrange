@@ -129,6 +129,6 @@ async function claimNativeLearnerRetirement(handler, scope) {
 }
 
 export {
-  claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
+  admitsLearnerRetirement, claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
   installsPlacementVoterRetirementGeneration,
 };

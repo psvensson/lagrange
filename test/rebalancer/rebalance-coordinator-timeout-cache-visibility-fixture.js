@@ -6,7 +6,7 @@ function isolateTimeoutVisibilityReads(coordinator) {
   // failed-create cleanup-release startup census has its own recovery witness;
   // keep it from consuming this fixture's gateway call counters.
   coordinator.workflowOwner.repository
-    .queryTerminalFailedCreateCleanupOperations = async () => [];
+    .queryTerminalReplicaCleanupOperations = async () => [];
   return coordinator;
 }
 

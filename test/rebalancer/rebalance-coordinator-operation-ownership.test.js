@@ -17,8 +17,8 @@ class RebalanceCoordinator extends CommittedReadRebalanceCoordinator {
     // Operation-ownership assertions count only the read under test. Startup
     // cleanup-release recovery is covered by its dedicated owner witnesses.
     this.workflowOwner.repository
-      .queryTerminalFailedCreateCleanupOperations = async () => [];
-    this.workflowOwner.recoverFailedCreateCleanupReleaseDebt = async () => 0;
+      .queryTerminalReplicaCleanupOperations = async () => [];
+    this.workflowOwner.recoverReplicaCleanupReleaseDebt = async () => 0;
   }
 }
 import {WORKFLOW_STEP} from '../../src/constants/index.js';

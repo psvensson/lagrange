@@ -30,6 +30,7 @@ const {
 const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
   REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
   REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+  REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
 ]);
 const PRIORITY_RECOVERY_COORDINATION_CONSTRUCTOR = 'constructor';
 
@@ -58,6 +59,8 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
         REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
         event,
       );
+    const operationSupersededListener = (event = {}) =>
+      this.handleCoordinatorProgressEvent(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED, event);
     coordinator.on(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, stepChangedListener);
     coordinator.on(
       REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
@@ -67,11 +70,13 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
       REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
       operationFailedListener,
     );
+    coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED, operationSupersededListener);
     this.coordinatorProgressListenerBindings = {
       coordinator,
       stepChangedListener,
       operationCompletedListener,
       operationFailedListener,
+      operationSupersededListener,
     };
   }
 
@@ -100,6 +105,8 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
         REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
         bindings.operationFailedListener,
       );
+      unsubscribe(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
+        bindings.operationSupersededListener);
     }
     this.coordinatorProgressListenerBindings = null;
   }

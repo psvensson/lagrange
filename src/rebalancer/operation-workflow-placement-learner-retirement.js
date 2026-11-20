@@ -7,7 +7,9 @@ import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {ReplicaCleanupTombstoneOwner, observeScopedLearnerCleanup} from '../node/replica-cleanup-tombstone-owner.js';
+import {
+  ReplicaCleanupTombstoneOwner, matchesScopedLearnerCleanup, observeScopedLearnerCleanup,
+} from '../node/replica-cleanup-tombstone-owner.js';
 import {learnerRetirementToken} from '../node/replica-learner-retirement-lifecycle.js';
 import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
@@ -152,7 +154,12 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
       verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   if (member && !exactServiceGeneration(member, operation, scoped)) {
-    return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
+    const birth = member[COLUMN.CREATED_AT];
+    const successor = member[COLUMN.PARTITION_ID] === operation.partitionId &&
+      member[COLUMN.NODE_ID] === operation.targetNodeId &&
+      Number.isSafeInteger(birth) && birth > scoped.replicaCreatedAt;
+    return verdict(successor ? LEARNER_RETIREMENT_OUTCOME.SUPERSEDED :
+      LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   return routeBoundLearnerRetirement(owner, operation, handlerType, scoped, member);
 }
@@ -191,18 +198,52 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
   });
 }
 
-async function releaseCompletedLearnerRetirementCleanup(owner, operation) {
-  const scope = scopedOperationAdmission(operation)?.learnerRetirement;
-  if (scope === undefined) return;
-  const cleanup = new ReplicaCleanupTombstoneOwner({
-    gateway: owner.repository.controlPlaneSystemTableGateway,
-    logger: owner.logger,
+async function completeOwnedLearnerRetirement(owner, operation, retirement) {
+  if (retirement.state !== LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED ||
+      !isScopedPlacementLearnerRetirement(operation)) {
+    throw new Error('Learner retirement requires exact committed cleanup ownership');
+  }
+  return owner.buildTerminalOperationDispatchResult(await owner.completeOperation(operation), {
+    operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
   });
-  await cleanup.releaseCompletedScopedLearnerCleanup({
+}
+
+function cleanupScopeOf(operation) {
+  const scope = scopedOperationAdmission(operation)?.learnerRetirement;
+  if (scope === undefined) return null;
+  return {
     operationId: operation.operationId, partitionId: operation.partitionId,
     replicaId: operation.replicaId, targetNodeId: operation.targetNodeId,
     replicaCreatedAt: scope.replicaCreatedAt,
+  };
+}
+
+function cleanupOwnerOf(owner) {
+  return new ReplicaCleanupTombstoneOwner({
+    gateway: owner.repository.controlPlaneSystemTableGateway,
+    logger: owner.logger,
   });
+}
+
+async function releaseCompletedLearnerRetirementCleanup(owner, operation) {
+  const scope = cleanupScopeOf(operation);
+  if (scope !== null) await cleanupOwnerOf(owner).releaseCompletedScopedLearnerCleanup(scope);
+}
+
+async function recoverCompletedLearnerRetirementCleanup(owner, operations, isCurrent) {
+  const scopes = operations.map(cleanupScopeOf).filter((scope) => scope !== null);
+  if (scopes.length === 0) return 0;
+  const cleanup = cleanupOwnerOf(owner);
+  const receipts = await cleanup.completedLearnerCleanupReceipts();
+  let released = 0;
+  for (const scope of scopes) {
+    if (!isCurrent()) break;
+    if (matchesScopedLearnerCleanup(receipts.get(scope.operationId), scope)) {
+      await cleanup.releaseCompletedScopedLearnerCleanup(scope);
+      released += 1;
+    }
+  }
+  return released;
 }
 
 function isScopedPlacementLearnerRetirement(operation) {
@@ -210,6 +251,8 @@ function isScopedPlacementLearnerRetirement(operation) {
 }
 
 export {
-  evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement,
-  isUnscopedPlacementRemoval, releaseCompletedLearnerRetirementCleanup,
+  completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
+  isScopedPlacementLearnerRetirement,
+  isUnscopedPlacementRemoval, recoverCompletedLearnerRetirementCleanup,
+  releaseCompletedLearnerRetirementCleanup,
 };

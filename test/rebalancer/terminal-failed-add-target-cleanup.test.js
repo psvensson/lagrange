@@ -38,7 +38,7 @@ import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
 import {
   armFailedCreateCleanupRelease,
-  recoverFailedCreateCleanupReleaseDebt,
+  recoverReplicaCleanupReleaseDebt,
   runTerminalTransitionRepairAttempt,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -87,7 +87,7 @@ function terminalCleanupRepairOwner(
   const scheduled = [];
   const repository = new ReplicaOperationRepository({nodeId: TARGET_NODE});
   repository.queryReplicaOperationPersistenceAuthorityOperation = async () => operation;
-  repository.queryTerminalFailedCreateCleanupOperations = async () => [operation];
+  repository.queryTerminalReplicaCleanupOperations = async () => [operation];
   return {
     isShuttingDown: false,
     isInitialized: true,
@@ -936,7 +936,7 @@ test('coordinator recovery reconstructs terminal cleanup release debt',
     );
     const deliveries = [{bootstrap: true}];
     const owner = terminalCleanupRepairOwner(operation, deliveries);
-    t.equal(await recoverFailedCreateCleanupReleaseDebt(owner), 1,
+    t.equal(await recoverReplicaCleanupReleaseDebt(owner), 1,
       'the authoritative terminal scan reconstructs one release owner');
     t.ok(owner.terminalTransitionRepairStateByOperationId.has(
       operation.operationId,

@@ -145,11 +145,13 @@ function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
 }
 
 function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
-  leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null}) {
+  leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null,
+  enableReplicaCleanupReleaseRecovery = false}) {
   bindRetirementAuthority(leader, nodes, rows.find((row) =>
     row.replica_id === removal.replica_id), source);
   const coordinator = createTestCoordinator({
     nodeId: SEED, enableTimeouts: false, replaceWitness: false,
+    enableReplicaCleanupReleaseRecovery,
     committedMembershipFixture: false,
     ...(clock === null ? {} : {
       setTimeoutFn: clock.setTimeout.bind(clock),
@@ -194,7 +196,8 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
   const ownerRead = gateway.readAuthoritativeRows.bind(gateway);
   const leaderGateway = leader.lifecycleStore.gateway;
   gateway.readAuthoritativeRows = (table, sql, params, options) =>
-    table === TABLES.SERVICES && /WHERE service_id = \?/u.test(sql) ?
+    table === TABLES.SERVICES &&
+      /WHERE (?:service_id = \?|service_type = \? AND status = \?)/u.test(sql) ?
       leaderGateway.readAuthoritativeRows(table, sql, params, options) :
       ownerRead(table, sql, params, options);
   const ownerMutation = gateway.submitMutation.bind(gateway);
@@ -258,6 +261,13 @@ test('late native promotion preserves an incumbent named by an admitted learner 
       assert.equal(changed, null, 'no generic REMOVING row may trigger native peer removal');
       assert.equal(durableLifecycleState(cluster.replica(initial.replica_id).dbFile,
         cluster.partitionId), observed);
+      const terminal = await coordinator.getOperation(removal.operation_id);
+      assert.equal(terminal.workflowStep, 'SUPERSEDED');
+      assert.equal(terminal.status, 'superseded');
+      assert.equal(answer.success, false);
+      assert.equal(answer.skipped, true);
+      assert.equal(coordinator.stats.operationsFailed, 0);
+      assert.equal(coordinator.stats.operationsCompleted, 0);
     } finally {
       await coordinator.shutdown();
       await source.dispose();
@@ -265,15 +275,16 @@ test('late native promotion preserves an incumbent named by an admitted learner 
     }
   }, {createCluster: addressedCluster}));
 
-test('a historical unscoped learner REMOVE never dispatches after the learner becomes a voter',
+for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
+  test(`a historical unscoped REMOVE holds only unresolved dispatch debt (${priorStep})`,
   async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, ledger} = context;
     const admitted = await admitRetirement(context);
     const history = JSON.parse(admitted.removal.steps_history);
     delete history[0].placementAdmission.learnerRetirement;
     assert.equal(commitLedgerStatement(ledger, 'historical-unscoped-removal',
-      'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
-      [JSON.stringify(history), admitted.removal.operation_id]), null);
+      'UPDATE replica_operations SET steps_history = ?, workflow_step = ? WHERE operation_id = ?',
+      [JSON.stringify(history), priorStep, admitted.removal.operation_id]), null);
     const historical = ledgerRows(ledger).find((row) =>
       row.operation_id === admitted.removal.operation_id);
     const rows = admitted.rows.map((row) => row.replica_id !== initial.replica_id ? row :
@@ -291,8 +302,17 @@ test('a historical unscoped learner REMOVE never dispatches after the learner be
     try {
       const result = await coordinator.dispatchOperation(historical);
       const pending = await coordinator.getOperation(historical.operation_id);
-      assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
-      assert.equal(pending.completedAt, null);
+      if (priorStep === WORKFLOW_STEP.PENDING) {
+        assert.equal(result.reconcileOutcome, 'superseded');
+        assert.equal(pending.workflowStep, 'SUPERSEDED');
+        assert.equal(pending.status, 'superseded');
+        assert.ok(Number.isFinite(pending.completedAt));
+      } else {
+        assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+        assert.equal(pending.completedAt, null);
+      }
+      assert.equal(coordinator.stats.operationsFailed, 0);
+      assert.equal(coordinator.stats.operationsCompleted, 0);
       assert.deepEqual(deliveries, []);
       assert.deepEqual(source.serviceChanges, []);
       assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
@@ -303,6 +323,7 @@ test('a historical unscoped learner REMOVE never dispatches after the learner be
       await leader.dispose();
     }
   }, {createCluster: addressedCluster}));
+}
 
 test('guarded disconnect can clear the exact learner on the leader while its host remains lost',
   async (t) => withPlacementLeaseAuthority(async (context) => {
@@ -508,9 +529,10 @@ for (const successor of ['boot', 'service generation']) {
     }, {createCluster: addressedCluster}));
 }
 
-for (const cleanupFirst of [false, true]) {
-  test(`offline learner custody releases after both durable effects (${
-    cleanupFirst ? 'disk first' : 'ledger first'})`, {timeout: 7000},
+for (const order of ['ledger first', 'disk first', 'disk first, new operation owner']) {
+  const cleanupFirst = order !== 'ledger first';
+  const restartOperationOwner = order === 'disk first, new operation owner';
+  test(`offline learner custody releases after both durable effects (${order})`, {timeout: 7000},
   async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, clock} = context;
     const targetId = initial.replica_id;
@@ -535,13 +557,24 @@ for (const cleanupFirst of [false, true]) {
       }
       return apply(mutation, options);
     };
-    const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
+    const repository = coordinator.repository;
+    let terminalCommitted = false;
+    const operationGateway = repository.controlPlaneSystemTableGateway;
+    const read = operationGateway.readAuthoritativeRows;
+    operationGateway.readAuthoritativeRows = (table, sql, params, options) =>
+      restartOperationOwner && terminalCommitted && table === TABLES.SERVICES ?
+        {success: false, error: 'receipt acknowledgement path unavailable'} :
+        read(table, sql, params, options);
+    const persist = repository.persistOperationUpdate.bind(repository);
     if (cleanupFirst) {
       coordinator.repository.persistOperationUpdate = async (operation, options) => {
         if (operation.operationId === removal.operation_id &&
             operation.workflowStep === WORKFLOW_STEP.REMOVED) {
           terminalReached.resolve(operation);
           await terminalReleased.promise;
+          const outcome = await persist(operation, options);
+          terminalCommitted = true;
+          return outcome;
         }
         return persist(operation, options);
       };
@@ -585,7 +618,8 @@ for (const cleanupFirst of [false, true]) {
         assert.equal((await readOperation()).completed_at, null);
         terminalReleased.resolve();
       }
-      await redrive;
+      if (restartOperationOwner) await Promise.allSettled([redrive]);
+      else await redrive;
       for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
       const terminal = await readOperation();
@@ -607,6 +641,17 @@ for (const cleanupFirst of [false, true]) {
         const restarted = source.restart();
         await restarted.handler.removedReplicaCleanupDebtSweepTask;
         assert.equal(fs.existsSync(file), false);
+      }
+      if (restartOperationOwner) {
+        assert.equal(source.lifecycleStore.durable.services.get(targetId)?.status, 'cleanup_complete');
+        await coordinator.shutdown();
+        const reconstructed = openDispatchOwner({source, rows, removal: terminal, nodes, cluster,
+          deliveries: [], leader, clock, enableReplicaCleanupReleaseRecovery: true});
+        try {
+          await reconstructed.workflowOwner.recoverReplicaCleanupReleaseDebt();
+        } finally {
+          await reconstructed.shutdown();
+        }
       }
       for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           source.lifecycleStore.durable.services.has(targetId); turns += 1) await nextTurns(1);
