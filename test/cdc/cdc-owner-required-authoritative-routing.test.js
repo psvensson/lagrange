@@ -27,6 +27,8 @@ const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const PARTITION = INITIAL_PARTITION_IDS[TABLE];
 const CALLER = 'strict-read-caller';
 const OWNER = 'strict-read-owner';
+const OWNER_PORT = 19873;
+const CALLER_PORT = 19874;
 const REPLICA = 'strict-read-replica';
 const ADDRESS = `${OWNER}/partition/${REPLICA}`;
 const OPERATION = 'strict-read-operation';
@@ -130,10 +132,12 @@ test('strict CDC reads route to the registered owner while a local query is held
     ConfigurationManager.getInstance().initialize({});
     LoggingService.getInstance().initialize({level: 'error'});
     const callerRouter = new MessageRouter({
-      nodeId: CALLER, inProcess: true, bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: CALLER, wsPort: CALLER_PORT, inProcess: true,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
     const ownerRouter = new MessageRouter({
-      nodeId: OWNER, inProcess: true, bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: OWNER, wsPort: OWNER_PORT, inProcess: true,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
     const cache = seedRoutingCache();
     const partition = new PartitionService(withFoundingStamp({
@@ -149,7 +153,12 @@ test('strict CDC reads route to the registered owner while a local query is held
 
     try {
       await callerRouter.initialize();
-      await ownerRouter.initialize();
+      await ownerRouter.initialize({startServer: true});
+      await callerRouter.connectToNode(OWNER, ownerRouter.advertisedAddress);
+      // Recovery reads give a disconnected candidate a one-millisecond
+      // probe. Exercise the ready owner path over an actual connected pair.
+      t.equal(callerRouter.getConnectionState(OWNER), 'connected',
+        'the remote owner has a live node connection');
       await partition.initialize();
       partition.raft.campaign();
       t.equal(partition.raft.readStatus().role, 'leader', 'native owner is leader');
