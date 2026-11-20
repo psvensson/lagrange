@@ -24,6 +24,7 @@ import {
   STATE,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
+import {durableRowVersion} from '../node/replica-state-machine-lifecycle-observation.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   isCatchupLearnerRaftRole,
@@ -180,6 +181,7 @@ function classifyServiceRow(row, promotedVoterReplicaIds = null) {
     failed: status === ReplicaStatus.FAILED || status === SERVICE_STATUS.STOPPED,
     operationalVoter: activeVoter,
     createdAt: row[COLUMN.CREATED_AT],
+    lifecycleVersion: durableRowVersion(row),
     ...(!isLearner && !isVoterRole(role) ? {unresolvedRole: true} : {}),
     isLeader: activeVoter && role === RAFT_ROLE.LEADER,
   };
@@ -334,11 +336,14 @@ function copyMoveOf(context, deficitKind, type, fields) {
 function learnerRetirementDeficit(context, replica) {
   const nodeBootIncarnation = context.eligibility.nodeBoots.get(replica.nodeId);
   if (nodeBootIncarnation === undefined ||
-      !Number.isSafeInteger(replica.createdAt) || replica.createdAt <= 0) {
+      !Number.isSafeInteger(replica.createdAt) || replica.createdAt <= 0 ||
+      !Number.isSafeInteger(replica.lifecycleVersion?.value)) {
     return waitingOf(context, KIND.DEAD_LEARNER, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
   }
   const learnerRetirement = Object.freeze({nodeBootIncarnation,
-    replicaCreatedAt: replica.createdAt});
+    replicaCreatedAt: replica.createdAt,
+    lifecycleVersion: replica.lifecycleVersion.value,
+    lifecycleVersionColumn: replica.lifecycleVersion.column});
   return candidateOf(context, KIND.DEAD_LEARNER, moveOf(OperationType.REMOVE,
     {targetNodeId: replica.nodeId, replicaId: replica.replicaId, learnerRetirement}));
 }

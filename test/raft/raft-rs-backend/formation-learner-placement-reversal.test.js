@@ -113,7 +113,8 @@ function openNodes(clock) {
 function serviceRow(replicaId, nodeId, role, createdAt = START_MS) {
   return {service_id: replicaId, replica_id: replicaId, partition_id: PARTITION,
     node_id: nodeId, status: SERVICE_STATUS.ACTIVE, raft_role: role, service_type: 'partition',
-    created_at: createdAt};
+    created_at: createdAt, state_entered_at: createdAt, updated_at: createdAt,
+    cleanup_token: null};
 }
 
 function addLearner(cluster, row) {

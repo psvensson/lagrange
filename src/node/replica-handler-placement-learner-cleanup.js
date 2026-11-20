@@ -4,6 +4,9 @@ import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
 import {readCommittedMembershipStamp} from '../rebalancer/committed-membership-bootstrap-read.js';
 import {ReplicaOperationField} from '../rebalancer/replica-operation-constants.js';
 import {removalAuthorityDeferred} from './replica-removal-debt-errors.js';
+import {learnerRetirementToken} from './replica-learner-retirement-lifecycle.js';
+import {durableRowVersion, installAuthoritativeReplicaLifecycleSnapshot} from
+  './replica-state-machine-lifecycle-observation.js';
 
 const LEARNER_CLEANUP_AUTHORITY = Object.freeze({
   CLEARED: 'cleared',
@@ -15,7 +18,8 @@ function rowNamesCleanupGeneration(row, handler, scope, request) {
   return row?.created_at === scope.replicaCreatedAt &&
     row.replica_id === request[ReplicaOperationField.REPLICA_ID] &&
     row.partition_id === request[ReplicaOperationField.PARTITION_ID] &&
-    row.node_id === handler.nodeId;
+    row.node_id === handler.nodeId &&
+    row.cleanup_token === learnerRetirementToken(request[ReplicaOperationField.OPERATION_ID]);
 }
 
 async function observeClearedLearnerGeneration(handler, scope, request) {
@@ -34,7 +38,11 @@ async function observeClearedLearnerGeneration(handler, scope, request) {
     const stamp = await readCommittedMembershipStamp(handler,
       request[ReplicaOperationField.PARTITION_ID],
       {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT});
-    return projectReplicaRole(stamp, replicaId) === COMMITTED_REPLICA_ROLE.ABSENT ?
+    if (projectReplicaRole(stamp, replicaId) !== COMMITTED_REPLICA_ROLE.ABSENT) {
+      return LEARNER_CLEANUP_AUTHORITY.DEFERRED;
+    }
+    return await installAuthoritativeReplicaLifecycleSnapshot(handler.replicaStateMachine,
+      observed.row, handler.nodeId, durableRowVersion(observed.row)) ?
       LEARNER_CLEANUP_AUTHORITY.CLEARED : LEARNER_CLEANUP_AUTHORITY.DEFERRED;
   } catch {
     return LEARNER_CLEANUP_AUTHORITY.DEFERRED;

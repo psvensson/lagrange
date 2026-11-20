@@ -1,3 +1,5 @@
+import {assertDurableRejoinStorageAdmission} from
+  '../../../src/bootstrap/durable-rejoin-storage-admission.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {STATE, TABLES} from '../../../src/constants/index.js';
@@ -87,8 +89,22 @@ function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
     rowOf: (status) => ({...row, status}), replicaOperations: operations});
 }
 
+function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
+  const services = leader.lifecycleStore.durable.services;
+  services.set(sourceRow.replica_id,
+    source?.lifecycleStore.durable.services.get(sourceRow.replica_id) ?? sourceRow);
+  if (source) source.lifecycleStore.durable.services = services;
+  const gateway = leader.lifecycleStore.gateway;
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  gateway.readAuthoritativeRows = (table, sql, params, options) =>
+    table === TABLES.NODES ? {success: true, rows: [nodes.nodeRow()]} :
+      read(table, sql, params, options);
+}
+
 function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
   leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null}) {
+  bindRetirementAuthority(leader, nodes, rows.find((row) =>
+    row.replica_id === removal.replica_id), source);
   const coordinator = createTestCoordinator({
     nodeId: SEED, enableTimeouts: false, replaceWitness: false,
     committedMembershipFixture: false,
@@ -198,7 +214,7 @@ test('late native promotion preserves an incumbent named by an admitted learner 
 
 test('guarded disconnect can clear the exact learner on the leader while its host remains lost',
   async (t) => withPlacementLeaseAuthority(async (context) => {
-    const {cluster, initial} = context;
+    const {cluster, initial, nodes} = context;
     const targetId = initial.replica_id;
     cluster.isolate(targetId);
     const {removal, rows} = await admitRetirement(context);
@@ -207,6 +223,7 @@ test('guarded disconnect can clear the exact learner on the leader while its hos
     assert.ok(before.learners.includes(peerId), 'the lost host still holds a native learner');
     const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
       [removal]);
+    bindRetirementAuthority(leader, nodes, rows.find((row) => row.replica_id === targetId));
     try {
       const payload = {
         [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.REMOVE_LEARNER,
@@ -306,6 +323,7 @@ for (const restart of [false, true]) {
           assert.equal(cluster.restart(targetId).dbFile, disk);
           nodes.publishNewBootAtSameWatermark();
           Object.assign(source, sourceOf(cluster, service, [removal], rejoinedBoot));
+          source.lifecycleStore.durable.services = leader.lifecycleStore.durable.services;
           source.handler.messageRouter = coordinator.workflowOwner.messageRouter;
         }
         assert.equal(cluster.isolated.delete(targetId), true);
@@ -390,6 +408,14 @@ for (const successor of ['boot', 'service generation']) {
     }, {createCluster: addressedCluster}));
 }
 
+function restoreAuthorityOf(row) {
+  return {restoringExistingReplica: true, replicaId: row.replica_id, lifecycleAuthority: {
+    replicaId: row.replica_id, serviceType: row.service_type, partitionId: row.partition_id,
+    nodeId: row.node_id, status: row.status, durableVersionColumn: 'state_entered_at',
+    durableVersion: row.state_entered_at,
+  }};
+}
+
 async function waitForHeldRequest(entered) {
   const bound = Promise.withResolvers();
   const timer = setTimeout(() => bound.reject(new Error(
@@ -435,6 +461,8 @@ for (const change of ['boot', 'service birth']) {
           await nodes.renew(BOOT + 1);
           await nodes.waitForCommittedTarget((row) => row.boot_incarnation === BOOT + 1 &&
             row.connection_state === STATE.READY);
+          await assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
+            restoreAuthorityOf(target));
         } else {
           const next = {...target, created_at: target.created_at + 1};
           leader.lifecycleStore.durable.services.set(target.replica_id, next);
@@ -456,6 +484,54 @@ for (const change of ['boot', 'service birth']) {
       }
     }, {createCluster: addressedCluster}));
 }
+
+test('the committed retire custody wins against a restart using a fresh restore plan',
+  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+    const {cluster, initial, nodes, clock} = context;
+    const {rows, removal} = await admitRetirement(context);
+    const target = rows.find((row) => row.replica_id === initial.replica_id);
+    const source = sourceOf(cluster, target, [removal]);
+    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+      [removal]);
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const deliveries = [];
+    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
+      deliveries, leader, clock});
+    const gateway = leader.lifecycleStore.gateway;
+    const mutate = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      const answer = await mutate(mutation, options);
+      if (mutation.tableName === TABLES.SERVICES &&
+          typeof mutation.data?.cleanup_token === 'string') {
+        entered.resolve(leader.lifecycleStore.durable.services.get(target.replica_id));
+        await resume.promise;
+      }
+      return answer;
+    };
+    const run = coordinator.dispatchOperation(removal);
+    try {
+      const custody = await waitForHeldRequest(entered);
+      assert.equal(custody.created_at, target.created_at);
+      assert.ok(custody.state_entered_at > target.state_entered_at);
+      const peer = peerIdOf(cluster, SEED_REPLICA, target.replica_id);
+      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer));
+      nodes.publishNewBootAtSameWatermark();
+      await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
+        restoreAuthorityOf(custody)), {code: 'DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED'});
+      resume.resolve();
+      const result = await run;
+      assert.ok(settleCluster(cluster, () =>
+        !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer)));
+      t.diagnostic(JSON.stringify({custody, result, deliveries}));
+    } finally {
+      resume.resolve();
+      await Promise.allSettled([run]);
+      await coordinator.shutdown();
+      await source.dispose();
+      await leader.dispose();
+    }
+  }, {createCluster: addressedCluster}));
 
 for (const flaw of ['foreign operation', 'wrong status', 'different birth', 'contradictory proposal']) {
   test(`a retirement reply with ${flaw} cannot terminate the scoped operation`,

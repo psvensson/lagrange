@@ -39,6 +39,11 @@ import {
 } from '../partition/partition-service-raft-membership-administration.js';
 import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
   '../raft/raft-rs-committed-membership-read.js';
+import {claimNativeLearnerRetirement} from './replica-handler-learner-retirement-authority.js';
+import {
+  LEARNER_LIFECYCLE_CUSTODY, learnerRetirementToken, observeLearnerRetirementCustody,
+  releaseLearnerRetirementCustody,
+} from './replica-learner-retirement-lifecycle.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -70,6 +75,7 @@ function scopedLearnerOutcome(role) {
 const LEARNER_SCOPE_UNAVAILABLE = Object.freeze({});
 const LEARNER_SCOPE_FIELDS = Object.freeze([
   'targetNodeId', 'nodeBootIncarnation', 'replicaCreatedAt', 'canPropose',
+  'lifecycleVersion', 'lifecycleVersionColumn',
 ]);
 
 function scopedLearnerRetirementOf(request) {
@@ -86,21 +92,42 @@ function scopedLearnerRetirementOf(request) {
   const wellFormed = typeof scope.targetNodeId === 'string' && scope.targetNodeId.length > 0 &&
     Number.isSafeInteger(scope.nodeBootIncarnation) && scope.nodeBootIncarnation > 0 &&
     Number.isSafeInteger(scope.replicaCreatedAt) && scope.replicaCreatedAt > 0 &&
-    typeof scope.canPropose === 'boolean';
+    Number.isSafeInteger(scope.lifecycleVersion) && scope.lifecycleVersion > 0 &&
+    typeof scope.lifecycleVersionColumn === 'string' && typeof scope.canPropose === 'boolean';
   return wellFormed ? Object.freeze(scope) : LEARNER_SCOPE_UNAVAILABLE;
 }
 
-async function settleScopedLearnerRemoval(target, scope) {
-  const {service, fields: {operationId, replicaId}} = target;
+async function settleScopedLearnerRemoval(handler, target, scope) {
+  const {service, fields: {operationId, partitionId, replicaId}} = target;
+  const durableScope = {...scope, operationId, partitionId, replicaId};
   const role = await observeScopedLearner(service, replicaId);
-  if (role !== COMMITTED_REPLICA_ROLE.LEARNER || scope.canPropose !== true) {
-    return {state: role === COMMITTED_REPLICA_ROLE.LEARNER ?
-      LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : scopedLearnerOutcome(role)};
+  if (role === COMMITTED_REPLICA_ROLE.VOTER) {
+    const held = await observeLearnerRetirementCustody(
+      handler.replicaStateMachine, durableScope);
+    if (held.state === LEARNER_LIFECYCLE_CUSTODY.ACQUIRED &&
+        !await releaseLearnerRetirementCustody(
+          handler.replicaStateMachine, held.row, operationId)) {
+      return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
+    }
+  }
+  if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};
+  const custody = await claimNativeLearnerRetirement(handler, durableScope);
+  if (custody.state !== LEARNER_LIFECYCLE_CUSTODY.ACQUIRED) {
+    return {state: custody.state === LEARNER_LIFECYCLE_CUSTODY.CHANGED ?
+      LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : LEARNER_RETIREMENT_OUTCOME.DEFERRED};
   }
   const proposal = await turnChainValue(removePartitionRaftLearner(service, {
     operationId, replicaIdentity: replicaId, expectedNodeId: scope.targetNodeId,
   }));
-  return {state: scopedLearnerOutcome(await observeScopedLearner(service, replicaId)), proposal};
+  const observed = await observeScopedLearner(service, replicaId);
+  if (observed === COMMITTED_REPLICA_ROLE.VOTER) {
+    const released = await releaseLearnerRetirementCustody(
+      handler.replicaStateMachine, custody.row, operationId);
+    return {state: released ? scopedLearnerOutcome(observed) :
+      LEARNER_RETIREMENT_OUTCOME.DEFERRED};
+  }
+  return {state: scopedLearnerOutcome(observed), proposal,
+    custody: learnerRetirementToken(operationId)};
 }
 
 function readRequestField(request, field) {
@@ -404,10 +431,11 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
       }
       const target = this.resolvePartitionAdministrationTarget(request);
       if (target.response) return target.response;
-      const result = await settleScopedLearnerRemoval(target, scope);
+      const result = await settleScopedLearnerRemoval(this, target, scope);
       return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
         [ReplicaOperationField.LEARNER_RETIREMENT]: result.state,
         [ReplicaOperationField.LEARNER_RETIREMENT_SCOPE]: scope,
+        [ReplicaOperationField.LEARNER_RETIREMENT_CUSTODY]: result.custody,
         [ReplicaOperationField.PROPOSAL]: result.proposal,
         operationId: target.fields.operationId,
         partitionId: target.fields.partitionId,

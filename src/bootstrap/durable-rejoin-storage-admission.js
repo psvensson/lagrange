@@ -1,3 +1,7 @@
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {
+  claimLearnerDiskRejoin, isLearnerRetirementToken,
+} from '../node/replica-learner-retirement-lifecycle.js';
 import {observeAuthoritativeReplicaLifecycle} from
   '../node/replica-state-machine-lifecycle-observation.js';
 
@@ -20,6 +24,12 @@ function rowMatchesRestoreAuthority(row, authority) {
     row?.[field] === value);
 }
 
+async function claimRestoreGeneration(stateMachine, row) {
+  if (isLearnerRetirementToken(row.cleanup_token)) return false;
+  return isCatchupLearnerRaftRole(row.raft_role) ?
+    claimLearnerDiskRejoin(stateMachine, row) : true;
+}
+
 async function assertDurableRejoinStorageAdmission(
   replicaStateMachine,
   options,
@@ -30,7 +40,8 @@ async function assertDurableRejoinStorageAdmission(
     options.replicaId,
   );
   if (observation.available === true &&
-      rowMatchesRestoreAuthority(observation.row, options.lifecycleAuthority)) {
+      rowMatchesRestoreAuthority(observation.row, options.lifecycleAuthority) &&
+      await claimRestoreGeneration(replicaStateMachine, observation.row)) {
     return;
   }
   const error = new Error(

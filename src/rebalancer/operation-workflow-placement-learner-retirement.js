@@ -7,6 +7,7 @@ import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {learnerRetirementToken} from '../node/replica-learner-retirement-lifecycle.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
@@ -54,11 +55,12 @@ function matchesRetirementScope(replyScope, requestScope) {
     fields.every((field) => Object.hasOwn(reply, field) && reply[field] === requestScope[field]);
 }
 
-function removalProposalConsistent(answer, requestScope) {
+function removalProposalConsistent(answer) {
   const proposal = answer[ReplicaOperationField.PROPOSAL];
   if (proposal === undefined) return true;
   const recorded = copyStrictOwnDataRecord(proposal);
-  if (!recorded || requestScope.canPropose !== true) return false;
+  if (!recorded || answer[ReplicaOperationField.LEARNER_RETIREMENT_CUSTODY] !==
+      learnerRetirementToken(answer.operationId)) return false;
   const proposed = recorded.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
     recorded.reason === RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_REMOVAL_PROPOSED &&
     recorded.replicaIdentity === answer.replicaId;
@@ -75,7 +77,7 @@ function classifyRetirementReply(answer, request, leaderNodeId) {
   if (reply?.status !== ReplicaOperationResponseStatus.COMPLETED ||
       reply.nodeId !== leaderNodeId || identity.some((field) => reply[field] !== request[field]) ||
       !matchesRetirementScope(scope, requestScope) ||
-      !removalProposalConsistent(reply, requestScope)) {
+      !removalProposalConsistent(reply)) {
     return LEARNER_RETIREMENT_OUTCOME.DEFERRED;
   }
   const outcome = reply[ReplicaOperationField.LEARNER_RETIREMENT];

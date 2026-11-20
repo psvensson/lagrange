@@ -96,6 +96,7 @@ const ReplicaOperationField = Object.freeze({
   PROPOSAL: 'proposal',
   LEARNER_RETIREMENT: 'learnerRetirement',
   LEARNER_RETIREMENT_SCOPE: 'learnerRetirementScope',
+  LEARNER_RETIREMENT_CUSTODY: 'learnerRetirementCustody',
   // A REMOVE that retires its replica's whole group as a unit carries the
   // workflow's evidence (partition/group-retirement-evidence.js).
   GROUP_RETIREMENT: 'groupRetirement',

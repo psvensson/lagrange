@@ -40,7 +40,12 @@ const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'targetNodeStorageIncarnation']);
 const LEARNER_RETIREMENT = ReplicaOperationField.LEARNER_RETIREMENT;
 const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, LEARNER_RETIREMENT]);
-const LEARNER_RETIREMENT_FIELDS = Object.freeze(['nodeBootIncarnation', 'replicaCreatedAt']);
+const LEARNER_RETIREMENT_FIELDS = Object.freeze([
+  'nodeBootIncarnation', 'replicaCreatedAt', 'lifecycleVersion', 'lifecycleVersionColumn',
+]);
+const LEARNER_RETIREMENT_VERSION_COLUMNS = Object.freeze(new Set([
+  'state_entered_at', 'updated_at',
+]));
 const KINDS = Object.freeze(new Set(Object.values(KIND)));
 const MOVE_TYPES = Object.freeze(new Set([
   ...Object.values(OperationType),
@@ -138,7 +143,10 @@ function canonicalMove(kind, value) {
   if (!hasExactFields(move, LEARNER_RETIREMENT_MOVE_FIELDS) || kind !== KIND.PLACEMENT ||
       move.type !== OperationType.REMOVE ||
       !hasExactFields(retirement, LEARNER_RETIREMENT_FIELDS) ||
-      !LEARNER_RETIREMENT_FIELDS.every((key) => isPositiveInteger(retirement[key]))) return null;
+      !isPositiveInteger(retirement.nodeBootIncarnation) ||
+      !isPositiveInteger(retirement.replicaCreatedAt) ||
+      !isPositiveInteger(retirement.lifecycleVersion) ||
+      !LEARNER_RETIREMENT_VERSION_COLUMNS.has(retirement.lifecycleVersionColumn)) return null;
   return ordered({...move, learnerRetirement: ordered(retirement, LEARNER_RETIREMENT_FIELDS)},
     LEARNER_RETIREMENT_MOVE_FIELDS);
 }
