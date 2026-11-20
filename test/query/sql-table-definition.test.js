@@ -54,7 +54,7 @@ test('the catalog records each column\'s collation, BINARY when none is declared
   const schema = catalogSchema();
   assert.deepEqual(schema.columns.map((column) => [column.name, column.type, column.collation]), [
     ['id', 'INTEGER', 'BINARY'], ['name', 'TEXT', 'NOCASE'], ['tail', 'TEXT', 'RTRIM'],
-    ['plain', 'TEXT', 'BINARY'], ['n', 'REAL', 'BINARY'], ['un', 'BLOB', 'BINARY'],
+    ['plain', 'TEXT', 'BINARY'], ['n', 'NUMERIC', 'BINARY'], ['un', 'BLOB', 'BINARY'],
     ['amount', 'REAL', 'BINARY']]);
   assert.equal(schema.columns.find((column) => column.name === 'amount').defaultValue, '2.0');
 });

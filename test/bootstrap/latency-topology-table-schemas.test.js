@@ -62,7 +62,8 @@ describe('latency topology schema registration', () => {
     it(`includes ${tableName} in INITIAL_REPLICA_IDS`, () => {
       const replicaIds = INITIAL_REPLICA_IDS[tableName];
       assert.ok(replicaIds);
-      assert.equal(replicaIds.length, 3);
+      assert.equal(replicaIds.length, 1);
+      assert.deepEqual(replicaIds, [`${tableName}-p1-r1`]);
       assert.deepEqual(getInitialReplicaIds(tableName), replicaIds);
     });
 

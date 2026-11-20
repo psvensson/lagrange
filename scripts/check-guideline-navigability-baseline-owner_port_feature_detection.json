@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-11-18T06:01:29.698Z",
-  "rawViolationCount": 2009,
+  "rawViolationCount": 2008,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -13396,15 +13396,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/background-priority-spread-release-tracker.js",
-      "line": 157,
-      "column": 4,
-      "functionName": "registerBackgroundPrioritySpreadReleaseWake",
-      "kind": "owner_port_feature_detection",
-      "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/entity-size-resolution.js",
       "line": 50,
       "column": 4,
@@ -18084,5 +18075,6 @@
       "reason": "typeof feature detection on an owner member; take a named collaborator validated once in the constructor instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     }
-  ]
+  ],
+  "maxViolations": 2006
 }

@@ -194,186 +194,78 @@ const PRIORITY_CONTROL_PLANE_PARTITION_IDS = new Set([
 
 /**
  * Pre-assigned replica IDs for initial system table partitions.
- * Each partition has 3 replicas on the seed node.
+ * Each partition starts with 1 founding voter replica on the seed node.
  */
 const INITIAL_REPLICA_IDS = {
-  [SYSTEM_TABLE_NAME.TABLES]: ['tables-p1-r1', 'tables-p1-r2', 'tables-p1-r3'],
-  [SYSTEM_TABLE_NAME.PARTITIONS]: ['partitions-p1-r1', 'partitions-p1-r2', 'partitions-p1-r3'],
-  [SYSTEM_TABLE_NAME.INDICES]: ['indices-p1-r1', 'indices-p1-r2', 'indices-p1-r3'],
-  [SYSTEM_TABLE_NAME.MESSAGE_GROUPS]: [
-    'message_groups-p1-r1', 'message_groups-p1-r2', 'message_groups-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.NODES]: ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3'],
-  [SYSTEM_TABLE_NAME.SERVICES]: ['services-p1-r1', 'services-p1-r2', 'services-p1-r3'],
-  [SYSTEM_TABLE_NAME.LOGS]: ['logs-p1-r1', 'logs-p1-r2', 'logs-p1-r3'],
-  [SYSTEM_TABLE_NAME.CONFIG]: ['config-p1-r1', 'config-p1-r2', 'config-p1-r3'],
-  [SYSTEM_TABLE_NAME.LIVE_QUERIES]: [
-    'live_queries-p1-r1', 'live_queries-p1-r2', 'live_queries-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.CONTEXTS]: ['contexts-p1-r1', 'contexts-p1-r2', 'contexts-p1-r3'],
-  [SYSTEM_TABLE_NAME.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
+  [SYSTEM_TABLE_NAME.TABLES]: ['tables-p1-r1'],
+  [SYSTEM_TABLE_NAME.PARTITIONS]: ['partitions-p1-r1'],
+  [SYSTEM_TABLE_NAME.INDICES]: ['indices-p1-r1'],
+  [SYSTEM_TABLE_NAME.MESSAGE_GROUPS]: ['message_groups-p1-r1'],
+  [SYSTEM_TABLE_NAME.NODES]: ['nodes-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICES]: ['services-p1-r1'],
+  [SYSTEM_TABLE_NAME.LOGS]: ['logs-p1-r1'],
+  [SYSTEM_TABLE_NAME.CONFIG]: ['config-p1-r1'],
+  [SYSTEM_TABLE_NAME.LIVE_QUERIES]: ['live_queries-p1-r1'],
+  [SYSTEM_TABLE_NAME.CONTEXTS]: ['contexts-p1-r1'],
+  [SYSTEM_TABLE_NAME.CODE]: ['code-p1-r1'],
   [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: [
     'control_plane_publications-p1-r1',
-    'control_plane_publications-p1-r2',
-    'control_plane_publications-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: [
-    'replica_operations-p1-r1', 'replica_operations-p1-r2', 'replica_operations-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: [
-    'node_endpoints-p1-r1', 'node_endpoints-p1-r2', 'node_endpoints-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: [
-    'service_definitions-p1-r1', 'service_definitions-p1-r2', 'service_definitions-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_INSTANCES]: [
-    'service_instances-p1-r1', 'service_instances-p1-r2', 'service_instances-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_BINDINGS]: [
-    'service_bindings-p1-r1',
-    'service_bindings-p1-r2',
-    'service_bindings-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]: [
-    'service_endpoints-p1-r1', 'service_endpoints-p1-r2', 'service_endpoints-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_TIMERS]: [
-    'service_timers-p1-r1', 'service_timers-p1-r2', 'service_timers-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_PACKAGES]: [
-    'service_packages-p1-r1',
-    'service_packages-p1-r2',
-    'service_packages-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_REVISIONS]: [
-    'service_revisions-p1-r1',
-    'service_revisions-p1-r2',
-    'service_revisions-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SERVICE_INSTALLATIONS]: [
-    'service_installations-p1-r1',
-    'service_installations-p1-r2',
-    'service_installations-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: ['replica_operations-p1-r1'],
+  [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: ['node_endpoints-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: ['service_definitions-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_INSTANCES]: ['service_instances-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_BINDINGS]: ['service_bindings-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]: ['service_endpoints-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_TIMERS]: ['service_timers-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_PACKAGES]: ['service_packages-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_REVISIONS]: ['service_revisions-p1-r1'],
+  [SYSTEM_TABLE_NAME.SERVICE_INSTALLATIONS]: ['service_installations-p1-r1'],
   [SYSTEM_TABLE_NAME.SERVICE_INSTALL_FAILURES]: [
     'service_install_failures-p1-r1',
-    'service_install_failures-p1-r2',
-    'service_install_failures-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.MODULE_MANIFESTS]: [
-    'module_manifests-p1-r1',
-    'module_manifests-p1-r2',
-    'module_manifests-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.MODULE_MANIFESTS]: ['module_manifests-p1-r1'],
   [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_MAPPINGS]: [
     'package_registry_mappings-p1-r1',
-    'package_registry_mappings-p1-r2',
-    'package_registry_mappings-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES]: [
     'package_registry_overrides-p1-r1',
-    'package_registry_overrides-p1-r2',
-    'package_registry_overrides-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS]: [
     'module_dependency_locks-p1-r1',
-    'module_dependency_locks-p1-r2',
-    'module_dependency_locks-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.WASM_OPERATIONS]: [
-    'wasm_operations-p1-r1',
-    'wasm_operations-p1-r2',
-    'wasm_operations-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: [
-    'sql_transactions-p1-r1',
-    'sql_transactions-p1-r2',
-    'sql_transactions-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.WASM_OPERATIONS]: ['wasm_operations-p1-r1'],
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: ['sql_transactions-p1-r1'],
   [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]: [
     'sql_transaction_participants-p1-r1',
-    'sql_transaction_participants-p1-r2',
-    'sql_transaction_participants-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS]: [
-    'sql_write_operations-p1-r1',
-    'sql_write_operations-p1-r2',
-    'sql_write_operations-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS]: [
-    'schema_operations-p1-r1',
-    'schema_operations-p1-r2',
-    'schema_operations-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATIONS]: [
-    'schema_migrations-p1-r1',
-    'schema_migrations-p1-r2',
-    'schema_migrations-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS]: ['sql_write_operations-p1-r1'],
+  [SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS]: ['schema_operations-p1-r1'],
+  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATIONS]: ['schema_migrations-p1-r1'],
   [SYSTEM_TABLE_NAME.SCHEMA_MIGRATION_PARTITIONS]: [
     'schema_migration_partitions-p1-r1',
-    'schema_migration_partitions-p1-r2',
-    'schema_migration_partitions-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: [
-    'debug_sessions-p1-r1',
-    'debug_sessions-p1-r2',
-    'debug_sessions-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS]: [
-    'debug_breakpoints-p1-r1',
-    'debug_breakpoints-p1-r2',
-    'debug_breakpoints-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS]: [
-    'debug_snapshots-p1-r1',
-    'debug_snapshots-p1-r2',
-    'debug_snapshots-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: [
-    'storage_reservations-p1-r1',
-    'storage_reservations-p1-r2',
-    'storage_reservations-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: [
-    'latency_groups-p1-r1',
-    'latency_groups-p1-r2',
-    'latency_groups-p1-r3',
-  ],
-  [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: [
-    'inter_group_latencies-p1-r1',
-    'inter_group_latencies-p1-r2',
-    'inter_group_latencies-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: ['debug_sessions-p1-r1'],
+  [SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS]: ['debug_breakpoints-p1-r1'],
+  [SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS]: ['debug_snapshots-p1-r1'],
+  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: ['storage_reservations-p1-r1'],
+  [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: ['latency_groups-p1-r1'],
+  [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: ['inter_group_latencies-p1-r1'],
   [SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS]: [
     'service_partition_access-p1-r1',
-    'service_partition_access-p1-r2',
-    'service_partition_access-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_SLOTS]: [
     'call_cell_reduce_slots-p1-r1',
-    'call_cell_reduce_slots-p1-r2',
-    'call_cell_reduce_slots-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS]: [
     'call_cell_reduce_results-p1-r1',
-    'call_cell_reduce_results-p1-r2',
-    'call_cell_reduce_results-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES]: [
     'call_activation_leases-p1-r1',
-    'call_activation_leases-p1-r2',
-    'call_activation_leases-p1-r3',
   ],
-  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOADS]: [
-    'artifact_payloads-p1-r1',
-    'artifact_payloads-p1-r2',
-    'artifact_payloads-p1-r3',
-  ],
+  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOADS]: ['artifact_payloads-p1-r1'],
   [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOAD_CHUNKS]: [
     'artifact_payload_chunks-p1-r1',
-    'artifact_payload_chunks-p1-r2',
-    'artifact_payload_chunks-p1-r3',
   ],
 };
 

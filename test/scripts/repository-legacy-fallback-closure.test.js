@@ -14,8 +14,8 @@ test('repository-wide candidate inventory is complete and reconciled with census
   assert.equal(inventory.isInventoryComplete, true,
     'candidate inventory must account for 2,674 census sites across all classes');
   assert.equal(inventory.totalCensusSites, 2674, 'census must contain 2,674 candidate sites');
-  assert.equal(inventory.activeDetectedSites, 2648, 'detected fallback sites in src must be 2,648');
-  assert.equal(inventory.retiredSites, 32, 'retired sites from census must be 32');
+  assert.equal(inventory.activeDetectedSites, 2637, 'detected fallback sites in src must be 2,637');
+  assert.equal(inventory.retiredSites, 47, 'retired sites from census must be 47');
 });
 
 test('zero unclassified candidates remain across the repository-wide inventory', () => {

@@ -396,20 +396,20 @@ test('SQLParser - IN-list members keep column refs (not NULL literals)',
     );
   });
 
-test('SQLParser - IS with a non-NULL operand fails closed', async (t) => {
-  t.throws(
-    () => new SQLParser('SELECT * FROM users WHERE age IS 5').parse(),
-    /IS\/IS NOT supports only a NULL right operand/,
-    'IS <value> is rejected instead of silently becoming IS NULL',
-  );
-  t.throws(
-    () => new SQLParser(
-      'SELECT * FROM users WHERE age IS NOT 5',
-    ).parse(),
-    /IS\/IS NOT supports only a NULL right operand/,
-    'IS NOT <value> is rejected too',
-  );
-  // The supported forms still parse.
+test('SQLParser - IS and IS NOT with a non-NULL operand preserve their right operand', async (t) => {
+  const isFive = new SQLParser('SELECT * FROM users WHERE age IS 5').parse();
+  t.equal(isFive.where.type, 'binary');
+  t.equal(isFive.where.operator, 'IS');
+  t.equal(isFive.where.right.value, 5, 'IS <value> preserves right operand instead of becoming IS NULL');
+
+  const isNotFive = new SQLParser(
+    'SELECT * FROM users WHERE age IS NOT 5',
+  ).parse();
+  t.equal(isNotFive.where.type, 'binary');
+  t.equal(isNotFive.where.operator, 'IS NOT');
+  t.equal(isNotFive.where.right.value, 5, 'IS NOT <value> preserves right operand too');
+
+  // Unary IS NULL and IS NOT NULL forms still parse as unary operators.
   t.equal(
     new SQLParser('SELECT * FROM users WHERE a IS NULL').parse()
       .where.operator,

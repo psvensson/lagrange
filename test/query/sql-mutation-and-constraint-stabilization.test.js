@@ -130,7 +130,7 @@ test('Q01: QueryExecutor buildExpressionSQL safely escapes single quotes and sup
   );
 });
 
-test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params and inline expressions', async () => {
+test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL preserve SQL literal storage classes and slice per-partition params', async () => {
   const executor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
@@ -154,8 +154,8 @@ test('Q01: QueryExecutor buildInsertSQL & buildUpdateSQL bind literals to params
 
   const insertParams = [];
   const insertSql = executor.buildInsertSQL(insertAst, insertParams);
-  assert.equal(insertSql, 'INSERT INTO t (id, amount) VALUES (?, (2 + 3))');
-  assert.deepEqual(insertParams, [2]);
+  assert.equal(insertSql, 'INSERT INTO t (id, amount) VALUES (2, (2 + 3))');
+  assert.deepEqual(insertParams, []);
 
   const updateAst = {
     type: 'UPDATE',
@@ -480,3 +480,265 @@ test('Q02: UPDATE uniqueness distinguishes self-update, zero-row stale CAS, comp
 function insertAstExpressionType(ast, rowIdx, colIdx) {
   return ast.values[rowIdx][colIdx].type;
 }
+
+test('Review 4 Item 1: two-partition public INSERT and UPDATE preserve storage class between uniqueness precheck and actual mutation', async () => {
+  const db1 = new Database(':memory:');
+  const db2 = new Database(':memory:');
+  db1.defaultSafeIntegers(true);
+  db2.defaultSafeIntegers(true);
+
+  const ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY, u TEXT UNIQUE, raw BLOB)';
+  const ast = new SQLParser(ddl).parse();
+  const schema = TableCreationService.prototype.buildSchemaDefinition(ast.columns, ast);
+  const renderedDdl = renderTableDefinitionSql('t', schema);
+  db1.exec(renderedDdl);
+  db2.exec(renderedDdl);
+
+  // Partition 2 starts with id = 200, u = '100.0'
+  db2.prepare('INSERT INTO "t" ("id", "u", "raw") VALUES (?, ?, ?)').run(200n, '100.0', 100.0);
+
+  const dbsByPartition = new Map([
+    ['t-p1', db1],
+    ['t-p2', db2],
+  ]);
+
+  const tableInfo = {
+    table_id: 't',
+    table_name: 't',
+    primaryKey: 'id',
+    partition_key: 'id',
+    partition_key_type: 'INTEGER',
+    schema_definition: JSON.stringify(schema),
+  };
+  const partitions = [
+    {
+      partition_id: 't-p1',
+      table_name: 't',
+      partition_key_start: null,
+      partition_key_end: 100,
+      partition_key_type: 'INTEGER',
+    },
+    {
+      partition_id: 't-p2',
+      table_name: 't',
+      partition_key_start: 100,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+    },
+  ];
+
+  const executor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache([tableInfo], partitions, [], []),
+  });
+
+  executor.executeOnPartition = async (partitionId, sql, params = [], forRead = false) => {
+    const db = dbsByPartition.get(partitionId);
+    const stmt = db.prepare(sql);
+    if (forRead || stmt.reader) {
+      return {
+        partitionId,
+        success: true,
+        rows: stmt.all(...params),
+        rowSetComplete: true,
+      };
+    }
+    const info = stmt.run(...params);
+    return {
+      partitionId,
+      success: true,
+      changes: info.changes,
+      rows: [],
+    };
+  };
+  executor.executeOnPartitions = async (partitionIds, sql, params = [], _ts, forRead = false) =>
+    Promise.all(
+      partitionIds.map((pid) => executor.executeOnPartition(pid, sql, params, forRead)),
+    );
+
+  const coordinator = new DistributedWriteCoordinator({
+    queryExecutor: executor,
+    getTableInfo: () => tableInfo,
+    getTablePartitions: () => partitions,
+    partitionResolver: {
+      resolvePartitionForKey(_tableName, keyValue) {
+        return Number(keyValue) < 100 ? 't-p1' : 't-p2';
+      },
+    },
+  });
+
+  const parseSql = (sql) => new SQLParser(sql).parse();
+
+  try {
+    // 1. Non-conflicting SQL INTEGER literal 100 routed to t-p1 while t-p2 holds '100.0':
+    // Both precheck and actual mutation must treat SQL literal 100 as INTEGER -> TEXT '100'
+    // (NOT '100.0') and INTEGER 100 in BLOB/no-affinity `raw`.
+    const insertIntLiteral = await coordinator.executeInsert(
+      parseSql('INSERT INTO t (id, u, raw) VALUES (1, 100, 100)'),
+      [],
+    );
+    assert.equal(insertIntLiteral.success, true);
+
+    const p1Row1 = db1
+      .prepare('SELECT id, u, typeof(u) AS u_type, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 1')
+      .get();
+    assert.deepEqual(p1Row1, {
+      id: 1n,
+      u: '100',
+      u_type: 'text',
+      raw: 100n,
+      raw_type: 'integer',
+    });
+
+    // 2. Conflicting cases across partitions:
+    // (a) SQL REAL literal 100.0 routed to t-p1 conflicts with existing '100.0' on t-p2:
+    await assert.rejects(
+      () => coordinator.executeInsert(
+        parseSql('INSERT INTO t (id, u, raw) VALUES (2, 100.0, 100.0)'),
+        [],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+    // (b) JS numeric parameter 100 (which binds as SQLite REAL 100.0 -> TEXT '100.0')
+    // routed to t-p1 conflicts with existing '100.0' on t-p2:
+    await assert.rejects(
+      () => coordinator.executeInsert(
+        parseSql('INSERT INTO t (id, u, raw) VALUES (?, ?, ?)'),
+        [2, 100, 100],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+    // (c) SQL INTEGER literal 100 routed to t-p2 conflicts with '100' now stored on t-p1:
+    await assert.rejects(
+      () => coordinator.executeInsert(
+        parseSql('INSERT INTO t (id, u, raw) VALUES (201, 100, 100)'),
+        [],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+    // (d) JS BigInt parameter 100n (which binds as SQLite INTEGER 100 -> TEXT '100')
+    // routed to t-p2 conflicts with '100' stored on t-p1:
+    await assert.rejects(
+      () => coordinator.executeInsert(
+        parseSql('INSERT INTO t (id, u, raw) VALUES (?, ?, ?)'),
+        [201n, 100n, 100n],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+
+    // 3. Non-conflicting controls verifying JS Number parameter vs JS BigInt parameter
+    // storage-class fidelity on actual mutation:
+    const insertRealParam = await coordinator.executeInsert(
+      parseSql('INSERT INTO t (id, u, raw) VALUES (?, ?, ?)'),
+      [3, 200, 200],
+    );
+    assert.equal(insertRealParam.success, true);
+    const p1Row3 = db1
+      .prepare('SELECT id, u, typeof(u) AS u_type, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 3')
+      .get();
+    assert.deepEqual(p1Row3, {
+      id: 3n,
+      u: '200.0',
+      u_type: 'text',
+      raw: 200,
+      raw_type: 'real',
+    });
+
+    const insertBigIntParam = await coordinator.executeInsert(
+      parseSql('INSERT INTO t (id, u, raw) VALUES (?, ?, ?)'),
+      [204n, 200n, 200n],
+    );
+    assert.equal(insertBigIntParam.success, true);
+    const p2Row204 = db2
+      .prepare('SELECT id, u, typeof(u) AS u_type, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 204')
+      .get();
+    assert.deepEqual(p2Row204, {
+      id: 204n,
+      u: '200',
+      u_type: 'text',
+      raw: 200n,
+      raw_type: 'integer',
+    });
+
+    // 4. Multi-row parameterized INSERT spanning both partitions slices each partition's
+    // bound parameters accurately:
+    const multiRowRes = await coordinator.executeInsert(
+      parseSql('INSERT INTO t (id, u, raw) VALUES (?, ?, ?), (?, ?, ?)'),
+      [5n, 500n, 500n, 205, 500, 500],
+    );
+    assert.equal(multiRowRes.success, true);
+    assert.equal(db1.prepare('SELECT u FROM "t" WHERE id = 5').pluck().get(), '500');
+    assert.equal(db2.prepare('SELECT u FROM "t" WHERE id = 205').pluck().get(), '500.0');
+
+    // 5. SQL BLOB literal X'cafe' in INSERT preserves Uint8Array storage class:
+    const blobLiteralInsert = await coordinator.executeInsert(
+      parseSql('INSERT INTO t (id, u, raw) VALUES (6, \'blob-6\', X\'cafe\')'),
+      [],
+    );
+    assert.equal(blobLiteralInsert.success, true);
+    const p1Row6 = db1
+      .prepare('SELECT id, u, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 6')
+      .get();
+    assert.deepEqual(p1Row6, {
+      id: 6n,
+      u: 'blob-6',
+      raw: Buffer.from('cafe', 'hex'),
+      raw_type: 'blob',
+    });
+
+    // 6. Two-partition UPDATE preserving storage class between uniqueness precheck and mutation:
+    // (a) UPDATE on t-p1 with JS Number parameter 500 (-> REAL 500.0 -> TEXT '500.0') conflicts
+    // with '500.0' on t-p2 (id = 205):
+    await assert.rejects(
+      () => coordinator.executeUpdate(
+        parseSql('UPDATE t SET u = ?, raw = ? WHERE id = ?'),
+        [500, 500, 1],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+    // (b) UPDATE on t-p2 with SQL INTEGER literal 500 (-> TEXT '500') conflicts with '500' on t-p1 (id = 5):
+    await assert.rejects(
+      () => coordinator.executeUpdate(
+        parseSql('UPDATE t SET u = 500, raw = 500 WHERE id = 204'),
+        [],
+      ),
+      {code: 'SQLITE_CONSTRAINT_UNIQUE'},
+    );
+    // (c) Non-conflicting UPDATE on t-p1 with SQL INTEGER literal 700 and SQL BLOB literal X'beef'
+    // vs UPDATE on t-p2 with JS Number parameter 700 (-> '700.0'):
+    const updateIntLiteral = await coordinator.executeUpdate(
+      parseSql('UPDATE t SET u = 700, raw = X\'beef\' WHERE id = 1'),
+      [],
+      {partitionIds: ['t-p1']},
+    );
+    assert.equal(updateIntLiteral.success, true);
+    assert.deepEqual(
+      db1.prepare('SELECT u, typeof(u) AS u_type, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 1').get(),
+      {
+        u: '700',
+        u_type: 'text',
+        raw: Buffer.from('beef', 'hex'),
+        raw_type: 'blob',
+      },
+    );
+    const updateRealParam = await coordinator.executeUpdate(
+      parseSql('UPDATE t SET u = ?, raw = ? WHERE id = ?'),
+      [700, 700, 204n],
+      {partitionIds: ['t-p2']},
+    );
+    assert.equal(updateRealParam.success, true);
+    assert.deepEqual(
+      db2.prepare('SELECT u, typeof(u) AS u_type, raw, typeof(raw) AS raw_type FROM "t" WHERE id = 204').get(),
+      {
+        u: '700.0',
+        u_type: 'text',
+        raw: 700,
+        raw_type: 'real',
+      },
+    );
+  } finally {
+    db1.close();
+    db2.close();
+  }
+});

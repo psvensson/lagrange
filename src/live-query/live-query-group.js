@@ -22,6 +22,7 @@ import {
 import {
   canonicalizePredicate,
   extractPartitionKeyValue,
+  extractTableBindings,
 } from './live-query-service.js';
 import {
   buildDeleteEvent,
@@ -312,8 +313,15 @@ class QueryGroup extends EventEmitter {
 
     const keyColumns = (this.partitionKeyColumn && tableName === this.table) ?
       [this.partitionKeyColumn] : undefined;
+    const lowerTarget = String(tableName).toLowerCase();
+    const tableAliases = [
+      tableName,
+      ...extractTableBindings(this.parsedQuery)
+        .filter((b) => b.tableName.toLowerCase() === lowerTarget && b.alias)
+        .map((b) => b.alias),
+    ];
     return resolver.resolvePartitions(tableName, this.whereClause, partitions, {
-      tableInfo, tableMetadata: tableInfo, keyColumns,
+      tableInfo, tableMetadata: tableInfo, keyColumns, params: this.params, tableAliases,
     });
   }
 

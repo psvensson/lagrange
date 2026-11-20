@@ -10,10 +10,6 @@ import {
 import {
   applyUnifiedRebalancerPriorityRecoveryCoordination,
 } from './unified-rebalancer-priority-recovery-coordination.js';
-import {
-  isBackgroundPrioritySpreadReleaseOwner,
-  transferBackgroundPrioritySpreadReleaseOwnership,
-} from './background-priority-spread-release-tracker.js';
 import {resolveEntitySizeBytes} from './entity-size-resolution.js';
 import {ALLOWED_UNIFIED_SERVICE_TYPES} from
   '../constants/unified-service-lifecycle.js';
@@ -501,16 +497,9 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       });
     }
     if (
-      isBackgroundPrioritySpreadReleaseOwner(
-        coordinator.controlPlaneReadinessService,
-      ) &&
-      coordinator.controlPlaneReadinessService !==
-        this.controlPlaneReadinessService
+      coordinator.controlPlaneReadinessService &&
+      typeof coordinator.controlPlaneReadinessService === 'object'
     ) {
-      transferBackgroundPrioritySpreadReleaseOwnership(
-        this.controlPlaneReadinessService,
-        coordinator.controlPlaneReadinessService,
-      );
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
     }

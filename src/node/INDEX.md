@@ -65,7 +65,7 @@ documentClass: generated
 - [replica-handler-runtime-methods.js](replica-handler-runtime-methods.js) - Fence a PartitionService created by a failed CREATE before the failure becomes visible to the operation owner. (importers: one)
 - [replica-handler-status-methods.js](replica-handler-status-methods.js) - ReplicaHandler replica-status persistence methods. (importers: few)
 - [replica-handler-transition-policy.js](replica-handler-transition-policy.js) - Pure transition / readiness policy helpers shared by the ReplicaHandler lifecycle methods and the runtime metadata... (importers: few)
-- [replica-handler-voter-readiness-methods.js](replica-handler-voter-readiness-methods.js) - ReplicaHandler voter-readiness gating methods. (importers: one)
+- [replica-handler-voter-readiness-methods.js](replica-handler-voter-readiness-methods.js) - ReplicaHandler voter-readiness gating methods. (importers: few)
 - [replica-handler.js](replica-handler.js) - No leading comment; first export: ReplicaHandler. (importers: hub)
 - [replica-prior-existence.js](replica-prior-existence.js) - Owner contract: Owner: the CREATE_REPLICA target's prior-existence fact for the open-time rule (owner ruling... (importers: few)
 - [replica-recovery-constants.js](replica-recovery-constants.js) - No leading comment; first export: REPLICA_RECOVERY_DEFAULT. (importers: few)

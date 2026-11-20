@@ -68,10 +68,11 @@ describe('artifact payload table constants', () => {
       assert.ok(partitionId.endsWith('-p1'));
     });
 
-    it(`registers three initial replicas for ${table}`, () => {
+    it(`registers one initial founding replica for ${table}`, () => {
       const replicaIds = INITIAL_REPLICA_IDS[table];
       assert.ok(replicaIds, `${table} missing from INITIAL_REPLICA_IDS`);
-      assert.equal(replicaIds.length, 3);
+      assert.equal(replicaIds.length, 1);
+      assert.deepEqual(replicaIds, [`${table}-p1-r1`]);
     });
   }
 });

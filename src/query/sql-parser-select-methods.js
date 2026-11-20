@@ -12,6 +12,7 @@
 
 import {AST_TYPE, EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
 import {QUERY_ERROR_CODE} from './query-constants.js';
+import {SET_OP_BY_OPTION_SENTINEL} from './sql-parser-source-text.js';
 
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -188,9 +189,15 @@ const sqlParserSelectMethods = {
     if (!ast._next || !ast.set_op) {
       return null;
     }
+    const nextOptions = ast._next.options;
+    const sentinel = Array.isArray(nextOptions) && nextOptions.length === 1 &&
+      Object.hasOwn(SET_OP_BY_OPTION_SENTINEL, nextOptions[0]) ?
+      nextOptions[0] :
+      null;
+    const rightAst = sentinel ? {...ast._next, options: null} : ast._next;
     return {
-      type: stringToUpperCase(ast.set_op),
-      right: this.convertSelect(ast._next),
+      type: sentinel ? SET_OP_BY_OPTION_SENTINEL[sentinel] : stringToUpperCase(ast.set_op),
+      right: this.convertSelect(rightAst),
     };
   },
 

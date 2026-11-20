@@ -13,6 +13,8 @@ import {
 import {PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_MESSAGE_TYPE} from
   '../../src/partition/partition-service-constants.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../../src/query/query-constants.js';
+import {decodeTypedRowSet} from '../../src/query/sql-value-codec.js';
+import {materializeAndPresentRowObjects} from '../../src/query/sql-value-presentation.js';
 import {hasParticipantSession} from
   '../../src/partition/partition-participant-transaction-session.js';
 import {
@@ -45,6 +47,14 @@ import {
 
 const IDENTITY_REQUIRED = CODE.IDENTITY_REQUIRED;
 const answerCode = (answer) => answer?.failureCode ?? null;
+const answerRows = (answer) => {
+  if (answer?.rows !== undefined) return answer.rows;
+  if (answer?.rowSet) {
+    const decoded = decodeTypedRowSet(answer.rowSet);
+    return materializeAndPresentRowObjects(decoded.columns, decoded.rows);
+  }
+  return undefined;
+};
 const ingressRefusal = (answer) => ({
   error: answer?.error ?? null,
 });
@@ -223,7 +233,7 @@ test('TX1 alpha red: own partial identity, inherited identity and accessors cann
     assert.deepEqual({partialCodes, inheritedRefusal, accessorRefusal, accessorReads,
       symbolRefusal, proxyRefusal, proxyReads, typeAccessorRefusal, typeAccessorReads,
       payloadAccessorRefusal, payloadAccessorReads,
-      ordinary: {success: ordinary?.success, rows: ordinary?.rows}}, {
+      ordinary: {success: ordinary?.success, rows: answerRows(ordinary)}}, {
       partialCodes: partials.map(() => IDENTITY_REQUIRED),
       inheritedRefusal: invalid,
       accessorRefusal: invalid,
@@ -273,7 +283,7 @@ test('TX1 alpha: registered transport preserves direct and wrapped application a
     }}));
     assert.deepEqual({application: applicationAnswers.map((answer) => ({
       success: answer?.success,
-      rows: answer?.rows,
+      rows: answerRows(answer),
     })), raft: raftAnswers,
     stepped: leader.controllablePort.steps.length}, {
       application: Array.from({length: 3}, () => ({
@@ -384,10 +394,10 @@ test('TX1 alpha red: routing-only query collision is refused for volatile and du
 
     assert.deepEqual({volatile: answerCode(volatile), preparing: answerCode(preparing),
       durable: answerCode(durable),
-      unrelated: {success: unrelated?.success, rows: unrelated?.rows},
+      unrelated: {success: unrelated?.success, rows: answerRows(unrelated)},
       prepare: {apply: prepareApply, success: preparedAnswer?.success === true},
       decision: {apply: decisionApply, state: decision.value?.state},
-      terminal: {success: terminal?.success, rows: terminal?.rows},
+      terminal: {success: terminal?.success, rows: answerRows(terminal)},
       seeded,
       sealedOperations,
       proposedOrdinaryWrites: proposed.filter((entry) => entry.sql !== undefined).length,

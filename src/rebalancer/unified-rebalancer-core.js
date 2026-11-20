@@ -108,7 +108,6 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
     this.unbindCoordinatorProgressListeners();
     this.unbindPriorityRecoveryVisibilityCacheListener();
     this.disarmLocalMutationReadinessWake();
-    this.disarmOperationContinuationWake();
     this.lastStateChangeTime = null;
     this.initialized = false;
 

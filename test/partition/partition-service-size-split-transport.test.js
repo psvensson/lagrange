@@ -1050,7 +1050,8 @@ test('PartitionService - handleTransportMessage unwraps message-group query enve
 
   t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'wrapped query should execute successfully');
-  t.equal(result.rows?.[0]?.value, 42, 'wrapped query should return expected row');
+  t.same(result.rowSet?.columns, ['value'], 'wrapped query should return expected column');
+  t.equal(result.rowSet?.rows?.[0]?.[1], '42', 'wrapped query should return expected row');
 
   await partition.shutdown();
 });

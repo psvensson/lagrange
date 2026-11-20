@@ -35,6 +35,7 @@ import {
 import {cruise} from 'dependency-cruiser';
 import depcruiseConfig from '../../dependency-cruiser.config.cjs';
 import {
+  buildDecisionCommand,
   buildDecisionRecord,
   buildPrepareCommand,
   operationsOf,
@@ -62,7 +63,6 @@ import {
   commitDecision,
   commitMessage,
   commitOrdinaryWrite,
-  decisionCommandOf,
   durableAppliedIndex,
   generationOf,
   identityOf,
@@ -1012,17 +1012,32 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     );
     assert.deepEqual(snapWhileContradicted.userRows, []);
 
-    // Explicit incident disposition against the coordinator's canonical durable decision record
-    // (validating decision, decision_text, and decision_digest via canonicalDecisionRecord):
-    const coordinatorGateway = createTransactionPersistenceGateway();
-    const lookupDecisionRow = (txId) =>
-      coordinatorGateway.db
-        .prepare('SELECT * FROM sql_transactions WHERE transaction_id = ?')
-        .get(txId) ?? null;
+    // Explicit incident disposition against three independent immutable coordinator decision
+    // histories (validating decision, decision_text, and decision_digest via canonicalDecisionRecord
+    // without ever mutating an already-seeded transaction_id row):
+    const createImmutableCoordinatorHistory = (rows) => {
+      const gateway = createTransactionPersistenceGateway();
+      const seenTxIds = new Set();
+      for (const row of rows) {
+        assert.equal(seenTxIds.has(row.transaction_id), false);
+        seenTxIds.add(row.transaction_id);
+        gateway.seed('sql_transactions', row);
+      }
+      const lookup = (txId) =>
+        gateway.db
+          .prepare('SELECT * FROM sql_transactions WHERE transaction_id = ?')
+          .get(txId) ?? null;
+      return {gateway, lookup};
+    };
+    const remoteSibling1 = `${txHist1.transactionId}:p-remote-2`;
+    const remoteSibling2 = `${txHist2.transactionId}:p-remote-2`;
     const canonicalCommitHist1 = buildDecisionRecord(
       txHist1.transactionId,
       V3.DECISION.COMMIT,
-      [[txHist1.participantId, prepHist1.preparedDigest]],
+      [
+        [txHist1.participantId, prepHist1.preparedDigest],
+        [remoteSibling1, '9'.repeat(64)],
+      ],
     );
     const canonicalCommitHist2 = buildDecisionRecord(
       txHist2.transactionId,
@@ -1032,28 +1047,32 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     const canonicalRollbackHist2 = buildDecisionRecord(
       txHist2.transactionId,
       V3.DECISION.ROLLBACK,
-      [[txHist2.participantId, prepHist2.preparedDigest]],
+      [
+        [txHist2.participantId, prepHist2.preparedDigest],
+        [remoteSibling2, null],
+      ],
     );
-
-    // Case (a): Authoritative evidence is unavailable or incomplete (txHist2 record absent
-    // or lacking canonical decision_text/decision_digest) -> emit no disposition:
-    coordinatorGateway.seed('sql_transactions', {
+    const txHist1CommittedRow = {
       transaction_id: txHist1.transactionId,
       session_id: 'hist-sess-1',
       status: 'COMMITTED',
       transaction_mode: 'DISTRIBUTED',
       participant_set_state: 'FROZEN',
       commit_mode: 'TWO_PHASE',
-      frozen_participant_count: 1,
+      frozen_participant_count: 2,
       decision: canonicalCommitHist1.decision,
       decision_text: canonicalCommitHist1.decisionText,
       decision_digest: canonicalCommitHist1.decisionDigest,
       created_at: 1000,
       updated_at: 1000,
-    });
+    };
+
+    // History (a): Authoritative evidence is unavailable or incomplete (txHist2 record absent)
+    // -> emit no disposition:
+    const historyUnavailable = createImmutableCoordinatorHistory([txHist1CommittedRow]);
     const unavailableDisposition = resolveRetainedPreparedContradictionDisposition(
       initialInspection,
-      lookupDecisionRow,
+      historyUnavailable.lookup,
     );
     assert.deepEqual(unavailableDisposition, {
       resolvable: false,
@@ -1061,25 +1080,28 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
       orderedDecisions: [],
     });
 
-    // Case (b): Both canonical decisions are COMMIT -> retain and report the contradiction
-    // (emit no disposition):
-    coordinatorGateway.seed('sql_transactions', {
-      transaction_id: txHist2.transactionId,
-      session_id: 'hist-sess-2',
-      status: 'COMMITTED',
-      transaction_mode: 'DISTRIBUTED',
-      participant_set_state: 'FROZEN',
-      commit_mode: 'TWO_PHASE',
-      frozen_participant_count: 1,
-      decision: canonicalCommitHist2.decision,
-      decision_text: canonicalCommitHist2.decisionText,
-      decision_digest: canonicalCommitHist2.decisionDigest,
-      created_at: 1000,
-      updated_at: 1000,
-    });
+    // History (b): Independent immutable coordinator history where both canonical decisions
+    // are genuine COMMIT records from the outset -> retain and report the contradiction:
+    const historyBothCommitted = createImmutableCoordinatorHistory([
+      txHist1CommittedRow,
+      {
+        transaction_id: txHist2.transactionId,
+        session_id: 'hist-sess-2',
+        status: 'COMMITTED',
+        transaction_mode: 'DISTRIBUTED',
+        participant_set_state: 'FROZEN',
+        commit_mode: 'TWO_PHASE',
+        frozen_participant_count: 1,
+        decision: canonicalCommitHist2.decision,
+        decision_text: canonicalCommitHist2.decisionText,
+        decision_digest: canonicalCommitHist2.decisionDigest,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
     const conflictingCommitDisposition = resolveRetainedPreparedContradictionDisposition(
       initialInspection,
-      lookupDecisionRow,
+      historyBothCommitted.lookup,
     );
     assert.deepEqual(conflictingCommitDisposition, {
       resolvable: false,
@@ -1087,55 +1109,63 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
       orderedDecisions: [],
     });
 
-    // Case (c): One genuine recorded canonical ROLLBACK decision record (txHist2) and one
-    // genuine recorded canonical COMMIT decision record (txHist1) -> replay those exact
-    // canonical records ordered ROLLBACK first, then COMMIT:
-    coordinatorGateway.seed('sql_transactions', {
-      transaction_id: txHist2.transactionId,
-      session_id: 'hist-sess-2',
-      status: 'ABORTED',
-      transaction_mode: 'DISTRIBUTED',
-      participant_set_state: 'FROZEN',
-      commit_mode: 'TWO_PHASE',
-      frozen_participant_count: 1,
-      decision: canonicalRollbackHist2.decision,
-      decision_text: canonicalRollbackHist2.decisionText,
-      decision_digest: canonicalRollbackHist2.decisionDigest,
-      created_at: 1000,
-      updated_at: 1000,
-    });
+    // History (c): Independent immutable coordinator history with a genuine multiparticipant
+    // ROLLBACK decision record (txHist2) and a genuine multiparticipant COMMIT decision record
+    // (txHist1) from the outset -> replay the recorded canonical decision bytes ordered
+    // ROLLBACK first, then COMMIT:
+    const historyCommitAndRollback = createImmutableCoordinatorHistory([
+      txHist1CommittedRow,
+      {
+        transaction_id: txHist2.transactionId,
+        session_id: 'hist-sess-2',
+        status: 'ABORTED',
+        transaction_mode: 'DISTRIBUTED',
+        participant_set_state: 'FROZEN',
+        commit_mode: 'TWO_PHASE',
+        frozen_participant_count: 2,
+        decision: canonicalRollbackHist2.decision,
+        decision_text: canonicalRollbackHist2.decisionText,
+        decision_digest: canonicalRollbackHist2.decisionDigest,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
     const disposition = resolveRetainedPreparedContradictionDisposition(
       initialInspection,
-      lookupDecisionRow,
+      historyCommitAndRollback.lookup,
     );
     assert.equal(disposition.resolvable, true);
     assert.equal(disposition.reason, null);
-    assert.deepEqual(
-      disposition.orderedDecisions.map((a) => ({
-        participantId: a.participantId,
-        decision: a.decision,
-        decisionDigest: a.decisionDigest,
-      })),
-      [
-        {
-          participantId: txHist2.participantId,
-          decision: 'ROLLBACK',
-          decisionDigest: canonicalRollbackHist2.decisionDigest,
-        },
-        {
-          participantId: txHist1.participantId,
-          decision: 'COMMIT',
-          decisionDigest: canonicalCommitHist1.decisionDigest,
-        },
-      ],
-    );
+    assert.deepEqual(disposition.orderedDecisions, [
+      {
+        participantId: txHist2.participantId,
+        transactionId: txHist2.transactionId,
+        decision: 'ROLLBACK',
+        preparedDigest: prepHist2.preparedDigest,
+        decisionText: canonicalRollbackHist2.decisionText,
+        decisionDigest: canonicalRollbackHist2.decisionDigest,
+      },
+      {
+        participantId: txHist1.participantId,
+        transactionId: txHist1.transactionId,
+        decision: 'COMMIT',
+        preparedDigest: prepHist1.preparedDigest,
+        decisionText: canonicalCommitHist1.decisionText,
+        decisionDigest: canonicalCommitHist1.decisionDigest,
+      },
+    ]);
     const preparedByParticipantId = new Map([
       [txHist1.participantId, {identity: txHist1, prep: prepHist1}],
       [txHist2.participantId, {identity: txHist2, prep: prepHist2}],
     ]);
     const dispositionCommands = disposition.orderedDecisions.map((item) => {
       const target = preparedByParticipantId.get(item.participantId);
-      return decisionCommandOf(target.identity, item.decision, target.prep.preparedDigest);
+      return buildDecisionCommand(target.identity, item, {
+        executionEnvelope: target.prep.executionEnvelope,
+        timestamp: '',
+        proposedBy: leader2.replicaId,
+        proposedAt: 0,
+      });
     });
     leader2.controllablePort.commitBatches(
       dispositionCommands,
@@ -1146,16 +1176,24 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     assert.deepEqual(postRollbackInspection.contradictoryParticipantIds, []);
 
     const snap = readDurablePartitionSnapshot(leader2.db);
-    assert.deepEqual(
-      snap.decisions.map((d) => ({
-        state: d.state,
-        refusalCause: d.refusal_cause,
-      })),
-      [
-        {state: 'COMMITTED', refusalCause: null},
-        {state: 'ROLLED_BACK', refusalCause: null},
-      ],
-    );
+    const recordedDecisionRows = leader2.db
+      .prepare(
+        'SELECT state, refusal_cause AS refusalCause, decision_digest AS decisionDigest ' +
+        'FROM _participant_transactions ORDER BY participant_id',
+      )
+      .all();
+    assert.deepEqual(recordedDecisionRows, [
+      {
+        state: 'COMMITTED',
+        refusalCause: null,
+        decisionDigest: canonicalCommitHist1.decisionDigest,
+      },
+      {
+        state: 'ROLLED_BACK',
+        refusalCause: null,
+        decisionDigest: canonicalRollbackHist2.decisionDigest,
+      },
+    ]);
     assert.deepEqual(snap.userRows, [
       {id: 'hist-k1', value: 'contradictory@example.test'},
     ]);
@@ -1398,36 +1436,26 @@ test('P2 (Review 2 Finding 3): pre-_partition_write_generation_history storage r
 
     // 2. Reopen under the current implementation (which creates an empty
     // _partition_write_generation_history table) and deliver B's bound COMMIT decision:
-    const started2 = await startLeader({
-      dbPath,
-      generationOrigin: false,
-      releaseAdmission: false,
-    });
+    const started2 = await startLeader({dbPath, generationOrigin: false, releaseAdmission: false});
     leader2 = started2.leader;
     leader2.concurrencyGranularity = 'row-key';
     leader2.conflictSettleWaitMs = 50;
     discardParticipantSessions(leader2);
     resetParticipantRowKeyHistory(leader2);
-
     const commitB = commitDecision(txB, prepB);
     leader2.controllablePort.commitBatches([commitB], [1]);
 
     const snapAfterUpgrade = readDurablePartitionSnapshot(leader2.db);
     assert.deepEqual(
       snapAfterUpgrade.decisions.map((d) => ({
-        participantId: d.participant_id,
-        state: d.state,
-        refusalCause: d.refusal_cause,
+        participantId: d.participant_id, state: d.state, refusalCause: d.refusal_cause,
       })),
       [
         {participantId: txA.participantId, state: 'COMMITTED', refusalCause: null},
         {participantId: txB.participantId, state: 'COMMITTED', refusalCause: null},
       ],
     );
-    assert.deepEqual(snapAfterUpgrade.userRows, [
-      {id: 'up-key-a', value: 'val-a'},
-      {id: 'up-key-b', value: 'val-b'},
-    ]);
+    assert.deepEqual(snapAfterUpgrade.userRows, [{id: 'up-key-a', value: 'val-a'}, {id: 'up-key-b', value: 'val-b'}]);
 
     // 3. Negative control on 114bd420 representation: if generation N+2 was an ordinary
     // write W under 114bd420 (with _partition_write_generation_history empty/missing for N+2),
@@ -1436,24 +1464,16 @@ test('P2 (Review 2 Finding 3): pre-_partition_write_generation_history storage r
     const txD = identityOf('d'.repeat(32), {sessionId: 'up-sess-d'});
     const prepD = prepareCommandOf(txD, [operationOf({id: 'up-key-d', value: 'val-d'})], genBeforeW);
     const ordinaryW = {
-      type: PARTITION_SERVICE_OPERATION.QUERY,
-      entryId: 'up-ordinary-w',
-      sql: INSERT_SQL,
-      params: ['up-key-w', 'val-w'],
-      timestamp: '2000:0:node-1',
-      proposedBy: leader2.replicaId,
-      proposedAt: 2000,
+      type: PARTITION_SERVICE_OPERATION.QUERY, entryId: 'up-ordinary-w',
+      sql: INSERT_SQL, params: ['up-key-w', 'val-w'],
+      timestamp: '2000:0:node-1', proposedBy: leader2.replicaId, proposedAt: 2000,
     };
     leader2.controllablePort.commitBatches([ordinaryW], [1]);
     leader2.db.exec('DROP TABLE _partition_write_generation_history');
     await shutdownAll(leader2);
     leader2 = null;
 
-    const started3 = await startLeader({
-      dbPath,
-      generationOrigin: false,
-      releaseAdmission: false,
-    });
+    const started3 = await startLeader({dbPath, generationOrigin: false, releaseAdmission: false});
     leader3 = started3.leader;
     leader3.concurrencyGranularity = 'row-key';
     leader3.conflictSettleWaitMs = 50;

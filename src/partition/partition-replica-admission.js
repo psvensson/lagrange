@@ -42,10 +42,11 @@ import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_MESSAGE_TYPE,
 } from './partition-service-constants.js';
-import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
+import {COPY_PHASE_WORKFLOW_STEPS} from
+  '../rebalancer/replica-operation-step-policy.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {deliveryAnswerOf, deliveryTransportOf,
   isDeliveredTransportDeliveryOutcome} from
@@ -60,6 +61,14 @@ import {
 } from './partition-service-raft-membership-administration.js';
 
 const ADMIT_REPLICA_MESSAGE_TYPE = PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA;
+const DEFAULT_TARGET_REPLICATION_FACTOR = 3;
+const UNAVAILABLE_CONF_CHANGE_STATE = Object.freeze({
+  available: false,
+  membership: null,
+  voterCount: 0,
+  peerIds: Object.freeze([]),
+  identities: Object.freeze({}),
+});
 
 const REPLICA_ADMISSION_OUTCOME = Object.freeze({
   REQUEST_INVALID: 'request_invalid',
@@ -125,12 +134,7 @@ const PORT_OUTCOME_ANSWER = Object.freeze({
 // A create's operation admits its target while the create is in progress:
 // planned, dispatched, creating or syncing. ACTIVE is written only by a
 // target that is already a voter; STOPPING, REMOVED and FAILED are past it.
-const ADMITTING_WORKFLOW_STEPS = Object.freeze(new Set([
-  WORKFLOW_STEP.PENDING,
-  WORKFLOW_STEP.SENDING,
-  WORKFLOW_STEP.CREATING,
-  WORKFLOW_STEP.SYNCING,
-]));
+const ADMITTING_WORKFLOW_STEPS = COPY_PHASE_WORKFLOW_STEPS;
 const CREATING_OPERATION_TYPES = Object.freeze(new Set([
   OperationType.ADD,
   OperationType.REPLACE,
@@ -250,16 +254,86 @@ function operationRefusal(row, service, replicaIdentity) {
   return null;
 }
 
-function shouldAdmitAsLearner(service, row) {
-  return service?.learnerFirstAdmission === true || row?.as_learner === true;
+async function readCommittedConfChangeState(service) {
+  const membership = await readPartitionCommittedMembership(service);
+  if (
+    membership === null ||
+    membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED
+  ) {
+    return UNAVAILABLE_CONF_CHANGE_STATE;
+  }
+  const includeLearners =
+    service?.learnerFirstAdmission === true ||
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true ||
+    service?.role === RAFT_ROLE.LEARNER;
+  const peerIds = includeLearners ?
+    [
+      ...(membership.voters || []),
+      ...(membership.votersOutgoing || []),
+      ...(membership.learners || []),
+      ...(membership.learnersNext || []),
+    ] :
+    [...(membership.voters || []), ...(membership.votersOutgoing || [])];
+  const voterCount = Array.isArray(membership.voters) ?
+    membership.voters.length :
+    0;
+  return {
+    available: true,
+    membership,
+    voterCount,
+    peerIds,
+    identities: membership.identities || {},
+  };
+}
+
+function resolveTargetReplicationFactorForAdmission(service) {
+  const raw = Number(
+    service?.replicaCount ??
+      service?.tablePolicyService?.getReplicationFactor?.(service?.tableName) ??
+      DEFAULT_TARGET_REPLICATION_FACTOR,
+  );
+  return Number.isFinite(raw) && raw > 0 ?
+    raw :
+    DEFAULT_TARGET_REPLICATION_FACTOR;
+}
+
+function shouldAdmitAsLearner(service, row, committedState = null) {
+  if (service?.learnerFirstAdmission === true || row?.as_learner === true) {
+    return true;
+  }
+  if (
+    row?.type === OperationType.ADD &&
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true
+  ) {
+    const voterCount =
+      committedState?.available === true &&
+      Number.isFinite(committedState.voterCount) ?
+        committedState.voterCount :
+        null;
+    const targetRf = resolveTargetReplicationFactorForAdmission(service);
+    if (
+      Number.isFinite(voterCount) &&
+      voterCount > 0 &&
+      voterCount % 2 === 1 &&
+      voterCount < targetRf
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // The answer the port's admission maps to, with the committed node.
-function admissionAnswer(service, replicaIdentity, row) {
+function admissionAnswer(
+  service,
+  replicaIdentity,
+  row,
+  committedState = null,
+) {
   // The read yielded: leadership is decided again on the port's answer.
   reservePartitionRaftPeerIdentity(service, replicaIdentity);
   const peer = {replicaIdentity, nodeId: row.target_node_id};
-  const admission = shouldAdmitAsLearner(service, row) ?
+  const admission = shouldAdmitAsLearner(service, row, committedState) ?
     admitPartitionRaftLearner(service, peer) :
     admitPartitionRaftPeer(service, peer);
   return answer(PORT_OUTCOME_ANSWER[admission.outcome] ??
@@ -312,10 +386,26 @@ async function admitFromCommittedOperation(service, request) {
       retryAfterMs: AUTHORITY_UNAVAILABLE_RETRY_AFTER_MS});
   }
   const refusal = operationRefusal(read.row, service, replicaIdentity);
-  return settleAnswer(service, replicaIdentity, refusal !== null ?
-    answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
-      reason: refusal, workflowStep: readStateField(read.row?.workflow_step)}) :
-    admissionAnswer(service, replicaIdentity, read.row));
+  if (refusal !== null) {
+    return settleAnswer(
+      service,
+      replicaIdentity,
+      answer(REPLICA_ADMISSION_OUTCOME.OPERATION_NOT_ADMITTING, {
+        reason: refusal,
+        workflowStep: readStateField(read.row?.workflow_step),
+      }),
+    );
+  }
+  const committedState =
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true &&
+    read.row?.type === OperationType.ADD ?
+      await readCommittedConfChangeState(service) :
+      null;
+  return settleAnswer(
+    service,
+    replicaIdentity,
+    admissionAnswer(service, replicaIdentity, read.row, committedState),
+  );
 }
 
 /**
@@ -348,23 +438,12 @@ const UNCOMMITTED_ADMISSION_OUTCOMES = Object.freeze(new Set([
 ]));
 
 async function isOwnCommittedVoter(service) {
-  const membership = await readPartitionCommittedMembership(service);
-  if (
-    membership === null ||
-    membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED
-  ) {
+  const state = await readCommittedConfChangeState(service);
+  if (!state.available) {
     return false;
   }
-  const peerIds = service?.learnerFirstAdmission === true ?
-    [
-      ...membership.voters,
-      ...membership.votersOutgoing,
-      ...(membership.learners || []),
-      ...(membership.learnersNext || []),
-    ] :
-    [...membership.voters, ...membership.votersOutgoing];
-  return peerIds.some(
-    (peerId) => membership.identities[peerId] === service.replicaId,
+  return state.peerIds.some(
+    (peerId) => state.identities[peerId] === service.replicaId,
   );
 }
 
@@ -593,7 +672,9 @@ export {
   driveReplicaAdmission,
   drivePendingReplicaAdmission,
   handleReplicaAdmissionRequest,
+  readCommittedConfChangeState,
   redriveAcceptedAdmissionRequests,
   requestReplicaAdmission,
   sendReplicaAdmissionRequest,
+  shouldAdmitAsLearner,
 };

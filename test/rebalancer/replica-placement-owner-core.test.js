@@ -63,11 +63,9 @@ import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {
-  PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY, PLACEMENT_DEFICIT_KIND, PLACEMENT_FORMATION_STATE,
-  PLACEMENT_MOVE_TYPE, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
-} from '../../src/rebalancer/replica-placement-owner-constants.js';
+  OperationType,
+} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
@@ -75,6 +73,10 @@ import {
 import {
   assignReplicaHandlerMembershipMethods,
 } from '../../src/node/replica-handler-membership-methods.js';
+import {
+  PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY, PLACEMENT_DEFICIT_KIND, PLACEMENT_FORMATION_STATE,
+  PLACEMENT_MOVE_TYPE, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
+} from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {
   REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
   createReplicaPlacementOwner,
@@ -88,6 +90,10 @@ import {
   ledgerRows,
   onLedgerLeader,
 } from '../partition/placement-admission-fixture.js';
+import {
+  runCorrectionBProductionAssemblyWitness,
+  runGrowthPromoteProductionWitness,
+} from './replica-placement-owner-test-support.js';
 import {
   PRESSURE_STATE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
@@ -1395,6 +1401,32 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
     } finally {
       ledger.db.close();
     }
+  } finally {
+    clearFixtureSingletons();
+  }
+});
+
+test('Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold', async () => {
+  resetFixtureSingletons();
+  try {
+    await runGrowthPromoteProductionWitness({
+      createSimpleSystemCache,
+      nodeRow,
+      seededPartitionRow,
+    });
+  } finally {
+    clearFixtureSingletons();
+  }
+});
+
+test('Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly', async () => {
+  resetFixtureSingletons();
+  try {
+    await runCorrectionBProductionAssemblyWitness({
+      createSimpleSystemCache,
+      seededPartitionRow,
+      seededServiceRows,
+    });
   } finally {
     clearFixtureSingletons();
   }

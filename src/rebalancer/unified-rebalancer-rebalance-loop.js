@@ -8,13 +8,9 @@ import {
 } from './replica-operation-membership-epoch-binding.js';
 import {isGroupRetiringInView} from
   '../partition/group-retirement-evidence.js';
-import {
-  countNonTerminalSystemOpsByTargetNode,
-} from './system-spread-transition-policy.js';
 
 const {
   EntityType,
-  MoveType,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
   REBALANCER_PRE_EXECUTION_RETURN_STATE,
@@ -23,85 +19,6 @@ const {
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
-
-function compareSystemSpreadReplaceTargets(
-  left,
-  right,
-  countsByTargetNode,
-  preferredTargetNodeId,
-) {
-  if (left?.type !== MoveType.REPLACE || right?.type !== MoveType.REPLACE) {
-    return UNIFIED_REBALANCER_LITERAL.ZERO;
-  }
-  const leftCount =
-    countsByTargetNode.get(left.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
-  const rightCount =
-    countsByTargetNode.get(right.nodeId) || UNIFIED_REBALANCER_LITERAL.ZERO;
-  if (leftCount !== rightCount) {
-    return leftCount - rightCount;
-  }
-  if (!preferredTargetNodeId || left.nodeId === right.nodeId) {
-    return UNIFIED_REBALANCER_LITERAL.ZERO;
-  }
-  if (left.nodeId === preferredTargetNodeId) {
-    return -UNIFIED_REBALANCER_LITERAL.ONE;
-  }
-  if (right.nodeId === preferredTargetNodeId) {
-    return UNIFIED_REBALANCER_LITERAL.ONE;
-  }
-  return UNIFIED_REBALANCER_LITERAL.ZERO;
-}
-
-function orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, moves) {
-  if (!Array.isArray(moves) || moves.length <= UNIFIED_REBALANCER_LITERAL.ONE) {
-    return moves;
-  }
-  const countsByTargetNode = countNonTerminalSystemOpsByTargetNode(
-    rebalancer.systemTableCache,
-  );
-  const preferredTargetNodeId =
-    rebalancer._slotReleaseWakeContext?.targetNodeId || null;
-  if (
-    countsByTargetNode.size === UNIFIED_REBALANCER_LITERAL.ZERO &&
-    !preferredTargetNodeId
-  ) {
-    return moves;
-  }
-  return [...moves].sort((left, right) =>
-    compareSystemSpreadReplaceTargets(
-      left,
-      right,
-      countsByTargetNode,
-      preferredTargetNodeId,
-    ),
-  );
-}
-
-function resolveSystemSpreadExecutionPlan(
-  rebalancer,
-  moves,
-  availableBudget,
-  shouldPrioritizeBudgetedTopologyCleanup,
-) {
-  const isNonPriorityUnderSpreadSystemPartition =
-    rebalancer.isSystemPartitionEntity() &&
-    !rebalancer.isControlPlanePriorityPartition() &&
-    rebalancer.isPartitionBelowDeclaredDistinctHostSpread();
-  const rawMoveLimit = Math.max(
-    UNIFIED_REBALANCER_LITERAL.ZERO,
-    Math.min(rebalancer.maxConcurrentMoves, availableBudget),
-  );
-  const moveLimit = isNonPriorityUnderSpreadSystemPartition ?
-    Math.min(rawMoveLimit, UNIFIED_REBALANCER_LITERAL.ONE) :
-    rawMoveLimit;
-  const baseOrderedMoves = shouldPrioritizeBudgetedTopologyCleanup ?
-    rebalancer.prioritizePriorityTopologyCleanupMoves(moves) :
-    rebalancer.prioritizeOperationLedgerQuorumCureMoves(moves);
-  const budgetOrderedMoves = isNonPriorityUnderSpreadSystemPartition ?
-    orderSystemSpreadMovesByLeastLoadedTarget(rebalancer, baseOrderedMoves) :
-    baseOrderedMoves;
-  return {moveLimit, budgetOrderedMoves};
-}
 
 // Whether this rebalancer's partition is a group its durable workflow record
 // retires as a unit (group-retirement-evidence.js), as its view holds it.
@@ -314,7 +231,6 @@ async function planRebalanceCycleMoves(
   effectivePolicy,
   evaluationContext,
 ) {
-  await rebalancer.refreshDeferredAvailableNodeReadiness?.();
   const inventorySourceStateBefore =
     rebalancer.movePlanner.captureReplicaInventorySourceState();
   const currentReplicas = rebalancer.getCurrentReplicas();
@@ -496,120 +412,104 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       return preflightRefusal;
     }
 
-    let rebalanceResult = null;
+    const effectivePolicy = policy || (await this.getPolicy());
+    const plannedCycle = await planRebalanceCycleMoves(
+      this,
+      effectivePolicy,
+      evaluationContext,
+    );
+    if (plannedCycle.earlyResult !== null) {
+      return plannedCycle.earlyResult;
+    }
+    const {
+      currentReplicas,
+      availableNodes,
+      targetState,
+      planningMembershipPublicationEpoch,
+      moves,
+    } = plannedCycle;
+
+    let availableBudget = this.maxConcurrentMoves;
+    const shouldPrioritizeBudgetedTopologyCleanup =
+      this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
     try {
-      const effectivePolicy = policy || (await this.getPolicy());
-      const plannedCycle = await planRebalanceCycleMoves(
+      availableBudget = await computeRebalanceAvailableBudget(
         this,
-        effectivePolicy,
-        evaluationContext,
-      );
-      if (plannedCycle.earlyResult !== null) {
-        rebalanceResult = plannedCycle.earlyResult;
-        return rebalanceResult;
-      }
-      const {
+        moves,
         currentReplicas,
+        effectivePolicy,
         availableNodes,
-        targetState,
-        planningMembershipPublicationEpoch,
-        moves,
-      } = plannedCycle;
-
-      let availableBudget = this.maxConcurrentMoves;
-      const shouldPrioritizeBudgetedTopologyCleanup =
-        this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
-      try {
-        availableBudget = await computeRebalanceAvailableBudget(
-          this,
-          moves,
-          currentReplicas,
-          effectivePolicy,
-          availableNodes,
-          shouldPrioritizeBudgetedTopologyCleanup,
-        );
-        if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
-          rebalanceResult = this.buildRebalanceResult(true, {
-            skipped: true,
-            reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-            moves: [],
-          });
-          return rebalanceResult;
-        }
-      } catch (error) {
-        this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
-          entityId: this.entityId,
-          error: error.message,
-        });
-        rebalanceResult = this.buildRebalanceResult(false, {
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
-          moves: [],
-        });
-        return rebalanceResult;
-      }
-
-      this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
-        entityId: this.entityId,
-        entityType: this.entityType,
-        trigger,
-        moveCount: moves.length,
-        currentCount: currentReplicas.length,
-        targetCount: targetState.targetReplicaCount,
-      });
-
-      const {moveLimit, budgetOrderedMoves} = resolveSystemSpreadExecutionPlan(
-        this,
-        moves,
-        availableBudget,
         shouldPrioritizeBudgetedTopologyCleanup,
       );
-      const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
-        if (
-          !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
-        ) {
-          return move;
-        }
-        return {
-          ...move,
-          membershipPublicationEpoch: planningMembershipPublicationEpoch,
-        };
-      });
-      const results = await this.executeRebalancingMoves(limitedMoves, {
-        trigger,
-        plannedMoveCount: moves.length,
-        moveLimit,
-      });
-
-      // The planning cycle's own clock. This owner holds nowFn; reading the
-      // ambient one here made a deterministic node's cycle depend on host time.
-      this.lastRebalanceTime = this.nowFn();
-      this.rebalanceCount++;
-
-      this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
-        entityId: this.entityId,
-        entityType: this.entityType,
-        trigger,
-        results,
-      });
-
-      rebalanceResult = this.buildRebalanceResult(true, {
-        moves: results,
-        trigger,
-        timestamp: this.lastRebalanceTime,
-      });
-      return rebalanceResult;
-    } finally {
-      if (rebalanceResult === null) {
-        this.syncOperationContinuationWake?.(
-          null,
-          UNIFIED_REBALANCER_LITERAL.ZERO,
-        );
-        this.completeSlotReleaseContinuationCycle?.(
-          UNIFIED_REBALANCER_LITERAL.ZERO,
-        );
+      if (availableBudget <= UNIFIED_REBALANCER_LITERAL.ZERO) {
+        return this.buildRebalanceResult(true, {
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          moves: [],
+        });
       }
+    } catch (error) {
+      this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
+        entityId: this.entityId,
+        error: error.message,
+      });
+      return this.buildRebalanceResult(false, {
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.BUDGET_QUERY_FAILED,
+        moves: [],
+      });
     }
+
+    this.logger.info(REBALANCER_LOG_MSG.START_REBALANCE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      trigger,
+      moveCount: moves.length,
+      currentCount: currentReplicas.length,
+      targetCount: targetState.targetReplicaCount,
+    });
+
+    const moveLimit = Math.max(
+      UNIFIED_REBALANCER_LITERAL.ZERO,
+      Math.min(this.maxConcurrentMoves, availableBudget),
+    );
+    const budgetOrderedMoves = shouldPrioritizeBudgetedTopologyCleanup ?
+      this.prioritizePriorityTopologyCleanupMoves(moves) :
+      this.prioritizeOperationLedgerQuorumCureMoves(moves);
+    const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
+      if (
+        !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
+      ) {
+        return move;
+      }
+      return {
+        ...move,
+        membershipPublicationEpoch: planningMembershipPublicationEpoch,
+      };
+    });
+    const results = await this.executeRebalancingMoves(limitedMoves, {
+      trigger,
+      plannedMoveCount: moves.length,
+      moveLimit,
+    });
+
+    // The planning cycle's own clock. This owner holds nowFn; reading the
+    // ambient one here made a deterministic node's cycle depend on host time.
+    this.lastRebalanceTime = this.nowFn();
+    this.rebalanceCount++;
+
+    this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      trigger,
+      results,
+    });
+
+    return this.buildRebalanceResult(true, {
+      moves: results,
+      trigger,
+      timestamp: this.lastRebalanceTime,
+    });
   }
 
   resolvePublishedMembershipPlanningEpoch() {

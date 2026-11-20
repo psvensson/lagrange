@@ -3369,5 +3369,6 @@
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     }
-  ]
+  ],
+  "maxViolations": 373
 }

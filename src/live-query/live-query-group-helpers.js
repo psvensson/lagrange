@@ -23,6 +23,7 @@ import {
 import {
   compilePredicate,
   extractReferencedTables,
+  extractTableBindings,
   isComplexWhereNode,
   normalizeWhereAstForRenderer,
 } from './live-query-service.js';
@@ -319,6 +320,8 @@ function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null) {
     whereClause,
     predicate: compilePredicate(whereClause, params, schemas, {
       tableName: tables[0] || null,
+      tableBindings: extractTableBindings(parsedAst),
+      parsedQuery: parsedAst,
     }),
   };
 }

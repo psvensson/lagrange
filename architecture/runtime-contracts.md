@@ -393,16 +393,6 @@ Forbidden patterns:
   deficits when a downstream active-gate reconcile handoff is already pending,
   as this introduces structural deadlocks during rolling restarts under pressure.
 
-### Autonomous Readiness Lifecycle Source and Traffic-Ready Rebalancer Wake
-
-Planning publication in `ControlPlaneReadinessService` produces versioned
-readiness snapshots and publishes lifecycle transitions to
-`BootstrapReadinessLifecycleSource`. Upon reaching the traffic-ready threshold
-(`TRAFFIC_READY`), rising-edge notifications wake `UnifiedRebalancer`
-(`continuation-wake-coordinator.js`) without requiring external HTTP probe
-polling (`/readyz`), ensuring autonomous formation progression while reading
-node readiness exclusively from canonical snapshot owners.
-
 ### Comparative Benchmark Remote Shell Execution and Attributed Outcome Classification
 
 The remote-shell execution layer (`real-product-remote-shell.js`) captures
@@ -503,20 +493,6 @@ Specific admission rules:
 - Treat a denied candidate as one rejected candidate, not a global abort, until
   no admissible cohort can satisfy the minimum.
 - Fail impossible cohorts immediately with structured rejection diagnostics.
-
-### Phase B System Spread Host Occupancy and Serialized Admission Interaction
-
-The Phase B system spread transition policy (`system-spread-transition-policy.js`)
-coordinates multi-slot joiner spread (allowing 2 operations per target node
-after seed-first formation) with the serialized operation admission owner
-(`rebalance-coordinator-operation-creation.js`,
-`rebalance-coordinator-concurrent-add-budget.js`,
-`rebalance-coordinator-concurrent-budget-gate.js`). The serialized admission
-turn holds the `create-budget:add` mutex during atomic budget check and
-persistence, while Phase B capacity enforces per-target-node occupancy limits
-(`replica-operation-step-policy.js`) and coordinates staggered continuation
-wakes (`continuation-wake-coordinator.js`, `unified-rebalancer-rebalance-loop.js`)
-upon slot release.
 
 ## Modes And Status Taxonomy
 

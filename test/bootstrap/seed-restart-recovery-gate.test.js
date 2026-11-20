@@ -605,7 +605,7 @@ test('a completed multi-node founder whose drained services-p1-r1 anchor and mg-
   const dataDir = await mkdtemp(join(tmpdir(), 'seed-unlinked-anchor-and-mg-'));
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
-  const tablesReplicaId = getInitialReplicaIds(SYSTEM_TABLE_NAME.TABLES)[1];
+  const tablesReplicaId = getInitialReplicaIds(SYSTEM_TABLE_NAME.TABLES)[0];
   await seedCompletedOriginalFounderDbs(dataDir, {
     includeAnchor: false,
     includeMg: false,

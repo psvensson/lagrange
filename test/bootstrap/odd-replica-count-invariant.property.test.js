@@ -11,6 +11,9 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
+  DECLARED_REPLICA_COUNT_DEFAULT,
+} from '../../src/bootstrap/replication-target-authority.js';
+import {
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_REPLICA_IDS,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
@@ -50,17 +53,32 @@ function isOdd(n) {
  * requirements.
  */
 test('Property 33: All system table partitions have odd replica counts', async (t) => {
+  t.ok(
+    isOdd(DECLARED_REPLICA_COUNT_DEFAULT),
+    `Declared target partition replica count is odd: ${DECLARED_REPLICA_COUNT_DEFAULT}`,
+  );
+  t.equal(
+    DECLARED_REPLICA_COUNT_DEFAULT,
+    3,
+    `Declared target partition replica count is 3: ${DECLARED_REPLICA_COUNT_DEFAULT}`,
+  );
+  t.ok(
+    DECLARED_REPLICA_COUNT_DEFAULT >= 3,
+    `Declared target partition replica count is at least 3: ${DECLARED_REPLICA_COUNT_DEFAULT}`,
+  );
+
   for (const schema of SYSTEM_TABLE_SCHEMAS) {
     const tableName = schema.tableName;
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
 
     t.ok(
       isOdd(replicaIds.length),
-      `System table ${tableName} has odd replica count: ${replicaIds.length}`,
+      `System table ${tableName} has odd founding replica count: ${replicaIds.length}`,
     );
-    t.ok(
-      replicaIds.length >= 3,
-      `System table ${tableName} has at least 3 replicas: ${replicaIds.length}`,
+    t.equal(
+      replicaIds.length,
+      1,
+      `System table ${tableName} has 1 founding voter replica: ${replicaIds.length}`,
     );
   }
 });
@@ -71,6 +89,11 @@ test('Property 33: Initial message group has odd replica count', async (t) => {
   t.ok(
     isOdd(replicaCount),
     `Initial message group has odd replica count: ${replicaCount}`,
+  );
+  t.equal(
+    replicaCount,
+    3,
+    `Initial message group has 3 replicas: ${replicaCount}`,
   );
   t.ok(
     replicaCount >= 3,

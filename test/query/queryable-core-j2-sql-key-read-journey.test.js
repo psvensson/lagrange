@@ -182,7 +182,7 @@ async function executeDualMutation(engine, oracle, sql, params = []) {
  */
 async function assertDualQuery(t, engine, oracle, sql, params = [], label = '') {
   const oracleRows = oracle.prepare(sql).all(...params);
-  const engineResult = await engine.executeQuery(sql, params);
+  const engineResult = await engine.executeQuery(sql, params, {safeIntegers: true});
   t.ok(engineResult.success, `${label}: engine query succeeded`);
   assertRowsMatchOracle(t, engineResult.rows, oracleRows, label);
   return engineResult;

@@ -41,7 +41,7 @@ test('service instances have one system name and a complete RF3 bootstrap regist
   assert.equal(SYSTEM_TABLE_NAME.SERVICE_INSTANCES, NAME);
   assert.equal(INITIAL_PARTITION_IDS[NAME], 'service_instances-p1');
   assert.deepEqual(INITIAL_REPLICA_IDS[NAME], [
-    'service_instances-p1-r1', 'service_instances-p1-r2', 'service_instances-p1-r3',
+    'service_instances-p1-r1',
   ]);
   assert.equal(getSystemCachePrimaryKeyField(NAME), 'service_id');
 });

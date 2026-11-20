@@ -24,7 +24,10 @@ test('schema_operations is a bootstrapped priority workflow aggregate', (t) => {
 
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SCHEMA_OPERATIONS];
   t.equal(partitionId, 'schema_operations-p1');
-  t.equal(INITIAL_REPLICA_IDS[TABLES.SCHEMA_OPERATIONS].length, 3);
+  t.equal(INITIAL_REPLICA_IDS[TABLES.SCHEMA_OPERATIONS].length, 1);
+  t.same(INITIAL_REPLICA_IDS[TABLES.SCHEMA_OPERATIONS], [
+    'schema_operations-p1-r1',
+  ]);
   t.ok(PRIORITY_CONTROL_PLANE_PARTITION_IDS.has(partitionId));
   t.equal(isPriorityControlPlanePartition({partitionId}), true);
   t.equal(isCriticalTransportControlPlanePartition({partitionId}), true);

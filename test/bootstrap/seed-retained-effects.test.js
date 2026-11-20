@@ -244,11 +244,11 @@ test('original source stamps bind the actual proposer while preserving forwarded
         expect(f, STATE.CONTRARY);
       });
     }
-    await t.test('another declared founder stamps a forwarded original command', (t) => {
+    await t.test('declared founder stamps an original command with advanced clocks', (t) => {
       const f = fixture(t);
-      const proposer = f.declaration.members.find((member) =>
-        member.groupId === f.member.groupId && member.replicaId !== f.member.replicaId);
-      assert.ok(proposer, 'a different declared group member must engage forwarding identity');
+      const proposer = f.member;
+      assert.deepEqual(f.member.replicaIds, [proposer.replicaId],
+        'single-voter founding partition has one declared group founder');
       const command = sqlCommand(proposer,
         foundationMutation(f.declaration, f.member.tableName));
       command.timestamp = new HLCTimestamp(DECLARED_AT + 7, 2, proposer.replicaId).toString();
@@ -256,7 +256,7 @@ test('original source stamps bind the actual proposer while preserving forwarded
       retain(f, [origin(f), command], {applied: 1});
       const result = expect(f, STATE.ACCEPTED);
       assert.deepEqual(result.history.entries[1].command, command,
-        'forwarding keeps the original producer and need not align its clocks with declaration time');
+        'original producer need not align its clocks with declaration time');
     });
   });
 

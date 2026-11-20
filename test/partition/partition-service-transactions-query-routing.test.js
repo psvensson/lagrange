@@ -1170,8 +1170,9 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
 
   t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'should succeed for reads');
-  t.equal(result.rows.length, 1, 'should return data');
-  t.equal(result.rows[0].name, 'Alice', 'should return correct data');
+  t.equal(result.rowSet?.rows?.length, 1, 'should return data');
+  t.same(result.rowSet?.columns, ['id', 'name'], 'should return expected columns');
+  t.equal(result.rowSet?.rows?.[0]?.[2], 'Alice', 'should return correct data');
 
   partition.shutdown();
 });

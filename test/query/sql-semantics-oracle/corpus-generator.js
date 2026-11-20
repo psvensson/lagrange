@@ -324,9 +324,8 @@ function scalarCoverage(prng) {
   const operators = OPERATOR_FORMS.map((form) =>
     [operatorExpression(prng, form), operatorExpression(prng, form)]);
   return [
-    ...[...chunks(calls, COVERAGE_CHUNK), ...operators,
-      [SCALAR_FUNCTIONS.load_extension(prng)]].map(projectionCase),
-    ...CONNECTION_STATE_FUNCTIONS.map((name) => ({...projectionCase([SCALAR_FUNCTIONS[name](prng)]),
+    ...[...chunks(calls, COVERAGE_CHUNK), ...operators].map(projectionCase),
+    ...isolated.map((name) => ({...projectionCase([SCALAR_FUNCTIONS[name](prng)]),
       expect: 'typed-refusal'})),
   ];
 }

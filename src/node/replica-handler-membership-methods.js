@@ -16,9 +16,18 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+} from '../raft/raft-committed-membership-constants.js';
+import {
+  RAFT_FOUNDING_GROWTH_OUTCOME,
+  RAFT_OPERATION_OUTCOME,
+} from '../raft/raft-operation-port-constants.js';
 import {
   evaluatePartitionLearnerCatchUp,
   proposePartitionGrowthPromote,
+  readPartitionCommittedMembership,
   readPartitionReplicaMembership,
   removePartitionRaftLearner,
   retirePartitionRaftPeer,
@@ -27,6 +36,7 @@ import {
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const LOCAL_STR_ALREADY_VOTER = 'already_voter';
 const REPLICA_MEMBERSHIP_ERROR = Object.freeze({
   REQUIRED_FIELDS:
     'membership request requires partitionId, replicaId and sourceReplicaId',
@@ -50,6 +60,40 @@ function membershipRequestOf(request) {
     expectedBaseConfig:
       readRequestField(request, ReplicaOperationField.EXPECTED_BASE_CONFIG),
   };
+}
+
+function areReplicasCommittedVoters(membership, promoteReplicaIds) {
+  if (
+    !membership ||
+    membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+    !Array.isArray(promoteReplicaIds) ||
+    promoteReplicaIds.length === 0 ||
+    (Array.isArray(membership.votersOutgoing) &&
+      membership.votersOutgoing.length > 0)
+  ) {
+    return false;
+  }
+  const voterReplicaIds = new Set(
+    (membership.voters || [])
+      .map((peerId) => membership.identities?.[peerId] || String(peerId))
+      .filter(Boolean),
+  );
+  return promoteReplicaIds.every((id) => voterReplicaIds.has(id));
+}
+
+function transitionLocalPromotedLearners(handler, promoteReplicaIds) {
+  if (!handler?.localServices || !Array.isArray(promoteReplicaIds)) {
+    return;
+  }
+  for (const replicaId of promoteReplicaIds) {
+    const svc = handler.localServices.get(replicaId);
+    if (svc && svc.role === RAFT_ROLE.LEARNER) {
+      svc.role = RAFT_ROLE.FOLLOWER;
+      svc.learnerBootstrapped = true;
+      svc.cancelLearnerPromotionMonitor?.();
+      svc.queueRoleUpdate?.(RAFT_ROLE.FOLLOWER);
+    }
+  }
 }
 
 function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
@@ -134,17 +178,22 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
     }
 
     findLocalPartitionService(partitionId, replicaId) {
+      let firstMatch = null;
+      for (const service of this.localServices.values()) {
+        if (service?.partitionId !== partitionId) continue;
+        if (
+          service.isLeader === true ||
+          service.raft?.readStatus?.()?.role === RAFT_ROLE.LEADER
+        ) {
+          return service;
+        }
+        if (!firstMatch) firstMatch = service;
+      }
       if (replicaId) {
         const direct = this.getTrackedService(replicaId);
         if (direct && (!partitionId || direct.partitionId === partitionId)) {
           return direct;
         }
-      }
-      let firstMatch = null;
-      for (const service of this.localServices.values()) {
-        if (service?.partitionId !== partitionId) continue;
-        if (service.isLeader === true) return service;
-        if (!firstMatch) firstMatch = service;
       }
       return firstMatch;
     }
@@ -201,9 +250,32 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
     async handleProposeGrowthPromote(request) {
       const target = this.resolvePartitionAdministrationTarget(request);
       if (target.response) return target.response;
-      const promoteReplicaIds = Array.isArray(target.fields.promoteReplicaIds) ?
+      const promoteReplicaIds = Array.isArray(target.fields.promoteReplicaIds) &&
+          target.fields.promoteReplicaIds.length > 0 ?
         target.fields.promoteReplicaIds :
         [target.fields.replicaId, target.fields.sourceReplicaId].filter(Boolean);
+      const beforeMembership = await readPartitionCommittedMembership(
+        target.service,
+      );
+      if (areReplicasCommittedVoters(beforeMembership, promoteReplicaIds)) {
+        transitionLocalPromotedLearners(this, promoteReplicaIds);
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.INITIATED,
+          {
+            [ReplicaOperationField.PROPOSAL]: Object.freeze({
+              outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+              promotionOutcome: RAFT_FOUNDING_GROWTH_OUTCOME.PROMOTION_PROPOSED,
+              reason: LOCAL_STR_ALREADY_VOTER,
+              operationId: target.fields.operationId,
+              promotedReplicaIds: Object.freeze([...promoteReplicaIds]),
+            }),
+            committedVotersReached: true,
+            partitionId: target.fields.partitionId,
+            replicaId: target.service.replicaId,
+            nodeId: this.nodeId,
+          },
+        );
+      }
       const proposal = await turnChainValue(proposePartitionGrowthPromote(
         target.service,
         {
@@ -212,10 +284,21 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
           expectedBaseConfig: target.fields.expectedBaseConfig,
         },
       ));
+      const afterMembership = await readPartitionCommittedMembership(
+        target.service,
+      );
+      const committedVotersReached = areReplicasCommittedVoters(
+        afterMembership,
+        promoteReplicaIds,
+      );
+      if (committedVotersReached) {
+        transitionLocalPromotedLearners(this, promoteReplicaIds);
+      }
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.INITIATED,
         {
           [ReplicaOperationField.PROPOSAL]: proposal,
+          committedVotersReached,
           partitionId: target.fields.partitionId,
           replicaId: target.service.replicaId,
           nodeId: this.nodeId,

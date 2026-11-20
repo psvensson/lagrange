@@ -8,10 +8,11 @@ import {
   LiveQueryService,
   compilePredicate,
   extractPartitionKeyValue,
+  extractTableBindings,
   canonicalizePredicate,
   parseLiveSelect,
-  // evaluateExpression imported for potential future use
 } from '../../src/live-query/live-query-service.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 
 test('parseLiveSelect - parses LIVE SELECT statements', async (t) => {
   const result = parseLiveSelect('LIVE SELECT * FROM orders WHERE id = 1');
@@ -385,4 +386,66 @@ test('compilePredicate - evaluates COLLATE, LIKE ESCAPE, and catalog schema coll
   t.equal(tagPred({id: 1, email: 'a', tag: ' padded   '}), true, 'RTRIM column ignores trailing spaces');
   t.equal(tagPred({id: 2, email: 'a', tag: 'padded'}), false, 'leading space still distinct under RTRIM');
   tagPred.close();
+});
+
+test('aliased live query preserves declared COLLATE NOCASE and affinity on compilePredicate and LiveQueryService', async (t) => {
+  const schema = {
+    tableName: 'users',
+    columns: [
+      {name: 'id', type: 'INTEGER', primaryKey: true},
+      {name: 'name', type: 'TEXT', collation: 'NOCASE'},
+      {name: 'score', type: 'INTEGER'},
+    ],
+  };
+
+  const aliasedAst = new SQLParser('SELECT * FROM users AS u WHERE u.name = \'ALICE\'').parse();
+  const unaliasedAst = new SQLParser('SELECT * FROM users WHERE name = \'ALICE\'').parse();
+
+  t.same(
+    extractTableBindings(aliasedAst),
+    [{tableName: 'users', alias: 'u'}],
+    'extractTableBindings records base table and alias',
+  );
+
+  const directAliasedPred = compilePredicate(aliasedAst.where, [], schema);
+  const directUnaliasedPred = compilePredicate(unaliasedAst.where, [], schema);
+
+  for (const row of [
+    {id: 1, name: 'alice', score: 10},
+    {id: 2, name: 'Alice', score: 20},
+    {id: 3, name: 'ALICE', score: 30},
+    {id: 4, name: 'bob', score: 40},
+  ]) {
+    t.equal(
+      directAliasedPred(row),
+      directUnaliasedPred(row),
+      `direct compilePredicate aliased vs unaliased parity for ${row.name}`,
+    );
+  }
+  t.equal(directAliasedPred({id: 1, name: 'alice', score: 10}), true);
+  t.equal(directAliasedPred({u: {id: 1, name: 'alice', score: 10}}), true);
+  t.equal(directAliasedPred({users: {id: 1, name: 'alice', score: 10}}), true);
+  directAliasedPred.close();
+  directUnaliasedPred.close();
+
+  const systemCache = {
+    get: (_table, name) => (name === 'users' ? {table_name: 'users', schema} : null),
+    find: (_table, fn) => (fn({table_name: 'users', schema}) ? {table_name: 'users', schema} : null),
+  };
+
+  const aliasedService = new LiveQueryService({parsedQuery: aliasedAst, systemCache});
+  const unaliasedService = new LiveQueryService({parsedQuery: unaliasedAst, systemCache});
+
+  t.equal(
+    aliasedService.evaluatePredicate({id: 1, name: 'alice', score: 99}),
+    true,
+    'aliased LiveQueryService matches lowercase alice under NOCASE',
+  );
+  t.equal(
+    aliasedService.evaluatePredicate({id: 1, name: 'alice', score: 99}),
+    unaliasedService.evaluatePredicate({id: 1, name: 'alice', score: 99}),
+    'aliased and unaliased LiveQueryService agree',
+  );
+  aliasedService.cleanup();
+  unaliasedService.cleanup();
 });

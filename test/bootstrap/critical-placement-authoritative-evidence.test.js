@@ -56,7 +56,14 @@ function serviceRowsFor({omit = [], soloPartitionIds = [], seedOnly = false} = {
       return;
     }
     const tableId = partitionId.replace(/-p1$/u, '');
-    (getInitialReplicaIds(tableId) || []).forEach((replicaId, replicaIndex) => {
+    const foundingReplicaIds = getInitialReplicaIds(tableId) || [];
+    const replicaIds = seedOnly ?
+      foundingReplicaIds :
+      Array.from(
+        {length: DECLARED_REPLICA_COUNT_DEFAULT},
+        (_, index) => foundingReplicaIds[index] || `${partitionId}-r${index + 1}`,
+      );
+    replicaIds.forEach((replicaId, replicaIndex) => {
       rows.push({
         service_id: `svc-${replicaId}`,
         service_type: 'partition',
@@ -157,14 +164,15 @@ test('partial-spread-names-the-pending-partitions', () => {
 
 test('required-rf-resolves-through-the-policy-authority', () => {
   // The divergence probe. Persisted desired RF = 5 while the declared initial
-  // replica identity count stays 3: the requirement MUST follow the persisted
-  // policy row, so three distinct holders are now a measured deficit. An
-  // implementation still counting identities reports converged and reds here.
+  // replica identity count is 1 and the creation default is 3: the requirement
+  // MUST follow the persisted policy row, so three distinct holders are now a
+  // measured deficit. An implementation still counting identities reports
+  // converged and reds here.
   const declared = declaredCriticalPartitionIds();
   const probed = declared[0];
   const probedTableId = probed.replace(/-p1$/u, '');
-  assert.equal((getInitialReplicaIds(probedTableId) || []).length, 3,
-    'the declaration really says 3, so 5 can only come from the row');
+  assert.equal((getInitialReplicaIds(probedTableId) || []).length, 1,
+    'the declaration really says 1 founding voter, so 5 can only come from the row');
 
   const raised = resolveCriticalPlacementConvergence({
     serviceRows: serviceRowsFor(),

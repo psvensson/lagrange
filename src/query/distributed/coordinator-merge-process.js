@@ -356,7 +356,13 @@ class CoordinatorMergeProcessPool {
     return child;
   }
 
-  acquireWorker(deadlineMs) {
+  acquireWorker(deadlineMs, sessionOptions = null) {
+    if (isCancellationRequested(sessionOptions)) {
+      return Promise.reject(createMergeError(
+        QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+        PROCESS_ERROR_MSG.DEADLINE_KILLED,
+      ));
+    }
     while (this.idleWorkers.length > 0) {
       const candidate = this.idleWorkers.pop();
       if (candidate.connected && candidate.exitCode === null && !candidate.killed) {
@@ -373,26 +379,45 @@ class CoordinatorMergeProcessPool {
     }
     return new Promise((resolve, reject) => {
       let timer = null;
+      let detachCancel = null;
+      const clearWaiters = () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (detachCancel !== null) {
+          const detach = detachCancel;
+          detachCancel = null;
+          detach();
+        }
+      };
       const entry = {
         resolve: (worker) => {
-          if (timer !== null) clearTimeout(timer);
+          clearWaiters();
           resolve(worker);
         },
         reject: (err) => {
-          if (timer !== null) clearTimeout(timer);
+          clearWaiters();
           reject(err);
         },
       };
+      const abortWait = () => {
+        const idx = this.waitQueue.indexOf(entry);
+        if (idx >= 0) this.waitQueue.splice(idx, 1);
+        clearWaiters();
+        reject(createMergeError(
+          QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+          PROCESS_ERROR_MSG.DEADLINE_KILLED,
+        ));
+      };
+      detachCancel = attachCancellationWatcher(sessionOptions, abortWait);
+      if (isCancellationRequested(sessionOptions)) {
+        abortWait();
+        return;
+      }
       if (Number.isSafeInteger(deadlineMs) && deadlineMs > 0) {
         const waitMs = Math.max(0, deadlineMs - Date.now());
-        timer = setTimeout(() => {
-          const idx = this.waitQueue.indexOf(entry);
-          if (idx >= 0) this.waitQueue.splice(idx, 1);
-          reject(createMergeError(
-            QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
-            PROCESS_ERROR_MSG.DEADLINE_KILLED,
-          ));
-        }, waitMs);
+        timer = setTimeout(abortWait, waitMs);
       }
       this.waitQueue.push(entry);
     });
@@ -433,11 +458,27 @@ class CoordinatorMergeProcessPool {
       let onError = null;
 
       const cleanup = () => {
-        if (timer !== null) clearTimeout(timer);
-        if (detachCancel !== null) detachCancel();
-        child.removeListener(PROCESS_EVENT.MESSAGE, onMessage);
-        child.removeListener(PROCESS_EVENT.EXIT, onExit);
-        child.removeListener(PROCESS_EVENT.ERROR, onError);
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (detachCancel !== null) {
+          const detach = detachCancel;
+          detachCancel = null;
+          detach();
+        }
+        if (onMessage !== null) {
+          child.removeListener(PROCESS_EVENT.MESSAGE, onMessage);
+          onMessage = null;
+        }
+        if (onExit !== null) {
+          child.removeListener(PROCESS_EVENT.EXIT, onExit);
+          onExit = null;
+        }
+        if (onError !== null) {
+          child.removeListener(PROCESS_EVENT.ERROR, onError);
+          onError = null;
+        }
       };
 
       const abortChildForDeadlineOrCancel = () => {
@@ -490,6 +531,10 @@ class CoordinatorMergeProcessPool {
         sessionOptions,
         abortChildForDeadlineOrCancel,
       );
+      if (settled) {
+        cleanup();
+        return;
+      }
 
       if (Number.isFinite(timeoutMs) && timeoutMs >= 0) {
         timer = setTimeout(abortChildForDeadlineOrCancel, timeoutMs);
@@ -534,7 +579,7 @@ class CoordinatorMergeProcessPool {
       sessionOptions.deadlineMs,
       sessionOptions.timeoutMs,
     );
-    const child = await this.acquireWorker(deadlineMs);
+    const child = await this.acquireWorker(deadlineMs, sessionOptions);
     let workerUsable = true;
     try {
       const timeoutMs = this.computeRemainingTimeoutMs(budget, deadlineMs);

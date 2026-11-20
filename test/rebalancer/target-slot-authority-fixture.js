@@ -97,7 +97,7 @@ function installNativeIncompleteOperationRead(coordinator, database, readCalls) 
 
 function observeTargetSlotCalls(coordinator, cache, slotCalls) {
   const original = coordinator.ensureSystemPartitionTargetNodeSlotAllowed.bind(coordinator);
-  coordinator.ensureSystemPartitionTargetNodeSlotAllowed = (...args) => {
+  coordinator.ensureSystemPartitionTargetNodeSlotAllowed = async (...args) => {
     const observation = coordinator.repository.lastIncompleteOperationObservation;
     const call = {
       observationIsArray: Array.isArray(observation),
@@ -109,7 +109,7 @@ function observeTargetSlotCalls(coordinator, cache, slotCalls) {
     };
     slotCalls.push(call);
     try {
-      call.decision = original(...args);
+      call.decision = await original(...args);
       return call.decision;
     } catch (error) {
       call.error = error;

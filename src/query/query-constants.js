@@ -5,7 +5,6 @@ const QUERY_SUBSYSTEM = Object.freeze({
   SQL_QUERY_ENGINE: 'sql-query-engine',
   QUERY_EXECUTOR: 'query-executor',
   PARALLEL_QUERY_COORDINATOR: 'parallel-query-coordinator',
-  STREAMING_AGGREGATOR: 'streaming-aggregator',
   STRAGGLER_DETECTOR: 'straggler-detector',
   SPECULATIVE_EXECUTOR: 'speculative-executor',
   PARTITION_RESOLVER: 'partition-resolver',
@@ -323,7 +322,6 @@ const QUERY_LOG_MSG = Object.freeze({
     'Hedged partition attempt lost the race; result discarded',
   HEDGE_PRIMARY_ATTEMPT_REJECTED:
     'Primary partition attempt rejected unexpectedly during hedged fan-out',
-  STREAMING_MEMORY_LIMIT_REACHED: 'Streaming aggregator memory limit reached',
   TABLE_CREATE_START: 'Creating table',
   TABLE_EXISTS_SKIP: 'Table already exists, skipping creation',
   TABLE_CREATED_SUCCESS: 'Table created successfully',
@@ -404,7 +402,6 @@ const QUERY_JOIN_TYPE = Object.freeze({
 
 const QUERY_AST_NODE = Object.freeze({
   BINARY: 'binary',
-  LITERAL: 'literal',
   COLUMN_REF: 'column_ref',
   AGGREGATE: 'aggregate',
   STAR: 'star',
@@ -419,8 +416,6 @@ const QUERY_OPERATOR = Object.freeze({
   AND: 'AND',
   OR: 'OR',
   EQUALS: '=',
-  NOT_EQUALS: '!=',
-  NOT_EQUALS_ALT: '<>',
   LESS_THAN: '<',
   LESS_THAN_OR_EQUAL: '<=',
   GREATER_THAN: '>',
@@ -468,9 +463,6 @@ const QUERY_CONFIG_KEY = Object.freeze({
     CONFIG_KEY.QUERY_COORDINATOR_SPECULATIVE_EXECUTION_ENABLED,
   COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS:
     CONFIG_KEY.QUERY_COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS,
-  COORDINATOR_STREAMING_ENABLED: CONFIG_KEY.QUERY_COORDINATOR_STREAMING_ENABLED,
-  COORDINATOR_STREAMING_CHUNK_SIZE:
-    CONFIG_KEY.QUERY_COORDINATOR_STREAMING_CHUNK_SIZE,
 });
 
 const QUERY_DEFAULTS = Object.freeze({
@@ -499,7 +491,6 @@ const QUERY_DEFAULTS = Object.freeze({
   // chunk-relative and collapses toward zero on fast fan-outs; the floor
   // keeps hedging from firing on ordinary latency jitter.
   COORDINATOR_HEDGE_MIN_STRAGGLER_THRESHOLD_MS: NUM.HUNDRED,
-  COORDINATOR_STREAMING_CHUNK_SIZE: NUM.THOUSAND,
 });
 
 export {

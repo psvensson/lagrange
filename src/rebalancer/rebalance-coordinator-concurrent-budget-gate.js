@@ -159,6 +159,7 @@ class RebalanceCoordinatorConcurrentBudgetGate {
       return {
         allowed: true,
         maxPerTargetNode,
+        occupiedCount: occupying.length,
         occupyingOperationIds: occupying.map((op) => op.operationId),
       };
     }

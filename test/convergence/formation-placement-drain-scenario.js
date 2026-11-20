@@ -126,7 +126,6 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   PLACEMENT_COPY_CAPACITY,
-  PLACEMENT_MOVE_TYPE,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -693,6 +692,36 @@ function seedSingleVoterFounding(world) {
   }
 }
 
+function seedThreeVoterFounding(world) {
+  const existingByPartition = new Map();
+  for (const row of world.cache.getAll(TABLES.SERVICES)) {
+    const partitionId = row[COLUMN.PARTITION_ID];
+    if (!partitionId) continue;
+    const list = existingByPartition.get(partitionId) || [];
+    list.push(row);
+    existingByPartition.set(partitionId, list);
+  }
+  for (const [partitionId, rows] of existingByPartition.entries()) {
+    if (rows.length >= 3) continue;
+    const leaderRow = rows[0];
+    for (const ordinal of [2, 3]) {
+      const replicaId = `${partitionId}-r${ordinal}`;
+      if (rows.some((r) => r[COLUMN.REPLICA_ID] === replicaId)) continue;
+      world.cache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.INSERT,
+        {
+          ...leaderRow,
+          [COLUMN.SERVICE_ID]: replicaId,
+          [COLUMN.REPLICA_ID]: replicaId,
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        },
+      );
+    }
+  }
+}
+
 function stepSingleVoterLearnerCatchUp(world) {
   const nowMs = world.clock.now();
   const syncingLearners = world.cache.getAll(TABLES.SERVICES)
@@ -736,46 +765,100 @@ function stepSingleVoterLearnerCatchUp(world) {
   }
 }
 
-function stepGrowthPromoteOperations(world) {
-  const nowMs = world.clock.now();
-  for (const row of world.cache.getAll(TABLES.REPLICA_OPERATIONS)) {
-    if (!isUnresolved(row) || row.type !== PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE) {
-      continue;
-    }
-    const history = typeof row.steps_history === 'string' && row.steps_history.length > 0 ?
-      JSON.parse(row.steps_history) : [];
-    if (history[0]?.dispatchHold) continue;
-    const promoteIds = Array.isArray(history[0]?.promoteReplicaIds) ?
-      history[0].promoteReplicaIds :
-      [row.replica_id, row.source_replica_id].filter(Boolean);
-    for (const replicaId of promoteIds) {
-      const serviceRow = world.cache.get(TABLES.SERVICES, replicaId);
-      if (serviceRow) {
-        world.cache.applySystemTableChange(
-          TABLES.SERVICES,
-          CDC_OPERATION.UPDATE,
-          {
-            ...serviceRow,
-            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-            [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-          },
-        );
-      }
-    }
-    const nextHistory = [...history, {step: WORKFLOW_STEP.ACTIVE, timestamp: nowMs}];
-    world.cache.applySystemTableChange(
-      TABLES.REPLICA_OPERATIONS,
-      CDC_OPERATION.UPDATE,
-      {
-        ...row,
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        workflow_step: WORKFLOW_STEP.ACTIVE,
-        updated_at: nowMs,
-        completed_at: nowMs,
-        steps_history: JSON.stringify(nextHistory),
-      },
-    );
+function answerProposeGrowthPromote(world, nodeId, payload) {
+  const operationId = payload?.[ReplicaOperationField.OPERATION_ID] || null;
+  const partitionId = payload?.[ReplicaOperationField.PARTITION_ID] || null;
+  const leaderNodeId = partitionLeaderOf(world, partitionId);
+  if (!partitionId || nodeId !== leaderNodeId) {
+    return {
+      status: ReplicaOperationResponseStatus.INITIATED,
+      [ReplicaOperationField.PROPOSAL]: Object.freeze({
+        outcome: 'core_refused',
+        reason: 'not_leader',
+        retryable: true,
+        operationId,
+      }),
+      committedVotersReached: false,
+      partitionId,
+      nodeId,
+    };
   }
+  const promoteIds = Array.isArray(
+    payload?.[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+  ) && payload[ReplicaOperationField.PROMOTE_REPLICA_IDS].length > 0 ?
+    payload[ReplicaOperationField.PROMOTE_REPLICA_IDS] :
+    [
+      payload?.[ReplicaOperationField.REPLICA_ID],
+      payload?.[ReplicaOperationField.SOURCE_REPLICA_ID],
+    ].filter(Boolean);
+  if (promoteIds.length === 0) {
+    return {
+      status: ReplicaOperationResponseStatus.INITIATED,
+      [ReplicaOperationField.PROPOSAL]: Object.freeze({
+        outcome: 'core_refused',
+        reason: 'multi_change_shape_refused',
+        retryable: false,
+        operationId,
+      }),
+      committedVotersReached: false,
+      partitionId,
+      nodeId,
+    };
+  }
+  const serviceRows = promoteIds.map((replicaId) =>
+    world.cache.get(TABLES.SERVICES, replicaId));
+  if (serviceRows.some((row) => !row || row[COLUMN.PARTITION_ID] !== partitionId)) {
+    return {
+      status: ReplicaOperationResponseStatus.INITIATED,
+      [ReplicaOperationField.PROPOSAL]: Object.freeze({
+        outcome: 'core_refused',
+        reason: 'not_learner',
+        retryable: false,
+        operationId,
+      }),
+      committedVotersReached: false,
+      partitionId,
+      nodeId,
+    };
+  }
+  if (serviceRows.some((row) => row[COLUMN.STATUS] !== SERVICE_STATUS.ACTIVE)) {
+    return {
+      status: ReplicaOperationResponseStatus.INITIATED,
+      [ReplicaOperationField.PROPOSAL]: Object.freeze({
+        outcome: 'core_refused',
+        reason: 'promotion_progress_behind',
+        retryable: true,
+        operationId,
+      }),
+      committedVotersReached: false,
+      partitionId,
+      nodeId,
+    };
+  }
+  for (const row of serviceRows) {
+    if (row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEARNER) {
+      world.cache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPDATE,
+        {
+          ...row,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+        },
+      );
+    }
+  }
+  return {
+    status: ReplicaOperationResponseStatus.INITIATED,
+    [ReplicaOperationField.PROPOSAL]: Object.freeze({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+      operationId,
+      promotedReplicaIds: Object.freeze([...promoteIds]),
+    }),
+    committedVotersReached: true,
+    partitionId,
+    nodeId,
+  };
 }
 
 // The replica runtime boundary: the copy source of every CREATE, read from
@@ -793,7 +876,11 @@ function instrumentReplicaRuntime(
   world.replicaRuntime.answer = (nodeId, payload) => {
     const operationId = payload?.[ReplicaOperationField.OPERATION_ID];
     const partitionId = payload?.[ReplicaOperationField.PARTITION_ID];
-    const isCreate = payload?.[ReplicaOperationField.TYPE] ===
+    const messageType = payload?.[ReplicaOperationField.TYPE];
+    if (messageType === ReplicaOperationMessageType.PROPOSE_GROWTH_PROMOTE) {
+      return answerProposeGrowthPromote(world, nodeId, payload);
+    }
+    const isCreate = messageType ===
       ReplicaOperationMessageType.CREATE_REPLICA;
     if (isCreate && operationId && !copySources.has(operationId)) {
       copySources.set(operationId, partitionLeaderOf(world, partitionId));
@@ -820,7 +907,6 @@ function instrumentReplicaRuntime(
     world.replicaRuntime.step = () => {
       stepSingleVoterLearnerCatchUp(world);
       baseStep();
-      stepGrowthPromoteOperations(world);
     };
   }
   return {copySources, injected};
@@ -1204,6 +1290,8 @@ async function runPlacementDrain(order, options = {}) {
   });
   if (singleVoterFounding) {
     seedSingleVoterFounding(world);
+  } else {
+    seedThreeVoterFounding(world);
   }
   const driver = createRoundDriver(world, {plannerPolling: false});
   const floorWatch = createFloorWatch(world, {singleVoterFounding});

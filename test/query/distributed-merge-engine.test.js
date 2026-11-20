@@ -505,3 +505,107 @@ test('Review 3 Item 4c: PARTIAL_AGGREGATE preserves explicit COLLATE BINARY over
     close();
   }
 });
+
+test('Review 4 Item 4: CoordinatorMergeProcessPool handles already-aborted requests and cancellation between IPC phases cleanly, followed by a successful pooled query', async (t) => {
+  const rowsP1 = [{id: 1n, v: 10n}, {id: 2n, v: 20n}];
+  const rowsP2 = [{id: 3n, v: 30n}, {id: 4n, v: 40n}];
+  const {executor, close} = createSqliteClusterExecutor([{
+    tableName: 't',
+    ddl: 'CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER)',
+    schema: {
+      columns: [
+        {name: 'id', type: 'INTEGER'},
+        {name: 'v', type: 'INTEGER'},
+      ],
+      primaryKey: ['id'],
+    },
+    partitions: [rowsP1, rowsP2],
+  }]);
+
+  try {
+    // Force COORDINATOR_EVALUATED path (e.g. expression GROUP BY) so the worker pool is used:
+    const coordEvalAst = new SQLParser(
+      'SELECT (id % 2) AS parity, SUM(v) AS total FROM t GROUP BY (id % 2) ORDER BY parity',
+    ).parse();
+
+    // 1. Already-aborted AbortSignal before entering the merge worker pool:
+    const preAbortedController = new AbortController();
+    preAbortedController.abort();
+    let preAbortedErr = null;
+    try {
+      await executor.executeSelect(
+        coordEvalAst,
+        ['t-p1', 't-p2'],
+        [],
+        {signal: preAbortedController.signal},
+      );
+    } catch (err) {
+      preAbortedErr = err;
+    }
+    t.equal(preAbortedErr?.code, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED);
+
+    // 2. Also test sendAndWait directly when signal is already aborted on entry to a phase
+    // after worker acquisition, and cancellation occurring between INIT_SESSION and INGEST_BATCH:
+    const pool = executor.mergeEngine.processPool;
+    const workerForPreAbortedPhase = await pool.acquireWorker(Date.now() + 5000);
+    let phaseEntryAbortErr = null;
+    try {
+      await pool.sendAndWait(
+        workerForPreAbortedPhase,
+        {type: 'INIT_SESSION', sessionOptions: {}, tables: []},
+        5000,
+        {signal: preAbortedController.signal},
+      );
+    } catch (err) {
+      phaseEntryAbortErr = err;
+    } finally {
+      pool.releaseWorker(workerForPreAbortedPhase, false);
+    }
+    t.equal(phaseEntryAbortErr?.code, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED);
+
+    // 3. Cancellation triggered between IPC phases (after INIT_SESSION succeeds, before
+    // the next sendAndWait phase runs):
+    const betweenPhasesController = new AbortController();
+    const originalSendAndWait = pool.sendAndWait.bind(pool);
+    let ipcPhaseCount = 0;
+    pool.sendAndWait = async function(...args) {
+      ipcPhaseCount += 1;
+      const res = await originalSendAndWait(...args);
+      if (ipcPhaseCount === 1) {
+        // Abort immediately after INIT_SESSION completes, before INGEST_FRAGMENT / EXECUTE_MERGE
+        betweenPhasesController.abort();
+      }
+      return res;
+    };
+    let betweenPhasesErr = null;
+    try {
+      await executor.executeSelect(
+        coordEvalAst,
+        ['t-p1', 't-p2'],
+        [],
+        {signal: betweenPhasesController.signal},
+      );
+    } catch (err) {
+      betweenPhasesErr = err;
+    } finally {
+      pool.sendAndWait = originalSendAndWait;
+    }
+    t.equal(betweenPhasesErr?.code, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED);
+    t.equal(ipcPhaseCount, 2);
+
+    // 4. Subsequent query through the pool succeeds cleanly:
+    const followUp = await executor.executeSelect(
+      coordEvalAst,
+      ['t-p1', 't-p2'],
+      [],
+      {deadlineMs: Date.now() + 5000},
+    );
+    t.equal(followUp.success, true);
+    t.same(followUp.rows, [
+      {parity: 0, total: 60},
+      {parity: 1, total: 40},
+    ]);
+  } finally {
+    close();
+  }
+});

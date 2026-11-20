@@ -45,10 +45,6 @@ function applyQuiescentCheckCadence(rebalancer, cureDecision) {
     rebalancer.currentInterval = rebalancer.getPriorityRetryDelayMs();
     return false;
   }
-  if (rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true) {
-    rebalancer.resetIntervalToMinimum();
-    return true;
-  }
   if (isUserTableLeaderCureGapActionable(cureDecision)) {
     rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
     return false;
@@ -87,10 +83,8 @@ const REBALANCER_PLANNING_GATE_METHODS = {
 
     this.scheduledCheck = this.setTimeoutFn(() => {
       this.scheduledCheck = null;
-      this._scheduledCheckDueAtMs = null;
       this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
     }, delay);
-    this._scheduledCheckDueAtMs = ownerNowMs(this) + delay;
 
     this.logger.debug(REBALANCER_LOG_MSG.SCHEDULE_NEXT, {
       entityId: this.entityId,
@@ -106,7 +100,6 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       this.clearTimeoutFn(this.scheduledCheck);
       this.scheduledCheck = null;
     }
-    this._scheduledCheckDueAtMs = null;
   },
 
   /**
@@ -662,28 +655,18 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     let forcePriorityRetry = false;
 
     if (needsRebalance) {
-      let rebalanceResult = null;
-      let executedMoveCount = UNIFIED_REBALANCER_LITERAL.ZERO;
-      try {
-        rebalanceResult = await this.rebalance(
-          TriggerType.PERIODIC,
-          evaluatedPolicy,
-          evaluationContext,
-        );
-        executedMoveCount = this.countExecutedMoves(rebalanceResult);
-      } finally {
-        this.syncOperationContinuationWake(rebalanceResult, executedMoveCount);
-        this.completeSlotReleaseContinuationCycle(executedMoveCount);
-      }
+      const rebalanceResult = await this.rebalance(
+        TriggerType.PERIODIC,
+        evaluatedPolicy,
+        evaluationContext,
+      );
+      const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
         this.currentInterval = this.usesPriorityRebalanceCadence() ?
           this.getPriorityRetryDelayMs() :
           this.periodicCheckIntervalMs;
-      } else if (
-        this.usesPriorityRebalanceCadence() ||
-        this.isPartitionBelowDeclaredDistinctHostSpread?.() === true
-      ) {
+      } else if (this.usesPriorityRebalanceCadence()) {
         this.resetIntervalToMinimum();
         forcePriorityRetry = true;
       } else {
@@ -698,7 +681,6 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // recorded anti-churn levers are structurally upstream — the one
     // place the user-table leader-placement cure may act.
     const cureDecision = await applyUserTableLeaderPlacementCure(this);
-    this.completeSlotReleaseContinuationCycle(UNIFIED_REBALANCER_LITERAL.ZERO);
     return applyQuiescentCheckCadence(this, cureDecision);
   },
 
@@ -735,14 +717,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       // check, including diagnostics, so every stage consumes one answer.
       const evaluationContext =
         this.createRebalancePlanningGateEvaluationContext();
-      await this.refreshDeferredAvailableNodeReadiness?.();
       const blocker = await this.getCheckRebalanceBlocker(evaluationContext);
       this.recordPriorityRecoveryPlanningGateDecisionDiagnostic(
         blocker ? blocker.decision : null, evaluationContext);
       if (blocker) {
         blocker.apply();
         await evaluateLeaderPlacementCureBehindPrioritySpreadGate(this, blocker);
-        this.completeSlotReleaseContinuationCycle(UNIFIED_REBALANCER_LITERAL.ZERO);
         return;
       }
 
@@ -773,8 +753,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return;
     }
     if (forcePriorityRetry) {
-      const safetyDelayMs = this.resolveContinuationSafetyDelayMs();
-      this.scheduleNextCheck(safetyDelayMs ?? this.getPriorityRetryDelayMs());
+      this.scheduleNextCheck(this.getPriorityRetryDelayMs());
       return;
     }
     this.scheduleNextCheck();

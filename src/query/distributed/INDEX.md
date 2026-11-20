@@ -8,7 +8,7 @@ documentClass: generated
 ## Files
 
 - [coordinator-merge-process.js](coordinator-merge-process.js) - CoordinatorMergeProcessPool: bounded child-process pool for COORDINATOR_EVALUATED merge plans (design... (importers: few)
-- [coordinator-merge-session.js](coordinator-merge-session.js) - CoordinatorMergeSession: per-statement in-memory SQLite merge owner (design coordinator-sqlite-merge S2.1, S2.7,... (importers: few)
+- [coordinator-merge-session.js](coordinator-merge-session.js) - CoordinatorMergeSession: per-statement in-memory SQLite merge owner (design coordinator-sqlite-merge S2.1, S2.7,... (importers: many)
 - [distributed-context-constants.js](distributed-context-constants.js) - Constants for distributed movement primitives. (importers: many)
 - [distributed-merge-engine.js](distributed-merge-engine.js) - DistributedMergeEngine: coordinator SQLite merge engine backed by CoordinatorMergeSession (design... (importers: few)
 - [distributed-query-plan-constants.js](distributed-query-plan-constants.js) - No leading comment; first export: DISTRIBUTED_EXECUTION_POLICY. (importers: many)

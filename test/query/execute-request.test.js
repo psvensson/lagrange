@@ -15,6 +15,9 @@ import {
   ADAPTER_ERROR_MSG,
 } from '../../src/query/sql-adapter-constants.js';
 import {ResultStream} from '../../src/query/result-stream.js';
+import {
+  CoordinatorMergeSession,
+} from '../../src/query/distributed/coordinator-merge-session.js';
 import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
 import {
   collectBoundedSqliteRows,
@@ -517,7 +520,7 @@ async (t) => {
     );
   }
 
-  // 6) Audit all 14 budget dimensions between SqlRequest and BudgetEnforcer / ResultStream
+  // 6) Audit all 15 budget dimensions between SqlRequest and BudgetEnforcer / ResultStream / CoordinatorMergeSession
   for (const field of Object.keys(DEFAULT_QUERY_BUDGET)) {
     const request = createSqlRequest({
       statement: 'SELECT id, v FROM users',
@@ -527,15 +530,21 @@ async (t) => {
     const ctx = engine.createRequestExecutionContext(request);
     t.equal(ctx._budgets, request.budgets, `${field}: the context reads the request budget`);
     t.equal(ctx._budgets[field], 77);
-    const enforcedLimits = [
-      ...Object.values(ctx.getBudgetEnforcer()._limits),
-      ctx._resultStream.maxRows,
-      ctx._resultStream.maxBytes,
-    ];
-    t.equal(
-      enforcedLimits.filter((limit) => limit === 77).length,
-      1,
-      `${field} reaches exactly one enforced limit`,
-    );
+    const mergeSession = new CoordinatorMergeSession({budget: ctx._budgets});
+    try {
+      const enforcedLimits = [
+        ...Object.values(ctx.getBudgetEnforcer()._limits),
+        ctx._resultStream.maxRows,
+        ctx._resultStream.maxBytes,
+        mergeSession.mergeInputMaxRows,
+      ];
+      t.equal(
+        enforcedLimits.filter((limit) => limit === 77).length,
+        1,
+        `${field} reaches exactly one enforced limit`,
+      );
+    } finally {
+      mergeSession.close();
+    }
   }
 });

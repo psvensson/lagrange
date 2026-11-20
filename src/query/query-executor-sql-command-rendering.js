@@ -1,3 +1,5 @@
+import {EXPR_TYPE, SQL_STORAGE_CLASS} from './parser-constants.js';
+import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
 import {
@@ -5,6 +7,7 @@ import {
   renderResultColumn,
   renderSelect,
 } from './sql-statement-renderer.js';
+import {encodeTypedParams} from './sql-value-codec.js';
 import {
   affectedRowsField,
   sumAffectedRowCounts,
@@ -17,6 +20,12 @@ import {pickRoutingDenialFields} from './query-execution-budget.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BIGINT = 'bigint';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const SQLITE_INT64_MIN = -9223372036854775808n;
+const SQLITE_INT64_MIN_TEXT = '-9223372036854775808';
+const SQLITE_TYPE_INTEGER = 'INTEGER';
 
 const {
   QUERY_AST_TYPE,
@@ -94,6 +103,78 @@ function buildDistributedMutationResult(
   };
 }
 
+function toStorageClassLiteralAst(val) {
+  encodeTypedParams([val]);
+  if (typeof val === LOCAL_STR_BIGINT || typeof val === LOCAL_STR_BOOLEAN) {
+    if (val === SQLITE_INT64_MIN) {
+      return {
+        type: PG_EXPR_TYPE.CAST,
+        expression: {
+          type: EXPR_TYPE.LITERAL,
+          value: SQLITE_INT64_MIN_TEXT,
+          sqlType: SQL_STORAGE_CLASS.TEXT,
+        },
+        targetType: SQLITE_TYPE_INTEGER,
+      };
+    }
+    return {
+      type: EXPR_TYPE.LITERAL,
+      value: val,
+      sqlType: SQL_STORAGE_CLASS.INTEGER,
+    };
+  }
+  return {
+    type: EXPR_TYPE.LITERAL,
+    value: val,
+    sqlType: SQL_STORAGE_CLASS.BLOB,
+  };
+}
+
+function bindWriteParametersInAst(node, inputParams, outParams, cursor) {
+  if (
+    !node ||
+    typeof node !== LOCAL_STR_OBJECT ||
+    node instanceof Uint8Array ||
+    node.type === EXPR_TYPE.LITERAL
+  ) {
+    return node;
+  }
+  if (Array.isArray(node)) {
+    return node.map((item) => bindWriteParametersInAst(item, inputParams, outParams, cursor));
+  }
+  if (node.type === EXPR_TYPE.PARAMETER) {
+    const idx = typeof node.index === LOCAL_STR_NUMBER ? node.index : cursor.next;
+    cursor.next = idx + 1;
+    if (idx >= 0 && idx < inputParams.length && inputParams[idx] !== undefined) {
+      const val = inputParams[idx];
+      if (
+        typeof val === LOCAL_STR_BIGINT ||
+        typeof val === LOCAL_STR_BOOLEAN ||
+        val instanceof Uint8Array
+      ) {
+        return toStorageClassLiteralAst(val);
+      }
+      outParams.push(val);
+    }
+    return node;
+  }
+  const cloned = {};
+  for (const [key, value] of Object.entries(node)) {
+    cloned[key] = value && typeof value === LOCAL_STR_OBJECT ?
+      bindWriteParametersInAst(value, inputParams, outParams, cursor) :
+      value;
+  }
+  return cloned;
+}
+
+function renderWriteExpression(executor, expr, inputParams, outParams, cursor) {
+  if (inputParams === null) {
+    return executor.buildExpressionSQL(expr);
+  }
+  const boundExpr = bindWriteParametersInAst(expr, inputParams, outParams, cursor);
+  return executor.buildExpressionSQL(boundExpr);
+}
+
 const queryExecutorSqlCommandMethods = {
   /**
    * Build SQL string from SELECT AST (the one renderer,
@@ -122,14 +203,6 @@ const queryExecutorSqlCommandMethods = {
    */
   buildExpressionSQL(expr) {
     return renderExpression(expr);
-  },
-
-  extractLiteralValue(expr) {
-    if (!expr) return null;
-    if (expr.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
-      return expr.value;
-    }
-    return expr.value !== undefined ? expr.value : null;
   },
 
   /**
@@ -270,7 +343,11 @@ const queryExecutorSqlCommandMethods = {
    * @private
    */
   buildInsertSQL(ast, params) {
-    const bindLiterals = Array.isArray(params) && params.length === 0;
+    const inputParams = Array.isArray(params) ? [...params] : null;
+    if (inputParams !== null) {
+      params.length = 0;
+    }
+    const cursor = {next: 0};
     let sql;
     if (ast.orReplace) {
       sql = `${SQL.INSERT_OR_REPLACE_INTO} `;
@@ -285,13 +362,9 @@ const queryExecutorSqlCommandMethods = {
     }
     sql += ` ${SQL.VALUES} `;
     const rows = ast.values.map((row) => {
-      const vals = row.map((value) => {
-        if (bindLiterals && value?.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
-          params.push(this.extractLiteralValue(value));
-          return '?';
-        }
-        return this.buildExpressionSQL(value);
-      });
+      const vals = row.map((value) =>
+        renderWriteExpression(this, value, inputParams, params, cursor),
+      );
       return `(${vals.join(', ')})`;
     });
     sql += rows.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14);
@@ -372,21 +445,27 @@ const queryExecutorSqlCommandMethods = {
    * @private
    */
   buildUpdateSQL(ast, params) {
-    const bindLiterals = Array.isArray(params) && params.length === 0;
+    const inputParams = Array.isArray(params) ? [...params] : null;
+    if (inputParams !== null) {
+      params.length = 0;
+    }
+    const cursor = {next: 0};
     let sql = `UPDATE ${renderSqliteIdentifier(ast.table)} SET `;
     const assignments = ast.assignments || ast.set || [];
     const sets = assignments.map((assignment) => {
       const colSql = renderSqliteIdentifier(assignment.column);
-      const val = assignment.value;
-      if (bindLiterals && val?.type === QUERY_EXECUTOR_LITERAL.STRING_LITERAL) {
-        params.push(this.extractLiteralValue(val));
-        return `${colSql} = ?`;
-      }
-      return `${colSql} = ${this.buildExpressionSQL(val)}`;
+      const valSql = renderWriteExpression(
+        this,
+        assignment.value,
+        inputParams,
+        params,
+        cursor,
+      );
+      return `${colSql} = ${valSql}`;
     });
     sql += sets.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14);
     if (ast.where) {
-      sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
+      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params, cursor)}`;
     }
     return this.appendReturning(sql, ast.returning);
   },
@@ -399,11 +478,12 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Delete result.
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
-    const sql = this.buildDeleteSQL(ast);
+    const targetParams = [...params];
+    const sql = this.buildDeleteSQL(ast, targetParams);
     return this.executeDistributedMutation(
       ast,
       partitionIds,
-      params,
+      targetParams,
       executionOptions,
       sql,
       QUERY_AST_TYPE.DELETE,
@@ -417,10 +497,15 @@ const queryExecutorSqlCommandMethods = {
    * @return {string} SQL string.
    * @private
    */
-  buildDeleteSQL(ast) {
+  buildDeleteSQL(ast, params) {
+    const inputParams = Array.isArray(params) ? [...params] : null;
+    if (inputParams !== null) {
+      params.length = 0;
+    }
+    const cursor = {next: 0};
     let sql = `DELETE FROM ${renderSqliteIdentifier(ast.table)}`;
     if (ast.where) {
-      sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
+      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params, cursor)}`;
     }
     return this.appendReturning(sql, ast.returning);
   },

@@ -194,7 +194,28 @@ function assignReplicaOperationRepositoryRowMethods(
         operation.workflowStep,
         operation.status,
       );
-      operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+      if (operation.type === OperationType.GROWTH_PROMOTE) {
+        operation.sourceReplicaId =
+          operation.sourceReplicaId ||
+          getOperationMetadataString(
+            stepsHistory,
+            OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
+          ) ||
+          null;
+        const promoteReplicaIdsFromHistory = getOperationMetadataStringArray(
+          stepsHistory,
+          ReplicaOperationField.PROMOTE_REPLICA_IDS,
+        );
+        const promoteReplicaIds = promoteReplicaIdsFromHistory.length > 0 ?
+          promoteReplicaIdsFromHistory :
+          [operation.replicaId, operation.sourceReplicaId].filter(Boolean);
+        if (promoteReplicaIds.length > 0) {
+          operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] =
+            promoteReplicaIds;
+        }
+      } else {
+        operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
+      }
       const replicaIds = getOperationMetadataStringArray(
         stepsHistory,
         OPERATION_METADATA_KEY.REPLICA_IDS,

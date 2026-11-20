@@ -179,6 +179,15 @@ test('constructs the front end used to rewrite are carried exactly', () => {
   assertRoundTrip('SELECT id FROM t WHERE id IN (SELECT k + 1 FROM u) ORDER BY id');
   assertRoundTrip('SELECT CURRENT_TIMESTAMP IS NOT NULL AS v FROM t WHERE id = 1');
   assertRoundTrip('SELECT 1 AS c0 LIMIT 0');
+  assertRoundTrip('SELECT id, x IS \'a\' AS c1, a IS NOT 2 AS c2 FROM t ORDER BY id');
+  assertRoundTrip('SELECT id, a IS DISTINCT FROM x AS c1, a IS NOT DISTINCT FROM 2 AS c2 FROM t ORDER BY id');
+  assertRoundTrip('SELECT id, a GLOB x AS c1, r NOT GLOB x AS c2 FROM t ORDER BY id');
+  assertRoundTrip('SELECT id, a ISNULL AS c1, a NOTNULL AS c2 FROM t ORDER BY id');
+  assertRoundTrip('SELECT SUM(DISTINCT a) AS s, AVG(DISTINCT r) AS av, TOTAL(DISTINCT a) AS tt FROM t');
+  assertRoundTrip('SELECT id, row_number() OVER (ORDER BY id) AS rn, SUM(a) OVER (ORDER BY id) AS rs FROM t ORDER BY id');
+  assertRoundTrip('SELECT GROUP_CONCAT(x, \',\' ORDER BY id) AS gc FROM t');
+  assertRoundTrip('SELECT x FROM t EXCEPT SELECT v FROM u ORDER BY 1');
+  assertRoundTrip('SELECT id FROM t INTERSECT SELECT k FROM u ORDER BY 1');
 });
 
 test('syntax the AST cannot carry is refused, typed, never dropped', () => {
@@ -189,7 +198,6 @@ test('syntax the AST cannot carry is refused, typed, never dropped', () => {
     'SELECT x FROM t NATURAL JOIN u',
     'SELECT x FROM t CROSS JOIN u',
     'SELECT x FROM main.t',
-    'SELECT x IS \'a\' FROM t',
     'SELECT x FROM t WHERE x = :named',
   ]) {
     assertTypedRefusal(sql);
@@ -197,9 +205,8 @@ test('syntax the AST cannot carry is refused, typed, never dropped', () => {
 });
 
 test('SQLite decides whether unparsed text is SQL: valid SQLite is a typed refusal', () => {
-  for (const sql of ['SELECT a GLOB x FROM t', 'SELECT a IS DISTINCT FROM x FROM t',
-    'SELECT SUM(DISTINCT a) FROM t', 'SELECT x FROM t EXCEPT SELECT v FROM u',
-    'SELECT row_number() OVER (ORDER BY id) FROM t']) {
+  for (const sql of ['SELECT a FROM t INDEXED BY idx', 'VALUES (1, 2)',
+    'EXPLAIN SELECT 1']) {
     assertTypedRefusal(sql);
   }
   for (const sql of ['SELEC 1', 'SELECT FROM WHERE', 'SELECT (1']) {

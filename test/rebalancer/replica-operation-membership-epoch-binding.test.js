@@ -142,6 +142,9 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   // The placement admission applier copies the statement's validated epoch
   // onto the admitted operation record, uninterpreted.
   'src/partition/partition-placement-admission-decision.js',
+  'src/partition/partition-placement-admission.js',
+  'src/rebalancer/rebalance-coordinator-operation-creation-support.js',
+  'src/rebalancer/replica-placement-owner.js',
 ]);
 
 function initializeEnvironment() {

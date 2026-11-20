@@ -40,6 +40,8 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const UNDECLARED_PROMOTION_TARGET_REPLICA_COUNT = 0;
+const LOCAL_STR_REPLACE = 'REPLACE';
+const LOCAL_STR_GROWTH_PROMOTE_OWNED = 'growth_promote_owned';
 
 // The two identities one in-flight add-like row states, read once per row so
 // the traversal below asks each question a single time.
@@ -451,11 +453,21 @@ class PartitionServiceLearnerPromotionMethods {
       maxAllowedVotersAfterPromotion:
         decision.maxAllowedVotersAfterPromotion,
     };
-    if (decision.refused) {
+    const isPlacementOwnedOddVoterGrowth =
+      this.learnerFirstAdmission === true ||
+      (this.rebalanceCoordinator?.placementAdmissionEnabled === true &&
+        (decision.allowances?.singleVoterExpansion === true ||
+          (observation.activeVoterCount > 0 &&
+            observation.activeVoterCount % 2 === 1 &&
+            observation.activeVoterCount < observation.targetReplicaCount &&
+            observation.ownedAddLikeOperationRow?.type !== LOCAL_STR_REPLACE)));
+    if (decision.refused || isPlacementOwnedOddVoterGrowth) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        reason: decision.refusalReason,
+        reason: decision.refused ?
+          decision.refusalReason :
+          LOCAL_STR_GROWTH_PROMOTE_OWNED,
         ...countFields,
         countCheckInputs:
           this.buildLearnerPromotionCountCheckPayload(observation, decision),

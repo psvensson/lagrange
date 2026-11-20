@@ -706,13 +706,14 @@ function readCanonicalCoordinatorDecision(participantId, lookupCoordinatorRecord
     decisionText: rec?.decision_text,
     decisionDigest: rec?.decision_digest,
   });
-  const namesParticipant = Boolean(
-    record && record.participants.some((entry) => entry[ZERO] === participantId),
-  );
-  return namesParticipant ? Object.freeze({
+  const participantEntry = record?.participants.find(
+    (entry) => entry[ZERO] === participantId,
+  ) ?? null;
+  return participantEntry ? Object.freeze({
     participantId,
     transactionId: txId,
     decision: record.decision,
+    preparedDigest: participantEntry[ONE_ROW],
     decisionText: record.decisionText,
     decisionDigest: record.decisionDigest,
   }) : null;

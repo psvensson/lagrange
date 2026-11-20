@@ -1,6 +1,4 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {isTrafficReady} from '../bootstrap/traffic-readiness-utils.js';
-import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {LEDGER_PARTITION_ID} from './partition-placement-admission-decision.js';
 
 const {
@@ -11,78 +9,6 @@ const {
   UnifiedRebalancer,
   assertCritical,
 } = PARTITION_SERVICE_SHARED;
-
-const TRAFFIC_READY_STAGGER_BASE_MS = 12000;
-const TRAFFIC_READY_STAGGER_SLOTS = 39;
-const TRAFFIC_READY_STAGGER_STEP_MS = 250;
-const ENTITY_STAGGER_HASH_MULTIPLIER = 31;
-
-function computeEntityStaggerBucket(entityId, slotCount) {
-  const key = entityId ? String(entityId) : '';
-  let hash = 0;
-  for (let index = 0; index < key.length; index += 1) {
-    hash = (hash * ENTITY_STAGGER_HASH_MULTIPLIER + key.charCodeAt(index)) >>> 0;
-  }
-  return hash % slotCount;
-}
-
-function isPartitionTrafficReady(service) {
-  if (!service.metadataPublicationReadinessState) {
-    return true;
-  }
-  return isTrafficReady(service.metadataPublicationReadinessState);
-}
-
-function isFormationDependencyTrafficReadyWake(rebalancer, options) {
-  return (
-    options.trafficReady === true &&
-    !options.wasTrafficReady &&
-    rebalancer.isFormationLivenessDependencyPartition?.() === true &&
-    rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true
-  );
-}
-
-function shouldStaggerTrafficReadyWake(rebalancer) {
-  if (rebalancer.isFormationLivenessDependencyPartition?.() === true) {
-    return false;
-  }
-  if (rebalancer.isControlPlanePriorityPartition?.() === true) {
-    return false;
-  }
-  return (
-    rebalancer.isPartitionBelowDeclaredDistinctHostSpread?.() === true &&
-    Boolean(rebalancer.scheduleNextCheck)
-  );
-}
-
-function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
-  const backgroundEdge =
-    options.backgroundReady === true && !options.wasBackgroundReady;
-  const formationEdge =
-    isFormationDependencyTrafficReadyWake(rebalancer, options);
-  if (
-    !options.readinessTransitionOnly ||
-    rebalancer.isLeader !== true ||
-    (!backgroundEdge && !formationEdge)
-  ) {
-    return;
-  }
-  rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
-  rebalancer.lastCheckAtMs = 0;
-  rebalancer.lastStateChangeTime = 0;
-  if (shouldStaggerTrafficReadyWake(rebalancer)) {
-    rebalancer.syncOperationContinuationWake?.(null, 0);
-    const bucket = computeEntityStaggerBucket(
-      rebalancer.entityId,
-      TRAFFIC_READY_STAGGER_SLOTS,
-    );
-    const delayMs =
-      TRAFFIC_READY_STAGGER_BASE_MS + bucket * TRAFFIC_READY_STAGGER_STEP_MS;
-    rebalancer.scheduleNextCheck(delayMs);
-    return;
-  }
-  rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
-}
 
 class PartitionServiceRebalancerMethods {
   /**
@@ -218,11 +144,6 @@ class PartitionServiceRebalancerMethods {
   maybeInitializeRebalancer(options = {}) {
     const readinessTransitionOnly = options.readinessTransitionOnly === true;
     const backgroundReady = this.isBackgroundWorkReady();
-    const wasBackgroundReady = this._lastBackgroundWorkReady === true;
-    this._lastBackgroundWorkReady = backgroundReady;
-    const trafficReady = isPartitionTrafficReady(this);
-    const wasTrafficReady = this._lastTrafficReady === true;
-    this._lastTrafficReady = trafficReady;
     this.ensureReplicaPlacementOwnerAttached();
     this.driveRebalancerLeadershipSink();
     if (this.rebalancer) {
@@ -255,13 +176,6 @@ class PartitionServiceRebalancerMethods {
         this.rebalancer.setLeader(desiredLeadership);
       }
       this.driveRebalancerLeadershipSink();
-      maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
-        readinessTransitionOnly,
-        backgroundReady,
-        wasBackgroundReady,
-        trafficReady,
-        wasTrafficReady,
-      });
       return;
     }
     if (this.rebalanceCoordinator?.placementAdmissionEnabled === true) {
@@ -275,13 +189,6 @@ class PartitionServiceRebalancerMethods {
       return;
     }
     this.initializeRebalancer(bundle);
-    maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
-      readinessTransitionOnly,
-      backgroundReady,
-      wasBackgroundReady,
-      trafficReady,
-      wasTrafficReady,
-    });
   }
   /**
    * Initialize rebalancer components with required dependencies.
@@ -355,8 +262,6 @@ class PartitionServiceRebalancerMethods {
     this.rebalancer.initialize();
     this.rebalancer.setLeader(this.resolveRebalancerLeadership());
     this.driveRebalancerLeadershipSink();
-    this._lastBackgroundWorkReady = this.isBackgroundWorkReady();
-    this._lastTrafficReady = isPartitionTrafficReady(this);
   }
 }
 

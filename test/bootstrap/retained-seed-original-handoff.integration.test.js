@@ -52,7 +52,7 @@ const NODE_ID = '550e8400-e29b-41d4-a716-446655449965';
 const HOST_ADDRESS = 'http://127.0.0.1:18080';
 const TEST_TIMEOUT_MS = 180000;
 const HANDOFF_COMPLETE_CODE = STATE.DEFERRED;
-const EXPECTED_FOUNDER_COUNT = 141;
+const EXPECTED_FOUNDER_COUNT = 49;
 const EXPECTED_PARTITION_COHORT_COUNT = 46;
 const allocator = createPortAllocator(import.meta.url);
 

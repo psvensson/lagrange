@@ -103,6 +103,7 @@ export function parseValuesFromSQL(valuesStr) {
       char === PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE)) {
       inQuote = true;
       quoteChar = char;
+      current += char;
     } else if (inQuote && char === quoteChar) {
       // Check for escaped quote
       if (i + 1 < valuesStr.length &&
@@ -112,6 +113,7 @@ export function parseValuesFromSQL(valuesStr) {
       } else {
         inQuote = false;
         quoteChar = null;
+        current += char;
       }
     } else if (!inQuote && char === PARTITION_SERVICE_SQL_FRAGMENT.COMMA) {
       values.push(parseValue(current.trim()));

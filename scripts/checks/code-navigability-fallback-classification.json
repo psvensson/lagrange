@@ -37520,6 +37520,62 @@
       "classifiedBy": "agent:repository-legacy-fallback-closure",
       "verifiedBy": "verifier:contract-custody",
       "at": "2026-11-10T08:00:00.000Z"
+    },
+    {
+      "row": "two_source_fallback_reads",
+      "file": "src/query/distributed/join-pushdown-plan.js",
+      "hash": "c4067492bce2fa1ed681d37722970fdd403a29c15484414ac86773e23f4f34b7",
+      "occurrence": 0,
+      "owner": "src/query/distributed/join-pushdown-plan.js",
+      "classification": "named-state-at-owner",
+      "reason": "Owner-local state-dependent source read in src/query/distributed/join-pushdown-plan.js",
+      "censusClass": "primary-only",
+      "coverageWitnessStatus": "witnessed-primary-path-only",
+      "classifiedBy": "agent:repository-legacy-fallback-closure",
+      "verifiedBy": "verifier:contract-custody",
+      "at": "2026-11-10T08:00:00.000Z"
+    },
+    {
+      "row": "typeof_dual_paths",
+      "file": "src/query/query-executor-partition-request-builders.js",
+      "hash": "8a263fb476d493bc59cd6b5ef8ae0baaff1cbab1333d0e648ecdcc2f0c478b1b",
+      "occurrence": 0,
+      "owner": "src/query/query-executor-partition-request-builders.js",
+      "classification": "documented-default",
+      "reason": "Owner-local default initialization when type check fails in src/query/query-executor-partition-request-builders.js",
+      "censusClass": "both",
+      "coverageWitnessStatus": "witnessed-dual-execution",
+      "classifiedBy": "agent:repository-legacy-fallback-closure",
+      "verifiedBy": "verifier:contract-custody",
+      "at": "2026-11-10T08:00:00.000Z"
+    },
+    {
+      "row": "typeof_dual_paths",
+      "file": "src/query/query-executor-partition-request-builders.js",
+      "hash": "269930af2b43a0771897efba089e03f04c9bb060fa38e4d2a7aea44d5fc32c27",
+      "occurrence": 0,
+      "owner": "src/query/query-executor-partition-request-builders.js",
+      "classification": "documented-default",
+      "reason": "Owner-local default initialization when type check fails in src/query/query-executor-partition-request-builders.js",
+      "censusClass": "both",
+      "coverageWitnessStatus": "witnessed-dual-execution",
+      "classifiedBy": "agent:repository-legacy-fallback-closure",
+      "verifiedBy": "verifier:contract-custody",
+      "at": "2026-11-10T08:00:00.000Z"
+    },
+    {
+      "row": "catch_returns_default",
+      "file": "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+      "hash": "885b7d9d23c97cf398d4ccce0ecaa765ba01c5cc2714ba453627a0832193d0d1",
+      "occurrence": 0,
+      "owner": "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+      "classification": "dormant-error-recovery-branch",
+      "reason": "Dormant error recovery returning inert default or null on exception in src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+      "censusClass": "primary-only",
+      "coverageWitnessStatus": "witnessed-primary-path-only",
+      "classifiedBy": "agent:repository-legacy-fallback-closure",
+      "verifiedBy": "verifier:contract-custody",
+      "at": "2026-11-10T08:00:00.000Z"
     }
   ]
 }

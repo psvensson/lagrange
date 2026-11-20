@@ -340,7 +340,10 @@ describe('deployment Binding system-table owner', () => {
       INITIAL_PARTITION_IDS[TABLES.SERVICE_BINDINGS],
       'service_bindings-p1',
     );
-    assert.equal(INITIAL_REPLICA_IDS[TABLES.SERVICE_BINDINGS].length, 3);
+    assert.equal(INITIAL_REPLICA_IDS[TABLES.SERVICE_BINDINGS].length, 1);
+    assert.deepEqual(INITIAL_REPLICA_IDS[TABLES.SERVICE_BINDINGS], [
+      'service_bindings-p1-r1',
+    ]);
     assert.ok(CACHE_HYDRATION_TABLES.includes(TABLES.SERVICE_BINDINGS));
     assert.match(generateCreateTableSQL(schema), /CREATE TABLE IF NOT EXISTS/u);
     assert.deepEqual(

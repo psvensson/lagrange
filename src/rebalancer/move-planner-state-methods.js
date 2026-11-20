@@ -1,8 +1,5 @@
 import {STATE_ABSENT, readLowerStateField} from '../utils/state-field-read.js';
 import {requirePolicyTargetReplicaCount} from '../policy/table-policy-resolution.js';
-import {
-  buildPhaseBGlobalSystemTransitionNodeSet,
-} from './system-spread-transition-policy.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EMPTY_REPLICA_LIST = Object.freeze([]);
@@ -28,19 +25,11 @@ function resolvePlannerInventoryObservationState(values, available = true) {
 
 function buildPlannerReplicaInventory(options) {
   const {
-    builder,
-    entityType,
-    entityId,
-    currentReplicas,
-    operations,
-    operationObservationAvailable,
-    captureBefore,
-    captureAfter,
+    builder, entityType, entityId, currentReplicas, operations,
+    operationObservationAvailable, captureBefore, captureAfter,
   } = options;
   return builder({
-    entityType,
-    entityId,
-    capturedAtMs: captureAfter.capturedAtMs,
+    entityType, entityId, capturedAtMs: captureAfter.capturedAtMs,
     committedRowsObservation: {
       state: resolvePlannerInventoryObservationState(currentReplicas),
       rows: currentReplicas,
@@ -53,10 +42,7 @@ function buildPlannerReplicaInventory(options) {
       observedAtMs: captureBefore.capturedAtMs,
     },
     inFlightOperationObservation: {
-      state: resolvePlannerInventoryObservationState(
-        operations,
-        operationObservationAvailable,
-      ),
+      state: resolvePlannerInventoryObservationState(operations, operationObservationAvailable),
       operations,
       revisionBefore: captureBefore.inFlightOperations.revision,
       revisionAfter: captureAfter.inFlightOperations.revision,
@@ -87,6 +73,24 @@ function buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP) {
     }
   }
   return {nodesWithEntityAddTransitional, replicasInRemoving};
+}
+
+function buildGlobalSystemAddNodeSet(options) {
+  const targetNodeIds = new Set();
+  if (!options.systemPartition) {
+    return targetNodeIds;
+  }
+  for (const operation of options.operations) {
+    if (!options.isAddPending(operation)) {
+      continue;
+    }
+    const partitionId = operation?.partition_id || null;
+    if (!options.isSystemPartition({partitionId})) {
+      continue;
+    }
+    targetNodeIds.add(operation?.target_node_id || null);
+  }
+  return targetNodeIds;
 }
 
 function createMovePlannerStateMethods(deps = {}) {
@@ -447,21 +451,13 @@ function createMovePlannerStateMethods(deps = {}) {
       });
       const {nodesWithEntityAddTransitional, replicasInRemoving} =
         buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
-      const entityClassification = this.classifyPlannerEntityPartition();
       const nodesWithGlobalSystemAddTransitional =
-        buildPhaseBGlobalSystemTransitionNodeSet({
-          systemTableCache: this.moveStateProvider?.systemTableCache || null,
-          controlPlaneReadinessService:
-            this.moveStateProvider?.controlPlaneReadinessService || null,
-          entityId: this.entityId,
-          isSystemPartition: entityClassification.systemTable,
-          isPriorityPartition: entityClassification.priorityControlPlane,
-          isFormationDependencyPartition:
-            entityClassification.formationLivenessDependency,
-          currentReplicas,
-          resolveAvailableNodes: () => this.moveStateProvider.getAvailableNodes(),
-          globalInFlightOperations,
-          isAddActiveOperation: isReplicaInventoryAddTransitionalOperation,
+        buildGlobalSystemAddNodeSet({
+          systemPartition: this.isSystemPartitionEntity(),
+          operations: globalInFlightOperations,
+          isAddPending: isReplicaInventoryAddTransitionalOperation,
+          isSystemPartition: (options) =>
+            classifySystemPartition(options).systemTable,
         });
 
       return {

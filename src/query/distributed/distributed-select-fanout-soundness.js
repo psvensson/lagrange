@@ -727,14 +727,35 @@ function evaluateStatementEligibility(ast, schema, isAggregateQuery, aggregates)
  *   aggregates: Object[]
  * }}
  */
+function nodeHasWindowOrAggregateOrder(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(nodeHasWindowOrAggregateOrder);
+  if (
+    (node.type === PG_EXPR_TYPE.FUNCTION_CALL ||
+      node.type === FUNCTION_EXPR_TYPE ||
+      node.type === EXPR_TYPE.AGGREGATE) &&
+    (Boolean(node.over) || (Array.isArray(node.orderBy) && node.orderBy.length > 0))
+  ) {
+    return true;
+  }
+  return Object.values(node).some(nodeHasWindowOrAggregateOrder);
+}
+
 function classifySingleTableStatement(ast, schema = null) {
   const hasNested = hasNestedOrCompoundSelect(ast);
   const hasTime = isPerStatementTimeExpression(ast);
+  const hasWindowOrOrder = [
+    ast?.columns,
+    ast?.where,
+    ast?.groupBy,
+    ast?.having,
+    ast?.orderBy,
+  ].some(nodeHasWindowOrAggregateOrder);
   const aggregates = collectSelectAggregates(ast);
   const hasGroupBy = Array.isArray(ast?.groupBy) && ast.groupBy.length > 0;
   const isAggregateQuery = aggregates.length > 0 || hasGroupBy || Boolean(ast?.having);
 
-  const eligibility = hasNested || hasTime ?
+  const eligibility = hasNested || hasTime || hasWindowOrOrder ?
     {
       orderIndependent: false,
       eligibleForPartialAggregate: false,

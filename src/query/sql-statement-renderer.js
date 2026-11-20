@@ -78,7 +78,8 @@ const SQL = Object.freeze({
   CLOSE: ')',
 });
 
-const NULL_TEST_OPERATORS = new Set(['IS NULL', 'IS NOT NULL']);
+const NULL_TEST_OPERATORS = new Set(['IS NULL', 'IS NOT NULL', 'ISNULL', 'NOTNULL']);
+const OVER_ORDER_BY_PREFIX = ' OVER (ORDER BY ';
 const INTEGER_LEXEME = /^[+-]?\d+$/u;
 const NUMERIC_LEXEME = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
 const RENDER_ERROR_MSG = Object.freeze({
@@ -204,9 +205,23 @@ function renderLike(expr) {
   return parenthesize(lhs + SQL.SPACE + operator + pattern + escape);
 }
 
+function renderOrderByTerms(orderBy) {
+  return orderBy.map((term) =>
+    renderExpression(term.expression) + SQL.SPACE + term.direction).join(SQL.COMMA);
+}
+
+function renderOverClause(over) {
+  if (!over || !Array.isArray(over.orderBy) || over.orderBy.length === 0) return '';
+  return OVER_ORDER_BY_PREFIX + renderOrderByTerms(over.orderBy) + SQL.CLOSE;
+}
+
 function renderAggregate(expr) {
   const distinct = expr.distinct ? SQL.DISTINCT : '';
-  return expr.function + parenthesize(distinct + renderExpression(expr.argument));
+  const orderBy = Array.isArray(expr.orderBy) && expr.orderBy.length > 0 ?
+    SQL.ORDER_BY + renderOrderByTerms(expr.orderBy) :
+    '';
+  return expr.function + parenthesize(distinct + renderExpression(expr.argument) + orderBy) +
+    renderOverClause(expr.over);
 }
 
 function renderCase(expr) {
@@ -224,7 +239,11 @@ function renderCase(expr) {
 // written without an argument list, as SQLite spells it.
 function renderFunctionCall(expr) {
   if (expr.keyword === true) return expr.name;
-  return expr.name + parenthesize(renderList(expr.args || []));
+  const orderBy = Array.isArray(expr.orderBy) && expr.orderBy.length > 0 ?
+    SQL.ORDER_BY + renderOrderByTerms(expr.orderBy) :
+    '';
+  return expr.name + parenthesize(renderList(expr.args || []) + orderBy) +
+    renderOverClause(expr.over);
 }
 
 // Node types outside the core expression set: CASE, CAST, subqueries and

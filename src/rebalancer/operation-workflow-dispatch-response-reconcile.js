@@ -1,6 +1,9 @@
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
-import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   captureReplaceOwnerLevel,
@@ -25,33 +28,24 @@ import {
   isRetainedCreateDeliveryResolution,
   resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
-} from
-  './operation-workflow-ambiguous-create-delivery.js';
+} from './operation-workflow-ambiguous-create-delivery.js';
+import {
+  applyGrowthPromoteRequestFields,
+  isHeldGrowthPromoteOperation,
+  reconcileGrowthPromoteDispatchResponse,
+} from './operation-workflow-growth-promote.js';
 const {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  DISPATCH_RETRY_DELAY_MS,
-  FAILURE_LOG_LEVEL,
-  OPERATION_OWNER_ACTION,
-  OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
-  OperationType,
-  REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_LOG_MSG,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
+  FAILURE_LOG_LEVEL, OPERATION_OWNER_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
+  OPERATION_WORKFLOW_OWNER_REASON, OperationType, REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_ERROR_MSG, REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
-  ReplicaStatus,
-  SYSTEM_TABLE_NAME,
-  TRANSPORT_ERROR_MSG,
-  WORKFLOW_STEP,
-  buildHandoffDeferralTransportDiagnostics,
-  classifySystemPartition,
-  isBootstrapTopologyDispatchDeferred,
-  isDeliveredTransportDeliveryOutcome,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE, ReplicaOperationField,
+  ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus,
+  SYSTEM_TABLE_NAME, TRANSPORT_ERROR_MSG, WORKFLOW_STEP,
+  buildHandoffDeferralTransportDiagnostics, classifySystemPartition,
+  isBootstrapTopologyDispatchDeferred, isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_OPERATION_DISPATCH_WAIT = Object.freeze({
@@ -69,16 +63,12 @@ const DISPATCH_SCOPE_FIELDS = Object.freeze(['partitionId', 'operationId']);
  * @param {Object} owner
  * @param {Object} operation
  * @param {number} boundMs
- * @param {number} startedAtMs - Date.now() when the deadline was armed (the
- *   deadline timer is the platform setTimeout).
+ * @param {number} startedAtMs - Date.now() when the deadline was armed.
  * @return {void}
  */
-function reportReplicaOperationDispatchSpent(
-  owner, operation, boundMs, startedAtMs) {
+function reportReplicaOperationDispatchSpent(owner, operation, boundMs, startedAtMs) {
   reportWaitBoundSpent(owner.logger, {
-    ...REPLICA_OPERATION_DISPATCH_WAIT,
-    boundMs,
-    elapsedMs: Date.now() - startedAtMs,
+    ...REPLICA_OPERATION_DISPATCH_WAIT, boundMs, elapsedMs: Date.now() - startedAtMs,
     lastObserved: () => pickDispatchFields(operation, DISPATCH_OBSERVED_FIELDS),
     scope: () => ({
       nodeId: owner.nodeId ?? null,
@@ -89,9 +79,7 @@ function reportReplicaOperationDispatchSpent(
 
 function pickDispatchFields(operation, fieldNames) {
   const picked = {};
-  for (const fieldName of fieldNames) {
-    picked[fieldName] = operation?.[fieldName] ?? null;
-  }
+  for (const fieldName of fieldNames) picked[fieldName] = operation?.[fieldName] ?? null;
   return picked;
 }
 
@@ -99,21 +87,11 @@ function pickDispatchFields(operation, fieldNames) {
 // on overflow only means one extra info line per live operation step.
 const SEND_OPERATION_LOG_KEY_CAP = 2048;
 const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
-  'operationId',
-  'type',
-  'entityType',
-  'entityId',
-  'partitionId',
-  'replicaId',
-  'targetNodeId',
+  'operationId', 'type', 'entityType', 'entityId', 'partitionId', 'replicaId', 'targetNodeId',
 ]);
-const CREATE_DISPATCH_AUTHORITY_ACTION = Object.freeze({
-  DISPATCH: 'DISPATCH',
-  REFUSE: 'REFUSE',
-});
+const CREATE_DISPATCH_AUTHORITY_ACTION = Object.freeze({DISPATCH: 'DISPATCH', REFUSE: 'REFUSE'});
 const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
-  action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE,
-  operation: null,
+  action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE, operation: null,
 });
 
 /**
@@ -236,8 +214,7 @@ async function refreshCreateDispatchAuthority(
   if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase)) {
     return allowCreateDispatchAuthority(operation);
   }
-  if (operation.workflowStep === WORKFLOW_STEP.PENDING ||
-      operation.workflowStep === WORKFLOW_STEP.SENDING) {
+  if (DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
     return allowCreateDispatchAuthority(operation);
   }
   const observation =
@@ -455,7 +432,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         operation?.operationId,
       );
     }
-    if (isBootstrapTopologyDispatchDeferred(operation)) {
+    if (isBootstrapTopologyDispatchDeferred(operation) || isHeldGrowthPromoteOperation(operation)) {
       return this.buildSkippedOperationResult(
         OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
         operation?.operationId,
@@ -470,7 +447,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       operation.type === OperationType.REMOVE &&
       REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(operation.workflowStep);
     const createRearmDispatchPhase =
-      this.isCreateRearmDispatchPhase(operation);
+      this.isCreateRearmDispatchPhase(operation) ||
+      (operation.type === OperationType.GROWTH_PROMOTE &&
+        !DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep));
     const replaceSourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
     const dispatchOperationId = operation.operationId;
@@ -648,6 +627,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     let requestReason = null;
     if (operation.type === OperationType.REMOVE) {
       messageType = ReplicaOperationMessageType.REMOVE_REPLICA;
+    } else if (operation.type === OperationType.GROWTH_PROMOTE) {
+      messageType = ReplicaOperationMessageType.PROPOSE_GROWTH_PROMOTE;
+      dispatchNodeId = operation.targetNodeId;
     } else if (operation.type === OperationType.REPLACE) {
       if (replaceRemoveDispatchPhase) {
         dispatchNodeId = operation.sourceNodeId;
@@ -685,6 +667,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (operation.type === OperationType.GROWTH_PROMOTE) {
+      applyGrowthPromoteRequestFields(request, operation);
+    }
     if (messageType === ReplicaOperationMessageType.CREATE_REPLICA &&
         (operation.type === OperationType.ADD ||
           operation.type === OperationType.REPLACE)) {
@@ -892,6 +877,16 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
   },
   async _handleDispatchResponse(operation, response, replaceRemovePhase) {
     this.clearDispatchRetry(operation?.operationId);
+    if (operation?.type === OperationType.GROWTH_PROMOTE) {
+      const growthReconciled = await reconcileGrowthPromoteDispatchResponse(
+        this,
+        operation,
+        response,
+      );
+      if (growthReconciled) {
+        return growthReconciled;
+      }
+    }
     if (
       response.status === ReplicaOperationResponseStatus.INITIATED ||
       response.status === ReplicaOperationResponseStatus.IN_PROGRESS

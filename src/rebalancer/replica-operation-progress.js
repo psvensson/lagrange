@@ -57,12 +57,14 @@ const OperationType = {
   ADD: 'ADD',
   REMOVE: 'REMOVE',
   REPLACE: 'REPLACE',
+  GROWTH_PROMOTE: 'GROWTH_PROMOTE',
 };
 
 const COORDINATOR_OWNED_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
   OperationType.REMOVE,
   OperationType.REPLACE,
+  OperationType.GROWTH_PROMOTE,
 ]);
 
 const COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE =
@@ -143,6 +145,20 @@ const REPLACE_WORKFLOW_STEPS = [
   WORKFLOW_STEP.REMOVED,
 ];
 
+/**
+ * Workflow steps for GROWTH_PROMOTE operations.
+ * Progress in order: PENDING -> SENDING -> CREATING -> SYNCING -> ACTIVE
+ *
+ * @type {string[]}
+ */
+const GROWTH_PROMOTE_WORKFLOW_STEPS = [
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.ACTIVE,
+];
+
 const OPERATION_TERMINAL_STATUSES_BY_TYPE = Object.freeze(
   new Map([
     [
@@ -163,6 +179,13 @@ const OPERATION_TERMINAL_STATUSES_BY_TYPE = Object.freeze(
       OperationType.REPLACE,
       Object.freeze(new Set([
         ReplicaStatus.REMOVED,
+        ReplicaStatus.FAILED,
+      ])),
+    ],
+    [
+      OperationType.GROWTH_PROMOTE,
+      Object.freeze(new Set([
+        ReplicaStatus.ACTIVE,
         ReplicaStatus.FAILED,
       ])),
     ],
@@ -189,6 +212,13 @@ const OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE = Object.freeze(
       OperationType.REPLACE,
       Object.freeze(new Set([
         WORKFLOW_STEP.REMOVED,
+        WORKFLOW_STEP.FAILED,
+      ])),
+    ],
+    [
+      OperationType.GROWTH_PROMOTE,
+      Object.freeze(new Set([
+        WORKFLOW_STEP.ACTIVE,
         WORKFLOW_STEP.FAILED,
       ])),
     ],
@@ -250,65 +280,28 @@ const MONOTONIC_VISIBILITY_WORKFLOW_STEP_ORDER = Object.freeze([
   WORKFLOW_STEP.FAILED,
 ]);
 
-const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
-  new Map([
-    [
-      OperationType.ADD,
-      Object.freeze([
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
-          [WORKFLOW_STEP.ACTIVE],
-          [ReplicaStatus.ACTIVE],
-        ),
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.ACCEPTED,
-          TARGET_BUILD_WORKFLOW_STEPS,
-          TARGET_BUILD_STATUSES,
-        ),
-      ]),
-    ],
-    [
-      OperationType.REMOVE,
-      Object.freeze([
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
-          [WORKFLOW_STEP.REMOVED],
-          [ReplicaStatus.REMOVED],
-        ),
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING,
-          SOURCE_RETIRING_WORKFLOW_STEPS,
-          SOURCE_RETIRING_STATUSES,
-        ),
-      ]),
-    ],
-    [
-      OperationType.REPLACE,
-      Object.freeze([
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
-          [WORKFLOW_STEP.REMOVED],
-          [ReplicaStatus.REMOVED],
-        ),
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING,
-          [WORKFLOW_STEP.STOPPING],
-          [ReplicaStatus.REMOVING],
-        ),
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY,
-          [WORKFLOW_STEP.ACTIVE],
-          [ReplicaStatus.ACTIVE],
-        ),
-        buildReplicaOperationSemanticPhaseRule(
-          REPLICA_OPERATION_SEMANTIC_PHASE.ACCEPTED,
-          TARGET_BUILD_WORKFLOW_STEPS,
-          TARGET_BUILD_STATUSES,
-        ),
-      ]),
-    ],
-  ]),
-);
+const phaseRule = buildReplicaOperationSemanticPhaseRule;
+const PHASE = REPLICA_OPERATION_SEMANTIC_PHASE;
+const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(new Map([
+  [OperationType.ADD, Object.freeze([
+    phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.ACTIVE], [ReplicaStatus.ACTIVE]),
+    phaseRule(PHASE.ACCEPTED, TARGET_BUILD_WORKFLOW_STEPS, TARGET_BUILD_STATUSES),
+  ])],
+  [OperationType.REMOVE, Object.freeze([
+    phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.REMOVED], [ReplicaStatus.REMOVED]),
+    phaseRule(PHASE.SOURCE_RETIRING, SOURCE_RETIRING_WORKFLOW_STEPS, SOURCE_RETIRING_STATUSES),
+  ])],
+  [OperationType.REPLACE, Object.freeze([
+    phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.REMOVED], [ReplicaStatus.REMOVED]),
+    phaseRule(PHASE.SOURCE_RETIRING, [WORKFLOW_STEP.STOPPING], [ReplicaStatus.REMOVING]),
+    phaseRule(PHASE.TARGET_READY, [WORKFLOW_STEP.ACTIVE], [ReplicaStatus.ACTIVE]),
+    phaseRule(PHASE.ACCEPTED, TARGET_BUILD_WORKFLOW_STEPS, TARGET_BUILD_STATUSES),
+  ])],
+  [OperationType.GROWTH_PROMOTE, Object.freeze([
+    phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.ACTIVE], [ReplicaStatus.ACTIVE]),
+    phaseRule(PHASE.ACCEPTED, TARGET_BUILD_WORKFLOW_STEPS, TARGET_BUILD_STATUSES),
+  ])],
+]));
 
 /**
  * Metadata keys stored in operation stepsHistory entries.
@@ -317,6 +310,7 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
  */
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
+  PROMOTE_REPLICA_IDS: 'promoteReplicaIds',
   READINESS_SNAPSHOT: 'readinessSnapshot',
   REPLICA_IDS: 'replicaIds',
   PEER_ADDRESSES: 'peerAddresses',
@@ -389,6 +383,9 @@ function getWorkflowSteps(operationType) {
   }
   if (operationType === OperationType.REPLACE) {
     return [...REPLACE_WORKFLOW_STEPS];
+  }
+  if (operationType === OperationType.GROWTH_PROMOTE) {
+    return [...GROWTH_PROMOTE_WORKFLOW_STEPS];
   }
   return [];
 }
@@ -780,6 +777,7 @@ export {
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
   REPLACE_WORKFLOW_STEPS,
+  GROWTH_PROMOTE_WORKFLOW_STEPS,
   getWorkflowSteps,
   isValidWorkflowStep,
   getNextWorkflowStep,

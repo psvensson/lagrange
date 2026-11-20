@@ -14,25 +14,13 @@ import {
   REBALANCE_PLANNING_GATE,
 } from './rebalancer-planning-gate-constants.js';
 import {
-  isBackgroundPrioritySpreadReleaseActive,
-  observeActiveBackgroundPrioritySpreadReleaseBlocked,
-  observeActiveBackgroundPrioritySpreadOperationDrain,
-  observeBackgroundPrioritySpreadBlocked,
-  registerBackgroundPrioritySpreadReleaseWake,
-  resolveBackgroundPrioritySpreadStableRelease,
-} from './background-priority-spread-release-tracker.js';
-import {
   readExpectedReplicaCount,
 } from '../control-plane/membership-publication-priority-partition-canonical-data.js';
-import {
-  isReplicasBelowDeclaredDistinctHostSpread,
-} from './system-spread-transition-policy.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   EntityType,
   REBALANCER_LOG_MSG,
-  RECONCILE_REASON,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
@@ -132,26 +120,6 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   /**
-   * Register this parked entity's event-driven wake with the shared
-   * release tracker before deferring on the ordinary-work spread fence.
-   * The wake fires once, when the tracker declares the stable release,
-   * and re-enqueues this entity through the owner reconcile queue; the
-   * deferred decision's scheduled timer stays armed as the fallback.
-   * @return {boolean} whether the wake was registered
-   * @private
-   */
-  registerBackgroundPrioritySpreadStableReleaseWake() {
-    return registerBackgroundPrioritySpreadReleaseWake({
-      readinessOwner: this.controlPlaneReadinessService,
-      wakeKey: this.entityId,
-      onStableRelease: () =>
-        this.enqueueRebalanceCheck(
-          RECONCILE_REASON.PRIORITY_SPREAD_RELEASE_WAKE,
-        ),
-    });
-  },
-
-  /**
    * A runtime service below its desired replica count is actuating desired
    * state the operator asked for (a service_definitions replica_count), not
    * spreading in the background. The formation-quiescence fence that holds
@@ -175,26 +143,6 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   /**
-   * Whether this partition has a declared replication target and either holds
-   * fewer active replicas than declared or sits on fewer distinct active hosts
-   * than min(declared RF, available target hosts). Synthetic fixtures with no
-   * declared partition row or zero active replicas return false.
-   * @return {boolean}
-   */
-  isPartitionBelowDeclaredDistinctHostSpread() {
-    if (this.entityType !== EntityType.PARTITION) {
-      return false;
-    }
-    return isReplicasBelowDeclaredDistinctHostSpread(
-      this.systemTableCache,
-      this.entityId,
-      this.getCurrentReplicas(),
-      () => this.getAvailableNodes(),
-      this.controlPlaneReadinessService,
-    );
-  },
-
-  /**
    * Whether this entity uses the short priority reconcile cadence.
    * @return {boolean}
    */
@@ -205,117 +153,13 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     );
   },
 
-  /**
-   * Advance the shared ordinary-work release fence for one evaluation
-   * that observed no priority spread blocker, then resolve the
-   * stabilizing defer decision for non-priority entities. Priority
-   * partitions never defer on the shared fence, but they DO advance it
-   * here: their evaluations are already event-driven (the
-   * priority-recovery visibility cache and node-edge listeners
-   * re-enqueue them on placement-eligibility and operation-terminal
-   * edges), so they observe the clear that starts the stability window
-   * and resolve the stable release that wakes parked ordinary entities.
-   * The window law itself is unchanged — release still requires the full
-   * continuous-clear interval, and any blocked or in-flight observation
-   * still rearms it.
-   * @param {boolean} priorityPartition
-   * @return {Object|null}
-   * @private
-   */
-  resolveClearedPrioritySpreadFenceDecision(priorityPartition) {
-    const observedAt = this.nowFn();
-    let globalTopologyBlockingOperationCount = 0;
-    let latestTopologyDrain = null;
-    if (isBackgroundPrioritySpreadReleaseActive({
-      readinessOwner: this.controlPlaneReadinessService,
-    })) {
-      const globalTopologyBlockingOperations =
-        this.getGlobalTopologyBlockingInFlightOperations().filter(
-          (operation) =>
-            this.isPrioritySpreadFenceHoldingOperation(operation) &&
-            this.isTopologySettlingInFlightOperation(
-              operation,
-              {nowMs: observedAt},
-            ),
-        );
-      globalTopologyBlockingOperationCount =
-        globalTopologyBlockingOperations.length;
-      if (globalTopologyBlockingOperationCount > 0) {
-        observeActiveBackgroundPrioritySpreadReleaseBlocked({
-          readinessOwner: this.controlPlaneReadinessService,
-          observedAt,
-        });
-      } else {
-        latestTopologyDrain =
-          this.getLatestGlobalTopologyShapingOperationDrain({
-            observedAt,
-            operationFilter: (operation) =>
-              this.isPrioritySpreadFenceHoldingOperation(operation),
-          });
-        observeActiveBackgroundPrioritySpreadOperationDrain({
-          readinessOwner: this.controlPlaneReadinessService,
-          drainedAt: latestTopologyDrain?.drainedAtMs,
-        });
-      }
-    }
-    const stableReleaseBlocker =
-      resolveBackgroundPrioritySpreadStableRelease({
-        readinessOwner: this.controlPlaneReadinessService,
-        observedAt,
-        requiredStableMs:
-          this.getBackgroundPrioritySpreadStableWindowMs(),
-      });
-    if (
-      priorityPartition ||
-      !stableReleaseBlocker ||
-      this.isRuntimeServiceDesiredStateDeficit() ||
-      this.isPartitionBelowDeclaredDistinctHostSpread()
-    ) {
-      return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
-    }
-    this.registerBackgroundPrioritySpreadStableReleaseWake();
-    const scheduleDelayMs =
-      this.getBackgroundPrioritySpreadStableReleaseDelayMs(
-        stableReleaseBlocker.stableRemainingMs,
-      );
-    return this.buildRebalancePlanningGateDecision({
-      gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
-      blocker: stableReleaseBlocker,
-      logMessage:
-        REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
-      logContext: {
-        entityType: this.entityType,
-        delayMs: scheduleDelayMs,
-        releaseState: stableReleaseBlocker.state,
-        requiredStableMs: stableReleaseBlocker.requiredStableMs,
-        stableElapsedMs: stableReleaseBlocker.stableElapsedMs,
-        stableRemainingMs: stableReleaseBlocker.stableRemainingMs,
-        clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
-        lastBlockedObservedAtMs:
-          stableReleaseBlocker.lastBlockedObservedAtMs,
-        globalTopologyBlockingOperationCount,
-        latestTopologyDrainAtMs:
-          latestTopologyDrain?.drainedAtMs || null,
-        latestTopologyDrainOperationId:
-          latestTopologyDrain?.operationId || null,
-      },
-      scheduleDelayMs,
-    });
-  },
-
   resolvePrioritySpreadPlanningGateDecision(evaluationContext = null) {
     const priorityPartition = this.isControlPlanePriorityPartition();
     const controlPlanePriorityBlocker =
       this.getControlPlanePrioritySpreadBlocker();
     if (!controlPlanePriorityBlocker) {
-      return this.resolveClearedPrioritySpreadFenceDecision(
-        priorityPartition,
-      );
+      return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }
-    observeBackgroundPrioritySpreadBlocked({
-      readinessOwner: this.controlPlaneReadinessService,
-      observedAt: this.nowFn(),
-    });
     if (priorityPartition || this.isRuntimeServiceDesiredStateDeficit()) {
       return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }
@@ -341,9 +185,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         Math.max(largestGap, Number(partition?.spreadGap) || 0),
       0,
     );
-    this.registerBackgroundPrioritySpreadStableReleaseWake();
-    const scheduleDelayMs =
-      this.getBackgroundPrioritySpreadReleaseDelayMs();
+    const scheduleDelayMs = this.getPriorityRetryDelayMs();
     return this.buildRebalancePlanningGateDecision({
       gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
       blocker: controlPlanePriorityBlocker,

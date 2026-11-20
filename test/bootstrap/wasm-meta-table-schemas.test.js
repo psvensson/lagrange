@@ -109,10 +109,11 @@ describe('INITIAL_PARTITION_IDS registration', () => {
 
 describe('INITIAL_REPLICA_IDS registration', () => {
   for (const table of NEW_TABLES) {
-    it(`should have 3 replica IDs for ${table}`, () => {
+    it(`should have 1 founding replica ID for ${table}`, () => {
       const rids = INITIAL_REPLICA_IDS[table];
       assert.ok(rids, `${table} missing from INITIAL_REPLICA_IDS`);
-      assert.equal(rids.length, 3);
+      assert.equal(rids.length, 1);
+      assert.deepEqual(rids, [`${table}-p1-r1`]);
     });
   }
 });
@@ -157,7 +158,8 @@ describe('getInitialReplicaIds for new tables', () => {
     it(`should return replica IDs for ${table}`, () => {
       const ids = getInitialReplicaIds(table);
       assert.ok(ids);
-      assert.equal(ids.length, 3);
+      assert.equal(ids.length, 1);
+      assert.deepEqual(ids, [`${table}-p1-r1`]);
     });
   }
 });

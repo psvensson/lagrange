@@ -256,8 +256,8 @@ test('Property 10: node_endpoints has initial replica IDs for bootstrap', async 
           return false;
         }
 
-        // Verify 3 replicas (standard for system tables)
-        if (replicaIds.length !== 3) {
+        // Verify 1 founding voter replica on the seed node
+        if (replicaIds.length !== 1) {
           return false;
         }
 

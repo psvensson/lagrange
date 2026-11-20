@@ -32,14 +32,14 @@ const SQL_TYPE_MAP = Object.freeze(Object.assign(Object.create(null), {
   CLOB: 'TEXT',
   FLOAT: 'REAL',
   DOUBLE: 'REAL',
-  DECIMAL: 'REAL',
-  NUMERIC: 'REAL',
+  DECIMAL: 'NUMERIC',
+  NUMERIC: 'NUMERIC',
   BOOLEAN: 'INTEGER',
   BOOL: 'INTEGER',
-  DATETIME: 'TEXT',
-  TIMESTAMP: 'TEXT',
-  DATE: 'TEXT',
-  TIME: 'TEXT',
+  DATETIME: 'NUMERIC',
+  TIMESTAMP: 'NUMERIC',
+  DATE: 'NUMERIC',
+  TIME: 'NUMERIC',
 }));
 
 

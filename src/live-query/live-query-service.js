@@ -74,22 +74,55 @@ function resolveTableName(target) {
   return typeof target === LOCAL_STR_STRING ? target : (target.name || target.table || null);
 }
 
+function resolveTableAlias(target, explicitAlias = null) {
+  if (typeof explicitAlias === LOCAL_STR_STRING && explicitAlias.length > 0) {
+    return explicitAlias;
+  }
+  if (!target || typeof target !== LOCAL_STR_OBJECT) return null;
+  const candidate = target.alias ?? target.as ?? null;
+  return typeof candidate === LOCAL_STR_STRING && candidate.length > 0 ? candidate : null;
+}
+
 function extractPrimaryTable(parsedQuery) {
   const fromTarget = resolveTableName(parsedQuery?.from);
   if (fromTarget) return fromTarget;
   return typeof parsedQuery?.table === LOCAL_STR_STRING ? parsedQuery.table : null;
 }
 
-function extractReferencedTables(parsedQuery) {
-  if (!parsedQuery) return [];
-  const tables = new Set();
+function extractTableBindings(parsedQuery) {
+  if (!parsedQuery || typeof parsedQuery !== LOCAL_STR_OBJECT) return [];
+  const bindings = [];
+  const seen = new Set();
+  const addBinding = (tableName, alias) => {
+    if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0) return;
+    const normalizedAlias = typeof alias === LOCAL_STR_STRING && alias.length > 0 ?
+      alias :
+      null;
+    const key = `${tableName.toLowerCase()}:${(normalizedAlias || '').toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    bindings.push({tableName, alias: normalizedAlias});
+  };
   const primaryTable = extractPrimaryTable(parsedQuery);
-  if (primaryTable) tables.add(primaryTable);
+  if (primaryTable) {
+    addBinding(
+      primaryTable,
+      resolveTableAlias(parsedQuery.from, parsedQuery.alias ?? parsedQuery.as ?? null),
+    );
+  }
   if (Array.isArray(parsedQuery.joins)) {
     for (const join of parsedQuery.joins) {
       const joinTable = resolveTableName(join?.table);
-      if (joinTable) tables.add(joinTable);
+      addBinding(joinTable, resolveTableAlias(join?.table, join?.alias ?? join?.as ?? null));
     }
+  }
+  return bindings;
+}
+
+function extractReferencedTables(parsedQuery) {
+  const tables = new Set();
+  for (const binding of extractTableBindings(parsedQuery)) {
+    tables.add(binding.tableName);
   }
   return Array.from(tables);
 }
@@ -284,37 +317,81 @@ function resolvePrimaryProbeTableName(options, schemaList, firstRefTable) {
   return firstRefTable || DEFAULT_PREDICATE_TABLE;
 }
 
+function resolveEffectiveTableBindings(options, schemaList, refs) {
+  const explicit = Array.isArray(options?.tableBindings) ?
+    options.tableBindings :
+    extractTableBindings(options?.parsedQuery);
+  if (explicit.length > 0) return explicit;
+  let singleTableName = options?.tableName || null;
+  if (schemaList.length === 1 && schemaList[0]?.tableName) {
+    singleTableName = schemaList[0].tableName;
+  }
+  if (!singleTableName) return [];
+  const distinctRefTables = Array.from(
+    new Set(refs.map((r) => r.table).filter(Boolean)),
+  );
+  const singleRef = distinctRefTables.length === 1 ? distinctRefTables[0] : null;
+  const alias = singleRef && singleRef.toLowerCase() !== singleTableName.toLowerCase() ?
+    singleRef :
+    null;
+  return [{tableName: singleTableName, alias}];
+}
+
 function buildProbeTableDefinitions(normalizedWhere, schemas, options = {}) {
   const schemaList = extractSchemaList(schemas);
   const refs = collectReferencedColumnRefs(normalizedWhere);
+  const bindings = resolveEffectiveTableBindings(options, schemaList, refs);
   const firstRefTable = refs.find((r) => r.table !== null)?.table || null;
-  const primaryTableName = resolvePrimaryProbeTableName(
-    options,
-    schemaList,
-    firstRefTable,
-  );
+  const primaryBinding = bindings[0] || null;
+  const primaryTableName = primaryBinding ?
+    (primaryBinding.alias || primaryBinding.tableName) :
+    resolvePrimaryProbeTableName(options, schemaList, firstRefTable);
+  const primarySourceName = primaryBinding?.tableName || primaryTableName;
 
-  const tablesMap = new Map();
-  const ensureTable = (tName) => {
-    const key = tName.toLowerCase();
-    if (!tablesMap.has(key)) tablesMap.set(key, {tableName: tName, columnsByLower: new Map()});
-    return tablesMap.get(key);
+  const uniqueEntries = [];
+  const entriesByName = new Map();
+  const ensureTable = (probeName, sourceTableName = probeName) => {
+    const probeKey = probeName.toLowerCase();
+    const sourceKey = (sourceTableName || probeName).toLowerCase();
+    const existing = entriesByName.get(probeKey) || entriesByName.get(sourceKey);
+    if (existing) {
+      entriesByName.set(probeKey, existing);
+      entriesByName.set(sourceKey, existing);
+      return existing;
+    }
+    const entry = {
+      tableName: probeName,
+      sourceTableName: sourceTableName || probeName,
+      columnsByLower: new Map(),
+    };
+    uniqueEntries.push(entry);
+    entriesByName.set(probeKey, entry);
+    entriesByName.set(sourceKey, entry);
+    return entry;
   };
 
-  const primaryEntry = ensureTable(primaryTableName);
+  const primaryEntry = ensureTable(primaryTableName, primarySourceName);
+  for (const binding of bindings) {
+    ensureTable(binding.alias || binding.tableName, binding.tableName);
+  }
   for (const schema of schemaList) {
-    const targetEntry = schema.tableName ? ensureTable(schema.tableName) : primaryEntry;
+    const targetEntry = schema.tableName ?
+      (entriesByName.get(schema.tableName.toLowerCase()) || ensureTable(schema.tableName)) :
+      primaryEntry;
     registerSchemaColumns(targetEntry, schema.columns);
   }
   for (const ref of refs) {
-    const targetEntry = ref.table ? ensureTable(ref.table) : primaryEntry;
+    const targetEntry = ref.table ?
+      (entriesByName.get(ref.table.toLowerCase()) || ensureTable(ref.table)) :
+      primaryEntry;
     const lowerCol = ref.column.toLowerCase();
     if (!targetEntry.columnsByLower.has(lowerCol)) {
       targetEntry.columnsByLower.set(lowerCol, {name: ref.column});
     }
   }
-  return Array.from(tablesMap.values()).map((entry) => ({
+  return uniqueEntries.map((entry) => ({
     tableName: entry.tableName,
+    sourceTableName: entry.sourceTableName,
     columns: entry.columnsByLower.size > 0 ?
       Array.from(entry.columnsByLower.values()) :
       [{name: DEFAULT_DUMMY_COLUMN}],
@@ -337,16 +414,24 @@ function normalizeRowCellForSqlite(val) {
   return null;
 }
 
-function readRowColumnValue(row, tableName, colName) {
-  if (Object.hasOwn(row, colName)) return row[colName];
+function readNestedRowColumn(row, qualifier, colName) {
   if (
-    tableName &&
-    row[tableName] &&
-    typeof row[tableName] === LOCAL_STR_OBJECT &&
-    Object.hasOwn(row[tableName], colName)
+    qualifier &&
+    row[qualifier] &&
+    typeof row[qualifier] === LOCAL_STR_OBJECT &&
+    Object.hasOwn(row[qualifier], colName)
   ) {
-    return row[tableName][colName];
+    return {found: true, value: row[qualifier][colName]};
   }
+  return {found: false, value: null};
+}
+
+function readRowColumnValue(row, tableName, colName, sourceTableName = null) {
+  if (Object.hasOwn(row, colName)) return row[colName];
+  const byProbe = readNestedRowColumn(row, tableName, colName);
+  if (byProbe.found) return byProbe.value;
+  const bySource = readNestedRowColumn(row, sourceTableName, colName);
+  if (bySource.found) return bySource.value;
   const lower = colName.toLowerCase();
   for (const [key, val] of Object.entries(row)) {
     if (key.toLowerCase() === lower) return val;
@@ -391,6 +476,7 @@ function createPreparedTableStatements(db, tableDefinitions) {
     const placeholders = columnNames.map(() => PLACEHOLDER).join(COMMA_SPACE);
     return {
       tableName: def.tableName,
+      sourceTableName: def.sourceTableName || def.tableName,
       quotedTable,
       columnNames,
       clearStmt: db.prepare(`DELETE FROM ${quotedTable}`),
@@ -441,7 +527,9 @@ function compilePredicate(whereClause, params = [], schemas = null, options = {}
     if (!row || typeof row !== LOCAL_STR_OBJECT || !db.open) return false;
     for (const runner of tableRunners) {
       const rowValues = runner.columnNames.map((colName) =>
-        normalizeRowCellForSqlite(readRowColumnValue(row, runner.tableName, colName)),
+        normalizeRowCellForSqlite(
+          readRowColumnValue(row, runner.tableName, colName, runner.sourceTableName),
+        ),
       );
       runner.clearStmt.run();
       runner.insertStmt.run(...rowValues);
@@ -563,6 +651,8 @@ class LiveQueryService {
     const schemas = tableLookup ? this.tables.map(tableLookup).filter(Boolean) : null;
     this.predicate = compilePredicate(this.whereClause, this.params, schemas, {
       tableName: this.table,
+      tableBindings: extractTableBindings(this.parsedQuery),
+      parsedQuery: this.parsedQuery,
     });
 
     this.partitionKeyValue = null;
@@ -683,6 +773,7 @@ export {
   compilePredicate,
   extractPartitionKeyValue,
   extractReferencedTables,
+  extractTableBindings,
   isComplexWhereNode,
   normalizeWhereAstForRenderer,
   parseLiveSelect,

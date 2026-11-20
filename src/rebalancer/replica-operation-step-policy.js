@@ -551,42 +551,98 @@ function shouldClearPriorityDeferredClaim(step) {
   return step === WORKFLOW_STEP.CREATING;
 }
 
-const SYSTEM_TARGET_SLOT_ADD_PHASE_WORKFLOW_STEPS = Object.freeze(
+const ACTIVE_TERMINAL_OPERATION_TYPES = Object.freeze(
   new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-    WORKFLOW_STEP.SYNCING,
+    OperationType.ADD,
+    OperationType.GROWTH_PROMOTE,
   ]),
 );
 
-const SYSTEM_TARGET_SLOT_DRAIN_PHASE_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-    WORKFLOW_STEP.SYNCING,
-    WORKFLOW_STEP.ACTIVE,
-    WORKFLOW_STEP.STOPPING,
-  ]),
-);
+function isActiveTerminalOperationType(operationType) {
+  return ACTIVE_TERMINAL_OPERATION_TYPES.has(
+    String(operationType || '').toUpperCase(),
+  );
+}
 
-function doesWorkflowStepOccupySystemTargetNodeSlot(
-  workflowStep,
-  includeDrainPhase = false,
-) {
-  const normalizedStep = readUpperStateField(workflowStep);
-  if (!normalizedStep) {
-    return true;
-  }
-  return includeDrainPhase === true ?
-    SYSTEM_TARGET_SLOT_DRAIN_PHASE_WORKFLOW_STEPS.has(normalizedStep) :
-    SYSTEM_TARGET_SLOT_ADD_PHASE_WORKFLOW_STEPS.has(normalizedStep);
+const OPERATION_STEP_SPECS = Object.freeze({
+  [WORKFLOW_STEP.PENDING]: Object.freeze({
+    step: WORKFLOW_STEP.PENDING,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REMOVE,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+  [WORKFLOW_STEP.SENDING]: Object.freeze({
+    step: WORKFLOW_STEP.SENDING,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REMOVE,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+  [WORKFLOW_STEP.CREATING]: Object.freeze({
+    step: WORKFLOW_STEP.CREATING,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+  [WORKFLOW_STEP.SYNCING]: Object.freeze({
+    step: WORKFLOW_STEP.SYNCING,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+  [WORKFLOW_STEP.ACTIVE]: Object.freeze({
+    step: WORKFLOW_STEP.ACTIVE,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+  [WORKFLOW_STEP.STOPPING]: Object.freeze({
+    step: WORKFLOW_STEP.STOPPING,
+    operationTypes: Object.freeze(new Set([
+      OperationType.REMOVE,
+      OperationType.REPLACE,
+    ])),
+  }),
+  [WORKFLOW_STEP.REMOVED]: Object.freeze({
+    step: WORKFLOW_STEP.REMOVED,
+    operationTypes: Object.freeze(new Set([
+      OperationType.REMOVE,
+      OperationType.REPLACE,
+    ])),
+  }),
+  [WORKFLOW_STEP.FAILED]: Object.freeze({
+    step: WORKFLOW_STEP.FAILED,
+    operationTypes: Object.freeze(new Set([
+      OperationType.ADD,
+      OperationType.REMOVE,
+      OperationType.REPLACE,
+      OperationType.GROWTH_PROMOTE,
+    ])),
+  }),
+});
+
+function getWorkflowStepSpec(step) {
+  const normalizedStep = readUpperStateField(step);
+  return (normalizedStep && OPERATION_STEP_SPECS[normalizedStep]) || null;
 }
 
 export {
+  ACTIVE_TERMINAL_OPERATION_TYPES,
   COPY_PHASE_WORKFLOW_STEPS,
-  doesWorkflowStepOccupySystemTargetNodeSlot,
+  getWorkflowStepSpec,
+  isActiveTerminalOperationType,
+  OPERATION_STEP_SPECS,
   REPLACE_OWNER_PHASE_WORKFLOW_STEPS,
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,

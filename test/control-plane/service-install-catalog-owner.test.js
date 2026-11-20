@@ -287,7 +287,8 @@ describe('service install catalog system-table contract', () => {
       );
       assert.ok(schema, `${tableName} schema must be registered`);
       assert.equal(INITIAL_PARTITION_IDS[tableName], `${tableName}-p1`);
-      assert.equal(INITIAL_REPLICA_IDS[tableName].length, 3);
+      assert.equal(INITIAL_REPLICA_IDS[tableName].length, 1);
+      assert.deepEqual(INITIAL_REPLICA_IDS[tableName], [`${tableName}-p1-r1`]);
       assert.ok(CDC_NON_PROPAGATED_TABLES.includes(tableName));
       assert.ok(!CACHE_HYDRATION_TABLES.includes(tableName));
       assert.match(generateCreateTableSQL(schema), /CREATE TABLE IF NOT EXISTS/);

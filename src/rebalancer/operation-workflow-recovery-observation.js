@@ -14,6 +14,9 @@ import {
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
+import {
+  observeGrowthPromoteIncompleteState,
+} from './operation-workflow-growth-promote.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -170,8 +173,11 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   }
 
   hasObservedOperationRowTargetProgress(operation) {
-    if (!operation ||
-        typeof this.repository?.getObservedReplicaStatusFromCache !== 'function') {
+    if (
+      !operation ||
+      !this.isObservedOperationRowTargetProgressShapeCandidate(operation) ||
+      typeof this.repository?.getObservedReplicaStatusFromCache !== 'function'
+    ) {
       return false;
     }
     const observedTargetStatus = this.repository.getObservedReplicaStatusFromCache(
@@ -181,6 +187,10 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       this.buildObservedTargetReplicaObservationOptions(operation),
     );
     return OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(observedTargetStatus);
+  }
+
+  observeIncompleteOperationState(operation) {
+    return observeGrowthPromoteIncompleteState(this, operation);
   }
 
   getObservedOperationRowTargetProgressStatus(operation) {
@@ -253,6 +263,16 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
           row, targetNodeId, replicaId, partitionId)) return false;
         const operation = this.repository.rowToOperation(row);
         if (!this.isObservedProgressOperationShapeCandidate(operation)) return false;
+        if (operation.type === OperationType.GROWTH_PROMOTE) {
+          return (
+            (replicaId.length > 0 &&
+              (operation.replicaId === replicaId ||
+                operation.sourceReplicaId === replicaId ||
+                (Array.isArray(operation.promoteReplicaIds) &&
+                  operation.promoteReplicaIds.includes(replicaId)))) ||
+            (partitionId.length > 0 && operation.partitionId === partitionId)
+          );
+        }
         if (this.isObservedProgressReplaceSourceMatch(
           operation, targetNodeId, replicaId, partitionId)) return true;
         if (operation.targetNodeId !== targetNodeId) return false;
@@ -280,6 +300,13 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   ) {
     if (!row || typeof row !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return false;
+    }
+    if (row.type === OperationType.GROWTH_PROMOTE) {
+      return (
+        (replicaId.length > 0 &&
+          (row.replica_id === replicaId || row.source_replica_id === replicaId)) ||
+        (partitionId.length > 0 && row.partition_id === partitionId)
+      );
     }
     if (row.target_node_id === targetNodeId) {
       return (replicaId.length > 0 && row.replica_id === replicaId) ||
@@ -414,6 +441,11 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     cacheOperation,
     operation,
   ) {
+    const heldGrowthPromote =
+      operation?.type === OperationType.GROWTH_PROMOTE &&
+      (operation.status === ReplicaStatus.HELD ||
+        Boolean(operation.stepsHistory?.[0]?.dispatchHold &&
+          operation.status === ReplicaStatus.HELD));
     return Object.freeze({
       tableState,
       cacheDelete: cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE,
@@ -426,9 +458,11 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       terminalOperation: this.repository.isOperationTerminal(operation),
       observedTargetProgressVisible:
         this.hasObservedOperationRowTargetProgress(operation),
-      dispatchRetryable: this.isDispatchRetryableWorkflowStep(operation),
+      dispatchRetryable:
+        !heldGrowthPromote && this.isDispatchRetryableWorkflowStep(operation),
       priorityRecoveryReentryEligible:
-        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation),
+        this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) ||
+        operation?.type === OperationType.GROWTH_PROMOTE,
     });
   }
 

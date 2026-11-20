@@ -58,7 +58,8 @@ describe('debug metadata table constants', () => {
       const replicaIds = INITIAL_REPLICA_IDS[tableName];
       assert.ok(partitionId);
       assert.ok(Array.isArray(replicaIds));
-      assert.equal(replicaIds.length, 3);
+      assert.equal(replicaIds.length, 1);
+      assert.deepEqual(replicaIds, [`${tableName}-p1-r1`]);
     });
 
     it(`registers ${tableName} in cache tables`, () => {

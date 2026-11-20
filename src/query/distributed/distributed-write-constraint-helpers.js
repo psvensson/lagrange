@@ -105,7 +105,7 @@ function extractParameterValue(expr, params) {
 }
 
 function assertAdmissibleKeyExpressionAst(node) {
-  if (!node || typeof node !== TYPEOF_OBJECT) {
+  if (!node || typeof node !== TYPEOF_OBJECT || node instanceof Uint8Array) {
     return;
   }
   if (Array.isArray(node)) {
@@ -223,7 +223,7 @@ function hasColumnAffinityOrCollation(columnSchemas) {
  * @param {Array<Object>|null} [columnSchemas] - Target column definitions.
  * @return {Array<*>} Normalized key values.
  */
-function evaluateKeyExpressionsInSqlite(exprs, params = [], columnSchemas = null) {
+function evaluateRawExpressionsInSqlite(exprs, params = [], columnSchemas = null) {
   const {sqlList, selectSql, typedParams} = renderKeyExpressionBatch(exprs, params);
   const db = new Database(MEMORY_DATABASE);
   try {
@@ -255,19 +255,24 @@ function evaluateKeyExpressionsInSqlite(exprs, params = [], columnSchemas = null
         .raw(true)
         .safeIntegers(true)
         .get();
-      return storedRow.map(normalizeKeyCellValue);
+      return storedRow.map((val) => (val === undefined ? null : val));
     }
     const rawRow = db
       .prepare(selectSql)
       .raw(true)
       .safeIntegers(true)
       .get(...typedParams);
-    return rawRow.map(normalizeKeyCellValue);
+    return rawRow.map((val) => (val === undefined ? null : val));
   } catch (error) {
     throw mapSqliteKeyEvaluationError(error);
   } finally {
     db.close();
   }
+}
+
+function evaluateKeyExpressionsInSqlite(exprs, params = [], columnSchemas = null) {
+  return evaluateRawExpressionsInSqlite(exprs, params, columnSchemas)
+    .map(normalizeKeyCellValue);
 }
 
 function extractCoordinatorKeyValue(
@@ -399,6 +404,8 @@ async function assertUniqueAcrossPartitions(
     partitionIds,
     checkSql,
     candidateValues,
+    undefined,
+    true,
   );
   if (
     Array.isArray(results) &&
@@ -456,7 +463,7 @@ function insertBatchCandidateIntoProbeTable(
     throw mapSqliteKeyEvaluationError(error);
   }
   const storedRow = selectByRowidStmt.get(info.lastInsertRowid);
-  return storedRow.map(normalizeKeyCellValue);
+  return storedRow.map((val) => (val === undefined ? null : val));
 }
 
 async function checkInsertColumnSetUniqueness(
@@ -569,8 +576,9 @@ async function assertUpdateUniqueAcrossPartitions(
   const valueClause = colNames
     .map((c) => `${renderSqliteIdentifier(c)} = ?`)
     .join(WHERE_AND_SEPARATOR);
-  const {sql: targetClause, params: targetParams} =
+  const {sql: targetClause, params: rawTargetParams} =
     renderTargetPredicate(ast.where, params);
+  const targetParams = decodeTypedParams(encodeTypedParams(rawTargetParams));
   const checkSql =
     `SELECT CASE WHEN (${targetClause}) THEN 1 ELSE 0 END AS target_match, ` +
     `CASE WHEN (${valueClause}) THEN 1 ELSE 0 END AS value_match ` +
@@ -587,6 +595,8 @@ async function assertUpdateUniqueAcrossPartitions(
     partitionIds,
     checkSql,
     checkParams,
+    undefined,
+    true,
   );
   assertCompletePartitionProbeResults(results, partitionIds);
   const {matchedTargetCount, externalOwnerCount} =
@@ -617,7 +627,7 @@ async function checkUpdateColumnSetUniqueness(
   const probeColumns = colNames.map((name) =>
     resolveSchemaColumnDefinition(schema, name),
   );
-  const candidateValues = evaluateKeyExpressionsInSqlite(
+  const candidateValues = evaluateRawExpressionsInSqlite(
     assigned.map((a) => a.value),
     params,
     probeColumns,

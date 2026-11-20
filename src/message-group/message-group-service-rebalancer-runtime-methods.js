@@ -1,22 +1,6 @@
-import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
-
 const MESSAGE_GROUP_SERVICE_REBALANCER_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
-
-function maybeWakeRebalancerOnTrafficReady(rebalancer, options = {}) {
-  if (
-    options.readinessTransitionOnly &&
-    options.backgroundReady &&
-    !options.wasBackgroundReady &&
-    rebalancer.isLeader === true
-  ) {
-    rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
-    rebalancer.lastCheckAtMs = 0;
-    rebalancer.lastStateChangeTime = 0;
-    rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
-  }
-}
 
 function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
   const {
@@ -109,7 +93,6 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
       });
       this.rebalancer.initialize();
       this.rebalancer.setLeader(this.resolveRebalancerLeadership());
-      this._lastBackgroundWorkReady = this.isBackgroundWorkReady();
     }
 
     /**
@@ -121,8 +104,6 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
     maybeInitializeRebalancer(options = {}) {
       const readinessTransitionOnly = options.readinessTransitionOnly === true;
       const backgroundReady = this.isBackgroundWorkReady();
-      const wasBackgroundReady = this._lastBackgroundWorkReady === true;
-      this._lastBackgroundWorkReady = backgroundReady;
       if (this.rebalancer) {
         // Edge-gate (mirror of PartitionService.maybeInitializeRebalancer): the
         // shared metadata-publication readiness state fans this call out across
@@ -157,11 +138,6 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
             this.cdcIntegrationService?.sqlQueryEngine || null;
         }
         this.rebalancer.setLeader(desiredLeadership);
-        maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
-          readinessTransitionOnly,
-          backgroundReady,
-          wasBackgroundReady,
-        });
         return;
       }
       if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {
@@ -171,11 +147,6 @@ function createMessageGroupServiceRebalancerRuntimeMethods(deps = {}) {
         return;
       }
       this.initializeRebalancer();
-      maybeWakeRebalancerOnTrafficReady(this.rebalancer, {
-        readinessTransitionOnly,
-        backgroundReady,
-        wasBackgroundReady,
-      });
     }
 
     /**

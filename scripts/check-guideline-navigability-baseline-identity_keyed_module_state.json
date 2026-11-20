@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-11-18T05:30:45.414Z",
-  "rawViolationCount": 83,
+  "rawViolationCount": 82,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-stale-watermark-record.js",
@@ -580,15 +580,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/background-priority-spread-release-tracker.js",
-      "line": 7,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "identity_keyed_module_state",
-      "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/global-topology-blocking-operation-view.js",
       "line": 10,
       "column": 6,
@@ -750,5 +741,6 @@
       "reason": "module-scope identity-keyed state; hold it in an owner-held field instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     }
-  ]
+  ],
+  "maxViolations": 81
 }

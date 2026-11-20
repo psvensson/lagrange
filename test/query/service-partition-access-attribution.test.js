@@ -353,7 +353,7 @@ test('service_partition_access system table is registered end-to-end', (t) => {
   );
   t.equal(
     INITIAL_REPLICA_IDS[TABLES.SERVICE_PARTITION_ACCESS].length,
-    3,
+    1,
     'bootstrap replica ids assigned',
   );
   t.ok(

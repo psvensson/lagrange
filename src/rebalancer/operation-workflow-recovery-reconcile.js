@@ -48,6 +48,14 @@ import {
   shouldReconcilePriorityRecoveryDispatchPendingDrain,
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
 
+import {
+  releaseOperationLedgerSelfMoveHoldAfterTerminal,
+} from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {
+  completeGrowthPromoteOperation,
+  reconcileGrowthPromoteLifecycle,
+} from './operation-workflow-growth-promote.js';
+
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -88,9 +96,30 @@ function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   constructor(options) {
     super(options);
+    this.releasePlacementHold = options?.releasePlacementHold || null;
     // A new owner instance begins its REPLACE-owner session: an operation
     // whose step began earlier may have lost its attempt state (BR10).
     startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
+  }
+
+  async releasePlacementHoldIfNeeded(operation) {
+    if (!operation) return;
+    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
+    if (this.releasePlacementHold) {
+      await this.releasePlacementHold(operation);
+    }
+  }
+
+  async completeOperation(operation) {
+    return operation?.type === OperationType.GROWTH_PROMOTE ?
+      completeGrowthPromoteOperation(this, operation) :
+      super.completeOperation(operation);
+  }
+
+  async reconcileOperationLifecycle(operation, options = {}) {
+    return operation?.type === OperationType.GROWTH_PROMOTE ?
+      reconcileGrowthPromoteLifecycle(this, operation) :
+      super.reconcileOperationLifecycle(operation, options);
   }
 
   handleObservedReplicaStateChange(tableName, cacheOperation, record) {
@@ -400,6 +429,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       }
 
       if (
+        op.type === OperationType.GROWTH_PROMOTE ||
         recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
           .RESERVATION_BACKED_PENDING_REDRIVEN ||
         this.isRemoveInitialDispatchPhase({
@@ -735,40 +765,22 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   }
 
   normalizeErrorMessage(errorLike, fallbackMessage) {
-    if (
-      typeof errorLike === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-      errorLike.trim()
-    ) {
+    if (typeof errorLike === OPERATION_WORKFLOW_OWNER_LITERAL.STRING && errorLike.trim()) {
       return errorLike;
     }
-
-    if (
-      !errorLike ||
-      typeof errorLike !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
-    ) {
+    if (!errorLike || typeof errorLike !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return fallbackMessage;
     }
-
     const candidateValues = [
-      errorLike.message,
-      errorLike.errorMessage,
-      errorLike.error,
-      errorLike.error?.message,
-      errorLike.error?.errorMessage,
-      errorLike.details,
-      errorLike.details?.message,
-      errorLike.details?.errorMessage,
+      errorLike.message, errorLike.errorMessage, errorLike.error,
+      errorLike.error?.message, errorLike.error?.errorMessage,
+      errorLike.details, errorLike.details?.message, errorLike.details?.errorMessage,
     ];
-
     for (const candidate of candidateValues) {
-      if (
-        typeof candidate === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        candidate.trim()
-      ) {
+      if (typeof candidate === OPERATION_WORKFLOW_OWNER_LITERAL.STRING && candidate.trim()) {
         return candidate;
       }
     }
-
     return fallbackMessage;
   }
 }

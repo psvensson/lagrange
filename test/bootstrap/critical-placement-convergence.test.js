@@ -153,7 +153,8 @@ test('required-count-derives-from-authoritative-policy', () => {
   // schema default cannot stay green.
   const declaredIdentityCount =
     getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length;
-  const divergedRequirement = declaredIdentityCount + 2;
+  assert.equal(declaredIdentityCount, 1);
+  const divergedRequirement = DECLARED_REPLICA_COUNT_DEFAULT + 2;
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
@@ -592,6 +593,15 @@ test('empty-critical-set-is-not-converged', () => {
     CRITICAL_PLACEMENT_EVIDENCE_STATE.KNOWN_CONVERGED);
 });
 
+function targetReplicaIdsForPartition(partitionId) {
+  const tableId = partitionId.replace(/-p1$/u, '');
+  const foundingReplicaIds = getInitialReplicaIds(tableId) || [];
+  return Array.from(
+    {length: DECLARED_REPLICA_COUNT_DEFAULT},
+    (_, index) => foundingReplicaIds[index] || `${partitionId}-r${index + 1}`,
+  );
+}
+
 test('whole-set-convergence-is-reachable', () => {
   // Without this, the sealed bar is consistent with an evaluator that is
   // ALWAYS false: every other whole-set assertion checks a negative or an
@@ -602,8 +612,7 @@ test('whole-set-convergence-is-reachable', () => {
   const rows = [];
   [...CRITICAL_SYSTEM_PARTITION_IDS].sort().forEach(
     (partitionId, partitionIndex) => {
-      const tableId = partitionId.replace(/-p1$/u, '');
-      const replicaIds = getInitialReplicaIds(tableId) || [];
+      const replicaIds = targetReplicaIdsForPartition(partitionId);
       replicaIds.forEach((replicaId, replicaIndex) => {
         rows.push({
           service_id: `svc-${replicaId}`,
@@ -664,8 +673,7 @@ test('per-partition-attribution-is-measured', () => {
     if (omittedIndices.includes(partitionIndex)) {
       return; // pending because it has NO rows
     }
-    const tableId = partitionId.replace(/-p1$/u, '');
-    const replicaIds = getInitialReplicaIds(tableId) || [];
+    const replicaIds = targetReplicaIdsForPartition(partitionId);
     replicaIds.forEach((replicaId, replicaIndex) => {
       rows.push({
         service_id: `svc-${replicaId}`,

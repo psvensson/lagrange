@@ -1,0 +1,343 @@
+/**
+ * OperationWorkflowOwner helpers for durable GROWTH_PROMOTE operations
+ * (1-voter founding + odd-voter growth via joint learner promotion).
+ *
+ * @module rebalancer/operation-workflow-growth-promote
+ */
+
+import {readLowerStateField} from '../utils/state-field-read.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from './operation-workflow-owner-shared.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED,
+} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from './replica-operation-update-disposition.js';
+
+const {
+  OPERATION_TRANSITION_REASON,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
+  REBALANCE_COORDINATOR_EVENT,
+  REBALANCE_COORDINATOR_LOG_MSG,
+  ReplicaStatus,
+  WORKFLOW_STEP,
+} = SHARED;
+
+const {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+  SYSTEM_TABLE_NAME,
+} = OPERATION_WORKFLOW_OWNER_SHARED;
+
+const GROWTH_PROMOTE_RETRYABLE_REASONS = Object.freeze(
+  new Set([
+    'promotion_progress_behind',
+    'conf_change_pending',
+    'leader_term_unapplied',
+    'not_leader',
+    'membership-change-not-leader',
+    'authority_unavailable',
+    'base_configuration_changed',
+  ]),
+);
+
+const VOTER_ROLES = Object.freeze(new Set(['follower', 'candidate', 'leader']));
+const GROWTH_PROMOTE_OBSERVED_STATE = Object.freeze({
+  UNAPPLICABLE: 'UNAPPLICABLE',
+  COMPLETE_ACTIVE: 'COMPLETE_ACTIVE',
+  REPLAY_DISPATCH: 'REPLAY_DISPATCH',
+});
+const LOCAL_STR_CORE_OK = 'CORE_OK';
+const LOCAL_STR_GROWTH_PROMOTE_REFUSED = 'growth_promote_refused';
+
+function isHeldGrowthPromoteOperation(operation) {
+  return (
+    operation?.type === OperationType.GROWTH_PROMOTE &&
+    operation.status === ReplicaStatus.HELD
+  );
+}
+
+function resolveGrowthPromoteReplicaIds(operation) {
+  const explicit = operation?.[ReplicaOperationField.PROMOTE_REPLICA_IDS];
+  if (Array.isArray(explicit) && explicit.length > 0) {
+    return explicit.filter((id) => typeof id === 'string' && id.length > 0);
+  }
+  const fromHistory = Array.isArray(operation?.stepsHistory) ?
+    operation.stepsHistory
+      .map((entry) => entry?.[ReplicaOperationField.PROMOTE_REPLICA_IDS])
+      .find((list) => Array.isArray(list) && list.length > 0) :
+    null;
+  if (Array.isArray(fromHistory) && fromHistory.length > 0) {
+    return fromHistory.filter((id) => typeof id === 'string' && id.length > 0);
+  }
+  return [operation?.replicaId, operation?.sourceReplicaId].filter(
+    (id) => typeof id === 'string' && id.length > 0,
+  );
+}
+
+function applyGrowthPromoteRequestFields(request, operation) {
+  const promoteReplicaIds = resolveGrowthPromoteReplicaIds(operation);
+  let sourceReplicaId = null;
+  if (operation.sourceReplicaId) {
+    sourceReplicaId = operation.sourceReplicaId;
+  } else if (promoteReplicaIds.length > 1) {
+    sourceReplicaId = promoteReplicaIds[1];
+  }
+  request[ReplicaOperationField.SOURCE_REPLICA_ID] = sourceReplicaId;
+  request[ReplicaOperationField.PROMOTE_REPLICA_IDS] = promoteReplicaIds;
+  if (operation[ReplicaOperationField.EXPECTED_BASE_CONFIG]) {
+    request[ReplicaOperationField.EXPECTED_BASE_CONFIG] =
+      operation[ReplicaOperationField.EXPECTED_BASE_CONFIG];
+  }
+}
+
+async function deferGrowthPromoteToSyncing(owner, operation) {
+  if (operation.workflowStep !== WORKFLOW_STEP.SYNCING) {
+    await owner.updateStep(operation, WORKFLOW_STEP.SYNCING);
+  }
+  owner.scheduleObservedProgressRetry?.(
+    operation.operationId,
+    SYSTEM_TABLE_NAME.SERVICES,
+    OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+  );
+  return owner.buildSuccessfulOperationResult(operation.operationId, {
+    status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+  });
+}
+
+async function completeAndBuildGrowthPromoteResult(owner, operation) {
+  await owner.completeOperation(operation);
+  return owner.buildSuccessfulOperationResult(operation.operationId, {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+  });
+}
+
+function isObservedCompleteActive(owner, operation) {
+  return (
+    observeGrowthPromoteIncompleteState(owner, operation) ===
+    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE
+  );
+}
+
+async function reconcileGrowthPromoteDispatchResponse(
+  owner,
+  operation,
+  response,
+) {
+  const proposal = response?.[ReplicaOperationField.PROPOSAL] || null;
+  if (response?.committedVotersReached === true) {
+    return completeAndBuildGrowthPromoteResult(owner, operation);
+  }
+  if (proposal && typeof proposal === 'object') {
+    const normalizedOutcome = readLowerStateField(proposal.outcome).toUpperCase();
+    const normalizedReason = readLowerStateField(proposal.reason);
+    if (normalizedOutcome === LOCAL_STR_CORE_OK) {
+      if (response?.committedVotersReached === false) {
+        return isObservedCompleteActive(owner, operation) ?
+          completeAndBuildGrowthPromoteResult(owner, operation) :
+          deferGrowthPromoteToSyncing(owner, operation);
+      }
+      return completeAndBuildGrowthPromoteResult(owner, operation);
+    }
+    if (isObservedCompleteActive(owner, operation)) {
+      return completeAndBuildGrowthPromoteResult(owner, operation);
+    }
+    if (
+      proposal.retryable === true ||
+      GROWTH_PROMOTE_RETRYABLE_REASONS.has(normalizedReason)
+    ) {
+      return deferGrowthPromoteToSyncing(owner, operation);
+    }
+    const refusalReason = proposal.reason || LOCAL_STR_GROWTH_PROMOTE_REFUSED;
+    await owner.failOperation(operation, refusalReason);
+    return owner.buildFailedOperationResult(operation.operationId, refusalReason);
+  }
+  if (isObservedCompleteActive(owner, operation)) {
+    return completeAndBuildGrowthPromoteResult(owner, operation);
+  }
+  if (
+    response?.status === ReplicaOperationResponseStatus.INITIATED ||
+    response?.status === ReplicaOperationResponseStatus.IN_PROGRESS ||
+    response?.status === ReplicaOperationResponseStatus.COMPLETED
+  ) {
+    return deferGrowthPromoteToSyncing(owner, operation);
+  }
+  return null;
+}
+
+function readObservedServiceRow(owner, cache, replicaId, partitionId) {
+  if (cache?.get) {
+    const direct = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
+    if (direct) return direct;
+  }
+  if (cache?.getAll) {
+    const all = cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+    const match = all.find(
+      (row) => (row?.replica_id || row?.service_id) === replicaId,
+    );
+    if (match) return match;
+  }
+  if (owner.repository?.getObservedReplicaRowFromCache) {
+    return owner.repository.getObservedReplicaRowFromCache(
+      replicaId,
+      partitionId,
+      null,
+    );
+  }
+  return null;
+}
+
+function observeGrowthPromoteIncompleteState(owner, operation) {
+  if (!operation || operation.type !== OperationType.GROWTH_PROMOTE) {
+    return GROWTH_PROMOTE_OBSERVED_STATE.UNAPPLICABLE;
+  }
+  const promoteIds = resolveGrowthPromoteReplicaIds(operation);
+  if (promoteIds.length === 0) {
+    return GROWTH_PROMOTE_OBSERVED_STATE.REPLAY_DISPATCH;
+  }
+  let cache = owner.systemTableCache || null;
+  if (!cache && owner.repository?.systemTableCache) {
+    cache = owner.repository.systemTableCache;
+  }
+  const allPromotedActiveVoters = promoteIds.every((replicaId) => {
+    const row = readObservedServiceRow(owner, cache, replicaId, operation.partitionId);
+    if (!row) return false;
+    const status = readLowerStateField(row.status);
+    if (status !== ReplicaStatus.ACTIVE) return false;
+    const role = readLowerStateField(row.raft_role) || readLowerStateField(row.raftRole);
+    return VOTER_ROLES.has(role);
+  });
+  return allPromotedActiveVoters ?
+    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE :
+    GROWTH_PROMOTE_OBSERVED_STATE.REPLAY_DISPATCH;
+}
+
+async function completeGrowthPromoteOperation(owner, operation) {
+  const now = owner.resolveTimeoutCheckNowMs();
+  const finalStep = WORKFLOW_STEP.ACTIVE;
+  if (
+    operation.workflowStep === finalStep &&
+    operation.completedAt !== null &&
+    operation.completedAt !== undefined
+  ) {
+    await owner.releasePlacementHoldIfNeeded(operation);
+    return Object.freeze({
+      committed: false,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+    });
+  }
+  const previousStep = operation.workflowStep;
+  const stepEntry = owner.buildOperationTransitionStepEntry(
+    operation,
+    finalStep,
+    OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+    previousStep,
+    now,
+  );
+  const projectedOperation = {
+    ...operation,
+    workflowStep: finalStep,
+    status: ReplicaStatus.ACTIVE,
+    updatedAt: now,
+    completedAt: now,
+    stepsHistory: [
+      ...(Array.isArray(operation.stepsHistory) ? operation.stepsHistory : []),
+      stepEntry,
+    ],
+  };
+  const projectIdempotentTransition = () => {
+    operation.workflowStep = finalStep;
+    operation.status = ReplicaStatus.ACTIVE;
+    const previousUpdatedAt = Number(operation.updatedAt);
+    operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+      Math.max(previousUpdatedAt, now) :
+      now;
+    const previousCompletedAt = Number(operation.completedAt);
+    operation.completedAt = Number.isFinite(previousCompletedAt) ?
+      Math.max(previousCompletedAt, now) :
+      now;
+  };
+  const persistOptions = {
+    ...owner.buildOperationTransitionPersistOptions(),
+    terminalTransition: true,
+    returnDisposition: true,
+  };
+  const persistFn = async () =>
+    owner.repository.persistOperationUpdate(projectedOperation, persistOptions);
+  const transitionOutcome = await owner.executeAtomicTransition(
+    operation,
+    finalStep,
+    OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+    persistFn,
+    {
+      onIdempotentTransition: projectIdempotentTransition,
+      afterCommit: async () => {
+        await owner.confirmCommittedTransitionPersistence(projectedOperation, {
+          terminalTransitionRepair: true,
+        });
+      },
+    },
+  );
+  if (!transitionOutcome?.committed) {
+    await owner.resolveNotCommittedTerminalTransition(
+      operation,
+      projectedOperation,
+      transitionOutcome,
+      finalStep,
+      persistOptions,
+    );
+    return transitionOutcome;
+  }
+  owner.clearTerminalOperationRetryState(operation);
+  owner.clearTransitionRetry(operation.operationId);
+  operation.workflowStep = finalStep;
+  operation.status = ReplicaStatus.ACTIVE;
+  operation.updatedAt = now;
+  operation.completedAt = now;
+  operation.stepsHistory.push(stepEntry);
+  await owner.releasePlacementHoldIfNeeded(operation);
+  await owner.releaseReservationForOperation(operation);
+  owner.clearDeferredSafetyBlockState(operation.operationId);
+  owner.stats.operationsCompleted++;
+  owner.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
+    operationId: operation.operationId,
+    type: operation.type,
+    partitionId: operation.partitionId,
+    targetNodeId: operation.targetNodeId,
+  });
+  owner.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+    operation,
+  });
+  return transitionOutcome;
+}
+
+async function reconcileGrowthPromoteLifecycle(owner, operation) {
+  if (
+    owner.repository.isOperationTerminal(operation) ||
+    isHeldGrowthPromoteOperation(operation)
+  ) {
+    return false;
+  }
+  if (
+    owner.observeIncompleteOperationState(operation) ===
+    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE
+  ) {
+    await owner.completeOperation(operation);
+    return true;
+  }
+  const replayResult = await owner.executeOperationFromReconcilePath(operation);
+  return replayResult?.success === true;
+}
+
+export {
+  applyGrowthPromoteRequestFields,
+  completeGrowthPromoteOperation,
+  isHeldGrowthPromoteOperation,
+  observeGrowthPromoteIncompleteState,
+  reconcileGrowthPromoteDispatchResponse,
+  reconcileGrowthPromoteLifecycle,
+  resolveGrowthPromoteReplicaIds,
+};

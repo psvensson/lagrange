@@ -15,7 +15,7 @@ import {
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 import {
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
@@ -24,6 +24,8 @@ import {
 } from './replica-handler-transition-policy.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const LOCAL_STR_PLACEMENT_ADMISSION_KEY = '"placementAdmission"';
+const DEFAULT_TARGET_REPLICATION_FACTOR = 3;
 const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS',
   awaited: 'local replica promoted to a routable voter (voter-ready activation)',
@@ -106,6 +108,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           explicitOperationType.trim().toUpperCase() :
           null;
       if (normalizedExplicitOperationType) {
+        if (isLearnerFirstGrowthAdd(this, partitionId, null, normalizedExplicitOperationType)) {
+          return false;
+        }
         return CRITICAL_VOTER_READY_GATED_OPERATION_TYPES.has(
           normalizedExplicitOperationType,
         );
@@ -137,6 +142,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           operationRow.type.toUpperCase() :
           null;
       if (!operationType) {
+        return false;
+      }
+      if (
+        isLearnerFirstGrowthAdd(this, partitionId, operationRow, operationType)
+      ) {
         return false;
       }
       return CRITICAL_VOTER_READY_GATED_OPERATION_TYPES.has(operationType);
@@ -285,6 +295,65 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
       ),
     );
   }
+}
+
+function isLearnerFirstGrowthAdd(
+  handler,
+  partitionId,
+  operationRow,
+  operationType,
+) {
+  if (operationType && operationType !== OperationType.ADD) {
+    return false;
+  }
+  if (operationRow?.as_learner === true || handler?.learnerFirstAdmission === true) {
+    return true;
+  }
+  let placementEnabled =
+    handler?.rebalanceCoordinator?.placementAdmissionEnabled === true ||
+    Boolean(
+      typeof operationRow?.steps_history === 'string' &&
+      operationRow.steps_history.includes(LOCAL_STR_PLACEMENT_ADMISSION_KEY),
+    );
+  if (handler?.localServices instanceof Map) {
+    for (const service of handler.localServices.values()) {
+      if (service?.partitionId !== partitionId) continue;
+      if (service.learnerFirstAdmission === true) {
+        return true;
+      }
+      if (service?.rebalanceCoordinator?.placementAdmissionEnabled === true) {
+        placementEnabled = true;
+      }
+    }
+  }
+  if (!placementEnabled) {
+    return false;
+  }
+  const cache = handler?.systemTableCache;
+  if (!cache?.getAll) {
+    return true;
+  }
+  const allServices = cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+  const serviceRows = allServices.filter(
+    (row) => row?.partition_id === partitionId,
+  );
+  const activeVoterCount = serviceRows.filter(
+    (row) =>
+      row?.status !== ReplicaStatus.FAILED &&
+      row?.status !== ReplicaStatus.REMOVING &&
+      row?.status !== ReplicaStatus.REMOVED &&
+      isVoterRaftRole(row?.raft_role),
+  ).length;
+  const partitionRow = cache.get ?
+    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId) :
+    null;
+  const targetRf =
+    Number(partitionRow?.replica_count ?? DEFAULT_TARGET_REPLICATION_FACTOR) ||
+    DEFAULT_TARGET_REPLICATION_FACTOR;
+  return (
+    activeVoterCount === 0 ||
+    (activeVoterCount % 2 === 1 && activeVoterCount < targetRf)
+  );
 }
 
 export {assignReplicaHandlerVoterReadinessMethods};

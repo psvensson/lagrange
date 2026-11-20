@@ -2,7 +2,7 @@
 /**
  * Evidence producer for the coordinator-sqlite-merge Quest (design §4.1 rev 2).
  *
- * Each measured receipt runs one top-level test of
+ * Each measured oracle receipt runs one top-level test of
  * test/query/sql-semantics-differential-oracle.test.js, selected by its
  * anchored group name, and requires exactly the number of tests that group
  * declares (test/query/sql-semantics-oracle/receipt-groups.js). The oracle
@@ -34,22 +34,6 @@ const REGEXP_MATCH_ESCAPE = '\\$&';
 const NOT_YET_MEASURED = Object.freeze({
   'durable-command-format-fence': 'WP-D: command format v2 and its committed upgrade fence ' +
     'do not exist yet; the WP1 hop census defines the witness',
-  'js-sql-evaluator-census-zero': 'WP6: the static census guard ' +
-    '(scripts/checks/check-coordinator-sql-evaluation-census.js) does not exist yet',
-  'one-schema-authority-collation': 'WP2: the catalog schema records no collation and the ' +
-    'coordinator still parses CREATE TABLE; the oracle\'s DDL round trip ' +
-    '(sql-render-round-trip-fidelity) is red on it today',
-  'write-key-evaluation-by-sqlite': 'WP4: the oracle\'s write-key family F9 is not built yet',
-  'merge-resource-bounds-typed-refusal': 'WP3: no CoordinatorMergeSession exists; the ' +
-    'bounds family F10 is not built yet',
-  'coordinator-evaluated-kill-bound': 'WP3: no merge child-process pool exists; the F10 ' +
-    'deadline-kill witness is not built yet',
-  'engine-identity-parity': 'WP3: no merge-time engine identity check exists; family F10 ' +
-    'is not built yet',
-  'every-stage-green': 'every work package: each WP verification records its own green ' +
-    'candidate and interim table; no stage has been verified yet',
-  'consumer-and-test-migration': 'WP6: the pinned consumers and tests (design §1.3 I) ' +
-    'are not migrated yet',
   'comparative-scenario-a-shapes-unregressed': 'WP6: the Scenario A semantic gate and lab ' +
     'latency delta have not been measured',
 });
@@ -103,6 +87,57 @@ const receipts = Object.freeze([
   groupReceipt(GROUP.TYPED_WIRE, 'layer B: every storage class, local and remote, rows and ' +
     'parameters, crosses the query wire as SQLite produced it; a non-canonical answer ' +
     'cell is a typed refusal'),
+  Object.freeze({
+    id: 'js-sql-evaluator-census-zero',
+    testFile: 'test/query/coordinator-sql-evaluation-census.test.js',
+    detail: 'WP6 static census guard: the 5 JS SQL evaluator modules and 2 duplicate SQL ' +
+      'renderer modules are deleted, zero prohibited evaluator signatures remain, and the ' +
+      'classified SQLite/DDL/wire/routing owner inventory is complete',
+  }),
+  Object.freeze({
+    id: 'one-schema-authority-collation',
+    testFile: 'test/query/sql-table-definition.test.js',
+    detail: 'WP2 one schema authority: catalog records each column collation and affinity, ' +
+      'one DDL renderer serves partitions and coordinator, and non-BINARY key columns are ' +
+      'refused with UNSUPPORTED_SQL_FEATURE',
+  }),
+  Object.freeze({
+    id: 'write-key-evaluation-by-sqlite',
+    testFile: 'test/query/sql-mutation-and-constraint-stabilization.test.js',
+    detail: 'WP4 write-key evaluation and batch UNIQUE enforcement by in-memory SQLite over ' +
+      'declared column types and collations',
+  }),
+  Object.freeze({
+    id: 'merge-resource-bounds-typed-refusal',
+    testFile: 'test/query/distributed-merge-engine.test.js',
+    detail: 'WP3 CoordinatorMergeSession enforces MERGE_INPUT_MAX_ROWS, MEMORY_LIMIT_BYTES, ' +
+      'PRAGMA max_page_count, and GUARDED_PARTIAL overflow with typed refusals',
+  }),
+  Object.freeze({
+    id: 'coordinator-evaluated-kill-bound',
+    testFile: 'test/query/distributed-merge-engine.test.js',
+    detail: 'WP3 CoordinatorMergeProcessPool interrupts expensive COORDINATOR_EVALUATED ' +
+      'queries at deadline / AbortSignal with SIGKILL and keeps the coordinator responsive',
+  }),
+  Object.freeze({
+    id: 'engine-identity-parity',
+    testFile: 'test/query/distributed-merge-engine.test.js',
+    detail: 'WP3 CoordinatorMergeSession verifies sqliteVersion, sqliteSourceId, and ' +
+      'compileOptionsDigest parity and refuses mismatches with QUERY_ENGINE_MISMATCH',
+  }),
+  Object.freeze({
+    id: 'every-stage-green',
+    testFile: 'test/query/coordinator-interim-refusals.test.js',
+    detail: 'WP1-WP7 stage verification: all interim refusals I1a-I1e, I2, and I3 are retired ' +
+      'in favor of CoordinatorMergeSession and SQLite evaluation while connection-state ' +
+      'functions remain permanently refused on coordinator read paths',
+  }),
+  Object.freeze({
+    id: 'consumer-and-test-migration',
+    testFile: 'test/live-query/live-query-group.test.js',
+    detail: 'WP6/WP7 consumer and test migration: live-query and distributed SELECT consumers ' +
+      'use the canonical SQL renderer and SQLite evaluation with aliased collation parity',
+  }),
   ...Object.keys(NOT_YET_MEASURED).map((id) => Object.freeze({
     id,
     command: `node ${SCRIPT} ${NOT_YET_MEASURED_FLAG} ${id}`,
