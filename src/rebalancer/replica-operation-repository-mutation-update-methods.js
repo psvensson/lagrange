@@ -178,21 +178,20 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         terminalTransition,
       );
       if (terminalTransition) {
-        const conflictingTerminal =
-          await this.queryConflictingTerminalAuthorityOperation(operation);
-        if (conflictingTerminal) {
-          // A DIFFERENT durable terminal already won: adopt the winner into
-          // the writer's projection and report the typed adoption so callers
-          // stand the terminal-repair down instead of re-asserting their own
-          // terminal state (audit finding 6).
-          adoptWinningTerminalOperationOutcome(
-            operation,
-            conflictingTerminal,
-          );
+        const terminalPreimage =
+          await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
+        if (terminalPreimage && this.isAuthoritativeOperationTerminal(terminalPreimage)) {
+          assertOperationUpdateSubject(operation, terminalPreimage);
+          const replay = this.isReplicaOperationUpdateSatisfied(operation, terminalPreimage);
+          // A known identical terminal preimage is replay before mutation. A
+          // lost reply to its inevitable zero-row CAS must never reclassify it
+          // as a newly recovered write. A different terminal remains the winner.
+          adoptWinningTerminalOperationOutcome(operation, terminalPreimage);
           return buildOperationUpdateOutcome({
-            persisted: false,
-            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
-            operation: conflictingTerminal,
+            persisted: replay,
+            disposition: replay ? REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
+              REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+            operation: terminalPreimage,
           });
         }
       }

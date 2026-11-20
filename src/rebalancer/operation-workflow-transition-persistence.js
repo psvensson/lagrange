@@ -249,7 +249,8 @@ class OperationWorkflowTransitionPersistence
           operation.operationId,
           step,
         );
-        commitProjectedState(operation);
+        Object.assign(operation, structuredClone(transitionCommitted.operation));
+        delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
 
         this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
           operationId: operation.operationId,
