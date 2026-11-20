@@ -23,8 +23,7 @@ import {completeParticipantRelease} from '../node/participant-release-client.js'
 import {observeParticipantReleaseClockValue,
   participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
   '../node/participant-release-diagnostic-observation.js';
-import {PARTICIPANT_CUTOVER_OUTCOME,
-  PARTICIPANT_RELEASE_TRIGGER} from
+import {PARTICIPANT_RELEASE_TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
   NodeState,
@@ -326,13 +325,14 @@ function createBootstrapServiceSeedWorkflowMethods() {
         if (authorization === null) {
           throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.AUTHORITY_UNAVAILABLE);
         }
-        const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
+        const {answer, completed: cohortCompleted, attemptCount,
+          firstBlockedDrain, firstJoinedAttempt} =
           await completeParticipantRelease(this.replicaHandler, {
             partitionId: service.partitionId, targetBuildDigest: build.digest,
             trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
             deadlineAtMs: deadline, authorization,
           }, {now: () => timeSource.now(), sleep: (delayMs) => this.sleep(delayMs)});
-        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+        if (!cohortCompleted) {
           const terminalObservation = readParticipantReleaseClock(timeSource);
           const seedRelease = seedReleaseFailureProjection({startObservation,
             terminalObservation, budgetMs, ordinal: completed + 1,

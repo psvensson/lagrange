@@ -269,8 +269,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     });
     exposePartitionConstruction(options, partition, this.partitionServices);
     await partition.initialize();
-    // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
-    // so the dispatcher seam attaches here for every join-built service.
+    // Dynamic CREATE, snapshot recreation, and direct restore all use
+    // this factory, which wires only its exact initialized partition.
     attachSnapshotCatchupDispatcher({service: partition,
       systemTableCache, messageRouter: this.messageRouter});
     const tableName = options.tableName;

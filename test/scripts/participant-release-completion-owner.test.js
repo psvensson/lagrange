@@ -95,6 +95,9 @@ test('completion audit requires current reply classification and typed CREATE un
   rejectsContract(changed(sources, FRESH,
     'error.code = FRESH_CREATE_RELEASE_UNAVAILABLE;',
     'error.code = OUTCOME.OPERATOR_REQUIRED;'), FRESH);
+  rejectsContract(changed(sources, SEED,
+    'if (!cohortCompleted) {',
+    'if (Boolean(answer.outcome)) {'), SEED);
 });
 
 test('completion audit rejects spoofed imports, shadowed bindings and an extra aliased caller', async () => {

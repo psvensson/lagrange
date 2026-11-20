@@ -38,14 +38,14 @@ const TRIVIA = new Set(['loc', 'range', 'start', 'end', 'raw', 'comments', 'toke
 const CONTEXTS = new WeakMap();
 const POLICY_IMPORTS = Object.freeze({OUTCOME: 'PARTICIPANT_CUTOVER_OUTCOME',
   BOUND: 'PARTICIPANT_CUTOVER_BOUND', TRIGGER: 'PARTICIPANT_RELEASE_TRIGGER'});
-const SEED_IMPORTS = Object.freeze({PARTICIPANT_CUTOVER_OUTCOME: 'PARTICIPANT_CUTOVER_OUTCOME',
+const SEED_IMPORTS = Object.freeze({
   PARTICIPANT_RELEASE_TRIGGER: 'PARTICIPANT_RELEASE_TRIGGER'});
 const ACTION_IMPORT = Object.freeze({ACTION: 'PARTICIPANT_RELEASE_ACTION'});
 const OWNER_BINDINGS = Object.freeze([NAME, 'requestParticipantRelease',
   'retainFirstReleaseObservation', 'OUTCOME', 'BOUND', 'TRIGGER', 'ACTION',
   'objectFreeze', 'mathMin', 'mathMax', 'EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION',
   'askParticipantRelease', 'releaseNodeOfAddress']);
-const SEED_BINDINGS = Object.freeze([SEED_FACTORY, 'PARTICIPANT_CUTOVER_OUTCOME',
+const SEED_BINDINGS = Object.freeze([SEED_FACTORY,
   'PARTICIPANT_RELEASE_TRIGGER', 'TABLES', 'observeParticipantReleaseClockValue',
   'readParticipantReleaseClock', 'participantReleaseSeedBudgetObservation']);
 const FRESH_BINDINGS = Object.freeze([FRESH_FACTORY, 'handler', 'now', 'sleep',
@@ -182,13 +182,13 @@ const SEED_CONTRACT = `({async releaseSeedParticipantCohorts() {
     if (authorization === null) {
       throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.AUTHORITY_UNAVAILABLE);
     }
-    const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
+    const {answer, completed: cohortCompleted, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
       await completeParticipantRelease(this.replicaHandler, {
         partitionId: service.partitionId, targetBuildDigest: build.digest,
         trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
         deadlineAtMs: deadline, authorization,
       }, {now: () => timeSource.now(), sleep: (delayMs) => this.sleep(delayMs)});
-    if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+    if (!cohortCompleted) {
       const terminalObservation = readParticipantReleaseClock(timeSource);
       const seedRelease = seedReleaseFailureProjection({startObservation,
         terminalObservation, budgetMs, ordinal: completed + 1,
