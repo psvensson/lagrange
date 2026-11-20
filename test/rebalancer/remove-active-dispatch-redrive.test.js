@@ -312,11 +312,13 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
   const {coordinator, deliveries} = createRemoveCoordinator({operationRow,
     removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND});
   const repository = coordinator.repository;
-  const persist = repository.persistOperationUpdate.bind(repository);
+  const gateway = repository.controlPlaneSystemTableGateway;
+  const execute = gateway.executeQuery.bind(gateway);
   let winner = null;
   let correctionAttempts = 0;
-  repository.persistOperationUpdate = async (projection, options) => {
-    if (projection.workflowStep === WORKFLOW_STEP.STOPPING) {
+  gateway.executeQuery = async (sql, params, options) => {
+    if (sql.includes('UPDATE replica_operations') && sql.includes('AND steps_history = ?') &&
+        params[1] === WORKFLOW_STEP.STOPPING) {
       correctionAttempts += 1;
       const now = Date.now();
       const failed = {...repository.rowToOperation(operationRow),
@@ -324,12 +326,18 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
         updatedAt: now, completedAt: now, errorMessage: 'competing terminal writer',
         stepsHistory: [...JSON.parse(operationRow.steps_history),
           {step: WORKFLOW_STEP.FAILED, timestamp: now}]};
-      const result = await persist(failed, {terminalTransition: true});
-      t.equal(result.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        'competing failure is a real SQLite commit');
-      winner = result.operation;
+      // An independent writer wins at the storage boundary. Keep the
+      // owner's terminal CAS guard and parameter encoding while bypassing
+      // the correcting owner's pre-read of the deliberately stranded row.
+      const result = await execute(
+        repository.resolveOperationUpdateSql(WORKFLOW_STEP.ACTIVE, true),
+        repository.buildReplicaOperationUpdateParams(failed, WORKFLOW_STEP.ACTIVE, null),
+        options,
+      );
+      t.equal(result.changes, 1, 'the competing guarded terminal write commits in SQLite');
+      winner = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
     }
-    return persist(projection, options);
+    return execute(sql, params, options);
   };
   try {
     await coordinator.reconcileOrphanedOperations();

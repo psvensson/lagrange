@@ -59,6 +59,7 @@ import {
   OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SAFETY_SHARED,
 } from '../../src/rebalancer/priority-publication-safety-shared.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
@@ -71,6 +72,7 @@ import {
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {OPERATION_TRANSITION_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const {
@@ -315,67 +317,21 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
   for (const row of serviceRows) {
     trackedServices.set(row.service_id, {...row});
   }
-  const sqlEngine = {
-    executeQuery: async (sql, params) => {
-      if (sql.includes('UPDATE replica_operations')) {
-        const [status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId] = params;
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing, status, workflow_step: workflowStep,
-            updated_at: updatedAt, completed_at: completedAt,
-            error_message: errorMessage, steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true};
+  const store = createCoordinatorSqlStore({
+    getAll(table) {
+      if (table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return [...trackedOperations.values()];
       }
-      // The exact-target observation SELECTs full identity columns and
-      // rejects rows whose node_id does not match the intended target
-      // (doesObservedReplicaRowMatchTarget), so the authoritative services
-      // read must answer with the whole tracked row, not a bare status.
-      if (sql.includes('services') && sql.includes('service_id = ?')) {
-        const [serviceId] = params;
-        const service = trackedServices.get(serviceId);
-        return {
-          success: true,
-          rows: service ? [{...service}] : [],
-        };
+      if (table === SYSTEM_TABLE_NAME.SERVICES) {
+        return [...trackedServices.values()];
       }
-      if (sql.includes('services') && sql.includes('partition_id = ?')) {
-        const [partitionId, nodeId] = params;
-        const matching = Array.from(trackedServices.values()).filter((s) =>
-          s.partition_id === partitionId && s.node_id === nodeId);
-        return {
-          success: true,
-          rows: matching.map((service) => ({...service})),
-        };
-      }
-      if (sql.includes('replica_operations')) {
-        const allOps = Array.from(trackedOperations.values());
-        if (sql.includes('operation_id = ?')) {
-          const [operationId] = params;
-          const op = trackedOperations.get(operationId);
-          return {success: true, rows: op ? [op] : []};
-        }
-        if (sql.includes('partition_id = ?') &&
-            sql.includes('target_node_id = ?')) {
-          const [partitionId, targetNodeId] = params;
-          return {success: true, rows: allOps.filter((op) =>
-            op.partition_id === partitionId &&
-            op.target_node_id === targetNodeId &&
-            !['active', 'removed', 'failed'].includes(op.status))};
-        }
-        if (sql.includes('NOT IN')) {
-          return {success: true, rows: allOps.filter((op) =>
-            !['active', 'removed', 'failed'].includes(op.status))};
-        }
-        return {success: true, rows: allOps};
-      }
-      return {success: true, rows: []};
+      return [];
     },
-  };
+    upsert(_table, row) {
+      trackedOperations.set(row.operation_id, row);
+    },
+  });
+  const sqlEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
   const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'test-node-1',
     systemTableCache: createMockCache(),
@@ -418,7 +374,41 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
   }));
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    try {
+      await shutdown();
+    } finally {
+      store.suspend();
+    }
+  };
   return {coordinator, getOp: (id) => trackedOperations.get(id) || null};
+}
+
+// Model a write acknowledged by the SQL transport that never becomes
+// authoritative. The real repository confirmation and retry owners still
+// consume the durable row through SQLite, and the subsequent write can land.
+function loseNextTerminalWrite(owner) {
+  const gateway = owner.repository.controlPlaneSystemTableGateway;
+  const execute = gateway.executeQuery.bind(gateway);
+  let lostWrites = 0;
+  gateway.executeQuery = async (sql, params, options) => {
+    if (lostWrites === 0 && sql.includes('UPDATE replica_operations') &&
+        sql.includes('completed_at IS NULL')) {
+      lostWrites += 1;
+      return {success: true, changes: 1};
+    }
+    return execute(sql, params, options);
+  };
+  return () => lostWrites;
+}
+
+async function attemptUnconfirmedTerminal(owner, durable, projection) {
+  return owner.persistTerminalOperation(durable, projection,
+    OPERATION_TRANSITION_REASON.OPERATION_COMPLETED, {
+      ...owner.buildOperationTransitionPersistOptions(),
+      terminalTransition: true,
+    });
 }
 
 t.test(
@@ -534,7 +524,8 @@ t.test(
       updated_at: now,
       completed_at: null,
       error_message: null,
-      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now,
+        sourceReplicaId: 'replica-terminal-0'}]),
     };
     const {coordinator, getOp} = buildSweepCoordinator({
       operationRows: [syncingRow],
@@ -579,14 +570,16 @@ t.test(
           sourceReplicaId: syncingRow.source_replica_id,
           replaceRemovalIntent: true,
           replaceWitnessCommitIndex: witness.commitIndex,
-        }],
+        }, {step: WORKFLOW_STEP.REMOVED, timestamp: now + 10}],
       };
 
       // The terminal write never landed durably (failed authoritative
       // terminal persistence): the durable row still says SYNCING.
-      await owner.confirmCommittedTransitionPersistence(projectedTerminal, {
-        terminalTransitionRepair: true,
-      });
+      const lostWrites = loseNextTerminalWrite(owner);
+      await t.rejects(attemptUnconfirmedTerminal(owner, durable, projectedTerminal),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED'},
+        'an acknowledgement without durable visibility cannot settle');
+      t.equal(lostWrites(), 1, 'the original guarded terminal write reached the SQL fault');
 
       t.equal(
         owner.terminalTransitionRepairStateByOperationId.has('op-terminal-1'),
@@ -678,10 +671,16 @@ t.test(
         workflowStep: 'ACTIVE',
         updatedAt: now + 10,
         completedAt: now + 10,
+        stepsHistory: [...durable.stepsHistory, {
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: now + 10,
+        }],
       };
-      await owner.confirmCommittedTransitionPersistence(projectedActive, {
-        terminalTransitionRepair: true,
-      });
+      const lostWrites = loseNextTerminalWrite(owner);
+      await t.rejects(attemptUnconfirmedTerminal(owner, durable, projectedActive),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED'},
+        'an unconfirmed ACTIVE write cannot settle');
+      t.equal(lostWrites(), 1, 'the original ACTIVE write reached the SQL fault');
       t.equal(
         owner.terminalTransitionRepairStateByOperationId.has('op-active-1'),
         true,
@@ -692,6 +691,12 @@ t.test(
         ReplicaStatus.SYNCING,
         'the durable row still says SYNCING — the ACTIVE cell held, not lost',
       );
+      t.equal(scheduledRepairs.length, 1, 'one ACTIVE repair owns the lost acknowledgement');
+      await scheduledRepairs[0]();
+      t.equal(getOp('op-active-1').status, ReplicaStatus.ACTIVE,
+        'the same repair durably commits ADD ACTIVE after the fault clears');
+      t.equal(owner.terminalTransitionRepairStateByOperationId.has('op-active-1'), false,
+        'the repair clears only after authoritative terminal confirmation');
     } finally {
       await coordinator.shutdown();
     }
@@ -721,7 +726,8 @@ t.test(
       updated_at: now,
       completed_at: null,
       error_message: null,
-      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now,
+        sourceReplicaId: 'replica-refused-0'}]),
     };
     const {coordinator, getOp} = buildSweepCoordinator({
       operationRows: [refusedRow],

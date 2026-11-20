@@ -112,6 +112,7 @@ import {
   REBALANCE_COORDINATOR_LOG_MSG,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {OperationType, ReplicaStatus} from
   '../../src/rebalancer/replica-status.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
@@ -409,7 +410,9 @@ async function quiesce() {
  * Build the real coordinator/owner wired to the CAS-backed store,
  * mirroring rebalance-coordinator-outcome-routing.test.js conventions.
  */
-function createHarness(store) {
+function createHarness(store, witness = createReplaceWitness({
+  leaderReplicaId: TEST_TARGET_REPLICA_ID,
+})) {
   const emitter = new ExecutorOutcomeEmitter({
     logger: {debug() {}, info() {}, warn() {}, error() {}},
   });
@@ -421,10 +424,6 @@ function createHarness(store) {
   // The REPLACE's witness replica (quest replace-source-removal-owner): the
   // target's committed configuration still holds the source, and the target
   // leads.
-  const witness = createReplaceWitness({
-    leaderReplicaId: TEST_TARGET_REPLICA_ID,
-  });
-
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createTransactionCoordinator(),
@@ -646,7 +645,7 @@ function settledReconcileCount(harness) {
  * be applied, but via the loop — a different call shape than these
  * scenarios pin).
  */
-async function emitTargetCompletionOutcomesSequentially(harness) {
+async function emitTargetCompletionOutcomesSequentially(harness, beforeActive) {
   harness.emitter.emitOutcome(
     EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
     TEST_OPERATION_ID,
@@ -657,6 +656,7 @@ async function emitTargetCompletionOutcomesSequentially(harness) {
     () => settledReconcileCount(harness) >= 1,
     'the SYNCING outcome reconcile to settle',
   );
+  beforeActive?.();
   harness.emitter.emitOutcome(
     EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
     TEST_OPERATION_ID,
@@ -713,7 +713,7 @@ async function runScenario(harness, operation, options = {}) {
   }
 
   if (!emitDuringWalk) {
-    await emitTargetCompletionOutcomesSequentially(harness);
+    await emitTargetCompletionOutcomesSequentially(harness, options.beforeActive);
   }
 
   await quiesce();
@@ -850,9 +850,16 @@ test(
         const operation = buildReplaceOperation();
         const store = createCasBackedReplicaOperationStore(operation);
         const harness = createHarness(store);
+        const {owner} = harness;
 
         try {
-          await runScenario(harness, operation, {emitDuringWalk: false});
+          await runScenario(harness, operation, {
+            emitDuringWalk: false,
+            beforeActive() {
+              t.equal(owner.executorOutcomeRetryTimerByOperationId.has(TEST_OPERATION_ID),
+                false, 'the exact authoritative SYNCING replay needs no visibility retry');
+            },
+          });
 
           t.equal(
             callsOf(harness.calls, 'reconcileExecutorOutcome').length,
@@ -909,8 +916,15 @@ test(
 
         try {
           let staleSendingSnapshot = null;
+          let syncingRetryTimer;
+          let priorWarnings = 0;
           await runScenario(harness, operation, {
             emitDuringWalk: false,
+            beforeActive() {
+              syncingRetryTimer = owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID);
+              priorWarnings = warnsMatching(harness.logs,
+                REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED).length;
+            },
             afterWalk: async () => {
               // The owner's read path is served by a divergent replica
               // frozen at the SENDING era (run evidence: 'No row found
@@ -938,6 +952,15 @@ test(
             'below is what un-wedges it later',
           );
 
+          t.ok(syncingRetryTimer?.cleared,
+            'the newer exact-replica ACTIVE wake displaced the old refused SYNCING wait');
+          const activeRetryTimer = owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID);
+          t.ok(activeRetryTimer && activeRetryTimer !== syncingRetryTimer,
+            'unresolved ACTIVE owns its own retry');
+          await syncingRetryTimer?.callback();
+          t.equal(owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID),
+            activeRetryTimer, 'a stale SYNCING callback cannot clear the ACTIVE timer');
+
           // --- the exact raced application: ACTIVE CAS lost to the walk
           const activeUpdateCalls = updateStepCallsTo(
             harness.calls,
@@ -951,7 +974,7 @@ test(
           );
           t.equal(
             activeUpdateCalls[0]?.result,
-            false,
+            OPERATION_RECONCILE_OUTCOME.REFUSED,
             'the ACTIVE transition did NOT commit (and did not throw): ' +
             'the CAS lost against the dispatch step-walk',
           );
@@ -1045,7 +1068,7 @@ test(
           const deferredWarns = warnsMatching(
             harness.logs,
             REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
-          );
+          ).slice(priorWarnings);
           t.equal(
             deferredWarns.length,
             1,
@@ -1089,7 +1112,7 @@ test(
           const rearmedWarns = warnsMatching(
             harness.logs,
             REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
-          );
+          ).slice(priorWarnings);
           t.equal(
             rearmedWarns.length,
             2,
@@ -1172,9 +1195,9 @@ test(
       'ledger exit (b) superseded: a retryable CAS persist failure at ' +
       'ACTIVE is absorbed by the owner-local deferred-progress lane ' +
       '(quest formation-ledger-self-move-blocks-cluster-ops) — updateStep ' +
-      'does not throw, the observed-target replay is not needed, source ' +
-      'removal actuates directly with the durable row still at SYNCING, ' +
-      'a durable retry owner is retained (the CL-029 invariant), and the ' +
+      'does not throw, the observed-target replay is not needed, ' +
+      'the source is not removed from a provisional ACTIVE row, ' +
+      'the transition retains an exact retry owner, and the ' +
       'persist error is still LOGGED (the 145024Z-run3 discriminator ' +
       'holds: that run had none)',
       async (t) => {
@@ -1216,7 +1239,7 @@ test(
             replayObservedTargetCalls.length,
             0,
             'the observed-target replay was not needed — the workflow ' +
-            'advanced directly off the owner-local ACTIVE row',
+            'keeps the owner-local ACTIVE projection and its persistence retry',
           );
           t.ok(
             countLiveOwnerRetryState(owner).transitionRetryTimers >= 1,
@@ -1227,18 +1250,24 @@ test(
           t.equal(
             store.state.authoritative.workflowStep,
             WORKFLOW_STEP.SYNCING,
-            'the DURABLE row never records ACTIVE (or any later step) — ' +
-            'still SYNCING; progress continues via the dispatched removal',
+            'the durable row is still SYNCING during the refused ACTIVE write',
           );
-          t.equal(
-            owner.executorOutcomeRetryPayloadByOperationId.size +
-              owner.executorOutcomeRetryTimerByOperationId.size,
-            0,
-            'no executor-outcome retry owner remains — correct here ' +
-            '(unlike exit (a)) because the evidence WAS applied via the ' +
-            'observed-target replay, so clearing it is consumption, not ' +
-            'loss',
-          );
+          t.equal(removeDeliveries(harness).length, 0,
+            'provisional ACTIVE cannot authorize source removal');
+          const retained = owner.executorOutcomeRetryPayloadByOperationId.get(TEST_OPERATION_ID);
+          const retryTimer = owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID);
+          t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
+            'the unapplied ACTIVE notification is retained');
+          t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+          await retryTimer?.callback();
+          await waitForCondition(() => removeDeliveries(harness).length === 1,
+            'the healed ACTIVE retry to commit and dispatch source removal');
+          t.equal(store.state.authoritative.workflowStep, WORKFLOW_STEP.STOPPING,
+            'the applied ACTIVE notification writes STOPPING before removal');
+          t.equal(owner.executorOutcomeRetryPayloadByOperationId.has(TEST_OPERATION_ID), false,
+            'the exact ACTIVE notification clears only once consumed');
+          t.equal(owner.transitionRetryTimerByOperationId.has(TEST_OPERATION_ID), false,
+            'the committed transition clears its owned persistence retry');
           // The discriminating observable vs the real run:
           t.ok(
             errorsMatching(
@@ -1626,16 +1655,16 @@ test(
           timestamp: operation.createdAt,
           sourceReplicaId: TEST_SOURCE_REPLICA_ID,
         });
-        const store = createCasBackedReplicaOperationStore(operation);
-        const harness = createHarness(store);
-        const {owner} = harness;
-        // Its removal intent was recorded against the witness's commit index
-        // (quest replace-source-removal-owner: R-1a completes only a REPLACE
-        // with a recorded intent, C0).
+        // R-1a uses the committed STOPPING intent. Seed C0 before SQLite
+        // commits the row so the authority read sees the same history.
+        const witness = createReplaceWitness({leaderReplicaId: TEST_TARGET_REPLICA_ID});
         Object.assign(operation.stepsHistory.at(-1), {
           replaceRemovalIntent: true,
-          replaceWitnessCommitIndex: harness.witness.commitIndex,
+          replaceWitnessCommitIndex: witness.commitIndex,
         });
+        const store = createCasBackedReplicaOperationStore(operation);
+        const harness = createHarness(store, witness);
+        const {owner} = harness;
 
         // The armed retry owner: retained ACTIVE evidence plus its timed
         // retry, exactly what the visibility-deferral loop holds

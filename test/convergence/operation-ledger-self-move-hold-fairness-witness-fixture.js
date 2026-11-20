@@ -4,6 +4,9 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {isTerminalStep} from '../../src/rebalancer/replica-operation-progress.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway} from
+  '../rebalancer/test-helpers.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
@@ -71,10 +74,9 @@ import {
 //   t+18.2 s the four dependents' second spread round (-> joiner-3) is
 //            planned on their completion wake.
 //   t+26 s   the seed's authoritative point reads of the self-move answer
-//            EMPTY (the null point read of run 23-51-32, 23:55:14.47): the
-//            reservation reconciliation releases the reservation as an
-//            orphan and the seed's recent-intent memory of the self-move is
-//            pruned; the ledger planner then executes a second REPLACE (r1
+//            incomplete (the null point read of run 23-51-32, 23:55:14.47).
+//            The sweep retains the holder reservation and independently
+//            releases a reservation whose operation is confirmed absent; the ledger planner then executes a second REPLACE (r1
 //            -> joiner-4) whose interlock lifecycle reads are answered with
 //            a positive terminal row that is NOT the holder's (a lagging,
 //            misattributed ledger read — the one HEAD path by which a read
@@ -125,19 +127,18 @@ const SINGLE_ROW = 1;
 const NO_SELF_MOVES = 0;
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ID_PREFIX = 'res-';
+const ORPHAN_OPERATION_ID = 'absent-previous-self-move';
+const RESERVATION_TTL_MS = 60_000;
 const CENSUS_PRESSURE_MESSAGE =
   'In-flight operation owner query indicates control-plane pressure';
 const REPLICA_OPERATIONS_TABLE_MARKER = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const STORAGE_RESERVATIONS_TABLE_MARKER = SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS;
 const POINT_READ_MARKER = 'operation_id = ?';
 const ENTITY_READ_MARKER = 'entity_id = ?';
-const RESERVATION_STATUS_MARKER = 'status = ?';
-const RESERVATION_EXPIRY_MARKER = 'expires_at';
 
 // The seed ledger's answer to the authoritative point read of the held
-// self-move during the injected sequence: EMPTY for every reader (the null
-// point read of run 23-51-32 — it releases the reservation as an orphan and
-// prunes the seed's recent-intent memory of the self-move), and a positive
+// self-move during the injected sequence: EMPTY for every reader (the
+// incomplete point read of run 23-51-32) and a positive
 // terminal row of a DIFFERENT operation for the interlock's own lifecycle
 // reads (the misattributed ledger read that released the hold).
 // FAILED_READ serves the holder-release witness below: a point read that
@@ -189,9 +190,15 @@ function buildReservationRow(operationId, nowMs) {
   return {
     reservation_id: RESERVATION_ID_PREFIX + operationId,
     operation_id: operationId,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: LEDGER_PARTITION_ID,
+    partition_id: LEDGER_PARTITION_ID,
+    target_node_id: JOINER_1_NODE_ID,
     status: RESERVATION_STATUS.ACTIVE,
     estimated_bytes: RESERVATION_ESTIMATED_BYTES,
-    expires_at: nowMs,
+    created_at: nowMs,
+    updated_at: nowMs,
+    expires_at: nowMs + RESERVATION_TTL_MS,
   };
 }
 
@@ -268,6 +275,10 @@ function injectLedgerAnswers({
   foreignRow,
 }) {
   const gateway = coordinator.controlPlaneSystemTableGateway;
+  const reservationStore = createCoordinatorSqlStore({});
+  const reservationGateway = createMockControlPlaneSystemTableGateway({
+    executeQuery: reservationStore.execute,
+  });
   const control = {
     pointReadAnswer: POINT_READ_ANSWER.LEDGER,
     reservationRowsVisible: false,
@@ -308,11 +319,40 @@ function injectLedgerAnswers({
     String(sql).includes(REPLICA_OPERATIONS_TABLE_MARKER) &&
     String(sql).includes(ENTITY_READ_MARKER) &&
     params?.includes(LEDGER_PARTITION_ID);
-  const isActiveReservationSweep = (sql) =>
-    String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER) &&
-    String(sql).includes(RESERVATION_STATUS_MARKER) &&
-    !String(sql).includes(RESERVATION_EXPIRY_MARKER) &&
-    !String(sql).includes(POINT_READ_MARKER);
+  control.reconcileReservations = async () => {
+    const holderId = selfMoveId();
+    const now = timeSource.now();
+    for (const operationId of [holderId, ORPHAN_OPERATION_ID]) {
+      const insert = reservationStore.submitMutation({
+        operation: 'insert',
+        tableName: SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+        row: buildReservationRow(operationId, now),
+      });
+      if (!insert.success) throw new Error(insert.error);
+    }
+    const previousPointReadAnswer = control.pointReadAnswer;
+    // A failed authority read of the live holder is distinct from the
+    // successful SQLite point read for the truly absent operation.
+    control.pointReadAnswer = POINT_READ_ANSWER.FAILED_READ;
+    control.reservationRowsVisible = true;
+    try {
+      const result = await coordinator.reconcileReservations();
+      const statuses = reservationStore.execute(
+        'SELECT operation_id, status FROM storage_reservations WHERE operation_id IN (?, ?)',
+        [holderId, ORPHAN_OPERATION_ID],
+      );
+      if (!statuses.success) throw new Error(statuses.error);
+      const committedById = new Map(statuses.rows.map((row) => [row.operation_id, row.status]));
+      return {...result,
+        holderReservationStatus: committedById.get(holderId),
+        orphanReservationStatus: committedById.get(ORPHAN_OPERATION_ID),
+      };
+    } finally {
+      control.pointReadAnswer = previousPointReadAnswer;
+      control.reservationRowsVisible = false;
+      reservationStore.suspend();
+    }
+  };
   for (const [method, sqlIndex] of [
     ['readAuthoritativeRows', 1],
     ['readRows', 1],
@@ -351,11 +391,8 @@ function injectLedgerAnswers({
       ) {
         return {success: true, rows: []};
       }
-      if (control.reservationRowsVisible && isActiveReservationSweep(sql)) {
-        return {
-          success: true,
-          rows: [buildReservationRow(selfMoveId(), timeSource.now())],
-        };
+      if (control.reservationRowsVisible && String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER)) {
+        return reservationGateway[method](...args);
       }
       return original(...args);
     };
@@ -456,12 +493,12 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
   };
   const runInjectedSequence = async () => {
     ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.EMPTY;
-    ledgerAnswers.reservationRowsVisible = true;
-    const reconcile = await seed.reconcileReservations();
-    ledgerAnswers.reservationRowsVisible = false;
+    const reconcile = await ledgerAnswers.reconcileReservations();
     extras.reconcile = {
       atMs: elapsed(),
       orphansReleased: reconcile.orphansReleased,
+      holderReservationStatus: reconcile.holderReservationStatus,
+      orphanReservationStatus: reconcile.orphanReservationStatus,
       expired: reconcile.expired,
       holderPhase: holderPhase(),
     };
@@ -845,7 +882,7 @@ function scheduleHolderReleaseExtras(context, {settlement}) {
     let reconcile = null;
     try {
       if (probe === HOLDER_PROBE.RESERVATION_RECONCILE) {
-        reconcile = await target.reconcileReservations();
+        reconcile = await ledgerAnswers.reconcileReservations();
       } else {
         engagement = await target.engageOperationLedgerSelfMoveHold(
           buildProbeCandidate(),
@@ -854,13 +891,14 @@ function scheduleHolderReleaseExtras(context, {settlement}) {
     } finally {
       ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.LEDGER;
       ledgerAnswers.interlockForeignRow = false;
-      ledgerAnswers.reservationRowsVisible = false;
     }
     const observation = {
       probe,
       atMs: elapsed(),
       engagement,
       orphansReleased: reconcile?.orphansReleased ?? null,
+      holderReservationStatus: reconcile?.holderReservationStatus ?? null,
+      orphanReservationStatus: reconcile?.orphanReservationStatus ?? null,
       holderBefore,
       holderAfter: snapshotHolder(target),
       holderRow: describeRow(holderBefore.operationId),
@@ -887,7 +925,6 @@ function scheduleHolderReleaseExtras(context, {settlement}) {
     });
     await probeEngagement(HOLDER_PROBE.RESERVATION_RECONCILE, () => {
       ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.EMPTY;
-      ledgerAnswers.reservationRowsVisible = true;
     });
   };
   const runLocalSettlementAfterClaimRefused = () => {

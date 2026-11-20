@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import assert from 'node:assert/strict';
 import {REBALANCER_DEFAULT} from '../../src/rebalancer/rebalancer-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
@@ -228,9 +229,11 @@ test(
     assertSelfMoveLifecycleObserved(m);
     assert.ok(
       m.extras.reconcile !== null &&
-        m.extras.reconcile.orphansReleased > NO_RELEASES,
-      'the real reservation reconciliation released the self-move\'s ' +
-        `reservation as an orphan on the null point read (${JSON.stringify(
+        m.extras.reconcile.orphansReleased > NO_RELEASES &&
+        m.extras.reconcile.orphanReservationStatus === RESERVATION_STATUS.RELEASED &&
+        m.extras.reconcile.holderReservationStatus === RESERVATION_STATUS.ACTIVE,
+      'the real reservation reconciliation released the absent operation’s ' +
+        `reservation and retained the self-move’s reservation on the incomplete read (${JSON.stringify(
           m.extras.reconcile,
         )})`,
     );

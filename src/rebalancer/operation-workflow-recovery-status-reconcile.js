@@ -683,6 +683,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     });
     if (
       didOperationReconcileAdvanceOrComplete(progressed) ||
+      progressed === OPERATION_RECONCILE_OUTCOME.STOPPING_REDRIVE_CONFIRMED ||
       this.repository?.isOperationTerminal?.(operation) === true
     ) {
       return;

@@ -35,6 +35,7 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   RECONCILED_REPLICA_STATUS_OBSERVED_TARGET_UNAVAILABLE,
+  ReplicaOperationResponseStatus,
   ReplicaStatus,
   STOPPING_REPLICA_OBSERVATION_STATE,
   TRANSITION_RETRY_DELAY_MS,
@@ -94,6 +95,20 @@ const COORDINATOR_CREATED_CACHE_REENTRY_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+
+function classifyStoppingRedrive(owner, operation, lifecycleStatus, result) {
+  if (owner.repository.isOperationTerminal(operation)) {
+    return terminalOperationReconcileOutcome(operation);
+  }
+  // Only a fresh, positively observed removing replica and the same
+  // operation's acknowledged re-drive establish an external effect in flight.
+  if (lifecycleStatus === ReplicaStatus.REMOVING &&
+      result?.operationId === operation.operationId && result.success === true &&
+      result.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
+    return OPERATION_RECONCILE_OUTCOME.STOPPING_REDRIVE_CONFIRMED;
+  }
+  return OPERATION_RECONCILE_OUTCOME.WAITING;
+}
 
 class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTarget {
   getObservedProgressTableState(tableName) {
@@ -720,9 +735,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       ).reconcileOutcome;
     }
 
-    await this.executeOperationFromReconcilePath(operation);
-    return this.repository.isOperationTerminal(operation) ?
-      terminalOperationReconcileOutcome(operation) : OPERATION_RECONCILE_OUTCOME.WAITING;
+    const result = await this.executeOperationFromReconcilePath(operation);
+    return classifyStoppingRedrive(this, operation, actualStatus, result);
   }
 
   // BR7: the effect is observed without a recorded intent; record it and

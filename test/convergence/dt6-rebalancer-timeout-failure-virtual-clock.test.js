@@ -17,7 +17,7 @@ import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinat
 //
 // HONEST SCOPE: the coordinator, the operation store, checkTimeouts, reconcileTimeoutOperation, and
 // failOperation are all real production code (the same fixture used by timeout-triggers-failure's
-// Property 7 wall-clock tests). The durable store is the established in-memory mock SQL engine; only
+// Property 7 wall-clock tests). The durable store is the production-schema SQLite fixture; only
 // the clock is virtualized. This is the real timeout->FAILED transition step 12 deferred.
 
 const START_MS = 1_000_000;
@@ -38,7 +38,7 @@ async function runVirtualTimeout({advanceMs}) {
 
     // First check at virtual now == START_MS (elapsed 0): real reconcile leaves it PENDING.
     await coordinator.checkTimeouts();
-    const afterFirstCheck = getTrackedOperation(operation.operationId);
+    const afterFirstCheck = structuredClone(getTrackedOperation(operation.operationId));
 
     // Advance virtual time, then check again: past the timeout the real failOperation fires.
     timeSource.advance(advanceMs);
