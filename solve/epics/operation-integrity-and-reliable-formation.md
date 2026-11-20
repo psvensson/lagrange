@@ -293,7 +293,7 @@ planning. Both must revalidate the exact operation before sending.
 
 The same 53-file selection on `58ec69a2a` passed 51 files and failed two.
 One convergence witness allowed a second ledger REPLACE at virtual time
-26,000 ms while its target-side hold still reported engaged. The same host
+26,000 ms while the seed-side hold still reported engaged. The same host
 passed at the CREATE parent and reproduced the second admission at the
 strict-workflow parent. Trace the admission-time seed-side ledger and
 target-side holder before attributing the failure to an actual concurrent

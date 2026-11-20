@@ -859,8 +859,8 @@ async (t) => {
     }),
   );
 
-  t.equal(localReadCount, 1,
-    'strict owner-rpc mode may still probe local rows but must not return them');
+  t.equal(localReadCount, 0,
+    'strict owner-rpc mode skips the local replica probe');
   t.equal(ownerRpcReadCount, 1,
     'strict owner-rpc mode should still attempt owner-rpc reads');
   t.equal(result.success, false,
