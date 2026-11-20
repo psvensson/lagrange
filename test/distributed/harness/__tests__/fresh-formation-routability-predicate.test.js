@@ -15,6 +15,7 @@
  */
 
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from '../../../../src/test-helpers/tap.js';
@@ -357,7 +358,7 @@ function satisfiedWriteReadback() {
     publicProbe: {probeId: 'ffr-probe-1', probeValue: 1},
     insert: {rowCount: 1},
     readbacks: [
-      {nodeId: null, rowCount: 1, rows: [{...publicRow}], via: 'public-pg-wire'},
+      {nodeId: null, rowCount: 1, rows: [{...publicRow, probe_value: '1'}], via: 'public-pg-wire'},
       ...arrayMap(NODE_IDS, (nodeId) => ({nodeId, rowCount: 1,
         rows: [{...publicRow}], via: `admin:${nodeId}`})),
     ],
@@ -385,12 +386,18 @@ test('write/readback rejects missing writers and count-only or wrong-row evidenc
   const countOnly = satisfiedWriteReadback();
   countOnly.readbacks[0].rows = [];
   assert.equal(evaluateWriteReadback(countOnly).met, false, 'rowCount alone is insufficient');
+  const malformedPgValue = satisfiedWriteReadback();
+  malformedPgValue.readbacks[0].rows[0].probe_value = '01';
+  assert.equal(evaluateWriteReadback(malformedPgValue).met, false, 'exact pg text is required');
   const wrongPublicRow = satisfiedWriteReadback();
   wrongPublicRow.readbacks[1].rows[0].probe_value = 99;
   assert.equal(evaluateWriteReadback(wrongPublicRow).met, false, 'public probe value must match');
   const wrongNodeRow = satisfiedWriteReadback();
   wrongNodeRow.nodeWrites[1].readback.rows[0].probe_id = 'different-probe';
   assert.equal(evaluateWriteReadback(wrongNodeRow).met, false, 'writer probe identity must match');
+  const missingNodeRow = satisfiedWriteReadback();
+  missingNodeRow.nodeWrites[0].readback.rows = [];
+  assert.equal(evaluateWriteReadback(missingNodeRow).met, false, 'affectedRows alone is insufficient');
   const sameNodeRead = satisfiedWriteReadback();
   sameNodeRead.nodeWrites[0].readerNodeId = NODE_IDS[0];
   assert.equal(evaluateWriteReadback(sameNodeRead).met, false, 'another node must read the write');
@@ -1149,7 +1156,7 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
   let now = T0;
   let created = false;
   let countCalls = 0;
-  const probeRows = new Map();
+  const probeDatabase = new Database(':memory:');
   const writerCalls = [];
   const authority = satisfiedAuthority();
   const table = {table_name: 'ffr_probe', partition_id: PRIORITY_PARTITION_IDS[0],
@@ -1158,6 +1165,7 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
     partitions: {rows: [table]}};
   async function query(nodeId, sql, params = []) {
     if (stringStartsWith(sql, 'CREATE')) {
+      probeDatabase.exec(sql);
       created = true;
       now += createDelay;
       return {contractState: 'ready'};
@@ -1165,17 +1173,15 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
     if (stringStartsWith(sql, 'SELECT COUNT')) {
       countCalls++;
       now += countDelay;
-      return {rows: [{cnt: 0}]};
+      return {rows: probeDatabase.prepare(sql).all(...params)};
     }
     if (stringStartsWith(sql, 'INSERT')) {
       writerCalls.push({nodeId, params: [...params]});
       if (nodeId === rejectedWriter) throw new Error('injected writer refusal');
-      probeRows.set(params[0], {probe_id: params[0], probe_value: params[1]});
-      return {affectedRows: 1};
+      return {affectedRows: probeDatabase.prepare(sql).run(...params).changes};
     }
     if (stringStartsWith(sql, 'SELECT probe_id')) {
-      const row = probeRows.get(params.length === 0 ? 'ffr-probe-1' : params[0]);
-      return {rows: row ? [{...row}] : []};
+      return {rows: probeDatabase.prepare(sql).all(...params)};
     }
     const key = stringSplit(sql, ' ')[3];
     return created ? afterCreate[key] : key === 'replica_operations' ? authority.replicaOperations : authority[key];
@@ -1197,13 +1203,13 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
       },
       openPublicPg: async () => ({connection: {}, endpoint: {host: 'test', port: 1}}),
       pgClient: () => ({connect: async () => {}, end: async () => {},
-        query: async (sql) => {
-          if (stringStartsWith(sql, 'INSERT')) {
-            probeRows.set('ffr-probe-1', {probe_id: 'ffr-probe-1', probe_value: 1});
-            return {rowCount: 1, rows: []};
-          }
-          const row = probeRows.get('ffr-probe-1');
-          return {rowCount: row ? 1 : 0, rows: row ? [{...row}] : []};
+        query: async (sql, params = []) => {
+          const statement = probeDatabase.prepare(sql);
+          if (!statement.reader) return {rowCount: statement.run(...params).changes, rows: []};
+          const rows = arrayMap(statement.all(...params), (row) => ({
+            probe_id: row.probe_id, probe_value: String(row.probe_value),
+          }));
+          return {rowCount: rows.length, rows};
         }}),
     }}};
   try {
@@ -1212,6 +1218,8 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
     if (!error.diagnostics?.freshFormationRoutability) throw error;
     return {passed: false, report: error.diagnostics.freshFormationRoutability,
       countCalls, writerCalls};
+  } finally {
+    probeDatabase.close();
   }
 }
 
@@ -1222,8 +1230,11 @@ test('formation and routability bounds include time spent awaiting successful re
   assert.equal(lateFormation.report.formationSatisfied, false);
   assert.equal(lateFormation.passed, false);
   assert.equal(lateFormation.report.firstUnmet.id, 'formation-bound-spent');
+  assert.equal(lateFormation.writerCalls.length, 3,
+    'successful post-bound diagnostic writes cannot certify formation');
   const lateRoute = await observeScenarioTiming({snapshotDelay: 0, countDelay: 101});
   assert.equal(lateRoute.report.formationSatisfied, true);
+  assert.equal(lateRoute.writerCalls.length, 0, 'expired routability does not start writes');
   assert.equal(lateRoute.report.firstUnmet?.id, PREDICATE.USER_TABLE_ROUTABLE);
   assert.equal(lateRoute.report.timings.timeToUserTableRoutableSinceScenarioStartMs, null);
   const lateCreate = await observeScenarioTiming({

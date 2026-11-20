@@ -86,6 +86,8 @@ const NEXT_ACTION_RETRY = 'retry';
 const TABLE_NAME = 'ffr_probe';
 const PROBE_ID = 'ffr-probe-1';
 const PROBE_VALUE = 1;
+const NODE_PROBE_VALUE_START = 2;
+const NEXT_NODE_OFFSET = 1;
 const MAX_RECORDED_READ_FAILURES = 50;
 const REPORT_SCHEMA_VERSION = 1;
 const FORMATION_BOUND_SPENT = 'formation-bound-spent';
@@ -100,6 +102,8 @@ const SQL = Object.freeze({
     `VALUES ('${PROBE_ID}', ${PROBE_VALUE})`,
   READBACK: `SELECT probe_id, probe_value FROM ${TABLE_NAME} ` +
     `WHERE probe_id = '${PROBE_ID}'`,
+  NODE_INSERT: `INSERT INTO ${TABLE_NAME} (probe_id, probe_value) VALUES (?, ?)`,
+  NODE_READBACK: `SELECT probe_id, probe_value FROM ${TABLE_NAME} WHERE probe_id = ?`,
   PARTITIONS: 'SELECT * FROM partitions',
   REPLICA_OPERATIONS: 'SELECT * FROM replica_operations',
   SERVICES: 'SELECT * FROM services',
@@ -183,9 +187,9 @@ function resolvePrimaryReadWitness(result) {
     null;
 }
 
-async function readRows(node, sql, timeoutMs) {
+async function readRows(node, sql, timeoutMs, params = []) {
   try {
-    const result = await node.queryWithTimeout(sql, [], {timeoutMs});
+    const result = await node.queryWithTimeout(sql, params, {timeoutMs});
     const rows = Array.isArray(result?.rows) ? result.rows : null;
     if (rows === null) return {error: 'rows_absent'};
     const complete = isReadRowSetComplete(result);
@@ -379,6 +383,19 @@ async function observeUserTable(context) {
   return {issuedAtMs, result: result ?? expiredUserTableRoutability(null)};
 }
 
+async function writeFromNodeAndReadElsewhere(node, reader, probeValue, timeoutMs) {
+  const probeId = `ffr-node-${node.id}`;
+  let insert;
+  try {
+    const result = await node.queryWithTimeout(SQL.NODE_INSERT, [probeId, probeValue], {timeoutMs});
+    insert = {affectedRows: result.affectedRows};
+  } catch (error) {
+    insert = {error: errorText(error)};
+  }
+  const readback = await readRows(reader, SQL.NODE_READBACK, timeoutMs, [probeId]);
+  return {writerNodeId: node.id, readerNodeId: reader.id, probeId, probeValue, insert, readback};
+}
+
 async function writeAndReadBack(context) {
   const {deps, cluster, nodes, seedNode, timeoutMs} = context;
   const readbacks = [];
@@ -396,8 +413,9 @@ async function writeAndReadBack(context) {
       insert = {error: errorText(error)};
     }
     try {
-      readbacks.push({nodeId: null, rowCount:
-        (await client.query(SQL.READBACK)).rowCount, via: 'public-pg-wire'});
+      const read = await client.query(SQL.READBACK);
+      readbacks.push({nodeId: null, rowCount: read.rowCount, rows: read.rows,
+        via: 'public-pg-wire'});
     } catch (error) {
       readbacks.push({error: errorText(error), nodeId: null,
         via: 'public-pg-wire'});
@@ -411,10 +429,15 @@ async function writeAndReadBack(context) {
     const read = await readRows(node, SQL.READBACK, timeoutMs);
     readbacks.push(read.error ?
       {error: read.error, nodeId: node.id, via: `admin:${node.id}`} :
-      {nodeId: node.id, rowCount: read.rows.length, via: `admin:${node.id}`});
+      {nodeId: node.id, rowCount: read.rows.length, rows: read.rows, via: `admin:${node.id}`});
+  }
+  const nodeWrites = [];
+  for (let index = ZERO; index < nodes.length; index++) {
+    nodeWrites.push(await writeFromNodeAndReadElsewhere(nodes[index],
+      nodes[(index + NEXT_NODE_OFFSET) % nodes.length], NODE_PROBE_VALUE_START + index, timeoutMs));
   }
   return evaluateWriteReadback({clusterNodeIds: nodes.map((node) => node.id),
-    insert, readbacks});
+    publicProbe: {probeId: PROBE_ID, probeValue: PROBE_VALUE}, insert, readbacks, nodeWrites});
 }
 
 async function scanNodeLogs(nodes, state, collector = null) {

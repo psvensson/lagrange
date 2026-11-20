@@ -20,7 +20,7 @@
  *      replica-operation-progress.js) and every observer's projected
  *      `replicaOperations.inFlightCount` is 0;
  *   d. user table routable after a-c;
- *   e. one INSERT + readback with rowCount 1 from every node;
+ *   e. public INSERT/readback plus a distinct write at each node, read elsewhere;
  *   f. no `learner_address_unresolvable` refusal for a learner whose services
  *      row was durably committed before the refusal;
  *   g. the class (owner rule 2026-11-01): no serve-gating projection disagrees
@@ -61,6 +61,7 @@ import {
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringIndexOf = Function.call.bind(String.prototype.indexOf);
@@ -780,10 +781,53 @@ function expiredUserTableRoutability(lastObservation) {
   return unmet(PREDICATE.USER_TABLE_ROUTABLE, ['routability_bound_spent'], {lastObservation});
 }
 
+function matchesProbeRows(read, probe, publicPg = false) {
+  if (typeof probe?.probeId !== TYPEOF_STRING || probe.probeId.length === ZERO ||
+      !Number.isFinite(probe.probeValue) || !Array.isArray(read?.rows) ||
+      read.rows.length !== ONE) return false;
+  // The public pg-wire owner describes every output column as PostgreSQL TEXT.
+  // Admin queries expose the integer from the engine in their JSON result.
+  const expectedValue = publicPg ? String(probe.probeValue) : probe.probeValue;
+  return read.rows[ZERO]?.probe_id === probe.probeId &&
+    read.rows[ZERO]?.probe_value === expectedValue;
+}
+
+function checkPublicProbeReadbacks(input, readbacks, reasons) {
+  for (const nodeId of [null, ...input.clusterNodeIds]) {
+    const matches = arrayFilter(readbacks, (entry) => entry?.nodeId === nodeId);
+    if (matches.length !== ONE) reasons.push(`readback_coverage:${nodeId}`);
+  }
+  for (const entry of readbacks) {
+    if (entry?.nodeId !== null && !arrayIncludes(input.clusterNodeIds, entry?.nodeId)) {
+      reasons.push('readback_unknown_node');
+    }
+    if (entry?.error) reasons.push(`readback_failed:${entry.via}`);
+    if (entry?.rowCount !== ONE ||
+        !matchesProbeRows(entry, input.publicProbe, entry.nodeId === null)) {
+      reasons.push(`readback_row_mismatch:${entry?.via}`);
+    }
+  }
+}
+
+function checkNodeWrite(entry, nodeIds, reasons) {
+  const writer = entry?.writerNodeId;
+  if (!arrayIncludes(nodeIds, writer)) reasons.push('write_unknown_node');
+  if (!arrayIncludes(nodeIds, entry?.readerNodeId) || entry.readerNodeId === writer) {
+    reasons.push(`write_cross_node_read_absent:${writer}`);
+  }
+  if (entry?.insert?.error || entry?.insert?.affectedRows !== ONE) {
+    reasons.push(`node_insert_failed:${writer}`);
+  }
+  if (entry?.readback?.error || !matchesProbeRows(entry?.readback, entry)) {
+    reasons.push(`node_readback_mismatch:${writer}`);
+  }
+}
+
 /**
- * Predicate (e).
- * @param {Object} input {clusterNodeIds, insert: {rowCount|error},
- *   readbacks: Array<{via, nodeId|null, rowCount|error}>}
+ * Predicate (e): retain the public INSERT and every original observer read;
+ * also require one distinct INSERT at each node and its exact row at another.
+ * Inputs contain requested probe identities/values and original result facts.
+ * @param {Object} input
  * @return {Object} predicate result
  */
 function evaluateWriteReadback(input) {
@@ -791,22 +835,19 @@ function evaluateWriteReadback(input) {
   const insert = input.insert || null;
   if (insert === null) reasons.push('insert_not_issued');
   else if (insert.error) reasons.push(`insert_failed:${insert.error}`);
-  else if (insert.rowCount !== ONE) {
-    reasons.push(`insert_row_count:${insert.rowCount}`);
-  }
+  else if (insert.rowCount !== ONE) reasons.push(`insert_row_count:${insert.rowCount}`);
   const readbacks = Array.isArray(input.readbacks) ? input.readbacks : [];
+  checkPublicProbeReadbacks(input, readbacks, reasons);
+  const nodeWrites = Array.isArray(input.nodeWrites) ? input.nodeWrites : [];
   for (const nodeId of input.clusterNodeIds) {
-    if (!arraySome(readbacks, (entry) => entry.nodeId === nodeId)) {
-      reasons.push(`readback_absent:${nodeId}`);
+    if (arrayFilter(nodeWrites, (entry) => entry?.writerNodeId === nodeId).length !== ONE) {
+      reasons.push(`writer_coverage:${nodeId}`);
     }
   }
-  for (const entry of readbacks) {
-    if (entry.error) reasons.push(`readback_failed:${entry.via}`);
-    else if (entry.rowCount !== ONE) {
-      reasons.push(`readback_row_count:${entry.via}:${entry.rowCount}`);
-    }
-  }
-  const detail = {insert, readbacks};
+  const probeIds = [input.publicProbe?.probeId, ...arrayMap(nodeWrites, (entry) => entry?.probeId)];
+  if (new Set(probeIds).size !== probeIds.length) reasons.push('write_probe_identity_reused');
+  for (const entry of nodeWrites) checkNodeWrite(entry, input.clusterNodeIds, reasons);
+  const detail = {publicProbe: input.publicProbe, insert, readbacks, nodeWrites};
   return reasons.length === ZERO ?
     met(PREDICATE.WRITE_READBACK, detail) :
     unmet(PREDICATE.WRITE_READBACK, reasons, detail);
