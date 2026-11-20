@@ -105,24 +105,40 @@ function readOriginals(directory) {
   return originals;
 }
 
+function verifyTerminalStatus(status) {
+  requireOriginal(status.job_id === REQUEST && status.state === MANAGED_FAILURE &&
+    status.exit_code === 1 && status.execution_scope_closed === true &&
+    status.workload_started === true, TERMINAL_PROBLEM);
+}
+
+function verifyInventory(inventory) {
+  requireOriginal(inventory.job_id === REQUEST && inventory.next_cursor === null &&
+    inventory.names.includes(LOG), CUSTODY_PROBLEM);
+}
+
+function verifySelection(selection) {
+  requireOriginal(selection.sha === SOURCE && selection.host === HOST &&
+    selection.files.length === 1 && selection.files[0] === TEST, SELECTION_PROBLEM);
+}
+
+function verifyExecutedFile(ledger) {
+  requireOriginal(ledger.file === TEST && ledger.attempt === 1 && ledger.retriedOnce === false &&
+    ledger.ok === false && ledger.assertions === CASES.length, LEDGER_PROBLEM);
+}
+
 function verifyOriginalRun(originals) {
   const status = JSON.parse(originals.get(STATUS_FILE));
   const inventory = JSON.parse(originals.get(INVENTORY_FILE));
   const selection = JSON.parse(originals.get(SELECTION_FILE));
   const ledger = JSON.parse(originals.get(LEDGER_FILE).trim());
-  requireOriginal(status.job_id === REQUEST && status.state === MANAGED_FAILURE &&
-    status.exit_code === 1 && status.execution_scope_closed === true &&
-    status.workload_started === true, TERMINAL_PROBLEM);
-  requireOriginal(inventory.job_id === REQUEST && inventory.next_cursor === null &&
-    inventory.names.includes(LOG), CUSTODY_PROBLEM);
-  requireOriginal(selection.sha === SOURCE && selection.host === HOST &&
-    selection.files.length === 1 && selection.files[0] === TEST, SELECTION_PROBLEM);
-  requireOriginal(ledger.file === TEST && ledger.attempt === 1 && ledger.retriedOnce === false &&
-    ledger.ok === false && ledger.assertions === CASES.length, LEDGER_PROBLEM);
+  verifyTerminalStatus(status);
+  verifyInventory(inventory);
+  verifySelection(selection);
+  verifyExecutedFile(ledger);
   return {status, selection, ledger};
 }
 
-function verifyTap(raw) {
+function parseOriginalTap(raw) {
   const start = raw.indexOf(TAP_START);
   const end = raw.indexOf(TAP_FOOTER);
   requireOriginal(start >= 0 && end > start && raw.includes(`placement-head=${SOURCE}\n`) &&
@@ -135,18 +151,32 @@ function verifyTap(raw) {
     final = result;
   });
   parser.end(raw.slice(start, end));
+  return {final, assertions};
+}
+
+function verifyTapSummary(final, assertions) {
   requireOriginal(final && final.ok === false && final.count === CASES.length &&
     final.pass === 2 && final.fail === 2 && !final.bailout &&
     assertions.length === CASES.length, TAP_PROBLEM);
+}
+
+function verifyTapCase(result, name, error) {
+  requireOriginal(result.name === name && !result.skip && !result.todo && !result.tapError &&
+    result.ok === (error === null), `case ${name}`);
+  if (error !== null) verifyContractAssertion(result, name, error);
+}
+
+function verifyContractAssertion(result, name, error) {
+  requireOriginal(result.diag?.code === ASSERTION_ERROR &&
+    result.diag?.error?.includes(error) && result.diag?.stack?.includes(TEST),
+  `intended contract assertion ${name}`);
+}
+
+function verifyTap(raw) {
+  const {final, assertions} = parseOriginalTap(raw);
+  verifyTapSummary(final, assertions);
   for (const [index, [name, error]] of CASES.entries()) {
-    const result = assertions[index];
-    requireOriginal(result.name === name && !result.skip && !result.todo && !result.tapError &&
-      result.ok === (error === null), `case ${name}`);
-    if (error !== null) {
-      requireOriginal(result.diag?.code === ASSERTION_ERROR &&
-        result.diag?.error?.includes(error) && result.diag?.stack?.includes(TEST),
-      `intended contract assertion ${name}`);
-    }
+    verifyTapCase(assertions[index], name, error);
   }
   return {tests: final.count, passed: final.pass, failed: final.fail};
 }

@@ -463,14 +463,15 @@ async function joinParticipantCutover(handler, current, request) {
   const joinObservation = readParticipantReleaseClock(handler.timeSource);
   const remainingMs = participantReleaseClockMeasured(joinObservation) ?
     participantReleaseWaitRemainingMs(joinObservation.value, request.deadlineAtMs) : 0;
-  if (remainingMs <= 0) return joinedReleaseDeadline(request);
   // One shared settlement distribution, with detachable per-caller waiters.
   // An expired join leaves no reaction retained by a never-settling run promise.
-  const answer = await awaitJoinedCutover(handler, current, request, remainingMs);
+  const observedAnswer = remainingMs <= 0 ? joinedReleaseDeadline(request) :
+    await awaitJoinedCutover(handler, current, request, remainingMs);
   const terminalObservation = readParticipantReleaseClock(handler.timeSource);
-  if (!participantReleaseClockMeasured(terminalObservation) ||
+  const answer = !participantReleaseClockMeasured(terminalObservation) ||
       !participantReleaseAbsoluteClockValid(terminalObservation.value) ||
-      terminalObservation.value >= request.deadlineAtMs) return joinedReleaseDeadline(request);
+      terminalObservation.value >= request.deadlineAtMs ?
+    joinedReleaseDeadline(request) : observedAnswer;
   if (answer.outcome === OUTCOME.CUT_OVER) return answer;
   const joinedAttempt = participantReleaseAttemptAgeObservation(
     current.startObservation,
