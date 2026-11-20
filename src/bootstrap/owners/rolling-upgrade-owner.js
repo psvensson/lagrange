@@ -8,8 +8,8 @@ import {
   TERMINAL_MANAGEMENT_OPERATION_STATES as TERM_STATES,
 } from './management-v1-constants.js';
 import {
+  SupportEnvelopeOwner,
   evaluateRollbackEligibility,
-  validateVersionPairAdmission,
 } from './support-envelope-owner.js';
 
 const UNSET = null;
@@ -35,7 +35,7 @@ const OWNER_DEFAULTS = Object.freeze({
   onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
   onTriggerNodeRestart: UNSET, onPersistState: UNSET, activeOperation: UNSET,
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
-  initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET,
+  initialOperationState: OP_STATE.ACCEPTED, supportEnvelopeOwner: UNSET,
 });
 
 function createNodeVersionsMap(source) {
@@ -113,12 +113,13 @@ function isClusterNotReady(snap) {
 // certified by a support envelope of this build's cluster format revision is
 // admitted. Without a configured envelope nothing is certified, so the pair
 // is refused (fail closed), never admitted by the semver rule alone.
-function isOutsideSupportEnvelope(owner, targetVersion) {
-  const check = validateVersionPairAdmission(owner.supportEnvelope, {
+function isOutsideSupportEnvelope(owner, targetVersion, nodeCount) {
+  if (!SupportEnvelopeOwner.isOwner(owner.supportEnvelopeOwner)) return true;
+  return !SupportEnvelopeOwner.prototype.validateUpgradePair.call(owner.supportEnvelopeOwner, {
     sourceVersion: owner.currentVersion,
     targetVersion,
-  });
-  return !check.admitted;
+    nodeCount,
+  }).admitted;
 }
 function findPreflightFailure(owner, params, snap) {
   const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
@@ -127,13 +128,14 @@ function findPreflightFailure(owner, params, snap) {
   const hit = [
     [snap.hasActiveOperation === true || owner.hasActiveUpgrade(),
       L4_CODE.CONCURRENT_OPERATION_ACTIVE],
-    [isOutsideSupportEnvelope(owner, tVer), L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
     [snap.hasPartitionQuorum !== true, L4_CODE.QUORUM_SAFETY_HALT],
     [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
+    [isOutsideSupportEnvelope(owner, tVer, snap.nodeIds.length),
+      L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
   ].find(([failed]) => failed);
   return hit ? hit[1] : UNSET;
 }
@@ -386,10 +388,13 @@ class RollingUpgradeOwner {
     return this.versionSkew === true;
   }
   getReleaseFacts() {
+    const owner = this.supportEnvelopeOwner;
+    const certified = SupportEnvelopeOwner.isOwner(owner) &&
+      SupportEnvelopeOwner.prototype.validateEnvelope.call(owner).valid;
     return {
       version: this.currentVersion, artifactDigest: this.currentArtifactDigest,
       versionSkew: this.isVersionSkewActive(),
-      rollingUpgrade: this.capabilitySupported ?
+      rollingUpgrade: this.capabilitySupported && certified ?
         FACTS.CAPABILITY_SUPPORTED : FACTS.CAPABILITY_UNSUPPORTED,
     };
   }
@@ -411,7 +416,10 @@ class RollingUpgradeOwner {
   // A downgrade is admitted only back to the source of a pair certified at
   // this build's cluster format revision; without an envelope it is refused.
   executeRollback(options = {}) {
-    const eligibility = evaluateRollbackEligibility(this.supportEnvelope, options);
+    const owner = this.supportEnvelopeOwner;
+    const eligibility = SupportEnvelopeOwner.isOwner(owner) ?
+      SupportEnvelopeOwner.prototype.evaluateRollback.call(owner, options) :
+      evaluateRollbackEligibility(null, options);
     if (!eligibility.eligible) {
       return {
         message: eligibility.message,

@@ -27,7 +27,7 @@ import {
   evaluatePartitionQuorumAuthority,
 } from '../../src/bootstrap/owners/partition-quorum-authority.js';
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
-import {buildSupportEnvelopeRecord} from
+import {SupportEnvelopeOwner, buildSupportEnvelopeRecord} from
   '../../src/bootstrap/owners/support-envelope-owner.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
@@ -87,11 +87,8 @@ const BACKUP_PARAMS = Object.freeze({backupId: 'bkp-auth-1', destinationUri: 'me
 const RELEASE_PARAMS = Object.freeze({
   targetVersion: '0.5.0', targetArtifactDigest: `sha256:${'5'.repeat(64)}`,
 });
-// An in-place release transition is admitted only for a pair certified by a
-// support envelope of this build's cluster format revision (the release
-// version fence); without one it is refused OUTSIDE_SUPPORT_ENVELOPE.
-const CERTIFIED_RELEASE_ENVELOPE = buildSupportEnvelopeRecord({versionPair: {
-  sourceVersion: C.DEFAULT_RELEASE_VERSION,
+const RELEASE_POLICY = buildSupportEnvelopeRecord({versionPair: {
+  sourceVersion: MANAGEMENT_V1_CONTRACT.DEFAULT_RELEASE_VERSION,
   targetVersion: RELEASE_PARAMS.targetVersion,
 }});
 
@@ -466,7 +463,7 @@ function physicalCapabilityAdapters() {
   const effects = {exports: 0, drains: 0, restarts: 0, decommissions: 0};
   const storage = new MemoryBackupStorageAdapter();
   const adapters = {
-    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
+    supportEnvelopeOwner: new SupportEnvelopeOwner({envelope: RELEASE_POLICY}),
     storageAdapter: storage,
     exportPartitionSnapshots: () => {
       effects.exports += 1;
@@ -883,7 +880,7 @@ test('production composition rejects incomplete inventories, duplicate/learner r
   t.equal(majBackupRes.json.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED,
     'consistent-cut backup succeeds under valid 2/3 owner-backed voter quorum');
 
-  // 6b. Valid 3/3 distinct active voter quorum: facts + all management operations succeed!
+  // 6b. Valid 3/3 distinct active voters establish quorum. Release still needs physical proof.
   committedServices = savedPartitions.flatMap(
     (p) => buildVoterServiceRowsForPartition(p.partition_id, NODE_IDS),
   );
@@ -915,9 +912,15 @@ test('production composition rejects incomplete inventories, duplicate/learner r
   const relRes = await call('POST', OPERATIONS_URL, {
     body: envelope('TRANSITION_RELEASE', {...RELEASE_PARAMS}), authorization: GOOD_AUTH,
   });
-  t.equal(relRes.json.state, MANAGEMENT_OPERATION_STATE.ACCEPTED);
-  t.ok(caps.storage.writeCount > 0 && caps.effects.drains === 1 && caps.effects.restarts === 1,
-    'valid owner-backed authority grants permission to execute declared capabilities');
+  t.equal(relRes.json.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+  t.equal(relRes.json.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
+  t.ok(caps.storage.writeCount > 0);
+  t.equal(caps.effects.drains, 0);
+  t.equal(caps.effects.restarts, 0);
+  t.equal(factsRes.json.facts.release.supportEnvelope.policyValid, true);
+  t.same(factsRes.json.facts.release.supportEnvelope.certifiedDrillIds, []);
+  t.equal(factsRes.json.facts.capabilities.rollingUpgrade,
+    CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED);
 });
 
 test('PartitionService.prototype.getStatus contract parity, ready-node quorum, and ' +
@@ -1085,7 +1088,7 @@ test('PartitionService.prototype.getStatus contract parity, ready-node quorum, a
   for (const missingQuorum of [null, undefined]) {
     let drained = 0;
     const upg = new RollingUpgradeOwner({
-      supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
+      supportEnvelopeOwner: new SupportEnvelopeOwner({envelope: RELEASE_POLICY}),
       onDrainNodeLeadership: () => {
         drained += 1;
       },

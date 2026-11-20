@@ -13,8 +13,6 @@ import {
   TERMINAL_MANAGEMENT_OPERATION_STATES,
 } from '../../src/bootstrap/owners/management-v1-constants.js';
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
-import {buildSupportEnvelopeRecord} from
-  '../../src/bootstrap/owners/support-envelope-owner.js';
 import {BackupRestoreOwner} from '../../src/bootstrap/owners/backup-restore-owner.js';
 import {
   computeCanonicalOperationDigest, failValidation,
@@ -34,16 +32,8 @@ const PARTITIONS = Object.freeze([1, 2, 3].map((partitionId) => Object.freeze({
 })));
 const READY_BACKUP_SNAPSHOT = Object.freeze({ready: true, hasPartitionQuorum: true});
 
-// An in-place release transition is admitted only for a pair certified by a
-// support envelope of this build's cluster format revision (the release
-// version fence); without an envelope it is refused OUTSIDE_SUPPORT_ENVELOPE.
-const certifiedEnvelope = (targetVersion) => buildSupportEnvelopeRecord({
-  versionPair: {sourceVersion: C.DEFAULT_RELEASE_VERSION, targetVersion}});
-const CERTIFIED_RELEASE_ENVELOPE = certifiedEnvelope('0.5.0');
-
-/** Physical rolling-upgrade ports; without both the capability is unsupported. */
+/** Physical rolling-upgrade effect ports, independent of support evidence. */
 const upgradePorts = (extra = {}) => ({
-  supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
   onDrainNodeLeadership: () => {}, onTriggerNodeRestart: () => {}, ...extra,
 });
 
@@ -115,11 +105,10 @@ test('Constants, reason codes, contracts, and validator helpers', async (t) => {
   t.equal(ownerValidateRequest, validateManagementV1OperationRequest);
 });
 
+// Exercise the plan/recovery state machine after the new-operation admission boundary.
 function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
   const haltSafetyOwner = new RollingUpgradeOwner(upgradePorts());
-  haltSafetyOwner.startUpgrade({
-    operationId: `op-safety-halt-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
-  });
+  haltSafetyOwner.initiatePlan(`op-safety-halt-${idx}`, null, p, snap, 100);
   const safetyOpts = badQuorum === undefined ? {nowMs: 120} :
     {nowMs: 120, quorumHealthy: badQuorum};
   const safetyRes = haltSafetyOwner.checkTimeoutsAndSafety(safetyOpts);
@@ -127,9 +116,7 @@ function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
   t.equal(safetyRes.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
 
   const qOwner = new RollingUpgradeOwner(upgradePorts());
-  qOwner.startUpgrade({
-    operationId: `op-qs-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
-  });
+  qOwner.initiatePlan(`op-qs-${idx}`, null, p, snap, 100);
   qOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
   const catchUpOpts = badQuorum === undefined ? {nowMs: 120, underReplicatedPartitionCount: 0} :
     {nowMs: 120, underReplicatedPartitionCount: 0, quorumHealthy: badQuorum};
@@ -139,15 +126,12 @@ function assertRollingUpgradeStepQuorumHalt(t, snap, p, idx, badQuorum) {
 
   let nextDrains = 0;
   const drainGateOwner = new RollingUpgradeOwner({
-    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
     onDrainNodeLeadership: () => {
       nextDrains += 1;
     },
     onTriggerNodeRestart: () => {},
   });
-  drainGateOwner.startUpgrade({
-    operationId: `op-drain-gate-${idx}`, parameters: p, clusterSnapshot: snap, nowMs: 100,
-  });
+  drainGateOwner.initiatePlan(`op-drain-gate-${idx}`, null, p, snap, 100);
   drainGateOwner.recordNodeRestarted('node-1', {version: '0.5.0', nowMs: 110});
   drainGateOwner.completeNodeCatchUp('node-1', {
     nowMs: 120, quorumHealthy: true, underReplicatedPartitionCount: 0,
@@ -165,8 +149,7 @@ function assertRollingUpgradeQuorumSafetyGates(t, snap, p) {
   for (const [idx, missingQuorum] of [false, null, undefined, 1, 'true'].entries()) {
     let effects = 0;
     const rejOwner = new RollingUpgradeOwner({
-      supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
-      onDrainNodeLeadership: () => {
+        onDrainNodeLeadership: () => {
         effects += 1;
       },
       onSetNodeReadyz: () => {
@@ -210,13 +193,9 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
     L4_ROLLING_UPGRADE_REASON_CODE.CONCURRENT_OPERATION_ACTIVE],
     [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(
       {targetVersion: '0.3.0'}, snap),
-    L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE],
-    [() => new RollingUpgradeOwner({...upgradePorts(), supportEnvelope: undefined})
-      .evaluatePreflight(p, snap),
-    L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE],
-    [() => new RollingUpgradeOwner(upgradePorts({supportEnvelope: certifiedEnvelope('0.3.0')}))
-      .evaluatePreflight({targetVersion: '0.3.0'}, snap),
     L4_ROLLING_UPGRADE_REASON_CODE.RELEASE_VERSION_INCOMPATIBLE],
+    [() => new RollingUpgradeOwner(upgradePorts()).evaluatePreflight(p, snap),
+      L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE],
     [() => new RollingUpgradeOwner(upgradePorts({
       expectedArtifactDigests: {'0.5.0': 'sha256:different'},
     })).evaluatePreflight(p, snap), L4_ROLLING_UPGRADE_REASON_CODE.ARTIFACT_DIGEST_MISMATCH],
@@ -259,32 +238,24 @@ test('L4 Rolling Upgrade: 10 reason codes, 3-node upgrade and recovery', async (
   assertRollingUpgradeQuorumSafetyGates(t, snap, p);
 
   const toOwner = new RollingUpgradeOwner(upgradePorts({nodeUpgradeTimeoutMs: 50}));
-  toOwner.startUpgrade({operationId: 'op-to-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
+  toOwner.initiatePlan('op-to-1', null, p, snap, 100);
   t.equal(toOwner.checkTimeoutsAndSafety({nowMs: 200, quorumHealthy: true}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.NODE_UPGRADE_TIMEOUT);
 
   const mOwner = new RollingUpgradeOwner(upgradePorts());
-  mOwner.startUpgrade({operationId: 'op-mv-1', parameters: p, clusterSnapshot: snap, nowMs: 100});
+  mOwner.initiatePlan('op-mv-1', null, p, snap, 100);
   t.equal(mOwner.recordNodeRestarted('node-1', {version: '0.8.0'}).reasonCode,
     L4_ROLLING_UPGRADE_REASON_CODE.MIXED_VERSION_INVARIANT_VIOLATED);
 
   const [drained, readyzCalls, restarts] = [[], [], []];
   const uOwner = new RollingUpgradeOwner({
-    supportEnvelope: CERTIFIED_RELEASE_ENVELOPE,
     currentVersion: '0.4.0',
     onDrainNodeLeadership: (id) => drained.push(id),
     onSetNodeReadyz: (id, val) => readyzCalls.push({id, val}),
     onTriggerNodeRestart: (id, v, d) => restarts.push({id, v, d}),
   });
   const nodes = ['node-1', 'node-2', 'node-3'];
-  uOwner.startUpgrade({
-    operationId: 'op-roll-1', parameters: {targetVersion: '0.5.0', targetArtifactDigest: dSha},
-    clusterSnapshot: {
-      nodeIds: nodes, readyNodeIds: nodes, underReplicatedPartitionCount: 0,
-      hasPartitionQuorum: true,
-    },
-    nowMs: 1000,
-  });
+  uOwner.initiatePlan('op-roll-1', null, p, {...snap, nodeIds: nodes}, 1000);
 
   t.equal(drained[0], 'node-1');
   t.same(readyzCalls[0], {id: 'node-1', val: false});

@@ -1,27 +1,19 @@
 /**
  * Scenario: supported-upgrade-and-recovery-envelope
  *
- * Exercises the 5 certified upgrade, rollback, failure-recovery,
- * wiped-replica rebuild, and service-artifact upgrade drills under
- * foreground load with zero lost acknowledged writes, verifies
- * OUTSIDE_SUPPORT_ENVELOPE refusal at rolling-upgrade preflight and
- * bootstrap join admission (keyed on the cluster format revision), proves L3 BYOC partition-backed snapshot
- * export and hydration, and validates the canonical support-envelope
- * record.
+ * Policy/refusal simulation, an in-memory backup/restore exercise, and a
+ * same-format join check. This scenario has no certification topology
+ * declaration because it runs no physical upgrade or recovery drills.
  */
 
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_ROLLBACK_CUTOFF_PHASE,
   DEFAULT_SOURCE_VERSION,
   DEFAULT_TARGET_VERSION,
-  SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME,
-  SUPPORT_ENVELOPE_DRILL_ID,
   SUPPORT_ENVELOPE_REASON_CODE,
   SupportEnvelopeOwner,
   buildSupportEnvelopeRecord,
   clusterFormatRevisionClaim,
-  validateSupportEnvelopeRecord,
 } from '../../../src/bootstrap/owners/support-envelope-owner.js';
 import {
   RollingUpgradeOwner,
@@ -45,38 +37,20 @@ const DEFAULT_CLUSTER_NODES = Object.freeze([
   'node-2',
   'node-3',
 ]);
-const CERTIFIED_ARTIFACT_DIGEST =
+const SIMULATED_ARTIFACT_DIGEST =
   'sha256:0500000000000000000000000000000000000000000000000000000000000500';
 const SEED_NODE_UUID = '00000000-0000-4000-8000-000000000001';
 const PEER_NODE_UUID = '00000000-0000-4000-8000-000000000002';
 
-function executeRollingUpgradeDrill(envelope) {
-  const drained = [];
-  const restarted = [];
+function observeUpgradeRefusal(supportEnvelopeOwner) {
+  const effects = [];
   const owner = new RollingUpgradeOwner({
     currentVersion: DEFAULT_SOURCE_VERSION,
-    onDrainNodeLeadership: (nodeId) => drained.push(nodeId),
-    onTriggerNodeRestart: (nodeId, version) =>
-      restarted.push({nodeId, version}),
-    supportEnvelope: envelope,
+    onDrainNodeLeadership: (nodeId) => effects.push(nodeId),
+    onTriggerNodeRestart: (nodeId) => effects.push(nodeId),
+    supportEnvelopeOwner,
   });
-  const preflightBad = owner.evaluatePreflight(
-    {
-      targetArtifactDigest: CERTIFIED_ARTIFACT_DIGEST,
-      targetVersion: '0.9.0',
-    },
-    {
-      nodeIds: [...DEFAULT_CLUSTER_NODES],
-      readyNodeIds: [...DEFAULT_CLUSTER_NODES],
-      underReplicatedPartitionCount: ZERO,
-    },
-  );
-  assert.equal(
-    preflightBad.reasonCode,
-    L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
-  );
-
-  owner.startUpgrade({
+  const operation = owner.startUpgrade({
     clusterSnapshot: {
       hasPartitionQuorum: true,
       nodeIds: [...DEFAULT_CLUSTER_NODES],
@@ -84,123 +58,25 @@ function executeRollingUpgradeDrill(envelope) {
       underReplicatedPartitionCount: ZERO,
     },
     nowMs: 1000,
-    operationId: 'op-q12-rolling-upgrade',
+    operationId: 'op-q12-policy-only',
     parameters: {
-      targetArtifactDigest: CERTIFIED_ARTIFACT_DIGEST,
+      targetArtifactDigest: SIMULATED_ARTIFACT_DIGEST,
       targetVersion: DEFAULT_TARGET_VERSION,
     },
   });
-  for (let idx = ZERO; idx < DEFAULT_CLUSTER_NODES.length; idx += 1) {
-    const nodeId = DEFAULT_CLUSTER_NODES[idx];
-    if (idx > ZERO) {
-      owner.beginNextNodeDrain(1000 + idx * 100, {quorumHealthy: true});
-    }
-    owner.recordNodeRestarted(nodeId, {
-      nowMs: 1050 + idx * 100,
-      version: DEFAULT_TARGET_VERSION,
-    });
-    owner.completeNodeCatchUp(nodeId, {
-      nowMs: 1090 + idx * 100,
-      quorumHealthy: true,
-      underReplicatedPartitionCount: ZERO,
-    });
-  }
-  const finalStatus = owner.getOperationStatus('op-q12-rolling-upgrade');
-  assert.equal(finalStatus.state, MANAGEMENT_OPERATION_STATE.SUCCEEDED);
-  return {
-    availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.CONTINUOUS,
-    drainedNodes: drained,
-    drillId: SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE,
-    executed: finalStatus.state === MANAGEMENT_OPERATION_STATE.SUCCEEDED,
-    lostAcknowledgedWrites: ZERO,
-    outsideEnvelopePreflightReason: preflightBad.reasonCode,
-    recoveryDurationMs: 510,
-    restartedNodes: restarted.length,
-    sourceVersion: DEFAULT_SOURCE_VERSION,
-    targetVersion: owner.currentVersion,
-  };
-}
-
-function executeDowngradeRollbackDrill(envelope) {
-  const owner = new RollingUpgradeOwner({
-    currentVersion: DEFAULT_TARGET_VERSION,
-    nodeVersions: {
-      'node-1': DEFAULT_TARGET_VERSION,
-      'node-2': DEFAULT_SOURCE_VERSION,
-      'node-3': DEFAULT_SOURCE_VERSION,
-    },
-    supportEnvelope: envelope,
-  });
-  const preCutoff = owner.executeRollback({
-    currentPhase: DEFAULT_ROLLBACK_CUTOFF_PHASE,
-    targetVersion: DEFAULT_SOURCE_VERSION,
-  });
-  assert.equal(preCutoff.ok, true);
-  assert.equal(owner.currentVersion, DEFAULT_SOURCE_VERSION);
-
+  assert.equal(operation.state, MANAGEMENT_OPERATION_STATE.REJECTED);
+  assert.equal(operation.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
+  assert.deepEqual(effects, []);
   const postCutoff = owner.executeRollback({
     currentPhase: 'TARGET_SCHEMA_FINALIZED',
     cutoffExceeded: true,
     targetVersion: DEFAULT_SOURCE_VERSION,
   });
-  assert.equal(postCutoff.ok, false);
-  assert.equal(
-    postCutoff.reasonCode,
-    SUPPORT_ENVELOPE_REASON_CODE.ROLLBACK_CUTOFF_EXCEEDED,
-  );
-  return {
-    availabilityOutcome:
-      SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-    drillId: SUPPORT_ENVELOPE_DRILL_ID.DOWNGRADE_ROLLBACK_BOUNDARY,
-    executed: preCutoff.ok === true && postCutoff.ok === false,
-    lostAcknowledgedWrites: ZERO,
-    postCutoffMessage: postCutoff.message,
-    postCutoffRefusedWithCode: postCutoff.reasonCode,
-    preCutoffSucceeded: preCutoff.ok,
-    recoveryDurationMs: 420,
-  };
+  assert.equal(postCutoff.reasonCode, SUPPORT_ENVELOPE_REASON_CODE.ROLLBACK_CUTOFF_EXCEEDED);
+  return {reasonCode: operation.reasonCode, postCutoffReasonCode: postCutoff.reasonCode};
 }
 
-function executeOneNodeFailureRecoveryDrill() {
-  return {
-    availabilityOutcome:
-      SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-    drillId: SUPPORT_ENVELOPE_DRILL_ID.ONE_NODE_FAILURE_RECOVERY,
-    executed: true,
-    failedNodeId: 'node-2',
-    lostAcknowledgedWrites: ZERO,
-    recoveryDurationMs: 650,
-    targetVersion: DEFAULT_TARGET_VERSION,
-  };
-}
-
-function executeWipedReplicaRebuildDrill() {
-  return {
-    availabilityOutcome:
-      SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-    drillId: SUPPORT_ENVELOPE_DRILL_ID.WIPED_REPLICA_REBUILD,
-    executed: true,
-    learnerCatchUpVerified: true,
-    lostAcknowledgedWrites: ZERO,
-    rebuiltNodeId: 'node-3',
-    recoveryDurationMs: 890,
-    replicaBytesRebuilt: 4_194_304,
-  };
-}
-
-function executeServiceArtifactUpgradeDrill() {
-  return {
-    artifactAbi: 'service-cell-v2',
-    availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.CONTINUOUS,
-    drillId: SUPPORT_ENVELOPE_DRILL_ID.SERVICE_ARTIFACT_UPGRADE,
-    executed: true,
-    lostAcknowledgedWrites: ZERO,
-    previousGenerationRetired: true,
-    recoveryDurationMs: 310,
-  };
-}
-
-async function executeByocPartitionBackupRestoreProof(envelope) {
+async function executeByocPartitionBackupRestoreProof(supportEnvelopeOwner) {
   const livePartitions = [
     {
       partitionId: 101,
@@ -228,13 +104,13 @@ async function executeByocPartitionBackupRestoreProof(envelope) {
     onDrainNodeLeadership: () => {},
     onTriggerNodeRestart: () => {},
     storageAdapter: new MemoryBackupStorageAdapter(),
-    supportEnvelope: envelope,
+    supportEnvelopeOwner,
   });
   const backupStatus = await mgmt.backupRestoreOwner.createBackup({
     clusterSnapshot: {hasPartitionQuorum: true, ready: true},
     operationId: 'op-q12-backup-0001',
     parameters: {
-      backupId: 'bkp-q12-certified',
+      backupId: 'bkp-q12-simulation',
       destinationUri: 'memory://q12-byoc/backup-1',
     },
   });
@@ -293,41 +169,15 @@ async function executeJoinHandshakeAdmissionProof() {
 }
 
 async function runSupportedUpgradeAndRecoveryScenario(cluster = null) {
-  const baseEnvelope = buildSupportEnvelopeRecord();
-  const rollingUpgrade = executeRollingUpgradeDrill(baseEnvelope);
-  const downgradeRollback = executeDowngradeRollbackDrill(baseEnvelope);
-  const oneNodeRecovery = executeOneNodeFailureRecoveryDrill();
-  const wipedReplicaRebuild = executeWipedReplicaRebuildDrill();
-  const serviceArtifactUpgrade = executeServiceArtifactUpgradeDrill();
-
-  const certifiedEnvelope = buildSupportEnvelopeRecord({
-    drills: {
-      [SUPPORT_ENVELOPE_DRILL_ID.DOWNGRADE_ROLLBACK_BOUNDARY]:
-        downgradeRollback,
-      [SUPPORT_ENVELOPE_DRILL_ID.ONE_NODE_FAILURE_RECOVERY]: oneNodeRecovery,
-      [SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE]: rollingUpgrade,
-      [SUPPORT_ENVELOPE_DRILL_ID.SERVICE_ARTIFACT_UPGRADE]:
-        serviceArtifactUpgrade,
-      [SUPPORT_ENVELOPE_DRILL_ID.WIPED_REPLICA_REBUILD]: wipedReplicaRebuild,
-    },
-  });
-  const owner = new SupportEnvelopeOwner({envelope: certifiedEnvelope});
-  const validation = owner.validateEnvelope();
-  assert.equal(validation.valid, true);
-  assert.equal(validation.reasonCode, SUPPORT_ENVELOPE_REASON_CODE.OK);
-
-  const byocBackupRestore = await executeByocPartitionBackupRestoreProof(
-    certifiedEnvelope,
-  );
-  const joinHandshake = await executeJoinHandshakeAdmissionProof();
-
+  const policy = buildSupportEnvelopeRecord();
+  const owner = new SupportEnvelopeOwner({envelope: policy});
   const report = {
-    byocBackupRestore,
-    envelope: certifiedEnvelope,
-    joinHandshake,
+    byocBackupRestore: await executeByocPartitionBackupRestoreProof(owner),
+    joinHandshake: await executeJoinHandshakeAdmissionProof(),
     managementSummary: owner.getManagementSummary(),
+    policy,
     scenarioName: SCENARIO_NAME,
-    validation,
+    upgradeRefusal: observeUpgradeRefusal(owner),
   };
   if (cluster && typeof cluster === 'object') {
     cluster.reportDetail = report;
@@ -339,15 +189,4 @@ export async function run(cluster = null) {
   return runSupportedUpgradeAndRecoveryScenario(cluster);
 }
 
-export {
-  SCENARIO_NAME,
-  executeByocPartitionBackupRestoreProof,
-  executeDowngradeRollbackDrill,
-  executeJoinHandshakeAdmissionProof,
-  executeOneNodeFailureRecoveryDrill,
-  executeRollingUpgradeDrill,
-  executeServiceArtifactUpgradeDrill,
-  executeWipedReplicaRebuildDrill,
-  runSupportedUpgradeAndRecoveryScenario,
-  validateSupportEnvelopeRecord,
-};
+export {SCENARIO_NAME};

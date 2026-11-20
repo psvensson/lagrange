@@ -11,6 +11,7 @@ import {
   MANAGEMENT_V1_CONTRACT,
 } from './management-v1-constants.js';
 import {RollingUpgradeOwner} from './rolling-upgrade-owner.js';
+import {SupportEnvelopeOwner} from './support-envelope-owner.js';
 import {BackupRestoreOwner} from './backup-restore-owner.js';
 import {
   computeCanonicalOperationDigest,
@@ -235,12 +236,11 @@ function buildClusterSection(owner, incLin) {
 }
 
 function buildFacts(owner, snap, incLin) {
+  const supportEnvelope = owner.supportEnvelope;
+  const release = owner.rollingUpgradeOwner?.getReleaseFacts?.();
   const baseFacts = {
     cluster: buildClusterSection(owner, incLin),
-    release: buildReleaseSection(
-      owner.rollingUpgradeOwner?.getReleaseFacts?.(),
-      owner.supportEnvelope,
-    ),
+    release: buildReleaseSection(release, supportEnvelope),
     health: buildHealth(owner.backupRestoreOwner, readSnapshotPort(owner.options.healthSnapshot)),
     topology: buildTopology(snap, owner.isVersionSkewActive()),
     operations: owner._buildOperationsSection(),
@@ -248,11 +248,11 @@ function buildFacts(owner, snap, incLin) {
     capabilities: {
       backupRestore: resolveCapabilityState(owner.backupRestoreOwner?.capabilitySupported),
       decommissionNode: resolveCapabilityState(owner.decommissionSupported),
-      rollingUpgrade: resolveCapabilityState(owner.rollingUpgradeOwner?.capabilitySupported),
+      rollingUpgrade: release?.rollingUpgrade ?? CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED,
     },
   };
-  return owner.supportEnvelope ?
-    {...baseFacts, supportEnvelope: owner.supportEnvelope} :
+  return supportEnvelope ?
+    {...baseFacts, supportEnvelope} :
     baseFacts;
 }
 
@@ -408,24 +408,27 @@ class ManagementV1Owner {
    *   (the established cluster record), getClusterSnapshot, healthSnapshot,
    *   capacitySnapshot, storageAdapter, exportPartitionSnapshots,
    *   hydratePartitionSnapshots, onDrainNodeLeadership, onTriggerNodeRestart,
-   *   onSetNodeReadyz, onPersistState, onDecommissionNode, supportEnvelope.
+   *   onSetNodeReadyz, onPersistState, onDecommissionNode, supportEnvelopeOwner.
    *   A capability is supported only when its adapters are installed.
    */
   constructor(options = {}) {
     this.options = options;
     this.clusterId = options.clusterId ?? NULL_CLUSTER_ID;
     this.includeRestoredFromInFacts = options.includeRestoredFromInFacts ?? false;
-    this.supportEnvelope =
-      options.supportEnvelopeOwner?.getEnvelope?.() ??
-      options.supportEnvelope ??
-      null;
+    this.supportEnvelopeOwner = SupportEnvelopeOwner.isOwner(options.supportEnvelopeOwner) ?
+      options.supportEnvelopeOwner : null;
     this.decommissionSupported = typeof options.onDecommissionNode === FUNCTION_TYPE;
     this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
       ...pickPorts(options, ROLLING_UPGRADE_PORTS),
-      supportEnvelope: this.supportEnvelope,
+      supportEnvelopeOwner: this.supportEnvelopeOwner,
     });
     this.backupRestoreOwner = options.backupRestoreOwner ?? createBackupRestoreOwner(this);
     this.operationsById = new Map();
+  }
+
+  get supportEnvelope() {
+    if (this.supportEnvelopeOwner === null) return null;
+    return SupportEnvelopeOwner.prototype.getManagementSummary.call(this.supportEnvelopeOwner);
   }
 
   /**

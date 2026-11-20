@@ -281,7 +281,7 @@
     {
       "id": "backup-and-upgrades",
       "area": "Operations",
-      "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. docs/support-envelope.json contains policy/fixture defaults, including literal drill measurements and placeholder certification strings; it does not certify physical recovery or the declared version pair. The upgrade and recovery policy described in docs/operations-readiness.md requires actual artifacts and original physical drill outputs before support is qualified."
+      "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. docs/support-envelope.json declares the version pair, boundaries, topology and rollback policy. Physical execution evidence for that policy is unavailable. The upgrade and recovery policy described in docs/operations-readiness.md requires actual artifacts and original physical drill outputs before support is qualified."
     },
     {
       "id": "cluster-format-revision-fence",

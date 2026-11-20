@@ -26,22 +26,18 @@ const DEFAULT_ROLLBACK_CUTOFF_PHASE = 'BEFORE_TARGET_SCHEMA_FINALIZE';
 const DEFAULT_PROTOCOL_BOUNDARY_ID = 'node-transport-mtls-v1';
 const DEFAULT_SCHEMA_BOUNDARY_ID = 'raft-sqlite-schema-v1';
 const DEFAULT_ARTIFACT_ABI_ID = 'service-cell-v2'; const DIGEST_EXCLUDED_KEY = 'envelopeDigest';
-const DEFAULT_FINALIZED_PHASE = 'FINALIZED'; const DEFAULT_DOWNGRADE_RECOVERY_MS = 420;
-const DEFAULT_FAILURE_RECOVERY_MS = 650; const DEFAULT_ROLLING_UPGRADE_RECOVERY_MS = 510;
-const DEFAULT_ARTIFACT_UPGRADE_RECOVERY_MS = 310; const DEFAULT_REPLICA_REBUILD_RECOVERY_MS = 890;
-const DEFAULT_REPLICA_BYTES_REBUILT = 4_194_304;
+const DEFAULT_FINALIZED_PHASE = 'FINALIZED';
 const ROLLBACK_RESTORE_SUFFIX = 'restore from certified snapshot instead.';
 const SCHEMA_INCOMPATIBLE_SUFFIX = 'boundary is incompatible.';
 const ENVELOPE_FIELD = objectFreeze({
   BOUNDARIES: 'boundaries', DEPENDENCY_RECEIPTS: 'dependencyReceipts', DRILLS: 'drills',
-  ELIGIBLE_PHASES: 'eligiblePhases', ENVELOPE_OPTION: 'envelope',
+  ELIGIBLE_PHASES: 'eligiblePhases',
   REBUILD: 'rebuildEnvelope', ROLLBACK: 'rollback', ROLLBACK_CUTOFF: 'rollbackCutoff',
   SCHEMA_VERSION: 'schemaVersion', SOURCE_VERSION: 'sourceVersion',
   TARGET_VERSION: 'targetVersion', TOPOLOGY: 'topologyEnvelope', VERSION_PAIR: 'versionPair',
 });
 const UNCERTIFIED_ENVELOPE_PREFIX = 'Support envelope is not certified (';
 const UNCERTIFIED_ENVELOPE_SUFFIX = ').';
-const CERTIFIED_PAIR_ADMITTED_SUFFIX = 'is within the certified support envelope.';
 const OUTSIDE_CERTIFIED_PAIR_INFIX = 'is outside the certified support envelope (';
 const OUTSIDE_MIXED_PEER_INFIX = ') is outside the certified support envelope (';
 const CLUSTER_FORMAT_SUBJECT = objectFreeze({
@@ -62,11 +58,6 @@ const SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME = objectFreeze({
   BOUNDED_UNAVAILABILITY: 'BOUNDED_UNAVAILABILITY',
   CONTINUOUS: 'CONTINUOUS',
 });
-const VALID_AVAILABILITY_OUTCOMES = objectFreeze([
-  SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.CONTINUOUS,
-  SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-  SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_UNAVAILABILITY,
-]);
 const SUPPORT_ENVELOPE_DRILL_ID = objectFreeze({
   DOWNGRADE_ROLLBACK_BOUNDARY: 'downgrade_rollback_boundary',
   ONE_NODE_FAILURE_RECOVERY: 'one_node_failure_recovery',
@@ -84,6 +75,9 @@ const SUPPORT_ENVELOPE_REASON_CODE = objectFreeze({
   ENVELOPE_DIGEST_MISMATCH: 'ENVELOPE_DIGEST_MISMATCH',
   INVALID_AVAILABILITY_OUTCOME: 'INVALID_AVAILABILITY_OUTCOME',
   MISSING_DEPENDENCY_RECEIPT: 'MISSING_DEPENDENCY_RECEIPT',
+  PHYSICAL_EXECUTION_EVIDENCE_UNAVAILABLE: 'PHYSICAL_EXECUTION_EVIDENCE_UNAVAILABLE',
+  POLICY_FIELDS_INVALID: 'POLICY_FIELDS_INVALID',
+  UNADMITTED_EXECUTION_ASSERTIONS: 'UNADMITTED_EXECUTION_ASSERTIONS',
   MISSING_OR_INVALID_DRILL_RECEIPT: 'MISSING_OR_INVALID_DRILL_RECEIPT',
   MIXED_VERSION_UNSUPPORTED: 'MIXED_VERSION_UNSUPPORTED', OK: 'OK',
   ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED:
@@ -335,41 +329,33 @@ function uncertifiedEnvelopeRefusalMessage(formatRefusal, validation) {
     `${UNCERTIFIED_ENVELOPE_PREFIX}${validation.reasonCode}${UNCERTIFIED_ENVELOPE_SUFFIX}`;
 }
 
-function validateVersionPairAdmission(envelope, {sourceVersion, targetVersion} = {}) {
+function validateVersionPairAdmission(envelope, {sourceVersion, targetVersion, nodeCount} = {}) {
   const snap = snapshotEnvelopeRecord(envelope);
   const validation = validateEnvelopeSnapshot(snap);
-  const certified = readEnvelopeVersionPair(snap.snapshot);
+  const pair = readEnvelopeVersionPair(snap.snapshot);
   const formatRefusal = outsideClusterFormatClaimRefusal(
     CLUSTER_FORMAT_SUBJECT.SUPPORT_ENVELOPE, snap.claim);
-  if (!validation.valid) {
-    return {
-      admitted: false,
-      certifiedSourceVersion: certified.sourceVersion,
-      certifiedTargetVersion: certified.targetVersion,
-      message: uncertifiedEnvelopeRefusalMessage(formatRefusal, validation),
-      reasonCode: validation.reasonCode,
-    };
-  }
   const exactMatch = typeof sourceVersion === 'string' &&
     typeof targetVersion === 'string' &&
-    sourceVersion === certified.sourceVersion &&
-    targetVersion === certified.targetVersion;
-  const code = exactMatch ?
-    SUPPORT_ENVELOPE_REASON_CODE.OK :
+    sourceVersion === pair.sourceVersion && targetVersion === pair.targetVersion;
+  const topology = readOwnObjectProperty(snap.snapshot, ENVELOPE_FIELD.TOPOLOGY);
+  if (validation.policyValid && nodeCount !== undefined &&
+      (!numberIsSafeInteger(nodeCount) || nodeCount < topology.minNodes ||
+        nodeCount > topology.maxNodes)) {
+    return {
+      admitted: false,
+      message: 'Cluster node count is outside the declared support topology.',
+      reasonCode: SUPPORT_ENVELOPE_REASON_CODE.TOPOLOGY_OUTSIDE_ENVELOPE,
+    };
+  }
+  const reasonCode = exactMatch || formatRefusal !== null ? validation.reasonCode :
     SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE;
-  const message = exactMatch ?
-    `Version pair ${sourceVersion} -> ${targetVersion} ${CERTIFIED_PAIR_ADMITTED_SUFFIX}` :
+  const message = exactMatch || formatRefusal !== null ?
+    uncertifiedEnvelopeRefusalMessage(formatRefusal, validation) :
     `Version transition ${formatVersionOrPhaseLabel(sourceVersion)} -> ` +
-      `${formatVersionOrPhaseLabel(targetVersion)} ` +
-      `${OUTSIDE_CERTIFIED_PAIR_INFIX}${certified.sourceVersion} -> ` +
-      `${certified.targetVersion}).`;
-  return {
-    admitted: exactMatch,
-    certifiedSourceVersion: certified.sourceVersion,
-    certifiedTargetVersion: certified.targetVersion,
-    message,
-    reasonCode: code,
-  };
+      `${formatVersionOrPhaseLabel(targetVersion)} ${OUTSIDE_CERTIFIED_PAIR_INFIX}` +
+      `${pair.sourceVersion} -> ${pair.targetVersion}).`;
+  return {admitted: exactMatch && validation.valid, message, reasonCode};
 }
 
 function isRollbackPhaseEligible(eligiblePhases, currentPhase, cutoffExceeded) {
@@ -393,13 +379,13 @@ function buildRollbackCutoffExceededResult(certified, cutoffName, currentPhase) 
 }
 
 function resolveRollbackDecisionState({
-  validEnvelope, targetMatchesSource, phaseEligible,
+  policyValid, validEnvelope, targetMatchesSource, phaseEligible,
 }) {
-  if (!validEnvelope) return ROLLBACK_DECISION_STATE.INVALID_ENVELOPE;
+  if (!policyValid) return ROLLBACK_DECISION_STATE.INVALID_ENVELOPE;
   if (!targetMatchesSource) return ROLLBACK_DECISION_STATE.OUTSIDE_TARGET;
-  return phaseEligible ?
-    ROLLBACK_DECISION_STATE.ELIGIBLE :
-    ROLLBACK_DECISION_STATE.CUTOFF_EXCEEDED;
+  if (!phaseEligible) return ROLLBACK_DECISION_STATE.CUTOFF_EXCEEDED;
+  return validEnvelope ? ROLLBACK_DECISION_STATE.ELIGIBLE :
+    ROLLBACK_DECISION_STATE.INVALID_ENVELOPE;
 }
 
 function evaluateRollbackEligibility(
@@ -418,7 +404,8 @@ function evaluateRollbackEligibility(
   const phaseEligible = !schemaFinalized &&
     isRollbackPhaseEligible(rollbackSection.eligiblePhases, currentPhase, cutoffExceeded);
   const state = resolveRollbackDecisionState({
-    validEnvelope: validation.valid, targetMatchesSource, phaseEligible,
+    policyValid: validation.policyValid, validEnvelope: validation.valid,
+    targetMatchesSource, phaseEligible,
   });
   switch (state) {
   case ROLLBACK_DECISION_STATE.INVALID_ENVELOPE:
@@ -448,10 +435,11 @@ function evaluateRollbackEligibility(
   }
 }
 
-function resolveMixedAdmissionState({validEnvelope, boundaryMatched, bothKnown}) {
-  if (!validEnvelope) return MIXED_ADMISSION_STATE.INVALID_ENVELOPE;
+function resolveMixedAdmissionState({policyValid, validEnvelope, boundaryMatched, bothKnown}) {
+  if (!policyValid) return MIXED_ADMISSION_STATE.INVALID_ENVELOPE;
   if (!boundaryMatched) return MIXED_ADMISSION_STATE.BOUNDARY_MISMATCH;
-  return bothKnown ? MIXED_ADMISSION_STATE.ADMITTED : MIXED_ADMISSION_STATE.OUTSIDE_ENVELOPE;
+  if (!bothKnown) return MIXED_ADMISSION_STATE.OUTSIDE_ENVELOPE;
+  return validEnvelope ? MIXED_ADMISSION_STATE.ADMITTED : MIXED_ADMISSION_STATE.INVALID_ENVELOPE;
 }
 
 function validateMixedVersionNodeAdmission(
@@ -467,7 +455,8 @@ function validateMixedVersionNodeAdmission(
   const bothKnown = typeof localVersion === 'string' && typeof peerVersion === 'string' &&
     allowedVersions.has(localVersion) && allowedVersions.has(peerVersion);
   const state = resolveMixedAdmissionState({
-    validEnvelope: validation.valid, boundaryMatched: Boolean(schemaBoundaryCompatible), bothKnown,
+    policyValid: validation.policyValid, validEnvelope: validation.valid,
+    boundaryMatched: Boolean(schemaBoundaryCompatible), bothKnown,
   });
   switch (state) {
   case MIXED_ADMISSION_STATE.INVALID_ENVELOPE:
@@ -500,52 +489,6 @@ function validateMixedVersionNodeAdmission(
   }
 }
 
-function buildDefaultDrills() {
-  return {
-    [SUPPORT_ENVELOPE_DRILL_ID.DOWNGRADE_ROLLBACK_BOUNDARY]: {
-      availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-      drillId: SUPPORT_ENVELOPE_DRILL_ID.DOWNGRADE_ROLLBACK_BOUNDARY,
-      executed: true, lostAcknowledgedWrites: ZERO,
-      postCutoffRefusedWithCode: SUPPORT_ENVELOPE_REASON_CODE.ROLLBACK_CUTOFF_EXCEEDED,
-      preCutoffSucceeded: true, recoveryDurationMs: DEFAULT_DOWNGRADE_RECOVERY_MS,
-    },
-    [SUPPORT_ENVELOPE_DRILL_ID.ONE_NODE_FAILURE_RECOVERY]: {
-      availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-      drillId: SUPPORT_ENVELOPE_DRILL_ID.ONE_NODE_FAILURE_RECOVERY,
-      executed: true, lostAcknowledgedWrites: ZERO,
-      recoveryDurationMs: DEFAULT_FAILURE_RECOVERY_MS, targetVersion: DEFAULT_TARGET_VERSION,
-    },
-    [SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE]: {
-      availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.CONTINUOUS,
-      drillId: SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE,
-      executed: true, lostAcknowledgedWrites: ZERO,
-      recoveryDurationMs: DEFAULT_ROLLING_UPGRADE_RECOVERY_MS,
-      sourceVersion: DEFAULT_SOURCE_VERSION, targetVersion: DEFAULT_TARGET_VERSION,
-    },
-    [SUPPORT_ENVELOPE_DRILL_ID.SERVICE_ARTIFACT_UPGRADE]: {
-      artifactAbi: DEFAULT_ARTIFACT_ABI_ID,
-      availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.CONTINUOUS,
-      drillId: SUPPORT_ENVELOPE_DRILL_ID.SERVICE_ARTIFACT_UPGRADE,
-      executed: true, lostAcknowledgedWrites: ZERO,
-      previousGenerationRetired: true, recoveryDurationMs: DEFAULT_ARTIFACT_UPGRADE_RECOVERY_MS,
-    },
-    [SUPPORT_ENVELOPE_DRILL_ID.WIPED_REPLICA_REBUILD]: {
-      availabilityOutcome: SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME.BOUNDED_DEGRADATION,
-      drillId: SUPPORT_ENVELOPE_DRILL_ID.WIPED_REPLICA_REBUILD,
-      executed: true, learnerCatchUpVerified: true, lostAcknowledgedWrites: ZERO,
-      recoveryDurationMs: DEFAULT_REPLICA_REBUILD_RECOVERY_MS,
-      replicaBytesRebuilt: DEFAULT_REPLICA_BYTES_REBUILT,
-    },
-  };
-}
-
-function buildDefaultDependencyReceipts() {
-  const receipts = {};
-  for (const questId of REQUIRED_DEPENDENCY_QUEST_IDS) {
-    receipts[questId] = {questId, receiptDigest: `sha256:${questId}-certified`, verified: true};
-  }
-  return receipts;
-}
 function resolveBoundariesSection(boundaries = {}) {
   return {
     artifactAbi: boundaries.artifactAbi ?? DEFAULT_ARTIFACT_ABI_ID,
@@ -582,8 +525,6 @@ function buildSupportEnvelopeRecord(input = {}) {
   const baseRecord = {
     ...clusterFormatRevisionClaim(),
     boundaries: resolveBoundariesSection(input.boundaries),
-    dependencyReceipts: input.dependencyReceipts ?? buildDefaultDependencyReceipts(),
-    drills: input.drills ?? buildDefaultDrills(),
     rebuildEnvelope: resolveRebuildSection(input.rebuildEnvelope),
     rollback: resolveRollbackSection(input.rollback),
     schemaVersion: input.schemaVersion ?? SUPPORT_ENVELOPE_SCHEMA_VERSION,
@@ -591,69 +532,6 @@ function buildSupportEnvelopeRecord(input = {}) {
     versionPair: resolveVersionPairSection(input.versionPair),
   };
   return {...baseRecord, envelopeDigest: computeSupportEnvelopeDigest(baseRecord)};
-}
-
-function isRebuildDurationExceeded(drill, rebuildEnvelope) {
-  return numberIsFinite(drill?.recoveryDurationMs) &&
-    numberIsFinite(rebuildEnvelope?.maxRebuildDurationMs) &&
-    drill.recoveryDurationMs > rebuildEnvelope.maxRebuildDurationMs;
-}
-
-function isReplicaBytesExceeded(drill, rebuildEnvelope) {
-  return numberIsFinite(drill?.replicaBytesRebuilt) &&
-    numberIsFinite(rebuildEnvelope?.maxReplicaBytes) &&
-    drill.replicaBytesRebuilt > rebuildEnvelope.maxReplicaBytes;
-}
-
-function checkSingleDrillReceipt(drill, rebuildEnvelope, collectedCodes) {
-  if (!isNonNullObject(drill) || drill.executed !== true) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.MISSING_OR_INVALID_DRILL_RECEIPT);
-    return;
-  }
-  if (!VALID_AVAILABILITY_OUTCOMES.includes(drill.availabilityOutcome)) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.INVALID_AVAILABILITY_OUTCOME);
-  }
-  if (!numberIsFinite(drill.lostAcknowledgedWrites) || drill.lostAcknowledgedWrites > ZERO) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.ACKNOWLEDGED_DATA_LOSS_DETECTED);
-  }
-  if (isRebuildDurationExceeded(drill, rebuildEnvelope)) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.REBUILD_WINDOW_EXCEEDED);
-  }
-  if (isReplicaBytesExceeded(drill, rebuildEnvelope)) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.REPLICA_SIZE_EXCEEDS_ENVELOPE);
-  }
-}
-
-function checkDrillReceipts(record, rebuildEnvelope, collectedCodes) {
-  const drills = readOwnObjectProperty(record, ENVELOPE_FIELD.DRILLS);
-  if (drills === null) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.MISSING_OR_INVALID_DRILL_RECEIPT);
-    return;
-  }
-  for (const drillId of REQUIRED_DRILL_IDS) {
-    const drill = objectHasOwn(drills, drillId) ? drills[drillId] : null;
-    checkSingleDrillReceipt(drill, rebuildEnvelope, collectedCodes);
-  }
-}
-
-function isValidDependencyReceipt(receipt) {
-  return isNonNullObject(receipt) &&
-    receipt.verified === true &&
-    isNonEmptyString(receipt.receiptDigest);
-}
-
-function checkDependencyReceipts(record, collectedCodes) {
-  const receipts = readOwnObjectProperty(record, ENVELOPE_FIELD.DEPENDENCY_RECEIPTS);
-  if (receipts === null) {
-    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.MISSING_DEPENDENCY_RECEIPT);
-    return;
-  }
-  for (const questId of REQUIRED_DEPENDENCY_QUEST_IDS) {
-    const receipt = objectHasOwn(receipts, questId) ? receipts[questId] : null;
-    if (!isValidDependencyReceipt(receipt)) {
-      collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.MISSING_DEPENDENCY_RECEIPT);
-    }
-  }
 }
 
 function isEnvelopeDigestMatch(record, options, computedDigest) {
@@ -670,7 +548,7 @@ function isTopologyBoundsValid(topology) {
       !numberIsSafeInteger(rf)) {
     return false;
   }
-  return minNodes >= DEFAULT_MIN_NODES && maxNodes >= minNodes && rf <= maxNodes;
+  return minNodes >= DEFAULT_MIN_NODES && maxNodes >= minNodes && rf >= 1 && rf <= minNodes;
 }
 
 function hasValidVersionPairAndRollback(record) {
@@ -695,19 +573,70 @@ function checkTopologyAndDigest(snap, options, computedDigest, collectedCodes) {
   }
 }
 
-function validateEnvelopeSnapshot(snap, options = {}) {
-  const record = snap.snapshot;
-  const computedDigest = computeSupportEnvelopeDigest(record);
-  const collectedCodes = [];
-  checkTopologyAndDigest(snap, options, computedDigest, collectedCodes);
-  checkDependencyReceipts(record, collectedCodes);
-  checkDrillReceipts(record, readOwnObjectProperty(record, ENVELOPE_FIELD.REBUILD), collectedCodes);
-  const uniqueCodes = arrayFrom(new Set(collectedCodes));
-  const primaryReason = uniqueCodes.length === ZERO ?
-    SUPPORT_ENVELOPE_REASON_CODE.OK : uniqueCodes[ZERO];
+const POLICY_FIELDS = objectFreeze([
+  CLUSTER_FORMAT_REVISION_FIELD, DIGEST_EXCLUDED_KEY, ENVELOPE_FIELD.BOUNDARIES,
+  ENVELOPE_FIELD.REBUILD, ENVELOPE_FIELD.ROLLBACK, ENVELOPE_FIELD.SCHEMA_VERSION,
+  ENVELOPE_FIELD.TOPOLOGY, ENVELOPE_FIELD.VERSION_PAIR,
+]);
+
+function hasOnlyFields(record, fields) {
+  return isNonNullObject(record) && objectKeys(record).length === fields.length &&
+    fields.every((field) => objectHasOwn(record, field));
+}
+
+function hasValidPolicyFields(record) {
+  const boundaries = readOwnObjectProperty(record, ENVELOPE_FIELD.BOUNDARIES);
+  const rebuild = readOwnObjectProperty(record, ENVELOPE_FIELD.REBUILD);
+  const rollback = readOwnObjectProperty(record, ENVELOPE_FIELD.ROLLBACK);
+  return hasOnlyFields(record, POLICY_FIELDS) &&
+    hasOnlyFields(boundaries, ['artifactAbi', 'protocolBoundary', 'schemaBoundary']) &&
+    Object.values(boundaries).every(isNonEmptyString) &&
+    hasOnlyFields(rebuild, ['maxRebuildDurationMs', 'maxReplicaBytes']) &&
+    Object.values(rebuild).every((bound) => numberIsSafeInteger(bound) && bound > ZERO) &&
+    hasOnlyFields(rollback, ['rollbackCutoff', 'eligiblePhases']) &&
+    hasOnlyFields(record.versionPair, ['sourceVersion', 'targetVersion']) &&
+    hasOnlyFields(record.topologyEnvelope, ['minNodes', 'maxNodes', 'replicationFactor']);
+}
+
+function validationResult(actualDigest, collectedCodes) {
+  const reasonCodes = arrayFrom(new Set(collectedCodes));
   return {
-    actualDigest: computedDigest, reasonCode: primaryReason,
-    reasonCodes: uniqueCodes, valid: uniqueCodes.length === ZERO,
+    actualDigest, reasonCodes,
+    reasonCode: reasonCodes[ZERO] ?? SUPPORT_ENVELOPE_REASON_CODE.OK,
+    valid: reasonCodes.length === ZERO,
+  };
+}
+
+function validatePolicySnapshot(snap, options = {}) {
+  const record = snap.snapshot;
+  const actualDigest = computeSupportEnvelopeDigest(record);
+  const collectedCodes = [];
+  checkTopologyAndDigest(snap, options, actualDigest, collectedCodes);
+  if (!hasValidPolicyFields(record)) {
+    collectedCodes.push(SUPPORT_ENVELOPE_REASON_CODE.POLICY_FIELDS_INVALID);
+  }
+  return validationResult(actualDigest, collectedCodes);
+}
+
+function validateSupportEnvelopePolicy(record, options = {}) {
+  return validatePolicySnapshot(snapshotEnvelopeRecord(record), options);
+}
+
+function executionEvidenceReason(record) {
+  if (record && (objectHasOwn(record, ENVELOPE_FIELD.DRILLS) ||
+      objectHasOwn(record, ENVELOPE_FIELD.DEPENDENCY_RECEIPTS))) {
+    return SUPPORT_ENVELOPE_REASON_CODE.UNADMITTED_EXECUTION_ASSERTIONS;
+  }
+  return SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_UNAVAILABLE;
+}
+
+function validateEnvelopeSnapshot(snap, options = {}) {
+  const policy = validatePolicySnapshot(snap, options);
+  const evidenceReasonCode = executionEvidenceReason(snap.snapshot);
+  return {
+    ...validationResult(policy.actualDigest, [...policy.reasonCodes, evidenceReasonCode]),
+    policyValid: policy.valid,
+    evidenceReasonCode,
   };
 }
 
@@ -720,37 +649,50 @@ function readOptionalOwnSection(record, field) {
 }
 
 class SupportEnvelopeOwner {
-  constructor(options = {}) {
-    this.envelope = isNonNullObject(options) &&
-      objectHasOwn(options, ENVELOPE_FIELD.ENVELOPE_OPTION) ?
-      options.envelope : null;
+  #record;
+
+  static isOwner(candidate) {
+    return isNonNullObject(candidate) && #record in candidate;
   }
-  getEnvelope() {
-    return this.envelope;
+
+  constructor({envelope = null} = {}) {
+    const snap = snapshotEnvelopeRecord(envelope);
+    const canonical = canonicalizeEnvelopeValue(snap.snapshot, new Set());
+    // The digest is excluded from canonical encoding. Restore it only as an
+    // input to policy validation, never as an authority over execution.
+    this.#record = canonical.valid && canonical.value !== null ?
+      {...canonical.value, envelopeDigest: snap.snapshot.envelopeDigest} : null;
   }
+
   validateEnvelope(options = {}) {
-    return validateSupportEnvelopeRecord(this.envelope, options);
+    return validateSupportEnvelopeRecord(this.#record, options);
   }
-  validateUpgradePair({sourceVersion, targetVersion} = {}) {
-    return validateVersionPairAdmission(this.envelope, {sourceVersion, targetVersion});
+
+  validateUpgradePair(options = {}) {
+    return validateVersionPairAdmission(this.#record, options);
   }
+
   evaluateRollback(options = {}) {
-    return evaluateRollbackEligibility(this.envelope, options);
+    return evaluateRollbackEligibility(this.#record, options);
   }
+
   validateMixedVersionPeer(options = {}) {
-    return validateMixedVersionNodeAdmission(this.envelope, options);
+    return validateMixedVersionNodeAdmission(this.#record, options);
   }
+
   getManagementSummary() {
-    const snap = snapshotEnvelopeRecord(this.envelope);
+    const snap = snapshotEnvelopeRecord(this.#record);
     const validation = validateEnvelopeSnapshot(snap);
-    const record = snap.snapshot;
-    const drills = readOwnObjectProperty(record, ENVELOPE_FIELD.DRILLS);
+    const record = validation.policyValid ? structuredClone(snap.snapshot) : null;
     return {
       boundaries: readOptionalOwnSection(record, ENVELOPE_FIELD.BOUNDARIES),
       clusterFormatRevision: sanitizeDiagnosticClusterFormatRevision(
         snap.claim.present, snap.claim.rawRevision),
-      certifiedDrillIds: drills === null ? [] : objectKeys(drills),
+      certifiedDrillIds: [],
       envelopeDigest: readOptionalOwnSection(record, DIGEST_EXCLUDED_KEY),
+      evidenceReasonCode: validation.evidenceReasonCode,
+      policyValid: validation.policyValid,
+      reasonCodes: validation.reasonCodes,
       rebuildEnvelope: readOptionalOwnSection(record, ENVELOPE_FIELD.REBUILD),
       rollback: readOptionalOwnSection(record, ENVELOPE_FIELD.ROLLBACK),
       schemaVersion: readOptionalOwnSection(record, ENVELOPE_FIELD.SCHEMA_VERSION),
@@ -769,5 +711,5 @@ export {
   assertCurrentClusterFormatDeclaration, buildSupportEnvelopeRecord, clusterFormatRevisionClaim,
   computeSupportEnvelopeDigest, evaluateRollbackEligibility, isCurrentClusterFormatDeclaration,
   resolveJoinSupportEnvelopeConflict, validateMixedVersionNodeAdmission,
-  validateSupportEnvelopeRecord, validateVersionPairAdmission,
+  validateSupportEnvelopePolicy, validateSupportEnvelopeRecord, validateVersionPairAdmission,
 };
