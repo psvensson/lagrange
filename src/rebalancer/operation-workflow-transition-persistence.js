@@ -64,6 +64,15 @@ const CREATE_FAILURE_LIFECYCLE_UNAVAILABLE = Object.freeze({
   refusal: CREATE_TARGET_LIFECYCLE_UNAVAILABLE,
 });
 
+const PRIORITY_TARGET_SUPERSESSION_CHANGED = Object.freeze({
+  ...buildOperationTransitionOutcome({
+    persisted: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+    operation: null,
+  }),
+  refusal: 'priority_target_supersession_changed',
+});
+
 // A failure no post-intent boundary applies to: written as it is.
 const UNBOUNDED_FAILURE_ADMISSION = Object.freeze({
   refused: false,
@@ -520,6 +529,9 @@ class OperationWorkflowTransitionPersistence
           terminalAdmission},
         stepMetadata: admission.stepMetadata});
     }
+    if (admission.supersessionChanged) {
+      return Object.freeze({refused: true, supersessionChanged: true});
+    }
     if (admission.unavailable) {
       this.logger.warn('Create failure deferred while target lifecycle is unavailable', {
         operationId: operation.operationId,
@@ -568,6 +580,7 @@ class OperationWorkflowTransitionPersistence
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
     if (failureAdmission.refused) {
+      if (failureAdmission.supersessionChanged) return PRIORITY_TARGET_SUPERSESSION_CHANGED;
       if (failureAdmission.unavailable) return CREATE_FAILURE_LIFECYCLE_UNAVAILABLE;
       return failureAdmission.completeInstead ?
         this.completeOperation(operation) : buildReplaceFailureRefusal();
@@ -613,8 +626,13 @@ class OperationWorkflowTransitionPersistence
         failedStepEntry,
       ],
     };
+    const guardedSupersession = isPartitionReplace(operation) &&
+      Boolean(options.priorityRecoverySupersession);
     const terminalPersistOptions = {
       ...failureAdmission.persistOptions,
+      ...(guardedSupersession ?
+        {requireCreateAdmissionAbsent: true, requireExactCreateTarget: true} :
+        {}),
       ...(options.requireCreateAdmissionAbsent === true ?
         {requireCreateAdmissionAbsent: true} :
         {}),

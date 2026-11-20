@@ -23,6 +23,7 @@ function createRepository(overrides = {}) {
       async readAuthoritativeRows() {
         return {
           success: true,
+          rowSetComplete: true,
           rows: [],
         };
       },
@@ -159,6 +160,7 @@ test(
         async readAuthoritativeRows() {
           return {
             success: true,
+            rowSetComplete: true,
             rows: [{
               service_id: TEST_REPLICA_ID,
               replica_id: TEST_REPLICA_ID,
@@ -210,6 +212,7 @@ test(
         async readAuthoritativeRows() {
           return {
             success: true,
+            rowSetComplete: true,
             rows: [{
               service_id: TEST_REPLICA_ID,
               replica_id: TEST_REPLICA_ID,
@@ -262,6 +265,7 @@ test(
           if (params[0] === TEST_REPLICA_ID) {
             return {
               success: true,
+              rowSetComplete: true,
               rows: [],
             };
           }
@@ -271,6 +275,7 @@ test(
           ) {
             return {
               success: true,
+              rowSetComplete: true,
               rows: [{
                 service_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
                 replica_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
@@ -285,6 +290,7 @@ test(
           }
           return {
             success: true,
+            rowSetComplete: true,
             rows: [],
           };
         },
@@ -421,7 +427,7 @@ test(
         },
         controlPlaneSystemTableGateway: {
           async readAuthoritativeRows() {
-            return {success: true, rows: [row]};
+            return {success: true, rowSetComplete: true, rows: [row]};
           },
         },
       });
@@ -451,7 +457,7 @@ test(
     const exactNullStateEnteredRepository = createRepository({
       controlPlaneSystemTableGateway: {
         async readAuthoritativeRows() {
-          return {success: true, rows: [baseRow]};
+          return {success: true, rowSetComplete: true, rows: [baseRow]};
         },
       },
     });

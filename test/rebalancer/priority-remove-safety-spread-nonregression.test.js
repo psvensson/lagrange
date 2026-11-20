@@ -41,7 +41,7 @@ function makeRemoveSafetyOwner() {
     },
   });
   owner.isPriorityRecoveryRemoveSafetySatisfied = () => false;
-  owner.getPriorityRecoverySupersededTargetErrorFromContext = () => null;
+  owner.getPriorityRecoverySupersededTargetFailureFromContext = () => null;
   owner.resolvePriorityRemoveSafetyMembershipSnapshot = (
     _planningSnapshot,
     _priorityRecoveryContext,

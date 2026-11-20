@@ -1,3 +1,8 @@
+import {isDeepStrictEqual} from 'node:util';
+import {
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+  readAuthoritativeReplicaLifecycleObservationState,
+} from './replica-operation-repository-observation-methods.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {resolvePriorityRecoverySupersededTargetDecision} from './operation-workflow-priority-recovery-superseded-target-decision.js';
 
@@ -12,14 +17,16 @@ const {
  * @param {Object} operation
  * @param {string} targetNodeId
  * @param {string[]} eligibleNodeIds
- * @returns {string}
+ * @param {Object} targetObservation
+ * @returns {Object}
  */
-function buildPriorityRecoverySupersededTargetError(
+function buildPriorityRecoverySupersededTargetFailure(
   operation,
   targetNodeId,
   eligibleNodeIds,
+  targetObservation,
 ) {
-  return (
+  const error = (
     OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_RECOVERY_TARGET_NODE +
     targetNodeId +
     OPERATION_WORKFLOW_OWNER_LITERAL.IS_NO_LONGER_IN_THE_CURRENT_ELIGIBLE_COHORT_FOR +
@@ -28,16 +35,48 @@ function buildPriorityRecoverySupersededTargetError(
     eligibleNodeIds.join(OPERATION_WORKFLOW_OWNER_LITERAL.COMMA_SPACE) +
     OPERATION_WORKFLOW_OWNER_LITERAL.CLOSE_PAREN
   );
+  return Object.freeze({
+    error,
+    operationId: operation.operationId,
+    partitionId: operation.partitionId,
+    replicaId: operation.replicaId,
+    targetNodeId,
+    targetObservation,
+  });
+}
+
+async function isPriorityRecoverySupersessionCurrent(owner, operation, failure) {
+  if (
+    failure.operationId !== operation.operationId ||
+    failure.partitionId !== operation.partitionId ||
+    failure.replicaId !== operation.replicaId ||
+    failure.targetNodeId !== operation.targetNodeId
+  ) {
+    return false;
+  }
+  const prior = failure.targetObservation;
+  const current = await owner.observePriorityRecoveryTarget(operation);
+  const state = readAuthoritativeReplicaLifecycleObservationState(current);
+  if (state !== readAuthoritativeReplicaLifecycleObservationState(prior)) {
+    return false;
+  }
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT) {
+    return true;
+  }
+  return state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED &&
+    prior.lifecycleStatus === current.lifecycleStatus &&
+    isDeepStrictEqual(prior.observedTargetIdentity, current.observedTargetIdentity) &&
+    isDeepStrictEqual(prior.lifecyclePrecondition, current.lifecyclePrecondition);
 }
 
 /**
- * Get priority recovery superseded target error from context.
+ * Get priority recovery superseded target failure from context.
  * @param {Object} context - Segment/Class context instance.
  * @param {Object} operation
  * @param {Object|null} priorityRecoveryContext
- * @returns {Promise<string|null>}
+ * @returns {Promise<Object|null>}
  */
-async function getPriorityRecoverySupersededTargetErrorFromContext(
+async function getPriorityRecoverySupersededTargetFailureFromContext(
   context,
   operation,
   priorityRecoveryContext,
@@ -72,27 +111,28 @@ async function getPriorityRecoverySupersededTargetErrorFromContext(
     return null;
   }
 
-  return buildPriorityRecoverySupersededTargetError(
+  return buildPriorityRecoverySupersededTargetFailure(
     operation,
     targetNodeId,
     supersededTargetDecision.eligibleNodeIds,
+    supersededTargetDecision.targetObservation,
   );
 }
 
 /**
- * Get priority recovery superseded target error.
+ * Get priority recovery superseded target failure.
  * @param {Object} context - Segment/Class context instance.
  * @param {Object} operation
- * @returns {Promise<string|null>}
+ * @returns {Promise<Object|null>}
  */
-async function getPriorityRecoverySupersededTargetError(context, operation) {
+async function getPriorityRecoverySupersededTargetFailure(context, operation) {
   const planningSnapshot =
     await context.readAvailablePriorityRecoveryPlanningSnapshot(operation);
   const priorityContext = context.buildPriorityRecoveryAssessmentContextForOperation(
     operation,
     planningSnapshot,
   );
-  return getPriorityRecoverySupersededTargetErrorFromContext(
+  return getPriorityRecoverySupersededTargetFailureFromContext(
     context,
     operation,
     priorityContext,
@@ -100,7 +140,8 @@ async function getPriorityRecoverySupersededTargetError(context, operation) {
 }
 
 export {
-  buildPriorityRecoverySupersededTargetError,
-  getPriorityRecoverySupersededTargetErrorFromContext,
-  getPriorityRecoverySupersededTargetError,
+  buildPriorityRecoverySupersededTargetFailure,
+  getPriorityRecoverySupersededTargetFailureFromContext,
+  getPriorityRecoverySupersededTargetFailure,
+  isPriorityRecoverySupersessionCurrent,
 };

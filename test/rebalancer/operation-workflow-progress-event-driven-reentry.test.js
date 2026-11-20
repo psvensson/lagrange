@@ -2610,7 +2610,7 @@ test(
         {
           action: TEST_OPERATION_LIFECYCLE_ACTION
             .FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET,
-          supersededTargetError: 'superseded target probe',
+          supersededTargetFailure: {error: 'superseded target probe'},
         },
         {
           action: TEST_OPERATION_LIFECYCLE_ACTION

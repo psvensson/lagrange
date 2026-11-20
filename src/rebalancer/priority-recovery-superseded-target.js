@@ -17,9 +17,9 @@ import {
   replayReplaceActiveSourceRemovalFromObservedTarget,
 } from './operation-workflow-replace-replay.js';
 import {
-  buildPriorityRecoverySupersededTargetError,
-  getPriorityRecoverySupersededTargetErrorFromContext,
-  getPriorityRecoverySupersededTargetError,
+  buildPriorityRecoverySupersededTargetFailure,
+  getPriorityRecoverySupersededTargetFailureFromContext,
+  getPriorityRecoverySupersededTargetFailure,
 } from './operation-workflow-priority-recovery-errors.js';
 import {
   evaluatePriorityRecoveryCompletionRemoveSafety,
@@ -220,24 +220,24 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
 
   /**
    * @param {Object} operation
-   * @return {Promise<string|null>}
+   * @return {Promise<Object|null>}
    * @private
    */
-  async getPriorityRecoverySupersededTargetError(operation) {
-    return getPriorityRecoverySupersededTargetError(this, operation);
+  async getPriorityRecoverySupersededTargetFailure(operation) {
+    return getPriorityRecoverySupersededTargetFailure(this, operation);
   }
 
   /**
    * @param {Object} operation
    * @param {Object|null} priorityRecoveryContext
-   * @return {Promise<string|null>}
+   * @return {Promise<Object|null>}
    * @private
    */
-  async getPriorityRecoverySupersededTargetErrorFromContext(
+  async getPriorityRecoverySupersededTargetFailureFromContext(
     operation,
     priorityRecoveryContext,
   ) {
-    return getPriorityRecoverySupersededTargetErrorFromContext(
+    return getPriorityRecoverySupersededTargetFailureFromContext(
       this,
       operation,
       priorityRecoveryContext,
@@ -260,18 +260,21 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * @param {Object} operation
    * @param {string} targetNodeId
    * @param {string[]} eligibleNodeIds
-   * @return {string}
+   * @param {Object} targetObservation
+   * @return {Object}
    * @private
    */
-  buildPriorityRecoverySupersededTargetError(
+  buildPriorityRecoverySupersededTargetFailure(
     operation,
     targetNodeId,
     eligibleNodeIds,
+    targetObservation,
   ) {
-    return buildPriorityRecoverySupersededTargetError(
+    return buildPriorityRecoverySupersededTargetFailure(
       operation,
       targetNodeId,
       eligibleNodeIds,
+      targetObservation,
     );
   }
 

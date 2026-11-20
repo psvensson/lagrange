@@ -18,11 +18,28 @@ const AUTHORITATIVE_REPLICA_OBSERVATION_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 
+const AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE = 'authoritative';
+const UNAVAILABLE_REPLICA_OBSERVATION = Object.freeze({
+  state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+  source: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+});
+
 function readAuthoritativeReplicaLifecycleObservationState(observation) {
-  const state = observation?.state;
-  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT) return state;
+  if (observation?.source !== AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE) {
+    return AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+  }
+  const state = observation.state;
+  if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT &&
+      observation.lifecycleStatus === undefined &&
+      observation.previousState === undefined &&
+      observation.observedTargetIdentity === undefined &&
+      observation.lifecyclePrecondition === undefined) {
+    return state;
+  }
   if (state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED &&
-      isValidStatus(observation.lifecycleStatus)) return state;
+      isValidStatus(observation.lifecycleStatus)) {
+    return state;
+  }
   return AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
 }
 
@@ -413,68 +430,6 @@ function assignReplicaOperationRepositoryObservationMethods(
       return REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS;
     }
     /**
-     * Run the authoritative replica-status reads (exact-id probe, then the
-     * optional partition+node secondary lookup) and fold their outcomes into
-     * one attempted/failed/row summary for observation classification.
-     * @param {string} replicaId
-     * @param {string} partitionId
-     * @param {string} targetNodeId
-     * @param {Object} readOptions
-     * @return {Promise<{observedRow: Object|null,
-     *   authoritativeReadAttempted: boolean,
-     *   authoritativeReadFailed: boolean}>}
-     * @private
-     */
-    async readAuthoritativeReplicaRowForObservation(
-      replicaId,
-      partitionId,
-      targetNodeId,
-      readOptions,
-    ) {
-      const statusReadQueryOptions =
-        this.resolveActualReplicaStatusReadQueryOptions(readOptions);
-      let observedRow = null;
-      let authoritativeReadAttempted = false;
-      let authoritativeReadFailed = false;
-      let authoritativeTargetMismatch = false;
-      const recordAuthoritativeResult = (result, matchesRow) => {
-        if (!result || typeof result !== 'object') {
-          return;
-        }
-        authoritativeReadAttempted = true;
-        if (result.success !== true) {
-          authoritativeReadFailed = true;
-          return;
-        }
-        if (Array.isArray(result.rows) && result.rows.length > 0) {
-          observedRow = result.rows.find(matchesRow) || null;
-          if (!observedRow) {
-            authoritativeTargetMismatch = true;
-          }
-        }
-      };
-      if (replicaId) {
-        recordAuthoritativeResult(
-          await readAuthoritativeControlPlaneRows(
-            this.controlPlaneSystemTableGateway,
-            SYSTEM_TABLE_NAME.SERVICES,
-            SQL.SELECT_REPLICA_STATUS,
-            [replicaId],
-            statusReadQueryOptions,
-          ),
-          (row) => this.doesObservedReplicaRowMatchTarget(
-            row, replicaId, partitionId, targetNodeId),
-        );
-      }
-      return {
-        observedRow,
-        authoritativeReadAttempted,
-        authoritativeReadFailed,
-        authoritativeTargetMismatch,
-      };
-    }
-
-    /**
      * Classify a successful-but-empty authoritative read. ABSENT is positive
      * retirement evidence and terminates retiring operations, so absence must
      * be corroborated: while the local cache still holds a live (not
@@ -517,7 +472,7 @@ function assignReplicaOperationRepositoryObservationMethods(
       }
       return Object.freeze({
         state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT,
-        source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
+        source: AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE,
       });
     }
 
@@ -535,38 +490,24 @@ function assignReplicaOperationRepositoryObservationMethods(
       targetNodeId,
       readOptions = {},
     ) {
-      const {
-        observedRow,
-        authoritativeReadAttempted,
-        authoritativeReadFailed,
-        authoritativeTargetMismatch,
-      } = await this.readAuthoritativeReplicaRowForObservation(
-        replicaId,
-        partitionId,
-        targetNodeId,
-        readOptions,
-      );
-      if (observedRow) {
-        const decoded = decodeCanonicalObservedReplicaRow(observedRow);
-        return Object.freeze({
-          state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED,
-          source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
-          lifecycleStatus: this.resolveObservedReplicaLifecycleStatus(
-            observedRow,
-            readOptions,
-          ),
-          previousState: decoded?.previousState || null,
-          observedTargetIdentity:
-            this.buildObservedReplicaTargetIdentity(observedRow),
-          lifecyclePrecondition:
-            buildObservedReplicaLifecyclePrecondition(observedRow),
-        });
+      if ([replicaId, partitionId, targetNodeId].some((value) =>
+        this.normalizeObservedTargetIdentifier(value).length === 0)) {
+        return UNAVAILABLE_REPLICA_OBSERVATION;
       }
-      if (
-        authoritativeReadAttempted === true &&
-        authoritativeReadFailed !== true &&
-        authoritativeTargetMismatch !== true
-      ) {
+      const result = await readAuthoritativeControlPlaneRows(
+        this.controlPlaneSystemTableGateway,
+        SYSTEM_TABLE_NAME.SERVICES,
+        SQL.SELECT_REPLICA_STATUS,
+        [replicaId],
+        this.resolveActualReplicaStatusReadQueryOptions(readOptions),
+      );
+      // The gateway can normalize a malformed result to an empty array. Only
+      // a complete exact-key answer can prove either presence or absence.
+      if (result?.success !== true || result.rowSetComplete !== true ||
+          !Array.isArray(result.rows)) {
+        return UNAVAILABLE_REPLICA_OBSERVATION;
+      }
+      if (result.rows.length === 0) {
         return this.classifyCorroboratedReplicaAbsence(
           replicaId,
           partitionId,
@@ -574,9 +515,26 @@ function assignReplicaOperationRepositoryObservationMethods(
           readOptions,
         );
       }
+      const [row] = result.rows;
+      if (result.rows.length !== 1 || !this.doesObservedReplicaRowMatchTarget(
+        row, replicaId, partitionId, targetNodeId)) {
+        return UNAVAILABLE_REPLICA_OBSERVATION;
+      }
+      const lifecycleStatus = this.resolveObservedReplicaLifecycleStatus(
+        row,
+        readOptions,
+      );
+      if (!isValidStatus(lifecycleStatus)) {
+        return UNAVAILABLE_REPLICA_OBSERVATION;
+      }
+      const decoded = decodeCanonicalObservedReplicaRow(row);
       return Object.freeze({
-        state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
-        source: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+        state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED,
+        source: AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE,
+        lifecycleStatus,
+        previousState: decoded.previousState,
+        observedTargetIdentity: this.buildObservedReplicaTargetIdentity(row),
+        lifecyclePrecondition: buildObservedReplicaLifecyclePrecondition(row),
       });
     }
     /**
@@ -667,6 +625,7 @@ function assignReplicaOperationRepositoryObservationMethods(
 }
 
 export {
+  AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE,
   AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
   assignReplicaOperationRepositoryObservationMethods,
   readAuthoritativeReplicaLifecycleObservationState,

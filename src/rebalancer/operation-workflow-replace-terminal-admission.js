@@ -1,3 +1,6 @@
+import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {isPriorityRecoverySupersessionCurrent} from
+  './operation-workflow-priority-recovery-errors.js';
 import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
@@ -170,6 +173,26 @@ async function observeCreateTarget(owner, operation) {
  * @return {Promise<Object>} Frozen {admitted, expectedWorkflowStep}.
  */
 async function admitReplaceTerminalFailure(owner, operation, options = {}) {
+  const supersession = options.priorityRecoverySupersession;
+  if (supersession) {
+    const durable = await owner.repository
+      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+    // A current CREATE claim owns the next target effect even if its SERVICES
+    // row has not materialized yet. The same predicate remains on the UPDATE
+    // to serialize against the claim after this revalidation.
+    const admitted = Boolean(durable) &&
+      PRE_SYNC_WORKFLOW_STEPS.has(durable.workflowStep) &&
+      durable.createAdmissionState == null &&
+      await isPriorityRecoverySupersessionCurrent(owner, durable, supersession);
+    return Object.freeze({
+      admitted,
+      expectedWorkflowStep: durable?.workflowStep,
+      completeInstead: false,
+      stepMetadata: null,
+      requiresRevalidation: true,
+      supersessionChanged: !admitted,
+    });
+  }
   const durableStep = await readReplaceDurableStep(owner, operation);
   const admitted = !isReplaceRemovalIntentDurable(
     {...operation, workflowStep: durableStep}) ||

@@ -484,16 +484,17 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       );
     }
     operation = createDispatchAuthority.operation;
-    const supersededPriorityRecoveryError =
+    const supersededPriorityRecoveryFailure =
       this.isPriorityRecoverySupersededTargetFailureApplicable(
         operation,
         replaceRemoveDispatchPhase,
       ) ?
-        await this.getPriorityRecoverySupersededTargetError(operation) :
+        await this.getPriorityRecoverySupersededTargetFailure(operation) :
         null;
-    if (supersededPriorityRecoveryError) {
-      return settleDispatchFailure(this, operation, supersededPriorityRecoveryError, {
+    if (supersededPriorityRecoveryFailure) {
+      return settleDispatchFailure(this, operation, supersededPriorityRecoveryFailure.error, {
         logLevel: FAILURE_LOG_LEVEL.WARN,
+        priorityRecoverySupersession: supersededPriorityRecoveryFailure,
       });
     }
     if (
@@ -605,6 +606,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
       if (removeSafetyEvaluation?.error) {
         return settleDispatchFailure(this, operation, removeSafetyEvaluation.error, {
+          priorityRecoverySupersession: removeSafetyEvaluation.priorityRecoverySupersession,
           logLevel: FAILURE_LOG_LEVEL.WARN,
           logMessage:
             REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
