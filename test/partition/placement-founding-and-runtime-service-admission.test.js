@@ -163,6 +163,15 @@ function createAuthoritativeLedgerRepository(leader) {
   // Retain the repository owner's exact projection comparison.
   return Object.assign(Object.create(ReplicaOperationRepository.prototype), {
     nodeId: NODE.A,
+    timeSource: leader.timeSource,
+    rowToOperation: mapLedgerRowToOperation,
+    async executeReplicaOperationsRead(sql, params) {
+      return {
+        success: true,
+        rowSetComplete: true,
+        rows: leader.db.prepare(sql).all(...params),
+      };
+    },
     getInFlightOperations: async () => [],
     getExistingReplicaRows: async () => [],
     queryIncompleteOperations: async () => [],
@@ -523,14 +532,10 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           } : answer;
         };
         const repo = coordinator.repository;
-        const read = repo.queryAuthoritativeOperationById.bind(repo);
+        const read = repo.executeReplicaOperationsRead.bind(repo);
         let readable = false;
-        repo.queryAuthoritativeOperationById = async (operationId) =>
-          readable ? read(operationId) : null;
-        repo.queryAuthoritativeOperationVisibilityObservation = async (operationId) => ({
-          operation: readable ? await read(operationId) : null,
-          deferredOutcome: readable ? null : {retryAfterMs: 20},
-        });
+        repo.executeReplicaOperationsRead = async (sql, params) =>
+          readable ? read(sql, params) : {success: false, retryAfterMs: 20};
         const original = {
           type: OperationType.ADD,
           partitionId: USER_PARTITION_ID,
