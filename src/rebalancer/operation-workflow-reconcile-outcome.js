@@ -3,6 +3,7 @@ const OPERATION_RECONCILE_OUTCOME = Object.freeze({
   FAILED: 'failed',
   ADVANCED: 'advanced',
   WAITING: 'waiting',
+  STOPPING_REDRIVE_CONFIRMED: 'stopping_redrive_confirmed',
   HELD: 'held',
   REFUSED: 'refused',
 });

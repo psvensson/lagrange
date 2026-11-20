@@ -220,8 +220,8 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
     }
   });
 
-  await t.test('operation in STOPPING remains removing during timeout checks', async (t) => {
-    const {coordinator, backdateOperation, getTrackedOperation} =
+  async function checkStoppingRemoval(status) {
+    const {coordinator, setOperationUpdatedAt, getTrackedOperation} =
       createTimeoutTestCoordinator({
         removingTimeoutMs: 1,
         services: [{
@@ -229,7 +229,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
           replica_id: 'test-replica',
           partition_id: 'test-partition',
           node_id: 'test-node',
-          status: ReplicaStatus.REMOVING,
+          status,
         }],
       });
 
@@ -240,30 +240,33 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
         nodeId: 'test-node',
         replicaId: 'test-replica',
       });
-
-      // Move to STOPPING
       await coordinator.updateStep(operation, 'STOPPING');
-      t.equal(operation.workflowStep, 'STOPPING', 'Step is STOPPING');
-
-      // Backdate the operation
-      backdateOperation(operation.operationId, 100);
-
-      // Trigger timeout check
+      // Rebase the step entry as well as the row timestamp so the owner
+      // checks a genuinely expired STOPPING step.
+      const stepBeforeCheck = operation.workflowStep;
+      setOperationUpdatedAt(operation.operationId, Date.now() - 100);
       await coordinator.checkTimeouts();
-
-      // Get the updated operation
-      const updatedOp = getTrackedOperation(operation.operationId);
-
-      // REMOVE STOPPING remains externally tracked as removing
-      t.equal(updatedOp.status, ReplicaStatus.REMOVING,
-        'Status remains removing while waiting on external removal');
-      t.equal(updatedOp.workflow_step, 'STOPPING',
-        'Workflow step remains STOPPING');
-      t.equal(updatedOp.error_message, null,
-        'No timeout error is recorded for STOPPING REMOVE');
+      return {stepBeforeCheck,
+        durable: structuredClone(getTrackedOperation(operation.operationId))};
     } finally {
       await coordinator.shutdown();
     }
+  }
+
+  await t.test('operation in STOPPING remains removing during timeout checks', async (t) => {
+    const {stepBeforeCheck, durable} = await checkStoppingRemoval(ReplicaStatus.REMOVING);
+    t.equal(stepBeforeCheck, 'STOPPING', 'Step is STOPPING');
+    t.equal(durable.status, ReplicaStatus.REMOVING,
+      'Status remains removing while waiting on external removal');
+    t.equal(durable.workflow_step, 'STOPPING', 'Workflow step remains STOPPING');
+    t.equal(durable.error_message, null, 'No timeout error is recorded for STOPPING REMOVE');
+  });
+
+  await t.test('acknowledged redrive without observed removal cannot suppress timeout', async (t) => {
+    const {durable} = await checkStoppingRemoval(ReplicaStatus.ACTIVE);
+    t.equal(durable.status, ReplicaStatus.FAILED, 'the expired removal failed');
+    t.match(durable.error_message, /Timeout in STOPPING/u,
+      'the failure comes from the normal STOPPING deadline');
   });
 
   await t.test('completed operation does not timeout', async (t) => {

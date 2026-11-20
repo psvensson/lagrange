@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import assert from 'node:assert/strict';
 import {REBALANCER_DEFAULT} from '../../src/rebalancer/rebalancer-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
@@ -317,9 +318,11 @@ test(
     assert.ok(
       reconcile !== undefined &&
         reconcile.orphansReleased > NO_RELEASES &&
+        reconcile.orphanReservationStatus === RESERVATION_STATUS.RELEASED &&
+        reconcile.holderReservationStatus === RESERVATION_STATUS.ACTIVE &&
         reconcile.holderAfter.operationId === reconcile.holderBefore.operationId,
-      'the target\'s reservation reconciliation released the holder\'s ' +
-        `reservation as an orphan without releasing the hold (${JSON.stringify(
+      'the target’s reservation reconciliation released the absent operation’s ' +
+        `reservation and retained both the holder reservation and hold (${JSON.stringify(
           reconcile,
         )})`,
     );

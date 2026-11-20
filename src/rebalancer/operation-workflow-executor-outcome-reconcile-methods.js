@@ -1,3 +1,4 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from './replica-operation-update-disposition.js';
 import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
@@ -82,6 +83,13 @@ const EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS = Object.freeze([
 const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
   'Executor outcome operation visibility deferred';
 
+function isMatchingExecutorReplicaOutcome(operation, outcome) {
+  return typeof outcome?.replicaId === 'string' && outcome.replicaId.length > 0 &&
+    outcome.operationId === operation.operationId &&
+    outcome.partitionId === operation.partitionId &&
+    outcome.replicaId === operation.replicaId;
+}
+
 class OperationWorkflowExecutorOutcomeReconcileMethods {
   handleExecutorOutcome(outcome) {
     if (this.isShuttingDown || !this.isInitialized) {
@@ -92,8 +100,22 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     if (!operationId) {
       return;
     }
-    this.retainExecutorOutcomeRetryPayload(operationId, outcome);
+    const previous = this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+    const selected = this.retainExecutorOutcomeRetryPayload(operationId, outcome);
+    if (this.supersedesExecutorStepRetry(previous, selected)) {
+      this.cancelExecutorOutcomeRetryTimer(operationId);
+      this.executorOutcomeRetryDelayMsByOperationId.delete(operationId);
+    }
     this.redriveExecutorOutcomeReconcile(operationId).catch(() => null);
+  }
+
+  supersedesExecutorStepRetry(previous, selected) {
+    return EXECUTOR_OUTCOME_ACTION_MAP[previous?.outcomeType]?.action ===
+      EXECUTOR_OUTCOME_ACTION.UPDATE_STEP &&
+      isMatchingExecutorReplicaOutcome(previous, selected) &&
+      selected.timestamp >= previous.timestamp &&
+      this.getExecutorOutcomeRetryWorkflowStepRank(selected) >
+        this.getExecutorOutcomeRetryWorkflowStepRank(previous);
   }
 
   /**
@@ -149,7 +171,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
             },
           );
         } catch (error) {
-          if (!factoryRan) {
+          if (!factoryRan || this.supersedesExecutorStepRetry(payload,
+            this.executorOutcomeRetryPayloadByOperationId.get(operationId))) {
             continue;
           }
           // Retryable reconcile failures re-arm the OUTCOME retry (with
@@ -297,13 +320,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     return selectedPayload;
   }
 
-  clearExecutorOutcomeRetry(operationId) {
+  cancelExecutorOutcomeRetryTimer(operationId) {
     const timerHandle =
       this.executorOutcomeRetryTimerByOperationId.get(operationId);
     if (timerHandle) {
       this.clearTimeoutFn(timerHandle);
       this.executorOutcomeRetryTimerByOperationId.delete(operationId);
     }
+  }
+
+  clearExecutorOutcomeRetry(operationId) {
+    this.cancelExecutorOutcomeRetryTimer(operationId);
     this.executorOutcomeRetryPayloadByOperationId.delete(operationId);
     this.executorOutcomeRetryDelayMsByOperationId.delete(operationId);
   }
@@ -471,6 +498,9 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       },
     );
     const timerHandle = this.setTimeoutFn(() => {
+      if (this.executorOutcomeRetryTimerByOperationId.get(operationId) !== timerHandle) {
+        return;
+      }
       this.executorOutcomeRetryTimerByOperationId.delete(operationId);
       if (this.isShuttingDown || !this.isInitialized) {
         return;
@@ -661,13 +691,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
 
     if (mapping.action === EXECUTOR_OUTCOME_ACTION.UPDATE_STEP) {
-      if (!this.isExecutorOutcomeStepBehindOperation(operation, workflowStep)) {
-        const progress = await this.updateStep(operation, workflowStep,
-          OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME);
-        if (!didOperationReconcileAdvanceOrComplete(progress)) {
-          this.scheduleExecutorOutcomeRetry(outcome);
-          return false;
-        }
+      if (!await this.reconcileExecutorStepNotification(operation, outcome)) {
+        return false;
       }
       await this.reconcileExecutorStepUpdateOutcome(
         operation,
@@ -772,6 +797,30 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
       {operationId, outcomeType},
     );
+    return false;
+  }
+
+  async reconcileExecutorStepNotification(operation, outcome) {
+    const {operationId, workflowStep} = outcome;
+    if (this.isExecutorOutcomeStepBehindOperation(operation, workflowStep)) {
+      return true;
+    }
+    if (operation.workflowStep === workflowStep &&
+        isMatchingExecutorReplicaOutcome(operation, outcome)) {
+      const read = await this.repository.observeOperationTransition(operation, workflowStep);
+      if (read.outcome?.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY) {
+        // This notification's exact durable step already exists. Consumption
+        // does not claim a workflow advance or cancel newer evidence.
+        return this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome);
+      }
+    }
+    const progress = await this.updateStep(operation, workflowStep,
+      OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME);
+    if (!this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome)) {
+      return false;
+    }
+    if (didOperationReconcileAdvanceOrComplete(progress)) return true;
+    this.scheduleExecutorOutcomeRetry(outcome);
     return false;
   }
 
