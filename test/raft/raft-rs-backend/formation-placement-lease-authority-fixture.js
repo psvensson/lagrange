@@ -209,9 +209,10 @@ function openPlacementNodes(clock, cache, cluster) {
   };
 }
 
-function serviceRow(replicaId, nodeId, role) {
+function serviceRow(replicaId, nodeId, role, createdAt = START_MS) {
   return {service_id: replicaId, replica_id: replicaId, partition_id: PARTITION,
-    node_id: nodeId, status: SERVICE_STATUS.ACTIVE, raft_role: role, service_type: 'partition'};
+    node_id: nodeId, status: SERVICE_STATUS.ACTIVE, raft_role: role, service_type: 'partition',
+    created_at: createdAt};
 }
 
 function addLearner(cluster, row) {
@@ -237,10 +238,12 @@ function finishLedger(ledger, row, step, status, now) {
     [step, status, now, now, JSON.stringify(history), row.operation_id]), null);
 }
 
-async function withPlacementLeaseAuthority(measure) {
+async function withPlacementLeaseAuthority(measure, {
+  createCluster = createFoundingCluster,
+} = {}) {
   initializeRuntimeFixture();
   const clock = new VirtualTimeSource({startMs: START_MS});
-  const cluster = createFoundingCluster([SEED_REPLICA], {partitionId: PARTITION});
+  const cluster = createCluster([SEED_REPLICA], {partitionId: PARTITION});
   const cache = new SystemTableCache({
     timeSource: clock, scheduleCacheChangeNotification: queueMicrotask,
   });
@@ -268,7 +271,7 @@ async function withPlacementLeaseAuthority(measure) {
       function finishAdd(row) {
         addLearner(cluster, row);
         cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT,
-          serviceRow(row.replica_id, TARGET, RAFT_ROLE.LEARNER));
+          serviceRow(row.replica_id, TARGET, RAFT_ROLE.LEARNER, row.created_at));
         finishLedger(ledger, row, WORKFLOW_STEP.ACTIVE, SERVICE_STATUS.ACTIVE, clock.now());
       }
       function finishRemove(row) {
@@ -291,7 +294,7 @@ async function withPlacementLeaseAuthority(measure) {
         finishAdd(initial);
         await owner.awaitCurrentWorkIdle();
         await measure({
-          owner, ledger, nodes, cluster, initial, actions, clock, finishAdd, finishRemove,
+          owner, ledger, nodes, cluster, initial, actions, clock, finishAdd, finishRemove, cache,
           async observeCommittedPlacement() {
             await nodes.authority.readServeEligibility();
             await owner.awaitCurrentWorkIdle();

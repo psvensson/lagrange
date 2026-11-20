@@ -94,15 +94,18 @@ function partitionServiceRow(partitionId, replicaId, status) {
  * the row against that address.
  * @param {string} partitionId
  * @param {Array<string>} replicaIds
+ * @param {Object} [options] - Optional node identity mapping.
  * @return {PartitionNodeCluster}
  */
-function partitionClusterAtRowAddresses(partitionId, replicaIds) {
-  const addressOf = (replicaId) => partitionServiceRow(partitionId, replicaId,
-    ReplicaStatus.ACTIVE).address;
-  const cluster = new PartitionNodeCluster({partitionId, replicaIds,
+function partitionClusterAtRowAddresses(partitionId, replicaIds, {
+  nodeIdOf = (replicaId) => `${replicaId}-node`,
+} = {}) {
+  const addressOf = (replicaId) => `${nodeIdOf(replicaId)}/partition/${replicaId}`;
+  const founderNodeIds = Object.fromEntries(replicaIds.map((id) => [id, nodeIdOf(id)]));
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds, founderNodeIds,
     resolveFor: (_replicaId, peerReplicaId) => addressOf(peerReplicaId),
     sendFor: (replicaId, address, packet) => {
-      const target = replicaIds.find((peer) => addressOf(peer) === address);
+      const target = cluster.replicaIds.find((peer) => addressOf(peer) === address);
       cluster.queue(replicaId, cluster.addressOf(target), packet);
       return DELIVERED_TO_PEER;
     }});
