@@ -400,9 +400,16 @@ function createBulkTransferChannelRegistry(options = {}) {
       }
       const ws = createWebSocket(address, {maxPayload});
       await new Promise((resolve, reject) => {
+        let settled = false;
+        let onOpen = null;
         let onAbort = null;
         let failDial = null;
+        const absorbError = () => {};
         const cleanupDial = () => {
+          if (onOpen !== null) {
+            ws.removeListener(TRANSPORT_EVENT.OPEN, onOpen);
+            onOpen = null;
+          }
           if (failDial !== null) {
             ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
             failDial = null;
@@ -413,11 +420,24 @@ function createBulkTransferChannelRegistry(options = {}) {
           }
         };
         failDial = (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           cleanupDial();
+          ws.on(TRANSPORT_EVENT.ERROR, absorbError);
           reject(error);
         };
         onAbort = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           cleanupDial();
+          // ws.terminate() on a CONNECTING socket schedules an asynchronous
+          // 'error' event; keep a no-op error listener attached so the
+          // aborted socket teardown never throws an uncaught exception.
+          ws.on(TRANSPORT_EVENT.ERROR, absorbError);
           ws.terminate();
           reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
         };
@@ -425,10 +445,15 @@ function createBulkTransferChannelRegistry(options = {}) {
           onAbort();
           return;
         }
-        ws.once(TRANSPORT_EVENT.OPEN, () => {
+        onOpen = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           cleanupDial();
           resolve();
-        });
+        };
+        ws.once(TRANSPORT_EVENT.OPEN, onOpen);
         ws.once(TRANSPORT_EVENT.ERROR, failDial);
         signal?.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
       });

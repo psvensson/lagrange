@@ -36,11 +36,12 @@
  * binds those back to INTEGER, REAL, TEXT, BLOB and NULL. A JS number always
  * binds REAL, which is why INTEGER never decodes to a number.
  *
- * Input typing (D3) is the same for row values and parameters: BigInt is
- * INTEGER (int64 range), number is REAL (an integral number too; NaN
- * refused), string is TEXT, Buffer or Uint8Array is BLOB, null is NULL, and
- * anything else is refused. A producer reading SQLite must therefore read
- * with safeIntegers(true): an INTEGER read as a JS number would be typed REAL.
+ * Input typing (D3, D15) is the same for row values and parameters: BigInt is
+ * INTEGER (int64 range), boolean is INTEGER (1 or 0), number is REAL (an
+ * integral number too; NaN refused), string is TEXT, Buffer or Uint8Array is
+ * BLOB, null is NULL, and anything else is refused. A producer reading SQLite
+ * must therefore read with safeIntegers(true): an INTEGER read as a JS number
+ * would be typed REAL.
  *
  * The decoder is strict: a non-canonical cell, an unknown class character, a
  * wrong arity, an unknown or missing version, an extra or missing field or an
@@ -283,11 +284,13 @@ function encodeTypedRowSet(columns, rows) {
 
 /**
  * Encode statement parameters as TypedParams under the input-typing table.
+ * Boolean inputs are encoded as INTEGER ('1' or '0', D15).
  * @param {Array<*>} values - Positional parameter values.
  * @return {{v: number, classes: string, cells: Array<?string>}}
  * @throws {SqlValueCodecError} UNREPRESENTABLE for a value outside the table
- *   (boolean, undefined, objects, NaN, a BigInt outside int64, a string with
- *   an unpaired surrogate) or a non-array (named parameters are not typed).
+ *   (undefined, functions, symbols, non-Uint8Array objects, NaN, a BigInt
+ *   outside int64, or a string with an unpaired surrogate) or a non-array
+ *   (named parameters are not typed).
  */
 function encodeTypedParams(values) {
   if (!arrayIsArray(values)) throw unrepresentable(SQL_VALUE_CODEC_REFUSAL.SHAPE_INVALID);
