@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "7962944a85e0618bb42f65c449da7d8e8f5ef7f73023597f4e6d66ad221fede6"
+    "sourceSha256": "a77ac3c6c6a24d2058da17f208e859f14ac2b791a4cc54b35b11c9d4b67b48cf"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 67,
     "publicExportCount": 773,
-    "importEdgeCount": 319,
+    "importEdgeCount": 320,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -5052,6 +5052,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": true,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-superseded-target.js",
+      "specifier": "./operation-workflow-reconcile-outcome.js",
+      "to": "src/rebalancer/operation-workflow-reconcile-outcome.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/rebalancer/priority-recovery-superseded-target.js",

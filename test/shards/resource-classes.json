@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2674,
+    "ordinary": 2675,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2700,
-  "digest": "fnv1a32-701b414b",
+  "censusSize": 2701,
+  "digest": "fnv1a32-a61f4489",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1515,6 +1515,7 @@
     "test/partition/raft-rs-transport-demux.test.js": "ordinary",
     "test/partition/range-integrity-validation.property.test.js": "ordinary",
     "test/partition/replica-admission-committed-operation-production.integration.test.js": "ordinary",
+    "test/partition/replica-admission-delivery-lifetime.test.js": "ordinary",
     "test/partition/replica-admission-from-committed-operation.test.js": "ordinary",
     "test/partition/replica-operations-schema-migration.test.js": "ordinary",
     "test/partition/replicated-sql-determinism-three-replica.test.js": "ordinary",

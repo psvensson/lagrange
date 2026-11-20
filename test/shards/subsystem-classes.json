@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 237,
+    "storage-partition": 238,
     "storage-raft": 156,
     "test-infrastructure": 166,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2700,
-  "digest": "fnv1a32-61baca94",
+  "censusSize": 2701,
+  "digest": "fnv1a32-8523e3b2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3cdc472e",
+  "observationDigest": "fnv1a32-039b7f82",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1535,6 +1535,7 @@
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
     "test/partition/replica-admission-committed-operation-production.integration.test.js": "storage-partition",
+    "test/partition/replica-admission-delivery-lifetime.test.js": "storage-partition",
     "test/partition/replica-admission-from-committed-operation.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
     "test/partition/replicated-sql-determinism-three-replica.test.js": "storage-partition",
@@ -14271,6 +14272,20 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/replica-admission-delivery-lifetime.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
