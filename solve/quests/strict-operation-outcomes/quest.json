@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "strict-operation-outcomes",
+  "statement": "Through the production ReplicaOperationRepository and OperationWorkflowOwner construction, only recognized and internally consistent owner results for the exact operation establish progress or terminal settlement. Competing durable failure remains failure. Malformed, unavailable, refused and unresolved reinsertion answers retain existing recovery and resource obligations. Migrate the finite producer/consumer/fixture census in solve/epics/operation-integrity-and-reliable-formation/strict-operation-outcomes.md together, removing weak alternate result shapes without breaking valid nonterminal updates and replays. Same-owner retries must re-enter persistence after malformed or thrown answers; fresh-owner reconstruction must recover the exact durable winner and its interrupted release.",
+  "epic": "operation-integrity-and-reliable-formation",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/strict-operation-outcomes.receipt.json",
+      "requiredReceipts": [
+        "strict-persistence-positive-and-malformed-negative",
+        "terminal-dispositions-and-failure-meaning",
+        "reconstruction-and-interrupted-release",
+        "permissive-path-negative-controls",
+        "classified-consumer-closure",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "real-producer-and-original-execution",
+      "statement": "The initial red must be a named behavioral assertion through real SQLite persistence and production workflow construction on identified managed-lab source. Missing receipts, absent tests, wrong artifacts, setup errors and marker-only records are non-measuring. Derive receipts only from original admitted execution artifacts; keep raw failures and their source/runtime/substrate identities. Do not seal before measuring red."
+    },
+    {
+      "id": "retained-obligations-and-single-contract",
+      "statement": "Preserve conditional terminal writes, exact operation/entity/placement identity, permitted pre-admission replica binding, and existing retry/release owners. Full terminal tuple validation applies to terminal claims; ordinary nonterminal writes and replays remain valid. No compatibility Boolean arm or fixture-defined success policy may remain in the closed interaction."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Independent review covers changed source/proof meaning and collected candidate before integration. Witness-only design approval does not approve the later runtime migration or claim whole-unit acceptance."
+    },
+    {
+      "id": "bounded-interaction",
+      "statement": "Initial writable scope is this successor record/log, test/rebalancer/strict-operation-outcomes.test.js, and a minimal execution-artifact-consuming scripts/quest-evidence/strict-operation-outcomes.js after original run shape is known. Runtime implementation requires the measured red and reviewed migration assignment. Item 03 underlying admission lifetime, item 04 completed-growth projection authority, and physical formation/release acceptance remain outside this unit's initial witness scope."
+    }
+  ]
+}

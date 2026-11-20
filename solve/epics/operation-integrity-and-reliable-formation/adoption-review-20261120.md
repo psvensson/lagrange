@@ -103,3 +103,23 @@ and continuation. This is capacity recovery, not a passing formation trial.
 The same independent verifier subsequently observed the matching controller
 generation, READY with target null and unchanged other-host generations, and
 APPROVED capacity recovery only.
+
+## Committed adoption and generated-output applicability
+
+Managed request `2e1ed6a0-931f-4bae-a662-5a387f829680`
+([issue 5481](https://github.com/psvensson/lagrange-lab/issues/5481)) completed
+the normal Git commit and hooks: exit 0, execution scope closed. Commit
+`f5d5d1c13d90fb58e3c5299d1e096fb53dfc7db1` contains the reviewed explanatory
+changes plus two producer-generated digest updates: the global owner debt
+inventory and impact graph seal. Independent verifier
+`subagent:/root/lifetime_census` APPROVED those outputs after inspecting the
+hook/producer and reconstructing the digest from all 6,176 recorded source
+hashes. Substituting only the codec's parent comment bytes reproduced the old
+source digest; resolver identity, graph counts and inventory findings did not
+change. This establishes applicability for generated bindings, not runtime proof.
+
+The exact commit was pushed to `candidate/reconciliation-20261119` using the
+existing non-main preservation route. It is not published to main, released,
+or accepted as a composed service candidate. Item 09's required gates remain
+outstanding. The next bounded work is the two production-owner counterexamples
+described in the current summary; no runtime repair is credited here.

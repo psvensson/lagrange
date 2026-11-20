@@ -207,7 +207,7 @@ documentClass: generated
 - [replica-operation-repository.js](replica-operation-repository.js) - ReplicaOperationRepository - SQL/cache reads and writes, row <-> operation translation for replica_operations. (importers: hub)
 - [replica-operation-step-policy.js](replica-operation-step-policy.js) - Single owner of replica-operation STEP-COVERAGE policy (quest step-coverage-single-owner-table; epic... (importers: hub)
 - [replica-operation-topology-drain.js](replica-operation-topology-drain.js) - Resolve the latest retained drain watermark for coordinator-owned topology-shaping work. (importers: few)
-- [replica-operation-update-disposition.js](replica-operation-update-disposition.js) - Typed disposition for replica_operation UPDATE persistence. (importers: many)
+- [replica-operation-update-disposition.js](replica-operation-update-disposition.js) - Typed disposition for replica_operation UPDATE persistence. (importers: hub)
 - [replica-placement-cure-policy.js](replica-placement-cure-policy.js) - Single owner of the replica-placement CURE-TYPING relation (quest cure-typing-single-owner-table; epic... (importers: many)
 - [replica-placement-owner-admission-statement.js](replica-placement-owner-admission-statement.js) - The admission statement: the one canonical body of a PLACEMENT_ADMIT command (quest... (importers: many)
 - [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts. (importers: one)

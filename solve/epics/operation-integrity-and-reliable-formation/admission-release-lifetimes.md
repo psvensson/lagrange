@@ -95,18 +95,39 @@ contract, clock treatment and discriminating trace.
 The integration owner recovered task-3804 and task-3823 originals and verified
 their retained archive; see the [custody review](adoption-review-20261120.md#original-evidence-custody)
 and the evidence-and-candidate-binding Quest log. Task-3823's report records
-`control_snapshot_read_failed` as its first unmet predicate and confirms cleanup
-of all three trial containers. This is a failed physical formation run, not
+`control_snapshot_read_failed` in its final first-unmet predicate and confirms
+cleanup of all three trial containers. This is a failed physical formation run, not
 accepted formation. Task-3804's original output confirms 18 passing files and
 1,428 assertions, but lacks the executed source/runtime/host binding needed for
 current applicability.
 
-The handover's 33/36 partition count, 71 release timeouts, repeated control pauses,
-two READY-lease dips and causal durations remain handover-reported here; this
-note has not independently derived them from the recovered playback. Remaining
-work is causal attribution and full execution admission, not recovery of those
-originals. Custody verification alone does not establish the proposed causal
-explanation or qualify source/runtime applicability.
+Read-only attribution on 20 November inspected the top-level task-3823 playback
+members, excluding the archived `.previous-*` runs. The report and playback
+archive hashes were rechecked against the retained manifest:
+`48d8f5dbffbbe02768b6bbf427c31793c70d5450fe91023e566ec2d7d99f4538`
+and `48104b8d8dd00f9488c5542c99a4172946940dcbfee5a6e445d5e16d860a84ac`,
+respectively. This analysis changes no original output or acceptance result.
+The following timestamps are UTC on 20 November; node abbreviations identify
+the three full IDs in the original report.
+
+| Retained observation | Supported inference and limit |
+| --- | --- |
+| The three node logs contain 71 distinct `wait_bound_spent` message IDs with `deliverySource: message:participant_release`, each `repeats:0`: seed `eed1d027` emits 21, `08f85935` emits 19, `71a63fa6` emits 31. Their timestamps span 17:19:50.604 to 17:27:53.870. | The timeout-record count is confirmed. Only 38 target the seed, 30 target `08f85935`, and three target `71a63fa6`. Records omit action, partition, operation and cutover-run identity; `responseContext` is null. They do not prove 71 outer ACTION.RELEASE retries to the leader. |
+| No run-start/join/pause-generation events were identified in those node logs; `joinedAttempt` is absent. | The retained observations cannot count fresh cutovers versus joined requests or reconstruct a control-partition pause interval. Absence of a marker does not prove absence of the action. |
+| `snapshots.ndjson:95` first records REMOVE `pl-call_activation_leases-p1-389-0`, created 17:20:47.376. Nearby snapshot 17:20:47.828 shows its ACTIVE learner on `08f85935`, whose node remains ACTIVE/ready but has lease expiry 17:20:32.068. A later snapshot renews the lease. | Removal and an expired lease observation coincide. The operation's dispatch history records `planning_snapshot_refresh_pending`, not the exact placement decision input. |
+| `snapshots.ndjson:100` first records REMOVE `pl-code-p1-458-0`, created 17:21:22.924. Snapshot 17:21:25.314 shows its ACTIVE learner on the same node and lease expiry 17:21:22.190; the next sample renews the lease. | This supports investigating the same eligibility boundary; the creation timestamp differs from the handover's 17:21:35. Sampling does not establish the exact authority read used to admit REMOVE. |
+| `08f85935-540e-45cd-b1af-06af4a0e5d3f.log:1793–1795` records a rejected `nodes-p1` UPDATE with `partition_write_cutover_paused` and `committed:false` at 17:19:39.751–756. Membership-publication reconcile reads later time out at 17:20:23.384, 28.373, 33.386, 38.374 and 17:21:08.434, 13.456, 18.453, 23.444. | A real cutover pause rejected a node-row write; later read/reconcile failures overlap the lease/removal periods. These are not correlated heartbeat-write lifecycle and `sql_transactions-p1` pause records, so the proposed causal chain remains unproved. |
+| The formation report records four seed snapshot-lane timeouts of 15000ms, at formation offsets 365985, 382243, 399494 and 428483ms. Earlier polls already fail spread and operation-quiet predicates. | `firstUnmet` is the final ordered predicate, not the earliest chronological failure. Preserve all failed predicates; the 33/36 narrative cannot replace them. The 420000ms acceptance bound remains unchanged. |
+| The report verdict is `BLOCK_EVIDENCE_INCOMPLETE`, reason `log_window_coverage_incomplete`; its coverage summary reports 6271023 withheld bytes and all three nodes incomplete. Its separate capture-completeness records are true. | Capture completion and admitted failure-window coverage are different claims. This note does not reconstruct or override that coverage verdict from the playback files. |
+
+The handover's 33/36 partition count, repeated control-pause attribution and
+causal durations have not been independently established by this bounded
+analysis. Remaining work is causal attribution and full execution admission,
+not recovery of the originals. Custody verification alone does not establish
+the causal explanation or qualify source/runtime applicability. Item 03 needs
+action/run/join/pause identity, item 04 needs each removal's authoritative
+eligibility input, and item 09 retains snapshot-query and evidence-coverage
+diagnosis. No quantified time-saving estimate follows from these observations.
 
 In particular, an outer timeout followed by a retry cannot alone demonstrate a
 new pause: `RUNS` joins an active same-build attempt. Attribute each pause to a

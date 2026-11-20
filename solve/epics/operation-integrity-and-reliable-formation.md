@@ -84,6 +84,7 @@ quests:
   - strict-hydration-fixture-owner-ports
   - tap-default-machine-factor-portability
   - node-ready-lease-renewal-cadence
+  - strict-operation-outcomes
 authorizes:
   - src
   - test
@@ -126,7 +127,8 @@ invalid evidence before integration.
   workflow, delegation, documentation lifecycle, and the user's 20 November
   reliability and agent usability programme. The programme's numbers below are
   references to obligations, not new Quest IDs or a second acceptance ledger.
-- **Current bounded unit (01):** reconcile this summary and the named active
+- **Adopted bounded unit (01):** commit
+  `f5d5d1c13d90fb58e3c5299d1e096fb53dfc7db1` reconciles this summary and the named active
   owner summaries, architecture entrypoint, locking-read explanation, capability
   source/projection, operations and migration guidance. Writable scope is those
   explanatory surfaces, `docs/execution-semantics.md`, the codec's input-typing
@@ -159,9 +161,10 @@ invalid evidence before integration.
   against original logs. Completed-growth compensation needs identity/generation
   and retirement proof (04). Support-envelope builder defaults and simulated
   drills cannot certify physical support (07/14).
-- **Execution and continuation:** source reads/edits and Git inspection occur
-  here; runtime proof, audits and generators retain the managed-lab execution
-  boundary. Root observes submitted runs by their actual request identity. No
+- **Execution and continuation:** the user's subsequent explicit local-shell
+  authorization permits routine Unix commands, repository tooling and Git work
+  here. Runtime testing remains on the lab machines, parallelized through the
+  existing placement/resource owners. Root observes submitted runs by their actual request identity. No
   new runtime acceptance run is submitted by this adoption. Root owns documentation and
   composition; delegated documentation authors and an independent evidence
   reviewer work in disjoint scopes. Runtime investigations and proposed designs
@@ -208,11 +211,15 @@ diagnostics, retries and user backup/restore/PITR are AGPL product obligations.
 | 17 | Same recovery owner; durable history/TX1/retention | After 15/16 and archive contract, transaction-consistent target mapping, contiguous verified history, bounded archive debt and restartable recovery; reject gaps and unavailable targets. 1.0. |
 | 18 | `RM-1.0-support-contract`; topology/durability/certification/release owners | After all applicable items and existing release prerequisites, freeze and measure workload/topology/resource/recovery envelope and operational procedures. Separate process-crash from power-loss evidence. 1.0. |
 
-**Next action:** complete 01's current-document contradictions and independent
-review; review the [proposed strict outcome interaction](operation-integrity-and-reliable-formation/strict-operation-outcomes.md)
-and prepare 02's finite persistence-to-release transition and real-producer
-counterexample while 03's ownership matrix and 07's original-evidence census
-proceed independently. The [lifetime proposal](operation-integrity-and-reliable-formation/admission-release-lifetimes.md)
+**Next action:** the explanatory adoption passed independent review and its
+documentation checks; this does not close all of item 01 or the programme.
+Prepare the independently reviewed [strict outcome interaction](operation-integrity-and-reliable-formation/strict-operation-outcomes.md)
+as 02's successor Quest and real SQLite counterexample. In parallel, prepare
+07's [production-owner false-certification witness](operation-integrity-and-reliable-formation/support-envelope-evidence.md); neither witness author may
+change the runtime contract before its genuine red and the required seal.
+Root owns proof placement and integration; `outcome_census` owns the outcome
+witness, `evidence_census` the support-envelope witness, and `lifetime_census`
+the original physical-log attribution. The [lifetime proposal](operation-integrity-and-reliable-formation/admission-release-lifetimes.md)
 preserves the source census and prior contracts; the [adoption review](operation-integrity-and-reliable-formation/adoption-review-20261120.md)
 records independent findings and original-evidence custody. Then serialize the affected lifetime/placement/TX/SQL
 repairs and their composition. Freeze supported limits before acceptance;

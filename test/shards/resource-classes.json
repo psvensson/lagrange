@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2670,
+    "ordinary": 2672,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2696,
-  "digest": "fnv1a32-42dfeb2b",
+  "censusSize": 2698,
+  "digest": "fnv1a32-98144ed4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -300,6 +300,7 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "ordinary",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "ordinary",
     "test/bootstrap/storage-budget-bootstrap.test.js": "ordinary",
+    "test/bootstrap/support-envelope-execution-evidence.test.js": "ordinary",
     "test/bootstrap/support-envelope-owner.test.js": "ordinary",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "ordinary",
     "test/bootstrap/system-partition-classification-owner.test.js": "ordinary",
@@ -2136,6 +2137,7 @@
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "ordinary",
     "test/rebalancer/storage-pressure-behavior.test.js": "ordinary",
     "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "ordinary",
+    "test/rebalancer/strict-operation-outcomes.test.js": "ordinary",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "ordinary",

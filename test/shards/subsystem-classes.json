@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 348,
+    "bootstrap-membership": 349,
     "cdc-metadata": 71,
     "cli-tooling": 99,
     "control-plane": 234,
@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 287,
+    "placement-rebalance": 288,
     "query-sql": 205,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2696,
-  "digest": "fnv1a32-46d31e14",
+  "censusSize": 2698,
+  "digest": "fnv1a32-ae28989b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-10d09b7c",
+  "observationDigest": "fnv1a32-892a58fa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -320,6 +320,7 @@
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap-membership",
     "test/bootstrap/storage-budget-bootstrap.test.js": "bootstrap-membership",
+    "test/bootstrap/support-envelope-execution-evidence.test.js": "bootstrap-membership",
     "test/bootstrap/support-envelope-owner.test.js": "bootstrap-membership",
     "test/bootstrap/system-leader-readiness-address-gate.test.js": "bootstrap-membership",
     "test/bootstrap/system-partition-classification-owner.test.js": "bootstrap-membership",
@@ -2156,6 +2157,7 @@
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "placement-rebalance",
     "test/rebalancer/storage-pressure-behavior.test.js": "placement-rebalance",
     "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "placement-rebalance",
+    "test/rebalancer/strict-operation-outcomes.test.js": "placement-rebalance",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "placement-rebalance",
@@ -19097,6 +19099,15 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/partition/partition-write-kernel.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/rebalance-coordinator.js"
+      ]
+    },
+    "test/rebalancer/strict-operation-outcomes.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
