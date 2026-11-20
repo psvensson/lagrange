@@ -100,6 +100,31 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const RESERVATION_BIRTH_VERB = 'birth';
+const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
+const RESERVATION_RELEASE_WITNESS_SQL =
+  'SELECT * FROM storage_reservations WHERE reservation_id = ?';
+
+function reservationReleaseError(operation, reason) {
+  const error = new Error(`Reservation release unresolved for ${operation.operationId}: ${reason}`);
+  error.code = RESERVATION_RELEASE_UNCONFIRMED;
+  return error;
+}
+
+function requireReservationReleaseRows(result, operation) {
+  if (result?.success !== true || !Array.isArray(result.rows)) {
+    throw reservationReleaseError(operation, result?.error || 'malformed authority response');
+  }
+  for (const row of result.rows) {
+    if (!row || typeof row.reservation_id !== 'string' || row.reservation_id.length === 0 ||
+        row.operation_id !== operation.operationId || row.entity_type !== operation.entityType ||
+        row.entity_id !== operation.entityId || row.partition_id !== operation.partitionId ||
+        row.target_node_id !== operation.targetNodeId) {
+      throw reservationReleaseError(operation, 'reservation identity mismatch');
+    }
+  }
+  return result.rows;
+}
+
 
 // The subject of a reservation's write identities.
 function reservationWriteSubject(reservationId) {
@@ -468,38 +493,33 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       [operation.operationId, RESERVATION_STATUS.ACTIVE],
       STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
-    if (!activeResult.success) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-        {
-          operationId: operation.operationId,
-          error: activeResult.error,
-        },
-      );
-      return;
+    const rows = requireReservationReleaseRows(activeResult, operation);
+    if (rows.some((row) => row.status !== RESERVATION_STATUS.ACTIVE || row.released_at !== null)) {
+      throw reservationReleaseError(operation, 'invalid active reservation tuple');
     }
 
     const now = this.nowFn();
     let releasedCount = 0;
-    const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
     for (const row of rows) {
       const transition = await this.transitionActiveReservationById(
         row.reservation_id,
         RESERVATION_STATUS.RELEASED,
         now,
       );
-      if (!transition.success) {
-        this.logger.warn(
-          REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-          {
-            operationId: operation.operationId,
-            reservationId: row.reservation_id,
-            error: transition.error,
-          },
-        );
-        continue;
+      if (!transition.success || transition.changeCount === null || transition.changeCount === 0) {
+        const witness = await readAuthoritativeControlPlaneRows(
+          this.controlPlaneSystemTableGateway, SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+          RESERVATION_RELEASE_WITNESS_SQL, [row.reservation_id],
+          STORAGE_RESERVATION_READ_QUERY_OPTIONS);
+        const finalRows = requireReservationReleaseRows(witness, operation);
+        const final = finalRows[0];
+        if (finalRows.length !== 1 || final.reservation_id !== row.reservation_id ||
+            ![RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.EXPIRED].includes(final.status) ||
+            !Number.isFinite(final.released_at)) {
+          throw reservationReleaseError(operation, transition.error || 'conditional release unproved');
+        }
       }
-      if (transition.changed) {
+      if (transition.changeCount > 0) {
         releasedCount++;
       }
     }

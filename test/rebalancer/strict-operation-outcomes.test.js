@@ -1,3 +1,4 @@
+import {readPlacementCensus} from '../../src/partition/partition-placement-admission-decision.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {admitReplaceTerminalRepair} from '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
 import {
@@ -148,8 +149,8 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
     targetNodeId: TARGET_NODE_ID,
     ...overrides,
   });
-  operation.entityType = SERVICE_TYPE.PARTITION;
-  operation.entityId = PARTITION_ID;
+  operation.entityType = overrides.entityType ?? SERVICE_TYPE.PARTITION;
+  operation.entityId = overrides.entityId ?? PARTITION_ID;
   if (operation.type === OperationType.GROWTH_PROMOTE) {
     operation.sourceReplicaId = `${operation.replicaId}-peer`;
     operation.promoteReplicaIds = [operation.replicaId, operation.sourceReplicaId];
@@ -159,6 +160,7 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
   }
   const persisted = await fixture.coordinator.repository.persistNewOperation(operation);
   t.equal(persisted, true, 'seed goes through the real repository and SQLite INSERT');
+  if (![OperationType.ADD, OperationType.REPLACE].includes(operation.type)) return operation;
   const now = Date.now();
   const reservation = await fixture.gateway.submitMutation({
     operation: 'insert',
@@ -166,9 +168,9 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
     row: {
       reservation_id: `res-${operationId}`,
       operation_id: operationId,
-      entity_type: SERVICE_TYPE.PARTITION,
-      entity_id: PARTITION_ID,
-      partition_id: PARTITION_ID,
+      entity_type: operation.entityType,
+      entity_id: operation.entityId,
+      partition_id: operation.partitionId,
       target_node_id: TARGET_NODE_ID,
       estimated_bytes: 1,
       amplification_factor: 1,
@@ -186,7 +188,7 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
 function reservationStatus(fixture, operationId) {
   return fixture.database.prepare(
     'SELECT status FROM storage_reservations WHERE operation_id = ?',
-  ).get(operationId).status;
+  ).get(operationId)?.status ?? null;
 }
 
 async function observeAttempt(run) {
@@ -381,7 +383,15 @@ for (const type of [OperationType.ADD, OperationType.GROWTH_PROMOTE]) {
     t.equal(outcome.committed, false, 'reconstruction makes no new terminal write');
     t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
     t.same(outcome.operation, original.operation, 'exact terminal history and timestamp survive');
-    t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.RELEASED);
+    if (type === OperationType.ADD) {
+      t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.RELEASED);
+    } else {
+      t.equal(reservationStatus(reopened, operation.operationId), null,
+        'growth does not admit a storage-increasing reservation');
+      const census = readPlacementCensus(reopened.database);
+      t.equal(census.find((row) => row.operationId === operation.operationId).incomplete, false,
+        'durable terminal row clears growth occupancy in the real placement census');
+    }
   });
 }
 
@@ -396,27 +406,27 @@ test('strict outcomes failed REPLACE repair releases before now-refused write ad
     const persistOptions = {expectedWorkflowStep: WORKFLOW_STEP.PENDING};
     const refusal = await admitReplaceTerminalRepair(owner, committed.operation, persistOptions);
     t.equal(refusal.admitted, false, 'new write admission refuses the old expected-step intent');
-    let placementAttempts = 0;
-    owner.releasePlacementHold = async () => {
-      placementAttempts++;
-      throw new Error('interrupted placement release');
+    let releaseReads = 0;
+    const read = fixture.current.gateway.readAuthoritativeRows.bind(fixture.current.gateway);
+    fixture.current.gateway.readAuthoritativeRows = async (table, ...args) => {
+      if (table === SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS && ++releaseReads === 1) {
+        return {success: false, error: 'interrupted reservation authority read'};
+      }
+      return read(table, ...args);
     };
     armTerminalTransitionRepair(owner, committed.operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
     const interrupted = await observeAttempt(() =>
       runTerminalTransitionRepairAttempt(owner, operation.operationId));
-    t.equal(interrupted.error?.message, 'interrupted placement release');
-    t.equal(placementAttempts, 1, 'committed terminal reaches release despite admission refusal');
+    t.equal(interrupted.error?.code, 'RESERVATION_RELEASE_UNCONFIRMED');
+    t.equal(releaseReads, 1, 'committed terminal reaches real release despite admission refusal');
     const held = owner.terminalTransitionRepairStateByOperationId.get(operation.operationId);
     t.equal(held.phase, TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
     t.same(held.projectedOperation, committed.operation);
     t.same(held.persistOptions, {}, 'release debt carries no stale new-write admission');
     t.equal(reservationStatus(fixture.current, operation.operationId), RESERVATION_STATUS.ACTIVE);
-    owner.releasePlacementHold = async () => {
-      placementAttempts++;
-    };
     await runTerminalTransitionRepairAttempt(owner, operation.operationId);
-    t.equal(placementAttempts, 2);
+    t.equal(releaseReads, 2);
     t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), false);
     t.equal(reservationStatus(fixture.current, operation.operationId), RESERVATION_STATUS.RELEASED);
     // Reopening and a different attempted failure still adopt the same failure;
@@ -454,4 +464,16 @@ test('strict outcomes accessor corruption is rejected without evaluating the get
   t.equal(attempt.error?.code, INVALID_OUTCOME_CODE);
   t.equal(getterCalls, 0, 'validation rejects accessor before clone or identity comparison');
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+});
+
+test('strict outcomes supported runtime service has no partition identity', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-runtime', {
+    type: OperationType.REMOVE, partitionId: null,
+    entityType: SERVICE_TYPE.RUNTIME_SERVICE, entityId: 'strict-service',
+  });
+  const outcome = await fixture.coordinator.workflowOwner.completeOperation(operation);
+  t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+  t.equal(outcome.operation.partitionId, null);
+  t.equal(outcome.operation.entityId, 'strict-service');
 });

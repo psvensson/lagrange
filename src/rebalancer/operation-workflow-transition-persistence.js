@@ -1,3 +1,4 @@
+import {releaseOperationLedgerSelfMoveHoldAfterTerminal} from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -344,7 +345,7 @@ class OperationWorkflowTransitionPersistence
     // re-enter this same release phase without asking admission for another write.
     armTerminalTransitionRepair(this, outcome.operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
-    await this.releasePlacementHoldIfNeeded(operation);
+    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
     await this.releaseReservationForOperation(operation);
     this.clearTerminalOperationRetryState(operation);
     this.clearTransitionRetry(operation.operationId);

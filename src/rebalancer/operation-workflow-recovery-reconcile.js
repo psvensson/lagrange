@@ -51,9 +51,6 @@ import {
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
 
 import {
-  releaseOperationLedgerSelfMoveHoldAfterTerminal,
-} from './operation-workflow-dispatch-ledger-self-move-gate.js';
-import {
   completeGrowthPromoteOperation,
   reconcileGrowthPromoteLifecycle,
 } from './operation-workflow-growth-promote.js';
@@ -98,16 +95,9 @@ function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   constructor(options) {
     super(options);
-    this.releasePlacementHold = options?.releasePlacementHold || null;
     // A new owner instance begins its REPLACE-owner session: an operation
     // whose step began earlier may have lost its attempt state (BR10).
     startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
-  }
-
-  async releasePlacementHoldIfNeeded(operation) {
-    if (!operation) return;
-    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
-    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
   }
 
   async completeOperation(operation) {

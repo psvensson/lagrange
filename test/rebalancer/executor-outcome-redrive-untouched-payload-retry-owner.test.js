@@ -165,7 +165,6 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
       confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED}),
   };
   host.operationWorkflowCoordinator = {removeWorkflow() {}};
-  host.releasePlacementHoldIfNeeded = async () => {};
   host.clearDispatchRetry = (id) => recorded.retryClears.push(
     {lane: 'dispatch', id},
   );

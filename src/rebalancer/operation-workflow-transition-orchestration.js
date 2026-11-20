@@ -136,7 +136,11 @@ class OperationWorkflowTransitionOrchestration
       Object.assign(operation, structuredClone(observation.operation));
       if (pendingReplicaBinding) operation.replicaId = pendingReplicaBinding;
     }
-    return observation.outcome ? buildOperationTransitionOutcome(observation.outcome) : null;
+    if (!observation.outcome) return null;
+    // Reconstruct the disposable mirror only after repository proof. This
+    // restores its actual history without manufacturing a transition entry.
+    this.ensureOperationWorkflow(operation);
+    return buildOperationTransitionOutcome(observation.outcome);
   }
 
   /**

@@ -33,18 +33,20 @@ function requireOutcome(condition, reason) {
   if (!condition) throw invalidOperationPersistenceOutcome(reason);
 }
 
-function assertOperationData(value, visited = new Set(), fieldPath = 'operation') {
+function assertOperationData(value, visited = new Set()) {
   if (value === null || typeof value !== 'object') return;
   requireOutcome(!visited.has(value), 'cyclic operation data');
   visited.add(value);
-  requireOutcome(Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype,
-    `operation data must use plain records and arrays at ${fieldPath}: ${Object.getOwnPropertyDescriptor(Object.getPrototypeOf(value) ?? {}, 'constructor')?.value?.name ?? 'no-own-constructor'}`);
+  const prototype = Object.getPrototypeOf(value);
+  // Committed membership stamps use null-prototype data records.
+  requireOutcome(Array.isArray(value) || prototype === Object.prototype || prototype === null,
+    'operation data must use plain records and arrays');
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     requireOutcome(typeof key === 'string' && Object.hasOwn(descriptor, 'value'),
       'operation data contains an accessor or symbol');
     requireOutcome(typeof descriptor.value !== 'function', 'operation data contains a function');
-    assertOperationData(descriptor.value, visited, fieldPath + String(key).padStart(String(key).length + 1, '.'));
+    assertOperationData(descriptor.value, visited);
   }
   visited.delete(value);
 }

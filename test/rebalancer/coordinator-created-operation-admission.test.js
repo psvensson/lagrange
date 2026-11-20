@@ -1,8 +1,17 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {buildOperationTransitionOutcome} from
+  '../../src/rebalancer/operation-workflow-transition-outcome.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
@@ -70,9 +79,10 @@ test('REPLACE binds a fresh target in the durable dispatch step before ' +
   owner.repository.persistOperationUpdate = async (operation, options) => {
     events.push('persist');
     persisted.push({operation: {...operation}, options: {...options}});
-    return true;
+    return buildOperationUpdateOutcome({persisted: true, operation,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED});
   };
-  owner.updateStep = async () => false;
+  owner.updateStep = async () => OPERATION_RECONCILE_OUTCOME.WAITING;
   owner.evaluateRemoveSafety = async () => null;
   owner.clearDeferredSafetyBlockState = () => {};
   owner.deliverReplicaOperationRequest = async (
@@ -99,7 +109,7 @@ test('REPLACE binds a fresh target in the durable dispatch step before ' +
     sourceReplicaId,
     sourceNodeId: 'node-source',
     targetNodeId: 'node-local',
-    status: 'sending',
+    status: ReplicaStatus.PENDING,
     workflowStep: WORKFLOW_STEP.SENDING,
     updatedAt: 101,
     completedAt: null,
@@ -189,7 +199,7 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
     replicaId: 'user-p1-r2',
     sourceNodeId: 'node-source',
     targetNodeId: 'node-local',
-    status: 'in_progress',
+    status: ReplicaStatus.CREATING,
     workflowStep: WORKFLOW_STEP.CREATING,
     updatedAt: 202,
     completedAt: null,
@@ -316,7 +326,7 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
     replicaId: 'user-lost-response-p1-r2',
     sourceNodeId: 'node-source',
     targetNodeId: 'node-local',
-    status: 'sending',
+    status: ReplicaStatus.PENDING,
     workflowStep: WORKFLOW_STEP.SENDING,
     createdAt: Date.now(),
     updatedAt: 101,
@@ -356,9 +366,9 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
     retained.push({candidate: {...candidate}, response: {...response}});
     return true;
   };
-  owner.failOperation = async () => {
+  owner.failOperation = async (candidate) => {
     failCalls += 1;
-    return Object.freeze({committed: true, disposition: 'updated'});
+    return buildTerminalOperationFixtureOutcome(candidate, {failed: true});
   };
 
   try {
@@ -392,10 +402,12 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       t.equal(options.deferWhenCreateAdmissionWins, true,
         'a concurrent admission winner is returned to the retry owner');
       return {
-        committed: false,
-        disposition: 'refused',
+        ...buildOperationTransitionOutcome(buildOperationUpdateOutcome({
+          persisted: false, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          operation: null,
+        })),
         createAdmissionWon: true,
-        operation: admitted,
+        createAdmissionOperation: admitted,
       };
     };
     const racedResult = await owner.executeOperationInternal(

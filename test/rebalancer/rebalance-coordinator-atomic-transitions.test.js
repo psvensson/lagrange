@@ -33,19 +33,19 @@ test('transition persistence is independent autocommit with expected-step CAS', 
     }},
   });
   const operation = await seedOperation(t, coordinator);
-  const gateway = coordinator.repository.controlPlaneSystemTableGateway;
-  const submit = gateway.submitMutation.bind(gateway);
+  const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
   const writes = [];
-  gateway.submitMutation = async (mutation, options) => {
-    if (mutation.operation === 'update' && mutation.data?.workflow_step) {
-      writes.push({mutation, options});
+  coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
+    if (sql.includes('UPDATE replica_operations') && sql.includes('workflow_step')) {
+      writes.push({sql, params, options});
     }
-    return submit(mutation, options);
+    return execute(sql, params, options);
   };
   await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
   t.equal(operation.workflowStep, WORKFLOW_STEP.SENDING);
   t.equal(writes.length, 1);
-  t.equal(writes[0].mutation.whereClause.workflow_step, WORKFLOW_STEP.PENDING);
+  t.match(writes[0].sql, /workflow_step = \?/);
+  t.equal(writes[0].params.at(-1), WORKFLOW_STEP.PENDING);
   t.equal(Object.hasOwn(writes[0].options || {}, 'sessionId'), false);
 });
 
@@ -144,14 +144,14 @@ test('guarded transitions retry the same operation after rejected persistence', 
       operationId: `op-same-object-${testCase.name}`,
       workflowStep: testCase.initialStep, status: testCase.initialStatus,
     });
-    const gateway = coordinator.repository.controlPlaneSystemTableGateway;
-    const submit = gateway.submitMutation.bind(gateway);
+    const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
     let writes = 0;
-    gateway.submitMutation = async (mutation, options) => {
-      if (mutation.operation === 'update' && mutation.data?.workflow_step && ++writes === 1) {
+    coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
+      if (sql.includes('UPDATE replica_operations') && sql.includes('workflow_step') &&
+          ++writes === 1) {
         return {success: false, error: 'persist failed'};
       }
-      return submit(mutation, options);
+      return execute(sql, params, options);
     };
     await t.rejects(testCase.invoke(coordinator, operation));
     t.equal(coordinator.operationWorkflowCoordinator.isTransitionIdempotent(

@@ -300,7 +300,8 @@ test(
       'an observed history without an expected step is refused',
     );
     await t.rejects(
-      repository.persistOperationUpdate(released, {
+      repository.persistOperationUpdate({...released, workflowStep: WORKFLOW_STEP.ACTIVE,
+        status: ReplicaStatus.ACTIVE, completedAt: TEST_TERMINAL_AT_MS}, {
         expectedWorkflowStep: WORKFLOW_STEP.PENDING,
         expectedStepsHistory: held.stepsHistory,
         terminalTransition: true,
@@ -748,7 +749,7 @@ test(
 
     const result = await repository.persistOperationUpdate(
       losingProjection,
-      {terminalTransition: true, returnDisposition: true},
+      {terminalTransition: true},
     );
 
     t.same(
@@ -784,7 +785,7 @@ test(
       ].map((disposition) =>
         isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
           persisted: disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
-          disposition, operation: projectedOperation,
+          disposition, operation: losingProjection,
         })),
       ),
       [true, true],
@@ -794,7 +795,7 @@ test(
     t.equal(
       isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
         persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        operation: projectedOperation,
+        operation: losingProjection,
       })),
       true,
       'a committed terminal settles',
@@ -802,7 +803,7 @@ test(
     t.equal(
       isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
         persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
-        operation: projectedOperation,
+        operation: losingProjection,
       })),
       false,
       'REINSERTED is unresolved divergence, not settled progress',
