@@ -1,94 +1,389 @@
 {
   "schema": "test-receipt/1",
   "quest": "participant-release-caller-lifetimes",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "aggregate-caller-and-bounded-leaf-composition",
-      "passed": false,
-      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+      "passed": true,
+      "testFile": "test/partition/participant-release-caller-lifetimes.test.js"
     },
     {
       "id": "shorter-joiner-and-retained-shared-attempt",
-      "passed": false,
-      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+      "passed": true,
+      "testFile": "test/partition/participant-release-caller-lifetimes.test.js"
     },
     {
       "id": "positive-and-negative-controls",
-      "passed": false,
-      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+      "passed": true,
+      "testFile": "test/partition/participant-release-caller-lifetimes.test.js"
     },
     {
       "id": "historic-contract-disposition-and-independent-review",
-      "passed": false,
-      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+      "passed": true,
+      "failure": null
     }
   ],
-  "generatedAt": "2026-11-20T19:47:07.497Z",
-  "sourceCommit": "9a559d0cb0bb51580988165b8116f2d68b9713c7",
-  "requestId": "b0a51112-53bb-4ac7-9d3b-b1a1af48a51b",
+  "generatedAt": "2026-11-20T20:24:32.852Z",
+  "sourceCommit": "5cc73e45e400e160e77687398f18e06059767eb1",
+  "sourceTree": "769ddc0fe4793ce6cc14146afd7ac68c7ef971cf",
+  "requestId": "3bce09eb-3cbe-4f32-b9c0-ad320cc926e3",
   "testFileDigests": {
-    "test/partition/participant-release-caller-lifetimes.test.js": "d5c241170c92ed9efa14504003ebc545af7eb52cd9d712c069a333c5636e1690"
+    "test/partition/participant-release-caller-lifetimes.test.js": "aba1dc65fafee97ecaec8b23ddc22bc19b319e544bf2f06fae7af2685f3430e4",
+    "test/partition/participant-release-protocol.test.js": "8c0a6af1b02b41d66213fc4831bb3ff036dc4d7c3113c418f4c7194537916227"
   },
   "productionFileDigests": {
-    "src/node/participant-release-client.js": "0c5dd576444b0c717db649e87c67b1e00c2a947a1a1aff5646daeeb560f0526b",
-    "src/node/replica-handler-participant-cutover.js": "26c3730d0210fa5b85119f96e37d02a8b3d34c0283eaf20a318d656e64efcc1b",
+    "src/node/participant-release-client.js": "b1355e2397af1fdf139a163d7831757781161f844a44611bb850ef007a29467c",
+    "src/node/replica-handler-participant-cutover.js": "42ac876fbd18f2adc17128162d5bb78d761a8b4b6435f8cfe0815689196b0de1",
     "src/node/replica-handler-participant-release.js": "55f827b55f45448e4d2f31f2cdbc82e669ee53f1be22758c860e9d42a1879408",
     "src/transport/message-router-delivery-lifetime.js": "30ee227ed5c52d4a2db2cfef0ed623f716d6199776adbe13ef9d6c75fa647580"
   },
   "originalDigests": {
-    "status.json": "d70c2fdfadfe8a3f0ee8beb5cd1af84045b968b6b26482b11faf424428da61d6",
-    "artifacts-0.json": "e0efd182267e90588d3565cd852b6fa9f63b12caf7a455525449e80b00e0cf51",
-    "artifacts/9a559d0cb0bb-mwpdyjvl-3279229-adam-laptop.log": "fbdc5cb5649f9bde4b0c97a02dc4817f4a19d665c99b42675f7e03c12ba20141",
-    "artifacts/selection.json": "f02366347311009ce2524fa4233556c5ba83f5ce85a952ddf72ba018ed275ead",
-    "artifacts/test-results.ndjson": "c809a5d9caf25361a5be37dab18df55255959fd112553c27b3fd257965311a21"
+    "status.json": "8bb6caf618e9f4ae940ecfb2af7e809596e58555878e3b96f9fc650642b53b2d",
+    "manifest.json": "3047a46549695920d5442d436fe97e3f70d16a1cec9f3f3c0b6063019828db02",
+    "artifacts-0.json": "717096fbe6cbeedf8fb6710d20d52b8de289482967ef26dbc269873b59beac81"
   },
-  "provenance": {
-    "status": {
-      "docker_create_attempted": false,
-      "elapsed_s": 41.56,
-      "execution_scope_closed": true,
-      "exit_code": 1,
-      "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
-      "host": "local-workstation",
-      "intentDigest": "cebbfb70f1d019b39cfecfc45b30de708ee52b43f96bc394a57eb5c5688f7297",
-      "job_id": "b0a51112-53bb-4ac7-9d3b-b1a1af48a51b",
-      "reason": null,
-      "source_execution_started": false,
-      "state": "FAILED",
-      "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-b0a5111253bb4ac79d3bb1a1af48a51b.service",
-      "workload_started": true
+  "originalArtifacts": [
+    {
+      "name": "cache-readiness.json",
+      "bytes": 1574,
+      "sha256": "0eb0f20ff5b6bd0bd324bca45284f73f9c770abf447fd2b0abf28eca38714af8"
     },
-    "selection": {
-      "sha": "9a559d0cb0bb51580988165b8116f2d68b9713c7",
-      "host": "adam-laptop",
-      "files": [
-        "test/partition/participant-release-caller-lifetimes.test.js"
+    {
+      "name": "cache-source.json",
+      "bytes": 319,
+      "sha256": "b800e0fe626182ff7353047a764f93f21bf0526ccb8f2afe3a1f98886397df09"
+    },
+    {
+      "name": "candidate-readiness.json",
+      "bytes": 1481,
+      "sha256": "d551f96dbebd271e5dd9ec223018e92a6a6fdbbd1b01bd62b94fba81f1cdcbe7"
+    },
+    {
+      "name": "checkout.json",
+      "bytes": 269,
+      "sha256": "9f03208865ffbae3c184836d2f74cfdab74c62d74b26c77be269aedb15c52149"
+    },
+    {
+      "name": "command-result.json",
+      "bytes": 53,
+      "sha256": "5be607aa6069756a424013851e837a1d6719ca60a53323cc1dcdd74f0dd1cb8a"
+    },
+    {
+      "name": "execution-report.json",
+      "bytes": 2145,
+      "sha256": "6049d5fd564149d3af4de2d7b0a725a833357d1d731e924147b0c95539a63d1d"
+    },
+    {
+      "name": "execution-sections.ndjson",
+      "bytes": 966,
+      "sha256": "6ade03aeea8a97a2504a5d0a42d170cbf71ad8972ba1aa32c35bca40da4a8247"
+    },
+    {
+      "name": "execution-validation.json",
+      "bytes": 305,
+      "sha256": "d174e0f354055a2f9560225241f1285b545137c642e0e72ddd3b4478e497d9ce"
+    },
+    {
+      "name": "invocation.json",
+      "bytes": 2137,
+      "sha256": "e49296a2246b493c25ac17003417c706e8a783d3a63d08965ac9e3712a1f6627"
+    },
+    {
+      "name": "native-after.json",
+      "bytes": 2038,
+      "sha256": "fe75b5924aa4c39cf0d75bf24afbf039f6cd17b929873f17e3e45f31f3e5bd9e"
+    },
+    {
+      "name": "native-before.json",
+      "bytes": 2038,
+      "sha256": "fe75b5924aa4c39cf0d75bf24afbf039f6cd17b929873f17e3e45f31f3e5bd9e"
+    },
+    {
+      "name": "payload.mjs",
+      "bytes": 13759,
+      "sha256": "037c2aaae61edbb6391a1121ec746bc38222861b4080186751a78868b71de30f"
+    },
+    {
+      "name": "preparation.json",
+      "bytes": 76,
+      "sha256": "962da071a6234046c9af8b8cf1d7d1aa42700bb1e55d574d41e7b49554924d12"
+    },
+    {
+      "name": "process-identity.cjs",
+      "bytes": 2873,
+      "sha256": "cae15d51819238486f70bcf0c31fe62fd165881c6ff0f1bfdcbec3219af2e78e"
+    },
+    {
+      "name": "process-identity/2250483-3415bee7-9161-4dcd-83dc-264753463981.end.json",
+      "bytes": 2387,
+      "sha256": "d386ea1e43305e36084b09c9c27ccf7314ff067f91776ec74e632bc6c7d575d5"
+    },
+    {
+      "name": "process-identity/2250483-3415bee7-9161-4dcd-83dc-264753463981.start.json",
+      "bytes": 1752,
+      "sha256": "d0951981c28336267d692b75f7b8a0ee092d3be5987c3ddf3e55d36e07e494c5"
+    },
+    {
+      "name": "process-identity/2250491-7dce2d45-af06-45aa-8515-5daf61992c60.end.json",
+      "bytes": 2503,
+      "sha256": "8926a0a6a7e5ff75d29be58d9c9dbbbba641feb5f6157dcea758ce5c4c596a9b"
+    },
+    {
+      "name": "process-identity/2250491-7dce2d45-af06-45aa-8515-5daf61992c60.start.json",
+      "bytes": 1868,
+      "sha256": "aeb7f539a6a69dbf6fc198fbc2b552b42f079f2ef8359ee22695318743734145"
+    },
+    {
+      "name": "process-identity/2250522-7f173ed2-9f6d-423f-8fb3-830efa407bd5.end.json",
+      "bytes": 3930,
+      "sha256": "1dfa523b95c00a25d93291882884b2fc76e14b96f9dccf03446f921bb4bca682"
+    },
+    {
+      "name": "process-identity/2250522-7f173ed2-9f6d-423f-8fb3-830efa407bd5.start.json",
+      "bytes": 1977,
+      "sha256": "18c61191205106e483c7bbd7f66b0701d53deac36b9970294a30e57ccd7cb62e"
+    },
+    {
+      "name": "process-identity/2250529-380b482f-7e63-4b68-b27d-8545fa62383a.end.json",
+      "bytes": 3919,
+      "sha256": "1bb78380727596e9005584e6f08afe79e153da0ef0fd66199de1ba3a34799a9a"
+    },
+    {
+      "name": "process-identity/2250529-380b482f-7e63-4b68-b27d-8545fa62383a.start.json",
+      "bytes": 1969,
+      "sha256": "4442ed1546b5fdb7f9509d0ea43ef6549926314622455ab16149ef6a02772718"
+    },
+    {
+      "name": "raw-tap/test/partition/participant-release-caller-lifetimes.test.js.tap",
+      "bytes": 39408,
+      "sha256": "67e36239573ffb8deca487609623d6d9daac938e6cfbdf7f0003523e774bceb6"
+    },
+    {
+      "name": "raw-tap/test/partition/participant-release-caller-lifetimes.test.js.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "raw-tap/test/partition/participant-release-protocol.test.js.tap",
+      "bytes": 5152,
+      "sha256": "24325f0717edeb3b9b870e07541c2ccf55b36b28603dcf681b3f6df52a75c1e3"
+    },
+    {
+      "name": "raw-tap/test/partition/participant-release-protocol.test.js.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "runner.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "runner.stdout",
+      "bytes": 350,
+      "sha256": "8489be31de044c2ae970ef7a9f8d9c6c9c1eccfd455af8897562f676d8d30efe"
+    },
+    {
+      "name": "selected-files.txt",
+      "bytes": 112,
+      "sha256": "c828d224a2d67b3a1d90ec7c12b8884fcabd8847bd9475c9116f51b9fe92bacf"
+    },
+    {
+      "name": "source-after.json",
+      "bytes": 143,
+      "sha256": "af1a1f7cb8c8ef4f483a5e645513fb257b7fffdfcaa3dd0154a7a37f9e4aeed8"
+    },
+    {
+      "name": "source-before.json",
+      "bytes": 143,
+      "sha256": "af1a1f7cb8c8ef4f483a5e645513fb257b7fffdfcaa3dd0154a7a37f9e4aeed8"
+    }
+  ],
+  "originalRed": {
+    "archive": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-caller-lifetimes--participant-release-caller-lifetimes-original-red-b0a51112.tar.gz"
+  },
+  "originalArchive": {
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-caller-lifetimes--participant-release-caller-lifetimes-source-green-3bce09eb.tar.gz",
+    "sha256": "78a2b971e9ef722809f97882063a63c17087352a577ae4a07bcfcd3583f9faeb"
+  },
+  "rejectedPostflight": {
+    "requestId": "6d7114de-3e27-4f81-958d-93eaddeaa24d",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-caller-lifetimes--participant-release-caller-lifetimes-postflight-failure-6d7114de.tar.gz",
+    "sha256": "10a15173e0b6d0e768ae5be0234d6166d2ec3d7049cb0b41a0d1eff3430b2c5b"
+  },
+  "ceiling": "Local production-owner composition on registered tv-dator, inprocess transport and virtual-clock schedules. No physical formation, cross-host clock, task3823 causality or time-saved claim.",
+  "execution": {
+    "candidate": {
+      "sha": "5cc73e45e400e160e77687398f18e06059767eb1",
+      "tree": "769ddc0fe4793ce6cc14146afd7ac68c7ef971cf",
+      "status": "",
+      "clean": true
+    },
+    "invocation": {
+      "candidate": {
+        "sha": "5cc73e45e400e160e77687398f18e06059767eb1",
+        "tree": "769ddc0fe4793ce6cc14146afd7ac68c7ef971cf",
+        "status": "",
+        "clean": true
+      },
+      "registeredHost": "tv-dator",
+      "hostname": "peter-RB102",
+      "selected": [
+        "test/partition/participant-release-caller-lifetimes.test.js",
+        "test/partition/participant-release-protocol.test.js"
       ],
-      "plan": [
+      "argv": [
+        "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+        "scripts/run-classified-test-files.js",
+        "--stdin"
+      ],
+      "env": {
+        "LAGRANGE_PLACEMENT": "local",
+        "LAGRANGE_RETRY_FAILED_ONCE": "0",
+        "LAGRANGE_WORKSPACE_INJECTIONS": "node_modules",
+        "LAGRANGE_TEST_MACHINE_FACTOR": "1.4",
+        "LAGRANGE_LANE_JOBS_CAP": "11",
+        "LAGRANGE_CHECK_BASE": "f5d5d1c13d90fb58e3c5299d1e096fb53dfc7db1",
+        "LAGRANGE_EXECUTION_REPORT": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/artifacts/execution-sections.ndjson",
+        "LAGRANGE_PROCESS_IDENTITY_DIR": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/artifacts/process-identity",
+        "NODE_OPTIONS": "--require=/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/artifacts/process-identity.cjs"
+      },
+      "bounds": {
+        "requestSeconds": 600,
+        "selectedFiles": 2,
+        "retry": 0,
+        "laneJobsCap": "11",
+        "perFileOutputBytes": 134217728,
+        "aggregateMemoryCeiling": "not asserted; existing worker scope and host admission"
+      },
+      "machineFactorBasis": {
+        "kind": "existing tv-dator profile setting used by the reviewed source-run template",
+        "requestId": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
+        "originalLogSha256": "b18852b15ffb462aa0b60451f7f9303a147d105de2aae160e0a01eb8bd5aa915",
+        "factor": 1.4,
+        "meaning": "same tv-dator configured budget as reviewed template; prior release runs used adam-laptop and no cross-host speed claim is made"
+      },
+      "hardware": {
+        "cores": 12,
+        "totalMemory": 16514969600,
+        "freeMemory": 8888954880
+      }
+    },
+    "validation": {
+      "problems": [],
+      "qualification": [],
+      "summary": {
+        "planned": 2,
+        "executed": 2,
+        "assertions": 23,
+        "runs": 1,
+        "commands": [
+          {
+            "label": "canonical-classified-selected-file",
+            "exitStatus": 0
+          }
+        ],
+        "reusedProofs": [],
+        "passedOnRetry": 0
+      }
+    },
+    "sourceRoot": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source"
+  },
+  "measured": [
+    {
+      "file": "test/partition/participant-release-caller-lifetimes.test.js",
+      "count": 4,
+      "cases": [
+        "RELEASE aggregate crosses leaf bound while every actual leaf stays within its own bound",
+        "same-slot shorter joiner settles at its own deadline without retiring the original cutover",
+        "ordinary registered client release completes with unchanged origin and no delayed replies",
+        "expired aggregate request refuses before delivery and cannot create a native origin"
+      ]
+    },
+    {
+      "file": "test/partition/participant-release-protocol.test.js",
+      "count": 19,
+      "cases": [
+        "real release route pauses initial writes, applies origin, censuses and resumes; registry and consensus triggers recover a recreated service from the same durable origin",
+        "no-origin release without fresh storage or operator authority stays closed",
+        "dependent release stays closed without a reconstructed current control owner fact",
+        "dependent release consumes an exact remotely routed current control owner fact",
+        "mixed target build is refused and cannot lower admission",
+        "control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin",
+        "already-current control cohort proves release with fewer original route calls",
+        "already-clean control release consumes one post-pause census at original recipient",
+        "control current-proof refuses an enforcer mutation at final actual RESUME",
+        "control cohort preserves unreconstructible legacy rows and reports exact activation debt",
+        "registered participant release projects one real blocked drain and older joined attempt",
+        "registered failed joins bound triggers without getters or coercion",
+        "registered joins retain typed clock diagnostics when caller budget refuses",
+        "post-ENABLE control loss returns the canonical control refusal and stays paused",
+        "registered dependent release retains control expiry before nested client dispatch",
+        "registered dependent release retains delivered control refusal after current leader loss",
+        "controlled native-Raft pair: idempotent conf-change stays CLOSED without CONF_CHANGE_APPLIED wake and recovers autonomously to OPEN with it",
+        "idempotent add-peer conf-change, restart and stale-service rejection preserve cleanup custody and exact membershipGenerationIndex fences",
+        "concurrent membershipGenerationIndex advance right after RESUME invalidates superseded CUT_OVER in reconcile and autonomously re-runs to OPEN"
+      ]
+    }
+  ],
+  "processes": [
+    {
+      "file": "test/partition/participant-release-caller-lifetimes.test.js",
+      "pid": 2250522,
+      "executableSha256": "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327",
+      "raftBinding": {
+        "glue": {
+          "path": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm.js",
+          "realpath": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm.js",
+          "loaded": true,
+          "sha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+        },
+        "wasm": {
+          "path": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm",
+          "realpath": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm",
+          "sha256": "afac4cabf03c5b61009ee64527961bc4d2e10540f1efca6de299efc793de0f1e"
+        }
+      },
+      "native": [
         {
-          "files": [
-            "test/partition/participant-release-caller-lifetimes.test.js"
-          ],
-          "jobs": 4,
-          "resourceClass": "ordinary"
+          "path": "/home/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+          "realpath": "/home/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+          "sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
         }
       ]
     },
-    "ledger": {
-      "file": "test/partition/participant-release-caller-lifetimes.test.js",
-      "attempt": 1,
-      "ok": false,
-      "assertions": 4,
-      "durationMs": 8948,
-      "retriedOnce": false,
-      "firstFailureLine": "not ok 1 - RELEASE aggregate crosses leaf bound while every actual leaf stays within its own bound"
+    {
+      "file": "test/partition/participant-release-protocol.test.js",
+      "pid": 2250529,
+      "executableSha256": "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327",
+      "raftBinding": {
+        "glue": {
+          "path": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm.js",
+          "realpath": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm.js",
+          "loaded": true,
+          "sha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+        },
+        "wasm": {
+          "path": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm",
+          "realpath": "/home/peter/.local/state/lagrange-lab3-worker/runs/54457e5d-023f-4a8a-a7c7-97bd6b432e58/3bce09eb3cbe4f32b9c0ad320cc926e3/source/vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm",
+          "sha256": "afac4cabf03c5b61009ee64527961bc4d2e10540f1efca6de299efc793de0f1e"
+        }
+      },
+      "native": [
+        {
+          "path": "/home/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+          "realpath": "/home/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+          "sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
+        }
+      ]
     }
-  },
-  "measured": {
-    "tests": 4,
-    "passed": 2,
-    "failed": 2
-  },
-  "ceiling": "Original local native/inprocess virtual-clock red only. Native binary hashes were not captured. No green behavior, physical formation or task3823 causal admission."
+  ],
+  "review": {
+    "entryDigest": "06dee8f539dcbac1040dbdef92c1213d8f606b918a68affcc68d2b1c2e2c137f",
+    "verifier": "subagent:/root",
+    "at": "5cc73e45e400e160e77687398f18e06059767eb1",
+    "candidateDigest": "d9493fccd54a29b6073d08cc83c79090be0a85ed8c0b20a9445e182f5e7a8e90",
+    "text": "Independently reviewed the aggregate release budget, leaf deadlines, detachable waiters, terminal clock diagnostics and executable custody adapter. Measured source 5cc73e45e400e160e77687398f18e06059767eb1, physical request 3bce09eb-3cbe-4f32-b9c0-ad320cc926e3, original manifest 3047a46549695920d5442d436fe97e3f70d16a1cec9f3f3c0b6063019828db02, adapter 6eee502eac6218a09ab78cb24f73491102d4f82cc54dab0c7b8241953e9c7483. Checked exact runtime identities and raw TAP for both files. Same-subject rejection supersedes an approval. Physical formation remains a separate gate."
+  }
 }
