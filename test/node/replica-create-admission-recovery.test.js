@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
+import {NodeJoiningPublicationActivation} from '../../src/bootstrap/node-joining-publication-activation.js';
+import {wrapPartitionServiceFactoryWithSnapshotCatchup} from '../../src/bootstrap/shared/snapshot-catchup-wiring.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
@@ -104,6 +107,64 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
     authority.close();
   }
 }
+
+it('fresh CREATE publishes activity for the service from the production join factory',
+  {timeout: 10_000}, async () => {
+    const row = operationRow();
+    const outcomes = [];
+    const fixture = await createHandlerFixture({
+      row, targetRow: targetLifecycle(row),
+      authorityFor: (cache) => sqlOperationsAuthority(cache, [row]),
+      executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
+    });
+    const {handler, authority, cache} = fixture;
+    const joining = Object.assign(Object.create(NodeJoiningPublicationActivation.prototype), {
+      nodeId: row.target_node_id,
+      replicaHandler: handler,
+      replicaStateMachine: handler.replicaStateMachine,
+      partitionServices: new Map(),
+      transport: handler.messageRouter,
+      messageRouter: handler.messageRouter,
+      tablePolicyService: {},
+      createCdcIntegrationService: () => null,
+      getLeaderMessageGroupService: () => null,
+    });
+    const resolveContext = handler.resolveReplicaContextWithRetry.bind(handler);
+    handler.resolveReplicaContextWithRetry = async (...args) => ({
+      ...await resolveContext(...args),
+      // The ownership handoff is independent of group growth. Use one real
+      // native voter so this fixture needs no synthetic remote membership.
+      replicaIds: [row.replica_id],
+      existingReplicaCount: 0,
+      bootstrapMembership: genesisStamp([row.replica_id], {[row.replica_id]: row.target_node_id}),
+    });
+    let opened;
+    let initializedAtReturn = false;
+    handler.createPartitionService = wrapPartitionServiceFactoryWithSnapshotCatchup({
+      systemTableCache: cache,
+      messageRouter: handler.messageRouter,
+      createPartitionService: async (options) => {
+        opened = await joining.createJoinLocalPartitionService(options);
+        initializedAtReturn = opened.initialized;
+        return opened;
+      },
+    });
+    try {
+      handler.initialize();
+      await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+      await Promise.all([...handler.operationTasks]);
+      assert.equal(initializedAtReturn, true, 'the real join factory initialized a native runtime');
+      assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+      assert.equal(handler.getTrackedService(row.replica_id), opened);
+      assert.equal(joining.partitionServices.get(row.replica_id), opened);
+      assert.equal(authority.lifecycleStore.durableRow(
+        SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status, ReplicaStatus.ACTIVE);
+    } finally {
+      await handler.shutdown();
+      if (opened && !opened.isShutdown) await opened.shutdown();
+      authority.close();
+    }
+  });
 
 it('unavailable final CREATE authority retains the live work for existing admission recovery',
   async (t) => withHeldActivationRead(t, async (f) => {
