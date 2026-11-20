@@ -110,18 +110,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       assertOperationUpdateRecord(durable);
       assertOperationUpdateSubject(operation, durable);
       const terminal = durable.completedAt !== null;
-      const exact = options.exactRequest === true ?
+      const exact = durable.workflowStep === step && (options.exactRequest === true ?
         this.isReplicaOperationUpdateSatisfied(operation, durable) :
-        durable.workflowStep === step &&
-          (options.terminalTransition !== true ||
-            options.stepMetadata === undefined &&
-              durable.errorMessage === options.terminalErrorMessage);
+        options.terminalTransition !== true || options.stepMetadata === undefined &&
+          durable.errorMessage === options.terminalErrorMessage);
       const replay = exact && (options.terminalTransition !== true || terminal);
       const disposition = replay ? REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
         REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED;
+      const unresolvedSameStep = options.exactRequest === true && durable.workflowStep === step;
       return {...observation, outcome: terminal || replay ? buildOperationUpdateOutcome({
         persisted: replay, disposition, operation: durable,
-      }) : null};
+      }) : unresolvedSameStep ? buildOperationUpdateOutcome({persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null}) : null};
     }
 
     // Post-write witness + (optional) authoritative visibility confirmation

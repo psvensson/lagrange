@@ -274,7 +274,10 @@ function buildTerminalTransitionRepairState(
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING :
       TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
     cleanupRelease: Boolean(existingState?.cleanupRelease) || cleanupOnly,
-    persistenceRepair: !releaseOnly && !retainRelease && !cleanupOnly,
+    persistenceRepair: !releaseOnly && !retainRelease &&
+      (cause === TERMINAL_TRANSITION_REPAIR_CAUSE.REPAIR_UNCONFIRMED ?
+        existingState.persistenceRepair :
+        cleanupOnly ? Boolean(existingState?.persistenceRepair) : true),
     attempt: existingState ? existingState.attempt + 1 : 0,
   };
 }
@@ -407,7 +410,8 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       if (!heldState || owner.isShuttingDown) {
         return;
       }
-      if (heldState.cleanupRelease && !heldState.persistenceRepair) {
+      if (heldState.cleanupRelease && !heldState.persistenceRepair &&
+          heldState.phase !== TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING) {
         await runFailedCreateCleanupReleaseAttempt(
           owner,
           operationId,

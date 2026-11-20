@@ -770,7 +770,5 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
 }
 
 export {
-  OPERATION_RECONCILE_OUTCOME,
   OperationWorkflowRecoveryStatusReconcile,
-  didOperationReconcileAdvanceOrComplete,
 };

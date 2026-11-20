@@ -93,12 +93,22 @@ class OperationWorkflowTransitionOrchestration
   ) {
     this.ensureOperationWorkflow(operation);
     try {
-      await this.operationWorkflowCoordinator.transitionStep(
-        operation.operationId,
-        {nextStep: step, reason},
-        {},
-        TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
-      );
+      try {
+        await this.operationWorkflowCoordinator.transitionStep(
+          operation.operationId,
+          {nextStep: step, reason},
+          {},
+          TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
+        );
+      } catch (error) {
+        // A queued writer may have settled the disposable mirror since the
+        // caller's preflight. Reconsult SQL only on this rejected transition;
+        // ordinary writes retain their existing expected-step/terminal CAS.
+        const replay = await this.resolveOperationTransitionBeforeWrite(operation, step,
+          {requestedOperation: options.requestedOperation, exactRequest: true});
+        if (replay) return replay;
+        throw error;
+      }
       const persistResult = await persistFn();
       const outcome = buildOperationTransitionOutcome(persistResult, {
         repository: this.repository,
@@ -120,7 +130,8 @@ class OperationWorkflowTransitionOrchestration
   }
 
   async resolveOperationTransitionBeforeWrite(operation, step, options = {}) {
-    const observation = await this.repository.observeOperationTransition(operation, step, options);
+    const observation = await this.repository.observeOperationTransition(
+      options.requestedOperation || operation, step, options);
     if (observation.deferredOutcome) {
       const error = new Error(observation.deferredOutcome.reasonCode);
       error.code = observation.deferredOutcome.reasonCode;

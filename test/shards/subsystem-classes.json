@@ -28,7 +28,7 @@
   "censusSize": 2698,
   "digest": "fnv1a32-ae28989b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d92b5a8a",
+  "observationDigest": "fnv1a32-dde5054a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18273,6 +18273,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
     },
