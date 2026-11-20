@@ -10,12 +10,14 @@ doneWhen:
     file: solve/oracle/core-architecture-convergence.json
 quests:
   - core-convergence-rs-raft-readiness-baseline
+  - independent-portability-q0-specification-census
 authorizes:
   - architecture
   - docs
   - package.json
   - scripts/checks
   - scripts/quest-evidence
+  - solve/changes/global-owner-debt-inventory/inventory.json
   - solve/oracle
   - src/admin
   - src/bootstrap
@@ -80,11 +82,15 @@ The approved [implementation-independent portability plan](core-architecture-con
 is a **planning-only contract and conformance continuation** within this epic,
 not a new runtime subsystem, Epic, roadmap lane or release requirement. Its
 [first Q0 inventory](core-architecture-convergence/independent-portability-q0-inventory-2026-11-17.md)
-is read-only and explicitly incomplete. It inventories source-of-truth and
-documentation drift without changing any existing sealed Quest or treating
-target semantics as current capability. A later behavior-changing package
-still requires the predecessor cutover/READY gates, one owner, a measuring
-red Quest, and the normal independent proof and landing rules.
+records the initial, explicitly incomplete observation. The subsequent
+[source-pinned classification Quest](../quests/independent-portability-q0-specification-census/quest.json)
+classifies its P01-P09 and W01-W07 questions, including typed holds, against
+the `fc626cb` baseline. Its retained
+[evidence](../quests/independent-portability-q0-specification-census/evidence/census.json)
+measures **classification completeness only**, not product certification.
+No other sealed Quest is changed and no target semantics become a current
+capability. Behavior-changing convergence still requires the predecessor
+cutover/READY gates, one owner, a measuring red Quest and independent proof.
 
 ### 2026-10-08 cutover interaction clarification
 

@@ -5,9 +5,10 @@ documentClass: planning
 
 # Q0 first observation — independent implementation portability
 
-Status: **IN PROGRESS, document/contract census and bounded read-only source
-spot checks; not a completed audit, public capability verdict, Quest receipt
-or runtime certification**.
+Status of this first observation: **historical Q0 starting census**, superseded
+for bounded classification by the
+[formal Q0 Quest](../../quests/independent-portability-q0-specification-census/quest.json).
+This initial note is not a public capability verdict or runtime certification.
 
 Baseline: `main` `f3a1be1eb79e5e6347ddc969968036eda49dcaf2`
 (2026-11-17 03:31:53 UTC). Scope of this first pass: versioned
@@ -148,3 +149,33 @@ Draft Quest proposal (not yet a Solver record):
   Solver probe owner must approve the actual supported probe shape.
 - Permitted change: planning/contract inventory and bounded read-only checks;
   no `src/`, source-default, runtime test, sealed acceptance or release change.
+
+## Q0 source-pinned classification continuation (2026-11-17)
+
+The Quest's [machine-checkable evidence](../../quests/independent-portability-q0-specification-census/evidence/census.json)
+pins the baseline `fc626cbf377a334c6960836afb92d837acd25ed9` and 16 bounded
+questions: P01-P09 from the initial register and W01-W07 for the selected
+logical write/recovery representation slice. Each has its own source SHA-256,
+existing semantic owner, owner contract, classification, typed verdict, proof
+limit, next witness and Q1 disposition. The
+[checker](../../../scripts/checks/independent-portability-q0-census.js)
+rejects omissions, stale source digests, malformed statuses, duplicate rows,
+unbound owners, source substitutions and a changed baseline; inverse controls
+run against the same inventory. Source inspection does not execute the product.
+
+The permitted Q1 first slice is **logical**: immutable committed-statement
+identity, exact decimal term/index, descriptor epoch, explicitly absent versus
+unavailable versus unknown observations, HLC, and canonical partial JSON.
+These are *representation definitions*, not new Raft/SQLite authorities or
+permission to change admission. The HLC implementation currently uses lax
+`parseInt` parsing and locale-sensitive node tie-break ordering; full-domain
+cross-language HLC equivalence therefore remains **blocked** pending its
+semantic owner ruling. Q2 separately owns cold recovery and crash-point proof.
+Public Cell/SQL support, mTLS and mixed-version/physical format compatibility
+remain outside this Q0 result.
+
+The Q0 exit means none of the selected first-slice questions is *unclassified*:
+every missing definition and unverified guarantee has an owner and a typed hold.
+It does **not** mean those questions are resolved, that Q1 is finished, that
+predecessor readiness changed, or that any capability is certified. The Solver
+Quest's terminal record, when landed, owns its completion state.
