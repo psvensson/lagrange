@@ -207,9 +207,11 @@ test('the first real admission delivery cannot renew the original CREATE budget'
     handler.trackReplicaCreateOperation(request.operationId, PARTITION, LEARNER, TABLE_NAME);
     createClock.advance(CREATE_BUDGET_MS / 2);
     let outcome;
-    const result = handler.createReplicaAsync(request)
-      .then(() => { outcome = {created: true}; },
-        (error) => { outcome = {error}; });
+    const result = handler.createReplicaAsync(request).then(() => {
+      outcome = {created: true};
+    }, (error) => {
+      outcome = {error};
+    });
     try {
       assert.equal(await waitForCondition(() => reads.length > 0,
         OBSERVATION_BOUND_MS), true, 'the first delivery engages its registered recipient');
