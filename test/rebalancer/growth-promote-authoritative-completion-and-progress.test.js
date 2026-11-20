@@ -2,12 +2,23 @@ import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import Database from 'better-sqlite3';
 import {
   CDC_OPERATION, COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {assignReplicaHandlerCreateMethods} from '../../src/node/replica-handler-create-methods.js';
+import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+import {createParticipantReleaseAuthorizationOwner} from
+  '../../src/node/participant-release-authorization-owner.js';
+import {TrackedServiceRegistry} from '../../src/node/replica-handler-membership-relay.js';
+import {createParticipantReleaseRecovery} from '../../src/node/replica-handler-release-recovery.js';
+import {
+  PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_ROUTE_SUFFIX, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_RELEASE_TYPE,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   LEARNER_ADMISSION_WAIT_OUTCOME, assignReplicaHandlerVoterReadinessMethods,
 } from '../../src/node/replica-handler-voter-readiness-methods.js';
@@ -1191,6 +1202,15 @@ test(
     // 4. End-to-end createReplicaAsync integration: timeout fails before releaseFreshCreate;
     // success preserves remaining original CREATE budget into releaseFreshCreate
     const releaseFreshCreateCalls = [];
+    const admissionEvidence = (operationId) => ({
+      operationId, partitionId: TEST_PARTITION_ID, replicaId: TEST_LEARNER_2,
+      targetNodeId: TEST_LEADER_NODE_2, admissionToken: `admission-${operationId}`,
+      attemptToken: `attempt-${operationId}`, attemptSeq: 1, replicaCreatedAt: 20_000,
+    });
+    const timedOut = admissionEvidence('op-create-budget');
+    const admitted = admissionEvidence('op-create-budget-ok');
+    // Build provenance does host I/O. Complete it before the virtual CREATE clock runs.
+    await runtimeBuildProvenance();
     let simulateAdmissionTimeoutInCreate = true;
     nowMs = 20_000;
 
@@ -1198,7 +1218,7 @@ test(
       syncTimeoutMs: 5000,
       timeSource: virtualTimeSource,
     });
-    createHandler.inProgressOperations.set('op-create-budget', {startedAt: 20_000});
+    createHandler.inProgressOperations.set(timedOut.operationId, {startedAt: 20_000});
     createHandler.startReplicaCreationProgress = () => ({});
     createHandler.clearReplicaCreationProgress = () => {};
     createHandler.finishReplicaCreationProgress = () => {};
@@ -1219,6 +1239,7 @@ test(
     createHandler.getPartitionDbPath = () => ':memory:';
     createHandler.getReplicaCreateAdmissionOwner = () => ({
       revalidatePhysicalWorker: async () => true,
+      markProgress: async () => true,
       releasePhysicalWorker: () => {},
     });
     createHandler.shouldGateActivationOnVoterReadiness = () => false;
@@ -1236,15 +1257,38 @@ test(
       observeIdentity: async () => ({existed: false, record: {recorded: true}}),
       recordIdentity: async () => ({recorded: true}),
     };
-    createHandler.participantReleaseRecovery = {
-      releaseFreshCreate: async (partitionId, opts) => {
-        releaseFreshCreateCalls.push({
-          partitionId,
-          deadlineAtMs: opts.deadlineAtMs,
-          remainingBudgetAtReleaseEntryMs: opts.deadlineAtMs - nowMs,
-        });
-      },
+    createHandler.localServices = new TrackedServiceRegistry();
+    createHandler.consensusEvents = {
+      subscribe: (listener) => createHandler.localServices.subscribeConsensusObservations(listener),
     };
+    createHandler.participantReleaseAuthorizationOwner =
+      createParticipantReleaseAuthorizationOwner(createHandler);
+    createHandler.participantReleaseRecovery = createParticipantReleaseRecovery(createHandler);
+    t.teardown(() => createHandler.participantReleaseRecovery.shutdown());
+    const transport = createInProcessMockTransport();
+    const releaseAddress = createHandler.nodeId + PARTICIPANT_RELEASE_ROUTE_SUFFIX;
+    const releaseHandler = ({payload}) => {
+      releaseFreshCreateCalls.push({
+        partitionId: payload.partitionId,
+        deadlineAtMs: payload.deadlineAtMs,
+        remainingBudgetAtReleaseEntryMs: payload.deadlineAtMs - nowMs,
+      });
+      assert.equal(payload.type, PARTICIPANT_RELEASE_TYPE);
+      assert.equal(payload.action, PARTICIPANT_RELEASE_ACTION.RELEASE);
+      assert.equal(payload.trigger, PARTICIPANT_RELEASE_TRIGGER.FRESH_CREATE);
+      assert.deepEqual(payload.createAdmissionIdentity, admitted);
+      const service = createHandler.getTrackedService(admitted.replicaId);
+      assert.equal(service.partitionId, payload.partitionId);
+      assert.equal(service.createAdmissionOperationId, admitted.operationId);
+      assert.equal(service.createAdmissionToken, admitted.admissionToken);
+      assert.equal(service.createAttemptToken, admitted.attemptToken);
+      return {[PARTICIPANT_RELEASE_RESULT_FIELD]: {
+        outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER,
+      }};
+    };
+    transport.register(releaseAddress, releaseHandler);
+    createHandler.messageRouter = transport;
+    createHandler.registeredRouterHandler = releaseHandler;
     createHandler.createPartitionService = async () => {
       const svc = makePrototypeService(TEST_LEARNER_2, 'op-create-budget');
       svc.participantTransactionCoordinator = {};
@@ -1279,10 +1323,11 @@ test(
 
     await t.rejects(
       createHandler.createReplicaAsync({
-        operationId: 'op-create-budget',
+        operationId: timedOut.operationId,
         explicitOperationType: OperationType.ADD,
         partitionId: TEST_PARTITION_ID,
         replicaId: TEST_LEARNER_2,
+        createAdmissionEvidence: timedOut,
       }),
       /Learner admission wait failed for replica user_orders-p1-r3: deadline_exceeded/,
     );
@@ -1290,18 +1335,16 @@ test(
 
     simulateAdmissionTimeoutInCreate = false;
     nowMs = 30_000;
-    createHandler.inProgressOperations.set('op-create-budget-ok', {startedAt: 30_000});
+    createHandler.inProgressOperations.set(admitted.operationId, {startedAt: 30_000});
     await createHandler.createReplicaAsync({
-      operationId: 'op-create-budget-ok',
+      operationId: admitted.operationId,
       explicitOperationType: OperationType.ADD,
       partitionId: TEST_PARTITION_ID,
       replicaId: TEST_LEARNER_2,
-      createAdmissionEvidence: {
-        operationId: 'op-create-budget-ok',
-        admissionToken: 'token-1',
-      },
+      createAdmissionEvidence: admitted,
     });
     t.equal(releaseFreshCreateCalls.length, 1);
+    t.equal(releaseFreshCreateCalls[0].partitionId, TEST_PARTITION_ID);
     t.equal(releaseFreshCreateCalls[0].deadlineAtMs, 35_000);
     t.equal(releaseFreshCreateCalls[0].remainingBudgetAtReleaseEntryMs, 3800);
   },
