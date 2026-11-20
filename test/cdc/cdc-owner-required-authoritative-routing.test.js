@@ -152,7 +152,7 @@ test('strict CDC reads route to the registered owner while a local query is held
     }));
 
     try {
-      await callerRouter.initialize();
+      await callerRouter.initialize({startServer: true});
       await ownerRouter.initialize({startServer: true});
       await callerRouter.connectToNode(OWNER, ownerRouter.advertisedAddress);
       // Recovery reads give a disconnected candidate a one-millisecond
