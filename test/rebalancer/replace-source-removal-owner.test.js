@@ -276,7 +276,7 @@ test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
     // A STOPPING row another writer left without an intent: the owner
     // records its intent (C0) from a fresh witness read first.
     harness.operation.workflowStep = WORKFLOW_STEP.STOPPING;
-    harness.operation.status = ReplicaStatus.ACTIVE;
+    harness.operation.status = ReplicaStatus.REMOVING;
     harness.operation.stepsHistory = [...harness.operation.stepsHistory,
       {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
     await harness.coordinator.repository.persistOperationUpdate(
@@ -577,8 +577,8 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
       t.equal((await persistedOperation(harness)).workflowStep,
         WORKFLOW_STEP.STOPPING, 'the repair writes no REMOVED while the ' +
           'source is a voter');
-      t.notOk(harness.owner.terminalTransitionRepairStateByOperationId.has(
-        harness.operation.operationId), 'the repair stood down');
+      t.ok(harness.owner.terminalTransitionRepairStateByOperationId.has(
+        harness.operation.operationId), 'refused persistence remains owned without releasing debt');
     } finally {
       await harness.coordinator.shutdown();
     }

@@ -112,9 +112,10 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       const terminal = durable.completedAt !== null;
       const exact = options.exactRequest === true ?
         this.isReplicaOperationUpdateSatisfied(operation, durable) :
-        durable.workflowStep === step && options.stepMetadata === undefined &&
+        durable.workflowStep === step &&
           (options.terminalTransition !== true ||
-            durable.errorMessage === options.terminalErrorMessage);
+            options.stepMetadata === undefined &&
+              durable.errorMessage === options.terminalErrorMessage);
       const replay = exact && (options.terminalTransition !== true || terminal);
       const disposition = replay ? REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
         REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED;
@@ -230,7 +231,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           disableSystemWriteSession: options.disableSystemWriteSession === true,
           mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
           onRetryableFailure: (errorResult) =>
-            this.recoverPersistedReplicaOperationMutation(
+            this.recoverPersistedReplicaOperationUpdate(
               operation,
               errorResult,
             ),
@@ -275,7 +276,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         });
       }
       const changeCount = this.extractMutationChangeCount(result);
-      if (changeCount !== null && changeCount <= 0) {
+      if (changeCount === null) return this.resolveUncountedOperationUpdate(operation);
+      if (changeCount <= 0) {
         if (expectedWorkflowStep || terminalTransition) {
           return this.resolveZeroChangeOperationUpdate(
             operation,
@@ -290,6 +292,15 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         });
       }
       return this.confirmPersistedOperationUpdate(operation, options);
+    }
+
+    async resolveUncountedOperationUpdate(operation) {
+      const observation = await this.observeOperationTransition(operation, operation.workflowStep,
+        {exactRequest: true});
+      // An absent count proves no new write. A separate authority observation
+      // may prove replay or another winner; uncertainty retains the obligation.
+      return observation.outcome || buildOperationUpdateOutcome({persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
     }
 
     // An expected-step CAS write pins the step in the WHERE clause (and the
@@ -396,11 +407,22 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       }
     }
 
+    async recoverPersistedReplicaOperationUpdate(operation, errorResult) {
+      const observation = await this.observeRetryableReplicaOperationMutation(operation, errorResult);
+      const observed = observation?.operation;
+      if (!observed) return false;
+      assertOperationUpdateRecord(observed);
+      assertOperationUpdateSubject(operation, observed);
+      if (!this.isReplicaOperationUpdateSatisfied(operation, observed)) return false;
+      this.emitReplicaOperationPersistenceDivergence(observed);
+      return true;
+    }
+
     // A failed gateway mutation either recovers through the already-applied
     // witness (the write landed despite the retryable failure) or escalates.
     async resolveFailedOperationUpdateResult(operation, result) {
       const recoveredPersistedMutation =
-        await this.recoverPersistedReplicaOperationMutation(
+        await this.recoverPersistedReplicaOperationUpdate(
           operation,
           result,
         );

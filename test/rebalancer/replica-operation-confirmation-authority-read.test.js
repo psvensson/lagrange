@@ -424,7 +424,7 @@ test(
 
     const updateResult = await repository.persistOperationUpdate(
       workflowUpdate,
-      {returnDisposition: true, disableSystemWriteSession: true},
+      {disableSystemWriteSession: true},
     );
     t.equal(updateResult.persisted, true, 'workflow UPDATE confirms despite concurrent admission progression');
     t.equal(
@@ -554,7 +554,6 @@ test(
 
     const result = await repository.persistOperationUpdate(losingProjection, {
       terminalTransition: true,
-      returnDisposition: true,
     });
     t.equal(
       result.disposition,
@@ -756,7 +755,7 @@ test('exact CAS: a zero-change expected-step update against a row that ' +
     zeroChange);
   const refused = await progressed.persistOperationUpdate(
     progressed.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
   t.equal(refused.persisted, false);
   t.equal(refused.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
     'SENDING written, CREATING durable: the CAS lost');
@@ -764,7 +763,7 @@ test('exact CAS: a zero-change expected-step update against a row that ' +
   const exact = rowsRepository(casWriteRow(), zeroChange);
   const replay = await exact.persistOperationUpdate(
     exact.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
   t.equal(replay.persisted, true);
   t.equal(replay.disposition,
     REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
@@ -808,7 +807,7 @@ test('exact CAS: a durable terminal row that progressed past a write is a ' +
 });
 
 test('exact CAS: a retryable failed mutation is not recovered by a durable ' +
-  'row that progressed past the write (recoverPersistedReplicaOperationMutation)',
+  'row that progressed past the write (recoverPersistedReplicaOperationUpdate)',
 async (t) => {
   const retryableFailure = {
     success: false,
@@ -820,12 +819,12 @@ async (t) => {
     [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true],
   ]) {
     const progressed = rowsRepository(casProgressedRow(step, status, terminal));
-    t.equal(await progressed.recoverPersistedReplicaOperationMutation(
+    t.equal(await progressed.recoverPersistedReplicaOperationUpdate(
       progressed.rowToOperation(casWriteRow()), retryableFailure), false,
     `SENDING written, ${step} durable: the failed write is not recovered`);
   }
   const exact = rowsRepository(casWriteRow());
-  t.equal(await exact.recoverPersistedReplicaOperationMutation(
+  t.equal(await exact.recoverPersistedReplicaOperationUpdate(
     exact.rowToOperation(casWriteRow()), retryableFailure), true,
   'control: the durable row IS the write, so it landed');
 });

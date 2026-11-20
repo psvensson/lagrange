@@ -1,3 +1,4 @@
+import {assertOperationUpdateRecord, assertOperationUpdateSubject, invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -421,6 +422,12 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         rearmTerminalTransitionRepairIfHeld(owner, operationId);
         return;
       }
+      if (heldState.phase === TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING &&
+          observation.operation &&
+          !owner.repository.isReplicaOperationUpdateSatisfied(
+            heldState.projectedOperation, observation.operation)) {
+        throw invalidOperationPersistenceOutcome('retained durable terminal winner changed');
+      }
       if (observation.outcome) {
         const outcome = buildOperationTransitionOutcome(observation.outcome);
         if (isTerminalTransitionOutcomeSettled(outcome)) {
@@ -470,6 +477,14 @@ async function runFailedCreateCleanupReleaseAttempt(
     .queryReplicaOperationPersistenceAuthorityOperation(
       heldState.projectedOperation,
     );
+  if (authoritative) {
+    assertOperationUpdateRecord(authoritative, {terminal: true});
+    assertOperationUpdateSubject(heldState.projectedOperation, authoritative);
+    if (!owner.repository.isReplicaOperationUpdateSatisfied(
+      heldState.projectedOperation, authoritative)) {
+      throw invalidOperationPersistenceOutcome('cleanup terminal winner changed');
+    }
+  }
   if (!isTerminalFailedCreateCleanupRemove(authoritative) ||
       !await deliverFailedCreateCleanupRelease(owner, authoritative)) {
     rearmTerminalTransitionRepairIfHeld(owner, operationId);

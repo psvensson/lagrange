@@ -73,13 +73,15 @@ const REBALANCER_DIRECTORY = path.join(REPOSITORY_ROOT, 'src', 'rebalancer');
 const LONG_AFTER_MS = 3_600_000;
 const POST_INTENT_TARGET_DEATH = 'replace_target_dead_source_retained';
 
+// Includes the new authoritative preflight observations; these counts are source census,
+// not evidence that a write occurred. Runtime cells exercise the terminal effects.
 // The edges as the code has them at the frozen production SHA: a changed
 // count or a new file fails here until the new edge has a cell below.
-const TERMINAL_PERSIST_SITES = Object.freeze({
-  'operation-workflow-transition-persistence.js': 2,
-  'operation-workflow-terminal-transition-repair.js': 1,
+const TERMINAL_INTENT_SITES = Object.freeze({
+  'operation-workflow-transition-persistence.js': 4,
+  'operation-workflow-terminal-transition-repair.js': 2,
   // GROWTH_PROMOTE completion (never REPLACE: guarded by type === GROWTH_PROMOTE).
-  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-growth-promote.js': 2,
 });
 const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-recovery-drain.js': 1,
@@ -90,7 +92,7 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
-  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-growth-promote.js': 2,
   'operation-workflow-recovery-reconcile.js': 1,
   // M2: a refused failure of a partition ADD whose target is live completes
   // it (never a REPLACE: its post-intent refusal completes nothing).
@@ -171,8 +173,8 @@ function failureOwnerSources() {
 
 test('P1 census: the terminal edges of the code are the ones with cells',
   async (t) => {
-    t.same(censusOf(/terminalTransition: true/gu), TERMINAL_PERSIST_SITES,
-      'the terminal persist sites (completeOperation, failOperation, repair)');
+    t.same(censusOf(/terminalTransition: true/gu), TERMINAL_INTENT_SITES,
+      'terminal intent sites: fresh authority observation and subsequent guarded write');
     t.same(censusOf(/\.completeOperation\(/gu), COMPLETE_OPERATION_CALLERS,
       'the completeOperation callers');
     t.same(Object.keys(censusOf(/\.failOperation\(/gu)).sort(),
@@ -469,8 +471,8 @@ test('P1 edge (terminal-transition repair, A11.1): a retained REMOVED is ' +
       await arm();
       await fireFallbackTimers(world);
     });
-    t.notOk(owner.terminalTransitionRepairStateByOperationId.has(
-      world.operation.operationId), 'the repair stood down');
+    t.ok(owner.terminalTransitionRepairStateByOperationId.has(
+      world.operation.operationId), 'refused persistence remains owned without a terminal write');
     world.group.advance();
     await settleTurns();
     if ((await readPersisted(world)).workflowStep !== WORKFLOW_STEP.REMOVED) {
@@ -689,7 +691,7 @@ test('AN11 (live, adopted intent): an absence the witness reports below ' +
     // Another writer's STOPPING: the owner adopts its intent from a fresh
     // witness read (C0 = that read's commit index), then decides.
     world.operation.workflowStep = WORKFLOW_STEP.STOPPING;
-    world.operation.status = ReplicaStatus.ACTIVE;
+    world.operation.status = ReplicaStatus.REMOVING;
     world.operation.stepsHistory = [...world.operation.stepsHistory,
       {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
     await world.coordinator.repository.persistOperationUpdate(world.operation);

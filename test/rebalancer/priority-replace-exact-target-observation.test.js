@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -136,7 +138,7 @@ test(
 
       t.equal(
         progressed,
-        false,
+        OPERATION_RECONCILE_OUTCOME.WAITING,
         'sibling visibility should not count as target progress',
       );
       t.equal(

@@ -527,16 +527,15 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       return visibility;
     }
 
-    async recoverPersistedReplicaOperationMutation(operation, errorResult) {
+    async observeRetryableReplicaOperationMutation(operation, errorResult) {
       if (
         !operation?.operationId ||
         !this.isRetryableOperationPersistError(errorResult) ||
         !this.shouldShortCircuitDeferredMutationRetry(errorResult)
       ) {
-        return false;
+        return null;
       }
-      const observation =
-        await this.queryAuthoritativeOperationVisibilityObservation(
+      return this.queryAuthoritativeOperationVisibilityObservation(
           operation.operationId,
           {
             authoritativeReadMode:
@@ -544,6 +543,10 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             allowPriorityRecoveryDeferredVisibility: false,
           },
         );
+    }
+
+    async recoverPersistedReplicaOperationMutation(operation, errorResult) {
+      const observation = await this.observeRetryableReplicaOperationMutation(operation, errorResult);
       if (
         !this.isReplicaOperationVisibilitySatisfied(
           operation,

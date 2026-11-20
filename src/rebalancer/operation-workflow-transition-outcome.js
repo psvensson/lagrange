@@ -36,8 +36,18 @@ function buildOperationTransitionOutcome(persisted, {repository, requestedOperat
 
 function assertOperationTransitionOutcome(outcome) {
   assertOperationData(outcome);
-  if (!outcome || typeof outcome !== 'object' || typeof outcome.committed !== 'boolean') {
+  if (!outcome || typeof outcome !== 'object' ||
+      Object.getPrototypeOf(outcome) !== Object.prototype) {
     throw invalidOperationPersistenceOutcome('missing workflow result');
+  }
+  for (const field of ['committed', 'disposition', 'operation', 'reconcileOutcome']) {
+    const descriptor = Object.getOwnPropertyDescriptor(outcome, field);
+    if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
+      throw invalidOperationPersistenceOutcome(`missing workflow data field ${field}`);
+    }
+  }
+  if (typeof outcome.committed !== 'boolean') {
+    throw invalidOperationPersistenceOutcome('invalid workflow committed flag');
   }
   const persisted = outcome.disposition !== DISPOSITION.REFUSED &&
     outcome.disposition !== DISPOSITION.TERMINAL_ADOPTED;

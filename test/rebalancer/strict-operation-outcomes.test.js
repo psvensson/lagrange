@@ -466,14 +466,145 @@ test('strict outcomes accessor corruption is rejected without evaluating the get
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
 });
 
-test('strict outcomes supported runtime service has no partition identity', async (t) => {
+test('strict outcomes runtime service preserves its encoded logical entity identity', async (t) => {
   const fixture = createFixture(t).current;
   const operation = await seedOperation(t, fixture, 'strict-runtime', {
-    type: OperationType.REMOVE, partitionId: null,
+    type: OperationType.REMOVE, partitionId: 'strict-service',
     entityType: SERVICE_TYPE.RUNTIME_SERVICE, entityId: 'strict-service',
   });
   const outcome = await fixture.coordinator.workflowOwner.completeOperation(operation);
   t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
-  t.equal(outcome.operation.partitionId, null);
+  t.equal(outcome.operation.partitionId, 'strict-service');
   t.equal(outcome.operation.entityId, 'strict-service');
 });
+
+test('strict outcomes real SQLite refusal and reinsertion retain obligations', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-dispositions');
+  const owner = fixture.coordinator.workflowOwner;
+  const requested = {...operation, workflowStep: WORKFLOW_STEP.CREATING,
+    status: ReplicaStatus.CREATING};
+  const refused = await owner.repository.persistOperationUpdate(requested,
+    {expectedWorkflowStep: WORKFLOW_STEP.ACTIVE, confirmPersistence: false});
+  t.equal(refused.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED);
+  t.equal(refused.operation, null);
+  t.equal(buildOperationTransitionOutcome(refused).reconcileOutcome,
+    OPERATION_RECONCILE_OUTCOME.REFUSED);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+  fixture.database.prepare('DELETE FROM replica_operations WHERE operation_id = ?')
+    .run(operation.operationId);
+  const reinserted = await owner.completeOperation(operation);
+  t.equal(reinserted.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+  t.equal(reinserted.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE,
+    'reinsertion cannot release a retained reservation');
+  t.ok(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId));
+  const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
+  const replay = await owner.completeOperation(operation);
+  t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+  t.equal(replay.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+  t.same(replay.operation, durable, 'a later authoritative observation proves exact reinsertion');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+for (const corruptHistory of [false, true]) {
+  test(`strict outcomes recovered real write checks exact history: corrupt=${corruptHistory}`,
+    async (t) => {
+      const fixture = createFixture(t).current;
+      const operation = await seedOperation(t, fixture, `strict-recovered-${corruptHistory}`);
+      const owner = fixture.coordinator.workflowOwner;
+      const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+      let deliveries = 0;
+      fixture.gateway.submitMutation = async (mutation, options) => {
+        const answer = await submit(mutation, options);
+        if (mutation.operation !== 'update' || !mutation.data?.workflow_step) return answer;
+        deliveries++;
+        if (corruptHistory) {
+          fixture.database.prepare(
+            'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
+          ).run(JSON.stringify([{step: WORKFLOW_STEP.FAILED, timestamp: 1}]), operation.operationId);
+        }
+        const participant = {error: 'query_admission_deferred',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', retryAfterMs: 250,
+          deferRetry: true, failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS};
+        return {success: false, ...participant,
+          firstFailedParticipant: participant, participantFailures: [participant]};
+      };
+      const attempted = await observeAttempt(() => owner.completeOperation(operation));
+      t.equal(deliveries, 1, 'actual conditional write executes once before reply loss');
+      if (corruptHistory) {
+        t.ok(attempted.error, 'matching step/time with different history cannot prove recovery');
+        t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+      } else {
+        t.equal(attempted.error, null);
+        t.equal(attempted.outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED);
+        t.equal(attempted.outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+        t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+        t.throws(() => {
+          attempted.outcome.operation.stepsHistory[0].step = 'MUTATED';
+        }, TypeError,
+          'returned evidence snapshot cannot be mutated through nested history');
+      }
+    });
+}
+
+for (const fault of ['malformed-read', 'zero-change', 'lost-release-reply']) {
+  test(`strict outcomes real storage release ${fault} retains or proves its exact obligation`,
+    async (t) => {
+      const fixture = createFixture(t).current;
+      const operation = await seedOperation(t, fixture, `strict-release-${fault}`);
+      const owner = fixture.coordinator.workflowOwner;
+      const execute = fixture.coordinator.sqlQueryEngine.executeQuery
+        .bind(fixture.coordinator.sqlQueryEngine);
+      const read = fixture.gateway.readAuthoritativeRows.bind(fixture.gateway);
+      if (fault === 'malformed-read') {
+        fixture.gateway.readAuthoritativeRows = async (table, ...args) =>
+          table === SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS ?
+            {success: true, rows: null} : read(table, ...args);
+      } else {
+        fixture.coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
+          if (!sql.includes('UPDATE storage_reservations')) return execute(sql, params, options);
+          if (fault === 'zero-change') return {success: true, changes: 0};
+          await execute(sql, params, options);
+          return {success: false, error: 'lost storage release reply'};
+        };
+      }
+      const attempted = await observeAttempt(() => owner.completeOperation(operation));
+      if (fault === 'lost-release-reply') {
+        t.equal(attempted.error, null, 'exact final row proves the release despite lost reply');
+        t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+      } else {
+        t.equal(attempted.error?.code, 'RESERVATION_RELEASE_UNCONFIRMED');
+        t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+        t.ok(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId));
+        fixture.gateway.readAuthoritativeRows = read;
+        fixture.coordinator.sqlQueryEngine.executeQuery = execute;
+        await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+        t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+        t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), false);
+      }
+    });
+}
+
+for (const apply of [false, true]) {
+  test(`strict outcomes uncounted success consults actual SQL: effect=${apply}`, async (t) => {
+    const fixture = createFixture(t).current;
+    const operation = await seedOperation(t, fixture, `strict-uncounted-${apply}`);
+    const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+    fixture.gateway.submitMutation = async (mutation, options) => {
+      if (mutation.operation !== 'update' || !mutation.data?.workflow_step) {
+        return submit(mutation, options);
+      }
+      if (apply) await submit(mutation, options);
+      return {success: true};
+    };
+    const outcome = await fixture.coordinator.workflowOwner.completeOperation(operation);
+    t.equal(outcome.committed, false, 'an uncounted answer never proves a new committed write');
+    t.equal(outcome.disposition, apply ? REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
+      REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED);
+    t.equal(reservationStatus(fixture, operation.operationId), apply ?
+      RESERVATION_STATUS.RELEASED : RESERVATION_STATUS.ACTIVE);
+    t.equal(fixture.coordinator.workflowOwner.terminalTransitionRepairStateByOperationId
+      .has(operation.operationId), !apply, 'uncertain effects retain their existing repair owner');
+  });
+}

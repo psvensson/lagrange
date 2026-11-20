@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
@@ -246,7 +248,7 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
 
       t.equal(
         reconcileResult,
-        true,
+        OPERATION_RECONCILE_OUTCOME.COMPLETED,
         'ACTIVE replace reconciliation should consume already-visible source removal',
       );
       t.equal(
@@ -317,7 +319,7 @@ test('RebalanceCoordinator fails a REPLACE whose target is REMOVED before ' +
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.FAILED,
       'reconcileOperationLifecycle should consume authoritative REMOVED state for REPLACE',
     );
     // SUPERSEDED (R09) by the owner decision of 2026-09-25 (approved REPLACE
@@ -393,7 +395,7 @@ test('RebalanceCoordinator fails ADD target REMOVED status during ' +
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.FAILED,
       'reconcileOperationLifecycle should fail ADD on authoritative REMOVED status',
     );
     t.equal(

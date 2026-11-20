@@ -83,9 +83,8 @@ function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
   } catch (_) {
     throw invalidOperationPersistenceOutcome('invalid canonical entity identity');
   }
-  requireOutcome(operation.partitionId === null ||
-    typeof operation.partitionId === 'string' && operation.partitionId.length > 0,
-  'invalid partition identity');
+  requireOutcome(typeof operation.partitionId === 'string' && operation.partitionId.length > 0,
+    'invalid encoded entity partition identity');
   if (operation.entityType === SERVICE_TYPE.PARTITION) {
     requireOutcome(operation.partitionId === operation.entityId, 'partition entity differs');
   }
@@ -126,6 +125,7 @@ function assertOperationUpdateSubject(expected, actual) {
 }
 
 function assertOperationUpdateOutcome(outcome) {
+  assertOperationData(outcome);
   requireDataFields(outcome, ['persisted', 'disposition', 'operation']);
   requireOutcome(typeof outcome.disposition === 'string' &&
     Object.hasOwn(PERSISTED_BY_DISPOSITION, outcome.disposition), 'unknown disposition');
@@ -140,8 +140,9 @@ function assertOperationUpdateOutcome(outcome) {
   return outcome;
 }
 
-function buildOperationUpdateOutcome({persisted, disposition, operation}) {
-  assertOperationUpdateOutcome({persisted, disposition, operation});
+function buildOperationUpdateOutcome(outcome) {
+  assertOperationUpdateOutcome(outcome);
+  const {persisted, disposition, operation} = outcome;
   return Object.freeze({persisted, disposition,
     operation: copyOperationOutcomeData(operation)});
 }

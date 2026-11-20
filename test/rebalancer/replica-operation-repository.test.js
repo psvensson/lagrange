@@ -1,3 +1,5 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 /**
  * Focused unit tests for ReplicaOperationRepository.
  *
@@ -58,6 +60,7 @@ import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './repli
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryTailTests} from './replica-operation-repository-tail-test-cases.js';
 
+const TEST_ROW_TIMESTAMP_MS = Date.now();
 const TEST_NODE_ID = 'test-node-1';
 const TEST_OPERATION_ID = 'op-1';
 const TEST_PARTITION_ID = 'partition-1';
@@ -173,10 +176,10 @@ function makeRow(overrides = {}) {
     replica_id: TEST_REPLICA_ID,
     source_node_id: TEST_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
+    status: TEST_CREATING_STATUS,
     workflow_step: WORKFLOW_STEP.CREATING,
-    created_at: Date.now(),
-    updated_at: Date.now(),
+    created_at: TEST_ROW_TIMESTAMP_MS,
+    updated_at: TEST_ROW_TIMESTAMP_MS,
     completed_at: null,
     error_message: null,
     steps_history: '[]',
@@ -194,7 +197,7 @@ function makePriorityOperation(overrides = {}) {
     replicaId: TEST_PRIORITY_REPLICA_ID,
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
+    status: TEST_PENDING_STATUS,
     workflowStep: WORKFLOW_STEP.SENDING,
     createdAt: 1,
     updatedAt: 2,
@@ -753,7 +756,7 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
   const persisted = await repo.persistOperationUpdate(operation);
 
   t.equal(
-    persisted,
+    persisted.persisted,
     true,
     'authoritative confirmation should succeed once the shared replica fallback contract exposes the persisted row',
   );
@@ -889,7 +892,7 @@ test('CL-017(b): zero-row update with missing authoritative row re-inserts the o
   });
   const operation = repo.rowToOperation(
     makeRow({
-      status: 'in_progress',
+      status: TEST_PENDING_STATUS,
       workflow_step: WORKFLOW_STEP.SENDING,
     }),
   );
@@ -899,8 +902,8 @@ test('CL-017(b): zero-row update with missing authoritative row re-inserts the o
   });
 
   t.equal(
-    persisted,
-    true,
+    persisted.disposition,
+    REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
     'divergence path recovers by re-inserting instead of failing',
   );
   t.ok(
@@ -941,8 +944,9 @@ test('missing authoritative row never resurrects a stale create admission tuple'
       expectedWorkflowStep: WORKFLOW_STEP.SENDING,
     });
 
-    t.equal(persisted, false,
-      'row loss defers rather than recreating stale admission authority');
+    t.same(persisted, {persisted: false,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null},
+    'row loss defers rather than recreating stale admission authority');
     t.notOk(
       executedSql.some((sql) => sql.trim().toUpperCase().startsWith('INSERT')),
       'stale CLOSED admission tuple is never reinserted',
@@ -962,7 +966,7 @@ test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-inse
         success: true,
         rows: [
           makeRow({
-            status: 'in_progress',
+            status: TEST_PENDING_STATUS,
             workflow_step: WORKFLOW_STEP.SENDING,
           }),
         ],
@@ -971,7 +975,7 @@ test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-inse
   });
   const operation = repo.rowToOperation(
     makeRow({
-      status: 'in_progress',
+      status: TEST_PENDING_STATUS,
       workflow_step: WORKFLOW_STEP.SENDING,
     }),
   );
@@ -980,7 +984,8 @@ test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-inse
     expectedWorkflowStep: WORKFLOW_STEP.CREATING,
   });
 
-  t.equal(persisted, true, 'visible row satisfies the transition');
+  t.equal(persisted.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+    'the exact visible row satisfies the transition without a new write');
   t.ok(
     !executedSql.some((sql) =>
       sql.trim().toUpperCase().startsWith('INSERT'),

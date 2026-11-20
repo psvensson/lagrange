@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {initiatedDeliveryRouter, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_RECOVERY_COMPLETION_STATE, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, buildPriorityDrainSupersededReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
@@ -620,7 +622,7 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.FAILED,
       'remote superseded priority recovery row should reconcile',
     );
     t.equal(
@@ -804,7 +806,7 @@ test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
 
     t.equal(
       reconcileResult,
-      false,
+      OPERATION_RECONCILE_OUTCOME.WAITING,
       'materialized superseded target should remain in pre-sync progress rather than fail terminally',
     );
     t.equal(

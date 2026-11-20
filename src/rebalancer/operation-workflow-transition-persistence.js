@@ -534,7 +534,8 @@ class OperationWorkflowTransitionPersistence
     const now = Date.now();
     const normalizedError = this.normalizeErrorMessage(errorMessage, 'Unknown error');
     const replay = await this.resolveOperationTransitionBeforeWrite(operation,
-      WORKFLOW_STEP.FAILED, {terminalTransition: true, terminalErrorMessage: normalizedError});
+      WORKFLOW_STEP.FAILED, {terminalTransition: true, terminalErrorMessage: normalizedError,
+        stepMetadata: options.stepMetadata});
     if (replay) {
       await this.releaseDurableTerminalOperation(operation, replay);
       return replay;

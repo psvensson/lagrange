@@ -13,6 +13,8 @@
 // post-intent no-fail guard (shared with REPLACE) completes it instead -
 // even when the SYNCING step timer fires after the promotion.
 
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -1102,7 +1104,7 @@ test('L3: the claimed FAILED target of a create that failed after admission ' +
       t.equal(
         await owner.reconcileObservedTargetProgressDuringTransitionGrace(
           replaceOp, Date.now()),
-        false,
+        OPERATION_RECONCILE_OUTCOME.WAITING,
         'unclaimed pre-runtime FAILED does not break active transition retry grace',
       );
       const reconciledPreSync = await owner.getReconciledReplicaStatus(
