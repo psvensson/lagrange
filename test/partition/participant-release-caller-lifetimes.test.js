@@ -17,6 +17,7 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_TYPE as TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
 import {resetFixtureSingletons, clearFixtureSingletons} from
   '../test-helpers/participant-transaction-fixture.js';
 import {NODE, PARTITION, withParticipantReleaseProtocol as fixture} from
@@ -29,6 +30,22 @@ const ORIGINAL_BUDGET_MS = 30000;
 const LEAF_DELAY_MS = 3000;
 const JOIN_BUDGET_MS = 100;
 const OBSERVATION_BOUND_MS = 5000;
+const REPEATED_JOIN_COUNT = 16;
+
+// Passive occupancy observation only; never creates or changes the RUNS record.
+function observeCurrentWaiters(handler) {
+  const original = WeakMap.prototype.get;
+  let waiters = null;
+  const restore = replacePrototypeProperty(WeakMap.prototype, 'get', function(key) {
+    const value = Reflect.apply(original, this, [key]);
+    if (key === handler && value instanceof Map) {
+      const current = value.get(PARTITION);
+      if (current?.waiters instanceof Set) waiters = current.waiters;
+    }
+    return value;
+  });
+  return {current: () => waiters, restore};
+}
 
 async function bounded(promise, label) {
   let timer;
@@ -157,12 +174,15 @@ test('same-slot shorter joiner settles at its own deadline without retiring the 
       entered.resolve();
       await release.promise;
     }, async ({registered, observations}) => {
+      const timersBeforeStarter = clock.pendingTimerCount();
       let starter;
       let joined;
+      let continuingJoiner;
       let joinedAtDeadline;
       let originalAtDeadline;
       let joinedAnswer;
       let originalAnswer;
+      let observer = null;
       try {
         starter = requestParticipantRelease(context.handler, request).then((answer) => {
           originalAnswer = answer;
@@ -177,22 +197,61 @@ test('same-slot shorter joiner settles at its own deadline without retiring the 
           targetBuildDigest: '0'.repeat(64)}}), 'wrong-build refusal');
         assert.equal(mixed[RESULT].outcome, OUTCOME.INVALID);
         assert.equal(observations.length, leafCount, 'wrong build starts no additional leaf');
+        const timersBeforeJoin = clock.pendingTimerCount();
+        const unsupported = await bounded(registered({payload: {...request,
+          deadlineAtMs: Number.MAX_SAFE_INTEGER}}), 'unsupported join timer span');
+        assert.equal(unsupported[RESULT].outcome, OUTCOME.UNAVAILABLE);
+        assert.equal(unsupported[RESULT].missingFact, MISSING.RELEASE_DEADLINE);
+        assert.equal(clock.pendingTimerCount(), timersBeforeJoin, 'oversized timer is never armed');
         const shorter = {...request, deadlineAtMs: clock.now() + JOIN_BUDGET_MS};
+        observer = observeCurrentWaiters(context.handler);
         joined = registered({payload: shorter}).then((response) => {
           joinedAnswer = response[RESULT];
           return joinedAnswer;
         });
         joined.catch(() => {}); // finally still observes the original rejection.
         await turn();
+        observer.restore();
+        const waiters = observer.current();
+        assert.ok(waiters instanceof Set, 'observed actual current RUNS waiter collection');
+        assert.equal(waiters.size, 1);
         assert.equal(observations.length, leafCount, 'same build coalesces instead of restarting cutover');
+        assert.equal(clock.pendingTimerCount(), timersBeforeJoin + 1,
+          'joining caller owns exactly one additional deadline timer');
         clock.advance(JOIN_BUDGET_MS);
         await turn();
         joinedAtDeadline = joinedAnswer;
         originalAtDeadline = originalAnswer;
+        assert.equal(clock.pendingTimerCount(), timersBeforeJoin,
+          'expired joiner retires its timer while shared delivery timers remain');
+        assert.equal(waiters.size, 0, 'expired waiter detaches from the still-held shared run');
+        for (let index = 0; index < REPEATED_JOIN_COUNT; index += 1) {
+          const short = registered({payload: {...request,
+            deadlineAtMs: clock.now() + JOIN_BUDGET_MS}});
+          short.catch(() => {}); // bounded below observes the original rejection.
+          await turn();
+          assert.equal(waiters.size, 1, 'only the current short caller is retained');
+          clock.advance(JOIN_BUDGET_MS);
+          const result = await bounded(short, 'repeated short join retirement');
+          assert.equal(result[RESULT].outcome, OUTCOME.UNAVAILABLE);
+          assert.equal(result[RESULT].missingFact, MISSING.RELEASE_DEADLINE);
+          assert.equal(waiters.size, 0, 'repeated timeouts cannot accumulate subscriptions');
+          assert.equal(clock.pendingTimerCount(), timersBeforeJoin);
+        }
+        continuingJoiner = registered({payload: request});
+        continuingJoiner.catch(() => {}); // finally observes this original promise.
+        await turn();
+        assert.equal(clock.pendingTimerCount(), timersBeforeJoin + 1,
+          'a later valid join still observes the original owned cutover');
       } finally {
+        if (observer) observer.restore();
         release.resolve();
-        await bounded(Promise.all([starter, joined]), 'retained shared effect after gate release');
+        await bounded(Promise.all([starter, joined, continuingJoiner]),
+          'retained shared effect after gate release');
       }
+      assert.equal(clock.pendingTimerCount(), timersBeforeStarter,
+        'successful join and original delivery retire all their own timers');
+      assert.equal(observer.current().size, 0, 'shared settlement clears the successful waiter');
       assert.equal(originalAtDeadline, undefined, 'short waiter cannot retire original held work');
       assert.equal(originalAnswer.outcome, OUTCOME.CUT_OVER);
       assert.notEqual(readPartitionWriteOrigin(context.service.db), null);
@@ -227,13 +286,14 @@ test('ordinary registered client release completes with unchanged origin and no 
 test('expired aggregate request refuses before delivery and cannot create a native origin', async () => {
   const clock = new VirtualTimeSource({startMs: 1000});
   await fixture(async (context) => {
-    const request = {...requestOf(context.handler, context.build, clock),
-      deadlineAtMs: clock.now()};
     await withRealDelivery(context, clock, async () => {}, async ({deliveries}) => {
-      const answer = await bounded(requestParticipantRelease(context.handler, request),
-        'expired release');
-      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
-      assert.equal(answer.missingFact, MISSING.RELEASE_DEADLINE);
+      for (const deadlineAtMs of [clock.now(), Number.MAX_SAFE_INTEGER, undefined, NaN]) {
+        const request = {...requestOf(context.handler, context.build, clock), deadlineAtMs};
+        const answer = await bounded(requestParticipantRelease(context.handler, request),
+          'expired or unsupported release budget');
+        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
+        assert.equal(answer.missingFact, MISSING.RELEASE_DEADLINE);
+      }
       assert.equal(deliveries.length, 0, 'expired request must not invoke transport');
       assert.equal(readPartitionWriteOrigin(context.service.db), null);
     });

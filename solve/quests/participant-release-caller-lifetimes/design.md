@@ -1,5 +1,13 @@
 # Participant release caller lifetimes: witness proposal
 
+## Current bounded repair after original red
+
+Original native run b0a51112-53bb-4ac7-9d3b-b1a1af48a51b on adam-laptop measured the two intended assertion failures and both ordinary/expiry controls passed at9a559d0cb. Its archive SHA3c123c29d87255bb7ca6904af9445c9dfd884c0743a06055707f25a074df41d9 is uploaded and re-download verified through the existing evidence owner; the append-only log carries custody. The red-only adapter independently reviewed by the integration owner admitted the originals; Solver sealed a measuring red on20November. No passing repair evidence exists yet.
+
+The user-directed WP10 contract is now explicitly dispositioned: RELEASE consumes the original caller remaining budget across orchestrator work; other actions retain5000ms leaf limits. The original overall deadline, single redirect, authority checks, RUNS coalescing and existing committed-effect/recovery owners remain. This prospectively replaces only the old uniform action cap, preserving the old seal and its evidence. No formation acceptance bound changes. A joining caller owns exactly one deadline timer and a post-await expiry check; expiry settles that caller but never cancels the shared cutover or deletes its slot. Unusable deadline/clock observations cannot grant a default wait. Current repair paths are participant-release-client.js and replica-handler-participant-cutover.js, with original-output adapter and focused timer/resource witnesses. Independent review and managed candidate proof remain required before integration.
+
+## Original pre-execution proposal (preserved context)
+
 Baseline 58a2080337b56b4e5f97bcb54da59f57b94e6611; rule-set revision 5. This is proposed witness work, not executed failure or accepted repair. Writer scope: this Quest's record/log/design and test/partition/participant-release-caller-lifetimes.test.js in the isolated worktree. No production source or shared integration tree changes.
 
 Decision and authority: participant-release-client owns caller delivery options; MessageRouter owns actual local delivery lifetime. The registered ReplicaHandler dispatches ACTION.RELEASE to runParticipantCutover. RUNS coalesces by handler/partition/build, while native PartitionService/Raft, committed membership, origin persistence and admission owners decide actual release. A timeout is caller uncertainty and cannot roll back an origin. The running cutover retains its slot until its promise settles; existing-origin recovery retains its existing role. Existing native fixture's empty cache and local routing mean this is local owner composition, not physical distribution.
