@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2676,
+    "ordinary": 2677,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2702,
-  "digest": "fnv1a32-76fbb7c8",
+  "censusSize": 2703,
+  "digest": "fnv1a32-c255ae77",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1780,6 +1780,7 @@
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "ordinary",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "ordinary",
     "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js": "ordinary",
+    "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js": "ordinary",
     "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": "ordinary",
     "test/raft/raft-rs-backend/founding-growth-lifecycle-witnesses.test.js": "ordinary",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "ordinary",
