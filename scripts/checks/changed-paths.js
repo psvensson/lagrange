@@ -83,7 +83,10 @@ const STATUS_ADDED_PREFIX = 'A';
 const INJECTION_SEPARATOR = ',';
 const PATH_SEPARATOR = '/';
 const MERGE_BASE = 'merge-base';
-const PUBLICATION_REMOTE = 'origin/main';
+const PUBLICATION_REMOTE = 'refs/remotes/origin/main';
+const SHOW_REF = 'show-ref';
+const SHOW_REF_ABSENT = 1;
+const MISSING_MERGE_BASE = 'git merge-base returned no unique publication base';
 const REV_PARSE = 'rev-parse';
 const VERIFY = '--verify';
 const QUIET = '--quiet';
@@ -95,21 +98,14 @@ const MALFORMED_CHANGE_RECORD = 'git returned an incomplete NUL-delimited change
 const REPOSITORY_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// Null when git cannot answer (no base, not a repository). Output past the
-// git output bound is not that: it is a failure of its own and propagates.
-function git(root, args, separator = NEWLINE) {
-  try {
-    return arrayFilter(
-      stringSplit(execGit(args, {
-        cwd: root,
-        encoding: UTF8,
-        env: gitProcessEnvironment(),
-      }), separator),
-      Boolean);
-  } catch (error) {
-    if (isGitOutputTooLarge(error)) throw error;
-    return null;
-  }
+function readGitFields(root, args, separator = NEWLINE) {
+  return arrayFilter(
+    stringSplit(execGit(args, {
+      cwd: root,
+      encoding: UTF8,
+      env: gitProcessEnvironment(),
+    }), separator),
+    Boolean);
 }
 
 // `--name-status -z` emits status, path and (for a rename) destination as
@@ -117,14 +113,13 @@ function git(root, args, separator = NEWLINE) {
 // become data transformations or record separators in this owner.
 function parseNameStatus(fields) {
   const records = [];
-  const sourceFields = fields || [];
-  for (let index = 0; index < sourceFields.length;) {
-    const code = sourceFields[index];
-    const firstPath = sourceFields[index + 1];
+  for (let index = 0; index < fields.length;) {
+    const code = fields[index];
+    const firstPath = fields[index + 1];
     index += 2;
     if (!firstPath) throw new Error(MALFORMED_CHANGE_RECORD);
     if (stringStartsWith(code, STATUS_RENAMED_PREFIX)) {
-      const destination = sourceFields[index];
+      const destination = fields[index];
       index += 1;
       if (!destination) throw new Error(MALFORMED_CHANGE_RECORD);
       appendArrayValue(records, {
@@ -165,15 +160,22 @@ function dedupe(records) {
 }
 
 /**
- * The merge base with the publication remote, or null when the repository at
- * `root` has none. This is what a push would be measured against, so it is
+ * The merge base with the publication remote, or null when its ref is absent.
+ * This is what a push would be measured against, so it is
  * the base an unqualified local proof means.
  * @param {string} root
  * @return {string|null}
  */
 export function publicationBase(root) {
-  const lines = git(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);
-  return lines && lines.length > 0 ? lines[0] : null;
+  try {
+    readGitFields(root, [SHOW_REF, VERIFY, QUIET, PUBLICATION_REMOTE]);
+  } catch (error) {
+    if (error?.status === SHOW_REF_ABSENT) return null;
+    throw error;
+  }
+  const lines = readGitFields(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);
+  if (lines.length !== 1) throw new Error(MISSING_MERGE_BASE);
+  return lines[0];
 }
 
 // An explicit flag wins; otherwise the environment supplies the range; otherwise
@@ -235,9 +237,15 @@ export function repositoryCheckBase(root, env = process.env) {
 export function resolvedCheckBaseCommit(explicitBase, env, root) {
   const base = resolvedCheckBase(explicitBase, env, root);
   if (!base) return null;
-  const lines = git(root, [REV_PARSE, VERIFY, QUIET, END_OF_OPTIONS,
-    `${base}${COMMIT_PEEL}`]);
-  if (!lines || lines.length !== 1) throw new Error(`${UNRESOLVED_BASE}${base}`);
+  let lines;
+  try {
+    lines = readGitFields(root, [REV_PARSE, VERIFY, QUIET, END_OF_OPTIONS,
+      `${base}${COMMIT_PEEL}`]);
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
+    throw new Error(`${UNRESOLVED_BASE}${base}`, {cause: error});
+  }
+  if (lines.length !== 1) throw new Error(`${UNRESOLVED_BASE}${base}`);
   return lines[0];
 }
 
@@ -280,17 +288,17 @@ export function withoutWorkspaceInjections(paths, env = process.env) {
 export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
   const records = [];
   if (base) {
-    const committed = git(root,
+    const committed = readGitFields(root,
       [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, `${base}..${head}`], NUL);
-    if (committed === null) return null;
     appendArrayValues(records, parseNameStatus(committed));
   }
   appendArrayValues(records, parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, DEFAULT_HEAD], NUL)));
+    readGitFields(root,
+      [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, DEFAULT_HEAD], NUL)));
   appendArrayValues(records, parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, CACHED], NUL)));
-  const untrackedPaths = git(root,
-    [LS_FILES, OTHERS, EXCLUDE_STANDARD, NULL_TERMINATED], NUL) || [];
+    readGitFields(root, [DIFF, NAME_STATUS, NULL_TERMINATED, RENAME_DETECTION, CACHED], NUL)));
+  const untrackedPaths = readGitFields(root,
+    [LS_FILES, OTHERS, EXCLUDE_STANDARD, NULL_TERMINATED], NUL);
   for (let index = 0; index < untrackedPaths.length; index += 1) {
     appendArrayValue(records, {
       status: CHANGE_ADDED,
@@ -308,9 +316,8 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
 // deletion and both sides of a rename. This is what the selector must classify.
 export function semanticPaths(records) {
   const paths = createOrderedStringSet();
-  const sourceRecords = records || [];
-  for (let index = 0; index < sourceRecords.length; index += 1) {
-    const record = sourceRecords[index];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
     if (record.path) orderedStringSetAdd(paths, record.path);
     if (record.oldPath) orderedStringSetAdd(paths, record.oldPath);
   }
@@ -322,15 +329,14 @@ export function semanticPaths(records) {
 // cannot be run and cannot be under-tested, so it must not be mistaken for an
 // unclassified one - deleting a test would otherwise refuse the whole proof.
 export function vanishedPaths(records) {
-  const sourceRecords = records || [];
   const present = createOrderedStringSet();
-  for (let index = 0; index < sourceRecords.length; index += 1) {
-    const record = sourceRecords[index];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
     if (record.path) orderedStringSetAdd(present, record.path);
   }
   const vanished = createOrderedStringSet();
-  for (let index = 0; index < sourceRecords.length; index += 1) {
-    const record = sourceRecords[index];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
     if (record.oldPath && !orderedStringSetHas(present, record.oldPath)) {
       orderedStringSetAdd(vanished, record.oldPath);
     }
@@ -341,10 +347,9 @@ export function vanishedPaths(records) {
 // Paths that still exist, which is all a static checker can open.
 export function existingPaths(records) {
   const paths = createOrderedStringSet();
-  const sourceRecords = records || [];
-  for (let index = 0; index < sourceRecords.length; index += 1) {
-    if (sourceRecords[index].path) {
-      orderedStringSetAdd(paths, sourceRecords[index].path);
+  for (let index = 0; index < records.length; index += 1) {
+    if (records[index].path) {
+      orderedStringSetAdd(paths, records[index].path);
     }
   }
   return sortStrings(orderedStringSetValues(paths));
@@ -358,8 +363,7 @@ export function javaScriptPaths(paths) {
       (suffix) => stringEndsWith(candidate, suffix)));
 }
 
-// Backwards-compatible convenience for callers that only need existing paths.
+// Existing paths are the static checker's file inputs.
 export function changedCandidatePaths(options) {
-  const records = changedRecords(options);
-  return records === null ? null : existingPaths(records);
+  return existingPaths(changedRecords(options));
 }

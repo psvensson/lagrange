@@ -6,6 +6,7 @@ import path from 'node:path';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
+import {PROOF_SCOPE_PATH} from '../../scripts/checks/change-selection-constants.js';
 
 const UTF8 = 'utf8';
 const ORCHESTRATOR = 'scripts/select-change-tests.js';
@@ -101,7 +102,10 @@ function createChangeProofFixture({
   }
 
   function resultWithInvocation(result) {
+    const scopePath = path.join(repo, PROOF_SCOPE_PATH);
     return {
+      proofScope: fs.existsSync(scopePath) ?
+        JSON.parse(fs.readFileSync(scopePath, UTF8)) : null,
       status: result.status,
       output: `${result.stdout}${result.stderr}`,
       invocation: fs.existsSync(sentinel) ?
@@ -119,6 +123,26 @@ function createChangeProofFixture({
     const proof = resultWithInvocation(result);
     restoreFixture();
     return proof;
+  }
+
+  function proofWithLinkedWorktree(changes) {
+    const linked = fs.mkdtempSync(path.join(workspace, 'linked-'));
+    git(['worktree', 'add', '--quiet', '--detach', linked]);
+    try {
+      for (const [relative, contents] of Object.entries(changes)) {
+        fs.writeFileSync(path.join(linked, relative), contents, UTF8);
+      }
+      git(['-C', linked, 'add', '.']);
+      git(['-C', linked, 'commit', '--quiet', '-m', 'linked worktree changes']);
+      const linkedHead = git(['-C', linked, 'rev-parse', 'HEAD']);
+      const gitDir = git(['-C', linked, 'rev-parse', '--absolute-git-dir']);
+      const targetHead = git(['rev-parse', 'HEAD']);
+      const env = {...fixtureEnv(),
+        GIT_DIR: gitDir, GIT_WORK_TREE: linked, GIT_INDEX_FILE: path.join(gitDir, 'index')};
+      return {proof: proofFor(changes, {env}), linkedHead, targetHead};
+    } finally {
+      git(['worktree', 'remove', linked]);
+    }
   }
 
   function proofForCommittedAndWorkingChanges(committed, working) {
@@ -164,6 +188,7 @@ function createChangeProofFixture({
     proofFor,
     proofForCommittedAndWorkingChanges,
     proofFromCommittedBaseline,
+    proofWithLinkedWorktree,
     repo,
     restoreFixture,
     writeChanges,

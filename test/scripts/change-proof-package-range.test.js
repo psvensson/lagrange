@@ -16,6 +16,7 @@ const BANNER = 'MODULAR PROOF NOT SAFE';
 const {
   proofFor,
   proofForCommittedAndWorkingChanges,
+  proofWithLinkedWorktree,
 } = createChangeProofFixture({
   root,
   checkBaseEnvironment: CHECK_BASE_ENV,
@@ -97,4 +98,28 @@ test('an explicit committed head cannot hide a dirty package dependency', () => 
   assert.equal(proof.invocation, null,
     'a dirty package dependency must refuse before spawning tests');
   assert.ok(proof.output.includes('RELEASE_PROOF_REQUIRED'));
+});
+
+test('a linked worktree hook cannot hide the target package and lock graph changes', () => {
+  const changes = releaseVersionChanges('9.9.9');
+  for (const [file, rewrite] of [
+    ['package.json', (json) => withJsonDependency(json, 'linked-fixture-package')],
+    ['package-lock.json', withTransitiveIntegrity],
+  ]) {
+    const {proof, linkedHead, targetHead} =
+      proofWithLinkedWorktree({[file]: rewrite(changes[file])});
+    assert.notEqual(linkedHead, targetHead);
+    assert.notEqual(proof.status, 0, proof.output);
+    assert.equal(proof.invocation, null);
+    assert.match(proof.output, /RELEASE_PROOF_REQUIRED/u);
+  }
+});
+
+test('a linked worktree hook cannot stamp the target proof with its own HEAD', () => {
+  const {proof, linkedHead, targetHead} =
+    proofWithLinkedWorktree(releaseVersionChanges('9.9.9'));
+  assert.notEqual(linkedHead, targetHead);
+  assert.equal(proof.status, 0, proof.output);
+  assert.ok(proof.invocation);
+  assert.equal(proof.proofScope?.sha, targetHead);
 });

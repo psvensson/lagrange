@@ -34,6 +34,7 @@ import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
 import {spawnGit} from './checks/git-invocation.js';
+import {gitProcessEnvironment} from './checks/git-process-environment.js';
 import {
   appendArrayValue,
   copyOwnDataArray,
@@ -52,6 +53,7 @@ import {
 import {
   changedRecords,
   resolvedCheckBase,
+  resolvedCheckBaseCommit,
   semanticPaths,
   vanishedPaths,
 } from './checks/changed-paths.js';
@@ -156,22 +158,6 @@ function requireValidSafetySpine(value) {
     throw new Error(INVALID_SAFETY_SPINE_PROBLEM);
   }
   return tests;
-}
-
-// Both sides of a rename and the vanished side of a deletion: a change that
-// removed src/raft/x.js must still prove storage-raft, and a rename that
-// crosses a subsystem boundary must prove BOTH owners.
-export function changedPathsBetween(base, head, gitRoot = root) {
-  const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? null : semanticPaths(records);
-}
-
-// Which of those paths this change REMOVED. Kept separate from the path list
-// because the selector needs both: a vanished test is not unclassified, while
-// a vanished source file must still prove its former owner.
-export function vanishedPathsBetween(base, head, gitRoot = root) {
-  const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? createOrderedStringSet() : vanishedPaths(records);
 }
 
 // Which top-level package.json keys differ between the two states. Computed
@@ -284,7 +270,7 @@ function hasPotentiallyLossyJsonNumber(text) {
 
 function jsonFromRevision(relativePath, revision, gitRoot) {
   const result = spawnGit(['show', `${revision}:${relativePath}`],
-    {cwd: gitRoot, encoding: UTF8});
+    {cwd: gitRoot, encoding: UTF8, env: gitProcessEnvironment()});
   return result.status === 0 ? parseJson(result.stdout) : null;
 }
 
@@ -368,17 +354,16 @@ export function lockfileDependencyGraphChanged(base, head, gitRoot = root) {
 }
 
 // The plan for a committed range plus the working tree: what `npm test` and
-// the push gate both execute. null when the range cannot be diffed.
+// the push gate both execute. Git errors abort before a proof is planned.
 export function planChangeProof({base = null, head = null,
   planRoot = root} = {}) {
   const headRevision = head || DEFAULT_HEAD;
-  const changedPaths = changedPathsBetween(base, headRevision, planRoot);
-  if (changedPaths === null) return null;
+  const records = changedRecords({root: planRoot, base, head: headRevision});
   return buildExecutionPlan({
-    changedPaths,
+    changedPaths: semanticPaths(records),
     packageFields: changedPackageFields(base, head, planRoot),
     lockfileGraphChanged: lockfileDependencyGraphChanged(base, head, planRoot),
-    vanished: vanishedPathsBetween(base, headRevision, planRoot),
+    vanished: vanishedPaths(records),
     planRoot,
   });
 }
@@ -639,7 +624,6 @@ function parseInvocation(argv) {
     valid: !(base.present && !base.value) && !(head.present && !head.value),
     base: resolvedCheckBase(base.value, process.env, root),
     head: head.value,
-    headRevision: head.value || DEFAULT_HEAD,
     explain: arrayIncludes(argv, EXPLAIN_FLAG),
     list: arrayIncludes(argv, LIST_FLAG),
   };
@@ -684,20 +668,13 @@ async function main() {
     return;
   }
   const plan = planChangeProof({base: invocation.base, head: invocation.head});
-  if (plan === null) {
-    process.stderr.write(
-      `cannot diff ${invocation.base}..${invocation.headRevision}${NEWLINE}`);
-    process.exitCode = 1;
-    return;
-  }
-
   if (invocation.explain) {
     process.stdout.write(renderExplain(plan));
     if (plan.kind === SELECTION_REFUSED) process.exitCode = 1;
     return;
   }
   if (plan.kind === SELECTION_REFUSED) {
-    const sha = headSha();
+    const sha = resolvedCheckBaseCommit(DEFAULT_HEAD, {}, root);
     if (releaseProofSatisfiesRefusal(plan, {sha})) {
       process.stdout.write(
         `${RELEASE_PROOF_REUSED_PREFIX}: ${RELEASE_PROOF_ID} ${sha}${NEWLINE}`,
@@ -719,7 +696,7 @@ async function main() {
     `${plan.observedElsewhere.length}${OBSERVED_ELSEWHERE_SUFFIX})${NEWLINE}`);
   // This path never runs the whole corpus; the push gate's proof owns that
   // decision and records it itself.
-  writeProofScope({head: headSha(), fullCorpus: false, plan});
+  writeProofScope({head: resolvedCheckBaseCommit(DEFAULT_HEAD, {}, root), fullCorpus: false, plan});
   process.exitCode = await runPlacedClassifiedTestFiles(
     planTestPaths(plan), {root});
 }
@@ -753,16 +730,6 @@ export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
     testPaths: fullCorpus === false && Array.isArray(plan?.tests) ? planTestPaths(plan) : null,
   })}\n`, UTF8);
   return file;
-}
-
-const stringTrimValue = Function.call.bind(String.prototype.trim);
-const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
-
-function headSha(gitRoot = root) {
-  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
-    {cwd: gitRoot, encoding: UTF8});
-  const sha = stringTrimValue(String(result.stdout || ''));
-  return sha.length > 0 ? sha : null;
 }
 
 export function planTestPaths(plan) {

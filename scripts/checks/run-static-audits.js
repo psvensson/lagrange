@@ -259,8 +259,7 @@ function isUnboundedRange(range) {
 function rangeChangedPaths(root) {
   const range = resolvedCheckRange(null, process.env, root);
   if (isUnboundedRange(range)) return null;
-  const records = changedRecords({root, base: range.base});
-  return records === null ? null : semanticPaths(records);
+  return semanticPaths(changedRecords({root, base: range.base}));
 }
 
 const STATIC_AUDIT_SCRIPTS = Object.freeze([

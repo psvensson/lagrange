@@ -179,7 +179,7 @@ function writeExplainReport(changed, changedJs, results) {
 
 export function runFastStatic({base = null, explain = false,
   range = {base, source: base ? RANGE_SOURCE.FLAG : RANGE_SOURCE.WORKTREE}} = {}) {
-  const changed = changedCandidatePaths({root, base: range.base}) || [];
+  const changed = changedCandidatePaths({root, base: range.base});
   const changedJs = javaScriptPaths(changed);
   const warnings = rangeWarnings({range, changedJs});
   const results = collectFastStaticResults(range, changedJs);

@@ -38,7 +38,6 @@ const PATH_SEPARATOR = '/';
 const PARENT_DIRECTORY = '..';
 const OUTSIDE_ROOT_PREFIX = '../';
 const HEAD = 'HEAD';
-const COMPARISON_UNAVAILABLE = 'Unable to determine the file-size comparison range';
 
 function git(root, args, encoding = ENCODING) {
   return execGit(args, {cwd: root, encoding, env: gitProcessEnvironment()});
@@ -203,7 +202,6 @@ export function fileSizeChangeErrors({root, base = null, paths = null, env = pro
   const comparisonBase = resolvedCheckBaseCommit(base, env, root) ||
     resolvedCheckBaseCommit(HEAD, {}, root);
   const records = changedRecords({root, base: comparisonBase});
-  if (records === null) throw new Error(COMPARISON_UNAVAILABLE);
   const selected = selectedPaths(root, paths);
   const candidates = candidatePaths(records, selected);
   const files = baselineFiles(root, comparisonBase);
