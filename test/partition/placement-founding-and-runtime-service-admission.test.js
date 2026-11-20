@@ -541,8 +541,11 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         };
         const conflicting = {...original, nodeId: NODE.C};
 
-        await assert.rejects(() => coordinator.createOperation(original),
-          {failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
+        await assert.rejects(
+          () => coordinator.createOperation(original),
+          (error) => error.admissionAnswer?.failureCode ===
+            PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+        );
         const [held] = ledgerRows(leader);
         assert.equal(held.target_node_id, original.nodeId);
         await assert.rejects(() => coordinator.createOperation(conflicting),
