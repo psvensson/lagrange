@@ -418,7 +418,7 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
   extras.secondSelfMove = {
     attemptedAtMs: null,
     admittedAtMs: null,
-    operationId: null,
+    returned: null,
     refusals: [],
     resolved: false,
     holderPhaseAfter: null,
@@ -460,23 +460,46 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
   };
   sampleLedgerSelfMoves();
 
+  const readDurableSelfMoves = async () => {
+    const result = await seed.sqlQueryEngine.executeQuery(
+      'SELECT operation_id, target_node_id, source_node_id, source_replica_id ' +
+        'FROM replica_operations WHERE partition_id = ? AND completed_at IS NULL',
+      [LEDGER_PARTITION_ID],
+    );
+    if (!result.success) throw new Error(result.error);
+    return result.rows;
+  };
+  const operationSubject = (operation) => ({
+    operation_id: operation.operationId,
+    target_node_id: operation.targetNodeId,
+    source_node_id: operation.sourceNodeId,
+    source_replica_id: seed.getReplaceSourceReplicaId(operation),
+  });
   const attemptSecondSelfMove = async () => {
-    extras.secondSelfMove.attemptedAtMs = elapsed();
+    const secondMove = extras.secondSelfMove;
+    const move = buildMove({
+      publicationEpoch: publicationRow().publication_epoch,
+      type: OperationType.REPLACE,
+      tableId: LEDGER_TABLE_ID,
+      targetNodeId: JOINER_4_NODE_ID,
+      replicaIndex: LEADER_REPLICA_INDEX,
+    });
+    secondMove.attemptedAtMs = elapsed();
+    secondMove.requested = {
+      target_node_id: move.nodeId,
+      source_node_id: move.sourceNodeId,
+      source_replica_id: move.replicaId,
+    };
+    secondMove.durableBefore = await readDurableSelfMoves();
     try {
-      const operation = await seed.createOperation(
-        buildMove({
-          publicationEpoch: publicationRow().publication_epoch,
-          type: OperationType.REPLACE,
-          tableId: LEDGER_TABLE_ID,
-          targetNodeId: JOINER_4_NODE_ID,
-          replicaIndex: LEADER_REPLICA_INDEX,
-        }),
-      );
-      extras.secondSelfMove.admittedAtMs = elapsed();
-      extras.secondSelfMove.operationId = operation.operationId;
-      record(FAIRNESS_EVENT.SECOND_SELF_MOVE_ADMITTED, {
-        holderPhase: holderPhase(),
-      });
+      const operation = await seed.createOperation(move);
+      secondMove.returned = operationSubject(operation);
+      if (operation.operationId !== selfMoveId()) {
+        secondMove.admittedAtMs = elapsed();
+        record(FAIRNESS_EVENT.SECOND_SELF_MOVE_ADMITTED, {
+          holderPhase: holderPhase(),
+        });
+      }
     } catch (error) {
       if (!isTypedRetryableSkip(error)) {
         throw error;
@@ -509,8 +532,20 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
     } finally {
       ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.LEDGER;
       ledgerAnswers.interlockForeignRow = false;
-      extras.secondSelfMove.resolved = true;
       extras.secondSelfMove.holderPhaseAfter = holderPhase();
+      extras.secondSelfMove.durableAfter = await readDurableSelfMoves();
+      const incumbent = state.selfMove;
+      extras.secondSelfMove.replayed = operationSubject(await seed.createOperation(
+        buildMove({
+          publicationEpoch: incumbent.membershipPublicationEpoch,
+          type: OperationType.REPLACE,
+          tableId: LEDGER_TABLE_ID,
+          targetNodeId: JOINER_1_NODE_ID,
+          replicaIndex: MOVED_REPLICA_INDEX,
+        }),
+      ));
+      extras.secondSelfMove.durableAfterReplay = await readDurableSelfMoves();
+      extras.secondSelfMove.resolved = true;
       extras.selfMoveOperationId = selfMoveId();
       extras.pointReads = ledgerAnswers.pointReads;
       extras.ledgerSelfMoveRowsAfterInjection = [...trackedOperations.values()]
