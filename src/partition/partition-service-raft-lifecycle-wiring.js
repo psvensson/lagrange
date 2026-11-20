@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -19,6 +20,8 @@ const {
   RaftRole,
   wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
+
+const LOCAL_STR_VOTER = 'voter';
 
 function wirePartitionRaftLifecycleEvents(
   service,
@@ -136,16 +139,47 @@ function wirePartitionRaftLifecycleEvents(
  * port.
  * @param {Object} service - The partition service.
  */
+function isPromotedLearnerVoterObservation(service, observation) {
+  if (service?.role !== RaftRole.LEARNER) {
+    return false;
+  }
+  if (observation?.role === LOCAL_STR_VOTER) {
+    return true;
+  }
+  const voters = observation?.confState?.voters;
+  if (!Array.isArray(voters) || voters.length === 0) {
+    return false;
+  }
+  const voterSet = new Set(voters.map((v) => String(v)));
+  const replicaId = String(service?.replicaId || '');
+  if (
+    replicaId.length > 0 &&
+    (voterSet.has(replicaId) ||
+      voterSet.has(String(deriveRaftRsPeerId(replicaId))))
+  ) {
+    return true;
+  }
+  const statusId = service?.raft?.readStatus?.()?.id;
+  return statusId !== undefined && statusId !== null && voterSet.has(String(statusId));
+}
+
 function relayPartitionConsensusObservations(service) {
   const emit = (fields) => service.emit(
     PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
     {partitionId: service.partitionId, replicaId: service.replicaId,
       ...fields},
   );
-  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) =>
+  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) => {
+    if (isPromotedLearnerVoterObservation(service, observation)) {
+      service.role = RaftRole.FOLLOWER;
+      service.learnerBootstrapped = true;
+      service.cancelLearnerPromotionMonitor?.();
+      service.queueRoleUpdate?.(RaftRole.FOLLOWER);
+    }
     emit({confState: observation?.confState ?? null,
       commitIndex: observation?.commitIndex ?? null,
-      appliedIndex: observation?.appliedIndex ?? null}));
+      appliedIndex: observation?.appliedIndex ?? null});
+  });
   service.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, (settlement) => {
     if ((settlement?.confChangeEntries ?? 0) > 0) {
       emit({appliedIndex: settlement?.appliedIndex ?? null,

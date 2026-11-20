@@ -395,18 +395,42 @@ function createBulkTransferChannelRegistry(options = {}) {
           dialOptions.maxPayload > 0 ?
         dialOptions.maxPayload :
         BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PAYLOAD_BYTES;
+      if (signal?.aborted) {
+        throw new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
+      }
       const ws = createWebSocket(address, {maxPayload});
       await new Promise((resolve, reject) => {
-        const failDial = (error) => reject(error);
+        let onAbort = null;
+        let failDial = null;
+        const cleanupDial = () => {
+          if (failDial !== null) {
+            ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
+            failDial = null;
+          }
+          if (onAbort !== null) {
+            signal?.removeEventListener(SIGNAL_ABORT_EVENT, onAbort);
+            onAbort = null;
+          }
+        };
+        failDial = (error) => {
+          cleanupDial();
+          reject(error);
+        };
+        onAbort = () => {
+          cleanupDial();
+          ws.terminate();
+          reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
+        };
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
         ws.once(TRANSPORT_EVENT.OPEN, () => {
-          ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
+          cleanupDial();
           resolve();
         });
         ws.once(TRANSPORT_EVENT.ERROR, failDial);
-        signal?.addEventListener(SIGNAL_ABORT_EVENT, () => {
-          ws.terminate();
-          reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
-        }, {once: true});
+        signal?.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
       });
       // Pre-claim frame discipline (load-bearing): the IDENTIFY frame with
       // the bulk channel marker is the FIRST and ONLY frame on this socket
