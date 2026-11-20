@@ -19,6 +19,28 @@ the concrete source/records below. Navigation used source/Git reads; no successf
 Serena invocation is claimed. One writer must own this coupled contract and its
 fixtures. The author of this note cannot independently approve its implementation.
 
+## Current review of the WIP admission path
+
+At `8f446cc0f` the management and rolling-upgrade entrypoints reject
+policy-only data. Their seven selected managed files passed on tv-dator.
+No qualifying five-drill archive or deployed release binding was found.
+[Seven managed source files](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-policy-and-management-8f446-nov20.tar.gz).
+
+The changed management tests also call `RollingUpgradeOwner.initiatePlan`
+directly. That method accepts an omitted support binding and invokes drain
+and restart. These cases cover workflow sequencing. They cannot establish
+admission before the first effect. Production calls the method from
+`startUpgrade`. On reconstruction, `resumeFromPersistedState` restores
+the saved plan and `beginNextNodeDrain` can issue a subsequent effect.
+The evidence owner must cover both entrypoints. Preserve the identity and
+debt of a genuinely started operation, refuse a fresh effect derived solely
+from an unbound plan, and distinguish the resulting hold from a completed
+upgrade. Trace the actual persisted state supplied by management and the
+release-preparation source of the recorded run before accepting this WIP.
+Physical qualification remains with the pilot owner.
+[Reviewed source](https://github.com/psvensson/lagrange/blob/8f446cc0fca629f68155dd6cc6873276e4e3d896/src/bootstrap/owners/rolling-upgrade-owner.js)
+and [workflow tests](https://github.com/psvensson/lagrange/blob/8f446cc0fca629f68155dd6cc6873276e4e3d896/test/bootstrap/management-v1-l4-l3.test.js).
+
 ## Decision and acceptance boundary
 
 SupportEnvelopeOwner owns whether an envelope authorizes a named upgrade or

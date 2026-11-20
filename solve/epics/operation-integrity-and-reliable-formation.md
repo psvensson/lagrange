@@ -283,6 +283,15 @@ findings, this distinction determines which source an agent should reproduce.
 
 ### Physical formation and placement stability
 
+At `dc021bf30` the existing embedded formation test passed on tv-dator in
+39.971 seconds (20 assertions). Three real processes published membership,
+settled operations, created a table, observed an empty COUNT, and read back
+the inserts from every node. All three installed admin-observation guards
+recorded zero calls. This is the single-host public SQL control for the
+physical investigation. The 420-second three-host predicate still has a
+passing streak of zero.
+[Original managed result, three node logs and guards](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-embedded-public-sql-dc021-nov20.tar.gz).
+
 After repairing startup, run `e068cbdc` first observed six-partition spread at
 36.629 seconds; run `57e4db30` observed it at 90.548 seconds. Each run
 started 46 system partitions with a configured replica count of three. For
@@ -368,6 +377,17 @@ renewal, the committed wake and revalidation at the effect. Preserve voter
 floor, per-host capacity, ledger exclusivity and original quiet window. The
 remaining formation throughput investigation follows the completed operations
 and the exact delayed authority request. Background work continues throughout.
+
+The native two-schedule test at `68b868cc8` reproduced a second reversal
+at the effect itself. A committed placement REMOVE for a learner remained
+pending while native membership promoted the target. The delayed REMOVE
+reached the registered handler and removed the voter. In the control, the
+leader could remove a confirmed isolated learner while its host remained
+unavailable. The placement owner must preserve the intended role and exact
+replica through dispatch, membership change, local lifecycle cleanup and
+reconstruction. Fixing the earlier eligibility decision alone leaves this
+race reachable. Its frequency on the three-host runs is unknown.
+[Native removal and true-loss controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--delayed-learner-removal-after-promotion-68b-nov20.tar.gz).
 
 The same physical run records three failed ADDs. Two targeted 6998462b
 and one targeted d8b38f9c. All three CREATE handlers logged
