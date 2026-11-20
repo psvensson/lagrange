@@ -5,11 +5,42 @@ import {CREATE_ADMISSION_ERROR_CODE} from '../../node/replica-create-admission-o
 import {isExactReplicaHandlerRegistered} from '../../node/replica-transport-handler-identity.js';
 import {PARTITION_SERVICE_EVENT} from '../../partition/partition-service-constants.js';
 
+const INVALID_PARTITION_CONSTRUCTION = 'Partition factory did not provide one exact construction handoff';
 const SUPERSEDED_PARTITION_CONSTRUCTION = 'Partition construction was superseded';
 
 function supersededPartitionConstruction(replicaId) {
   return Object.assign(new Error(SUPERSEDED_PARTITION_CONSTRUCTION),
     {code: CREATE_ADMISSION_ERROR_CODE.STALE, replicaId});
+}
+
+function createPartitionConstructionHandoff(replicaId, requireCurrent) {
+  let opened = null;
+  let commit;
+  let invalidCapture = false;
+  const refused = () => Object.assign(new Error(INVALID_PARTITION_CONSTRUCTION),
+    {code: CREATE_ADMISSION_ERROR_CODE.INVALID, replicaId});
+  return Object.freeze({
+    get opened() {
+      return opened;
+    },
+    retain(service, publish) {
+      if (invalidCapture || opened !== null || !service) {
+        invalidCapture = true;
+        throw refused();
+      }
+      opened = service;
+      if (typeof publish !== 'function') throw refused();
+      commit = publish;
+      requireCurrent();
+    },
+    publish(service) {
+      if (invalidCapture || service !== opened || typeof commit !== 'function') throw refused();
+      requireCurrent();
+      const publish = commit;
+      commit = null;
+      publish();
+    },
+  });
 }
 
 function exposePartitionConstruction(options, service, registry, onPublished) {
@@ -35,4 +66,5 @@ function exposePartitionConstruction(options, service, registry, onPublished) {
   }
 }
 
-export {exposePartitionConstruction, supersededPartitionConstruction};
+export {createPartitionConstructionHandoff, exposePartitionConstruction,
+  supersededPartitionConstruction};

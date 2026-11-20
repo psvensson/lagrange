@@ -365,7 +365,7 @@ const PARTITION_CONSTRUCTION_SITES = Object.freeze({
     // The catch-up wrapper: the wrapped factory's own options.
     /const service = await createPartitionService\(serviceOptions\)/u,
     // The replacement's factory: the handler's create with its options.
-    /replicaHandler\.createPartitionService\(serviceOptions\)/u,
+    /replicaHandler\.createPartitionService\(\{\.\.\.serviceOptions,/u,
   ],
   // The durable-rejoin lifecycle: a restore plan (durableRecordBootstrap)
   // or the join options it queued, which are restore plans.

@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Property-based tests for ReplicaHandler idempotency using cache state.
  * Feature: guideline-violations-cleanup
@@ -60,13 +61,13 @@ function createMockCDCService(cache) {
  */
 function createMockPartitionServiceFactory() {
   return async (options) => {
-    return {
+    return completePartitionConstructionFixture({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 

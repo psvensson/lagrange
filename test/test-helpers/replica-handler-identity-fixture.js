@@ -138,6 +138,42 @@ function bindRegisteredReplicaHandler(service, options = {}) {
   });
 }
 
+// A factory fixture with no bootstrap registry publishes through its exact
+// local test registration. Native production producers expose their own handoff.
+function completePartitionConstructionFixture(service, options) {
+  options.onPartitionConstructed(service, () => {
+    if (service.transportHandler) {
+      assert.equal(service.transport.getRegisteredHandler(service.unifiedAddress),
+        service.transportHandler);
+    }
+  });
+  return service;
+}
+
+function createRegisteredPartitionFactoryFixture(service, options) {
+  return completePartitionConstructionFixture(bindRegisteredReplicaHandler(service, options),
+    options);
+}
+
+// Some factory tests replace native initialization to isolate CDC wiring.
+// They still install the partition's actual handler in the exact registry.
+async function initializePartitionTransportFixture() {
+  this.transportHandler = this.handleTransportMessage.bind(this);
+  this.transport.register(this.unifiedAddress, this.transportHandler);
+}
+
+async function createHostPartitionFixture(factory, options) {
+  let opened;
+  let commit;
+  const service = await factory({...options, onPartitionConstructed(instance, publish) {
+    opened = instance;
+    commit = publish;
+  }});
+  assert.equal(service, opened);
+  commit();
+  return service;
+}
+
 /**
  * Model a lifecycle-state-machine test whose replicas' exact handlers are
  * registered: every transition carries an exact-handler check that holds.
@@ -154,6 +190,10 @@ function withRegisteredActivationHandler(stateMachine) {
 
 export {
   bindRegisteredReplicaHandler,
+  completePartitionConstructionFixture,
+  createRegisteredPartitionFactoryFixture,
+  createHostPartitionFixture,
+  initializePartitionTransportFixture,
   registerCompletedFreshCreateReleaseFixture,
   createIdentityTransport,
   createInProcessMockTransport,

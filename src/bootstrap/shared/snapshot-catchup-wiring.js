@@ -23,7 +23,8 @@
 // ReplicaHandlerSetup; the join durable-rejoin restore path additionally
 // attaches per-service (it constructs services without the handler factory).
 
-import {supersededPartitionConstruction} from './partition-service-construction.js';
+import {createPartitionConstructionHandoff, supersededPartitionConstruction} from
+  './partition-service-construction.js';
 import {
   buildSnapshotCatchupIdentityFromCache,
   dispatchSnapshotCatchup,
@@ -220,14 +221,14 @@ function armSnapshotOfferRouting(context) {
         resolveLocalReplicaService(replicaHandler, raftGroupId),
       orchestrate: ({service, socket}) => {
         const {replicaId, partitionId} = service;
-        let opened;
-        let publish;
         const requireCurrent = () => {
           if (replicaHandler.getTrackedService(replicaId) !== service) {
             throw supersededPartitionConstruction(replicaId);
           }
         };
+        const construction = createPartitionConstructionHandoff(replicaId, requireCurrent);
         const retireOpening = async (error) => {
+          const {opened} = construction;
           if (opened) {
             await replicaHandler.fenceFailedReplicaCreateRuntime(
               replicaId, partitionId, opened, error);
@@ -255,11 +256,7 @@ function armSnapshotOfferRouting(context) {
             requireCurrent();
             try {
               return await replicaHandler.createPartitionService({...serviceOptions,
-                onPartitionConstructed: (partition, commit) => {
-                  opened = partition;
-                  publish = commit;
-                  requireCurrent();
-                },
+                onPartitionConstructed: construction.retain,
               });
             } catch (error) {
               return retireOpening(error);
@@ -267,11 +264,9 @@ function armSnapshotOfferRouting(context) {
           },
           registerReplacementService: async (replacement) => {
             try {
-              requireCurrent();
-              publish?.();
+              construction.publish(replacement);
               replicaHandler.replaceLocalReplicaService(replicaId, replacement);
             } catch (error) {
-              opened ??= replacement;
               await retireOpening(error);
             }
           },

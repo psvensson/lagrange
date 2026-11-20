@@ -28,7 +28,7 @@
   "censusSize": 2703,
   "digest": "fnv1a32-fcdeacc2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1d3024f5",
+  "observationDigest": "fnv1a32-1d976091",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3340,6 +3340,12 @@
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/node-storage-budget-service.js"
+      ]
+    },
+    "test/bootstrap/dynamic-partition-cdc-subscription.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": {
@@ -11888,6 +11894,7 @@
     "test/node/replica-handler-cache-state.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/test-helpers/lifecycle-state-store.js"
@@ -11895,6 +11902,7 @@
     },
     "test/node/replica-handler-idempotency.property.test.js": {
       "files": [
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -12115,6 +12123,11 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js",
         "src/wasm-service/wasm-service-constants.js"
+      ]
+    },
+    "test/node/replica-state-delegation.test.js": {
+      "files": [
+        "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },
     "test/node/replica-state-machine-registered-activation.test.js": {
@@ -17524,6 +17537,7 @@
     },
     "test/raft/snapshot-dispatcher-wiring.test.js": {
       "files": [
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
@@ -17998,6 +18012,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },

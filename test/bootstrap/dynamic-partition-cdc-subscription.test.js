@@ -1,3 +1,5 @@
+import {createHostPartitionFixture, createIdentityTransport, initializePartitionTransportFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -86,7 +88,7 @@ async function withCapturedReplicaFactory(
 
   try {
     service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
-    service.transport = {unregister() {}};
+    service.transport = createIdentityTransport();
     service.systemTableCache = cache;
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
@@ -144,7 +146,7 @@ async function withCapturedReplicaFactory(
       },
     });
 
-    PartitionService.prototype.initialize = async function() {};
+    PartitionService.prototype.initialize = initializePartitionTransportFixture;
     PartitionService.prototype.subscribeToCDCWithHandshake =
       typeof options.subscribeToCDCWithHandshake === 'function' ?
         function(subscriber, handshakeOptions = {}) {
@@ -204,7 +206,7 @@ async function withCapturedReplicaFactory(
 }
 
 async function createPartition(createPartitionService, tableName, nodeId) {
-  const partition = await createPartitionService({
+  const partition = await createHostPartitionFixture(createPartitionService, {
     partitionId: `${tableName}-p1`,
     tableId: tableName,
     tableName,
@@ -397,7 +399,7 @@ test('NodeJoiningService can defer priority CDC handshake behind replica lifecyc
       handshakeSubscriberIds,
       createPartitionService,
     }) => {
-      const partition = await createPartitionService({
+      const partition = await createHostPartitionFixture(createPartitionService, {
         partitionId: `${TEST_CONTROL_PLANE_PUBLICATIONS_TABLE}-p1`,
         tableId: TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
         tableName: TEST_CONTROL_PLANE_PUBLICATIONS_TABLE,
@@ -533,7 +535,7 @@ test('BootstrapService dynamic partition factory injects the current SQL engine'
     await withCapturedReplicaFactory(service, t, async ({
       createPartitionService,
     }) => {
-      const partition = await createPartitionService({
+      const partition = await createHostPartitionFixture(createPartitionService, {
         partitionId: 'benchmark_events-p1',
         tableId: 'benchmark_events',
         tableName: 'benchmark_events',
@@ -578,7 +580,7 @@ test('NodeJoiningService dynamic partition factory injects the current SQL engin
     await withCapturedReplicaFactory(service, t, async ({
       createPartitionService,
     }) => {
-      const partition = await createPartitionService({
+      const partition = await createHostPartitionFixture(createPartitionService, {
         partitionId: 'benchmark_events-p1',
         tableId: 'benchmark_events',
         tableName: 'benchmark_events',

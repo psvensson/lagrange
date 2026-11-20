@@ -539,7 +539,9 @@ export async function registerReplicaHandlerIdentityEntryTests({
       cache: seededCache(lifecycleRow), operationRows,
       ownerIncarnation: 2, initialize: false});
     const live = await node.createPartitionService({partitionId: PARTITION_ID,
-      replicaId, identityExisted: true});
+      replicaId, identityExisted: true,
+      onPartitionConstructed: (_service, publish) => publish(),
+    });
     node.handler.localServices.set(replicaId, live);
     node.handler.initialize();
     return {node, directory};

@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Unit tests for ReplicaHandler cache-based state access.
  * Tests that ReplicaHandler reads replica state from System_Table_Cache.
@@ -70,13 +71,13 @@ function createMockCDCService(cache) {
  */
 function createMockPartitionServiceFactory() {
   return async (options) => {
-    return {
+    return completePartitionConstructionFixture({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 

@@ -1,3 +1,5 @@
+import {createPartitionConstructionHandoff} from
+  '../bootstrap/shared/partition-service-construction.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
   replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
@@ -644,6 +646,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           );
         }
         requireReplicaCreateWork(this, work);
+        const construction = createPartitionConstructionHandoff(replicaId,
+          () => requireReplicaCreateWork(this, work));
+        const capturePartition = (service, publish) => {
+          try {
+            construction.retain(service, publish);
+          } finally {
+            work.openedService = construction.opened;
+          }
+        };
         const partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
@@ -661,20 +672,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             if (isCreateCurrent()) this.updateReplicaCreationProgress(progress, stageEvent);
           },
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
-          onPartitionConstructed: (service, publish) => {
-            work.openedService = service;
-            work.publishOpenedService = publish;
-            requireReplicaCreateWork(this, work);
-          },
+          onPartitionConstructed: capturePartition,
         });
-        if (work.openedService && work.openedService !== partitionService) {
-          throw Object.assign(new Error('CREATE factory returned a different runtime'), {
-            code: CREATE_ADMISSION_ERROR_CODE.STALE,
-          });
+        // A returned object that is already tracked elsewhere is never
+        // adopted as cleanup custody merely because a malformed factory
+        // returned it. A captured opened resource always takes precedence.
+        if (!work.openedService && partitionService !== this.getTrackedService(replicaId)) {
+          work.openedService = partitionService;
         }
-        work.openedService = partitionService;
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
-        requireReplicaCreateWork(this, work);
+        construction.publish(partitionService);
         // Store service reference in localServices
         const admissionOperationId =
           createAdmissionEvidence?.operationId || operationId || null;
@@ -689,7 +696,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionService.createAdmissionToken = admissionToken;
           partitionService.createAttemptToken = admissionAttemptToken;
         }
-        work.publishOpenedService?.();
         this.localServices.set(replicaId, partitionService);
         work.service = partitionService;
         this.setLocalReplica(replicaId, {

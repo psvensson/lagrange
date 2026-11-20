@@ -109,7 +109,7 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
 }
 
 for (const scenario of ['owned join factory', 'replaced during join factory',
-  'refused CDC subscription']) {
+  'refused CDC subscription', 'missing handoff', 'repeated handoff']) {
   it(`fresh CREATE custody with the production factory: ${scenario}`, {timeout: 10_000}, async () => {
     const row = operationRow();
     const outcomes = [];
@@ -159,7 +159,11 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
           ...options,
           onPartitionConstructed(service, publish) {
             opened = service;
-            options.onPartitionConstructed(service, publish);
+            if (scenario !== 'missing handoff') options.onPartitionConstructed(service, publish);
+            if (scenario === 'repeated handoff') {
+              assert.throws(() => options.onPartitionConstructed(service, publish),
+                /one exact construction handoff/u);
+            }
           },
         });
         openedAndHeld.resolve();
@@ -191,7 +195,7 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
       }
       finishFactory.resolve();
       await worker;
-      if (rejectedSubscription) {
+      if (rejectedSubscription || scenario.endsWith('handoff')) {
         assert.equal(opened.isShutdown, true);
         assert.deepEqual(outcomes, [WORKFLOW_STEP.FAILED]);
         assert.equal(handler.getTrackedService(row.replica_id), null);

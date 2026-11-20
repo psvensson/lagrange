@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -188,7 +189,8 @@ test('the first real admission delivery cannot renew the original CREATE budget'
       nodeId: NODE, ownerIncarnation: TEST_BOOT_INCARNATION, dataDir: directory,
       systemTableCache: new SystemTableCache(), cdcIntegrationService: {},
       replicaStateMachine: {},
-      createPartitionService: async () => learner,
+      createPartitionService: async (options) =>
+        completePartitionConstructionFixture(learner, options),
       timeSource: createClock,
     });
     t.after(() => handler.shutdown());
@@ -308,7 +310,8 @@ for (const replace of [false, true]) {
         // CREATE, the release client, registered responder, and native cutover
         // run normally. Supply the founding row and observe lifecycle writes at
         // the external ledger boundary, which this fixture does not host.
-        handler.createPartitionService = async () => service;
+        handler.createPartitionService = async (options) =>
+          completePartitionConstructionFixture(service, options);
         handler.replicaStateMachine = {};
         handler.localServices.delete(replicaId);
         handler.persistReplicaCreateInitialStatus = async () => true;

@@ -83,7 +83,7 @@ import {
   createMockTransactionCoordinator,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
-import {bindRegisteredReplicaHandler} from
+import {createRegisteredPartitionFactoryFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
@@ -171,7 +171,7 @@ function seedSiblingServiceRow(cache, {partitionId, replicaId, nodeId}) {
 function createCapturingPartitionServiceFactory(captured) {
   return async (options) => {
     captured.options = options;
-    return bindRegisteredReplicaHandler({
+    return createRegisteredPartitionFactoryFixture({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,

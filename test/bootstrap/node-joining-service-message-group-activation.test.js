@@ -1,3 +1,5 @@
+import {createHostPartitionFixture, initializePartitionTransportFixture} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Tests for Node Joining Service.
  * Requirements: 7.8, 7.10, 7.11, 7.14
@@ -804,7 +806,7 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
 
     try {
       service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
-      service.transport = {unregister() {}};
+      service.transport = createIdentityTransport();
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
       service.rebalanceCoordinator = {};
@@ -826,7 +828,7 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
         },
       });
 
-      PartitionService.prototype.initialize = async function() {};
+      PartitionService.prototype.initialize = initializePartitionTransportFixture;
 
       ReplicaHandlerSetup.create = ({createPartitionService}) => {
         capturedCreatePartitionService = createPartitionService;
@@ -844,7 +846,7 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
         'should build a replica partition factory',
       );
 
-      const partition = await capturedCreatePartitionService({
+      const partition = await createHostPartitionFixture(capturedCreatePartitionService, {
         partitionId: 'partition-1',
         tableId: 'table-1',
         tableName: null,
@@ -895,7 +897,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
 
     try {
       service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
-      service.transport = {unregister() {}};
+      service.transport = createIdentityTransport();
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
       service.rebalanceCoordinator = {};
@@ -929,7 +931,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
         },
       });
 
-      PartitionService.prototype.initialize = async function() {};
+      PartitionService.prototype.initialize = initializePartitionTransportFixture;
       PartitionService.prototype.subscribeToCDCWithHandshake =
         async function(_subscriber, options = {}) {
           handshakeSubscriberIds.push(options.subscriberId);
@@ -950,7 +952,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
       service.initializeReplicaHandler();
 
       for (const tableName of CACHE_HYDRATION_TABLES) {
-        await capturedCreatePartitionService({
+        await createHostPartitionFixture(capturedCreatePartitionService, {
           partitionId: `${tableName}-p1`,
           tableId: tableName,
           tableName,
@@ -964,7 +966,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
         });
       }
 
-      await capturedCreatePartitionService({
+      await createHostPartitionFixture(capturedCreatePartitionService, {
         partitionId: `${TABLES.LOGS}-p1`,
         tableId: TABLES.LOGS,
         tableName: TABLES.LOGS,
@@ -1025,7 +1027,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
 
     try {
       service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
-      service.transport = {unregister() {}};
+      service.transport = createIdentityTransport();
       service.systemCacheHydrated = true;
       service.tablePolicyService = {};
       service.rebalanceCoordinator = {};
@@ -1070,7 +1072,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
         },
       });
 
-      PartitionService.prototype.initialize = async function() {};
+      PartitionService.prototype.initialize = initializePartitionTransportFixture;
       PartitionService.prototype.subscribeToCDCWithHandshake =
         async function(subscriber, options = {}) {
           capturedSubscriber = subscriber;
@@ -1090,7 +1092,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
 
       service.initializeReplicaHandler();
 
-      await capturedCreatePartitionService({
+      await createHostPartitionFixture(capturedCreatePartitionService, {
         partitionId: `${TABLES.SQL_TRANSACTIONS}-p1`,
         tableId: TABLES.SQL_TRANSACTIONS,
         tableName: TABLES.SQL_TRANSACTIONS,

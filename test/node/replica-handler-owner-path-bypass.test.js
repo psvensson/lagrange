@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Owner-path regressions proving ReplicaHandler cannot bypass the
  * RebalanceCoordinator for replica_operations workflow mutations.
@@ -53,7 +54,7 @@ import {
   createCanonicalLifecycleServiceRow,
   createLifecycleCdcServiceForCache,
 } from '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {createRegisteredPartitionFactoryFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OwnerPathReplicaHandler as ReplicaHandler} from
   './replica-handler-owner-path-admission-fixture.js';
@@ -130,7 +131,7 @@ function createMockCDCService(cache) {
  * @return {Function} Factory that returns a minimal partition service.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler({
+  return async (options) => createRegisteredPartitionFactoryFixture({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
@@ -744,7 +745,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
         createPartitionService: async (options) =>
-          bindRegisteredReplicaHandler(partitionService, options),
+          createRegisteredPartitionFactoryFixture(partitionService, options),
       });
       handler.initialize();
 
@@ -953,7 +954,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
           cdcIntegrationService: cdcService,
-          createPartitionService: async () => {
+          createPartitionService: async (options) => {
             factoryCount += 1;
             liveRuntimeCount += 1;
             maxLiveRuntimeCount = Math.max(
@@ -983,7 +984,7 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
                 }
               },
             };
-            return partitionService;
+            return completePartitionConstructionFixture(partitionService, options);
           },
           executorOutcomeEmitter: emitter,
         });

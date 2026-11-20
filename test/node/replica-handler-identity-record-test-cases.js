@@ -38,7 +38,7 @@ import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
+import {createRegisteredPartitionFactoryFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
 const PARTITION_ID = 'identity-record-partition';
@@ -89,7 +89,7 @@ function realPortFactory(directory, opened, overridesFor = () => ({})) {
       db.close();
       throw error;
     }
-    return bindRegisteredReplicaHandler({
+    return createRegisteredPartitionFactoryFixture({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,

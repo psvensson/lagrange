@@ -1,4 +1,5 @@
-import {supersededPartitionConstruction} from './shared/partition-service-construction.js';
+import {createPartitionConstructionHandoff, supersededPartitionConstruction} from
+  './shared/partition-service-construction.js';
 import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS} from './node-joining-constants.js';
@@ -60,20 +61,15 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
         throw supersededPartitionConstruction(replicaId);
       }
     };
-    let opened;
-    let publish;
+    const construction = createPartitionConstructionHandoff(replicaId, requireCurrent);
     try {
-      await this.createJoinLocalPartitionService({...options,
-        onPartitionConstructed: (service, commit) => {
-          opened = service;
-          publish = commit;
-          requireCurrent();
-        },
+      const opened = await this.createJoinLocalPartitionService({...options,
+        onPartitionConstructed: construction.retain,
       });
-      requireCurrent();
-      publish();
+      construction.publish(opened);
       this.trackJoinPartitionReplica(replicaId, partitionId, opened);
     } catch (error) {
+      const {opened} = construction;
       if (opened) {
         if (handler) {
           await handler.fenceFailedReplicaCreateRuntime(replicaId, partitionId, opened, error);

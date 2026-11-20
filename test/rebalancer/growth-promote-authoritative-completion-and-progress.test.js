@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
@@ -1245,7 +1246,7 @@ test(
         });
       },
     };
-    createHandler.createPartitionService = async () => {
+    createHandler.createPartitionService = async (options) => {
       const svc = makePrototypeService(TEST_LEARNER_2, 'op-create-budget');
       svc.participantTransactionCoordinator = {};
       svc.requestReplicaAdmission = async (opId) => {
@@ -1274,7 +1275,7 @@ test(
         admitted = true;
         return {outcome: 'proposed', nodeId: TEST_LEADER_NODE_2};
       };
-      return svc;
+      return completePartitionConstructionFixture(svc, options);
     };
 
     await t.rejects(
