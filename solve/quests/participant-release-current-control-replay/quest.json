@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-current-control-replay",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "A dependent partition with a durable current write origin must re-establish current SQL_TRANSACTIONS control authority after its actual PAUSE census and before RESUME. Losing that authority during a post-origin replay returns the canonical current-control refusal and leaves dependent admission closed without changing its committed origin. A healthy replay retains the existing exact-recipient admission proof and does not repeat origin ENABLE.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-current-control-replay/evidence/receipt.json",
+      "requiredReceipts": [
+        "current-control-loss-before-replay-resume",
+        "healthy-current-replay-and-retained-origin",
+        "original-control-loss-and-release-lifetime-composition",
+        "independent-contract-and-execution-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "witness-first",
+      "statement": "Initial writable scope is this Quest directory and test/partition/participant-release-current-control-replay.test.js. Production source and existing tests, historical seals, receipts and the fleet candidate remain unchanged. Preserve the original managed red before sealing and any repair."
+    },
+    {
+      "id": "real-production-binding",
+      "statement": "Use the existing native PartitionService/Raft/SQLite fixture, registered ReplicaHandler and operator authorization. Hold an actual dependent PAUSE reply after its real recipient returns fresh facts; shut down the actual control service. Never fabricate membership, origin, census, permission or release results."
+    },
+    {
+      "id": "unchanged-authority",
+      "statement": "Consume the pre/post current-control obligation in seed-control-current-proof-amortization seal 68c88fcfdc0bd7e60cff543e295e3ffd15d172a4 and the existing post-ENABLE control-loss witness. Do not reuse an earlier CUT_OVER as permission, bypass the current recipient, add an alternate release algorithm or increase any deadline/formation bound."
+    },
+    {
+      "id": "bounded-claim",
+      "statement": "The native in-process schedule can establish this owner interaction only. It cannot attribute task-3823 timeout chains or READY lease dips, certify physical formation, quantify time saved, or close the historical broad control amortization Quest."
+    }
+  ],
+  "sealedAt": "bd2c33ec50d93a70a65d2c06b8f0a527df4523cd"
+}
