@@ -1,0 +1,25 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-caller-lifetimes",
+  "class": "fix",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Discriminate the ACTION.RELEASE aggregate caller lifetime from bounded leaf delivery and the lifetime of a shorter-deadline caller joining an already-running same-partition/build cutover. Real registered release owners, native persistence and MessageRouter delivery lifetime must establish the divergence before production repair. Preserve original deadlines, coalescing, current generation authority and continuing committed effects. This successor proposes no timeout increase or automatic supersession of the earlier completion seal.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-caller-lifetimes/evidence/receipt.json",
+      "requiredReceipts": [
+        "aggregate-caller-and-bounded-leaf-composition",
+        "shorter-joiner-and-retained-shared-attempt",
+        "positive-and-negative-controls",
+        "historic-contract-disposition-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {"id": "witness-first", "statement": "Initial writable scope is this Quest record, append-only log, design.md and test/partition/participant-release-caller-lifetimes.test.js. Production files, shared root, existing receipts and seals are unchanged. No production repair before original measured red and independent contract review."},
+    {"id": "actual-authority", "statement": "Use existing native protocol fixture, real registered ReplicaHandler, authorization owner, cutover, origin and admission owners, plus real MessageRouter with its own deadline. Timing seams may hold/delay actual leaf replies but cannot fabricate release facts, membership, native commit or terminal outcomes. Reuse original deadline and independently observe late server settlement."},
+    {"id": "original-evidence-ceiling", "statement": "Task-3823 has 71 untyped participant_release timeout IDs, not 71 proven outer RELEASE retries; fresh-versus-joined attempts and causal READY lease churn remain uninstrumented. Local native schedules do not establish physical causality, clock-skew policy, full formation or time saved."},
+    {"id": "sealed-contract", "statement": "participant-release-completion-owner sealed92ae06 preserves no timeout increase, original deadline and one attempt plus one redirect. Preserve its history; any new aggregate action grant requires an explicit prospective owner disposition before implementation. No generic scheduler, fallback, timer-speedup or acceptance bound change."}
+  ]
+}
