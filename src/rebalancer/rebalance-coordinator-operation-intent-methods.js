@@ -6,6 +6,7 @@ import {
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
 import {readStateField} from '../utils/state-field-read.js';
+import {SERVICE_TYPE} from '../constants/service.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
@@ -166,25 +167,34 @@ class RebalanceCoordinatorOperationIntentMethods {
     );
     return typeof metadata?.entryId === 'string' ? Object.freeze({
       entryId: metadata.entryId,
-      operationIntentId: move.operationIntentId || null,
+      operationIntentId: move.operationIntentId ?? null,
+      replicaIntentId: move.replicaIntentId ?? null,
     }) : null;
   }
 
   operationMatchesCreationRequest(operation, move, placementIntent = null) {
     const moveType = this.normalizeMoveType(move.type);
-    const explicitTargetReplicaId = moveType === OperationType.ADD ?
-      move.replicaId || move.replicaIntentId :
-      move.replicaIntentId || (move.sourceReplicaId ? move.replicaId : null);
     const epoch = this.assertCreationRequestEpoch(move);
     const placementEntry = this.buildPlacementCreationIntent(operation, move);
     const exactPlacementIntent = placementIntent && placementEntry &&
       placementEntry.entryId === placementIntent.entryId &&
-      placementIntent.operationIntentId === (move.operationIntentId || null);
+      placementIntent.operationIntentId === (move.operationIntentId ?? null) &&
+      placementIntent.replicaIntentId === (move.replicaIntentId ?? null);
+    // The placement applier mints partition replica IDs. A public planner
+    // replicaIntentId correlates that request to the retained native entry.
+    const nativePartitionAssignment = placementEntry &&
+      move.entityType === SERVICE_TYPE.PARTITION &&
+      (moveType === OperationType.ADD || moveType === OperationType.REPLACE);
+    const requestedReplicaIntent = nativePartitionAssignment ? null : move.replicaIntentId;
+    const explicitTargetReplicaId = moveType === OperationType.ADD ?
+      move.replicaId || requestedReplicaIntent :
+      requestedReplicaIntent || (move.sourceReplicaId ? move.replicaId : null);
     return operation.partitionId === move.partitionId &&
       this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
       (!move.entryId || placementEntry?.entryId === move.entryId) &&
-      (!move.operationIntentId || operation.operationId === move.operationIntentId ||
-        exactPlacementIntent) &&
+      (!move.operationIntentId || (placementEntry ?
+        exactPlacementIntent : operation.operationId === move.operationIntentId)) &&
+      (!nativePartitionAssignment || !move.replicaIntentId || exactPlacementIntent) &&
       (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
       (!Object.hasOwn(move, 'targetClaimKey') ||
         operation.targetClaimKey === move.targetClaimKey) &&

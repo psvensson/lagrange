@@ -112,6 +112,30 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
+## Core integration handoff, 21 November 2026
+
+The integration owner is building on `wip/core-runtime-composed-20261120`.
+Resolve its current remote commit before resuming. The shared candidate
+`candidate/reconciliation-20261119` remains at `edbf84c2d`, and the
+accepted main reference checked on 21 November is `5edfcadb5`. The
+complete original dirty checkout is preserved at `b914991bd`.
+Development and measurement of the core system take precedence over new
+product features.
+
+| Decision | Current evidence | Next owner action |
+| --- | --- | --- |
+| Which service may CREATE publish or retire? | Both native factories hand over the exact instance before initialization. At `369c45e64`, the three-process public SQL journey passed in 37.808 seconds on tv-dator. | The integration owner reruns the public journey after composing placement changes. |
+| Which operation may a caller replay? | On `d1422529e` direct replay, native placement, reservations and public table provisioning passed six files, 292 assertions. Independent review found that some replay exits still omit caller-supplied copy source and target incarnations. Opaque aliases cannot be recovered from an entry that never stored them. | The creation owner must apply one request identity comparison to coalesced, remembered, reconstructed and freshly committed results. |
+| When may placement retire an existing learner? | On `91ea370b8`, 15 native cases ordered rejoin and removal on the same durable row and distinguished committed membership absence from outstanding disk cleanup. | The placement and cleanup owners must settle superseded work truthfully, reconcile old unscoped REMOVE, and release a completed cleanup receipt when terminal persistence comes last. |
+| Does the whole cluster meet the service goal? | On `549500b23`, the composed suite passed 52 of 53 files. The runtime-service reservation check passed subsequently on the creation branch. Neither recorded physical trial achieved the required quiet window. | Recheck the composed suite, public SQL and full changed-range static gate. Measure three successive clean formations on the named hosts within 420 seconds, then run the comparative smoke. |
+
+The physical trials had distinct amounts of useful work and one had no
+REMOVE admissions. Compare distinct admitted and completed operations and
+their time waiting for authority on the next run. Keep the original quiet
+window and count every failed operation. The comparison owner retains the
+separate GCP run; the release, snapshot, backup and PITR allocations below
+continue in their assigned order.
+
 ## Current integration summary (20 November 2026 - reliability and agent usability)
 
 - **Owner and checked source:** the current Codex root session owns integration,

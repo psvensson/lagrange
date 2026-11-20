@@ -31,7 +31,6 @@ import {
 
 const DEFAULT_FOUND_SCHEMA_JOB_ID = 'provision';
 const DEFAULT_FOUND_SOURCE_NODE_ID = 'node-1';
-const DEFAULT_FOUND_LATCH_EPOCH = 1;
 const FOUND_ENTRY_PREFIX = 'found';
 const PLACEMENT_FOUND_REFUSED_CODE = 'PLACEMENT_FOUND_REFUSED';
 
@@ -697,13 +696,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     const jobPrefix = context?.schemaJobId || DEFAULT_FOUND_SCHEMA_JOB_ID;
     const foundingIntentId = `${jobPrefix}:${partitionId}`;
     const sourceNodeId = this.nodeId || DEFAULT_FOUND_SOURCE_NODE_ID;
+    const placementClass = classifyPlacementClass(partitionId);
     const formationLatchEpoch =
-      coordinator.resolveFormationLatchEpochForPlacement ?
-        coordinator.resolveFormationLatchEpochForPlacement() :
-        DEFAULT_FOUND_LATCH_EPOCH;
+      coordinator.resolveFormationLatchEpochForPlacement(placementClass, partitionId);
     const statement = buildFoundingAdmissionStatement({
       partitionId,
-      placementClass: classifyPlacementClass(partitionId),
+      placementClass,
       foundingIntentId,
       targetNodeIds,
       sourceNodeId,
