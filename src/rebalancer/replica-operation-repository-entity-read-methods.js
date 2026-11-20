@@ -1,6 +1,8 @@
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {isScopedPlacementLearnerRetirement} from
+  './operation-workflow-placement-learner-retirement.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE, REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
@@ -54,7 +56,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
   });
 
   class ReplicaOperationRepositoryEntityReadMethods {
-    async queryTerminalFailedCreateCleanupOperations() {
+    async queryTerminalReplicaCleanupOperations() {
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_ALL_OPERATIONS,
         [],
@@ -68,9 +70,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         .filter((operation) => operation?.type === OperationType.REMOVE &&
           operation.workflowStep === WORKFLOW_STEP.REMOVED &&
           operation.status === ReplicaStatus.REMOVED &&
-          operation[
-            ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
-          ]);
+          (operation[ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION] ||
+            isScopedPlacementLearnerRetirement(operation)));
     }
     /**
    * Get in-flight replica IDs for an entity.

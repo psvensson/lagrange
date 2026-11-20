@@ -254,7 +254,7 @@ function createTestCoordinator(options = {}) {
     clearTimeoutFn,
     enableTimeouts: false,
   });
-  coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+  coordinator.workflowOwner.recoverReplicaCleanupReleaseDebt =
     async () => 0;
   coordinator.initialize();
   const shutdown = coordinator.shutdown.bind(coordinator);

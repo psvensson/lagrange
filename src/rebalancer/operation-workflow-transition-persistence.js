@@ -27,7 +27,7 @@ import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
   armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
-  recoverFailedCreateCleanupReleaseDebt,
+  recoverReplicaCleanupReleaseDebt,
   clearTerminalTransitionRepair,
 } from './operation-workflow-terminal-transition-repair.js';
 import {
@@ -112,8 +112,8 @@ async function observeConcurrentCreateAdmissionWinner(
 
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
-  recoverFailedCreateCleanupReleaseDebt(options = {}) {
-    return recoverFailedCreateCleanupReleaseDebt(this, options);
+  recoverReplicaCleanupReleaseDebt(options = {}) {
+    return recoverReplicaCleanupReleaseDebt(this, options);
   }
   /**
    * Claim one priority control-plane operation for dispatch without relying on

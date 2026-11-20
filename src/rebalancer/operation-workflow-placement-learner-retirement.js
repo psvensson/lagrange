@@ -7,7 +7,9 @@ import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {ReplicaCleanupTombstoneOwner, observeScopedLearnerCleanup} from '../node/replica-cleanup-tombstone-owner.js';
+import {
+  ReplicaCleanupTombstoneOwner, matchesScopedLearnerCleanup, observeScopedLearnerCleanup,
+} from '../node/replica-cleanup-tombstone-owner.js';
 import {learnerRetirementToken} from '../node/replica-learner-retirement-lifecycle.js';
 import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
@@ -191,18 +193,42 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
   });
 }
 
-async function releaseCompletedLearnerRetirementCleanup(owner, operation) {
+function cleanupScopeOf(operation) {
   const scope = scopedOperationAdmission(operation)?.learnerRetirement;
-  if (scope === undefined) return;
-  const cleanup = new ReplicaCleanupTombstoneOwner({
-    gateway: owner.repository.controlPlaneSystemTableGateway,
-    logger: owner.logger,
-  });
-  await cleanup.releaseCompletedScopedLearnerCleanup({
+  if (scope === undefined) return null;
+  return {
     operationId: operation.operationId, partitionId: operation.partitionId,
     replicaId: operation.replicaId, targetNodeId: operation.targetNodeId,
     replicaCreatedAt: scope.replicaCreatedAt,
+  };
+}
+
+function cleanupOwnerOf(owner) {
+  return new ReplicaCleanupTombstoneOwner({
+    gateway: owner.repository.controlPlaneSystemTableGateway,
+    logger: owner.logger,
   });
+}
+
+async function releaseCompletedLearnerRetirementCleanup(owner, operation) {
+  const scope = cleanupScopeOf(operation);
+  if (scope !== null) await cleanupOwnerOf(owner).releaseCompletedScopedLearnerCleanup(scope);
+}
+
+async function recoverCompletedLearnerRetirementCleanup(owner, operations, isCurrent) {
+  const scopes = operations.map(cleanupScopeOf).filter((scope) => scope !== null);
+  if (scopes.length === 0) return 0;
+  const cleanup = cleanupOwnerOf(owner);
+  const receipts = await cleanup.completedLearnerCleanupReceipts();
+  let released = 0;
+  for (const scope of scopes) {
+    if (!isCurrent()) break;
+    if (matchesScopedLearnerCleanup(receipts.get(scope.operationId), scope)) {
+      await cleanup.releaseCompletedScopedLearnerCleanup(scope);
+      released += 1;
+    }
+  }
+  return released;
 }
 
 function isScopedPlacementLearnerRetirement(operation) {
@@ -211,5 +237,6 @@ function isScopedPlacementLearnerRetirement(operation) {
 
 export {
   evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement,
-  isUnscopedPlacementRemoval, releaseCompletedLearnerRetirementCleanup,
+  isUnscopedPlacementRemoval, recoverCompletedLearnerRetirementCleanup,
+  releaseCompletedLearnerRetirementCleanup,
 };

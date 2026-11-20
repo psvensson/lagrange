@@ -6,7 +6,7 @@ import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
-import {recoverFailedCreateCleanupReleaseDebt} from
+import {recoverReplicaCleanupReleaseDebt} from
   '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
@@ -74,7 +74,7 @@ function createRecoveryOwner(queryTerminalDebt) {
     terminalTransitionRepairStateByOperationId: new Map(),
     terminalTransitionRepairTimerByOperationId: new Map(),
     repository: {
-      async queryTerminalFailedCreateCleanupOperations() {
+      async queryTerminalReplicaCleanupOperations() {
         queryCalls += 1;
         return queryTerminalDebt(queryCalls);
       },
@@ -167,11 +167,11 @@ test('cleanup recovery scan coalesces duplicate startup submissions in the ' +
   'canonical owner lane', async (t) => {
   const query = deferred();
   const harness = createRecoveryOwner(() => query.promise);
-  const first = recoverFailedCreateCleanupReleaseDebt(
+  const first = recoverReplicaCleanupReleaseDebt(
     harness.owner,
     harness.recoveryOptions(),
   );
-  const second = recoverFailedCreateCleanupReleaseDebt(
+  const second = recoverReplicaCleanupReleaseDebt(
     harness.owner,
     harness.recoveryOptions(),
   );
@@ -193,7 +193,7 @@ test('cleanup recovery rejection is logged while its owner lane is held and ' +
   const harness = createRecoveryOwner(async () => {
     throw error;
   });
-  const outcome = await observeOutcome(recoverFailedCreateCleanupReleaseDebt(
+  const outcome = await observeOutcome(recoverReplicaCleanupReleaseDebt(
     harness.owner,
     harness.recoveryOptions(),
   ));
@@ -217,7 +217,7 @@ test('cleanup recovery does not misclassify a post-query arm failure as an ' +
   harness.owner.cloneOperationSnapshot = () => {
     throw armError;
   };
-  const outcome = await observeOutcome(recoverFailedCreateCleanupReleaseDebt(
+  const outcome = await observeOutcome(recoverReplicaCleanupReleaseDebt(
     harness.owner,
     harness.recoveryOptions(),
   ));
@@ -237,7 +237,7 @@ for (const completion of ['success', 'rejection']) {
       const query = deferred();
       const harness = createRecoveryOwner(() => query.promise);
       const pendingOutcome = observeOutcome(
-        recoverFailedCreateCleanupReleaseDebt(
+        recoverReplicaCleanupReleaseDebt(
           harness.owner,
           harness.recoveryOptions(),
         ),
@@ -274,7 +274,7 @@ for (const completion of ['success', 'rejection']) {
         return retryQuery.promise;
       });
       const firstOutcome = await observeOutcome(
-        recoverFailedCreateCleanupReleaseDebt(
+        recoverReplicaCleanupReleaseDebt(
           harness.owner,
           harness.recoveryOptions(),
         ),

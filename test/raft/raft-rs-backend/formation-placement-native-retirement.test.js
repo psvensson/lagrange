@@ -145,11 +145,13 @@ function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
 }
 
 function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
-  leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null}) {
+  leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null,
+  enableReplicaCleanupReleaseRecovery = false}) {
   bindRetirementAuthority(leader, nodes, rows.find((row) =>
     row.replica_id === removal.replica_id), source);
   const coordinator = createTestCoordinator({
     nodeId: SEED, enableTimeouts: false, replaceWitness: false,
+    enableReplicaCleanupReleaseRecovery,
     committedMembershipFixture: false,
     ...(clock === null ? {} : {
       setTimeoutFn: clock.setTimeout.bind(clock),
@@ -194,7 +196,8 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
   const ownerRead = gateway.readAuthoritativeRows.bind(gateway);
   const leaderGateway = leader.lifecycleStore.gateway;
   gateway.readAuthoritativeRows = (table, sql, params, options) =>
-    table === TABLES.SERVICES && /WHERE service_id = \?/u.test(sql) ?
+    table === TABLES.SERVICES &&
+      /WHERE (?:service_id = \?|service_type = \? AND status = \?)/u.test(sql) ?
       leaderGateway.readAuthoritativeRows(table, sql, params, options) :
       ownerRead(table, sql, params, options);
   const ownerMutation = gateway.submitMutation.bind(gateway);
@@ -508,9 +511,10 @@ for (const successor of ['boot', 'service generation']) {
     }, {createCluster: addressedCluster}));
 }
 
-for (const cleanupFirst of [false, true]) {
-  test(`offline learner custody releases after both durable effects (${
-    cleanupFirst ? 'disk first' : 'ledger first'})`, {timeout: 7000},
+for (const order of ['ledger first', 'disk first', 'disk first, new operation owner']) {
+  const cleanupFirst = order !== 'ledger first';
+  const restartOperationOwner = order === 'disk first, new operation owner';
+  test(`offline learner custody releases after both durable effects (${order})`, {timeout: 7000},
   async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, clock} = context;
     const targetId = initial.replica_id;
@@ -535,13 +539,24 @@ for (const cleanupFirst of [false, true]) {
       }
       return apply(mutation, options);
     };
-    const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
+    const repository = coordinator.repository;
+    let terminalCommitted = false;
+    const operationGateway = repository.controlPlaneSystemTableGateway;
+    const read = operationGateway.readAuthoritativeRows;
+    operationGateway.readAuthoritativeRows = (table, sql, params, options) =>
+      restartOperationOwner && terminalCommitted && table === TABLES.SERVICES ?
+        {success: false, error: 'receipt acknowledgement path unavailable'} :
+        read(table, sql, params, options);
+    const persist = repository.persistOperationUpdate.bind(repository);
     if (cleanupFirst) {
       coordinator.repository.persistOperationUpdate = async (operation, options) => {
         if (operation.operationId === removal.operation_id &&
             operation.workflowStep === WORKFLOW_STEP.REMOVED) {
           terminalReached.resolve(operation);
           await terminalReleased.promise;
+          const outcome = await persist(operation, options);
+          terminalCommitted = true;
+          return outcome;
         }
         return persist(operation, options);
       };
@@ -585,7 +600,8 @@ for (const cleanupFirst of [false, true]) {
         assert.equal((await readOperation()).completed_at, null);
         terminalReleased.resolve();
       }
-      await redrive;
+      if (restartOperationOwner) await Promise.allSettled([redrive]);
+      else await redrive;
       for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
       const terminal = await readOperation();
@@ -607,6 +623,17 @@ for (const cleanupFirst of [false, true]) {
         const restarted = source.restart();
         await restarted.handler.removedReplicaCleanupDebtSweepTask;
         assert.equal(fs.existsSync(file), false);
+      }
+      if (restartOperationOwner) {
+        assert.equal(source.lifecycleStore.durable.services.get(targetId)?.status, 'cleanup_complete');
+        await coordinator.shutdown();
+        const reconstructed = openDispatchOwner({source, rows, removal: terminal, nodes, cluster,
+          deliveries: [], leader, clock, enableReplicaCleanupReleaseRecovery: true});
+        try {
+          await reconstructed.workflowOwner.recoverReplicaCleanupReleaseDebt();
+        } finally {
+          await reconstructed.shutdown();
+        }
       }
       for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           source.lifecycleStore.durable.services.has(targetId); turns += 1) await nextTurns(1);

@@ -532,7 +532,7 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
   }
 });
 
-test('getEntityInFlightReplicaIds and queryTerminalFailedCreateCleanupOperations ' +
+test('getEntityInFlightReplicaIds and queryTerminalReplicaCleanupOperations ' +
   'allow owner-RPC fallback when the node does not host replica_operations-p1 locally',
 async (t) => {
   const capturedReadOptions = [];
@@ -627,12 +627,12 @@ async (t) => {
 
     capturedReadOptions.length = 0;
     const cleanupOps =
-      await coordinator.repository.queryTerminalFailedCreateCleanupOperations();
+      await coordinator.repository.queryTerminalReplicaCleanupOperations();
     t.same(cleanupOps, [], 'cleanup query succeeds on non-hosting node');
     t.not(
       capturedReadOptions[0]?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      'queryTerminalFailedCreateCleanupOperations must not pin OWNER_LOCAL_ONLY on non-hosting nodes',
+      'queryTerminalReplicaCleanupOperations must not pin OWNER_LOCAL_ONLY on non-hosting nodes',
     );
 
     const transientOwnerError = new Error('authoritative_row_source_unavailable');

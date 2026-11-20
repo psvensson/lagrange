@@ -278,7 +278,7 @@ function createConvergenceCoordinator(options = {}) {
     executorOutcomeEmitter: emitter,
     enableTimeouts: false,
   });
-  coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+  coordinator.workflowOwner.recoverReplicaCleanupReleaseDebt =
     async () => 0;
   coordinator.initialize();
   // The witness replica's answers (quest replace-source-removal-owner): the
@@ -954,7 +954,7 @@ test('Owner-path convergence: all progression entry points ' +
         executorOutcomeEmitter: emitter,
         enableTimeouts: false,
       });
-      coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+      coordinator.workflowOwner.recoverReplicaCleanupReleaseDebt =
         async () => 0;
       coordinator.initialize();
 

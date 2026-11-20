@@ -1171,12 +1171,12 @@ function createTestCoordinator(options = {}) {
       options.replicaOperationDispatchTimeoutMs,
   });
 
-  if (options.enableFailedCreateCleanupReleaseRecovery !== true) {
+  if (options.enableReplicaCleanupReleaseRecovery !== true) {
     // Generic coordinator fixtures isolate the behavior under test from the
     // independent startup cleanup-release census. Dedicated recovery tests
     // opt in explicitly and exercise its authoritative read/retry owner.
     coordinator.workflowOwner.repository
-      .queryTerminalFailedCreateCleanupOperations = async () => [];
+      .queryTerminalReplicaCleanupOperations = async () => [];
   }
   coordinator.initialize();
   // A stopped coordinator leaves its store suspended, not lost.
