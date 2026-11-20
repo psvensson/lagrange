@@ -239,7 +239,7 @@ async function seeRejoinedCleanup(context, t) {
       purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
     });
     t.diagnostic(JSON.stringify({first, step: state?.workflowStep, node: nodes.nodeRow(),
-      membership, deliveries}));
+      membership, nativeStatus: cluster.node(SEED_REPLICA).readStatus(), deliveries}));
   }
 }
 
@@ -261,8 +261,9 @@ test('the workflow clears a lost learner before its captured generation can clea
         }
       }});
     try {
-      const first = await coordinator.dispatchOperation(removal);
       const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
+      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
+      const first = await coordinator.dispatchOperation(removal);
       assert.ok(settleCluster(cluster, () =>
         !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
       assert.ok(deliveries.some(({address, payload}) => address.startsWith(`${SEED}/`) &&

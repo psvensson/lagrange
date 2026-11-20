@@ -69,15 +69,15 @@ async function settleScopedLearnerRemoval(target, scope) {
   if (typeof scope?.targetNodeId !== 'string' || scope.targetNodeId.length === 0 ||
       !Number.isSafeInteger(scope.nodeBootIncarnation) || scope.nodeBootIncarnation <= 0 ||
       !Number.isSafeInteger(scope.replicaCreatedAt) || scope.replicaCreatedAt <= 0) {
-    return LEARNER_RETIREMENT_OUTCOME.DEFERRED;
+    return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
   }
   const role = await observeScopedLearner(service, replicaId);
-  if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return scopedLearnerOutcome(role);
-  if (scope.canPropose !== true) return LEARNER_RETIREMENT_OUTCOME.SUPERSEDED;
-  await turnChainValue(removePartitionRaftLearner(service, {
+  if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};
+  if (scope.canPropose !== true) return {state: LEARNER_RETIREMENT_OUTCOME.SUPERSEDED};
+  const proposal = await turnChainValue(removePartitionRaftLearner(service, {
     operationId, replicaIdentity: replicaId, expectedNodeId: scope.targetNodeId,
   }));
-  return scopedLearnerOutcome(await observeScopedLearner(service, replicaId));
+  return {state: scopedLearnerOutcome(await observeScopedLearner(service, replicaId)), proposal};
 }
 
 function readRequestField(request, field) {
@@ -378,7 +378,8 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
       if (scoped !== undefined) {
         const result = await settleScopedLearnerRemoval(target, scoped);
         return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
-          [ReplicaOperationField.LEARNER_RETIREMENT]: result,
+          [ReplicaOperationField.LEARNER_RETIREMENT]: result.state,
+          [ReplicaOperationField.PROPOSAL]: result.proposal,
           partitionId: target.fields.partitionId,
           replicaId: target.fields.replicaId,
           nodeId: this.nodeId,
