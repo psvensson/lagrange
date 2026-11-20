@@ -190,21 +190,36 @@ profile. Backup, restore and PITR retain their later milestone allocation.
   preceding run passed both files but its collector misidentified the batch
   runner as a test. Its original failed postflight remains available under
   request `6d7114de-3e27-4f81-958d-93eaddeaa24d`.
-- Strict persistence work is preserved on
-  `wip/strict-operation-composition-20261120`. The focused real SQLite
-  outcome suite passed 397 runner assertions at `90d6a8ffb`. The wider
-  consumer suites exposed additional source and fixture failures. The
-  workflow and repository owners are closing those against raw lab results,
-  including reconstruction, conditional writes and retained release work.
-- The formation owner is closing an observation gap. The registered scenario
-  issued one public INSERT, then read from each node. The new witness at
-  `1e90bde58` proved the previous predicate accepted a missing writer and
-  the scenario issued no per-node INSERT. The integration owner retains the
-  public PG check and requires a distinct write per node with its actual
-  stored ID and value read through another node. Physical acceptance still
-  requires three consecutive successful trials on tv-dator, adam-laptop and
-  adams-gamla. No successful base-system smoke or new GCP result has been
-  recorded in this session.
+- The strict outcome composition at `2ce889722` passed six managed SQLite
+  and workflow suites on tv-dator (1,252 runner assertions). Independent
+  review identified one remaining credit ambiguity when a terminal pre-write
+  observation is unavailable. The repository owner must prove who committed
+  the transition before reporting new progress.
+- The formation witness at `fab05d1d9` requires a distinct INSERT through
+  each node and reads the expected stored ID and value through a different
+  node. The managed witness passed 34 assertions. The original public PG
+  check and all three original node observations remain required.
+- Physical run `fa71e599` at `0115084f7` failed. The final playback sample
+  showed 41 active ADDs, 12 failed ADDs and one pending ADD. The coordinator
+  logged the startup cleanup snapshot deferral 1,024 times across 13 operation
+  IDs. The target logged the original refusal once. A diagnostic CREATE
+  returned `LEDGER_TRANSITION_UNRESOLVED`. All three containers were removed.
+  [Original report, logs, snapshots and configuration](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-fa71e599-nov20.tar.gz)
+- The target retained the first rejected authoritative cleanup read for the
+  lifetime of the replica handler. CREATE, REMOVE and membership requests all
+  awaited that rejection. The original lifecycle owner intentionally froze
+  the first successful read to protect cleanup tokens. The adjacent CREATE
+  recovery owner already re-arms after a failed read. At `1fcac4b05`, both
+  use that recovery owner. The successful result stays frozen, and shutdown
+  joins the admitted sweep. Four managed suites passed 339 assertions. A
+  fresh three-host run on that source tests the effect on formation.
+- A separate native counterexample at `bd2c33ec5` found that the clean
+  dependent release path could reopen after control authority shut down.
+  The healthy control passed. The participant release owner is moving the
+  final control check to the resume point used by both paths.
+- The integration owner must obtain three consecutive 420-second physical
+  formation passes on one composition, then a successful lab smoke. The
+  GCP comparison owner retains the Lagrange measurement.
 
 ### Programme adoption and dependency order
 

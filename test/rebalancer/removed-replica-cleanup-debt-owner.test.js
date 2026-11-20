@@ -403,7 +403,8 @@ function startupRecoveryFixture(t) {
   }
   const planner = new ControlPlaneSystemTableGateway();
   const state = {available: true, snapshotReads: 0, sweepCalls: 0,
-    beforeSnapshot: null, beforePointRead: null, wake: null, wakeArms: 0, readOptions: []};
+    beforeSnapshot: null, beforePointRead: null, afterPointRead: null,
+    wake: null, wakeArms: 0, readOptions: [], mutations: []};
   const gateway = {
     async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
       if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -415,11 +416,15 @@ function startupRecoveryFixture(t) {
       }
       if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
           params[0] === TEST_ORPHAN_REPLICA_ID) await state.beforePointRead?.();
-      return {success: true, rows: db.prepare(sql).all(...params)};
+      const rows = db.prepare(sql).all(...params);
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          params[0] === TEST_ORPHAN_REPLICA_ID) await state.afterPointRead?.(rows);
+      return {success: true, rows};
     },
     async submitMutation(mutation) {
       const {sql, params} = planner.buildSqlMutationPlan(mutation);
       const {changes} = db.prepare(sql).run(...params);
+      state.mutations.push({mutation: structuredClone(mutation), changes});
       return {success: true, partitionResult: {affectedRows: changes}};
     },
   };
@@ -589,4 +594,61 @@ test('shutdown joins an admitted sweep and fences its paused authority read',
     t.equal(state.sweepCalls, 1, 'shutdown starts no replacement cleanup work');
     t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'shutdown owns no recovery timer');
+  });
+
+
+test('an admitted cleanup release CAS preserves a new token after shutdown starts',
+  async (t) => {
+    const {handler, state, db} = startupRecoveryFixture(t);
+    const {authority} = await acquireStartupMarker(handler);
+    const owner = handler.getReplicaCleanupTombstoneOwner();
+    const releaseOwner = owner.release.bind(owner);
+    const entered = Promise.withResolvers();
+    const deliver = Promise.withResolvers();
+    let releaseEntered = false;
+    let heldRead = false;
+    owner.release = (...args) => {
+      releaseEntered = true;
+      return releaseOwner(...args);
+    };
+    state.afterPointRead = async (rows) => {
+      if (!releaseEntered || heldRead) return;
+      heldRead = true;
+      t.equal(rows[0].cleanup_token, authority.ownerToken,
+        'the inner release read really observed the original SQL token');
+      entered.resolve();
+      await deliver.promise;
+    };
+    handler.initialize();
+    await boundedStartupObservation(entered.promise);
+    await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
+    let shutdownSettled = false;
+    const shutdown = handler.shutdown().then(() => { shutdownSettled = true; });
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(shutdownSettled, false, 'shutdown joins the already-admitted release');
+    t.equal(handler.startReplicaCreateAdmissionRecovery(), false,
+      'shutdown admits no new CREATE recovery work');
+    const replacementToken = `${authority.ownerToken}:successor`;
+    const replacement = await owner.gateway.submitMutation({operation: 'update',
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
+      whereClause: {service_id: TEST_ORPHAN_REPLICA_ID,
+        cleanup_token: authority.ownerToken, updated_at: authority.updatedAt},
+      data: {cleanup_token: replacementToken, updated_at: authority.updatedAt + 1}});
+    t.equal(replacement.partitionResult.affectedRows, 1,
+      'a competing durable generation is installed through real SQL');
+    deliver.resolve();
+    await boundedStartupObservation(shutdown);
+    const report = await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+    const deletes = state.mutations.filter(({mutation}) => mutation.operation === 'delete');
+    t.equal(deletes.length, 1, 'the already-admitted owner attempted its fenced DELETE');
+    t.equal(deletes[0]?.mutation.whereClause.cleanup_token, authority.ownerToken,
+      'settlement preserves the original token in the predicate');
+    t.equal(deletes[0]?.changes, 0, 'SQLite refuses the stale conditional DELETE');
+    t.equal(report.failed, 1, 'changed ownership is retained as unresolved cleanup');
+    t.equal(db.prepare('SELECT cleanup_token FROM services WHERE service_id = ?')
+      .get(TEST_ORPHAN_REPLICA_ID)?.cleanup_token, replacementToken,
+    'the replacement token survives the old read and admitted CAS');
+    t.equal(state.sweepCalls, 1, 'no new sweep is admitted after shutdown');
+    t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'shutdown retains no recovery wake');
   });
