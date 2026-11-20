@@ -333,14 +333,23 @@ class NodeHandle {
       operationLabel,
       timeoutMs: requestTimeoutMs,
     });
+    const deadlineAtMs = traceEntry.startedAtMs + requestTimeoutMs;
     let ws = null;
     try {
+      const remainingMs = deadlineAtMs - Date.now();
+      if (remainingMs <= ZERO) throw new Error(timeoutMessage);
       ws = await withTimeout(
         this._getAdminSocket(lane),
-        requestTimeoutMs,
+        remainingMs,
         timeoutMessage,
       );
       traceEntry.socketReadyAtMs = Date.now();
+      if (traceEntry.socketReadyAtMs >= deadlineAtMs) {
+        throw new Error(timeoutMessage);
+      }
+      if (this._adminSocketByLane.get(lane) !== ws) {
+        throw this._adminSocketResetError(lane);
+      }
     } catch (error) {
       const errorMessage = normalizeAdminQueryError(error);
       const outcome = isTimeoutErrorMessage(errorMessage) ?
@@ -381,35 +390,56 @@ class NodeHandle {
         resolve(result);
       };
 
-      const timeout = setTimeout(() => {
-        pendingQueries.delete(queryId);
-        if (this._adminSocketByLane.get(lane) === ws) {
-          this._resetAdminSocket(lane);
-        }
-        rejectWithOutcome(
-          new Error(timeoutMessage),
-          ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,
-        );
-      }, requestTimeoutMs);
-
-      pendingQueries.set(queryId, {
+      const expire = () => rejectWithOutcome(
+        new Error(timeoutMessage),
+        ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,
+      );
+      const pending = {
         resolve: resolveWithTrace,
         reject: (error) => rejectWithOutcome(error),
-        timeout,
+        expire,
+        deadlineAtMs,
+        timeout: null,
         operationLabel,
-      });
+      };
 
       try {
-        ws.send(
-          JSON.stringify({
-            ...requestPayload,
-            queryId,
-          }),
-        );
+        // The server receives a relative execution grant, measured in its
+        // own clock domain. The caller retains its original local deadline.
+        const remainingMs = deadlineAtMs - Date.now();
+        if (remainingMs <= ZERO) {
+          expire();
+          return;
+        }
+        const frame = JSON.stringify({
+          ...requestPayload,
+          timeoutMs: Math.min(
+            resolvePositiveTimeoutMs(requestPayload.timeoutMs, remainingMs),
+            remainingMs,
+          ),
+          queryId,
+        });
+        const sendBudgetMs = deadlineAtMs - Date.now();
+        if (sendBudgetMs <= ZERO) {
+          expire();
+          return;
+        }
+        if (this._adminSocketByLane.get(lane) !== ws) {
+          rejectWithOutcome(this._adminSocketResetError(lane));
+          return;
+        }
+        pending.timeout = setTimeout(() => {
+          if (pendingQueries.get(queryId) === pending) {
+            pendingQueries.delete(queryId);
+            expire();
+          }
+        }, sendBudgetMs);
+        pendingQueries.set(queryId, pending);
+        ws.send(frame);
         traceEntry.sentAtMs = Date.now();
       } catch (err) {
         pendingQueries.delete(queryId);
-        clearTimeout(timeout);
+        clearTimeout(pending.timeout);
         if (this._adminSocketByLane.get(lane) === ws) {
           this._resetAdminSocket(lane);
         }
@@ -432,6 +462,11 @@ class NodeHandle {
         );
       }
     });
+  }
+
+  _adminSocketResetError(lane) {
+    return new Error(ADMIN_QUERY_CONNECTION_RESET_PREFIX +
+      this.id + ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT + lane);
   }
 
   /**
@@ -592,13 +627,16 @@ class NodeHandle {
     }
 
     let readyPromise = null;
+    const isCurrentReady = () =>
+      this._adminSocketReadyByLane.get(lane) === readyPromise;
     const resetIfCurrentReady = () => {
-      if (this._adminSocketReadyByLane.get(lane) === readyPromise) {
+      if (isCurrentReady()) {
         this._resetAdminSocket(lane);
       }
     };
     readyPromise = (async () => {
       const {default: WebSocket} = await import('ws');
+      if (!isCurrentReady()) throw this._adminSocketResetError(lane);
       const laneQuery = encodeURIComponent(
         String(lane || ADMIN_SOCKET_LANE_DEFAULT),
       );
@@ -647,10 +685,13 @@ class NodeHandle {
           settled = true;
           clearTimeout(connectTimeout);
           ws.off('error', onOpenError);
-          this._pendingAdminSocketByLane.delete(lane);
-          if (this._adminSocketReadyByLane.get(lane) === readyPromise) {
-            this._adminSocketReadyByLane.delete(lane);
+          if (!isCurrentReady()) {
+            closeWebSocketSafely(ws);
+            reject(this._adminSocketResetError(lane));
+            return;
           }
+          this._pendingAdminSocketByLane.delete(lane);
+          this._adminSocketReadyByLane.delete(lane);
           this._bindAdminSocketHandlers(ws, lane);
           this._adminSocketByLane.set(lane, ws);
           resolve(ws);
@@ -663,7 +704,9 @@ class NodeHandle {
           settled = true;
           clearTimeout(connectTimeout);
           ws.off('open', onOpen);
-          this._pendingAdminSocketByLane.delete(lane);
+          if (this._pendingAdminSocketByLane.get(lane) === ws) {
+            this._pendingAdminSocketByLane.delete(lane);
+          }
           resetIfCurrentReady();
           reject(
             new Error(
@@ -693,6 +736,9 @@ class NodeHandle {
 
   _bindAdminSocketHandlers(ws, lane) {
     ws.on('message', (data) => {
+      if (this._adminSocketByLane.get(lane) !== ws) {
+        return;
+      }
       try {
         const parsed = JSON.parse(data.toString());
         this._handleAdminSocketMessage(parsed, lane);
@@ -761,6 +807,10 @@ class NodeHandle {
     }
     pendingQueries.delete(queryId);
     clearTimeout(pending.timeout);
+    if (Date.now() >= pending.deadlineAtMs) {
+      pending.expire();
+      return;
+    }
 
     if (parsed.error) {
       const error = new Error(
@@ -966,13 +1016,7 @@ class NodeHandle {
     if (lane !== null) {
       const socket = this._adminSocketByLane.get(lane);
       const pendingSocket = this._pendingAdminSocketByLane.get(lane);
-      this._rejectPendingQueries(
-        ADMIN_QUERY_CONNECTION_RESET_PREFIX +
-          this.id +
-          ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT +
-          lane,
-        lane,
-      );
+      this._rejectPendingQueries(this._adminSocketResetError(lane).message, lane);
       this._adminSocketByLane.delete(lane);
       this._adminSocketReadyByLane.delete(lane);
       this._pendingAdminSocketByLane.delete(lane);

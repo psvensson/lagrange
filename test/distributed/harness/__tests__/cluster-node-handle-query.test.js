@@ -218,6 +218,30 @@ test('Unit: NodeHandle request timer detaches only the expired query on a shared
     });
   });
 
+test('Unit: NodeHandle retires an opening attempt without replacing its successor socket',
+  async () => {
+    const forwarded = [];
+    let connections = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      connections += 1;
+      observeAdminQueries(socket, (query, answer) => {
+        forwarded.push(query.sql);
+        answer();
+      });
+    }, {}, async (node) => {
+      const expired = assert.rejects(node.queryWithTimeout('SELECT retired', [],
+        {lane: TEST_SNAPSHOT_LANE}), /connection reset/i);
+      node._resetAdminSocket(TEST_SNAPSHOT_LANE);
+      const successor = node.queryWithTimeout('SELECT successor', [],
+        {lane: TEST_SNAPSHOT_LANE});
+      const [, result] = await Promise.all([expired, successor]);
+      assert.deepEqual(result.rows, [{sql: 'SELECT successor'}]);
+      assert.deepEqual(forwarded, ['SELECT successor']);
+      assert.equal(connections, 1);
+      assert.equal(node._getPendingQueries(TEST_SNAPSHOT_LANE).size, 0);
+    });
+  });
+
 test('Unit: NodeHandle reads process memory from the node diagnostics owner',
   async () => {
     const capturedAt = 123456;
@@ -319,7 +343,7 @@ test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
   let capturedQuery = null;
   await withTestAdminWebSocketNode(
     (socket) => {
-      socket.once('message', (data) => {
+      socket.on('message', (data) => {
         capturedQuery = JSON.parse(data.toString());
         socket.send(JSON.stringify({
           type: 'query_result',
@@ -331,12 +355,24 @@ test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
     },
     {adminQueryTimeoutMs: 4321},
     async (node) => {
-      await node.query('SELECT 1');
-      assert.strictEqual(
-        capturedQuery.timeoutMs,
-        4321,
-        'query() should inherit the injected default admin timeout',
-      );
+      const realNow = Date.now;
+      const fixedAt = realNow();
+      Date.now = () => fixedAt;
+      try {
+        await node.query('SELECT 1');
+        assert.strictEqual(
+          capturedQuery.timeoutMs,
+          4321,
+          'without elapsed time query() forwards the configured default',
+        );
+        await node._sendAdminRequest({
+          type: 'query', sql: 'SELECT 1', timeoutMs: 120,
+        }, 'query', {timeoutMs: CONNECTION_BUDGET_MS});
+        assert.strictEqual(capturedQuery.timeoutMs, 120,
+          'an explicit shorter server cap remains in force');
+      } finally {
+        Date.now = realNow;
+      }
     },
   );
 });
@@ -564,11 +600,9 @@ test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
       assert.strictEqual(traces.length, 1, 'timeout query should capture one trace');
       const trace = traces[0];
       assert.strictEqual(trace.queryId, capturedQuery.queryId);
-      assert.strictEqual(
-        capturedQuery.timeoutMs,
-        ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-        'query payload should include the per-request timeout override',
-      );
+      assert.ok(capturedQuery.timeoutMs > 0 &&
+        capturedQuery.timeoutMs <= ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+      'query payload carries only the remaining per-request timeout grant');
       assert.strictEqual(trace.lane, 'default');
       assert.strictEqual(trace.operation, 'query');
       assert.strictEqual(trace.outcome, 'timeout');
