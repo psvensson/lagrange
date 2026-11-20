@@ -407,15 +407,17 @@ test('untyped operation rows are outside canonical entity reads',
     };
     const cache = createMockCache({
       replicaOperations: [
-        untypedRow,
         {
           operation_id: 'typed-runtime-op',
           type: OperationType.ADD,
           partition_id: entityId,
           replica_id: `${entityId}-r2`,
+          source_node_id: 'test-node-1',
           target_node_id: 'node-b',
           status: ReplicaStatus.PENDING,
           workflow_step: 'PENDING',
+          created_at: 1000,
+          updated_at: 1000,
           entity_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
           entity_id: entityId,
         },
@@ -425,6 +427,11 @@ test('untyped operation rows are outside canonical entity reads',
       enableTimeouts: false,
       systemTableCache: cache,
     });
+    // The owner's schema refuses an untyped committed row (entity_type and
+    // entity_id are NOT NULL), so the untyped row can only be a cache
+    // observation that never committed: it reaches the cache after the
+    // ledger is built from the committed rows.
+    cache.upsert('replica_operations', untypedRow);
     try {
       const runtimeOperations = await coordinator.repository
         .getOperationsByEntity(

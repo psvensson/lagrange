@@ -189,6 +189,10 @@ function removalEffects(deliveries) {
 async function driveToRemovalIntent(harness) {
   harness.operation.workflowStep = WORKFLOW_STEP.SYNCING;
   harness.operation.status = ReplicaStatus.SYNCING;
+  // The SYNCING step is durable before its reconcile: the STOPPING
+  // transition compare-and-swaps on it.
+  await harness.coordinator.repository.persistOperationUpdate(
+    harness.operation, {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
   await harness.coordinator.reconcileSyncingOperation(harness.operation);
 }
 
@@ -919,8 +923,10 @@ test('ensureReplaceRemovalIntentRecorded transitions non-terminal pre-STOPPING d
       );
       t.equal(recordedAgain, true, 'idempotent call returns true');
 
+      // A REMOVED row's status is ReplicaStatus.REMOVED (there is no
+      // COMPLETED status; an undefined status is no row the schema holds).
       updatedDurable.workflowStep = WORKFLOW_STEP.REMOVED;
-      updatedDurable.status = ReplicaStatus.COMPLETED;
+      updatedDurable.status = ReplicaStatus.REMOVED;
       await harness.coordinator.repository.persistOperationUpdate(
         updatedDurable,
         {requireDurable: false},
