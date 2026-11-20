@@ -20,6 +20,8 @@ import {ManagementV1Owner} from '../../src/bootstrap/owners/management-v1-owner.
 import {RollingUpgradeOwner} from '../../src/bootstrap/owners/rolling-upgrade-owner.js';
 import {
   L4_ROLLING_UPGRADE_REASON_CODE,
+  L4_UPGRADE_NODE_STEP,
+  MANAGEMENT_OPERATION_KIND,
   MANAGEMENT_OPERATION_STATE,
   MANAGEMENT_V1_CONTRACT,
 } from '../../src/bootstrap/owners/management-v1-constants.js';
@@ -185,4 +187,88 @@ test('ManagementV1Owner forwards no synthetic authority to rolling upgrade effec
   const owner = new ManagementV1Owner({...ports, supportEnvelope: record});
   assert.equal(owner.rollingUpgradeOwner.capabilitySupported, true);
   assertUpgradeRefused(observeUpgrade(owner.rollingUpgradeOwner, effects));
+});
+
+const RECOVERY_PARAMETERS = Object.freeze({
+  targetVersion: DEFAULT_TARGET_VERSION,
+  targetArtifactDigest: TARGET_ARTIFACT_DIGEST,
+});
+
+function retainedUpgrade(supportBinding) {
+  const operationId = 'retained-without-certified-evidence';
+  const nodePlan = SNAPSHOT.nodeIds.map((nodeId, index) => ({
+    nodeId, step: index === 0 ? L4_UPGRADE_NODE_STEP.COMPLETED : L4_UPGRADE_NODE_STEP.PENDING,
+    targetVersion: DEFAULT_TARGET_VERSION,
+    previousVersion: DEFAULT_SOURCE_VERSION,
+    startedAtMs: 1,
+    updatedAtMs: 1,
+  }));
+  return {
+    currentVersion: DEFAULT_SOURCE_VERSION,
+    currentArtifactDigest: MANAGEMENT_V1_CONTRACT.DEFAULT_ARTIFACT_DIGEST,
+    activeOperation: {operationId, lagrangeOperationId: operationId,
+      kind: MANAGEMENT_OPERATION_KIND.TRANSITION_RELEASE,
+      state: MANAGEMENT_OPERATION_STATE.IN_PROGRESS, parameters: RECOVERY_PARAMETERS,
+      supportBinding, nodePlan},
+    nodePlan,
+    currentNodeIndex: 1,
+  };
+}
+
+test('rolling upgrade has one plan entry through the support admission owner', () => {
+  const {effects, ports} = observedPorts();
+  const owner = new RollingUpgradeOwner({...ports, currentVersion: DEFAULT_SOURCE_VERSION,
+    supportEnvelopeOwner: new SupportEnvelopeOwner({envelope: copiedSyntheticEnvelope()})});
+  // The predecessor exposes an effect-bearing alternate plan command.
+  owner.initiatePlan?.('unqualified-direct-plan', null, RECOVERY_PARAMETERS, SNAPSHOT, 1);
+  assert.deepEqual(effects, []);
+  assert.equal(owner.getOperationStatus('unqualified-direct-plan'), null);
+});
+
+test('uncertified retained operations cannot drain the next node', () => {
+  for (const binding of [undefined, {
+    policyDigest: buildSupportEnvelopeRecord().envelopeDigest,
+    sourceArtifactDigest: MANAGEMENT_V1_CONTRACT.DEFAULT_ARTIFACT_DIGEST,
+    targetArtifactDigest: TARGET_ARTIFACT_DIGEST,
+    nodeCount: SNAPSHOT.nodeIds.length,
+    executionReferences: ['sha256:synthetic-reference'],
+  }]) {
+    const {effects, ports} = observedPorts();
+    const retained = retainedUpgrade(binding);
+    const owner = new RollingUpgradeOwner({...ports,
+      currentVersion: retained.currentVersion,
+      initialPersistedState: retained,
+      supportEnvelopeOwner: new SupportEnvelopeOwner({envelope: copiedSyntheticEnvelope()}),
+    });
+    owner.beginNextNodeDrain(2, {quorumHealthy: true});
+    assert.deepEqual(effects, []);
+    assert.equal(owner.getActiveNode()?.step, L4_UPGRADE_NODE_STEP.PENDING);
+    assert.equal(owner.getOperationStatus(retained.activeOperation.operationId)?.state,
+      MANAGEMENT_OPERATION_STATE.IN_PROGRESS, 'the refused operation remains recoverable');
+  }
+});
+
+test('uncertified retained catch-up cannot publish ready or certify success', () => {
+  const retained = retainedUpgrade(undefined);
+  retained.nodePlan[1].step = L4_UPGRADE_NODE_STEP.CATCHING_UP;
+  const ready = [];
+  const {ports} = observedPorts();
+  const owner = new RollingUpgradeOwner({...ports,
+    currentVersion: retained.currentVersion,
+    initialPersistedState: retained,
+    onSetNodeReadyz: (...args) => ready.push(args)});
+  owner.completeNodeCatchUp('node-2', {nowMs: 2, quorumHealthy: true,
+    underReplicatedPartitionCount: 0});
+  assert.deepEqual(ready, []);
+  assert.equal(owner.getActiveNode()?.step, L4_UPGRADE_NODE_STEP.CATCHING_UP);
+});
+
+test('an uncertified retained operation can still halt for observed quorum loss', () => {
+  const retained = retainedUpgrade(undefined);
+  const {effects, ports} = observedPorts();
+  const owner = new RollingUpgradeOwner({...ports, initialPersistedState: retained});
+  const failure = owner.beginNextNodeDrain(2, {quorumHealthy: false});
+  assert.equal(failure.state, MANAGEMENT_OPERATION_STATE.FAILED);
+  assert.equal(failure.reasonCode, L4_ROLLING_UPGRADE_REASON_CODE.QUORUM_SAFETY_HALT);
+  assert.deepEqual(effects, []);
 });
