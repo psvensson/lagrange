@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// Admit only the preserved initial RED for strict-operation-outcomes. This
-// adapter never executes tests and has no green-admission branch. It consumes
-// the original managed placement artifacts, not reconstructed runner sections.
+// Admit the initial red or the bounded native SQLite execution from their
+// original artifacts. This adapter never executes tests.
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {isDeepStrictEqual} from 'node:util';
 import {Parser} from 'tap-parser';
 import {spawnGit} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {buildExecutionReport, executionReportProblems, readExecutionRuns, RETRY_POLICY} from
+  '../test-execution-report.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SOURCE = '58a2080337b56b4e5f97bcb54da59f57b94e6611';
@@ -86,10 +88,17 @@ const ENCODING = Object.freeze({
 });
 const CLI = Object.freeze({
   EVIDENCE: '--evidence-dir',
+  MANAGED: '--managed-evidence-dir',
   OUTPUT: '--output',
   PREFIX: '--',
   EVIDENCE_KEY: 'evidenceDir',
+  MANAGED_KEY: 'managedEvidenceDir',
   OUTPUT_KEY: 'output',
+});
+const OPTION_KEYS = Object.freeze({
+  [CLI.EVIDENCE]: CLI.EVIDENCE_KEY,
+  [CLI.MANAGED]: CLI.MANAGED_KEY,
+  [CLI.OUTPUT]: CLI.OUTPUT_KEY,
 });
 const ORIGINAL_FILE = Object.freeze({
   STATUS: 'status.json',
@@ -116,7 +125,7 @@ const RECEIPT_STATUS = Object.freeze({
   FAIL: 'fail',
 });
 const PROBLEM = Object.freeze({
-  EVIDENCE_REQUIRED: '--evidence-dir is required',
+  EVIDENCE_REQUIRED: 'specify one of --evidence-dir or --managed-evidence-dir',
   MANAGED_STATUS: 'managed request did not finish as the recorded test failure',
   ARTIFACT_INVENTORY: 'artifact inventory is incomplete or belongs to another request',
   MANIFEST_REQUEST: 'manifest request mismatch',
@@ -156,8 +165,95 @@ const MEASURED_FAILURE =
   'ordinary, thrown-reply and reopened-owner positive controls pass.';
 const OUTSTANDING_FAILURE = 'Outstanding; not measured or admitted by this red adapter.';
 
+const MANAGED = Object.freeze({
+  source: '8281e61d2b0a1c67583d7cd1790467268efa932e',
+  tree: 'd602ead8be437bc51208a459efd5bd7a44cb70b9',
+  requestId: '2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a',
+  generation: '51a47f3e-71ed-4429-a6c9-fff56f959d37',
+  ref: 'refs/heads/wip/strict-operation-composition-20261120',
+  repo: 'psvensson/lagrange',
+  controllerState: 'COMPLETE',
+  testDigest: '737871bfe14dabe95c72c4c1d3e5be94ff86590bdeceaea521d97de31aec53b1',
+  assertions: 521,
+  parents: 51,
+  leaves: 470,
+});
+const MANAGED_ANCHORS = Object.freeze({
+  'status.json': '0e63b826f125d9c50f3f61c86c5d787fae34a63b27682429ff80a2ead784819a',
+  'manifest.json': '18a6c35bec8716eb6dbe4b53971c9f6881cd96acda2c8c8b1f6fbd1ebd47ace1',
+  'artifacts-0.json': 'bf18daba99fdca19f6af0503e1770ab073b04a51df7ddea70a32924cc9078db8',
+});
+const MANAGED_FILE = Object.freeze({
+  STATUS: 'status.json', MANIFEST: 'manifest.json', INVENTORY: 'artifacts-0.json',
+  DIRECTORY: 'artifacts', SOURCE: 'source-before.json', AFTER: 'source-after.json',
+  CHECKOUT: 'checkout.json', INVOCATION: 'invocation.json', SELECTED: 'selected-files.txt',
+  COMMAND: 'command-result.json', SECTIONS: 'execution-sections.ndjson',
+  REPORT: 'execution-report.json', VALIDATION: 'execution-validation.json',
+  STDOUT: 'runner.stdout', STDERR: 'runner.stderr', TAP: `raw-tap/${TEST_FILE}.tap`,
+  NATIVE: 'native-before.json', NATIVE_AFTER: 'native-after.json',
+  READINESS: 'candidate-readiness.json', IDENTITY: 'process-identity/',
+});
+const MANAGED_CASES = Object.freeze([
+  [POSITIVES[0][0], 'real terminal release updates only its reservation through the coordinator'],
+  [POSITIVES[1][0], 'authoritative replay after a thrown reply performs no second write'],
+  [POSITIVES[2][0], 'fresh terminal entry discharges the interrupted terminal release'],
+  ['strict outcomes failed REPLACE repair releases before now-refused write admission',
+    'STOPPING adapter cannot turn adopted failure into success'],
+  ['strict outcomes real SQLite refusal and reinsertion retain obligations',
+    'reinsertion cannot release a retained reservation'],
+  ['strict outcomes queued terminal writers return the exact durable winner',
+    'the losing caller manufactures no second terminal history entry'],
+  ['strict outcomes interrupted release eventually wakes real terminal subscribers',
+    'actual intent pruner receives the wake'],
+  ['strict outcomes crash after release before notification resumes through owner rebind',
+    'existing coordinator attachment wakes both dependent owners without a terminal event replay'],
+  ['strict outcomes competing terminal writer between preimage and SQL cannot be overwritten',
+    'the actual losing SQLite CAS changes no row'],
+  ['strict outcomes known terminal preimage cannot become recovered progress after zero-effect reply loss',
+    'preexisting settlement is never new recovered progress'],
+  ['strict outcomes unreadable terminal preimage cannot earn recovered credit from a later row',
+    'later visibility cannot manufacture recovered progress'],
+]);
+const MANAGED_MALFORMED_LABELS = Object.freeze([...MALFORMED_LABELS, 'missing history',
+  'invalid timestamp', 'failed without completion', 'terminal on creating', 'wrong status',
+  'wrong entity', 'wrong requested replica', 'adopted different replica', 'refusal with payload']);
+const MANAGED_MALFORMED_ASSERTIONS = Object.freeze([REAL_EFFECT_ASSERTION.CALL, CONTRACT_FAILURE,
+  'malformed answer cannot commit the deferred workflow mirror',
+  'malformed answer retains the real reservation', REAL_EFFECT_ASSERTION.WRITE,
+  'same-step retry reconsults the real authoritative repository']);
+const MANAGED_PENDING = Object.freeze([
+  'Historical placement retains engaged mutant failures but only an aggregate for the paired ' +
+    'release-boundary positive, and no test-process native identity for the three controls.',
+  'Classified consumer closure remains red outside this single-file run.',
+  'Composed candidate and original-run admission require independent verification.',
+]);
+const HISTORICAL_CONTROLS = Object.freeze({
+  archive: 'strict-operation-outcomes--strict-historical-outcome-controls-nov20.tar.gz',
+  sha256: '9960f3250d659f28ec78d47cbeaa8ac8c12eba64edf37895a90b4108a4670d87',
+  adapterRed: '0a00e855fba84d73af6a3b0939844aa7497f542a',
+  helperRed: '6ef416aa65a9a652a876eebb0149b8a136f7a452',
+  helperPositive: '0081b7dfa8620fcf242930db14430f80fb81cbe3',
+});
+const MANAGED_CEILING = 'Single-file native SQLite production-owner composition on tv-dator. ' +
+  'Controller, nested runner and actual test-process records describe different scopes. ' +
+  'The original records are unsigned. Classified consumers, physical fleet, and applicability ' +
+  'to a later candidate remain outside this measurement.';
+const PROCESS_FIELDS = Object.freeze(['pid', 'ppid', 'argv', 'execArgv', 'execPath', 'hostname',
+  'executableSha256', 'versions', 'bootId', 'cgroup', 'cwd']);
+const PROCESS_SUFFIX = Object.freeze({START: '.start.json', END: '.end.json'});
+const LOCK_FILE = 'package-lock.json';
+const BETTER_SQLITE3 = 'node_modules/better-sqlite3';
+const SQLITE_ADDON = 'better_sqlite3.node';
+const MANAGED_RUNNER = 'scripts/run-test-files.js';
+const CLASSIFIED_RUNNER = 'scripts/run-classified-test-files.js';
+const MEASURED_MANAGED_RECEIPT_COUNT = 3;
+
 function requireEvidence(condition, message) {
   if (!condition) throw new Error(`red evidence refused: ${message}`);
+}
+
+function requireManaged(condition, message) {
+  if (!condition) throw new Error(`managed evidence refused: ${message}`);
 }
 
 function digest(bytes) {
@@ -168,15 +264,16 @@ function parseOptions(argv) {
   const options = {output: DEFAULT_OUTPUT};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
-    requireEvidence(key === CLI.EVIDENCE || key === CLI.OUTPUT, `unknown argument ${key}`);
+    requireEvidence(Object.hasOwn(OPTION_KEYS, key), `unknown argument ${key}`);
     const value = argv[index + 1];
     requireEvidence(typeof value === 'string' && !value.startsWith(CLI.PREFIX), `${key} needs a path`);
-    const name = key === CLI.EVIDENCE ? CLI.EVIDENCE_KEY : CLI.OUTPUT_KEY;
+    const name = OPTION_KEYS[key];
     requireEvidence(!Object.hasOwn(options, `${name}Provided`), `duplicate argument ${key}`);
     options[name] = path.resolve(value);
     options[`${name}Provided`] = true;
   }
-  requireEvidence(options.evidenceDirProvided, PROBLEM.EVIDENCE_REQUIRED);
+  requireEvidence(Boolean(options.evidenceDir) !== Boolean(options.managedEvidenceDir),
+    PROBLEM.EVIDENCE_REQUIRED);
   return options;
 }
 
@@ -257,8 +354,8 @@ function validateProvenance(originals) {
   return {status, selection, ledger, preflight};
 }
 
-function checkParserCompletion(result, count, name) {
-  requireEvidence(result && !result.bailout && result.skip === 0 && result.todo === 0 &&
+function checkParserCompletion(result, count, name, require = requireEvidence) {
+  require(result && !result.bailout && result.skip === 0 && result.todo === 0 &&
     result.count === count && result.plan.start === 1 && result.plan.end === count &&
     !result.plan.skipAll && result.failures.every((failure) => !failure.tapError),
   `${name}: missing plan/completion, skip, todo, bailout or parser error`);
@@ -354,12 +451,16 @@ function parseOriginalTap(raw) {
     malformedCases: [...MALFORMED_LABELS]};
 }
 
-function sourceBlob(file) {
-  const result = spawnGit([GIT_SHOW, `${SOURCE}:${file}`], {cwd: ROOT,
+function sourceCommand(args) {
+  const result = spawnGit(args, {cwd: ROOT,
     env: gitProcessEnvironment(),
     stdio: GIT_CAPTURE_STDIO});
-  requireEvidence(result.status === 0 && result.stdout, `source blob unavailable: ${file}`);
+  requireEvidence(result.status === 0 && result.stdout, `source unavailable: ${args.join(' ')}`);
   return result.stdout;
+}
+
+function sourceBlob(file, source = SOURCE) {
+  return sourceCommand([GIT_SHOW, `${source}:${file}`]);
 }
 
 function writeReceiptAtomically(output, receipt) {
@@ -424,6 +525,208 @@ function admitOriginalRed(options) {
   process.exitCode = 1;
 }
 
+function readManagedFile(directory, name, expected) {
+  const file = path.join(directory, name);
+  const stat = fs.lstatSync(file);
+  requireManaged(stat.isFile() && fs.realpathSync(file) === file &&
+    stat.size <= ORIGINAL_FILE_MAX_BYTES, `invalid original file: ${name}`);
+  const bytes = fs.readFileSync(file);
+  requireManaged(digest(bytes) === expected, `${name} hash mismatch`);
+  return bytes;
+}
+
+function readManagedOriginals(directory) {
+  const anchors = new Map(Object.entries(MANAGED_ANCHORS).map(([name, expected]) =>
+    [name, readManagedFile(directory, name, expected)]));
+  const manifest = readJson(anchors, MANAGED_FILE.MANIFEST);
+  const inventory = readJson(anchors, MANAGED_FILE.INVENTORY);
+  requireManaged(manifest.requestId === MANAGED.requestId &&
+    inventory.job_id === MANAGED.requestId && inventory.host === HOST &&
+    inventory.next_cursor === null, 'original manifest and inventory request mismatch');
+  const originals = new Map();
+  for (const {name, sha256, bytes} of manifest.entries) {
+    requireManaged(!path.isAbsolute(name) && path.normalize(name) === name &&
+      !name.startsWith(`..${path.sep}`) && !originals.has(name), `invalid artifact name: ${name}`);
+    const original = readManagedFile(directory, path.join(MANAGED_FILE.DIRECTORY, name), sha256);
+    requireManaged(original.length === bytes, `artifact size mismatch: ${name}`);
+    originals.set(name, original);
+  }
+  requireManaged(isDeepStrictEqual([...originals.keys()].sort(), [...inventory.names].sort()),
+    'original artifact inventory incomplete');
+  const status = readJson(anchors, MANAGED_FILE.STATUS);
+  requireManaged(status.job_id === MANAGED.requestId && status.generation === MANAGED.generation &&
+    status.host === HOST && status.state === MANAGED.controllerState && status.exit_code === 0 &&
+    status.execution_scope_closed === true && status.source_execution_started === true &&
+    status.workload_started === true && status.reason === null &&
+    isDeepStrictEqual(status.source, {sha: MANAGED.source, ref: MANAGED.ref, repo: MANAGED.repo}),
+  'controller did not complete the identified managed source execution');
+  return {status, originals, manifest};
+}
+
+function readManagedExecution(directory, originals) {
+  const candidate = readJson(originals, MANAGED_FILE.SOURCE);
+  requireManaged(candidate.sha === MANAGED.source && candidate.tree === MANAGED.tree &&
+    candidate.clean === true && candidate.status === '' &&
+    isDeepStrictEqual(candidate, readJson(originals, MANAGED_FILE.AFTER)),
+  'source changed or differs from the measured candidate');
+  const invocation = readJson(originals, MANAGED_FILE.INVOCATION);
+  requireManaged(invocation.registeredHost === HOST && invocation.env.LAGRANGE_PLACEMENT === 'local' &&
+    invocation.env.LAGRANGE_RETRY_FAILED_ONCE === '0' &&
+    isDeepStrictEqual(invocation.candidate, candidate) &&
+    isDeepStrictEqual(invocation.selected, [TEST_FILE]) &&
+    originals.get(MANAGED_FILE.SELECTED).toString(ENCODING.TEXT) === `${TEST_FILE}\n`,
+  'managed invocation does not select the exact unretried witness');
+  const command = readJson(originals, MANAGED_FILE.COMMAND);
+  requireManaged(command.status === 0 && command.signal === null && command.error === null,
+    'managed command did not exit cleanly');
+  const report = readJson(originals, MANAGED_FILE.REPORT);
+  const sections = path.join(directory, MANAGED_FILE.DIRECTORY, MANAGED_FILE.SECTIONS);
+  const runs = readExecutionRuns(sections);
+  const reconstructed = buildExecutionReport({candidate, producer: report.producer,
+    commands: report.commands, planned: [TEST_FILE], runs, reusedProofs: []});
+  const validation = executionReportProblems(reconstructed, {sha: MANAGED.source, tree: MANAGED.tree,
+    retryPolicy: RETRY_POLICY.REFUSE, requiredFiles: [TEST_FILE]});
+  requireManaged(isDeepStrictEqual(report, reconstructed) &&
+    isDeepStrictEqual(validation, readJson(originals, MANAGED_FILE.VALIDATION)) &&
+    validation.problems.length === 0 && validation.qualification.length === 0 &&
+    runs.length === 1 && validation.summary.assertions === MANAGED.assertions,
+  'original sections and complete unretried execution report disagree');
+  const [run] = runs;
+  requireManaged(isDeepStrictEqual(run.checkout, readJson(originals, MANAGED_FILE.CHECKOUT)) &&
+    run.results.length === 1 && run.results[0].attempts.length === 1 &&
+    isDeepStrictEqual(run.planned, [TEST_FILE]), 'nested runner scope differs from selected scope');
+  const stdout = originals.get(MANAGED_FILE.STDOUT).toString(ENCODING.TEXT);
+  requireManaged(stdout.endsWith(`# test-files total=1 pass=1 fail=0 assertions=${MANAGED.assertions}\n`) &&
+    stdout.includes(`ok ${TEST_FILE} (${MANAGED.assertions} assertions, `) &&
+    originals.get(MANAGED_FILE.STDERR).length === 0, 'managed runner output disagrees with report');
+  return {invocation, run, validation};
+}
+
+function managedProcessPairs(originals) {
+  const names = [...originals.keys()].filter((name) => name.startsWith(MANAGED_FILE.IDENTITY));
+  return names.filter((name) => name.endsWith(PROCESS_SUFFIX.END)).map((name) => {
+    const end = readJson(originals, name);
+    const startName = name.slice(0, -PROCESS_SUFFIX.END.length) + PROCESS_SUFFIX.START;
+    const start = readJson(originals, startName);
+    requireManaged(start.kind === 'start' && end.kind === 'end' &&
+      start.isMainThread === true && end.isMainThread === true &&
+      start.threadId === 0 && end.threadId === 0 && end.exitCode === 0 &&
+      PROCESS_FIELDS.every((field) => isDeepStrictEqual(start[field], end[field])),
+    `process identity disagreement: ${name}`);
+    return end;
+  });
+}
+
+function readManagedNative(originals, status, {invocation, run}) {
+  const native = readJson(originals, MANAGED_FILE.NATIVE);
+  const readiness = readJson(originals, MANAGED_FILE.READINESS);
+  const lock = sourceBlob(LOCK_FILE, MANAGED.source);
+  requireManaged(isDeepStrictEqual(native, readJson(originals, MANAGED_FILE.NATIVE_AFTER)) &&
+    native.lockfile === digest(lock) && native.package === JSON.parse(lock).packages[BETTER_SQLITE3].version &&
+    native.sqlite.sourceId && native.compileOptions.length > 0 &&
+    readiness.readiness.ready === true && readiness.capability.thermal === 'measured' &&
+    readiness.requirement.source === MANAGED.source &&
+    readiness.capability.repo.lockGraphSha256 === readiness.requirement.lockGraphSha256,
+  'native SQLite identity or candidate readiness changed');
+  const sourceRoot = run.checkout.root;
+  const records = managedProcessPairs(originals);
+  const [classified] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, CLASSIFIED_RUNNER));
+  const [runner] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, MANAGED_RUNNER));
+  const [test] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, TEST_FILE));
+  requireManaged(records.length === 3 && classified && runner && test &&
+    runner.ppid === classified.pid && test.ppid === runner.pid &&
+    String(runner.pid) === run.runId.split('-')[0] &&
+    isDeepStrictEqual(runner.argv.slice(2), run.argv) &&
+    isDeepStrictEqual(classified.argv.slice(2), invocation.argv.slice(2)),
+  'selected test process is not a child of the recorded classified runner');
+  for (const record of records) {
+    requireManaged(record.cwd === sourceRoot && record.hostname === invocation.hostname &&
+      record.bootId === readiness.capability.bootId && record.cgroup.endsWith(`/${status.unit}\n`) &&
+      record.execPath === native.process.execPath &&
+      record.executableSha256 === native.process.sha256 &&
+      isDeepStrictEqual(record.versions, native.process.versions),
+    `recorded process is outside the measured substrate: ${record.pid}`);
+  }
+  const addon = native.native.find(({path: file}) => path.basename(file) === SQLITE_ADDON);
+  requireManaged(addon && test.native.some((loaded) =>
+    loaded.realpath === addon.path && loaded.sha256 === addon.sha256),
+  'selected test process did not load the measured SQLite addon');
+  return {testPid: test.pid, runnerPid: runner.pid, classifiedPid: classified.pid,
+    node: native.process, addon, package: native.package, sqlite: native.sqlite,
+    compileOptions: native.compileOptions, lockfile: native.lockfile,
+    installedLockfile: native.installedLockfile};
+}
+
+function parseManagedTap(raw) {
+  const start = raw.indexOf(TAP_FRAMING.START);
+  requireManaged(start >= 0 && raw.indexOf(TAP_FRAMING.START, start + 1) === -1,
+    'missing or duplicated original TAP stream');
+  const {final, parents, children} = readTapStructure(raw.slice(start));
+  checkParserCompletion(final, MANAGED.parents, TAP_FRAMING.ROOT, requireManaged);
+  requireManaged(final.ok === true && parents.length === MANAGED.parents &&
+    children.length === MANAGED.parents, 'managed TAP did not complete all parent cases');
+  const byName = new Map(children.map((child) => [child.name, child]));
+  const byParent = new Map(parents.map((parent) => [parent.name, parent]));
+  requireManaged(byName.size === MANAGED.parents && byParent.size === MANAGED.parents,
+    'duplicate managed TAP parent names');
+  let leaves = 0;
+  for (const {name, result, assertions, nested} of children) {
+    const parent = byParent.get(name);
+    checkParserCompletion(result, assertions.length, name, requireManaged);
+    requireManaged(!nested && result.ok === true && parent?.ok === true &&
+      [parent, ...assertions].every((item) => item.ok && !item.skip && !item.todo && !item.tapError),
+    `unmeasured or failed managed case: ${name}`);
+    leaves += assertions.length;
+  }
+  requireManaged(leaves === MANAGED.leaves && leaves + parents.length === MANAGED.assertions,
+    'managed TAP assertion count differs from the nested runner');
+  const malformed = MANAGED_MALFORMED_LABELS.flatMap((label) =>
+    MANAGED_MALFORMED_ASSERTIONS.map((assertion) =>
+      [`strict outcomes malformed ${label}: no commit or release; same-owner retry`, assertion]));
+  for (const [name, assertion] of [...MANAGED_CASES, ...malformed]) {
+    requireManaged(byName.get(name)?.assertions.some((item) => item.name === assertion),
+      `managed case missing assertion "${assertion}": ${name}`);
+  }
+  return {parents: parents.length, leaves, assertions: MANAGED.assertions,
+    cases: children.map(({name}) => name)};
+}
+
+function managedSourceDigests() {
+  const tree = sourceCommand(['rev-parse', `${MANAGED.source}^{tree}`]).toString(ENCODING.TEXT).trim();
+  requireManaged(tree === MANAGED.tree &&
+    digest(sourceBlob(TEST_FILE, MANAGED.source)) === MANAGED.testDigest, 'managed source blob mismatch');
+  // The strict producer/consumer delta is the same 37-file rebalancer census
+  // reviewed under the existing Quest. This is not a later-candidate dependency proof.
+  const changed = sourceCommand(['diff', '--name-only', SOURCE, MANAGED.source, '--',
+    'src/rebalancer']).toString(ENCODING.TEXT).trim().split(NEWLINE);
+  const files = new Set([...PRODUCTION_FILES, ...changed, LOCK_FILE]);
+  return Object.fromEntries([...files].map((file) => [file, digest(sourceBlob(file, MANAGED.source))]));
+}
+
+function admitManagedPositive(directory, output) {
+  const {status, originals, manifest} = readManagedOriginals(directory);
+  const execution = readManagedExecution(directory, originals);
+  const native = readManagedNative(originals, status, execution);
+  const measured = parseManagedTap(originals.get(MANAGED_FILE.TAP).toString(ENCODING.TEXT));
+  const receipt = {
+    schema: RECEIPT_SCHEMA, quest: QUEST_ID, status: RECEIPT_STATUS.FAIL,
+    generatedAt: new Date().toISOString(), testFileDigests: {[TEST_FILE]: MANAGED.testDigest},
+    productionFileDigests: managedSourceDigests(),
+    evidence: {requestId: MANAGED.requestId, sourceCommit: MANAGED.source,
+      sourceTree: MANAGED.tree, executionHost: HOST, controllerStatus: status,
+      originalDirectory: directory, originalDigests: MANAGED_ANCHORS,
+      originalArtifacts: manifest.entries, run: execution.run, native, measured,
+      originalRed: {requestId: REQUEST_ID, sourceCommit: SOURCE, archive: ORIGINAL_ARCHIVE},
+      historicalControls: HISTORICAL_CONTROLS, ceiling: MANAGED_CEILING},
+    receipts: REQUIRED_RECEIPTS.map((id, index) => index < MEASURED_MANAGED_RECEIPT_COUNT ?
+      {id, passed: true, testFile: TEST_FILE, evidence: MANAGED_FILE.TAP} :
+      {id, passed: false, failure: MANAGED_PENDING[index - MEASURED_MANAGED_RECEIPT_COUNT]}),
+  };
+  writeReceiptAtomically(output, receipt);
+  process.stdout.write(`${output}: fail (bounded native SQLite proof admitted, Quest remains open)\n`);
+  process.exitCode = 1;
+}
+
 function main() {
   // Parse the entire invocation before selecting an output. Invalid arguments
   // do not mutate an unrelated default/partial target. Once a valid target is
@@ -431,15 +734,17 @@ function main() {
   // refusal or interruption must not leave an earlier pass available to probes.
   const options = parseOptions(process.argv.slice(2));
   const output = resolveExistingParent(path.resolve(options.output));
-  const evidenceDirectory = fs.existsSync(options.evidenceDir) ?
-    fs.realpathSync(options.evidenceDir) : resolveExistingParent(options.evidenceDir);
+  const directory = options.managedEvidenceDir ?? options.evidenceDir;
+  const evidenceDirectory = fs.existsSync(directory) ?
+    fs.realpathSync(directory) : resolveExistingParent(directory);
   const relative = path.relative(evidenceDirectory, output);
   requireEvidence(relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative),
     PROBLEM.OUTPUT);
   writeReceiptAtomically(output,
     unavailableReceipt(PROBLEM.NOT_VALIDATED));
   try {
-    admitOriginalRed({...options, output});
+    if (options.managedEvidenceDir) admitManagedPositive(evidenceDirectory, output);
+    else admitOriginalRed({...options, output});
   } catch (error) {
     writeReceiptAtomically(output, unavailableReceipt(error.message));
     throw error;
