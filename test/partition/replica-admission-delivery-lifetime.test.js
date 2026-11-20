@@ -8,7 +8,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {ReplicaHandler, REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler.js';
+import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
