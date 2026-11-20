@@ -41,6 +41,7 @@ import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 
 const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
+  LEADER_REMOVAL_COMMITTED: 'leader_removal_committed',
   REMOVAL_APPLIED: 'own-removal-applied',
   GROUP_UNAVAILABLE: 'consensus-group-unavailable',
   NO_CONSENSUS_PORT: 'no-consensus-port',

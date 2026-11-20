@@ -94,6 +94,7 @@ const ReplicaOperationField = Object.freeze({
   // In-memory only (never persisted): ReplicaOperationVisibilityClass.
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
+  LEARNER_RETIREMENT: 'learnerRetirement',
   // A REMOVE that retires its replica's whole group as a unit carries the
   // workflow's evidence (partition/group-retirement-evidence.js).
   GROUP_RETIREMENT: 'groupRetirement',
@@ -133,7 +134,18 @@ function isGenesisFoundingCreateOperation(operation) {
       COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS;
 }
 
+const LEARNER_MEMBERSHIP_CLEARED_REASON = 'placement_learner_membership_cleared';
+
+const LEARNER_RETIREMENT_OUTCOME = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  DEFERRED: 'learner_membership_deferred',
+  SUPERSEDED: 'learner_retirement_superseded',
+  CLEARED: 'learner_membership_cleared',
+});
+
 export {
+  LEARNER_MEMBERSHIP_CLEARED_REASON,
+  LEARNER_RETIREMENT_OUTCOME,
   isCompletedReplicaOperationAnswer,
   isGenesisFoundingCreateOperation,
   ReplicaOperationMessageType,

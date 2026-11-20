@@ -37,6 +37,8 @@ const STATEMENT_FIELDS = Object.freeze(['transitionKind', 'entityType',
 const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
+const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, 'learnerRetirement']);
+const LEARNER_RETIREMENT_FIELDS = Object.freeze(['nodeBootIncarnation', 'replicaCreatedAt']);
 const KINDS = Object.freeze(new Set(Object.values(KIND)));
 const MOVE_TYPES = Object.freeze(new Set([
   ...Object.values(OperationType),
@@ -126,11 +128,17 @@ function isMoveShapeValid(kind, move) {
 
 function canonicalMove(kind, value) {
   const move = copyStrictOwnDataRecord(value);
-  if (!hasExactFields(move, MOVE_FIELDS) || !MOVE_TYPES.has(move.type) ||
-      !isMoveShapeValid(kind, move)) {
-    return null;
+  if (move === null || !MOVE_TYPES.has(move.type) || !isMoveShapeValid(kind, move)) return null;
+  if (!Object.hasOwn(move, 'learnerRetirement')) {
+    return hasExactFields(move, MOVE_FIELDS) ? ordered(move, MOVE_FIELDS) : null;
   }
-  return ordered(move, MOVE_FIELDS);
+  const retirement = copyStrictOwnDataRecord(move.learnerRetirement);
+  if (!hasExactFields(move, LEARNER_RETIREMENT_MOVE_FIELDS) || kind !== KIND.PLACEMENT ||
+      move.type !== OperationType.REMOVE ||
+      !hasExactFields(retirement, LEARNER_RETIREMENT_FIELDS) ||
+      !LEARNER_RETIREMENT_FIELDS.every((key) => isPositiveInteger(retirement[key]))) return null;
+  return ordered({...move, learnerRetirement: ordered(retirement, LEARNER_RETIREMENT_FIELDS)},
+    LEARNER_RETIREMENT_MOVE_FIELDS);
 }
 
 // FOUND admits the whole founding set: one ADD per founder, on distinct
@@ -236,7 +244,7 @@ function isFullSourceCapacity(placementClass, repair) {
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
   ...MOVE_FIELDS,
-  'promoteReplicaIds',
+  'promoteReplicaIds', 'learnerRetirement',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
   'partitionId', 'placementClass', 'repair', 'move',
@@ -293,7 +301,8 @@ function moveOf(value) {
     sourceReplicaId: move.sourceReplicaId ?? null,
     copySourceNodeId: move.copySourceNodeId ?? null,
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
-    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null};
+    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
+    ...(Object.hasOwn(move, 'learnerRetirement') ? {learnerRetirement: move.learnerRetirement} : {})};
 }
 
 function isValidCandidateRecord(record) {

@@ -30,6 +30,32 @@ import {
 import {closeRemovalCreateAdmission} from
   './replica-removal-create-admission-close.js';
 
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_REPLICA_ROLE} from
+  '../raft/raft-committed-membership-constants.js';
+import {projectReplicaRole} from '../raft/raft-rs-committed-membership-read.js';
+import {readCommittedMembershipStamp} from
+  '../rebalancer/committed-membership-bootstrap-read.js';
+
+async function ownsClearedLearnerGeneration(handler, scope, replicaId, partitionId) {
+  if (scope?.nodeBootIncarnation !== handler.ownerIncarnation ||
+      !Number.isSafeInteger(scope?.replicaCreatedAt) || scope.replicaCreatedAt <= 0) return false;
+  const observed = await handler.replicaStateMachine
+    .observeAuthoritativeReplicaLifecycle(replicaId);
+  const row = observed?.row;
+  const service = handler.getTrackedService(replicaId);
+  if (observed?.available !== true || row?.created_at !== scope.replicaCreatedAt ||
+      row.replica_id !== replicaId || row.partition_id !== partitionId ||
+      row.node_id !== handler.nodeId ||
+      service?.partitionId !== partitionId) return false;
+  try {
+    const stamp = await readCommittedMembershipStamp(handler, partitionId,
+      {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT});
+    return projectReplicaRole(stamp, replicaId) === COMMITTED_REPLICA_ROLE.ABSENT;
+  } catch {
+    return false;
+  }
+}
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 // A failed-create cleanup request's two authority decisions. A deferral (an
 // authority read that did not answer, or the generation's CREATE admission
@@ -538,6 +564,12 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
             nodeId: this.nodeId,
           },
         );
+      }
+      const learnerRetirement = request[ReplicaOperationField.LEARNER_RETIREMENT];
+      if (learnerRetirement !== undefined && !await ownsClearedLearnerGeneration(
+        this, learnerRetirement, replicaId, partitionId)) {
+        return this.answerFailedCreateCleanupDeferred({operationId, replicaId,
+          partitionId, deferral: removalAuthorityDeferred(replicaId)});
       }
       const trackedOperation = this.inProgressOperations.get(operationId);
       const sameRemovalAlreadyInProgress = isSameReplicaRemoval(

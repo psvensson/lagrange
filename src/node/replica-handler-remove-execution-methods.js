@@ -9,6 +9,7 @@ import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js
 import {isFailedCreateRemoveToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {LEARNER_MEMBERSHIP_CLEARED_REASON} from '../rebalancer/replica-operation-constants.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
 import {
@@ -246,6 +247,11 @@ function leaveConsensus(handler, request, service) {
     });
     return Promise.resolve(exit);
   }
+  if (request.learnerRetirement !== undefined) {
+    const exit = Object.freeze({reason: REPLICA_CONSENSUS_EXIT_REASON.LEADER_REMOVAL_COMMITTED});
+    logReplicaRemovalConsensusExit(handler, exit, {operationId, replicaId, partitionId});
+    return Promise.resolve(exit);
+  }
   return handler.awaitReplicaRemovalConsensusExit(service, {
     operationId,
     replicaId,
@@ -259,9 +265,15 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
   // A group retired as a unit records its retirement as such - on the
   // REMOVING row (the row-driven reconcile proposes no conf change for it)
   // and on the durable lifecycle row.
-  const reason = request.groupRetirement?.retire === true ?
-    GROUP_RETIREMENT_REASON : request.reason;
+  const triggerReason = request.groupRetirement?.retire === true ?
+    GROUP_RETIREMENT_REASON : request.learnerRetirement === undefined ?
+      null : LEARNER_MEMBERSHIP_CLEARED_REASON;
+  const reason = triggerReason ?? request.reason;
   handler.throwIfShuttingDown();
+  if (request.learnerRetirement !== undefined &&
+      request.learnerRetirement.replicaCreatedAt !== lifecycle.trackedState?.createdAt) {
+    throw removalRowDeleteDeferred(replicaId);
+  }
   await handler.waitForReplicaServingDrain(service);
   const retiringRow = await handler.publishReplicaRetiringRow({
     operationId,
@@ -269,8 +281,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     partitionId,
     service,
     removalLifecycleSnapshot: lifecycle,
-    triggerReason: request.groupRetirement?.retire === true ?
-      GROUP_RETIREMENT_REASON : null,
+    triggerReason,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,

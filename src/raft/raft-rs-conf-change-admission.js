@@ -707,7 +707,12 @@ function decideWithdrawPromotion({group, tenure, status, confState,
   };
 }
 
-function decideRemoveLearner({status, confState, operation}) {
+function decideRemoveLearner({group, status, confState, operation}) {
+  if (operation.expectedNodeId !== undefined &&
+      group.resolvePeerNodeId(operation.replicaIdentity) !== operation.expectedNodeId) {
+    return {immediate: admissionRefusal(
+      RAFT_MEMBERSHIP_CHANGE_REFUSAL.TARGET_IDENTITY_REQUIRED, false)};
+  }
   const peerId = String(operation.peerId);
   const role = projectPeerRole(confState, peerId);
   if (role !== COMMITTED_REPLICA_ROLE.LEARNER) {

@@ -172,6 +172,8 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
+ * @param {number} [options.createdAt] - Committed service lifecycle generation.
+ * @param {number} [options.ownerIncarnation] - Handler node boot identity.
  * @param {string|null} [options.createAttemptToken] - The replica's create
  *   attempt (its generation's CREATE admission is in replicaOperations).
  * @param {Array<Object>} [options.replicaOperations] - replica_operations
@@ -180,17 +182,19 @@ function durableLifecycleState(dbFile, groupId) {
  *   removeRequest, dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf, createAttemptToken = null, replicaOperations = []}) {
+  cache, rowOf, createdAt = 1, ownerIncarnation, createAttemptToken = null,
+  replicaOperations = []}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
+  const serviceChanges = [];
   const initialRow = createLifecycleServiceRow({
     replicaId,
     partitionId,
     nodeId,
     status: ReplicaStatus.ACTIVE,
-    createdAt: 1,
-    stateEnteredAt: 1,
+    createdAt,
+    stateEnteredAt: createdAt,
     createAttemptToken,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
@@ -209,8 +213,10 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   lifecycleStore.gateway.submitMutation = async (...args) => {
     const result = await submitMutation(...args);
     const durableRow = lifecycleStore.durable.services.get(replicaId) || null;
-    if (durableRow) cache.upsert(SERVICES, durableRow);
-    else cache.delete(SERVICES, replicaId);
+    if (durableRow) {
+      serviceChanges.push({...durableRow});
+      cache.upsert(SERVICES, durableRow);
+    } else cache.delete(SERVICES, replicaId);
     return result;
   };
   const replicaStateMachine = new ReplicaStateMachine({
@@ -253,6 +259,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   });
   const handler = new ReplicaHandler({
     nodeId,
+    ownerIncarnation,
     dataDir,
     systemTableCache: cache,
     cdcIntegrationService: {},
@@ -286,6 +293,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     outcomes,
     exits,
     lifecycleStore,
+    serviceChanges,
     removeRequest(operationId, reason = 'rebalancing') {
       return handler.handleRemoveReplica({
         [ReplicaOperationField.TYPE]:

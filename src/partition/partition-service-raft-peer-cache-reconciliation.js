@@ -6,6 +6,7 @@ import {
 } from './partition-service-raft-membership-administration.js';
 import {RAFT_EVENT, RAFT_MEMBERSHIP_OPERATION} from
   '../raft/raft-operation-port-constants.js';
+import {LEARNER_MEMBERSHIP_CLEARED_REASON} from '../rebalancer/replica-operation-constants.js';
 import {GROUP_RETIREMENT_REASON} from './group-retirement-evidence.js';
 import {isFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
@@ -131,7 +132,8 @@ function isClaimedFailedCreateServiceRow(serviceRow) {
 }
 
 function isExplicitPeerRetirement(operation, serviceRow) {
-  if (serviceRow?.trigger_reason === GROUP_RETIREMENT_REASON) {
+  if (serviceRow?.trigger_reason === GROUP_RETIREMENT_REASON ||
+      serviceRow?.trigger_reason === LEARNER_MEMBERSHIP_CLEARED_REASON) {
     return false;
   }
   return (

@@ -31,10 +31,14 @@ import {
   reconcileGrowthPromoteDispatchResponse,
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
+import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
+import {evaluatePlacementLearnerRetirement} from
+  './operation-workflow-placement-learner-retirement.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL, OPERATION_OWNER_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON, OperationType, REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG, REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS,
@@ -620,6 +624,17 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(operation);
     const handlerType = resolveOperationHandlerType(entityType);
+    const learnerRetirement = await evaluatePlacementLearnerRetirement(
+      this, operation, handlerType);
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) {
+      return settleDispatchFailure(this, operation, learnerRetirement.state);
+    }
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.DEFERRED) {
+      const reason = REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+      this.scheduleDeferredSafetyRetry(operation, reason, learnerRetirement.state);
+      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId, {deferReason: reason, error: learnerRetirement.state});
+    }
     let dispatchNodeId = operation.targetNodeId;
     let messageType = ReplicaOperationMessageType.CREATE_REPLICA;
     let requestReplicaId = operation.replicaId;
@@ -662,6 +677,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEARED) {
+      request[ReplicaOperationField.LEARNER_RETIREMENT] = learnerRetirement.scope;
+    }
     if (operation.type === OperationType.GROWTH_PROMOTE) {
       applyGrowthPromoteRequestFields(request, operation);
     }
