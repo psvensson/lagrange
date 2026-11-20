@@ -171,6 +171,41 @@ invalid evidence before integration.
   make no implementation or acceptance claim. One writer will own each coupled
   repair after its scope is recorded.
 
+### Core verification and the next physical run
+
+The immediate release work is formation, routable SQL and recovery of interrupted
+operations. The comparison owner runs the lab smoke after the formation gate
+holds on the same composition, then measures Lagrange on the authorized GCP
+profile. Backup, restore and PITR retain their later milestone allocation.
+
+- At `8ed84f88a` the formation observer enforces the original 420-second
+  deadline on a completed observation. The original task-3823 recording
+  shows 27 completed promotions at the last sample before the deadline, 30 at
+  the next sample and 33 at the end of recording. All 60 polls reported
+  operations in flight. The exact count at the deadline is unknown.
+- The aggregate release deadline and detachable per-caller waits are on
+  `witness/participant-release-lifetimes-20261120` at `5cc73e45e`.
+  Managed request `3bce09eb-3cbe-4f32-b9c0-ad320cc926e3` ran both selected
+  files on `tv-dator` and passed 23 runner assertions on that source. The
+  preceding run passed both files but its collector misidentified the batch
+  runner as a test. Its original failed postflight remains available under
+  request `6d7114de-3e27-4f81-958d-93eaddeaa24d`.
+- Strict persistence work is preserved on
+  `wip/strict-operation-composition-20261120`. The focused real SQLite
+  outcome suite passed 397 runner assertions at `90d6a8ffb`. The wider
+  consumer suites exposed additional source and fixture failures. The
+  workflow and repository owners are closing those against raw lab results,
+  including reconstruction, conditional writes and retained release work.
+- The formation owner is closing an observation gap. The registered scenario
+  issued one public INSERT, then read from each node. The new witness at
+  `1e90bde58` proved the previous predicate accepted a missing writer and
+  the scenario issued no per-node INSERT. The integration owner retains the
+  public PG check and requires a distinct write per node with its actual
+  stored ID and value read through another node. Physical acceptance still
+  requires three consecutive successful trials on tv-dator, adam-laptop and
+  adams-gamla. No successful base-system smoke or new GCP result has been
+  recorded in this session.
+
 ### Programme adoption and dependency order
 
 Content reconciliation of main's recent extracted repairs is source-only:

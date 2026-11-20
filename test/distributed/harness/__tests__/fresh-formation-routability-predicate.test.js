@@ -15,6 +15,7 @@
  */
 
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from '../../../../src/test-helpers/tap.js';
@@ -348,6 +349,61 @@ function satisfiedObservation(capturedAtMs) {
     clusterNodeIds: [...NODE_IDS], snapshots};
 }
 
+function satisfiedWriteReadback() {
+  const publicRow = {probe_id: 'ffr-probe-1', probe_value: 1};
+  const nodeValues = [2, 3, 4];
+  const readers = [NODE_IDS[1], NODE_IDS[2], NODE_IDS[0]];
+  return {
+    clusterNodeIds: [...NODE_IDS],
+    publicProbe: {probeId: 'ffr-probe-1', probeValue: 1},
+    insert: {rowCount: 1},
+    readbacks: [
+      {nodeId: null, rowCount: 1, rows: [{...publicRow, probe_value: '1'}], via: 'public-pg-wire'},
+      ...arrayMap(NODE_IDS, (nodeId) => ({nodeId, rowCount: 1,
+        rows: [{...publicRow}], via: `admin:${nodeId}`})),
+    ],
+    nodeWrites: arrayMap(NODE_IDS, (writerNodeId, index) => ({
+      writerNodeId, readerNodeId: readers[index],
+      probeId: `ffr-node-${writerNodeId}`, probeValue: nodeValues[index],
+      insert: {affectedRows: 1},
+      readback: {rows: [{probe_id: `ffr-node-${writerNodeId}`,
+        probe_value: nodeValues[index]}]},
+    })),
+  };
+}
+
+test('write/readback rejects missing writers and count-only or wrong-row evidence', (t) => {
+  t.equal(evaluateWriteReadback(satisfiedWriteReadback()).met, true);
+  const missingWriter = satisfiedWriteReadback();
+  missingWriter.nodeWrites.pop();
+  t.equal(evaluateWriteReadback(missingWriter).met, false, 'every node must write');
+  const duplicateWriter = satisfiedWriteReadback();
+  duplicateWriter.nodeWrites[2] = duplicateWriter.nodeWrites[0];
+  t.equal(evaluateWriteReadback(duplicateWriter).met, false, 'duplicates cannot cover a writer');
+  const missingPublic = satisfiedWriteReadback();
+  missingPublic.readbacks.shift();
+  t.equal(evaluateWriteReadback(missingPublic).met, false, 'public read remains required');
+  const countOnly = satisfiedWriteReadback();
+  countOnly.readbacks[0].rows = [];
+  t.equal(evaluateWriteReadback(countOnly).met, false, 'rowCount alone is insufficient');
+  const malformedPgValue = satisfiedWriteReadback();
+  malformedPgValue.readbacks[0].rows[0].probe_value = '01';
+  t.equal(evaluateWriteReadback(malformedPgValue).met, false, 'exact pg text is required');
+  const wrongPublicRow = satisfiedWriteReadback();
+  wrongPublicRow.readbacks[1].rows[0].probe_value = 99;
+  t.equal(evaluateWriteReadback(wrongPublicRow).met, false, 'public probe value must match');
+  const wrongNodeRow = satisfiedWriteReadback();
+  wrongNodeRow.nodeWrites[1].readback.rows[0].probe_id = 'different-probe';
+  t.equal(evaluateWriteReadback(wrongNodeRow).met, false, 'writer probe identity must match');
+  const missingNodeRow = satisfiedWriteReadback();
+  missingNodeRow.nodeWrites[0].readback.rows = [];
+  t.equal(evaluateWriteReadback(missingNodeRow).met, false, 'affectedRows alone is insufficient');
+  const sameNodeRead = satisfiedWriteReadback();
+  sameNodeRead.nodeWrites[0].readerNodeId = NODE_IDS[0];
+  t.equal(evaluateWriteReadback(sameNodeRead).met, false, 'another node must read the write');
+  t.end();
+});
+
 test('constructed satisfying state is green on every predicate', (t) => {
   const evaluations = arrayMap([T0, T0 + 1000, T0 + 2000], (at) =>
     evaluateFormationObservation(satisfiedObservation(at)));
@@ -372,11 +428,7 @@ test('constructed satisfying state is green on every predicate', (t) => {
       create: {contractState: 'ready', reasonCodes: []},
       partitions: {rows: table}, services: {rows: tableServices},
       tableName: 'ffr_probe', tables: {rows: [{table_name: 'ffr_probe'}]}}),
-    evaluateWriteReadback({clusterNodeIds: [...NODE_IDS],
-      insert: {rowCount: 1}, readbacks: [
-        {nodeId: null, rowCount: 1, via: 'public-pg-wire'},
-        ...arrayMap(NODE_IDS, (nodeId) => ({nodeId, rowCount: 1,
-          via: `admin:${nodeId}`}))]}),
+    evaluateWriteReadback(satisfiedWriteReadback()),
     evaluateLearnerRefusals({refusals: [], services: {rows: []}}),
     evaluateProjectionAgreement(evaluations),
     evaluateObservationIntegrity([]),
@@ -1100,17 +1152,21 @@ test('end-to-end authority transport preserves rowSetComplete, leader witness, a
 
 // Exercise the scenario's actual clock checks around successful asynchronous
 // observations. These controlled facts qualify only the harness timing decision.
-async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0}) {
+async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0,
+  rejectedWriter = null}) {
   let now = T0;
   let created = false;
   let countCalls = 0;
+  const probeDatabase = new Database(':memory:');
+  const writerCalls = [];
   const authority = satisfiedAuthority();
   const table = {table_name: 'ffr_probe', partition_id: PRIORITY_PARTITION_IDS[0],
     replica_count: NODE_IDS.length, leader_node_id: NODE_IDS[0]};
   const afterCreate = {tables: {rows: [table]}, services: authority.services,
     partitions: {rows: [table]}};
-  async function query(sql) {
+  async function query(nodeId, sql, params = []) {
     if (stringStartsWith(sql, 'CREATE')) {
+      probeDatabase.exec(sql);
       created = true;
       now += createDelay;
       return {contractState: 'ready'};
@@ -1118,14 +1174,22 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
     if (stringStartsWith(sql, 'SELECT COUNT')) {
       countCalls++;
       now += countDelay;
-      return {rows: [{cnt: 0}]};
+      return {rows: probeDatabase.prepare(sql).all(...params)};
     }
-    if (stringStartsWith(sql, 'SELECT probe_id')) return {rows: [{probe_id: 'ffr-probe-1', probe_value: 1}]};
+    if (stringStartsWith(sql, 'INSERT')) {
+      writerCalls.push({nodeId, params: [...params]});
+      if (nodeId === rejectedWriter) throw new Error('injected writer refusal');
+      return {affectedRows: probeDatabase.prepare(sql).run(...params).changes};
+    }
+    if (stringStartsWith(sql, 'SELECT probe_id')) {
+      return {rows: probeDatabase.prepare(sql).all(...params)};
+    }
     const key = stringSplit(sql, ' ')[3];
     return created ? afterCreate[key] : key === 'replica_operations' ? authority.replicaOperations : authority[key];
   }
   const nodes = arrayMap(NODE_IDS, (id, index) => ({
-    id, role: index === 0 ? 'seed' : 'joiner', queryWithTimeout: query,
+    id, role: index === 0 ? 'seed' : 'joiner',
+    queryWithTimeout: (sql, params) => query(id, sql, params),
     getControlSnapshot: async () => {
       if (index === 0 && now > T0) now += snapshotDelay;
       return {rows: [satisfiedPayload()]};
@@ -1140,13 +1204,23 @@ async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0
       },
       openPublicPg: async () => ({connection: {}, endpoint: {host: 'test', port: 1}}),
       pgClient: () => ({connect: async () => {}, end: async () => {},
-        query: async () => ({rowCount: 1})}),
+        query: async (sql, params = []) => {
+          const statement = probeDatabase.prepare(sql);
+          if (!statement.reader) return {rowCount: statement.run(...params).changes, rows: []};
+          const rows = arrayMap(statement.all(...params), (row) => ({
+            probe_id: row.probe_id, probe_value: String(row.probe_value),
+          }));
+          return {rowCount: rows.length, rows};
+        }}),
     }}};
   try {
-    return {passed: true, report: await runFormation(cluster), countCalls};
+    return {passed: true, report: await runFormation(cluster), countCalls, writerCalls};
   } catch (error) {
     if (!error.diagnostics?.freshFormationRoutability) throw error;
-    return {passed: false, report: error.diagnostics.freshFormationRoutability, countCalls};
+    return {passed: false, report: error.diagnostics.freshFormationRoutability,
+      countCalls, writerCalls};
+  } finally {
+    probeDatabase.close();
   }
 }
 
@@ -1157,8 +1231,11 @@ test('formation and routability bounds include time spent awaiting successful re
   assert.equal(lateFormation.report.formationSatisfied, false);
   assert.equal(lateFormation.passed, false);
   assert.equal(lateFormation.report.firstUnmet.id, 'formation-bound-spent');
+  assert.equal(lateFormation.writerCalls.length, 3,
+    'successful post-bound diagnostic writes cannot certify formation');
   const lateRoute = await observeScenarioTiming({snapshotDelay: 0, countDelay: 101});
   assert.equal(lateRoute.report.formationSatisfied, true);
+  assert.equal(lateRoute.writerCalls.length, 0, 'expired routability does not start writes');
   assert.equal(lateRoute.report.firstUnmet?.id, PREDICATE.USER_TABLE_ROUTABLE);
   assert.equal(lateRoute.report.timings.timeToUserTableRoutableSinceScenarioStartMs, null);
   const lateCreate = await observeScenarioTiming({
@@ -1166,4 +1243,18 @@ test('formation and routability bounds include time spent awaiting successful re
   });
   assert.equal(lateCreate.passed, false);
   assert.equal(lateCreate.countCalls, 0, 'a spent CREATE budget cannot start a new COUNT');
+});
+
+test('scenario writes distinct bound values through every node and rejects a refused writer', async (t) => {
+  const result = await observeScenarioTiming({snapshotDelay: 0, countDelay: 0});
+  t.equal(result.passed, true);
+  t.same(result.writerCalls, [
+    {nodeId: NODE_IDS[0], params: [`ffr-node-${NODE_IDS[0]}`, 2]},
+    {nodeId: NODE_IDS[1], params: [`ffr-node-${NODE_IDS[1]}`, 3]},
+    {nodeId: NODE_IDS[2], params: [`ffr-node-${NODE_IDS[2]}`, 4]},
+  ]);
+  const refused = await observeScenarioTiming({snapshotDelay: 0, countDelay: 0,
+    rejectedWriter: NODE_IDS[1]});
+  t.equal(refused.passed, false);
+  t.equal(refused.report.firstUnmet.id, PREDICATE.WRITE_READBACK);
 });
