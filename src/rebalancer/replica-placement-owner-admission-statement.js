@@ -245,7 +245,7 @@ function isFullSourceCapacity(placementClass, repair) {
  * @return {number} kSrcForClass.
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
-  ...MOVE_FIELDS,
+  ...LEARNER_RETIREMENT_MOVE_FIELDS,
   'promoteReplicaIds',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
