@@ -254,11 +254,9 @@ function createCoordinatorWithLedger(leader, options = {}) {
     reservedRuntimeServicePlacementSlots: 2,
   };
   coordinator.controlPlaneReadinessService = {
-    serveEligibilityOwner: {
-      answerCommittedNodes: () => ({
-        formation: {state: 'FORMED', latchEpoch: 4},
-      }),
-    },
+    answerCommittedNodes: () => ({
+      formation: {state: 'FORMED', latchEpoch: 4},
+    }),
   };
   coordinator.repository = createAuthoritativeLedgerRepository(leader);
   coordinator.assertLocalControlPlaneMutationReady = () => {};
@@ -602,6 +600,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           partitionId: USER_PARTITION_ID,
           nodeId: NODE.B,
           operationIntentId: 'shared-opaque-creation-request',
+          replicaIntentId: 'shared-opaque-replica-request',
           entryId: 'original-placement-entry-x',
         };
         await assert.rejects(
@@ -618,6 +617,16 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         assert.equal(replay.operationId, held.operation_id);
         assert.deepEqual(submitted, [original.entryId, original.entryId]);
         assert.deepEqual(ledgerRows(leader), [held]);
+
+        const reconstructed = createCoordinatorWithLedger(leader);
+        const restored = await reconstructed.createOperation(original);
+        assert.equal(restored.operationId, held.operation_id);
+        assert.equal(restored.replicaId, held.replica_id);
+        await assert.rejects(() => reconstructed.createOperation({
+          ...original, entryId: 'conflicting-placement-entry-y',
+        }), {failureCode: PLACEMENT_REFUSAL.PARTITION_BUSY});
+        assert.deepEqual(ledgerRows(leader), [held],
+          'native replay and incompatible admission preserve the one committed row');
       } finally {
         await stopAutoCommit();
       }
@@ -660,9 +669,67 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         publishedEpoch = Number.MAX_SAFE_INTEGER + 1;
         await assert.rejects(() => coordinator.createOperation({
           ...runtime, membershipPublicationEpoch: publishedEpoch,
-        }));
+        }), {code: 'placement_admission_statement_invalid'});
         assert.deepEqual(ledgerRows(leader), held);
         assert.equal(proposed.filter(({type}) => type === 'PLACEMENT_ADMIT').length, 2);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('requires committed formation only for its gated placement classes', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        const engine = Object.create(SQLQueryEngine.prototype);
+        engine.rebalanceCoordinator = coordinator;
+        let formation = {state: 'UNAVAILABLE', latchEpoch: null};
+        const committedNodes = () => ({formation});
+        coordinator.controlPlaneReadinessService.answerCommittedNodes = committedNodes;
+        const placement = {
+          type: OperationType.ADD,
+          partitionId: USER_PARTITION_ID,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+        };
+        const runtime = {
+          ...placement,
+          entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+          entityId: SERVICE_ID,
+          partitionId: SERVICE_ID,
+          replicaId: `${SERVICE_ID}-r2`,
+        };
+        const founding = {
+          partitionId: 'formation-found-orders-p1',
+          targetNodeIds: [NODE.A, NODE.B, NODE.C],
+          context: {schemaJobId: 'formation-bound-native-founder'},
+        };
+        const refused = {failureCode: 'FORMATION_NOT_LATCHED'};
+        await assert.rejects(() => coordinator.createOperation(placement), refused);
+        await assert.rejects(() => coordinator.createOperation(runtime), refused);
+        await assert.rejects(() => engine.tryProvisionFoundingSetViaPlacementAdmission(founding),
+          refused);
+        assert.equal(proposed.length, 0);
+        assert.deepEqual(ledgerRows(leader), []);
+
+        const priorityPartition = 'control_plane_publications-p1';
+        await coordinator.createOperation({
+          ...placement, partitionId: priorityPartition, entityId: priorityPartition,
+        });
+        assert.equal(proposed.at(-1).body.formationLatchEpoch, null);
+        assert.equal(ledgerRows(leader).length, 1);
+
+        formation = {state: 'FORMED', latchEpoch: 7};
+        const allowed = await coordinator.createOperation({...placement, nodeId: NODE.C});
+        assert.equal(proposed.at(-1).body.formationLatchEpoch, 7);
+        assert.equal(ledgerRows(leader).find((row) => row.operation_id === allowed.operationId)
+          ?.target_node_id, NODE.C);
+        const found = await engine.tryProvisionFoundingSetViaPlacementAdmission(founding);
+        assert.equal(found.provisioned, true);
+        assert.equal(proposed.at(-1).body.formationLatchEpoch, 7);
       } finally {
         await stopAutoCommit();
       }

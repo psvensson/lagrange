@@ -7,6 +7,9 @@
 // capacities (K_src, K_tgt and the level-triggered kSrcForClass), the
 // ledger's dispatch hold, the formation latch epoch, the founding intent,
 // the planned input positions and the moves.
+import {isDeepStrictEqual} from 'node:util';
+import {placementReplicaIdOf} from '../partition/partition-placement-admission-identity.js';
+import {buildRuntimeServiceTargetClaimKey} from './runtime-service-replica-identity.js';
 import {ALLOWED_UNIFIED_SERVICE_TYPES, UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 import {
@@ -368,7 +371,8 @@ function buildFoundingAdmissionStatement(founding) {
 }
 
 const RUNTIME_SERVICE_FIELDS = Object.freeze([
-  'serviceId', 'sourceNodeId', 'formationLatchEpoch', 'positions', 'move',
+  'serviceId', 'sourceNodeId', 'formationLatchEpoch', 'membershipPublicationEpoch',
+  'positions', 'move',
 ]);
 
 function buildRuntimeServiceAdmissionStatement(input) {
@@ -391,10 +395,28 @@ function buildRuntimeServiceAdmissionStatement(input) {
     formationLatchEpoch: record.formationLatchEpoch,
     foundingIntentId: null,
     sourceNodeId: record.sourceNodeId,
-    membershipPublicationEpoch: null,
+    membershipPublicationEpoch: record.membershipPublicationEpoch,
     positions: record.positions,
     moves: [move],
   });
+}
+
+function matchesCommittedSinglePlacementStatement(operation, requested, admitted) {
+  const [move] = requested.moves;
+  const replicaId = move.replicaId ?? placementReplicaIdOf(operation.operationId);
+  const claimKey =
+    requested.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+    move.type !== OperationType.REMOVE ?
+      buildRuntimeServiceTargetClaimKey(replicaId, requested.entityId) : null;
+  return requested.sourceNodeId === admitted.sourceNodeId &&
+    requested.membershipPublicationEpoch === admitted.membershipPublicationEpoch &&
+    isDeepStrictEqual(requested.moves, admitted.moves) &&
+    operation.sourceNodeId === requested.sourceNodeId &&
+    (operation.membershipPublicationEpoch ?? null) === requested.membershipPublicationEpoch &&
+    operation.replicaId === replicaId &&
+    (operation.targetNodeBootIncarnation ?? null) === move.targetNodeBootIncarnation &&
+    (operation.targetNodeStorageIncarnation ?? null) === move.targetNodeStorageIncarnation &&
+    (operation.targetClaimKey ?? null) === claimKey;
 }
 
 export {
@@ -403,5 +425,6 @@ export {
   buildPlacementAdmissionStatement,
   buildRuntimeServiceAdmissionStatement,
   canonicalPlacementStatement,
+  matchesCommittedSinglePlacementStatement,
   resolveSourceCapacityForClass,
 };

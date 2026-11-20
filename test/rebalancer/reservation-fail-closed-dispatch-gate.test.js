@@ -297,9 +297,9 @@ async (t) => {
       ),
       'the operation owner retains one retry obligation for the durable PENDING row',
     );
-    const reusedOperation = await coordinator.createOperation(move);
-    t.equal(reusedOperation.operationId, TEST_OPERATION_ID,
-      'a caller retry reuses the durable operation generation');
+    await t.rejects(coordinator.createOperation(move),
+      {rebalanceSkipReason: 'deferred_retry_pending'},
+      'the caller retains the operation without claiming reuse under unavailable authority');
     t.equal(dispatchCalls.length, 0,
       'a caller retry cannot bypass the live canonical retry owner');
     t.equal(coordinator.stats.operationsCreated, 1,
@@ -315,6 +315,10 @@ async (t) => {
       'the same owner retry obligation is re-armed within the existing deadline',
     );
     coordinator.restoreOperationAuthority();
+    const reusedOperation = await coordinator.createOperation(move);
+    t.equal(reusedOperation.operationId, TEST_OPERATION_ID,
+      'restored exact authority permits positive replay of the original operation');
+    t.equal(dispatchCalls.length, 0, 'positive replay preserves the existing timer-owned wake');
     t.equal(await timers.runNext(), true,
       'the re-armed owner retry observes recovered authority');
     t.same(dispatchCalls, [TEST_OPERATION_ID],
