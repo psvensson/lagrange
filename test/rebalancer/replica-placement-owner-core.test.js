@@ -103,8 +103,8 @@ import {
   resolveVoterTarget,
 } from '../../src/rebalancer/replica-placement-owner-order.js';
 import {
-  PLACEMENT_DEFICIT_STATE, buildPlacementNodeEligibility, evaluatePartitionDeficit,
-  readPlacementNodeInputs, repairSourceNodeIdsOf,
+  PLACEMENT_DEFICIT_STATE, buildPartitionReplicaRows, buildPlacementNodeEligibility,
+  evaluatePartitionDeficit, readPlacementNodeInputs, repairSourceNodeIdsOf,
 } from '../../src/rebalancer/replica-placement-owner-deficits.js';
 import {
   PLACEMENT_STATEMENT_VALIDITY, buildFoundingAdmissionStatement,
@@ -1241,6 +1241,48 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     sourceReplicaId: null,
     copySourceNodeId: null,
   });
+
+  // Failed pre-voter create row (status: 'failed', raft_role: null) and
+  // partition_cleanup tombstone are excluded from buildPartitionReplicaRows so
+  // evaluatePartitionDeficit admits LEARNER_DEFICIT ADD instead of same-node REPLACE:
+  const rowsWithFailedCreate = buildPartitionReplicaRows([
+    {
+      [COLUMN.REPLICA_ID]: 'replica_operations-p1-r1',
+      [COLUMN.NODE_ID]: 'n1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: 'replace-replica-learner-n2',
+      [COLUMN.NODE_ID]: 'n2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: 'replace-replica-failed-create-n3',
+      [COLUMN.NODE_ID]: 'n3',
+      [COLUMN.STATUS]: 'failed',
+      [COLUMN.RAFT_ROLE]: null,
+      previous_state: 'pending',
+    },
+    {
+      [COLUMN.REPLICA_ID]: 'replace-replica-cleanup-tombstone-n3',
+      [COLUMN.NODE_ID]: 'n3',
+      service_type: 'partition_cleanup',
+      [COLUMN.STATUS]: 'owned',
+      [COLUMN.RAFT_ROLE]: null,
+    },
+  ], 'n1', false);
+  const afterFailedCreate = evaluatePartitionDeficit({
+    partitionId: 'replica_operations-p1',
+    replicationFactor: 3,
+    replicaRows: rowsWithFailedCreate,
+    eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
+  });
+  assert.equal(afterFailedCreate.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
+  assert.equal(afterFailedCreate.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT);
+  assert.equal(afterFailedCreate.candidate.move.type, OperationType.ADD);
+  assert.equal(afterFailedCreate.candidate.move.targetNodeId, 'n3');
 });
 
 test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration', async () => {

@@ -17,12 +17,17 @@ import {projectNodeLivenessSemantics} from
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
 import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
-import {COLUMN, SERVICE_STATUS} from '../constants/index.js';
+import {
+  COLUMN,
+  SERVICE_STATUS,
+  isPartitionCleanupServiceRow,
+} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   isCatchupLearnerRaftRole,
   isLoadRoutableRaftRole,
 } from '../raft/replica-voter-readiness.js';
+import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
 import {OperationType} from './replica-operation-progress.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
@@ -106,12 +111,21 @@ function isVoterRole(role) {
   return isLoadRoutableRaftRole(role);
 }
 
+function isFailedNonVoterCreateRow(row, status, role) {
+  if (status !== ReplicaStatus.FAILED) return false;
+  return !isVoterRole(role) ||
+    isFailedCreateCleanupToken(row.cleanup_token) ||
+    IN_FLIGHT_LEARNER_STATUSES.has(row.previous_state);
+}
+
 function shouldSkipServiceRow(row, isBusy) {
+  if (isPartitionCleanupServiceRow(row)) return true;
   const status = row[COLUMN.STATUS];
   if (status === ReplicaStatus.REMOVING || status === ReplicaStatus.REMOVED) {
     return true;
   }
   const role = row[COLUMN.RAFT_ROLE];
+  if (isFailedNonVoterCreateRow(row, status, role)) return true;
   return isBusy && (isCatchupLearnerRaftRole(role) || IN_FLIGHT_LEARNER_STATUSES.has(status));
 }
 
@@ -121,7 +135,8 @@ function classifyServiceRow(row) {
   if (typeof replicaId !== 'string' || typeof nodeId !== 'string') return null;
   const role = row[COLUMN.RAFT_ROLE];
   const status = row[COLUMN.STATUS];
-  const isLearner = isCatchupLearnerRaftRole(role);
+  const isLearner = isCatchupLearnerRaftRole(role) ||
+    (!isVoterRole(role) && IN_FLIGHT_LEARNER_STATUSES.has(status));
   const activeVoter = status === SERVICE_STATUS.ACTIVE && isVoterRole(role);
   const caughtUp = isLearner && status === SERVICE_STATUS.ACTIVE &&
     row.caught_up !== false && row.caughtUp !== false;

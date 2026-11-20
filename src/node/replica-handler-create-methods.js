@@ -261,10 +261,13 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                 this.inProgressOperations.delete(operationId);
                 this.localServices.delete(replicaId);
                 this.localReplicas.delete(replicaId);
-                if (error?.bootAuthorityUnavailable === true &&
-                    error?.bootIncarnationSuperseded !== true) {
-                  armCreateAdmissionRecoveryRearm(this);
-                }
+              }
+              if (error?.bootAuthorityUnavailable === true &&
+                  error?.bootIncarnationSuperseded !== true) {
+                const tracked =
+                  this.replicaStateMachine?.replicas?.get?.(replicaId);
+                if (tracked) tracked.timeoutStartedAt = null;
+                armCreateAdmissionRecoveryRearm(this);
               }
               this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
                 operationId,
