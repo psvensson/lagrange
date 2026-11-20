@@ -95,21 +95,30 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
   if (!exactServiceGeneration(member, operation, scoped)) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
   }
+  return routeBoundLearnerRetirement(owner, operation, handlerType, scoped, member);
+}
+
+async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped, member) {
   const node = await currentNode(owner, operation.targetNodeId);
-  if (!node) return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
-  if (node[COLUMN.BOOT_INCARNATION] !== scoped.nodeBootIncarnation) {
-    return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
+  const boot = node?.[COLUMN.BOOT_INCARNATION];
+  if (!Number.isSafeInteger(boot) || boot < scoped.nodeBootIncarnation) {
+    return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   const status = member[COLUMN.STATUS];
-  const canPropose = isCatchupLearnerRaftRole(member[COLUMN.RAFT_ROLE]) &&
+  const canPropose = boot === scoped.nodeBootIncarnation &&
+    isCatchupLearnerRaftRole(member[COLUMN.RAFT_ROLE]) &&
     (observesCommittedNodeLoss(node) || status === ReplicaStatus.FAILED ||
       status === SERVICE_STATUS.STOPPED);
   const membership = await reachMembershipOwner(owner, operation, handlerType, scoped, canPropose);
-  if (membership.state === LEARNER_RETIREMENT_OUTCOME.CLEARED &&
-      node[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED) {
+  if (membership.state !== LEARNER_RETIREMENT_OUTCOME.CLEARED) return membership;
+  if (node[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
-  return membership;
+  // A durable rejoin keeps the same SERVICES birth, but changes process boot.
+  // Only the fresh leader's committed absence can cross that boundary.
+  return verdict(LEARNER_RETIREMENT_OUTCOME.CLEARED, {
+    scope: Object.freeze({...scoped, nodeBootIncarnation: boot}),
+  });
 }
 
 function isScopedPlacementLearnerRetirement(operation) {

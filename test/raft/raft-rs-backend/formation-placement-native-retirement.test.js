@@ -11,6 +11,7 @@ import {
   createRemovalSourceHandler, durableLifecycleState, nextTurns,
   partitionClusterAtRowAddresses, rowDrivenRetirements,
 } from '../../node/replica-removal-consensus-exit-fixture.js';
+import {PARTITION_SERVICE_EVENT} from '../../../src/partition/partition-service-constants.js';
 import {relayPartitionConsensusObservations} from
   '../../../src/partition/partition-service-raft-lifecycle-wiring.js';
 import {ledgerRows} from '../../partition/placement-admission-fixture.js';
@@ -77,12 +78,12 @@ function commitLatePromotion(cluster, targetReplicaId) {
   }), 'native promotion must reach its stable committed configuration');
 }
 
-function sourceOf(cluster, row, operations) {
+function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
   return createRemovalSourceHandler({cluster, replicaId: row.replica_id,
     partitionId: row.partition_id, nodeId: row.node_id,
     cache: createMockCache({services: [row], partitions: [{partition_id: row.partition_id,
       leader_node_id: SEED}]}),
-    createdAt: row.created_at, ownerIncarnation: BOOT,
+    createdAt: row.created_at, ownerIncarnation,
     rowOf: (status) => ({...row, status}), replicaOperations: operations});
 }
 
@@ -244,7 +245,7 @@ async function seeRejoinedCleanup(context, t) {
   const {first, rejoinDelivery, coordinator, removal, nodes, deliveries, cluster} = context;
   const bounded = Promise.withResolvers();
   const timeout = setTimeout(() => bounded.reject(new Error(
-    'same-boot committed rejoin did not wake the retained cleanup')),
+    'committed rejoin did not wake the retained cleanup')),
   CONTROL_OBSERVATION_BOUND_MS);
   try {
     return await Promise.race([rejoinDelivery.promise, bounded.promise]);
@@ -259,58 +260,92 @@ async function seeRejoinedCleanup(context, t) {
   }
 }
 
-test('the workflow clears a lost learner before its captured generation can clean up on rejoin',
-  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
-    const {cluster, initial, nodes, clock} = context;
-    const targetId = initial.replica_id;
-    cluster.isolate(targetId);
-    const {rows, removal} = await admitRetirement(context);
-    const source = sourceOf(cluster, rows.find((row) => row.replica_id === targetId), [removal]);
-    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
-      [removal]);
-    const deliveries = [];
-    const rejoinDelivery = Promise.withResolvers();
-    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
-      deliveries, leader, clock, onLocalDelivery(payload, answer) {
-        if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-          rejoinDelivery.resolve(answer);
-        }
-      }});
-    try {
-      const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
-      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
-      const first = await coordinator.dispatchOperation(removal);
-      assert.ok(settleCluster(cluster, () =>
-        !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
-      assert.ok(deliveries.some(({address, payload}) => address.startsWith(`${SEED}/`) &&
+for (const restart of [false, true]) {
+  const rejoin = restart ? 'same-disk process restart' : 'same-boot rejoin';
+  test(`the workflow clears a lost learner before its captured generation cleans up on ${rejoin}`,
+    {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+      const {cluster, initial, nodes, clock} = context;
+      const targetId = initial.replica_id;
+      cluster.isolate(targetId);
+      const {rows, removal} = await admitRetirement(context);
+      const service = rows.find((row) => row.replica_id === targetId);
+      const source = sourceOf(cluster, service, [removal]);
+      const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+        [removal]);
+      const deliveries = [];
+      const consensusWakes = [];
+      leader.service.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
+        (observation) => consensusWakes.push(observation));
+      const rejoinDelivery = Promise.withResolvers();
+      const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
+        deliveries, leader, clock, onLocalDelivery(payload, answer) {
+          if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+            rejoinDelivery.resolve(answer);
+          }
+        }});
+      try {
+        const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
+        assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
+        const first = await coordinator.dispatchOperation(removal);
+        assert.ok(settleCluster(cluster, () =>
+          !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
+        assert.ok(consensusWakes.some((event) => event.partitionId === cluster.partitionId &&
+          event.replicaId === SEED_REPLICA && event.confState &&
+          event.confState.learners.every((learner) => String(learner) !== peerId)),
+        'the actual partition consensus relay carried committed learner absence');
+        assert.ok(deliveries.some(({address, payload}) => address.startsWith(`${SEED}/`) &&
         payload.type === ReplicaOperationMessageType.REMOVE_LEARNER));
-      assert.equal(source.lifecycleStore.durable.services.get(targetId).status,
-        ReplicaStatus.ACTIVE, 'the isolated target has not cleaned up');
-      assert.equal(cluster.isolated.delete(targetId), true);
-      await nodes.renew();
-      await context.observeCommittedPlacement();
-      // Virtual retry timers do not advance. This turn has to come from the
-      // committed owner event after the genuine same-boot READY publication.
-      const retried = await seeRejoinedCleanup({
-        first, rejoinDelivery, coordinator, removal, nodes, deliveries, cluster,
-      }, t);
-      assert.equal(retried.status, ReplicaOperationResponseStatus.INITIATED);
-      const cleanup = await deliverCommittedSourceChange(source, cluster);
-      t.diagnostic(JSON.stringify({first, retried, cleanup, deliveries}));
-      assert.equal(cleanup?.created_at,
-        JSON.parse(removal.steps_history)[0].placementAdmission.learnerRetirement.replicaCreatedAt);
-      assert.equal(cleanup.trigger_reason, 'placement_learner_membership_cleared');
-      for (let turn = 0; turn < DELIVERY_BOUND_ROUNDS &&
+        assert.equal(source.lifecycleStore.durable.services.get(targetId).status,
+          ReplicaStatus.ACTIVE, 'the isolated target has not cleaned up');
+        const rejoinedBoot = BOOT + Number(restart);
+        if (restart) {
+          const disk = cluster.replica(targetId).dbFile;
+          await source.dispose();
+          assert.equal(cluster.restart(targetId).dbFile, disk);
+          nodes.publishNewBootAtSameWatermark();
+          Object.assign(source, sourceOf(cluster, service, [removal], rejoinedBoot));
+          source.handler.messageRouter = coordinator.workflowOwner.messageRouter;
+        }
+        assert.equal(cluster.isolated.delete(targetId), true);
+        const readyObserved = nodes.waitForCommittedTarget((row) =>
+          row.boot_incarnation === rejoinedBoot && row.connection_state === STATE.READY);
+        await nodes.renew(rejoinedBoot);
+        await readyObserved;
+        await context.observeCommittedPlacement();
+        // Virtual retry timers do not advance. This turn has to come from the
+        // committed owner event after the genuine same-boot READY publication.
+        const retried = await seeRejoinedCleanup({
+          first, rejoinDelivery, coordinator, removal, nodes, deliveries, cluster,
+        }, t);
+        assert.equal(retried.status, ReplicaOperationResponseStatus.INITIATED);
+        const cleanup = await deliverCommittedSourceChange(source, cluster);
+        t.diagnostic(JSON.stringify({first, retried, cleanup, deliveries}));
+        assert.equal(cleanup?.created_at,
+          JSON.parse(removal.steps_history)[0].placementAdmission.learnerRetirement.replicaCreatedAt);
+        assert.equal(cleanup.trigger_reason, 'placement_learner_membership_cleared');
+        const cleanupDelivery = deliveries.findLast(({payload}) =>
+          payload.type === ReplicaOperationMessageType.REMOVE_REPLICA);
+        assert.equal(cleanupDelivery.payload.learnerRetirement.nodeBootIncarnation, rejoinedBoot);
+        assert.equal(deliveries.filter(({payload}) =>
+          payload.type === ReplicaOperationMessageType.REMOVE_LEARNER &&
+        payload.learnerRetirement.canPropose === true).length >= 1, true);
+        if (restart) {
+          assert.equal(deliveries.findLast(({payload}) =>
+            payload.type === ReplicaOperationMessageType.REMOVE_LEARNER)
+            .payload.learnerRetirement.canPropose, false);
+        }
+        for (let turn = 0; turn < DELIVERY_BOUND_ROUNDS &&
         source.lifecycleStore.durable.services.has(targetId); turn += 1) {
-        await nextTurns(1);
+          await nextTurns(1);
+        }
+        assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
+      } finally {
+        await coordinator.shutdown();
+        await source.dispose();
+        await leader.dispose();
       }
-      assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
-    } finally {
-      await coordinator.shutdown();
-      await source.dispose();
-      await leader.dispose();
-    }
-  }, {createCluster: addressedCluster}));
+    }, {createCluster: addressedCluster}));
+}
 
 for (const successor of ['boot', 'service generation']) {
   test(`a held learner REMOVE cannot cross a newer ${successor}`,
@@ -334,7 +369,17 @@ for (const successor of ['boot', 'service generation']) {
         t.diagnostic(JSON.stringify({outcome, deliveries}));
         const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
         assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
-        assert.deepEqual(deliveries, [], 'the old scope granted no transport effect');
+        if (successor === 'boot') {
+          assert.ok(deliveries.some(({payload}) =>
+            payload.type === ReplicaOperationMessageType.REMOVE_LEARNER &&
+            payload.learnerRetirement.canPropose === false));
+          assert.ok(deliveries.every(({payload}) =>
+            payload.type === ReplicaOperationMessageType.REMOVE_LEARNER &&
+            payload.learnerRetirement.canPropose === false),
+          'the newer boot can only request proof of prior native absence');
+        } else {
+          assert.deepEqual(deliveries, [], 'the old service generation granted no transport effect');
+        }
       } finally {
         await coordinator.shutdown();
         await source.dispose();

@@ -185,9 +185,9 @@ function openPlacementNodes(clock, cache, cluster) {
       gate = {entered: Promise.withResolvers(), release: Promise.withResolvers()};
       return gate;
     },
-    async renew() {
+    async renew(bootIncarnation = BOOT) {
       const result = await lifecycle.publish({
-        nodeId: TARGET, bootIncarnation: BOOT, state: STATE.READY, heartbeatAt: now(),
+        nodeId: TARGET, bootIncarnation, state: STATE.READY, heartbeatAt: now(),
       });
       assert.equal(result.outcome,
         NODE_LIFECYCLE_PUBLICATION_OUTCOME.APPLIED, JSON.stringify(result));
