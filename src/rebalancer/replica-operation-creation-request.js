@@ -83,8 +83,17 @@ function operationMatchesCreationRequest(owner, operation, move, placementIntent
       operation.sourceNodeId === (move.sourceNodeId || owner.nodeId));
 }
 
+function supersededPlacementOperationError(operation) {
+  return Object.assign(new Error(`Placement operation ${operation.operationId} was superseded`), {
+    code: 'PLACEMENT_OPERATION_SUPERSEDED',
+    reasonCode: 'placement_operation_superseded',
+    operationId: operation.operationId,
+  });
+}
+
 export {
   matchesExplicitCreationBindings,
   operationMatchesCreationRequest,
   readCreationRequestIdentity,
+  supersededPlacementOperationError,
 };

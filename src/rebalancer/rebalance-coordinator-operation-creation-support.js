@@ -1,3 +1,4 @@
+import {supersededPlacementOperationError} from './replica-operation-creation-request.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
@@ -499,6 +500,9 @@ const operationCreationSupportMethods = {
         !matchesCommittedSinglePlacementStatement(operation, requested, admitted.statement) ||
         !this.operationMatchesCreationRequest(operation, move, placementIntent)) {
       return this.refuseConflictingCreation(operation, move);
+    }
+    if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
+      throw supersededPlacementOperationError(operation);
     }
     return operation;
   },

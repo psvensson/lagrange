@@ -1,7 +1,10 @@
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {getOperationMetadataObject} from './replica-status.js';
-import {operationMatchesCreationRequest} from './replica-operation-creation-request.js';
+import {
+  operationMatchesCreationRequest,
+  supersededPlacementOperationError,
+} from './replica-operation-creation-request.js';
 import {
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
@@ -220,6 +223,9 @@ class RebalanceCoordinatorOperationIntentMethods {
           if (retireRecentHint || allowAbsent) {
             this.pruneRecentOperationIntentsForOperation(operation);
             return null;
+          }
+          if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
+            throw supersededPlacementOperationError(operation);
           }
           if (operation.workflowStep === WORKFLOW_STEP.FAILED) {
             throw this.createDeferredOperationVisibilityError(
