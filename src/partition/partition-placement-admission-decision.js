@@ -189,11 +189,12 @@ function admissionRefusal(db, statement, census) {
   return capacityRefusal(statement, census) ?? claimRefusal(db, statement);
 }
 
-function admissionMetadataOf(command, statement) {
+function admissionMetadataOf(command, statement, move) {
   return Object.freeze({entryId: command.entryId,
     transitionKind: statement.transitionKind, placementClass: statement.placementClass,
     repair: statement.repair, formationLatchEpoch: statement.formationLatchEpoch,
-    foundingIntentId: statement.foundingIntentId});
+    foundingIntentId: statement.foundingIntentId,
+    ...(move.learnerRetirement === undefined ? {} : {learnerRetirement: move.learnerRetirement})});
 }
 
 function promoteReplicaIdsOf(move) {
@@ -220,7 +221,7 @@ function operationOf(command, statement, move, identity) {
     identity.replicaId);
   const first = operation.stepsHistory[0];
   first[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION] =
-    admissionMetadataOf(command, statement);
+    admissionMetadataOf(command, statement, move);
   if (statement.dispatchHold !== null) {
     first[OPERATION_METADATA_KEY.DISPATCH_HOLD] = statement.dispatchHold;
   }

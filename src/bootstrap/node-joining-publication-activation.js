@@ -13,7 +13,8 @@ import {ENTITY_TYPE} from '../constants/addresses.js';
 import {isConsensusInitRefusal} from '../raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../raft/raft-committed-membership-constants.js';
-import {assertDurableRejoinStorageAdmission} from
+import {DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK,
+  assertDurableRejoinStorageAdmission} from
   './durable-rejoin-storage-admission.js';
 import {nodeStateUpdateOptionsFromLifecycleRequest} from
   '../control-plane/node-lifecycle-publication-wire.js';
@@ -124,7 +125,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * Ensure the restore batch has concrete local runtimes before publication.
    * The generic reconciler records action failures without throwing; durable
    * rejoin owns this exact-runtime invariant before activating service rows.
-   * A replica refused for holding no durable record (O4) is left out.
+   * A replica with no durable record or owned by a committed retirement is left out.
    * @param {Object[]} restorePlans
    * @return {Promise<Object[]>} The plans whose runtimes exist.
    * @private
@@ -144,14 +145,14 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       try {
         await this.createJoinPartitionReplica({replicaOptions: restorePlan});
       } catch (error) {
-        if (!isDurableRecordMissingRefusal(error)) {
-          throw error;
-        }
+        const retired = error.code === DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK;
+        if (!retired && !isDurableRecordMissingRefusal(error)) throw error;
         restored.pop();
-        this.logger.warn(DURABLE_REJOIN_RECORD_MISSING_MSG, {
+        this.logger.warn(retired ? 'Durable rejoin disk belongs to placement retirement' :
+          DURABLE_REJOIN_RECORD_MISSING_MSG, {
           nodeId: this.nodeId, replicaId,
           partitionId: restorePlan.partitionId,
-          phase: error.consensus.phase,
+          phase: error.consensus?.phase,
         });
         continue;
       }

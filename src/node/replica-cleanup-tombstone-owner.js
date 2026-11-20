@@ -23,7 +23,10 @@ import {
   REPLICA_CLEANUP_ERROR_CODE,
   REPLICA_CLEANUP_LOG_MSG,
 } from './replica-cleanup-constants.js';
-import {observeAuthoritativeReplicaLifecycle} from
+import {learnerRetirementOperationId, learnerRetirementToken} from
+  './replica-learner-retirement-lifecycle.js';
+import {buildReplicaLifecycleMutationPredicateFromRow,
+  isReplicaLifecycleMutationPredicate, observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 
 const REPLICA_CLEANUP_SERVICE_TYPE = SERVICE_TYPE.PARTITION_CLEANUP;
@@ -94,6 +97,28 @@ function rowIsReplacementForAuthority(row, authority) {
     typeof row?.status === 'string' &&
     (Number.isFinite(row?.state_entered_at) ||
       Number.isFinite(row?.updated_at));
+}
+
+function cleanupReceiptOperationId(token) {
+  return learnerRetirementOperationId(token) ?? parseFailedCreateRemoveOperationId(token);
+}
+
+function matchesScopedLearnerCleanup(authority, scope) {
+  return authority?.partitionId === scope.partitionId && authority?.nodeId === scope.targetNodeId &&
+    authority?.replicaId === scope.replicaId && authority?.replicaCreatedAt === scope.replicaCreatedAt &&
+    authority?.ownerToken === learnerRetirementToken(scope.operationId);
+}
+
+async function observeScopedLearnerCleanup(gateway, scope) {
+  try {
+    const observation = await observeAuthoritativeReplicaLifecycle({
+      getControlPlaneSystemTableGateway: () => gateway,
+    }, scope.replicaId);
+    return observation.available === true &&
+      matchesScopedLearnerCleanup(cleanupAuthorityFromRow(observation.row), scope);
+  } catch {
+    return false;
+  }
 }
 
 function throwCleanupReleaseDeferred(authority, effect, result = null) {
@@ -239,7 +264,6 @@ class ReplicaCleanupTombstoneOwner {
     const removalToken = removingAuthority?.replicaState?.cleanupToken;
     const ownerToken = isFailedCreateRemoveToken(removalToken) ?
       removalToken : this.randomUUID();
-    const updatedAt = this.now();
     const whereClause = {
       service_id: removingAuthority.replicaState.serviceId,
       service_type: SERVICE_TYPE.PARTITION,
@@ -249,6 +273,27 @@ class ReplicaCleanupTombstoneOwner {
       [removingAuthority.durableVersionColumn]:
         removingAuthority.durableVersion,
     };
+    return this.takeoverRow(whereClause, ownerToken, reason);
+  }
+
+  async takeOverAbsentLearner(scope) {
+    const token = learnerRetirementToken(scope.operationId);
+    const observed = await this.observeAuthority(scope.replicaId);
+    if (!observed.available) return null;
+    if (matchesScopedLearnerCleanup(observed.authority, scope)) return observed.authority;
+    const row = observed.row;
+    if (row?.service_type !== SERVICE_TYPE.PARTITION || row.replica_id !== scope.replicaId ||
+        !matchesScopedLearnerCleanup({partitionId: row.partition_id, nodeId: row.node_id,
+          replicaId: row.service_id, replicaCreatedAt: row.created_at,
+          ownerToken: row.cleanup_token}, scope)) return null;
+    const whereClause = buildReplicaLifecycleMutationPredicateFromRow(row);
+    if (!isReplicaLifecycleMutationPredicate(whereClause)) return null;
+    const authority = await this.takeoverRow(whereClause, token, 'placement_learner_membership_cleared');
+    return matchesScopedLearnerCleanup(authority, scope) ? authority : null;
+  }
+
+  async takeoverRow(whereClause, ownerToken, reason) {
+    const updatedAt = this.now();
     const data = {
       service_type: REPLICA_CLEANUP_SERVICE_TYPE,
       status: REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
@@ -304,7 +349,7 @@ class ReplicaCleanupTombstoneOwner {
   async markComplete(authority, completion = {}) {
     if (completion.artifactsAbsent !== true ||
         authority?.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.OWNED ||
-        !isFailedCreateRemoveToken(authority.ownerToken) ||
+        !cleanupReceiptOperationId(authority.ownerToken) ||
         !await this.requireCurrent(authority)) return false;
     const updatedAt = Math.max(this.now(), authority.updatedAt + 1);
     try {
@@ -363,9 +408,7 @@ class ReplicaCleanupTombstoneOwner {
     if (authority?.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
       return false;
     }
-    const operationId = parseFailedCreateRemoveOperationId(
-      authority.ownerToken,
-    );
+    const operationId = cleanupReceiptOperationId(authority.ownerToken);
     if (!operationId) return false;
     return this.isCleanupOperationTerminal(operationId);
   }
@@ -457,5 +500,7 @@ export {
   REPLICA_CLEANUP_ERROR_CODE,
   ReplicaCleanupTombstoneOwner,
   cleanupDeferredError,
+  cleanupReceiptOperationId,
   isCleanupTombstoneRow,
+  observeScopedLearnerCleanup,
 };

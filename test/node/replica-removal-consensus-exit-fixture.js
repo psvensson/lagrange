@@ -94,15 +94,18 @@ function partitionServiceRow(partitionId, replicaId, status) {
  * the row against that address.
  * @param {string} partitionId
  * @param {Array<string>} replicaIds
+ * @param {Object} [options] - Optional node identity mapping.
  * @return {PartitionNodeCluster}
  */
-function partitionClusterAtRowAddresses(partitionId, replicaIds) {
-  const addressOf = (replicaId) => partitionServiceRow(partitionId, replicaId,
-    ReplicaStatus.ACTIVE).address;
-  const cluster = new PartitionNodeCluster({partitionId, replicaIds,
+function partitionClusterAtRowAddresses(partitionId, replicaIds, {
+  nodeIdOf = (replicaId) => `${replicaId}-node`,
+} = {}) {
+  const addressOf = (replicaId) => `${nodeIdOf(replicaId)}/partition/${replicaId}`;
+  const founderNodeIds = Object.fromEntries(replicaIds.map((id) => [id, nodeIdOf(id)]));
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds, founderNodeIds,
     resolveFor: (_replicaId, peerReplicaId) => addressOf(peerReplicaId),
     sendFor: (replicaId, address, packet) => {
-      const target = replicaIds.find((peer) => addressOf(peer) === address);
+      const target = cluster.replicaIds.find((peer) => addressOf(peer) === address);
       cluster.queue(replicaId, cluster.addressOf(target), packet);
       return DELIVERED_TO_PEER;
     }});
@@ -169,6 +172,8 @@ function durableLifecycleState(dbFile, groupId) {
  * @param {Object} options.cache - The world's system-table cache (get,
  *   upsert, delete, filter).
  * @param {Function} options.rowOf - (status) => the replica's services row.
+ * @param {number} [options.createdAt] - Committed service lifecycle generation.
+ * @param {number} [options.ownerIncarnation] - Handler node boot identity.
  * @param {string|null} [options.createAttemptToken] - The replica's create
  *   attempt (its generation's CREATE admission is in replicaOperations).
  * @param {Array<Object>} [options.replicaOperations] - replica_operations
@@ -177,17 +182,19 @@ function durableLifecycleState(dbFile, groupId) {
  *   removeRequest, dispose}.
  */
 function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
-  cache, rowOf, createAttemptToken = null, replicaOperations = []}) {
+  cache, rowOf, createdAt = 1, ownerIncarnation, createAttemptToken = null,
+  replicaOperations = []}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
   const outcomes = [];
+  const serviceChanges = [];
   const initialRow = createLifecycleServiceRow({
     replicaId,
     partitionId,
     nodeId,
     status: ReplicaStatus.ACTIVE,
-    createdAt: 1,
-    stateEnteredAt: 1,
+    createdAt,
+    stateEnteredAt: createdAt,
     createAttemptToken,
     ...rowOf(ReplicaStatus.ACTIVE),
   });
@@ -206,8 +213,10 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   lifecycleStore.gateway.submitMutation = async (...args) => {
     const result = await submitMutation(...args);
     const durableRow = lifecycleStore.durable.services.get(replicaId) || null;
-    if (durableRow) cache.upsert(SERVICES, durableRow);
-    else cache.delete(SERVICES, replicaId);
+    if (durableRow) {
+      serviceChanges.push({...durableRow});
+      cache.upsert(SERVICES, durableRow);
+    } else cache.delete(SERVICES, replicaId);
     return result;
   };
   const replicaStateMachine = new ReplicaStateMachine({
@@ -239,6 +248,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     partitionId,
     replicaId,
     raft: cluster.node(replicaId),
+    timeSource: replicaStateMachine.timeSource,
     admissionFenced: false,
     fenceServingAdmissionForRemoval() {
       service.admissionFenced = true;
@@ -250,6 +260,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   });
   const handler = new ReplicaHandler({
     nodeId,
+    ownerIncarnation,
     dataDir,
     systemTableCache: cache,
     cdcIntegrationService: {},
@@ -283,6 +294,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     outcomes,
     exits,
     lifecycleStore,
+    serviceChanges,
     removeRequest(operationId, reason = 'rebalancing') {
       return handler.handleRemoveReplica({
         [ReplicaOperationField.TYPE]:
@@ -345,6 +357,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
         await restart.replicaStateMachine.clear();
       }
       handler.shuttingDown = true;
+      await handler.participantReleaseRecovery.shutdown();
       // The production shutdown boundary: close lifecycle admission and
       // advance every generation, so a removal still in flight cannot reach
       // the process-wide raft lifecycle registry (keyed by replica identity)

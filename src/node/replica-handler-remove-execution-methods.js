@@ -9,6 +9,7 @@ import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js
 import {isFailedCreateRemoveToken} from
   '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {LEARNER_MEMBERSHIP_CLEARED_REASON} from '../rebalancer/replica-operation-constants.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
 import {
@@ -19,7 +20,7 @@ import {
 } from './replica-handler-constants.js';
 import {
   REPLICA_CONSENSUS_EXIT_REASON,
-  awaitReplicaConsensusExit,
+  awaitReplicaConsensusExit, leaveConsensus,
 } from './replica-removal-consensus-exit.js';
 import {
   REPLICA_LEADER_CLEAR_DEFERRED,
@@ -223,45 +224,21 @@ async function runRemovalEffectsOrThrow(
   return true;
 }
 
-/**
- * When the retiring replica leaves consensus. A replica of a group retired
- * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
- * leaves at once: its whole group ends at the durable workflow transition,
- * nobody proposes a conf change for it, and nothing commits in it again.
- * Every other removal keeps participating until its own removal applies
- * (ruling F2).
- * @param {Object} handler
- * @param {Object} request
- * @param {Object|null} service
- * @return {Promise<Object>} Frozen {reason}.
- */
-function leaveConsensus(handler, request, service) {
-  const {operationId, partitionId, replicaId} = request;
-  if (request.groupRetirement?.retire === true) {
-    const exit = Object.freeze({
-      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
-    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
-      operationId, replicaId, partitionId, nodeId: handler.nodeId,
-      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
-    });
-    return Promise.resolve(exit);
-  }
-  return handler.awaitReplicaRemovalConsensusExit(service, {
-    operationId,
-    replicaId,
-    partitionId,
-  });
-}
-
 async function performReplicaRemoval(handler, request, service, lifecycle,
   execution) {
   const {operationId, partitionId, replicaId} = request;
   // A group retired as a unit records its retirement as such - on the
   // REMOVING row (the row-driven reconcile proposes no conf change for it)
   // and on the durable lifecycle row.
-  const reason = request.groupRetirement?.retire === true ?
-    GROUP_RETIREMENT_REASON : request.reason;
+  const triggerReason = request.groupRetirement?.retire === true ?
+    GROUP_RETIREMENT_REASON : request.learnerRetirement === undefined ?
+      null : LEARNER_MEMBERSHIP_CLEARED_REASON;
+  const reason = triggerReason ?? request.reason;
   handler.throwIfShuttingDown();
+  if (request.learnerRetirement !== undefined &&
+      request.learnerRetirement.replicaCreatedAt !== lifecycle.trackedState?.createdAt) {
+    throw removalRowDeleteDeferred(replicaId);
+  }
   await handler.waitForReplicaServingDrain(service);
   const retiringRow = await handler.publishReplicaRetiringRow({
     operationId,
@@ -269,8 +246,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     partitionId,
     service,
     removalLifecycleSnapshot: lifecycle,
-    triggerReason: request.groupRetirement?.retire === true ?
-      GROUP_RETIREMENT_REASON : null,
+    triggerReason,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,

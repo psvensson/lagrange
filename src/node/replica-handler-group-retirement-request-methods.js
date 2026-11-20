@@ -311,6 +311,7 @@ function assignReplicaHandlerGroupRetirementRequestMethods(ReplicaHandler) {
                 replicaId,
                 reason,
                 groupRetirement,
+                learnerRetirement: request?.[ReplicaOperationField.LEARNER_RETIREMENT],
                 groupRetirementEvidence:
                   request?.[ReplicaOperationField.GROUP_RETIREMENT] ?? null,
               }).catch((error) => {

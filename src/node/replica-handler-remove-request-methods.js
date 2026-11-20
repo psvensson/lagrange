@@ -29,6 +29,7 @@ import {
 } from './replica-removal-debt-errors.js';
 import {closeRemovalCreateAdmission} from
   './replica-removal-create-admission-close.js';
+import {checkPlacementLearnerCleanup} from './replica-handler-placement-learner-cleanup.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 // A failed-create cleanup request's two authority decisions. A deferral (an
@@ -539,6 +540,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
+      const blocked = await checkPlacementLearnerCleanup(this, request);
+      if (blocked !== null) return blocked;
       const trackedOperation = this.inProgressOperations.get(operationId);
       const sameRemovalAlreadyInProgress = isSameReplicaRemoval(
         trackedOperation,

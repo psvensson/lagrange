@@ -46,7 +46,7 @@ documentClass: generated
 - [cluster-incarnation-fence.js](cluster-incarnation-fence.js) - No leading comment; first export: CLUSTER_INCARNATION_FENCE_STATE. (importers: few)
 - [control-plane-write-health-owner.js](control-plane-write-health-owner.js) - No leading comment; first export: CONTROL_PLANE_WRITE_HEALTH_STATE. (importers: few)
 - [critical-placement-convergence.js](critical-placement-convergence.js) - Drain a Set through its captured iterator rather than Set.prototype.forEach, which is a seam an ambient callback can... (importers: few)
-- [durable-rejoin-storage-admission.js](durable-rejoin-storage-admission.js) - No leading comment; first export: assertDurableRejoinStorageAdmission. (importers: one)
+- [durable-rejoin-storage-admission.js](durable-rejoin-storage-admission.js) - No leading comment; first export: DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK. (importers: few)
 - [index.js](index.js) - Bootstrap module - System initialization and startup. (importers: one)
 - [join-cleanup-handler.js](join-cleanup-handler.js) - Join Cleanup Handler - handles failure cleanup and resource teardown for a joining node. (importers: many)
 - [join-cleanup-publication-context.js](join-cleanup-publication-context.js) - No leading comment; first export: buildFailedJoinMembershipPublicationContext. (importers: one)

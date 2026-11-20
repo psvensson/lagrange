@@ -404,6 +404,7 @@ function normalizeRemoveLearner(change, registry) {
       operationId: change.operationId ?? null,
       replicaIdentity: resolved.replicaIdentity,
       peerId: resolved.peerId,
+      expectedNodeId: change.expectedNodeId,
     }),
   };
 }

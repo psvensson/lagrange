@@ -257,7 +257,7 @@ documentClass: generated
 - [replica-dispatch-service-shared.js](replica-dispatch-service-shared.js) - ReplicaDispatchService - Replica operation dispatch and message forwarding. (importers: many)
 - [replica-dispatch-service.js](replica-dispatch-service.js) - A pre-canonical target's services row has no provable entity binding. (importers: hub)
 - [replica-dispatch-state-publication.js](replica-dispatch-state-publication.js) - Routed ingress adapter: the receiving message-group replica publishes the node lifecycle request itself. (importers: few)
-- [serve-eligibility-owner.js](serve-eligibility-owner.js) - No leading comment; first export: SERVE_ELIGIBILITY_DECISION. (importers: many)
+- [serve-eligibility-owner.js](serve-eligibility-owner.js) - No leading comment; first export: SERVE_ELIGIBILITY_DECISION. (importers: hub)
 - [serve-eligibility-record-decision.js](serve-eligibility-record-decision.js) - The serve decision for one node from committed facts at one read instant. (importers: few)
 - [snapshot-service.js](snapshot-service.js) - SnapshotService coordinates active-gate snapshot operations and write queue management. (importers: few)
 - [startup-authority-snapshot-contract.js](startup-authority-snapshot-contract.js) - No leading comment; first export: STARTUP_AUTHORITY_ADMISSION_STATE. (importers: one)

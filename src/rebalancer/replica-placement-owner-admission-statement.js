@@ -14,6 +14,7 @@ import {
   copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
 import {OperationType} from './replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
@@ -37,6 +38,14 @@ const STATEMENT_FIELDS = Object.freeze(['transitionKind', 'entityType',
 const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
+const LEARNER_RETIREMENT = ReplicaOperationField.LEARNER_RETIREMENT;
+const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, LEARNER_RETIREMENT]);
+const LEARNER_RETIREMENT_FIELDS = Object.freeze([
+  'nodeBootIncarnation', 'replicaCreatedAt', 'lifecycleVersion', 'lifecycleVersionColumn',
+]);
+const LEARNER_RETIREMENT_VERSION_COLUMNS = Object.freeze(new Set([
+  'state_entered_at', 'updated_at',
+]));
 const KINDS = Object.freeze(new Set(Object.values(KIND)));
 const MOVE_TYPES = Object.freeze(new Set([
   ...Object.values(OperationType),
@@ -126,11 +135,20 @@ function isMoveShapeValid(kind, move) {
 
 function canonicalMove(kind, value) {
   const move = copyStrictOwnDataRecord(value);
-  if (!hasExactFields(move, MOVE_FIELDS) || !MOVE_TYPES.has(move.type) ||
-      !isMoveShapeValid(kind, move)) {
-    return null;
+  if (move === null || !MOVE_TYPES.has(move.type) || !isMoveShapeValid(kind, move)) return null;
+  if (!Object.hasOwn(move, LEARNER_RETIREMENT)) {
+    return hasExactFields(move, MOVE_FIELDS) ? ordered(move, MOVE_FIELDS) : null;
   }
-  return ordered(move, MOVE_FIELDS);
+  const retirement = copyStrictOwnDataRecord(move.learnerRetirement);
+  if (!hasExactFields(move, LEARNER_RETIREMENT_MOVE_FIELDS) || kind !== KIND.PLACEMENT ||
+      move.type !== OperationType.REMOVE ||
+      !hasExactFields(retirement, LEARNER_RETIREMENT_FIELDS) ||
+      !isPositiveInteger(retirement.nodeBootIncarnation) ||
+      !isPositiveInteger(retirement.replicaCreatedAt) ||
+      !isPositiveInteger(retirement.lifecycleVersion) ||
+      !LEARNER_RETIREMENT_VERSION_COLUMNS.has(retirement.lifecycleVersionColumn)) return null;
+  return ordered({...move, learnerRetirement: ordered(retirement, LEARNER_RETIREMENT_FIELDS)},
+    LEARNER_RETIREMENT_MOVE_FIELDS);
 }
 
 // FOUND admits the whole founding set: one ADD per founder, on distinct
@@ -235,7 +253,7 @@ function isFullSourceCapacity(placementClass, repair) {
  * @return {number} kSrcForClass.
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
-  ...MOVE_FIELDS,
+  ...LEARNER_RETIREMENT_MOVE_FIELDS,
   'promoteReplicaIds',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
@@ -293,7 +311,9 @@ function moveOf(value) {
     sourceReplicaId: move.sourceReplicaId ?? null,
     copySourceNodeId: move.copySourceNodeId ?? null,
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
-    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null};
+    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
+    ...(Object.hasOwn(move, LEARNER_RETIREMENT) ?
+      {learnerRetirement: move.learnerRetirement} : {})};
 }
 
 function isValidCandidateRecord(record) {

@@ -15,6 +15,7 @@ const READ_REPLICA_LIFECYCLE_SQL = `SELECT
   partition_id,
   node_id,
   service_type,
+  raft_role,
   status,
   address,
   previous_state,

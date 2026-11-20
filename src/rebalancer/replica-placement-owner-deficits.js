@@ -7,9 +7,9 @@
 // declared hosts, co-located voters included: a count-neutral REPLACE) >
 // SURPLUS. Spread is counted in declared hosts (NODES.host_id,
 // read only through readNodeHostIdentity). Eligibility is per target: a node
-// without a valid READY lease, or without a declared host, is excluded as a
-// target and its replicas are repair deficits; it never holds admissions to
-// any other target. The copy source of a copy is the partition's current
+// without a valid READY lease or declared host cannot receive replicas.
+// Existing members keep their occupancy while their authority is unresolved.
+// The copy source of a copy is the partition's current
 // Raft leader (WP-A). REBALANCE (load and affinity scoring) stays with the
 // target scorer and is not derived here.
 import {projectNodeLivenessSemantics} from
@@ -19,9 +19,12 @@ import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
 import {
   COLUMN,
+  NODE_STATE,
   SERVICE_STATUS,
+  STATE,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
+import {durableRowVersion} from '../node/replica-state-machine-lifecycle-observation.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   isCatchupLearnerRaftRole,
@@ -57,27 +60,42 @@ function compareText(left, right) {
   return left < right ? -1 : 1;
 }
 
+function observesCommittedNodeLoss(row) {
+  const boot = row[COLUMN.BOOT_INCARNATION];
+  if (!Number.isSafeInteger(boot) || boot <= 0) return false;
+  const status = row[COLUMN.STATUS];
+  if (status === NODE_STATE.FAILED || status === NODE_STATE.STOPPED) return true;
+  return row[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED &&
+    row[COLUMN.READY_LEASE_EXPIRES_AT] === null;
+}
+
 /**
  * The per-target eligibility of the committed node answer at nowMs: a node
  * is an eligible target while its READY lease is valid (status ACTIVE and
  * lease unexpired) and its host is declared.
  * @param {Object} input - {nodeRows, nowMs}.
- * @return {Object} Frozen {hostOfNode: Map(eligible nodeId -> hostId),
- *   eligibleNodeIds: sorted Array, eligibleHostIds: Set}.
+ * @return {Object} Eligible target hosts, incumbent host declarations and
+ *   positive loss observations, all from the same committed node answer.
  */
 function buildPlacementNodeEligibility({nodeRows, nowMs}) {
   const hostOfNode = new Map();
+  const declaredHosts = new Map();
+  const lostNodeIds = new Set();
+  const nodeBoots = new Map();
   for (const nodeRow of nodeRows) {
     const nodeId = nodeRow[COLUMN.NODE_ID];
+    if (typeof nodeId !== 'string') continue;
+    const boot = nodeRow[COLUMN.BOOT_INCARNATION];
+    if (Number.isSafeInteger(boot) && boot > 0) nodeBoots.set(nodeId, boot);
+    if (observesCommittedNodeLoss(nodeRow)) lostNodeIds.add(nodeId);
     const host = readNodeHostIdentity(nodeRow);
-    if (typeof nodeId !== 'string' ||
-        host.state !== NODE_HOST_IDENTITY_STATE.DECLARED ||
-        projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow !== true) {
-      continue;
+    if (host.state !== NODE_HOST_IDENTITY_STATE.DECLARED) continue;
+    declaredHosts.set(nodeId, host.hostId);
+    if (projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow === true) {
+      hostOfNode.set(nodeId, host.hostId);
     }
-    hostOfNode.set(nodeId, host.hostId);
   }
-  return Object.freeze({hostOfNode,
+  return Object.freeze({hostOfNode, declaredHosts, lostNodeIds, nodeBoots,
     eligibleNodeIds: Object.freeze([...hostOfNode.keys()].sort(compareText)),
     eligibleHostIds: Object.freeze(new Set(hostOfNode.values()))});
 }
@@ -154,15 +172,17 @@ function classifyServiceRow(row, promotedVoterReplicaIds = null) {
   const activeVoter = status === SERVICE_STATUS.ACTIVE && isVoterRole(role);
   const caughtUp = isLearner && status === SERVICE_STATUS.ACTIVE &&
     row.caught_up !== false && row.caughtUp !== false;
-  const activeLearner = isLearner &&
-    (caughtUp || status === ReplicaStatus.SYNCING);
   return {
     replicaId,
     nodeId,
     role,
     isLearner,
     caughtUp,
-    failed: isLearner ? !activeLearner : !activeVoter,
+    failed: status === ReplicaStatus.FAILED || status === SERVICE_STATUS.STOPPED,
+    operationalVoter: activeVoter,
+    createdAt: row[COLUMN.CREATED_AT],
+    lifecycleVersion: durableRowVersion(row),
+    ...(!isLearner && !isVoterRole(role) ? {unresolvedRole: true} : {}),
     isLeader: activeVoter && role === RAFT_ROLE.LEADER,
   };
 }
@@ -181,21 +201,26 @@ function buildPartitionReplicaRows(
   }
   if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {
     const leaderRow = filtered.find((r) =>
-      !r.failed && !r.isLearner && r.nodeId === leaderNodeId);
+      r.operationalVoter === true && r.nodeId === leaderNodeId);
     if (leaderRow) leaderRow.isLeader = true;
   }
   return filtered;
 }
 
-function liveReplicasOf(replicaRows, eligibility) {
+function retainedReplicasOf(replicaRows, eligibility) {
   return replicaRows.filter((replica) => replica.failed !== true &&
-    eligibility.hostOfNode.has(replica.nodeId));
+    !eligibility.lostNodeIds.has(replica.nodeId));
+}
+
+function isOnEligibleHost(replica, eligibility) {
+  return eligibility.hostOfNode.has(replica.nodeId);
 }
 
 function hostCountsOf(replicas, eligibility) {
   const counts = new Map();
   for (const replica of replicas) {
-    const hostId = eligibility.hostOfNode.get(replica.nodeId);
+    const hostId = eligibility.declaredHosts.get(replica.nodeId);
+    if (hostId === undefined) continue;
     counts.set(hostId, (counts.get(hostId) ?? 0) + 1);
   }
   return counts;
@@ -204,7 +229,7 @@ function hostCountsOf(replicas, eligibility) {
 function findTargetNode(replicas, eligibility, {requireUnusedHost, excludedTargetNodeIds = null}) {
   const usedNodes = new Set(replicas.map((replica) => replica.nodeId));
   const usedHosts = new Set(replicas.map((replica) =>
-    eligibility.hostOfNode.get(replica.nodeId)));
+    eligibility.declaredHosts.get(replica.nodeId)));
   const free = eligibility.eligibleNodeIds.filter((nodeId) =>
     !usedNodes.has(nodeId) && !excludedTargetNodeIds?.has(nodeId));
   const unusedHost = free.find((nodeId) =>
@@ -247,8 +272,8 @@ function targetNodeOf(replicas, eligibility, {
 function overRepresentedReplicaOf(live, eligibility) {
   const counts = hostCountsOf(live, eligibility);
   const ranked = [...live].sort((left, right) =>
-    counts.get(eligibility.hostOfNode.get(right.nodeId)) -
-      counts.get(eligibility.hostOfNode.get(left.nodeId)) ||
+    counts.get(eligibility.declaredHosts.get(right.nodeId)) -
+      counts.get(eligibility.declaredHosts.get(left.nodeId)) ||
     Number(left.isLeader === true) - Number(right.isLeader === true) ||
     compareText(left.replicaId, right.replicaId));
   return ranked[0];
@@ -262,6 +287,7 @@ function moveOf(type, fields) {
     sourceReplicaId: fields.sourceReplicaId ?? null,
     copySourceNodeId: fields.copySourceNodeId ?? null,
   };
+  if (fields.learnerRetirement !== undefined) move.learnerRetirement = fields.learnerRetirement;
   if (Array.isArray(fields.promoteReplicaIds)) {
     move.promoteReplicaIds = Object.freeze([...fields.promoteReplicaIds]);
   }
@@ -307,10 +333,25 @@ function copyMoveOf(context, deficitKind, type, fields) {
     targetNodeId: target, copySourceNodeId: context.leader.nodeId}));
 }
 
+function learnerRetirementDeficit(context, replica) {
+  const nodeBootIncarnation = context.eligibility.nodeBoots.get(replica.nodeId);
+  if (nodeBootIncarnation === undefined ||
+      !Number.isSafeInteger(replica.createdAt) || replica.createdAt <= 0 ||
+      !Number.isSafeInteger(replica.lifecycleVersion?.value)) {
+    return waitingOf(context, KIND.DEAD_LEARNER, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
+  }
+  const learnerRetirement = Object.freeze({nodeBootIncarnation,
+    replicaCreatedAt: replica.createdAt,
+    lifecycleVersion: replica.lifecycleVersion.value,
+    lifecycleVersionColumn: replica.lifecycleVersion.column});
+  return candidateOf(context, KIND.DEAD_LEARNER, moveOf(OperationType.REMOVE,
+    {targetNodeId: replica.nodeId, replicaId: replica.replicaId, learnerRetirement}));
+}
+
 function failedOrDeadDeficit(context) {
   const dead = context.replicaRows.find((replica) =>
     !context.live.includes(replica));
-  if (context.live.length >= context.replicationFactor) {
+  if (context.readyVoters.length >= context.replicationFactor) {
     return candidateOf(context, KIND.FAILED_OR_DEAD, moveOf(OperationType.REMOVE,
       {targetNodeId: dead.nodeId, replicaId: dead.replicaId}));
   }
@@ -333,13 +374,13 @@ function surplusDeficit(context) {
 
 function promotableLearnersOf(liveLearners, liveVoters, eligibility) {
   const voterHosts = new Set(liveVoters.map((r) =>
-    eligibility.hostOfNode.get(r.nodeId)));
+    eligibility.declaredHosts.get(r.nodeId)));
   const seenHosts = new Set();
   const promotable = [];
   for (const learner of liveLearners) {
     if (learner.caughtUp === false) continue;
     const hostId = eligibility.hostOfNode.get(learner.nodeId);
-    if (voterHosts.has(hostId) || seenHosts.has(hostId)) continue;
+    if (hostId === undefined || voterHosts.has(hostId) || seenHosts.has(hostId)) continue;
     seenHosts.add(hostId);
     promotable.push(learner);
   }
@@ -347,7 +388,9 @@ function promotableLearnersOf(liveLearners, liveVoters, eligibility) {
 }
 
 function growthPromotionDeficit(context, voterTarget) {
-  if (context.live.length >= voterTarget) return null;
+  if (context.live.length >= voterTarget || context.readyVoters.length !== context.live.length) {
+    return null;
+  }
   const neededForNextOdd = context.live.length % 2 === 1 ? 2 : 1;
   if (context.live.length + neededForNextOdd > voterTarget) return null;
   const promotable = promotableLearnersOf(
@@ -369,28 +412,21 @@ function growthPromotionDeficit(context, voterTarget) {
 }
 
 function underVoterTargetDeficit(context, requiredHosts) {
-  if (context.live.length % 2 === 1) {
-    const replicaHosts = hostCountsOf(context.liveReplicas, context.eligibility).size;
-    if (replicaHosts >= requiredHosts) return NONE;
-    return copyMoveOf(
-      {...context, live: context.liveReplicas},
-      KIND.LEARNER_DEFICIT,
-      OperationType.ADD,
-      {},
-    );
+  const kind = context.live.length % 2 === 1 ? KIND.LEARNER_DEFICIT : KIND.UNDER_REPLICATED;
+  if (kind === KIND.LEARNER_DEFICIT &&
+      hostCountsOf(context.liveReplicas, context.eligibility).size >= requiredHosts) return NONE;
+  if (context.liveReplicas.length >= context.replicationFactor &&
+      context.liveReplicas.some((replica) => !isOnEligibleHost(replica, context.eligibility))) {
+    return waitingOf(context, kind, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
   }
-  return copyMoveOf(
-    {...context, live: context.liveReplicas},
-    KIND.UNDER_REPLICATED,
-    OperationType.ADD,
-    {},
-  );
+  return copyMoveOf({...context, live: context.liveReplicas}, kind, OperationType.ADD, {});
 }
 
 /**
  * The one deficit of a partition and its move, or why it waits.
  * @param {Object} input - {partitionId, replicationFactor, replicaRows:
- *   [{replicaId, nodeId, failed, isLeader, isLearner?, role?, caughtUp?}], eligibility}.
+ *   [{replicaId, nodeId, failed, isLeader, operationalVoter,
+ *     isLearner?, role?, caughtUp?}], eligibility}.
  * @return {Object} Frozen {state: NONE} | {state: CANDIDATE, candidate} |
  *   {state: WAITING, waiting}.
  */
@@ -398,22 +434,24 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   eligibility, saturatedTargetNodeIds = null, storageExcludedTargets = null}) {
   const voterRows = replicaRows.filter((r) => !isLearnerReplica(r));
   const learnerRows = replicaRows.filter(isLearnerReplica);
-  const live = liveReplicasOf(voterRows, eligibility);
-  const liveLearners = liveReplicasOf(learnerRows, eligibility);
+  const live = retainedReplicasOf(voterRows, eligibility);
+  const liveLearners = retainedReplicasOf(learnerRows, eligibility);
+  const readyVoters = live.filter((replica) =>
+    replica.operationalVoter === true && isOnEligibleHost(replica, eligibility));
   const liveReplicas = [...live, ...liveLearners];
   const distinctHostCount = hostCountsOf(live, eligibility).size;
-  const context = {replicaRows: voterRows, live, liveLearners, liveReplicas,
+  const context = {replicaRows: voterRows, live, liveLearners, liveReplicas, readyVoters,
     eligibility, replicationFactor, saturatedTargetNodeIds, storageExcludedTargets,
-    leader: live.find((replica) => replica.isLeader === true),
+    leader: readyVoters.find((replica) => replica.isLeader === true),
     summary: Object.freeze({partitionId,
       placementClass: classifyPlacementClass(partitionId),
       distinctHostCount, voterCount: live.length})};
   const deadLearner = learnerRows.find((r) => !liveLearners.includes(r));
-  if (deadLearner !== undefined) {
-    return candidateOf(context, KIND.DEAD_LEARNER, moveOf(OperationType.REMOVE,
-      {targetNodeId: deadLearner.nodeId, replicaId: deadLearner.replicaId}));
-  }
+  if (deadLearner !== undefined) return learnerRetirementDeficit(context, deadLearner);
   if (live.length < voterRows.length) return failedOrDeadDeficit(context);
+  if (live.some((replica) => replica.unresolvedRole)) {
+    return waitingOf(context, KIND.UNDER_REPLICATED, WAITING.INCUMBENT_ROLE_UNAVAILABLE);
+  }
   const eligibleHostCount = eligibility.eligibleHostIds.size;
   const voterTarget = resolveVoterTarget(replicationFactor, eligibleHostCount);
   const requiredHosts = Math.min(replicationFactor, eligibleHostCount);
@@ -422,8 +460,11 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   if (live.length < replicationFactor) {
     return underVoterTargetDeficit(context, requiredHosts);
   }
-  if (distinctHostCount < requiredHosts) return spreadDeficit(context);
-  return live.length > replicationFactor ? surplusDeficit(context) : NONE;
+  if (distinctHostCount >= requiredHosts && live.length === replicationFactor) return NONE;
+  if (readyVoters.length !== live.length) {
+    return waitingOf(context, KIND.HOST_SPREAD, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
+  }
+  return distinctHostCount < requiredHosts ? spreadDeficit(context) : surplusDeficit(context);
 }
 
 /**
@@ -445,6 +486,7 @@ export {
   buildPartitionReplicaRows,
   buildPlacementNodeEligibility,
   evaluatePartitionDeficit,
+  observesCommittedNodeLoss,
   readPlacementNodeInputs,
   repairSourceNodeIdsOf,
 };

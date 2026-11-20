@@ -20,13 +20,11 @@
 
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
-  REPLICA_CLEANUP_ACQUIRE_OUTCOME,
+  REPLICA_CLEANUP_ACQUIRE_OUTCOME, cleanupReceiptOperationId,
 } from './replica-cleanup-tombstone-owner.js';
 import {REPLICA_CLEANUP_AUTHORITY_KIND} from
   './replica-cleanup-constants.js';
 import {replicaStorageArtifactsAbsent} from './replica-storage-artifacts.js';
-import {isFailedCreateRemoveToken} from
-  '../rebalancer/failed-create-cleanup-token.js';
 
 const LOCAL_DB_EXT_LENGTH = '.db'.length;
 const QUARANTINED_SUFFIX = '.quarantined';
@@ -147,7 +145,7 @@ async function completeSweepCleanup(handler, owner, authority, fs, dbPath) {
   if (!replicaStorageArtifactsAbsent(fs, dbPath)) return false;
   if (!await owner.requireCurrent(authority)) return false;
   handler.throwIfShuttingDown();
-  if (isFailedCreateRemoveToken(authority.ownerToken)) {
+  if (cleanupReceiptOperationId(authority.ownerToken)) {
     const completed = authority.kind ===
       REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE ?
       authority : await owner.markComplete(authority, {artifactsAbsent: true});

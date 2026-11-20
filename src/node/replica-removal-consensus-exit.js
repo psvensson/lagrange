@@ -37,10 +37,12 @@ import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
 import {readPartitionReplicaMembership} from
   '../partition/partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {REPLICA_HANDLER_LOG_MSG} from './replica-handler-constants.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 
 const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
+  LEADER_REMOVAL_COMMITTED: 'leader_removal_committed',
   REMOVAL_APPLIED: 'own-removal-applied',
   GROUP_UNAVAILABLE: 'consensus-group-unavailable',
   NO_CONSENSUS_PORT: 'no-consensus-port',
@@ -147,4 +149,41 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
   });
 }
 
-export {REPLICA_CONSENSUS_EXIT_REASON, awaitReplicaConsensusExit};
+/**
+ * When the retiring replica leaves consensus. A replica of a group retired
+ * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
+ * leaves at once: its whole group ends at the durable workflow transition,
+ * nobody proposes a conf change for it, and nothing commits in it again.
+ * Every other removal keeps participating until its own removal applies
+ * (ruling F2).
+ * @param {Object} handler
+ * @param {Object} request
+ * @param {Object|null} service
+ * @return {Promise<Object>} Frozen {reason}.
+ */
+function leaveConsensus(handler, request, service) {
+  const {operationId, partitionId, replicaId} = request;
+  if (request.groupRetirement?.retire === true) {
+    const exit = Object.freeze({
+      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      operationId, replicaId, partitionId, nodeId: handler.nodeId,
+      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
+    });
+    return Promise.resolve(exit);
+  }
+  if (request.learnerRetirement !== undefined) {
+    const exit = Object.freeze({reason: REPLICA_CONSENSUS_EXIT_REASON.LEADER_REMOVAL_COMMITTED});
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      operationId, replicaId, partitionId, nodeId: handler.nodeId, reason: exit.reason,
+    });
+    return Promise.resolve(exit);
+  }
+  return handler.awaitReplicaRemovalConsensusExit(service, {
+    operationId,
+    replicaId,
+    partitionId,
+  });
+}
+
+export {REPLICA_CONSENSUS_EXIT_REASON, awaitReplicaConsensusExit, leaveConsensus};

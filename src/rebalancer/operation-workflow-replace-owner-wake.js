@@ -1,3 +1,7 @@
+import {COLUMN, TABLES} from '../constants/index.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {isScopedPlacementLearnerRetirement} from
+  './operation-workflow-placement-learner-retirement.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
 import {committedNodeFloorLevel} from './operation-workflow-committed-node-floor.js';
@@ -154,15 +158,34 @@ function readNodeLevel(owner, nodeId, readinessOptions) {
   return nodeId + LEVEL_FIELD_SEPARATOR + (ready ? LEVEL_TRUE : LEVEL_FALSE);
 }
 
+// These values only change the waiter's level. The next owner turn reads
+// the committed node and exact service lifecycle again before an effect.
+function scopedLearnerNodeLevel(owner, operation) {
+  const committed = owner.controlPlaneReadinessService.answerCommittedNodes();
+  if (committed?.state !== SERVE_ELIGIBILITY_STATE.READY) return NO_CONSENSUS_OBSERVATION;
+  const node = committed.nodeRows.find((row) => row[COLUMN.NODE_ID] === operation.targetNodeId);
+  return node ? JSON.stringify([node[COLUMN.BOOT_INCARNATION], node[COLUMN.STATUS],
+    node[COLUMN.CONNECTION_STATE], node[COLUMN.READY_LEASE_EXPIRES_AT] === null]) :
+    NO_CONSENSUS_OBSERVATION;
+}
+
+function consensusLevelForOperation(level, operation) {
+  if (!level || isScopedPlacementLearnerRetirement(operation)) return level;
+  const {confKey, leaderReplicaId, term} = JSON.parse(level);
+  return JSON.stringify({confKey, leaderReplicaId, term});
+}
+
 function readReplaceOwnerTailParts(owner, operation) {
   const consensusLevel = WAKE_STATE_BY_OWNER.get(owner)
     ?.consensusLevelByPartitionId.get(operation?.partitionId) ??
     NO_CONSENSUS_OBSERVATION;
   return [
     committedNodeFloorLevel(owner),
-    consensusLevel,
+    consensusLevelForOperation(consensusLevel, operation),
     concurrentOperationLevel(owner, operation),
     sourceRowLevel(owner, operation),
+    ...(isScopedPlacementLearnerRetirement(operation) ?
+      [scopedLearnerNodeLevel(owner, operation)] : []),
   ];
 }
 
@@ -179,6 +202,11 @@ function readReplaceOwnerLevel(owner, operation, nodeIds) {
 
 // The REPLACE source replica's lifecycle row as the cache holds it.
 function sourceRowLevel(owner, operation) {
+  if (isScopedPlacementLearnerRetirement(operation)) {
+    const row = owner.repository.systemTableCache.get(TABLES.SERVICES, operation.replicaId);
+    return row ? JSON.stringify([row[COLUMN.CREATED_AT], row[COLUMN.NODE_ID],
+      row[COLUMN.STATUS], row[COLUMN.RAFT_ROLE]]) : NO_CONSENSUS_OBSERVATION;
+  }
   const sourceReplicaId = operation?.type === OperationType.REPLACE ?
     owner.repository?.getReplaceSourceReplicaId?.(operation) : null;
   if (!sourceReplicaId ||
@@ -203,9 +231,9 @@ function wakeReplaceOwnersForReplicaRow(owner, record) {
   if (!state || typeof replicaId !== 'string' || owner.isShuttingDown) {
     return;
   }
-  wakeWaiters(owner, state, (waiter) =>
-    owner.repository?.getReplaceSourceReplicaId?.(waiter.operation) ===
-      replicaId);
+  wakeWaiters(owner, state, ({operation}) =>
+    isScopedPlacementLearnerRetirement(operation) ? operation.replicaId === replicaId :
+      owner.repository?.getReplaceSourceReplicaId?.(operation) === replicaId);
 }
 
 // The other non-terminal operations the cache holds for the partition: a
@@ -372,15 +400,17 @@ function consensusLevelOf(event, previous) {
     previous?.confKey ?? NO_CONSENSUS_OBSERVATION;
   return {
     confKey,
+    learnerKey: confState ? JSON.stringify([
+      sortedIds(confState.learners), sortedIds(confState.learnersNext),
+    ]) : previous?.learnerKey ?? NO_CONSENSUS_OBSERVATION,
     leaderReplicaId: carriedObservation(
       event?.leaderReplicaId, previous?.leaderReplicaId),
     term: carriedObservation(event?.term, previous?.term),
   };
 }
 
-// The target replica of a REPLACE hosted on this node whose owner is on
-// another node: that owner cannot observe this replica's consensus events,
-// so they are forwarded through the existing remote-owner wake ingress.
+// Forward consensus wakes to remote operation owners through their existing
+// ingress. A scoped learner retirement can settle on a surviving replica.
 function wakeRemoteReplaceOwners(owner, partitionId, replicaId) {
   if (typeof owner.repository?.filterReplicaOperationRowsFromCache !==
       'function' ||
@@ -389,15 +419,15 @@ function wakeRemoteReplaceOwners(owner, partitionId, replicaId) {
   }
   const rows = owner.repository.filterReplicaOperationRowsFromCache((row) =>
     row?.partition_id === partitionId &&
-    row?.type === OperationType.REPLACE &&
+    (row.type === OperationType.REPLACE || row.type === OperationType.REMOVE) &&
     (row?.completed_at === null || row?.completed_at === undefined));
   for (const row of rows || []) {
     const operation = owner.repository.rowToOperation?.(row) || null;
-    if (!operation || owner.repository.isOperationLocallyOwned(operation) ||
-        owner.repository.getReplaceTargetReplicaId?.(operation) !== replicaId) {
-      continue;
+    if (!operation || owner.repository.isOperationLocallyOwned(operation)) continue;
+    if (owner.repository.getReplaceTargetReplicaId?.(operation) === replicaId ||
+        isScopedPlacementLearnerRetirement(operation)) {
+      owner.wakeCoordinatorCreatedRemoteOwner(operation).catch(() => false);
     }
-    owner.wakeCoordinatorCreatedRemoteOwner(operation).catch(() => false);
   }
 }
 

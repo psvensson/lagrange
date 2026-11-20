@@ -6,12 +6,10 @@ import {
 } from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
-  captureReplaceOwnerLevel, registerReplaceOwnerWaiter, resolveReplaceOwnerEntryLevel,
+  captureReplaceOwnerLevel, registerReplaceOwnerWaiter,
 } from './operation-workflow-replace-owner-wake.js';
 import {
-  REPLACE_EFFECT_ADMISSION, REPLACE_WAIT_REASON, admitReplaceSourceRemovalEffect,
   isPartitionReplace, isReplaceRemovalIntentDurable, recordReplaceOwnerWait,
-  recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
@@ -31,10 +29,16 @@ import {
   reconcileGrowthPromoteDispatchResponse,
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
+import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
+import {evaluatePlacementLearnerRetirement} from
+  './operation-workflow-placement-learner-retirement.js';
+import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
+  './operation-workflow-remove-effect-admission.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL, OPERATION_OWNER_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON, OperationType, REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG, REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS,
@@ -280,48 +284,6 @@ function buildReplicaOperationDispatchTimeoutError(operation) {
 function isReplaceStoppingOwnerEntry(operation, options) {
   return isReplaceRemovalIntentDurable(operation) &&
     options?.replaceStoppingEffect !== true;
-}
-
-// The removal-effect boundary after SAFE for a partition REPLACE or initial
-// REMOVE: null when the effect is sent now; otherwise the owner's result.
-async function holdReplaceSourceRemovalEffect(
-  owner, operation, replaceRemoveDispatchPhase, entryLevel) {
-  if (!replaceRemoveDispatchPhase || !isPartitionReplace(operation)) {
-    const resolvedEntry = resolveReplaceOwnerEntryLevel(owner, entryLevel);
-    if (
-      owner.isRemoveInitialDispatchPhase(operation) &&
-      resolvedEntry &&
-      captureReplaceOwnerLevel(owner, operation)?.levelKey !==
-        resolvedEntry.levelKey
-    ) {
-      owner.armReplaceOwnerWait(
-        operation,
-        REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED,
-        resolvedEntry,
-      );
-      return owner.buildSkippedOperationResult(
-        REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
-        operation.operationId,
-        {deferReason: REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED},
-      );
-    }
-    return null;
-  }
-  const effect = await admitReplaceSourceRemovalEffect(
-    owner, operation, entryLevel);
-  if (effect.admission === REPLACE_EFFECT_ADMISSION.SEND) {
-    return null;
-  }
-  return effect.admission === REPLACE_EFFECT_ADMISSION.STOPPING_OWNER ?
-    owner.runReplaceStoppingOwner(operation) :
-    owner.waitReplaceSourceRemovalEffect(operation, effect, entryLevel);
-}
-
-function noteReplaceSourceRemovalEffect(
-  owner, operation, response, replaceRemoveDispatchPhase) {
-  if (replaceRemoveDispatchPhase && isPartitionReplace(operation)) {
-    recordReplaceSourceRemovalEffect(owner, operation, response);
-  }
 }
 
 const DISPATCH_RESPONSE_RECONCILE_METHODS = {
@@ -622,6 +584,25 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(operation);
     const handlerType = resolveOperationHandlerType(entityType);
+    const learnerRetirement = await evaluatePlacementLearnerRetirement(
+      this, operation, handlerType);
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED) {
+      // The committed peer is absent and physical cleanup belongs to the
+      // exact-generation tombstone. An offline target need not answer.
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation), {
+        operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
+      });
+    }
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) {
+      return settleDispatchFailure(this, operation, learnerRetirement.state);
+    }
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.DEFERRED) {
+      const reason = REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+      this.scheduleDeferredSafetyRetry(operation, reason, learnerRetirement.state);
+      registerReplaceOwnerWaiter(this, operation, readinessEntryLevel);
+      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId, {deferReason: reason, error: learnerRetirement.state});
+    }
     let dispatchNodeId = operation.targetNodeId;
     let messageType = ReplicaOperationMessageType.CREATE_REPLICA;
     let requestReplicaId = operation.replicaId;
@@ -664,6 +645,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEARED) {
+      request[ReplicaOperationField.LEARNER_RETIREMENT] = learnerRetirement.scope;
+      registerReplaceOwnerWaiter(this, operation, readinessEntryLevel);
+    }
     if (operation.type === OperationType.GROWTH_PROMOTE) {
       applyGrowthPromoteRequestFields(request, operation);
     }

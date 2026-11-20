@@ -276,6 +276,7 @@ function buildDurableRejoinPartitionRestoreOptions({
       nodeId: serviceRow.node_id,
       partitionId: serviceRow.partition_id,
       replicaId: serviceRow.service_id,
+      replicaCreatedAt: serviceRow.created_at,
       serviceType: serviceRow.service_type,
       status: serviceRow.status,
       durableVersionColumn: Number.isFinite(serviceRow.state_entered_at) ?

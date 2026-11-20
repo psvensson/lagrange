@@ -479,12 +479,13 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
  * replica's own applied configuration through its port, as the port
  * answered it (COMMITTED or a typed refusal), or null without a port.
  * @param {Object} service - The partition service.
+ * @param {string} [purpose] - The authority requested from the native port.
  * @return {Promise<Object|null>} The frozen answer.
  */
-async function readPartitionCommittedMembership(service) {
+async function readPartitionCommittedMembership(service,
+  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
   const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
-  return typeof read === 'function' ? read({
-    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
+  return typeof read === 'function' ? read({purpose}) : null;
 }
 
 function replicaIdentitiesOf(answer, peerIds) {
