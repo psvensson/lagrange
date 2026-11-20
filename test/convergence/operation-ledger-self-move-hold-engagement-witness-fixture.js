@@ -1,3 +1,4 @@
+import {injectOperationLedgerReadPressure} from './operation-ledger-read-pressure-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
@@ -201,8 +202,6 @@ const RETRYABLE_SKIP_REASONS = Object.freeze(new Set([
   REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
   REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
 ]));
-const INCOMPLETE_OPERATIONS_QUERY_MARKER = 'workflow_step IN';
-const REPLICA_OPERATIONS_TABLE_MARKER = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const DELIVERY_ACKNOWLEDGED_STATUS = 'completed';
 // cdc-integration-service-shared-constants.js AUTHORITATIVE_READ_SOURCE
 // .OWNER_RPC_LANE: the source the surplus REMOVE placement fence requires.
@@ -429,30 +428,6 @@ function isTypedRetryableSkip(error) {
 // Boundary injection: the seed's authoritative operation-ledger reads under
 // the ledger cure phase's control-plane pressure (run 21-22-08: slow reads
 // only after the self-move terminal, see LEDGER_AUTHORITATIVE_READ_LATENCY_MS).
-function injectLedgerReadLatency({coordinator, timeSource, isPressured}) {
-  const gateway = coordinator.controlPlaneSystemTableGateway;
-  const isIncompleteOperationsRead = (sql) =>
-    String(sql).includes(REPLICA_OPERATIONS_TABLE_MARKER) &&
-    String(sql).includes(INCOMPLETE_OPERATIONS_QUERY_MARKER);
-  const delay = () =>
-    new Promise((resolve) =>
-      timeSource.setTimeout(resolve, LEDGER_AUTHORITATIVE_READ_LATENCY_MS),
-    );
-  for (const [method, sqlIndex] of [
-    ['readAuthoritativeRows', 1],
-    ['readRows', 1],
-    ['executeQuery', 0],
-  ]) {
-    const original = gateway[method].bind(gateway);
-    gateway[method] = async (...args) => {
-      if (isPressured() && isIncompleteOperationsRead(args[sqlIndex])) {
-        await delay();
-      }
-      return original(...args);
-    };
-  }
-}
-
 // Boundary injection: the ledger partition's authoritative placement rows
 // (owner-RPC lane of the control-plane gateway), read by the surplus REMOVE
 // placement fence and the quorum-spread re-verification.
@@ -820,9 +795,10 @@ async function runSelfMovePlannedBeforeAddsScenario(
       getPlanningAnswer: () => state.planningAnswer,
     });
   }
-  injectLedgerReadLatency({
-    coordinator: seed,
+  const ledgerReadPressure = injectOperationLedgerReadPressure({
+    gateway: seed.controlPlaneSystemTableGateway,
     timeSource,
+    pressureMs: LEDGER_AUTHORITATIVE_READ_LATENCY_MS,
     isPressured: () => state.selfMoveTerminalAtMs !== null,
   });
   injectAuthoritativeServiceRows({
@@ -1428,6 +1404,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
 
   return {
     events,
+    ledgerReadPressure,
     dependents: [...dependents.values()].map((dependent) => ({
       tableId: dependent.tableId,
       refusals: dependent.refusals,
@@ -1466,6 +1443,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
 }
 
 export {
+  CLOCK_STEP_MS,
   DEFAULT_SCENARIO_PROFILE, DEPENDENTS_PLANNED_AT_MS, EXEMPT_TABLE_ID,
   FORMATION_READINESS_BUDGET_MS, JOINER_1_NODE_ID, JOINER_3_NODE_ID, JOINER_4_NODE_ID,
   LEADER_REPLICA_INDEX, LEDGER_PARTITION_ID, LEDGER_TABLE_ID, MOVED_REPLICA_INDEX,

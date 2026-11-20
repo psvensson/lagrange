@@ -1,7 +1,9 @@
+import {assertSingleOperationLedgerReadPressure} from './operation-ledger-read-pressure-fixture.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {REBALANCER_DEFAULT} from '../../src/rebalancer/rebalancer-constants.js';
 import {
+  CLOCK_STEP_MS,
   DEPENDENTS_PLANNED_AT_MS,
   FORMATION_READINESS_BUDGET_MS,
   HEAD_CRITICAL_CHECK_DELAY_MS,
@@ -368,6 +370,7 @@ test(
       'REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS is unchanged',
     );
     const m = await runSelfMovePlannedBeforeAddsScenario();
+    assertSingleOperationLedgerReadPressure(m.ledgerReadPressure, CLOCK_STEP_MS);
     assertSelfMoveLifecycleObserved(m);
     assert.equal(
       m.budget.maxConcurrentAdds,
