@@ -3,16 +3,16 @@
   "epic": "es6-owner-safety",
   "status": "pass",
   "testFileDigests": {
-    "test/query/scenario-a-transaction-coordination-fast-path.test.js": "efa0258beaaa77d2f6250b29d8efdd713d71824475895d6c8c649c65dc27503d",
+    "test/query/scenario-a-transaction-coordination-fast-path.test.js": "b8a0113726755355bfac784efa9c045bbb4346dd99e2f6d95342e691f3509594",
     "test/partition/partition-participant-transaction-apply.test.js": "e831cd12a988324fb5ae9ab49139749b90236f41d44317830911850babe0789d",
-    "test/rebalancer/replica-placement-owner-core.test.js": "32e43109042a032046049d1b0456560bccc08f12dbe7e8cbac6daacb5864e578",
+    "test/rebalancer/replica-placement-owner-core.test.js": "72c69b9f9fe7f88125776d7092eea6345f69e66b2733b55ad40397398fbf84cc",
     "test/partition/placement-admission-apply.test.js": "e646bb234508cd8b33037292110e4947f9fcef3096a9af395f9fd85cf1398d56",
     "test/convergence/dt-placement-owner-formation-drain.test.js": "027cd703d0077f0d0d193ea981d95149858a0f9797815c5e26d687625cff8df4",
     "test/convergence/formation-placement-drain-scenario.js": "c3f4aa5b9b39072f7cd3bbf367e59ba27f8dc57e955a9ac5416743f671b87b83"
   },
   "productionFileDigests": {
     "src/partition/partition-participant-transaction-constants.js": "0d1e2835f27331c41a9028cae80158b4046744737e1b3d4a7bc91ca0a99bce29",
-    "src/partition/partition-participant-transaction-store.js": "c8e85f395637e5db8ca74fc0cc14db6a3dc6280d41c1e37c7074f7ae876b51ae",
+    "src/partition/partition-participant-transaction-store.js": "d8636c59dd317c5126645d0c001b853dfda719d912cd2a00d49dcfad408edaec",
     "src/partition/partition-participant-transaction-session.js": "579980b24379cdb4592ef0fbd46b2c03bfc503e14f67b296840b9beffbfc4f68",
     "src/partition/partition-participant-transaction-apply.js": "492dc0de14c02b4796271041307ba47c2512bcf99d98bd429780a82d080387a4",
     "src/partition/partition-participant-transaction-bytes.js": "a04003b92a17ac2aba22546137525d5467d8badc579e0338729de573e49cd4f5",
@@ -23,11 +23,11 @@
     "src/rebalancer/replica-placement-owner.js": "b9b4843639502724573374244f566d38cf659098ef6a2d23124dff5e1296ceb3",
     "src/rebalancer/replica-placement-owner-attempts.js": "840ddb394c71442ccf858bb834d48ed4eaa2a67fe526a76ffce49bfc56f0c82d",
     "src/rebalancer/replica-placement-owner-admission-statement.js": "7d9654f62cb107229e6f8ef438b00da2f2c699caefcd247e6840cc7e0e8dfcce",
-    "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "6cb2795a73999542beb8cc9d312f1d038819401339988fa856e7c251c719893a",
+    "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "bd2de5559b5dc50c6d06cce1f861754792b378000577cef147846d807ac76430",
     "src/rebalancer/replica-status.js": "da0d75bea5e3ba4c49b57663b2a66da25a6a0ee340361116f3a3d797f21f16d5",
     "src/bootstrap/shared/control-plane-setup.js": "7664f0cd94023fd95d1f38a75eedcdb3069451f58b7c58c220cbce13d5a3ed87",
     "src/control-plane/membership-publication-coordinator-reconcile.js": "6b5469bddc9c52f3ebb5261fc1394a977d4baf45e88f887e648a6287b1f2864e",
-    "dependency-cruiser.config.cjs": "e5edb028bdf55d736c6654a701c0e1c4b310ff713b8b633cbac5f1405ba55665"
+    "dependency-cruiser.config.cjs": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
   },
   "source": {
     "base": "0970ab012f65456cad34cfadfa92fb420f7f09ef",
