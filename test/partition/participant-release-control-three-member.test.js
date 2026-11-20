@@ -11,15 +11,23 @@ import {createLoopbackTransport} from './partition-service-test-support.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+import {deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/tables.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_RS_MESSAGE_TYPE, RAFT_RS_TRANSPORT_PROTOCOL} from
+  '../../src/raft/raft-rs-ingress-constants.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+  PARTICIPANT_CUTOVER_BOUND as BOUND,
   PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+  PARTICIPANT_RELEASE_LOG,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING,
+  PARTICIPANT_RELEASE_RESULT_FIELD as RESULT,
   PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {participantReleaseAdmissionOf} from
@@ -31,17 +39,152 @@ const PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
 const NODE_ID = 'sql-control-three-voter';
 const MEMBERS = Object.freeze([1, 2, 3].map((n) =>
   Object.freeze([`${PARTITION_ID}-r${n}`, NODE_ID])));
+const DEPENDENT_PARTITION = 'participant-release-dependent-p1';
+const DEPENDENT_TABLE = 'participant_release_dependent';
+const DEPENDENT_MEMBERS = Object.freeze([[`${DEPENDENT_PARTITION}-r1`, NODE_ID]]);
 const TIMEOUT_MS = 40000;
 const RELEASE_BUDGET_MS = 15000;
+const RECOVERY_START_MS = 1000;
+const ABSENT_TRANSACTION_ID = 'd'.repeat(32);
+const PENDING_DELETE_SQL = 'DELETE FROM sql_transactions WHERE transaction_id = ?';
 
 function retain(current, error, label) {
   return current === null ? error : new AggregateError([current, error], label);
 }
 
+function holdWriteReplication(transport, leader) {
+  const original = transport.deliver;
+  const leaderPeer = String(leader.raft.readStatus().peerId);
+  const held = new Map();
+  transport.deliver = function(address, payload, ...options) {
+    if (payload?.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
+        payload.groupId === PARTITION_ID && String(payload.from) === leaderPeer &&
+        payload.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+        payload.message.entries?.length > 0) {
+      if (!held.has(address)) held.set(address, [address, payload, ...options]);
+      return null;
+    }
+    return Reflect.apply(original, this, [address, payload, ...options]);
+  };
+  return {held, async release() {
+    transport.deliver = original;
+    const packets = [...held.values()];
+    held.clear();
+    await Promise.all(packets.map((args) => Reflect.apply(original, transport, args)));
+  }};
+}
+
+async function recoveryReport(group, reports, predicate) {
+  assert.equal(await group.waitFor(() => reports.some(predicate)), true,
+    'the actual lifecycle recovery report must be emitted');
+  return reports.find(predicate);
+}
+
+async function closeDependent(transport, release) {
+  const original = transport.deliver;
+  let resume = null;
+  transport.deliver = function(address, payload, ...options) {
+    if (payload.type === PARTICIPANT_RELEASE_TYPE &&
+        payload.partitionId === DEPENDENT_PARTITION && payload.action === ACTION.RESUME) {
+      resume = [address, payload, ...options];
+    }
+    return Reflect.apply(original, this, [address, payload, ...options]);
+  };
+  try {
+    const first = await release(DEPENDENT_PARTITION);
+    assert.equal(first.outcome, OUTCOME.CUT_OVER, JSON.stringify(first));
+  } finally {
+    transport.deliver = original;
+  }
+  assert.notEqual(resume, null, 'the live dependent RESUME supplied a real current release target');
+  const [address, payload, ...options] = resume;
+  const paused = deliveryAnswerOf(await transport.deliver(address,
+    {...payload, action: ACTION.PAUSE}, ...options))?.[RESULT];
+  assert.equal(paused?.outcome, OUTCOME.OBSERVED, JSON.stringify(paused));
+  assert.equal(paused.paused, true);
+}
+
+async function measureHeldWrite({group, transport, handler, leader, dependent, clock, release}) {
+  const reports = [];
+  const originalInfo = handler.logger.info;
+  const gate = holdWriteReplication(transport, leader);
+  handler.logger.info = function(message, fields) {
+    if (message === PARTICIPANT_RELEASE_LOG) reports.push(fields);
+    return Reflect.apply(originalInfo, this, [message, fields]);
+  };
+  const write = leader.executeQuery(PENDING_DELETE_SQL, [ABSENT_TRANSACTION_ID]);
+  let failure = null;
+  let blocked = null;
+  let nested = null;
+  let recovered = null;
+  let expectedDrain = null;
+  try {
+    assert.equal(await group.waitFor(() => gate.held.size === MEMBERS.length - 1), true,
+      'the accepted SQL write must reach both actual follower routes');
+    assert.equal(leader.proposalQueue.size, 1,
+      'the native leader retains one accepted write with its replication held');
+    const refusal = await release();
+    assert.equal(refusal.outcome, OUTCOME.DRAIN_PENDING, JSON.stringify(refusal));
+    expectedDrain = refusal.blockedDrain;
+    assert.equal(expectedDrain?.generation?.replicaId, leader.replicaId);
+    assert.equal(expectedDrain?.work?.proposals, 1);
+    assert.ok(group.services.every((member) =>
+      participantReleaseAdmissionOf(member).state === ADMISSION.CLOSED));
+
+    // Advance only the handler clock. The original registered service wake
+    // starts the same cutover against still-live native Raft and SQLite.
+    clock.advance(0);
+    blocked = await recoveryReport(group, reports, (entry) =>
+      entry.partitionId === PARTITION_ID && entry.outcome === OUTCOME.DRAIN_PENDING);
+    nested = await recoveryReport(group, reports, (entry) =>
+      entry.partitionId === DEPENDENT_PARTITION && entry.outcome === OUTCOME.UNAVAILABLE &&
+      entry.missingFact === MISSING.CURRENT_CONTROL_OWNER);
+    assert.equal(participantReleaseAdmissionOf(dependent).state, ADMISSION.CLOSED);
+    assert.equal(leader.proposalQueue.size, 1, 'the report observes the still-held work');
+
+    await gate.release();
+    const written = await write;
+    assert.equal(written.success, true, JSON.stringify(written));
+    assert.equal(written.changes, 0, 'the exact held absent-row DELETE has applied');
+    assert.equal(leader.proposalQueue.size, 0);
+    assert.equal(await group.waitFor(() => group.services.every((member) => {
+      const status = member.raft.readStatus();
+      return status.commitIndex === leader.raft.readStatus().lastIndex;
+    })), true, 'the original held proposal has committed on every control voter');
+    clock.advance(BOUND.RECOVERY_RETRY_MS);
+    recovered = await recoveryReport(group, reports, (entry) =>
+      entry.partitionId === DEPENDENT_PARTITION && entry.outcome === OUTCOME.CUT_OVER);
+    assert.ok(group.services.every((member) =>
+      participantReleaseAdmissionOf(member).state === ADMISSION.OPEN));
+    assert.equal(participantReleaseAdmissionOf(dependent).state, ADMISSION.OPEN);
+  } catch (error) {
+    failure = error;
+  } finally {
+    handler.logger.info = originalInfo;
+    try {
+      await gate.release();
+      await write;
+    } catch (error) {
+      failure = retain(failure, error, 'held native proposal cleanup');
+    }
+  }
+  if (failure !== null) throw failure;
+  assert.deepEqual({blockedDrain: blocked.blockedDrain, controlOutcome: nested.controlOutcome,
+    controlPartitionId: nested.controlPartitionId, controlNodeId: nested.controlNodeId,
+    controlBlockedDrain: nested.controlBlockedDrain},
+  {blockedDrain: expectedDrain, controlOutcome: OUTCOME.DRAIN_PENDING,
+    controlPartitionId: PARTITION_ID, controlNodeId: NODE_ID, controlBlockedDrain: expectedDrain},
+  'both lifecycle refusals explain the same accepted native proposal at the SQL control owner');
+  assert.equal(recovered.controlBlockedDrain ?? null, null,
+    'the normal dependent CUT_OVER report carries no blocked drain');
+}
+
 test('three actual current SQL control voters share one PAUSE census and each rechecks RESUME',
   {timeout: TIMEOUT_MS}, async () => {
     const transport = createLoopbackTransport();
+    const clock = new VirtualTimeSource({startMs: RECOVERY_START_MS});
     let group = null;
+    let dependentGroup = null;
     let handler = null;
     let failure = null;
     try {
@@ -66,6 +209,7 @@ test('three actual current SQL control voters share one PAUSE census and each re
         createPartitionService: (options) => new PartitionService(options),
         messageRouter: transport,
         dataDir: path.dirname(group.dbFileOf(MEMBERS[0])),
+        timeSource: clock,
       });
       handler.registerWithRouter(transport);
       for (const service of group.services) {
@@ -73,10 +217,11 @@ test('three actual current SQL control voters share one PAUSE census and each re
       }
       const build = await runtimeBuildProvenance();
       assert.equal(build.state, 'measured', build.reason);
-      const release = () => handler.participantReleaseRecovery.releaseOperator({
-        partitionId: PARTITION_ID, targetBuildDigest: build.digest,
-        deadlineAtMs: handler.timeSource.now() + RELEASE_BUDGET_MS,
-      });
+      const release = (partitionId = PARTITION_ID) =>
+        handler.participantReleaseRecovery.releaseOperator({
+          partitionId, targetBuildDigest: build.digest,
+          deadlineAtMs: handler.timeSource.now() + RELEASE_BUDGET_MS,
+        });
       const first = await release();
       assert.equal(first.outcome, OUTCOME.CUT_OVER,
         'the original native three-member release must install durable origins: ' +
@@ -123,6 +268,15 @@ test('three actual current SQL control voters share one PAUSE census and each re
         assert.deepEqual(readPartitionWriteOrigin(service.db),
           origins[group.services.indexOf(service)]);
       }
+      dependentGroup = await formAdmittedGroup({partitionId: DEPENDENT_PARTITION,
+        members: DEPENDENT_MEMBERS, tempPrefix: 'control-drain-dependent-',
+        budgetMs: RELEASE_BUDGET_MS, transport,
+        serviceOptions: {tableId: DEPENDENT_TABLE, tableName: DEPENDENT_TABLE,
+          schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]}}});
+      const [dependent] = dependentGroup.services;
+      handler.localServices.set(dependent.replicaId, dependent);
+      await closeDependent(transport, release);
+      await measureHeldWrite({group, transport, handler, leader, dependent, clock, release});
     } catch (error) {
       failure = error;
     } finally {
@@ -133,6 +287,11 @@ test('three actual current SQL control voters share one PAUSE census and each re
         }
       } catch (error) {
         failure = retain(failure, error, 'real three-member release-owner cleanup');
+      }
+      try {
+        await dependentGroup?.dispose({retainDirectory: failure !== null});
+      } catch (error) {
+        failure = retain(failure, error, 'native dependent release shutdown');
       }
       try {
         await group?.dispose({retainDirectory: failure !== null});
