@@ -1,12 +1,44 @@
 // Fixture projections consume the production result builders. They do not
 // replace repository authority in persistence or reconstruction witnesses.
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   getWorkflowSteps, ReplicaStatus, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from '../../src/rebalancer/replica-operation-update-disposition.js';
+
+// A preexisting fixture operation carries the latest committed step and its
+// timestamp. Alternate or malformed histories should be supplied explicitly.
+function workflowFixtureHistory(step, timestamp) {
+  return [{step, timestamp}];
+}
+
+function completeServicesFixtureRead(rows) {
+  return {success: true, rowSetComplete: true, rows};
+}
+
+function installServicesAuthorityFixture(gateway, answer) {
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  gateway.readAuthoritativeRows = (table, sql, params, options) =>
+    table === TABLES.SERVICES ?
+      answer(sql, params, options) :
+      read(table, sql, params, options);
+  return () => {
+    gateway.readAuthoritativeRows = read;
+  };
+}
+
+// A coordinator SQL-store fixture already routes submitMutation through the
+// production planner. Advertise the same CDC ingress capability as that owner.
+function installCommittedOperationMutationFixture(gateway) {
+  gateway.cdcIntegrationService = {
+    insertSystemTableRow: (tableName, row) =>
+      gateway.submitMutation({operation: 'insert', tableName, row}),
+    updateSystemTableRow: (tableName, whereClause, data) =>
+      gateway.submitMutation({operation: 'update', tableName, whereClause, data}),
+  };
+}
 
 function buildTerminalOperationFixtureOutcome(operation, {
   failed = false,
@@ -23,4 +55,10 @@ function buildTerminalOperationFixtureOutcome(operation, {
   }));
 }
 
-export {buildTerminalOperationFixtureOutcome};
+export {
+  buildTerminalOperationFixtureOutcome,
+  completeServicesFixtureRead,
+  installCommittedOperationMutationFixture,
+  installServicesAuthorityFixture,
+  workflowFixtureHistory,
+};

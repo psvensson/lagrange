@@ -1,4 +1,7 @@
-import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {
+  buildTerminalOperationFixtureOutcome, completeServicesFixtureRead,
+  installServicesAuthorityFixture, workflowFixtureHistory,
+} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -278,7 +281,7 @@ const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
 ]);
 
 function buildEventDrivenOperation(overrides = {}) {
-  return Object.freeze({
+  const operation = {
     operationId: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partitionId: TEST_PARTITION_ID,
@@ -292,11 +295,17 @@ function buildEventDrivenOperation(overrides = {}) {
     createdAt: TEST_CREATED_AT_MS,
     updatedAt: TEST_UPDATED_AT_MS,
     ...overrides,
+  };
+  return Object.freeze({
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(operation.workflowStep, operation.updatedAt),
+    ...operation,
   });
 }
 
 function buildEventDrivenOperationRow(overrides = {}) {
-  return Object.freeze({
+  const operation = {
     operation_id: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -310,7 +319,9 @@ function buildEventDrivenOperationRow(overrides = {}) {
     created_at: TEST_CREATED_AT_MS,
     updated_at: TEST_UPDATED_AT_MS,
     ...overrides,
-  });
+  };
+  return Object.freeze({completed_at: null, error_message: null,
+    steps_history: JSON.stringify(workflowFixtureHistory(operation.workflow_step, operation.updated_at)), ...operation});
 }
 
 function buildEventDrivenPlanningSnapshot(options = {}) {
@@ -444,11 +455,7 @@ function buildSqlQueryEngine(operationRow) {
         };
       }
       if (normalizedSql.includes(TEST_SERVICES_TABLE)) {
-        return {
-          success: true,
-          rows: TEST_EMPTY_ROWS,
-          affectedRows: 0,
-        };
+        return completeServicesFixtureRead(TEST_EMPTY_ROWS);
       }
       return {
         success: true,
@@ -1632,34 +1639,25 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
 
     coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
       () => true;
-    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
-      async () => ({
-        observedRow: null,
-        authoritativeReadAttempted: true,
-        authoritativeReadFailed: true,
-      });
+    const restoreRead = installServicesAuthorityFixture(
+      coordinator.controlPlaneSystemTableGateway,
+      () => ({success: false, error: 'fixture SERVICES authority unavailable'}),
+    );
     t.equal(
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(operation),
       false,
       'cache-only ACTIVE with unavailable authoritative read must not settle',
     );
-    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
-      async (replicaId, partitionId, targetNodeId) => ({
-        observedRow: {
-          service_id: replicaId, replica_id: replicaId, service_type: 'partition',
-          partition_id: partitionId, node_id: targetNodeId,
-          status: ReplicaStatus.ACTIVE, raft_role: 'follower', address: 'node-2:1',
-          created_at: 1, state_entered_at: 1,
-        },
-        authoritativeReadAttempted: true,
-        authoritativeReadFailed: false,
-      });
-
-    const completed =
-      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
-        operation,
-      );
-
+    restoreRead();
+    installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
+      (_sql, [replicaId]) => completeServicesFixtureRead([{
+        service_id: replicaId, replica_id: replicaId, service_type: 'partition',
+        partition_id: operation.partitionId, node_id: operation.targetNodeId,
+        status: ReplicaStatus.ACTIVE, raft_role: 'follower', address: 'node-2:1',
+        created_at: 1, state_entered_at: 1,
+      }]));
+    const completed = await coordinator.workflowOwner
+      .reconcilePriorityRecoveryOperationDrain(operation);
     t.equal(
       completed,
       true,
@@ -2744,15 +2742,11 @@ async function runIntermediateAddDrain(
     const resolvedRow = authoritativeTargetRow === undefined ?
       defaultVoterTargetRow : authoritativeTargetRow;
     // The real status read (authoritative row -> lifecycle normalization).
-    owner.repository.readAuthoritativeReplicaRowForObservation =
-      async (...args) => {
-        authoritativeReads.push(args.slice(0, 3));
-        return {
-          observedRow: resolvedRow,
-          authoritativeReadAttempted: true,
-          authoritativeReadFailed: false,
-        };
-      };
+    installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
+      (_sql, [replicaId]) => {
+        authoritativeReads.push([replicaId, operation.partitionId, operation.targetNodeId]);
+        return completeServicesFixtureRead(resolvedRow === null ? [] : [resolvedRow]);
+      });
     const drainSnapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     const settled =

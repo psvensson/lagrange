@@ -98,6 +98,10 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   // M2: a refused failure of a partition ADD whose target is live completes
   // it (never a REPLACE: its post-intent refusal completes nothing).
   'operation-workflow-transition-persistence.js': 1,
+  // The retained sibling edge revalidates the same ADD-only admission.
+  // strict-operation-outcomes.test.js exercises refusal on unavailable
+  // authority and durable ACTIVE completion on the exact target.
+  'operation-workflow-terminal-transition-repair.js': 1,
 });
 const FAIL_OPERATION_CALLER_FILES = Object.freeze([
   // Lost CREATE responses settle only through the same failure owner, with

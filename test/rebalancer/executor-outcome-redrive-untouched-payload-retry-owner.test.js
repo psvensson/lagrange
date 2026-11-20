@@ -1,4 +1,5 @@
-import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {completeServicesFixtureRead, buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 /**
  * CL-029 (quest formation-ledger-self-move-blocks-cluster-ops): the re-drive
  * loop's retained-and-untouched exit must arm the timed retry.
@@ -158,7 +159,15 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
   };
   // This boundary fixture models an existing nonterminal row and confirmed
   // projection. Repository authority is exercised by the SQLite witnesses.
+  const replicaObserver = new ReplicaOperationRepository({
+    nodeId: TEST_TERMINAL_OPERATION.targetNodeId,
+    systemTableCache: {get: () => null, getAll: () => []},
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async () => completeServicesFixtureRead([]),
+    },
+  });
   host.repository = {
+    getActualReplicaObservation: replicaObserver.getActualReplicaObservation.bind(replicaObserver),
     observeOperationTransition: async () => ({operation: TEST_TERMINAL_OPERATION,
       outcome: null, deferredOutcome: null}),
     confirmReplicaOperationPersistence: async (operation) => ({operation,

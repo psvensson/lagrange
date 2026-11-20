@@ -223,7 +223,7 @@ test('post-insert authority deferral: terminal settlement wins before rearm ' +
       'terminal settlement releases the exact retained hold',
     );
     t.equal(
-      sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
+      sqlEngine.getOperationRow(TEST_OPERATION_ID)?.workflow_step,
       WORKFLOW_STEP.FAILED,
       'the durable terminal operation remains authoritative',
     );
@@ -436,7 +436,7 @@ test('post-insert authority deferral: restart recovery discovers the durable ' +
       'the exactly-once dispatch consumes the sole scheduled progress owner',
     );
     t.not(
-      sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
+      sqlEngine.getOperationRow(TEST_OPERATION_ID)?.workflow_step,
       WORKFLOW_STEP.FAILED,
       'restart does not terminalize the reservation-backed progress obligation',
     );
@@ -561,7 +561,8 @@ test('divergence-arm-keeps-reservation: unresolved terminal divergence ' +
   // Unresolved divergence: the terminal persist wins zero rows and the
   // authority row is still NON-terminal — the operation is live and
   // re-driveable, so its reservation must survive.
-  seedAuthoritativeOperation(sqlEngine, buildStorageIncreasingOperation());
+  const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   owner.repository.persistOperationUpdate = async () => buildOperationUpdateOutcome({
     persisted: false,
     disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
@@ -569,7 +570,7 @@ test('divergence-arm-keeps-reservation: unresolved terminal divergence ' +
   });
 
   try {
-    await owner.completeOperation(buildStorageIncreasingOperation());
+    await owner.completeOperation(operation);
 
     t.equal(
       sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
@@ -578,7 +579,7 @@ test('divergence-arm-keeps-reservation: unresolved terminal divergence ' +
     );
 
     await owner.failOperation(
-      buildStorageIncreasingOperation(),
+      operation,
       'divergence failure probe',
     );
 
@@ -604,14 +605,20 @@ test('divergence-arm-keeps-reservation: losing to a DIFFERENT durable ' +
   const owner = coordinator.workflowOwner;
   // Lost-to-other-terminal: a DIFFERENT durable terminal already won; the
   // winning terminal owns the operation, so the reservation is released.
-  seedAuthoritativeOperation(sqlEngine, buildStorageIncreasingOperation());
+  const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   owner.repository.persistOperationUpdate = async (operation) => {
+    const completedAt = Date.now();
     const winningTerminal = {
       ...operation,
       status: ReplicaStatus.FAILED,
       workflowStep: WORKFLOW_STEP.FAILED,
-      completedAt: Date.now(),
+      updatedAt: completedAt,
+      completedAt,
       errorMessage: 'winning terminal',
+      stepsHistory: [...operation.stepsHistory.slice(0, -1), {
+        step: WORKFLOW_STEP.FAILED, timestamp: completedAt,
+      }],
     };
     return buildOperationUpdateOutcome({
       persisted: false,
@@ -621,7 +628,7 @@ test('divergence-arm-keeps-reservation: losing to a DIFFERENT durable ' +
   };
 
   try {
-    await owner.completeOperation(buildStorageIncreasingOperation());
+    await owner.completeOperation(operation);
 
     t.equal(
       sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
