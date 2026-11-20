@@ -1,0 +1,94 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-caller-lifetimes",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "aggregate-caller-and-bounded-leaf-composition",
+      "passed": false,
+      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+    },
+    {
+      "id": "shorter-joiner-and-retained-shared-attempt",
+      "passed": false,
+      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+    },
+    {
+      "id": "positive-and-negative-controls",
+      "passed": false,
+      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+    },
+    {
+      "id": "historic-contract-disposition-and-independent-review",
+      "passed": false,
+      "failure": "Original red retained; repaired behavior and complete interaction not yet proved."
+    }
+  ],
+  "generatedAt": "2026-11-20T19:47:07.497Z",
+  "sourceCommit": "9a559d0cb0bb51580988165b8116f2d68b9713c7",
+  "requestId": "b0a51112-53bb-4ac7-9d3b-b1a1af48a51b",
+  "testFileDigests": {
+    "test/partition/participant-release-caller-lifetimes.test.js": "d5c241170c92ed9efa14504003ebc545af7eb52cd9d712c069a333c5636e1690"
+  },
+  "productionFileDigests": {
+    "src/node/participant-release-client.js": "0c5dd576444b0c717db649e87c67b1e00c2a947a1a1aff5646daeeb560f0526b",
+    "src/node/replica-handler-participant-cutover.js": "26c3730d0210fa5b85119f96e37d02a8b3d34c0283eaf20a318d656e64efcc1b",
+    "src/node/replica-handler-participant-release.js": "55f827b55f45448e4d2f31f2cdbc82e669ee53f1be22758c860e9d42a1879408",
+    "src/transport/message-router-delivery-lifetime.js": "30ee227ed5c52d4a2db2cfef0ed623f716d6199776adbe13ef9d6c75fa647580"
+  },
+  "originalDigests": {
+    "status.json": "d70c2fdfadfe8a3f0ee8beb5cd1af84045b968b6b26482b11faf424428da61d6",
+    "artifacts-0.json": "e0efd182267e90588d3565cd852b6fa9f63b12caf7a455525449e80b00e0cf51",
+    "artifacts/9a559d0cb0bb-mwpdyjvl-3279229-adam-laptop.log": "fbdc5cb5649f9bde4b0c97a02dc4817f4a19d665c99b42675f7e03c12ba20141",
+    "artifacts/selection.json": "f02366347311009ce2524fa4233556c5ba83f5ce85a952ddf72ba018ed275ead",
+    "artifacts/test-results.ndjson": "c809a5d9caf25361a5be37dab18df55255959fd112553c27b3fd257965311a21"
+  },
+  "provenance": {
+    "status": {
+      "docker_create_attempted": false,
+      "elapsed_s": 41.56,
+      "execution_scope_closed": true,
+      "exit_code": 1,
+      "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
+      "host": "local-workstation",
+      "intentDigest": "cebbfb70f1d019b39cfecfc45b30de708ee52b43f96bc394a57eb5c5688f7297",
+      "job_id": "b0a51112-53bb-4ac7-9d3b-b1a1af48a51b",
+      "reason": null,
+      "source_execution_started": false,
+      "state": "FAILED",
+      "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-b0a5111253bb4ac79d3bb1a1af48a51b.service",
+      "workload_started": true
+    },
+    "selection": {
+      "sha": "9a559d0cb0bb51580988165b8116f2d68b9713c7",
+      "host": "adam-laptop",
+      "files": [
+        "test/partition/participant-release-caller-lifetimes.test.js"
+      ],
+      "plan": [
+        {
+          "files": [
+            "test/partition/participant-release-caller-lifetimes.test.js"
+          ],
+          "jobs": 4,
+          "resourceClass": "ordinary"
+        }
+      ]
+    },
+    "ledger": {
+      "file": "test/partition/participant-release-caller-lifetimes.test.js",
+      "attempt": 1,
+      "ok": false,
+      "assertions": 4,
+      "durationMs": 8948,
+      "retriedOnce": false,
+      "firstFailureLine": "not ok 1 - RELEASE aggregate crosses leaf bound while every actual leaf stays within its own bound"
+    }
+  },
+  "measured": {
+    "tests": 4,
+    "passed": 2,
+    "failed": 2
+  },
+  "ceiling": "Original local native/inprocess virtual-clock red only. Native binary hashes were not captured. No green behavior, physical formation or task3823 causal admission."
+}

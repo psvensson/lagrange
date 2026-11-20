@@ -21,6 +21,7 @@ const mathMin = Math.min;
 const objectFreeze = Object.freeze;
 const objectIs = Object.is;
 const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
+const MAX_PLATFORM_TIMER_DELAY_MS = 2_147_483_647;
 
 function releaseNodeOfAddress(address) {
   try {
@@ -36,10 +37,21 @@ function ownerNow(owner) {
 }
 
 function requestTimeoutMs(owner, request) {
-  if (!Number.isSafeInteger(request?.deadlineAtMs)) {
-    return BOUND.REQUEST_TIMEOUT_MS;
-  }
-  return cappedRequestTimeoutMs(ownerNow(owner), request.deadlineAtMs);
+  if (!participantReleaseAbsoluteClockValid(request?.deadlineAtMs)) return 0;
+  const nowMs = ownerNow(owner);
+  if (!participantReleaseAbsoluteClockValid(nowMs)) return 0;
+  // RELEASE is an orchestrator: every leaf keeps its own cap while the caller
+  // observes the one original aggregate budget, including a leader redirect.
+  return request.action === ACTION.RELEASE ?
+    participantReleaseWaitRemainingMs(nowMs, request.deadlineAtMs) :
+    cappedRequestTimeoutMs(nowMs, request.deadlineAtMs);
+}
+
+function participantReleaseWaitRemainingMs(nowMs, deadlineAtMs) {
+  if (!participantReleaseAbsoluteClockValid(nowMs) ||
+      !participantReleaseAbsoluteClockValid(deadlineAtMs)) return 0;
+  const remainingMs = mathMax(0, deadlineAtMs - nowMs);
+  return remainingMs <= MAX_PLATFORM_TIMER_DELAY_MS ? remainingMs : 0;
 }
 
 function participantReleaseAbsoluteClockValid(value) {
@@ -184,5 +196,5 @@ async function completeParticipantRelease(owner, request, clock) {
 }
 
 export {askParticipantRelease, completeParticipantRelease, participantReleaseAbsoluteClockValid,
-  participantReleaseRequestBudget,
+  participantReleaseRequestBudget, participantReleaseWaitRemainingMs,
   releaseNodeOfAddress, requestParticipantRelease};

@@ -152,7 +152,8 @@ async function withEmptyRegisteredHandler(timeSource, measure) {
   if (failure !== null) throw failure;
 }
 
-async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 100, 101, 102]) {
+async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 100, 101, 102],
+  expectedJoinMissingFact = MISSING_FACT.HOSTED_PARTITION) {
   let answers = null;
   await withEmptyRegisteredHandler(scriptedTimeSource(clockValues),
     async ({handler, transport}) => {
@@ -164,14 +165,21 @@ async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 
   assert.equal(answers[0].outcome, OUTCOME.UNAVAILABLE);
   assert.equal(answers[0].missingFact, 'hosted_partition');
   assert.equal(answers[1].outcome, OUTCOME.UNAVAILABLE);
-  assert.equal(answers[1].missingFact, 'hosted_partition');
+  assert.equal(answers[1].missingFact, expectedJoinMissingFact);
   assert.equal(Object.hasOwn(answers[0], 'joinedAttempt'), false,
     'the starter is not its own joining caller');
   assert.equal(typeof answers[1].joinedAttempt?.clockState, 'string');
   assert.notEqual(answers[1].joinedAttempt.clockState.length, 0);
   const {joinedAttempt, ...underlying} = answers[1];
-  assert.deepEqual(underlying, answers[0],
-    'the caller projection must preserve the exact settled owner answer');
+  if (expectedJoinMissingFact === MISSING_FACT.HOSTED_PARTITION) {
+    assert.deepEqual(underlying, answers[0],
+      'a live caller projection preserves the exact settled owner answer');
+  } else {
+    assert.deepEqual(underlying, {outcome: OUTCOME.UNAVAILABLE, releaseId: null,
+      partitionId: PARTITION, phase: RELEASE_ACTION.RELEASE,
+      missingFact: MISSING_FACT.RELEASE_DEADLINE},
+    'an unusable caller budget refuses independently without a retry grant');
+  }
   return {starter: answers[0], joiner: answers[1], joinedAttempt};
 }
 
@@ -643,7 +651,7 @@ test('registered failed joins bound triggers without getters or coercion', async
   if (pollutionFailure !== null) throw pollutionFailure;
 });
 
-test('registered failed joins type invalid and backward owner clock observations', async () => {
+test('registered joins retain typed clock diagnostics when caller budget refuses', async () => {
   const measured = await joinedHostedPartitionFailure(registeredReleaseRequest({
     trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
   }), [100, 100, 101, 102]);
@@ -662,7 +670,7 @@ test('registered failed joins type invalid and backward owner clock observations
   let unsafeState = null;
   for (const sample of unsafeSamples) {
     const observed = await joinedHostedPartitionFailure(registeredReleaseRequest(),
-      [100, 100, sample, 102]);
+      [100, 100, sample, 102], MISSING_FACT.RELEASE_DEADLINE);
     unsafeState ??= observed.joinedAttempt.clockState;
     assert.equal(observed.joinedAttempt.clockState, unsafeState);
     assert.equal(observed.joinedAttempt.joinAgeMs, null);
@@ -672,7 +680,7 @@ test('registered failed joins type invalid and backward owner clock observations
 
   const overflow = await joinedHostedPartitionFailure(registeredReleaseRequest(),
     [-Number.MAX_SAFE_INTEGER, -Number.MAX_SAFE_INTEGER,
-      Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]);
+      Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER], MISSING_FACT.RELEASE_DEADLINE);
   assert.equal(overflow.joinedAttempt.clockState, unsafeState,
     'unsafe derived subtraction has the same typed state as unsafe samples');
   assert.equal(overflow.joinedAttempt.joinAgeMs, null);
@@ -688,14 +696,14 @@ test('registered failed joins type invalid and backward owner clock observations
   const unsafeBeforeBackward = await joinedHostedPartitionFailure(
     registeredReleaseRequest({deadlineAtMs: Number.MAX_SAFE_INTEGER}),
     [Number.MAX_SAFE_INTEGER, 0, -Number.MAX_SAFE_INTEGER,
-      -Number.MAX_SAFE_INTEGER]);
+      -Number.MAX_SAFE_INTEGER], MISSING_FACT.RELEASE_DEADLINE);
   assert.equal(unsafeBeforeBackward.joinedAttempt.clockState, unsafeState,
     'unsafe derived age takes precedence over the same backward observation');
   assert.equal(unsafeBeforeBackward.joinedAttempt.joinAgeMs, null);
   assert.equal(unsafeBeforeBackward.joinedAttempt.terminalAgeMs, null);
 
   const unavailable = await joinedHostedPartitionFailure(registeredReleaseRequest(),
-    [100, 100, 101, new Error('terminal clock unavailable')]);
+    [100, 100, 101, new Error('terminal clock unavailable')], MISSING_FACT.RELEASE_DEADLINE);
   assert.notEqual(unavailable.joinedAttempt.clockState, measured.joinedAttempt.clockState);
   assert.notEqual(unavailable.joinedAttempt.clockState, unsafeState);
   assert.notEqual(unavailable.joinedAttempt.clockState, backward.joinedAttempt.clockState);
@@ -703,11 +711,13 @@ test('registered failed joins type invalid and backward owner clock observations
   assert.equal(unavailable.joinedAttempt.terminalAgeMs, null);
 
   const unavailableJoin = await joinedHostedPartitionFailure(registeredReleaseRequest(),
-    [100, 100, new Error('join clock unavailable'), 102]);
+    [100, 100, new Error('join clock unavailable'), 102], MISSING_FACT.RELEASE_DEADLINE);
   const {joinedAttempt: unavailableJoinProjection, ...unavailableJoinAnswer} =
     unavailableJoin.joiner;
-  assert.deepEqual(unavailableJoinAnswer, unavailableJoin.starter,
-    'a throwing join observation cannot alter the settled owner answer');
+  assert.equal(unavailableJoinAnswer.missingFact, MISSING_FACT.RELEASE_DEADLINE,
+    'a throwing join clock cannot authorize a wait for the shared owner');
+  assert.equal(unavailableJoin.starter.missingFact, MISSING_FACT.HOSTED_PARTITION,
+    'caller refusal cannot alter the shared owner answer');
   assert.deepEqual(unavailableJoinProjection, unavailableJoin.joinedAttempt);
   assert.equal(unavailableJoin.joinedAttempt.clockState,
     unavailable.joinedAttempt.clockState);

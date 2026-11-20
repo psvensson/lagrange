@@ -13,10 +13,12 @@ import {readPartitionWriteOrigin} from
 import {isReleaseDrained, releaseAnswer, releaseCensusDefect,
   releaseIdentityOf, releaseIdentityValid, releaseMemberIds} from
   '../partition/partition-participant-release-contract.js';
-import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
+import {askParticipantRelease, participantReleaseAbsoluteClockValid, participantReleaseWaitRemainingMs,
+  releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
 import {captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
-  participantReleaseAttemptAgeObservation, readParticipantReleaseClock} from
+  participantReleaseAttemptAgeObservation, participantReleaseClockMeasured,
+  readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
   '../query/distributed/distributed-transaction-release-settlement.js';
@@ -424,10 +426,52 @@ async function finishEnabledCutover(handler, service, request, release, attempt,
     {census, queryDrainProof: finalQueryDrainProof});
 }
 
-async function joinParticipantCutover(handler, current) {
+function joinedReleaseDeadline(request) {
+  return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+    {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+}
+
+async function awaitJoinedCutover(handler, current, request, remainingMs) {
+  let timer = null;
+  let waiter = null;
+  try {
+    return await new Promise((resolve) => {
+      if (current.settled) {
+        resolve(current.answer);
+        return;
+      }
+      waiter = {resolve};
+      current.waiters.add(waiter);
+      timer = handler.timeSource.setTimeout(() => resolve(joinedReleaseDeadline(request)),
+        remainingMs);
+    });
+  } finally {
+    if (waiter !== null) current.waiters.delete(waiter);
+    if (timer !== null) handler.timeSource.clearTimeout(timer);
+  }
+}
+
+function settleCutoverWaiters(record, answer) {
+  record.settled = true;
+  record.answer = answer;
+  for (const waiter of record.waiters) waiter.resolve(answer);
+  record.waiters.clear();
+  return answer;
+}
+
+async function joinParticipantCutover(handler, current, request) {
   const joinObservation = readParticipantReleaseClock(handler.timeSource);
-  const answer = await current.promise;
+  const remainingMs = participantReleaseClockMeasured(joinObservation) ?
+    participantReleaseWaitRemainingMs(joinObservation.value, request.deadlineAtMs) : 0;
+  // One shared settlement distribution, with detachable per-caller waiters.
+  // An expired join leaves no reaction retained by a never-settling run promise.
+  const observedAnswer = remainingMs <= 0 ? joinedReleaseDeadline(request) :
+    await awaitJoinedCutover(handler, current, request, remainingMs);
   const terminalObservation = readParticipantReleaseClock(handler.timeSource);
+  const answer = !participantReleaseClockMeasured(terminalObservation) ||
+      !participantReleaseAbsoluteClockValid(terminalObservation.value) ||
+      terminalObservation.value >= request.deadlineAtMs ?
+    joinedReleaseDeadline(request) : observedAnswer;
   if (answer.outcome === OUTCOME.CUT_OVER) return answer;
   const joinedAttempt = participantReleaseAttemptAgeObservation(
     current.startObservation,
@@ -450,17 +494,18 @@ async function runParticipantCutover(handler, request) {
   const current = runs.get(request.partitionId);
   if (current) {
     return current.targetBuildDigest === request.targetBuildDigest ?
-      joinParticipantCutover(handler, current) : releaseAnswer(OUTCOME.INVALID, request);
+      joinParticipantCutover(handler, current, request) : releaseAnswer(OUTCOME.INVALID, request);
   }
   const originalTrigger = captureParticipantReleaseDiagnosticTrigger(request);
   const startObservation = readParticipantReleaseClock(handler.timeSource);
   const running = runCutoverAttempt(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
   const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
-    startObservation, promise: running};
+    startObservation, waiters: new Set(), settled: false, answer: null, promise: null};
+  record.promise = running.then((answer) => settleCutoverWaiters(record, answer));
   runs.set(request.partitionId, record);
   try {
-    return await running;
+    return await record.promise;
   } finally {
     if (runs.get(request.partitionId) === record) runs.delete(request.partitionId);
   }
