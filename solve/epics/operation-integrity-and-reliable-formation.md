@@ -292,12 +292,16 @@ planning. Both must revalidate the exact operation before sending.
 [Managed recovery and census controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--workflow-wake-strict-census-and-growth-d4f-nov20.tar.gz).
 
 The same 53-file selection on `58ec69a2a` passed 51 files and failed two.
-One convergence witness allowed a second ledger REPLACE at virtual time
-26,000 ms while the seed-side hold still reported engaged. The same host
-passed at the CREATE parent and reproduced the second admission at the
-strict-workflow parent. Trace the admission-time seed-side ledger and
-target-side holder before attributing the failure to an actual concurrent
-durable move. The second failure is a direct CREATE caller in the growth
+One convergence witness interpreted a fulfilled second REPLACE request at
+virtual time 26,000 ms as a new admission. It passed on the CREATE parent
+and reproduced on the strict-workflow parent on the same host. A same-run
+SQLite trace at `a6e64ac98` shows that the seed hold, returned operation
+ID and sole PENDING database row were identical before and after the
+request. The workflow owner must distinguish valid same-intent reuse from
+a conflicting target, and exercise the foreign-terminal reply against the
+original holder under both conditions.
+[Paired parent runs and original SQLite trace](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--ledger-self-move-same-holder-trace-nov20.tar.gz).
+The second failure is a direct CREATE caller in the growth
 deadline fixture. Its success case omitted the registered release route.
 [Original 53-file run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-composed-53-58ec-nov20.tar.gz).
 
