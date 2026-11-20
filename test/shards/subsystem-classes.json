@@ -28,7 +28,7 @@
   "censusSize": 2701,
   "digest": "fnv1a32-8523e3b2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-039b7f82",
+  "observationDigest": "fnv1a32-1c6d2f0a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -13357,7 +13357,8 @@
         "src/partition/partition-service-core-base.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "directories": [
         "src",
@@ -14278,6 +14279,15 @@
     },
     "test/partition/replica-admission-delivery-lifetime.test.js": {
       "files": [
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -14287,6 +14297,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -14295,7 +14306,8 @@
         "src/partition/partition-replica-admission.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "directories": [
         "src"

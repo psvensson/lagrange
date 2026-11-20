@@ -544,8 +544,12 @@ function admissionLeaderOf(service, request) {
 async function rereadCommittedStamp(service, request, signal) {
   const transport = service.transport;
   const messageRouter = {
-    deliver: (address, payload, options) =>
-      transport.deliver(address, payload, {...options, signal}),
+    deliver: (address, payload, options) => {
+      if (!isCurrentAdmissionRequest(service, request, signal)) {
+        throw new Error('Replica admission request no longer owns this transport');
+      }
+      return transport.deliver(address, payload, {...options, signal});
+    },
   };
   let refusal = null;
   for (const read of admissionStampReads(request.stamp)) {

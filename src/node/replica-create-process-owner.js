@@ -120,9 +120,12 @@ function claimReplicaCreatePhysicalWorker(owner, evidence) {
 
 function rowMatchesActivePhysicalWorker(row, evidence) {
   return rowMatchesPhysicalWorkerEvidence(row, evidence) &&
+    nullableSafeInteger(row?.create_admission_owner_incarnation) ===
+      evidence.ownerIncarnation &&
     row?.create_admission_attempt_token === evidence.attemptToken &&
     nullableSafeInteger(row?.create_admission_attempt_seq) ===
       evidence.attemptSeq &&
+    row?.completed_at == null &&
     row?.create_admission_state !== CLOSED_ADMISSION_STATE;
 }
 
