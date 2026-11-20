@@ -281,7 +281,7 @@ test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
       {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
     await harness.coordinator.repository.persistOperationUpdate(
       harness.operation);
-    await harness.coordinator.reconcileOperationProgress(harness.operation);
+    await harness.coordinator.reconcileOperationLifecycle(harness.operation);
     t.equal(parseSteps(harness.coordinator.repository
       .getReplicaOperationRowFromCache(harness.operation.operationId))
       .find((entry) => entry?.replaceRemovalIntent === true)
@@ -291,17 +291,17 @@ test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
       'REMOVE_PEER of the source is proposed through the witness');
     t.equal(harness.witness.retirements[0]?.sourceReplicaId,
       SOURCE_REPLICA_ID, 'the proposal names the source');
-    await harness.coordinator.reconcileOperationProgress(harness.operation);
+    await harness.coordinator.reconcileOperationLifecycle(harness.operation);
     t.equal(harness.witness.retirements.length, 1,
       'a wake with the same leader, term and membership proposes nothing');
     harness.witness.term += 1;
-    await harness.coordinator.reconcileOperationProgress(harness.operation);
+    await harness.coordinator.reconcileOperationLifecycle(harness.operation);
     t.equal(harness.witness.retirements.length, 2,
       'a term change (a proposal it may have dropped) re-drives once');
     t.equal(removalEffects(harness.deliveries).length, 0,
       'the failed source is sent no REMOVE_REPLICA');
     harness.witness.commitRemoval();
-    await harness.coordinator.reconcileOperationProgress(harness.operation);
+    await harness.coordinator.reconcileOperationLifecycle(harness.operation);
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.REMOVED, 'the committed removal completes it');
   } finally {
@@ -323,7 +323,7 @@ test('W5 (D2/P4): time past the former budgets fails nothing after the ' +
     t.notOk(harness.coordinator.repository.isOperationTerminal(persisted),
       'no timer reached a terminal');
     harness.witness.commitRemoval();
-    await harness.coordinator.reconcileOperationProgress(harness.operation);
+    await harness.coordinator.reconcileOperationLifecycle(harness.operation);
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.REMOVED, 'the committed removal still completes it');
   } finally {
@@ -346,7 +346,7 @@ test('W5b (D2): the exempt REPLACE budget check reports no ' +
     };
     // Reach the budget check itself: no retry grace, no observed progress.
     owner.hasActiveTransitionRetryGrace = () => false;
-    owner.reconcileOperationProgress = async () => false;
+    owner.reconcileOperationLifecycle = async () => false;
     const operation = await persistedOperation(harness);
     t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
       'the REPLACE waits at STOPPING (a time-exempt owner phase)');
@@ -374,7 +374,7 @@ test('W6 (P6): target death after the intent', async (t) => {
         await driveToRemovalIntent(harness);
         harness.coordinator.systemTableCache.upsert('services',
           targetRow(ReplicaStatus.FAILED));
-        await harness.coordinator.reconcileOperationProgress(
+        await harness.coordinator.reconcileOperationLifecycle(
           harness.operation);
         const persisted = await persistedOperation(harness);
         t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
@@ -394,7 +394,7 @@ test('W6 (P6): target death after the intent', async (t) => {
       harness.coordinator.systemTableCache.upsert('services',
         targetRow(ReplicaStatus.FAILED));
       harness.witness.available = false;
-      await harness.coordinator.reconcileOperationProgress(harness.operation);
+      await harness.coordinator.reconcileOperationLifecycle(harness.operation);
       harness.clock.offsetMs = LONG_AFTER_MS;
       await harness.owner.checkTimeouts();
       const persisted = await persistedOperation(harness);
@@ -412,7 +412,7 @@ test('W6 (P6): target death after the intent', async (t) => {
         harness.witness.commitRemoval();
         harness.coordinator.systemTableCache.upsert('services',
           targetRow(ReplicaStatus.FAILED));
-        await harness.coordinator.reconcileOperationProgress(
+        await harness.coordinator.reconcileOperationLifecycle(
           harness.operation);
         t.equal((await persistedOperation(harness)).workflowStep,
           WORKFLOW_STEP.REMOVED, 'the committed removal stands');
@@ -542,7 +542,7 @@ test('W8 (D2 boundary is durable): a stale in-memory copy cannot FAIL a ' +
       WORKFLOW_STEP.STOPPING,
       'the FAILED write is a CAS on the step it was admitted against');
     harness.witness.commitRemoval();
-    await harness.coordinator.reconcileOperationProgress(
+    await harness.coordinator.reconcileOperationLifecycle(
       await persistedOperation(harness));
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.REMOVED, 'the owner still completes it');
@@ -652,7 +652,7 @@ async (t) => {
     // AN11 on the preserved C0: a lagging absence completes nothing.
     harness.witness.sourceVoter = false;
     harness.witness.commitIndex = INTENT_COMMIT_INDEX - 1;
-    await harness.coordinator.reconcileOperationProgress(
+    await harness.coordinator.reconcileOperationLifecycle(
       await persistedOperation(harness));
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.STOPPING, 'an absence below C0 is not a retirement');
@@ -686,7 +686,7 @@ async function targetDeathOutcome({targetStatus, sourceMember,
     witness.available = false;
     harness.coordinator.systemTableCache.upsert('services',
       targetRow(targetStatus));
-    await harness.coordinator.reconcileOperationProgress(
+    await harness.coordinator.reconcileOperationLifecycle(
       await persistedOperation(harness));
     const persisted = await persistedOperation(harness);
     return {
@@ -789,7 +789,7 @@ async function completionAfterTargetSeesAbsence(harness, leaderReplicaId) {
   harness.witness.commitRemoval();
   harness.witness.leaderReplicaId = leaderReplicaId;
   await harness.owner.completeOperation(await persistedOperation(harness));
-  await harness.coordinator.reconcileOperationProgress(
+  await harness.coordinator.reconcileOperationLifecycle(
     await persistedOperation(harness));
   return persistedOperation(harness);
 }
@@ -851,7 +851,7 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
         leader.retirements.length >= 1,
       'the removal is re-driven');
       leader.commitRemoval();
-      await harness.coordinator.reconcileOperationProgress(
+      await harness.coordinator.reconcileOperationLifecycle(
         await persistedOperation(harness));
       t.equal((await persistedOperation(harness)).workflowStep,
         WORKFLOW_STEP.REMOVED, 'the leader\'s committed absence completes it');

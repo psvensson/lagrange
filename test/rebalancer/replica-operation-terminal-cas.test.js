@@ -1,3 +1,4 @@
+import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 // Audit finding 6 (quest replica-operation-terminal-cas): terminal
 // replica-operation transitions are first-terminal-wins, never
 // last-writer-wins. The terminal UPDATE guards on `completed_at IS NULL`
@@ -196,7 +197,7 @@ test(
       },
     );
 
-    t.equal(persisted, true, 'the guarded write against a non-terminal row persists');
+    t.equal(persisted.persisted, true, 'the guarded write against a non-terminal row persists');
     t.equal(mutations.length, 1, 'exactly one mutation reached the gateway');
     t.equal(
       mutations[0]?.whereClause?.completed_at,
@@ -271,7 +272,7 @@ test(
       confirmPersistence: false,
     });
 
-    t.equal(persisted, true, 'the CAS against the observed row persists');
+    t.equal(persisted.persisted, true, 'the CAS against the observed row persists');
     t.equal(mutations[0].whereClause.workflow_step, WORKFLOW_STEP.PENDING);
     t.equal(mutations[0].whereClause.steps_history, observedHistory,
       'a same-step change of the history (a released hold, an appended ' +
@@ -338,7 +339,7 @@ test(
       },
     );
 
-    t.equal(persisted, true, 'the terminal-first arm commits');
+    t.equal(persisted.persisted, true, 'the terminal-first arm commits');
     t.equal(mutations.length, 1, 'one authoritative mutation is issued');
     t.equal(mutations[0].whereClause.completed_at, null,
       'the mutation retains the first-terminal-wins guard');
@@ -398,7 +399,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -451,7 +451,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -491,14 +490,14 @@ test(
     );
 
     t.equal(
-      persisted,
-      false,
-      'callers without the typed opt-in observe the legacy boolean contract',
+      persisted.disposition,
+      REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+      'every caller consumes the mandatory typed winning terminal outcome',
     );
     t.equal(
       losingProjection.workflowStep,
       WORKFLOW_STEP.ACTIVE,
-      'the loser still adopts the winner even without the typed opt-in',
+      'the loser adopts the exact terminal winner',
     );
   },
 );
@@ -529,7 +528,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -632,8 +630,7 @@ test(
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
-          returnDisposition: true,
-        },
+          },
       );
       t.equal(
         winnerResult.persisted,
@@ -656,8 +653,7 @@ test(
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
-          returnDisposition: true,
-        },
+          },
       );
       t.equal(
         loserResult.persisted,
@@ -767,10 +763,7 @@ test(
     t.equal(mutations.length, 1, 'exactly one guarded mutation was issued');
 
     // Caller-side consequence: REFUSED is unresolved divergence.
-    const refusedOutcome = {
-      committed: false,
-      disposition: result?.disposition,
-    };
+    const refusedOutcome = buildOperationTransitionOutcome(result);
     t.equal(
       shouldReleaseReservationForTerminalOutcome(refusedOutcome),
       false,
@@ -789,25 +782,28 @@ test(
         REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
         REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
       ].map((disposition) =>
-        isTerminalTransitionOutcomeSettled({committed: false, disposition}),
+        isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+          persisted: disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+          disposition, operation: projectedOperation,
+        })),
       ),
       [true, true],
       'TERMINAL_ADOPTED and IDEMPOTENT_REPLAY settle (a durable terminal ' +
         'is proven)',
     );
     t.equal(
-      isTerminalTransitionOutcomeSettled({
-        committed: true,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-      }),
+      isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+        persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+        operation: projectedOperation,
+      })),
       true,
       'a committed terminal settles',
     );
     t.equal(
-      isTerminalTransitionOutcomeSettled({
-        committed: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
-      }),
+      isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+        persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
+        operation: projectedOperation,
+      })),
       false,
       'REINSERTED is unresolved divergence, not settled progress',
     );

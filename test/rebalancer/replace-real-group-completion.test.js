@@ -330,7 +330,7 @@ test('P1 terminal boundary: re-admission after the decision but before the ' +
   }
 });
 
-test('P1 edge (STOPPING owner via reconcileOperationProgress): the ' +
+test('P1 edge (STOPPING owner via reconcileOperationLifecycle): the ' +
   'membership decides, not the source row', async (t) => {
   const world = await openReplaceWorld({sourceHandler: true});
   try {
@@ -341,7 +341,7 @@ test('P1 edge (STOPPING owner via reconcileOperationProgress): the ' +
     await driveToIntent(world);
     setSourceRow(world, null);
     await assertNoCompletionWhileVoter(t, world, 'row gone, voter', () =>
-      world.coordinator.reconcileOperationProgress(readPersisted(world)
+      world.coordinator.reconcileOperationLifecycle(readPersisted(world)
         .then((operation) => operation)));
     const reason = readReplaceOwnerDiagnostic(world.coordinator.workflowOwner,
       world.operation.operationId)?.reason;
@@ -368,7 +368,7 @@ test('P1 edge (ACTIVE adoption, BR7): a source row already retiring at ' +
     world.group.kill(world.sourceReplicaId);
     world.group.advance(200);
     await assertNoCompletionWhileVoter(t, world, 'adoption', () =>
-      world.coordinator.reconcileOperationProgress(world.operation));
+      world.coordinator.reconcileOperationLifecycle(world.operation));
     const persisted = await readPersisted(world);
     t.ok(persisted.stepsHistory.some((entry) =>
       entry?.replaceRemovalIntent === true), 'an intent was adopted');
@@ -501,7 +501,7 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
     world.eventsSuppressed = true;
     world.group.kill(world.targetReplicaId);
     setTargetRow(world, ReplicaStatus.REMOVED);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'target gone', {targetGone: true});
@@ -514,7 +514,7 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
     // it keeps stepping until then); the leader's answer classifies.
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();
@@ -579,7 +579,7 @@ test('AN3: a target gone before the intent fails the REPLACE with the ' +
   try {
     world.currentEdge = 'target-removed-before-active';
     setTargetRow(world, ReplicaStatus.REMOVED);
-    await world.coordinator.reconcileOperationProgress(world.operation);
+    await world.coordinator.reconcileOperationLifecycle(world.operation);
     await settleTurns();
     const persisted = await readPersisted(world);
     t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED, 'FAILED');
@@ -694,7 +694,7 @@ test('AN11 (live, adopted intent): an absence the witness reports below ' +
       {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
     await world.coordinator.repository.persistOperationUpdate(world.operation);
     setSourceRow(world, null);
-    await world.coordinator.reconcileOperationProgress(world.operation);
+    await world.coordinator.reconcileOperationLifecycle(world.operation);
     await settleTurns();
     assertLaggingAbsenceCompletesNothing(t, world, 'adopted intent',
       await readPersisted(world));
@@ -736,7 +736,7 @@ test('AN11 (live, recorded intent): the same, with C0 recorded at the ' +
       'setup: the REPLACE decided nothing while its wakes were lost');
     await fireFallbackTimers(world);
     await settleTurns();
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     assertLaggingAbsenceCompletesNothing(t, world, 'recorded intent',
@@ -807,7 +807,7 @@ test('P1\' (D2): after the durable intent no elapsed time, sweep, stale ' +
     }
     setTargetRow(world, ReplicaStatus.FAILED);
     setSourceRow(world, null);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'P1 prime', {targetGone: true});
@@ -816,7 +816,7 @@ test('P1\' (D2): after the durable intent no elapsed time, sweep, stale ' +
     // re-reads the authority.
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();

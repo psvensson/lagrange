@@ -40,7 +40,7 @@ test('a FAIL-class remove-safety answer at a post-intent re-send withholds ' +
     const owner = world.coordinator.workflowOwner;
     owner.getCriticalReplicaRowsForSafety = async () => [];
     world.clockOffsetMs += RESEND_DUE_ADVANCE_MS;
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     t.equal(world.removeEffects.length, 1, 'no re-send without a safe answer');

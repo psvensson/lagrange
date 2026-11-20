@@ -111,7 +111,7 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
     );
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
@@ -250,7 +250,7 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
@@ -391,7 +391,7 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 

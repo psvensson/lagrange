@@ -505,8 +505,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           );
         }
         operation = claimedOperation;
-      } else {
-        await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+      } else if (operation.workflowStep !== WORKFLOW_STEP.SENDING) {
+        const progress = await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+        if (!didOperationReconcileAdvanceOrComplete(progress)) {
+          return this.buildSkippedOperationResult(progress, operation.operationId);
+        }
       }
     }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
@@ -909,7 +912,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       ) {
         nextStep = WORKFLOW_STEP.STOPPING;
       }
-      await this.updateStep(operation, nextStep);
+      const progress = await this.updateStep(operation, nextStep);
+      if (!didOperationReconcileAdvanceOrComplete(progress)) {
+        return this.buildSkippedOperationResult(progress, operation.operationId);
+      }
       return this.buildSuccessfulOperationResult(operation.operationId, {
         status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
       });

@@ -614,7 +614,7 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
   try {
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
@@ -798,7 +798,7 @@ test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
   try {
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 

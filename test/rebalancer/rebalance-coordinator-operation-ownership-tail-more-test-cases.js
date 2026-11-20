@@ -251,7 +251,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         ];
       };
-      coordinator.workflowOwner.reconcileOperationProgress =
+      coordinator.workflowOwner.reconcileOperationLifecycle =
       async (operation) => {
         reconciledOperationIds.push(operation.operationId);
         return false;
@@ -352,7 +352,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
     try {
       const progressed =
-      await coordinator.reconcileOperationProgress(operation);
+      await coordinator.reconcileOperationLifecycle(operation);
       t.equal(
         progressed,
         true,
@@ -895,7 +895,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         }
         return [operation];
       };
-      coordinator.workflowOwner.reconcileOperationProgress =
+      coordinator.workflowOwner.reconcileOperationLifecycle =
       async () => false;
       coordinator.workflowOwner.reconcileReservations = async () => ({
         expired: 0,

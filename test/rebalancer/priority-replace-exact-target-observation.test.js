@@ -130,7 +130,7 @@ test(
     try {
       const operation = await coordinator.getOperation(TEST_OPERATION_ID);
       const progressed =
-        await coordinator.workflowOwner.reconcileOperationProgress(operation);
+        await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
       const persistedOperation =
         await coordinator.getOperation(TEST_OPERATION_ID);
 

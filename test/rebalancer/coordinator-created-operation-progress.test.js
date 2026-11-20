@@ -1,5 +1,9 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
@@ -830,7 +834,8 @@ test('dispatchOperation defers priority claim misses when durable ' +
           options.expectedWorkflowStep === WORKFLOW_STEP.PENDING) {
         if (!injectedCompareAndSetMiss) {
           injectedCompareAndSetMiss = true;
-          return false;
+          return buildOperationUpdateOutcome({persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
         }
         const row = operationRows.get(operationId);
         if (row) {
@@ -842,7 +847,8 @@ test('dispatchOperation defers priority claim misses when durable ' +
           row.steps_history = JSON.stringify(operation.stepsHistory || []);
           row.replica_id = operation.replicaId;
         }
-        return true;
+        return buildOperationUpdateOutcome({persisted: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED, operation});
       }
       return originalPersistOperationUpdate(operation, options);
     };
@@ -1346,7 +1352,8 @@ async (t) => {
           options.expectedWorkflowStep === WORKFLOW_STEP.PENDING) {
         if (!injectedCompareAndSetMiss) {
           injectedCompareAndSetMiss = true;
-          return false;
+          return buildOperationUpdateOutcome({persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
         }
         const row = operationRows.get(operationId);
         if (row) {
@@ -1358,7 +1365,8 @@ async (t) => {
           row.steps_history = JSON.stringify(operation.stepsHistory || []);
           row.replica_id = operation.replicaId;
         }
-        return true;
+        return buildOperationUpdateOutcome({persisted: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED, operation});
       }
       return originalPersistOperationUpdate(operation, options);
     };

@@ -124,7 +124,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
         operation.status = 'active';
 
         const progressed =
-        await coordinator.workflowOwner.reconcileOperationProgress(
+        await coordinator.workflowOwner.reconcileOperationLifecycle(
           operation,
           {cause: 'progress'},
         );

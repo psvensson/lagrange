@@ -28,7 +28,7 @@
   "censusSize": 2698,
   "digest": "fnv1a32-ae28989b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b2bfec2d",
+  "observationDigest": "fnv1a32-24a78d98",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17491,6 +17491,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js",
         "src/rebalancer/replica-status.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
@@ -17570,7 +17571,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js"
       ]
     },
     "test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js": {
@@ -17695,6 +17698,7 @@
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-transition-persistence.js",
         "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
@@ -17998,6 +18002,11 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js"
       ]
     },
+    "test/rebalancer/operation-workflow-owner-adapter.test.js": {
+      "files": [
+        "src/rebalancer/operation-workflow-reconcile-outcome.js"
+      ]
+    },
     "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -18007,7 +18016,9 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
-        "src/rebalancer/replica-operation-update-disposition.js"
+        "src/rebalancer/operation-workflow-transition-outcome.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js"
       ]
     },
     "test/rebalancer/operation-workflow-remove-safety-concurrent-down-target.test.js": {
@@ -18214,7 +18225,9 @@
     },
     "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js": {
       "files": [
-        "src/control-plane/control-plane-system-table-gateway-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js": {

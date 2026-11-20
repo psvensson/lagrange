@@ -98,6 +98,8 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {ExecutorOutcomeEmitter, buildExecutorOutcome} from
@@ -1023,7 +1025,7 @@ test(
             ).length,
             0,
             'exit (b) path (observed-target replay) never ran — ' +
-            'updateStep returned false instead of throwing',
+            'updateStep returned REFUSED instead of throwing',
           );
 
           // --- GUARD fix piece 2: the evidence SURVIVES the failed
@@ -1667,9 +1669,7 @@ test(
           armedTimerHandle,
         );
 
-        // Refuse ONLY the terminal write, through the repository's typed
-        // disposition contract (the repository-level REFUSED reality is
-        // proven in replica-operation-terminal-cas.test.js).
+        // Typed terminal refusal; real CAS proof: replica-operation-terminal-cas.test.js.
         const refusedTerminalWrites = [];
         const originalPersist =
           owner.repository.persistOperationUpdate.bind(owner.repository);
@@ -1679,11 +1679,11 @@ test(
         ) => {
           if (options.terminalTransition === true) {
             refusedTerminalWrites.push(projection.operationId);
-            return {
+            return buildOperationUpdateOutcome({
               persisted: false,
               disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
               operation: null,
-            };
+            });
           }
           return originalPersist(projection, options);
         };

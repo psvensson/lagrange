@@ -1,3 +1,4 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EXECUTOR_OUTCOME_FIELD, EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
@@ -122,7 +123,7 @@ test('RUNTIME_SERVICE_CREATE_FAILED with deferRetry=true defers transition retry
   };
   owner.failOperation = async (op, msg) => {
     failedCalls.push({op, msg});
-    return Object.freeze({committed: true, disposition: 'updated'});
+    return buildTerminalOperationFixtureOutcome(op, {failed: true});
   };
   owner.clearExecutorOutcomeRetryIfNotAhead = () => true;
   owner.emitter = {emit: () => {}};

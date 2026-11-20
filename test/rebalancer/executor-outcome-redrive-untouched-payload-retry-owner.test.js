@@ -1,3 +1,4 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 /**
  * CL-029 (quest formation-ledger-self-move-blocks-cluster-ops): the re-drive
  * loop's retained-and-untouched exit must arm the timed retry.
@@ -19,7 +20,7 @@ import {applyOperationWorkflowExecutorOutcomeReconcileMethods} from
   '../../src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationWorkflowTransitionPersistence} from
   '../../src/rebalancer/operation-workflow-transition-persistence.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
@@ -27,6 +28,10 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
 import {REBALANCE_COORDINATOR_LOG_MSG} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
+import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
+import {REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE} from
+  '../../src/rebalancer/replica-operation-repository.js';
 
 const TEST_OPERATION_ID = 'op-redrive-untouched';
 
@@ -130,6 +135,8 @@ const TEST_TERMINAL_OPERATION = Object.freeze({
   operationId: TEST_OPERATION_ID,
   type: OperationType.ADD,
   partitionId: 'tbl-test-p1',
+  entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+  entityId: 'tbl-test-p1',
   replicaId: 'tbl-test-p1-r1',
   targetNodeId: 'node-target',
   workflowStep: WORKFLOW_STEP.SYNCING,
@@ -149,6 +156,16 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
     infos: [],
     scheduledRepairTimers: [],
   };
+  // This boundary fixture models an existing nonterminal row and confirmed
+  // projection. Repository authority is exercised by the SQLite witnesses.
+  host.repository = {
+    observeOperationTransition: async () => ({operation: TEST_TERMINAL_OPERATION,
+      outcome: null, deferredOutcome: null}),
+    confirmReplicaOperationPersistence: async (operation) => ({operation,
+      confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED}),
+  };
+  host.operationWorkflowCoordinator = {removeWorkflow() {}};
+  host.releasePlacementHoldIfNeeded = async () => {};
   host.clearDispatchRetry = (id) => recorded.retryClears.push(
     {lane: 'dispatch', id},
   );
@@ -203,10 +220,10 @@ test(
   'a REFUSED terminal persist keeps every armed retry lane, arms the ' +
     'terminal-transition repair, and warns once (typed)',
   async (t) => {
-    const refusedOutcome = Object.freeze({
-      committed: false,
+    const refusedOutcome = buildOperationTransitionOutcome(buildOperationUpdateOutcome({
+      persisted: false, operation: null,
       disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-    });
+    }));
     const {host, recorded} = buildTerminalPersistenceHost({
       transitionOutcome: refusedOutcome,
     });
@@ -267,10 +284,8 @@ test(
     'of the proven terminal',
   async (t) => {
     const {host, recorded} = buildTerminalPersistenceHost({
-      transitionOutcome: Object.freeze({
-        committed: true,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-      }),
+      transitionOutcome: buildTerminalOperationFixtureOutcome(
+        {...TEST_TERMINAL_OPERATION, errorMessage: 'boom'}, {failed: true}),
     });
 
     const returnedOutcome =
@@ -311,7 +326,10 @@ test(
       REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
     ]) {
       const {host, recorded} = buildTerminalPersistenceHost({
-        transitionOutcome: Object.freeze({committed: false, disposition}),
+        transitionOutcome: buildTerminalOperationFixtureOutcome(TEST_TERMINAL_OPERATION, {
+          disposition,
+          persisted: disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+        }),
       });
 
       await host.completeOperation({...TEST_TERMINAL_OPERATION});

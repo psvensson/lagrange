@@ -474,14 +474,14 @@ const PHASE_DRIVERS = Object.freeze({
     async (world, operation) => {
       await execute(world, operation);
       setSourceRow(world, null);
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world, operation.operationId));
     },
   [REPLACE_OWNER_PHASE.REMOVAL_COMMITTED_TERMINAL_UNWRITTEN]:
     async (world, operation) => {
       await execute(world, operation);
       setSourceRow(world, null);
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world, operation.operationId));
       world.witness.commitRemoval();
     },
