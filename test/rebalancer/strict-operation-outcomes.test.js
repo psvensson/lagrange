@@ -943,3 +943,35 @@ test('strict outcomes unreadable terminal preimage cannot earn recovered credit 
     t.equal(buildOperationTransitionOutcome(replay).committed, false);
     t.same(replay.operation, terminal.operation, 'fresh authority proves the original exact winner');
   });
+
+
+test('strict outcomes release boundary retains a real nonterminal committed transition', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-release-nonterminal');
+  const owner = fixture.coordinator.workflowOwner;
+  const now = Date.now();
+  const requested = {...operation, workflowStep: WORKFLOW_STEP.CREATING,
+    status: ReplicaStatus.CREATING, updatedAt: now,
+    stepsHistory: [...operation.stepsHistory, {step: WORKFLOW_STEP.CREATING, timestamp: now}]};
+  const persisted = await owner.repository.persistOperationUpdate(requested,
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+  const nonterminal = buildOperationTransitionOutcome(persisted,
+    {repository: owner.repository, requestedOperation: requested});
+  t.equal(nonterminal.committed, true, 'the real nonterminal SQLite write committed');
+  t.equal(nonterminal.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.ADVANCED);
+  const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
+  const attempted = await observeAttempt(() =>
+    owner.releaseDurableTerminalOperation(operation, nonterminal));
+  t.ok(attempted.error, 'committed nonterminal evidence cannot enter terminal release');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE,
+    'the actual nonterminal reservation remains held');
+  t.equal(fixture.coordinator.stats.operationsCompleted, 0,
+    'nonterminal evidence earns no terminal completion credit');
+  t.same(await owner.repository.queryAuthoritativeOperationById(operation.operationId), durable,
+    'refusal preserves the exact durable nonterminal row');
+  const terminal = await owner.completeOperation(operation);
+  t.equal(terminal.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED,
+    'ordinary proven terminal completion remains accepted');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED,
+    'the same reservation releases only after actual terminal persistence');
+});
