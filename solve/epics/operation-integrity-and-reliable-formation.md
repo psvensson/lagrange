@@ -268,9 +268,13 @@ findings, this distinction determines which source an agent should reproduce.
   finalization after participant release still needs proof against a replaced
   service and tracker. A composed run at `b4a5bb898` passed 45 of 53 files
   across three lab workers. Six failures involve workflow fixtures or their
-  contracts. Two deterministic formation cadence assertions also failed on
-  this composition and passed on the predecessor on the same worker. Preserve
-  their original bounds while locating the first changed event. The passing
+  contracts. Two deterministic formation cadence assertions also failed.
+  On the same worker, `200142a3` passes both. Selecting the later canonical
+  gateway fixture on that exact source at `8ede43d60` reproduces both failures.
+  Each pressure probe times both the gateway read and its nested SQL call.
+  The convergence fixture owner must count each underlying read once and
+  retain both original bounds.
+  [Single-change control and original outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-cadence-gateway-pair-nov20.tar.gz). The passing
   physical streak is zero of three. Lab smoke and the GCP Lagrange arm follow
   the accepted formation gate.
   [Managed suite selections and outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-placement-outcome-composition-b4a5bb898-nov20.tar.gz).
@@ -335,6 +339,15 @@ the lease and recording DISCONNECTED. Placement collapses those cases for
 an existing learner and also uses the eligible-node set for voter repair.
 [Physical node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz).
 
+The follow-up at `4b85cd2e2` exercised the production lease sweep and
+HeartbeatService's SQLite write. Two cases failed. Placement admitted REMOVE
+although the sweep kept the connected learner. An old observed lease also
+disconnected a newer boot with the same heartbeat and expiry values. Two
+controls passed. A later heartbeat in the same boot defeated the stale write,
+and a true disconnect followed by a committed same-boot rejoin restored
+eligibility. The heartbeat and placement owners share this correction.
+[Original four-case run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-placement-owned-disconnect-4b85c-nov20.tar.gz).
+
 The placement owner must preserve the exact existing replica across an overdue
 renewal, keep the host ineligible for new work, and prove removal and recovery
 after an owned disconnect or confirmed replica failure. Trace missing rows,
@@ -344,6 +357,33 @@ renewal, the committed wake and revalidation at the effect. Preserve voter
 floor, per-host capacity, ledger exclusivity and original quiet window. The
 remaining formation throughput investigation follows the completed operations
 and the exact delayed authority request. Background work continues throughout.
+
+The same physical run records three failed ADDs. Two targeted 6998462b
+and one targeted d8b38f9c. All three CREATE handlers logged
+`release_fact_unavailable` with `missingFact=replica_release_reply` and the
+same seed owner, 126d7916. Operation `pl-debug_breakpoints-p1-592-0` reached
+durable FAILED 398.890 seconds after scenario start. The indices and contexts
+operations failed at 449.034 and 473.402 seconds. At the CREATE boundary
+`releaseFreshCreate` converts the typed missing reply into a generic exception.
+A lost reply leaves the seed's effect unresolved. The activation owner must
+preserve the exact materialized replica and resume its owed work, while a
+proven terminal failure still permits cleanup. Pair same-service reply loss
+and later recovery with explicit refusal, post-deadline delivery and successor
+replacement. Source at `e48d8888a` passes the held-success and held-refusal
+replacement cases. The broader run passed six of seven files and review
+found remaining same-service read and deadline cases.
+[Physical source logs and ledger](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz)
+and [managed paired release and broader results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-registered-release-custody-and-cone-nov20.tar.gz).
+
+Both physical runs spent most recorded operation time on ADD. Summing each
+ADD's own ledger step durations inside the original 420 seconds, SENDING and
+SYNCING accounted for 390.7 and 528.0 of 1172.8 operation-seconds in
+`e068cbdc`, and 419.1 and 428.4 of 1135.2 in `57e4db30`. Concurrent
+operations contribute separately. Follow their actual transport, authority
+and activation events before changing fleet scheduling. A controlled held-reply
+experiment at `dc4ea4236` stopped in the embedded fixture's pre-start
+OPEN_SESSION. It produced no observation of contention.
+[Embedded setup failure](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--held-reply-before-engagement-nov20.tar.gz).
 
 Historical counterparts include the repository's single terminal winner and
 the formation repair that joined admission and its clearing event. The
