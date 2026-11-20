@@ -12,6 +12,8 @@ import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {buildSchemaProvisioningChildIntent} from
+  '../../src/query/schema-provisioning-child-intent.js';
 import {
   createPartitionServiceRebalancerMethods,
 } from '../../src/partition/partition-service-rebalancer-methods.js';
@@ -717,6 +719,51 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         assert.equal(replay.operationId, created.operationId);
         assert.deepEqual(ledgerRows(leader), [held]);
         assert.equal(proposed.length, 1, 'native replay uses the original command receipt');
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('rejects invalid creation IDs before both fresh admission and exact replay', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        coordinator.recentOperationIntents = new Map();
+        delete coordinator.getRecentOperationIntent;
+        delete coordinator.rememberOperationIntents;
+        const original = {
+          type: OperationType.ADD, entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID, partitionId: USER_PARTITION_ID, nodeId: NODE.B,
+          entryId: 'validated-native-entry',
+        };
+        const rejectInvalidIds = async () => {
+          for (const field of ['entryId', 'operationIntentId', 'replicaIntentId']) {
+            for (const value of [0, false, '', NaN]) {
+              await assert.rejects(() => coordinator.createOperation({
+                ...original, [field]: value,
+              }), TypeError, `${field} rejects ${String(value)}`);
+            }
+          }
+        };
+        await rejectInvalidIds();
+        assert.equal(proposed.length, 0);
+        const created = await coordinator.createOperation(original);
+        const initialWakes = coordinator.stats.operationsCreated;
+        await rejectInvalidIds();
+        assert.equal(coordinator.stats.operationsCreated, initialWakes);
+        const replayed = await coordinator.createOperation(original);
+        assert.equal(replayed.operationId, created.operationId);
+        const child = buildSchemaProvisioningChildIntent('validated-schema-child', NODE.C);
+        const planner = {
+          ...original, ...child, partitionId: 'validated-plan-p1',
+          entityId: 'validated-plan-p1', nodeId: NODE.C, entryId: null,
+        };
+        const planned = await coordinator.createOperation(planner);
+        assert.equal((await coordinator.createOperation(planner)).operationId, planned.operationId);
+        assert.equal(ledgerRows(leader).length, 2);
+        assert.equal(proposed.length, 2);
       } finally {
         await stopAutoCommit();
       }
