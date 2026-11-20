@@ -108,8 +108,9 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
   }
 }
 
-it('fresh CREATE publishes activity for the service from the production join factory',
-  {timeout: 10_000}, async () => {
+for (const scenario of ['owned join factory', 'replaced during join factory',
+  'refused CDC subscription']) {
+  it(`fresh CREATE custody with the production factory: ${scenario}`, {timeout: 10_000}, async () => {
     const row = operationRow();
     const outcomes = [];
     const fixture = await createHandlerFixture({
@@ -118,6 +119,9 @@ it('fresh CREATE publishes activity for the service from the production join fac
       executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
     });
     const {handler, authority, cache} = fixture;
+    const openedAndHeld = Promise.withResolvers();
+    const finishFactory = Promise.withResolvers();
+    const rejectedSubscription = scenario === 'refused CDC subscription';
     const joining = Object.assign(Object.create(NodeJoiningPublicationActivation.prototype), {
       nodeId: row.target_node_id,
       replicaHandler: handler,
@@ -128,10 +132,18 @@ it('fresh CREATE publishes activity for the service from the production join fac
       tablePolicyService: {},
       createCdcIntegrationService: () => null,
       getLeaderMessageGroupService: () => null,
+      resolveOperationalMessageGroupSelectionAsync: async () => ({
+        service: {async subscribeToCDC() {
+          openedAndHeld.resolve();
+          await finishFactory.promise;
+          throw new Error('controlled CDC refusal after native initialization');
+        }},
+      }),
     });
     const resolveContext = handler.resolveReplicaContextWithRetry.bind(handler);
     handler.resolveReplicaContextWithRetry = async (...args) => ({
       ...await resolveContext(...args),
+      ...(rejectedSubscription ? {tableName: SYSTEM_TABLE_NAME.NODES} : {}),
       // The ownership handoff is independent of group growth. Use one real
       // native voter so this fixture needs no synthetic remote membership.
       replicaIds: [row.replica_id],
@@ -139,32 +151,73 @@ it('fresh CREATE publishes activity for the service from the production join fac
       bootstrapMembership: genesisStamp([row.replica_id], {[row.replica_id]: row.target_node_id}),
     });
     let opened;
-    let initializedAtReturn = false;
     handler.createPartitionService = wrapPartitionServiceFactoryWithSnapshotCatchup({
       systemTableCache: cache,
       messageRouter: handler.messageRouter,
       createPartitionService: async (options) => {
-        opened = await joining.createJoinLocalPartitionService(options);
-        initializedAtReturn = opened.initialized;
-        return opened;
+        const initialized = await joining.createJoinLocalPartitionService({
+          ...options,
+          onPartitionConstructed(service, publish) {
+            opened = service;
+            options.onPartitionConstructed(service, publish);
+          },
+        });
+        openedAndHeld.resolve();
+        await finishFactory.promise;
+        return initialized;
       },
     });
     try {
       handler.initialize();
       await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
-      await Promise.all([...handler.operationTasks]);
-      assert.equal(initializedAtReturn, true, 'the real join factory initialized a native runtime');
-      assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
-      assert.equal(handler.getTrackedService(row.replica_id), opened);
-      assert.equal(joining.partitionServices.get(row.replica_id), opened);
-      assert.equal(authority.lifecycleStore.durableRow(
-        SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status, ReplicaStatus.ACTIVE);
+      const worker = Promise.allSettled([...handler.operationTasks]);
+      await Promise.race([openedAndHeld.promise, worker.then(() => {
+        assert.fail('CREATE completed before reaching the held factory or CDC checkpoint');
+      })]);
+      assert.ok(opened?.raft, 'production join factory opened the native port');
+      assert.equal(handler.getTrackedService(row.replica_id), null);
+      assert.equal(joining.partitionServices.has(row.replica_id), false);
+      const address = opened.unifiedAddress;
+      const router = handler.messageRouter;
+      const replacement = {
+        replicaId: row.replica_id, partitionId: row.partition_id,
+        transportHandler: () => ({}),
+      };
+      if (scenario === 'replaced during join factory') {
+        joining.partitionServices.set(row.replica_id, replacement);
+        handler.localServices.set(row.replica_id, replacement);
+        handler.setLocalReplica(row.replica_id, replacement);
+        router.register(address, replacement.transportHandler);
+      }
+      finishFactory.resolve();
+      await worker;
+      if (rejectedSubscription) {
+        assert.equal(opened.isShutdown, true);
+        assert.deepEqual(outcomes, [WORKFLOW_STEP.FAILED]);
+        assert.equal(handler.getTrackedService(row.replica_id), null);
+        assert.equal(joining.partitionServices.has(row.replica_id), false);
+        assert.equal(router.getRegisteredHandler(address), null);
+      } else if (scenario === 'replaced during join factory') {
+        assert.equal(opened.isShutdown, true);
+        assert.deepEqual(outcomes, []);
+        assert.equal(handler.getTrackedService(row.replica_id), replacement);
+        assert.equal(joining.partitionServices.get(row.replica_id), replacement);
+        assert.equal(router.getRegisteredHandler(address), replacement.transportHandler);
+      } else {
+        assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+        assert.equal(handler.getTrackedService(row.replica_id), opened);
+        assert.equal(joining.partitionServices.get(row.replica_id), opened);
+        assert.equal(authority.lifecycleStore.durableRow(
+          SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status, ReplicaStatus.ACTIVE);
+      }
     } finally {
+      finishFactory.resolve();
       await handler.shutdown();
       if (opened && !opened.isShutdown) await opened.shutdown();
       authority.close();
     }
   });
+}
 
 it('unavailable final CREATE authority retains the live work for existing admission recovery',
   async (t) => withHeldActivationRead(t, async (f) => {

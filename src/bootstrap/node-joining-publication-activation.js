@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {exposePartitionConstruction} from './shared/partition-service-construction.js';
 import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
@@ -266,17 +267,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       tablePolicyService: this.tablePolicyService,
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
+    exposePartitionConstruction(options, partition, this.partitionServices);
     await partition.initialize();
     // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
     // so the dispatcher seam attaches here for every join-built service.
     attachSnapshotCatchupDispatcher({service: partition,
       systemTableCache, messageRouter: this.messageRouter});
-    this.partitionServices.set(options.replicaId, partition);
-    this.trackJoinPartitionReplica(
-      options.replicaId,
-      options.partitionId,
-      partition,
-    );
     const tableName = options.tableName;
     if (tableName && shouldAttachPartitionCdcPropagation(tableName)) {
       const attachCdcPropagation = async () => {

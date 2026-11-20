@@ -661,7 +661,17 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             if (isCreateCurrent()) this.updateReplicaCreationProgress(progress, stageEvent);
           },
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
+          onPartitionConstructed: (service, publish) => {
+            work.openedService = service;
+            work.publishOpenedService = publish;
+            requireReplicaCreateWork(this, work);
+          },
         });
+        if (work.openedService && work.openedService !== partitionService) {
+          throw Object.assign(new Error('CREATE factory returned a different runtime'), {
+            code: CREATE_ADMISSION_ERROR_CODE.STALE,
+          });
+        }
         work.openedService = partitionService;
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         requireReplicaCreateWork(this, work);
@@ -679,6 +689,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionService.createAdmissionToken = admissionToken;
           partitionService.createAttemptToken = admissionAttemptToken;
         }
+        work.publishOpenedService?.();
         this.localServices.set(replicaId, partitionService);
         work.service = partitionService;
         this.setLocalReplica(replicaId, {

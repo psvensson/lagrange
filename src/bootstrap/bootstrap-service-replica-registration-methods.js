@@ -1,3 +1,4 @@
+import {exposePartitionConstruction} from './shared/partition-service-construction.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
   '../partition/partition-participant-transaction-constants.js';
@@ -168,10 +169,10 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
           bootstrapReadinessState: this.bootstrapReadinessState,
         });
 
+        exposePartitionConstruction(options, partition, this.partitionServices, () => {
+          this.servicesCreated++;
+        });
         await partition.initialize();
-
-        this.partitionServices.set(options.replicaId, partition);
-        this.servicesCreated++;
 
         const tableName = options.tableName;
         if (tableName &&
