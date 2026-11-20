@@ -204,6 +204,7 @@ class NodeHandle {
     this._pendingAdminSocketByLane = new Map();
     this._pendingQueriesByLane = new Map();
     this._adminQueryTrace = [];
+    this._adminRequestNow = options.adminRequestNow ?? (() => performance.now());
     this._suppressedBestEffortErrorCount = ZERO;
     this._logStreamListeners = new Set();
     this._lastReachabilityDiagnostics = null;
@@ -311,6 +312,7 @@ class NodeHandle {
    * @private
    */
   async _sendAdminRequest(requestPayload, operationLabel, options = {}) {
+    const startedMonotonicMs = this._adminRequestNow();
     const requestTimeoutMs = this._resolveAdminQueryTimeoutMs(
       options.timeoutMs,
     );
@@ -332,19 +334,20 @@ class NodeHandle {
       requestPayload,
       operationLabel,
       timeoutMs: requestTimeoutMs,
+      startedMonotonicMs,
     });
-    const deadlineAtMs = traceEntry.startedAtMs + requestTimeoutMs;
+    const deadlineAtMs = startedMonotonicMs + requestTimeoutMs;
     let ws = null;
     try {
-      const remainingMs = deadlineAtMs - Date.now();
+      const remainingMs = deadlineAtMs - this._adminRequestNow();
       if (remainingMs <= ZERO) throw new Error(timeoutMessage);
       ws = await withTimeout(
         this._getAdminSocket(lane),
-        remainingMs,
+        Math.ceil(remainingMs),
         timeoutMessage,
       );
       traceEntry.socketReadyAtMs = Date.now();
-      if (traceEntry.socketReadyAtMs >= deadlineAtMs) {
+      if (this._adminRequestNow() >= deadlineAtMs) {
         throw new Error(timeoutMessage);
       }
       if (this._adminSocketByLane.get(lane) !== ws) {
@@ -394,6 +397,10 @@ class NodeHandle {
         new Error(timeoutMessage),
         ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,
       );
+      const rejectSendFailure = (error) => rejectWithOutcome(new Error(
+        'Admin API ' + operationLabel + ' failed for node ' + this.id +
+        ' on lane ' + lane + ': ' + normalizeAdminQueryError(error),
+      ));
       const pending = {
         resolve: resolveWithTrace,
         reject: (error) => rejectWithOutcome(error),
@@ -403,15 +410,16 @@ class NodeHandle {
         operationLabel,
       };
 
+      // The server receives a relative execution grant, measured in its
+      // own clock domain. The caller retains its original local deadline.
+      const remainingMs = Math.floor(deadlineAtMs - this._adminRequestNow());
+      if (remainingMs <= ZERO) {
+        expire();
+        return;
+      }
+      let frame;
       try {
-        // The server receives a relative execution grant, measured in its
-        // own clock domain. The caller retains its original local deadline.
-        const remainingMs = deadlineAtMs - Date.now();
-        if (remainingMs <= ZERO) {
-          expire();
-          return;
-        }
-        const frame = JSON.stringify({
+        frame = JSON.stringify({
           ...requestPayload,
           timeoutMs: Math.min(
             resolvePositiveTimeoutMs(requestPayload.timeoutMs, remainingMs),
@@ -419,22 +427,27 @@ class NodeHandle {
           ),
           queryId,
         });
-        const sendBudgetMs = deadlineAtMs - Date.now();
-        if (sendBudgetMs <= ZERO) {
+      } catch (error) {
+        rejectSendFailure(error);
+        return;
+      }
+      const sendBudgetMs = deadlineAtMs - this._adminRequestNow();
+      if (sendBudgetMs <= ZERO) {
+        expire();
+        return;
+      }
+      if (this._adminSocketByLane.get(lane) !== ws) {
+        rejectWithOutcome(this._adminSocketResetError(lane));
+        return;
+      }
+      pending.timeout = setTimeout(() => {
+        if (pendingQueries.get(queryId) === pending) {
+          pendingQueries.delete(queryId);
           expire();
-          return;
         }
-        if (this._adminSocketByLane.get(lane) !== ws) {
-          rejectWithOutcome(this._adminSocketResetError(lane));
-          return;
-        }
-        pending.timeout = setTimeout(() => {
-          if (pendingQueries.get(queryId) === pending) {
-            pendingQueries.delete(queryId);
-            expire();
-          }
-        }, sendBudgetMs);
-        pendingQueries.set(queryId, pending);
+      }, Math.ceil(sendBudgetMs));
+      pendingQueries.set(queryId, pending);
+      try {
         ws.send(frame);
         traceEntry.sentAtMs = Date.now();
       } catch (err) {
@@ -448,18 +461,7 @@ class NodeHandle {
         } catch (_closeErr) {
           this._recordSuppressedBestEffortError();
         }
-        rejectWithOutcome(
-          new Error(
-            'Admin API ' +
-              operationLabel +
-              ' failed for node ' +
-              this.id +
-              ' on lane ' +
-              lane +
-              ': ' +
-              err.message,
-          ),
-        );
+        rejectSendFailure(err);
       }
     });
   }
@@ -502,6 +504,7 @@ class NodeHandle {
         Math.floor(options.timeoutMs) :
         null,
       startedAtMs: Date.now(),
+      startedMonotonicMs: options.startedMonotonicMs,
       socketReadyAtMs: null,
       sentAtMs: null,
       resolvedAtMs: null,
@@ -522,7 +525,9 @@ class NodeHandle {
     const finalizedAtMs = Date.now();
     traceEntry.finalized = true;
     traceEntry.outcome = outcome;
-    traceEntry.durationMs = finalizedAtMs - traceEntry.startedAtMs;
+    traceEntry.durationMs = Math.floor(
+      this._adminRequestNow() - traceEntry.startedMonotonicMs,
+    );
     traceEntry.error =
       typeof details.error === 'string' && details.error.length > ZERO ?
         details.error :
@@ -807,7 +812,7 @@ class NodeHandle {
     }
     pendingQueries.delete(queryId);
     clearTimeout(pending.timeout);
-    if (Date.now() >= pending.deadlineAtMs) {
+    if (this._adminRequestNow() >= pending.deadlineAtMs) {
       pending.expire();
       return;
     }
