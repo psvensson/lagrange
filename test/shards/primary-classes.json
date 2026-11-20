@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2345,
+    "unit": 2346,
     "integration": 124,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2702,
-  "digest": "fnv1a32-5c55415a",
+  "censusSize": 2703,
+  "digest": "fnv1a32-8c8f7018",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -365,6 +365,7 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": "unit",
     "test/cdc/cdc-integration-service.test.js": "unit",
     "test/cdc/cdc-observability.test.js": "unit",
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js": "unit",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "unit",
     "test/cdc/cdc-pipeline-metrics.test.js": "unit",
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": "unit",

@@ -5,7 +5,7 @@
     "admin-diagnostics": 122,
     "architecture-governance": 21,
     "bootstrap-membership": 349,
-    "cdc-metadata": 71,
+    "cdc-metadata": 72,
     "cli-tooling": 99,
     "control-plane": 234,
     "convergence-topology": 87,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2702,
-  "digest": "fnv1a32-85148c0c",
+  "censusSize": 2703,
+  "digest": "fnv1a32-fcdeacc2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d604ab24",
+  "observationDigest": "fnv1a32-a629bab0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -384,6 +384,7 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service.test.js": "cdc-metadata",
     "test/cdc/cdc-observability.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": "cdc-metadata",
@@ -4270,6 +4271,17 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-integration-service-test-support.js",
+        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": {
