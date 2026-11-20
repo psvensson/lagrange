@@ -1,3 +1,4 @@
+import net from 'node:net';
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -343,3 +344,63 @@ t.test('a stale socket close cannot evict a live replacement connection',
       registry.closeAll();
     }
   });
+
+t.test('aborting an in-flight CONNECTING bulk dial rejects with CANCELLED ' +
+  'without an uncaught WebSocket error', async (t) => {
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+  });
+  const sockets = new Set();
+  let resolveConnected = null;
+  const connectedPromise = new Promise((resolve) => {
+    resolveConnected = resolve;
+  });
+  // Hold the TCP connection open without replying to the HTTP WebSocket
+  // upgrade request so the client WebSocket stays in CONNECTING (readyState 0).
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on('error', () => {});
+    socket.once('data', () => {
+      resolveConnected();
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const {port} = server.address();
+  const uncaughtErrors = [];
+  const onUncaughtException = (error) => {
+    uncaughtErrors.push(error);
+  };
+  process.on('uncaughtException', onUncaughtException);
+  try {
+    const controller = new AbortController();
+    const dialPromise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: `ws://127.0.0.1:${port}`,
+      identify: {
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        bootIncarnation: TEST_BOOT_INCARNATION,
+      },
+      signal: controller.signal,
+    });
+    await connectedPromise;
+    controller.abort();
+    await t.rejects(
+      dialPromise,
+      {message: BULK_CHANNEL_SEND_OUTCOME.CANCELLED},
+      'in-flight CONNECTING dial rejects with CANCELLED on abort',
+    );
+    await flushDeliveries();
+    t.same(uncaughtErrors, [],
+      'terminating a CONNECTING WebSocket on abort emits no uncaught error');
+    t.equal(registry.hasConnection(TEST_PEER_NODE_ID), false,
+      'an aborted dial never attaches a bulk connection');
+  } finally {
+    process.removeListener('uncaughtException', onUncaughtException);
+    registry.closeAll();
+    for (const socket of sockets) {
+      socket.destroy();
+    }
+    await new Promise((resolve) => server.close(() => resolve()));
+  }
+});
