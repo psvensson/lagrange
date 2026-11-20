@@ -20,7 +20,7 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_REPLICA_ROLE,
+  COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE,
 } from '../raft/raft-committed-membership-constants.js';
 import {
   RAFT_FOUNDING_GROWTH_OUTCOME,
@@ -35,7 +35,8 @@ import {
   retirePartitionRaftPeer,
   withdrawPartitionPromotion,
 } from '../partition/partition-service-raft-membership-administration.js';
-import {projectReplicaRole} from '../raft/raft-rs-committed-membership-read.js';
+import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
+  '../raft/raft-rs-committed-membership-read.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';

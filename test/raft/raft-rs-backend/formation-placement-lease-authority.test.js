@@ -91,7 +91,9 @@ test('guarded disconnect and exact native learner retirement permit ordinary rej
     await owner.awaitCurrentWorkIdle();
     const removed = snapshot(context);
     assert.equal(removed.originalLearner, false);
-    assert.equal(removed.operations.length, 2, 'disconnected target remains ineligible');
+    assert.equal(removed.operations.length, 2, 'disconnected target remains ineligible: ' +
+      JSON.stringify(removed.operations.map((row) =>
+        [row.operation_id, row.type, row.replica_id, row.target_node_id])));
 
     const releaseAfter = wakes.length;
     await nodes.renew();

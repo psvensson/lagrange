@@ -297,8 +297,10 @@ async function runCase(mode) {
         }));
         assert.ok(settleCluster(cluster, () =>
           !appliedStateOf(cluster, SEED_REPLICA).learners.includes(learnerPeer)));
-        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE,
-          serviceRow(initial.replica_id, TARGET, RAFT_ROLE.LEARNER, initial.created_at));
+        const incumbent = cache.get(TABLES.SERVICES, initial.replica_id);
+        assert.ok(incumbent);
+        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, incumbent);
+        assert.equal(cache.get(TABLES.SERVICES, initial.replica_id), undefined);
         finishLedger(ledger, removal, WORKFLOW_STEP.REMOVED, ReplicaStatus.REMOVED, clock.now());
         await owner.awaitCurrentWorkIdle();
         const terminal = sample('remove-terminal');

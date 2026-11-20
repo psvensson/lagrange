@@ -30,9 +30,10 @@ import {
 import {closeRemovalCreateAdmission} from
   './replica-removal-create-admission-close.js';
 
-import {COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_REPLICA_ROLE} from
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../raft/raft-committed-membership-constants.js';
-import {projectReplicaRole} from '../raft/raft-rs-committed-membership-read.js';
+import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
+  '../raft/raft-rs-committed-membership-read.js';
 import {readCommittedMembershipStamp} from
   '../rebalancer/committed-membership-bootstrap-read.js';
 

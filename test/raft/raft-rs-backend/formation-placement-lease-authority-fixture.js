@@ -282,8 +282,10 @@ async function withPlacementLeaseAuthority(measure, {
         }));
         assert.ok(settleCluster(cluster, () =>
           !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer)));
-        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE,
-          serviceRow(row.replica_id, TARGET, RAFT_ROLE.LEARNER));
+        const incumbent = cache.get(TABLES.SERVICES, row.replica_id);
+        assert.ok(incumbent);
+        cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, incumbent);
+        assert.equal(cache.get(TABLES.SERVICES, row.replica_id), undefined);
         finishLedger(ledger, row, WORKFLOW_STEP.REMOVED, ReplicaStatus.REMOVED, clock.now());
       }
       try {
