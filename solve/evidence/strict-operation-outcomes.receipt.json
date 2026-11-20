@@ -1,0 +1,139 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "strict-operation-outcomes",
+  "status": "fail",
+  "generatedAt": "2026-11-20T19:24:19.390Z",
+  "testFileDigests": {
+    "test/rebalancer/strict-operation-outcomes.test.js": "6339350d3c4e4c2658f5ecf1215b073c1bc2c7a287a98a5801780c57cd9ac3ad"
+  },
+  "productionFileDigests": {
+    "src/rebalancer/operation-workflow-transition-orchestration.js": "48b5fc8df8043f41770968b62b8d68387d80b9353f236281caaf5481c097f65e",
+    "src/rebalancer/operation-workflow-transition-persistence.js": "397650a31da0c6e5f63223f121367b6debaee46078c88c6a7803484481a13355",
+    "src/rebalancer/operation-workflow-terminal-reservation-release.js": "ca02b6fb14e3dc4d939313cda313772face6811ec153c080791e5034b7d2e8c1",
+    "src/rebalancer/replica-operation-repository-mutation-update-methods.js": "f3c03789c98d548d6ab133c839ef228971d6098edfb83db02eb3858c80c7faad",
+    "src/rebalancer/rebalance-coordinator-lifecycle.js": "89ef4c794529e248f58d0a66dbddb592dfe88d2d9c46b7532eda284749f7b506",
+    "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js": "9d237f353c32918bcb5dcf7408f3858d8e2624b8b39f2cea4fb15a41cae341a7"
+  },
+  "evidence": {
+    "requestId": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
+    "sourceCommit": "58a2080337b56b4e5f97bcb54da59f57b94e6611",
+    "executionHost": "tv-dator",
+    "controllerStatus": {
+      "docker_create_attempted": false,
+      "elapsed_s": 50.556,
+      "execution_scope_closed": true,
+      "exit_code": 1,
+      "generation": "dc36de51-8de3-4d99-8717-2321d65173fd",
+      "host": "local-workstation",
+      "intentDigest": "eadc9db8dffebd453c17741012ec30116bbad3de73116391382989c735d46a95",
+      "job_id": "3883b67b-2d12-459c-a08e-d8a5f64b4ebe",
+      "reason": null,
+      "source_execution_started": false,
+      "state": "FAILED",
+      "unit": "lagrange-lab3-dc36de518de34d9987172321d65173fd-3883b67b2d12459ca08ed8a5f64b4ebe.service",
+      "workload_started": true
+    },
+    "originalArchive": {
+      "sha256": "4a7c9cf32d07c3612d138ea174f313d642cd84e8c3a2b589ccf804a4448ca4b7",
+      "bytes": 13962,
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz"
+    },
+    "originalDirectory": "/tmp/lagrange-takeover-20261120/red-originals",
+    "originalDigests": {
+      "manifest.json": "570c36bd83803e38ee614afdad95e0a9749fe1be48b0d59055914d8673429eb6",
+      "status.json": "dbb3f3b7fdb897f4f971450281bb09bbd9d1bee2a7202c11e2ba236a7abd8072",
+      "artifacts.json": "5c87b352f70da83e6c7819916fd1eeb029bdd0c9605c7c9a831718a09628b553",
+      "discovery-inventory.json": "636b00c53bf9d3c7c899ea95c6f7e7c05eaa3822aa9dc4710b3edbce89383d73",
+      "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.log": "b18852b15ffb462aa0b60451f7f9303a147d105de2aae160e0a01eb8bd5aa915",
+      "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.err": "0536083c874c4c570966411dc4f15d5138873aa72211f03c07417ae48c2c2422",
+      "outcome/selection.json": "bceb59c5160b8ef3df3706054443c7c41042ae1c489a042d5ecf0328990777c7",
+      "outcome/test-results.ndjson": "a87d4fb62623d5f18c99f4995da6498b473931a59ba91c1ec27061d5cedde423"
+    },
+    "selection": {
+      "sha": "58a2080337b56b4e5f97bcb54da59f57b94e6611",
+      "host": "tv-dator",
+      "files": [
+        "test/rebalancer/strict-operation-outcomes.test.js"
+      ],
+      "plan": [
+        {
+          "files": [
+            "test/rebalancer/strict-operation-outcomes.test.js"
+          ],
+          "jobs": 4,
+          "resourceClass": "ordinary"
+        }
+      ]
+    },
+    "runnerResult": {
+      "file": "test/rebalancer/strict-operation-outcomes.test.js",
+      "attempt": 1,
+      "ok": false,
+      "assertions": 140,
+      "durationMs": 2509,
+      "retriedOnce": false,
+      "firstFailureLine": "not ok 4 - malformed repository answer is a contract error, never terminal success"
+    },
+    "measured": {
+      "parents": 11,
+      "leaves": 129,
+      "passedLeaves": 96,
+      "failedLeaves": 33,
+      "positiveControls": [
+        "strict outcomes positive: real nonterminal update and terminal release",
+        "strict outcomes thrown post-write reply: same-owner retry re-enters repository",
+        "strict outcomes reopened SQLite: fresh owner recovers exact terminal and retained release"
+      ],
+      "malformedCases": [
+        "undefined",
+        "null",
+        "bare true",
+        "bare false",
+        "missing fields",
+        "missing operation",
+        "unknown disposition",
+        "contradictory updated"
+      ]
+    },
+    "preflight": {
+      "nodeVersion": "v22.23.2",
+      "lockGraphSha256": "b529c1d729f95683aa94049998b23508836a8fdcc5e5ec4d92f2284b9f4abdf1",
+      "observedAt": 1795201775911
+    },
+    "ceiling": "Initial local SQLite composition red only. Host preflight records Node and lock identity; original native binary and SQLite build hashes were not captured. The managed controller reports source_execution_started:false; original placement source and TAP establish the child execution. No physical fleet, full repair, green admission or later-source applicability is certified. Original summaries are not an attestation."
+  },
+  "receipts": [
+    {
+      "id": "strict-persistence-positive-and-malformed-negative",
+      "passed": false,
+      "testFile": "test/rebalancer/strict-operation-outcomes.test.js",
+      "failure": "Measured baseline: eight malformed reply cases fail the strict outcome contract; ordinary, thrown-reply and reopened-owner positive controls pass.",
+      "evidence": "outcome/58a2080337b5-mwpcsefx-3239844-tv-dator.log"
+    },
+    {
+      "id": "terminal-dispositions-and-failure-meaning",
+      "passed": false,
+      "failure": "Outstanding; not measured or admitted by this red adapter."
+    },
+    {
+      "id": "reconstruction-and-interrupted-release",
+      "passed": false,
+      "failure": "Outstanding; not measured or admitted by this red adapter."
+    },
+    {
+      "id": "permissive-path-negative-controls",
+      "passed": false,
+      "failure": "Outstanding; not measured or admitted by this red adapter."
+    },
+    {
+      "id": "classified-consumer-closure",
+      "passed": false,
+      "failure": "Outstanding; not measured or admitted by this red adapter."
+    },
+    {
+      "id": "independent-verification",
+      "passed": false,
+      "failure": "Outstanding; not measured or admitted by this red adapter."
+    }
+  ]
+}

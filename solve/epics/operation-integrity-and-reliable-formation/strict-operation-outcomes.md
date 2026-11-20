@@ -7,10 +7,13 @@ status: proposed
 # Strict operation outcomes: bounded successor proposal
 
 Prepared 20 November 2026 for programme item 02. This is an owner-local design
-proposal under [operation integrity](../operation-integrity-and-reliable-formation.md),
-not a sealed Quest, implementation assignment or execution receipt. The
-integration owner must independently review the proposal before assigning its
-implementation. No test, runtime command or lab run was performed to prepare it.
+contract under [operation integrity](../operation-integrity-and-reliable-formation.md).
+The successor [Quest](../../quests/strict-operation-outcomes/quest.json) is prepared;
+its seal and runtime implementation remain pending. Independent reviewer
+`subagent:/root/lifetime_census` approved the revised implementation design at
+SHA256 `0c282984a2831b9887f1c1f2f33d65bfc50c325e928d5b3211060a8f4b5083ce`.
+This current contract incorporates that prospective refinement; historical
+reviews, findings and original execution artifacts remain unchanged.
 
 ## Baseline, decision and scope
 
@@ -145,308 +148,412 @@ methods. Initial assignment/replacement search identified these 19 files under
 - `terminal-failed-add-target-cleanup.test.js`
 
 Also migrate direct producer-result assertions in repository tests, confirmation
-authority tests and `replica-operation-terminal-cas.test.js`. Before sealing,
+authority tests and `replica-operation-terminal-cas.test.js`. Before implementation assignment,
 complete this census with method-declaration and injected-object forms; the list
 above is an inspected substitution search, not proof that no dynamic fake exists.
 Ordinary fixtures use owner builders; malformed fixtures remain explicit negatives.
 
-## Contract-first transition record
+## Concrete owner decisions
 
-### Owner-defined shapes and combinations
+Keep ReplicaOperationRepository as the sole authority for persistence answers
+and OperationWorkflowOwner as the sole interpreter of their workflow effects.
+Use the existing disposition vocabulary. No new scheduler, ledger, generic
+schema library, generic state machine, result compatibility mode or timer.
 
-The existing repository shape is `{persisted, disposition, operation}`; the
-workflow shape is `{committed, disposition}` with some release/result extensions.
-Keep the owner distinction, but remove optional Boolean persistence and validate
-each conversion once at the owner boundary. The proposed shared contract must
-make durable adoption and terminal meaning available without interpreting a
-caller-mutated row as evidence. Exact builder names are an implementation choice.
+Add one small domain contract beside `replica-operation-update-disposition.js`
+(recommended name `replica-operation-update-outcome.js`) for the mandatory
+repository result builder/validator. All ordinary fixtures import it. Preserve
+the existing operation row encoder/decoder and exact visibility comparison;
+do not duplicate those algorithms in a test or result table.
 
-| Disposition | Current repository producer | Proposed workflow meaning to prove |
-| --- | --- | --- |
-| UPDATED | `persisted:true`, operation supplied | Current requested write confirmed through the existing producer; progress only for the validated requested transition. |
-| RECOVERED | `persisted:true`, operation supplied after retryable failure recovery | Requested durable write recovered from authoritative evidence; not a second effect. |
-| IDEMPOTENT_REPLAY | `persisted:true`, authoritative operation supplied | Exact requested durable result already exists; replay is distinct from a new local commit. Terminal settlement requires matching durable terminal meaning. |
-| TERMINAL_ADOPTED | `persisted:false`, winning terminal operation supplied | Different terminal won; adopt its exact success/failure meaning and stand down the losing write. |
-| REFUSED | `persisted:false`, null operation | No requested transition established; retain the unresolved obligation. |
-| REINSERTED | `persisted:true`, operation supplied | Reinsertion is currently reported as persisted but does not by itself settle the requested terminal transition. Preserve unresolved ownership; remove growth's local reinterpretation by expressing this at the common owner. |
+Repository result is always `{persisted, disposition, operation}`:
 
-Concrete recommendation for independent review: retain exactly one repository
-result `{persisted, disposition, operation}` and make it mandatory. `persisted`
-must be Boolean, `disposition` one of the six existing constants, and `operation`
-an owner-copied canonical operation record or the explicit null permitted only for
-REFUSED. Freeze the outer record and protect nested retained identity/history
-from caller mutation using the existing owner copy conventions. Missing fields,
-accessor surprises, unknown names and inconsistent combinations are contract
-errors, not alternative success representations.
-
-The producer branches above are concrete: UPDATED originates in
-`confirmPersistedOperationUpdate`; RECOVERED in the gateway's recovered-result
-arm or `resolveFailedOperationUpdateResult`; replay, adoption, reinsertion and
-refusal originate in `resolveZeroChangeOperationUpdate`, with additional
-pre-write adoption/refusal. `recoverPersistedReplicaOperationMutation` already
-requires `isReplicaOperationVisibilitySatisfied`, whose exact identity,
-step/status and durable-content checks differ intentionally from
-`isAppliedReplicaOperationWriteVisible`'s monotonic post-apply confirmation.
-Preserve that distinction. Do not allow a later row to prove an unapplied CAS.
-
-Use one workflow-owned conversion producing the mandatory record
-`{committed, disposition, operation, reconcileOutcome}`. `reconcileOutcome`
-uses existing `OPERATION_RECONCILE_OUTCOME` values; adding it to the atomic result
-is a proposed API change, not a field claimed to exist today. The conversion
-validates the result against the requested canonical operation and requested
-step, including existing identity and content fences. Its allowed combinations
-are:
-
-| Repository disposition | Workflow committed | Workflow reconcileOutcome | Operation payload and release meaning |
+| disposition | persisted | payload | issuing producer branch |
 | --- | --- | --- | --- |
-| UPDATED / RECOVERED | true | ADVANCED for the requested non-terminal transition; COMPLETED for successful terminal; FAILED for failed terminal | Exact requested durable write under the producer's contract. Only a validated terminal permits release. RECOVERED remains distinguishable from a directly acknowledged write. |
-| IDEMPOTENT_REPLAY | false | WAITING for non-terminal replay; COMPLETED or FAILED for the exact durable terminal | Exact matching durable row. It may satisfy the requested state without claiming a newly committed transition or new progress. |
-| TERMINAL_ADOPTED | false | COMPLETED or FAILED according to the winning durable terminal | Same immutable subject and valid terminal tuple, possibly a different terminal from the requested one. Adopt before release; never force success. |
-| REFUSED | false | REFUSED | Null payload; retains retries, hold and reservation. |
-| REINSERTED | false | WAITING | Reinserted operation payload, explicitly insufficient for requested transition settlement; retain obligations until an ordinary authoritative recovery/replay establishes the result. |
+| UPDATED | true | requested operation snapshot | confirmPersistedOperationUpdate |
+| RECOVERED | true | requested operation snapshot proved by exact recovery | recoveredAfterRetryableFailure or resolveFailedOperationUpdateResult |
+| IDEMPOTENT_REPLAY | true | exact observed matching operation | resolveZeroChangeOperationUpdate exact-visibility arm |
+| TERMINAL_ADOPTED | false | exact different winning terminal | pre-write conflict or zero-change terminal winner |
+| REFUSED | false | null | expected-step/admission refusal, unresolved zero-change |
+| REINSERTED | true | reinserted operation snapshot | missing-row reinsertion arm; not settlement |
 
-All other combinations are invalid. Terminal tuple requirements apply only when
-the result claims terminal settlement (COMPLETED or FAILED), including every
-TERMINAL_ADOPTED payload. Such a payload requires a finite `completedAt`, a
-terminal step admitted by `isTerminalStep(type, workflowStep)`,
-and a matching status: the explicit `WORKFLOW_STEP.FAILED` / `ReplicaStatus.FAILED`
-pair for failure, otherwise `status === WORKFLOW_STEP_TO_STATUS[workflowStep]`,
-consuming the existing definitions in `replica-operation-progress.js`. The map
-does not currently include FAILED, so a general map lookup alone is insufficient.
-A FAILED step/status maps to FAILED; the type's successful terminal step maps to
-COMPLETED. Valid non-terminal UPDATED, RECOVERED and IDEMPOTENT_REPLAY payloads
-remain accepted with their requested non-terminal step/status and null
-`completedAt`; they do not have to satisfy terminal predicates and cannot release
-terminal obligations. Reject invalid type, missing identity, contradictory
-step/status, a terminal claim without its terminal timestamp, and a non-terminal
-payload with a terminal timestamp. REINSERTED retains its unresolved disposition
-even if its row contains a terminal tuple; the tuple alone does not establish
-requested transition settlement.
-The existing `isAuthoritativeOperationTerminal` checks only the timestamp, while
-`isTerminalReplicaOperationRecord` can accept a status-or-step semantic match;
-neither alone validates the full result tuple. Tighten validation at this owned
-boundary without replacing unrelated general progress classification. Completion
-success and FAILED are both terminal
-settlements, but only COMPLETED is successful completion. The common terminal
-release helper validates the complete record and accepts only those terminal
-meanings. `committed:true` with REFUSED, REINSERTED, missing disposition or a
-contradictory payload never releases. Consumers use the conversion's result;
-ordinary test doubles use its owner builders.
+All three fields are mandatory own data properties. The record must be a plain
+object; reject absent/null/Boolean/array values, accessors, unknown dispositions,
+missing fields and contradictory combinations. Owner builders produce copied
+plain operation data and frozen outer records. Copy nested stepsHistory and
+admission/membership metadata (existing `structuredClone` convention is already
+used by bootstrap-topology operation construction). Existing shallow history
+copies in cloneOperationSnapshot/cloneIncompleteOperationObservation are not
+enough to protect a returned evidence snapshot from nested caller mutation.
+The mutable working operation remains separate from the evidence snapshot.
 
-Choose a named contract error for malformed collaborator records, with a stable
-owner code such as the proposed `INVALID_OPERATION_PERSISTENCE_OUTCOME`. Before
-propagating that error from terminal paths, retain/re-arm the existing terminal
-repair with the exact operation and failed validation context; non-terminal paths
-retain their existing operation/progress retry ownership. Do not encode malformed
-input as REFUSED: refusal is a valid producer decision, whereas this is a broken
-contract. Never catch this error and substitute success. An actual timeout or
-unavailable authoritative read keeps its existing typed/error semantics and
-recovery obligation rather than being relabeled as a contract error.
+Repository result validation establishes structural and disposition consistency.
+Requested-write validation belongs at the consumer boundary and consumes the
+repository's existing exact identity/step/content comparison for UPDATED,
+RECOVERED and REPLAY. TERMINAL_ADOPTED instead compares immutable operation,
+entity/partition and placement intent, then validates the winner's terminal
+tuple. Replica binding can legitimately change before CREATE admission through
+bindReplaceCreateTargetReplicaId; compare the requested bound write, not an old
+pre-binding replicaId. Existing incarnation/admission checks still apply.
 
-Remove the local idempotent fast path's authority to return null disposition or
-project terminal state. An already-committed workflow mirror can avoid repeating
-its local transition bookkeeping, but the requested persistence/replay still
-goes through the canonical repository contract before effect authorization.
-This includes `ALREADY_TERMINAL_TRANSITION_OUTCOME` in ordinary completion and
-the already-terminal arm in `completeGrowthPromoteOperation`: an in-memory
-terminal tuple alone cannot mint a new canonical durable replay or authorize
-resource release after owner reconstruction. Consume the actual repository
-terminal result for the exact identity.
-`updateStep` may preserve an explicit local no-op return where it starts with the
-same step and performs no effect; it cannot be consumed as durable terminal proof.
-Replays may project already-proven state while reporting no new advancement.
-No proof-bearing cache, new ledger or public operation format is introduced.
+Terminal tuple validation is conditional: finite completedAt, an allowed terminal
+step for the operation type, and matching status. FAILED needs the explicit
+FAILED/ReplicaStatus.FAILED pair because WORKFLOW_STEP_TO_STATUS omits it.
+Nonterminal UPDATED/RECOVERED/REPLAY with null completedAt remain valid. A terminal
+timestamp on a nonterminal step is invalid. REINSERTED remains unresolved even if
+its payload contains a terminal tuple.
 
-After a malformed answer or thrown persistence call, a same-owner retry of the
-same requested step must enter the repository again. The deferred workflow
-mirror created before the failed await cannot make `isTransitionIdempotent` or
-an equal in-memory step skip persistence. Preserve the distinction between a
-proven no-op and an attempted-but-unconfirmed transition. The existing owner lane
-must reconcile or discard the uncommitted mirror at that boundary, while keeping
-the retained operation and resource obligations; it may not return the local
-no-op arm merely because the previous attempt changed a disposable projection.
+Here nonterminal means an incomplete operation, not merely a step-name category.
+The current dispatch-wake-preemption path can call updateStep(ADD, ACTIVE) before
+completeOperation supplies completedAt. That valid incomplete stage must not be
+rejected solely because ACTIVE is the type's eventual final step. With null
+completedAt it proves at most requested stage advancement, never terminal
+settlement or release. For an explicitly requested terminal transition, null
+completedAt is invalid. Carry the existing terminalTransition intent into the
+boundary validator and use the full tuple to classify actual terminal meaning;
+do not infer it from status or step alone.
 
-`didOperationReconcileAdvanceOrComplete` cannot merely lose its `true` arm:
-`reconcileOperationProgress`, timeout-grace helpers, port methods and adapter
-command application currently carry declared Boolean answers. Migrate named
-lifecycle consumers and explicit Boolean adapters together. Keep settled failure
-separate from successful completion and from useful recovery progress.
+Do not change the two different repository visibility meanings: an unacknowledged
+write/replay recovery requires `isReplicaOperationVisibilitySatisfied` (exact),
+while confirmation of an already-applied write may use
+`isAppliedReplicaOperationWriteVisible` (monotonic). UPDATED still means the
+requested acknowledged write, even if later authoritative confirmation observes
+a successor; such an observation may be adopted through its existing authority
+path but cannot pretend an unacknowledged CAS succeeded.
 
-### Identity, ordering and durable commit
+Workflow conversion lives with the workflow owner, consuming the repository
+validator and producing `{committed, disposition, operation, reconcileOutcome}`.
+Move the generic OPERATION_RECONCILE_OUTCOME vocabulary and its predicates out of
+the growth implementation into a small workflow-owned contract module; migrate
+all imports directly and remove the old definition/export instead of re-exporting
+it as a compatibility alias. No generic framework is needed.
 
-The immutable durable subject comprises the existing `operationId`, operation
-type, entity/partition and admitted placement intent. Replica binding is a
-distinct, phase-dependent field: `bindReplaceCreateTargetReplicaId` may assign a
-fresh `replicaId` before CREATE admission, first in the PENDING projection or
-through its expected-step durable update. It explicitly refuses rotation after
-`createAdmissionState` is set. Validate that permitted binding transition against
-its requested durable write; do not reject it by comparing every field to an
-older pre-binding snapshot. After admission, validate the exact bound replica
-and generation. Growth's promoted identities are durable intent, while its
-current administration route is not immutable placement identity. Preserve
-existing CREATE admission, replica/node incarnation, membership and
-expected-step/history fences;
-this repair does not invent a new generation domain. Adoption must validate the
-winning row for that same subject and its existing authority contract. An
-administration route or cache row cannot replace operation identity.
+| disposition | committed | reconcileOutcome |
+| --- | --- | --- |
+| UPDATED / RECOVERED | true | ADVANCED for nonterminal; COMPLETED for successful terminal; FAILED for failed terminal |
+| IDEMPOTENT_REPLAY | false | WAITING for nonterminal replay; COMPLETED or FAILED for durable terminal |
+| TERMINAL_ADOPTED | false | COMPLETED or FAILED from the exact winner |
+| REFUSED | false | REFUSED |
+| REINSERTED | false | WAITING |
 
-Sequence: owner lane admits one transition; workflow coordinator prepares its
-uncommitted mirror; repository performs the existing conditional mutation and
-authoritative recovery/confirmation; the boundary validates the answer; only then
-may the workflow mark a committed transition, project its durable meaning and
-perform release. Terminal SQL retains `completed_at IS NULL` and applicable
-expected-step/admission conditions. A winning competing terminal is monotonic.
-The actual replicated mutation/authoritative confirmation owns durable truth;
-`markTransitionCommitted`, a successful callback or a projected row is not that
-commit point. No cross-log numeric comparison is introduced.
+Only this conversion decides these combinations. Terminal release helpers
+validate the full workflow result and permit both terminal meanings. They do not
+accept committed alone, disposition alone, operation.status alone or Boolean
+success. Release eligibility is distinct from successful completion and from
+whether all release effects have finished.
 
-Repository incomplete-operation observations and coordinator workflow mirrors
-remain disposable projections of their existing owner. They may trigger recovery
-but cannot certify an unknown persistence answer. The existing producer's
-deferred confirmation/witness behavior must be preserved and tested separately
-from proven durable replay. A confirmed absent row, unavailable authority and a
-malformed collaborator answer are distinct; none establishes terminal success.
+## Progress APIs: one named meaning, explicit predicates
 
-### Retained obligations, wake and cleanup
+Recommended coherent return migration:
 
-REFUSED, unresolved REINSERTED, unavailable confirmation and malformed results
-keep the operation owned and re-driveable. They cannot clear terminal retry state,
-release an ACTIVE storage reservation or placement hold, or authorize a removal
-intent. Use the existing terminal-transition repair, observed-progress and
-committed-operation wake paths; do not create polling or widen retries.
+* `executeAtomicTransition`, completeOperation and failOperation return the full
+  validated workflow result. Refusal constructors in operation-workflow-replace-owner
+  must produce the same REFUSED shape. No already-terminal constant without a
+  verified operation payload survives.
+* `updateStep`, reconcileOperationLifecycle, reconcileStoppingOperationProgress,
+  reconcileObservedTargetProgressDuringTransitionGrace and their forwarding
+  owner/coordinator entrypoints return the named OPERATION_RECONCILE_OUTCOME enum.
+  updateStep maps a validated atomic result; a deliberately retained local
+  priority projection returns WAITING, not ADVANCED. An ordinary nonterminal
+  replay adopts the durable state but returns WAITING, not a new commit.
+* Remove the redundant Boolean `reconcileOperationProgress` conversion and
+  migrate its production references to reconcileOperationLifecycle. Do not keep
+  an alias or a helper that accepts either Boolean or enum.
+* `didOperationReconcileAdvanceOrComplete` is a strict predicate of the named
+  enum: ADVANCED or COMPLETED only. A separate explicit terminal-settlement
+  predicate includes FAILED when a recovery loop should stop/release. A failed
+  terminal must never be classified as COMPLETED to stop a retry loop.
+* Owner adapter command application is a distinct question from operation
+  progress. Its command ports currently return actual Booleans for dispatch,
+  wake, marker and lifecycle-derived application. Keep this one declared Boolean
+  contract and validate it as Boolean; use `applied === true` in
+  buildOperationWorkflowAdapterCommandResultEvidence. Lifecycle-consuming ports
+  explicitly apply the named enum predicate once. Never pass their Boolean back
+  to the lifecycle predicate. This is a typed predicate output, not a second
+  persistence/terminal result shape or Boolean compatibility arm.
 
-A durable terminal may release only the exact operation's resources through
-their owners. Crash after terminal persistence but before release must reconstruct
-that same release obligation. Interrupted release must remain retryable without
-reasserting the losing terminal or double-releasing another operation. The
-candidate's growth releasing/settled distinction is useful and must be preserved.
-Ordinary terminal completion/failure need equivalent evidence for their actual
-release order. Caller expiry does not erase a durable decision; broader ownership
-of work outliving admission waits belongs to item 03.
+Migration includes every use of the old updateStep Boolean. Source census finds
+16 call sites plus the facade across dispatch-execution, growth, dispatch-response,
+priority-recovery-superseded-target, recovery-reconcile, dispatch-wake-preemption,
+priority-publication-safety-topology, executor-outcome-reconcile, recovery-observation
+and recovery-status-reconcile. Inspect ignored results as well as truthiness.
+In particular applyReconciledReplicaStatus currently returns ADVANCED after
+awaiting updateStep without checking its answer (CREATING and SYNCING arms).
+persistReplaceRemovalIntent/ensureReplaceRemovalIntentRecorded and
+priority-recovery-superseded-target must explicitly inspect the named result.
+The new witness positive-control assertion of updateStep's current Boolean must
+be prospectively migrated to ADVANCED with this declared API change after the
+original baseline run is preserved; its durable row/release assertions remain.
 
-## Evidence, successor route and stopping condition
+Failure classification must be fixed in all three paths found during refinement:
+classifyTerminalPersistOutcome; classifyReconcileExecutionOutcome; and the
+RECONCILE_STOPPING/early-terminal branches of reconcileOperationLifecycle.
+Their current generic isOperationTerminal-to-COMPLETED interpretation is not
+valid for a winner whose durable meaning is failure. Consume the canonical
+validated terminal meaning; transport COMPLETED alone cannot override it.
 
-Historical solved Quests `replica-operation-terminal-cas`,
-`reservation-fail-closed-dispatch-gate`, `terminal-write-refusal-retry-ownership`
-and `canonical-replica-completion-observation` remain immutable. Their failure
-lessons explain the retained repair/release distinction; they are not current
-acceptance for this migration. Use a bounded successor Quest under this epic,
-linked to those owners and the open placement/formation work. No successor record
-has been created or sealed by this proposal.
+## Deferred mirror, retry and lost reply
 
-**Proposed statement:** Through the production repository/workflow construction,
-only recognized, internally consistent owner results for the exact operation
-establish progress or terminal settlement. A competing durable failure remains
-failure. Malformed, unavailable, refused or unresolved reinsertion answers retain
-the existing recovery and resource obligations. All enumerated producer consumers
-and substituting fixtures use the canonical contract with no weak alternate arm.
+The dangerous sequence is ensureOperationWorkflow -> transitionStep with
+DEFER_COMMITTED_MARK -> persistFn -> validation -> markTransitionCommitted.
+On malformed return or thrown persistence, the mirror can already have advanced
+even though its committed-transition key is absent. EnsureOperationWorkflow
+returns early if this mirror exists, so fixing only the false-only branch is
+insufficient.
 
-**Initial real-path witness:** build a coordinator with the existing real SQLite
-fixture, seed a non-terminal operation and its storage reservation, then invoke
-ordinary `updateStep` and terminal completion/failure through `workflowOwner`.
-Wrap the real repository return boundary to inject undefined, null, bare Booleans,
-missing fields, unknown dispositions and contradictory combinations. Keep one
-unchanged real producer success as the positive control. Inspect durable rows,
-workflow commit markers, actual resource rows and retry ownership. Where a write
-has already happened before reply corruption, assert truthful uncertainty and
-reconciliation to the real row rather than asserting that no effect occurred.
+The corrected entry ordering is required for completeOperation, failOperation,
+completeGrowthPromoteOperation, ordinary updateStep and retained repair:
 
-`test/rebalancer/test-helpers.js` already creates SQLite tables from the production
-replica-operation/reservation/partition schemas and uses the production mutation
-SQL planner; its store serializes and reopens across coordinator shutdown. Extend
-the real-repository section of
-`test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js`
-for terminal competition and interrupted release. The hand-interpreted gateway
-in `createTerminalCasHarness` remains useful for narrower policy tests but cannot
-supply the real-SQLite acceptance claim. Explicitly test owner reconstruction
-from retained rows, not merely reuse the same live operation object.
+1. Under the existing operation lane, read the exact operation from the repository
+   authority using its existing authoritative visibility observation. Preserve
+   absent versus unavailable/deferred; unavailable cannot hydrate or settle from
+   the supplied mutable operation. Retain the obligation and return the existing
+   uncertainty/error behavior. A confirmed absent row follows the current
+   persistence/reinsertion policy; it is not a terminal replay.
+2. Validate subject identity and the observed row before preparing a candidate.
+   Resolve existing terminal truth first, through a repository-owned replay/
+   adoption classification sharing the same exact-match and terminal-winner
+   rules used by persistence. If the requested terminal meaning is already the
+   winner, return canonical IDEMPOTENT_REPLAY carrying that unchanged observed
+   row; a different terminal produces TERMINAL_ADOPTED with the exact winner.
+   A new call does not invent a new timestamp/history merely to compare it with
+   the winner. A retained exact request still compares its original durable
+   content through the producer's existing exact comparator.
+3. A validated existing terminal goes directly to the common terminal consequence
+   routine. Do not call transitionStep, terminal write admission or persistence
+   again. For nonterminal matching replay, return WAITING with the exact observed
+   state without creating a transition-history entry or committing a new key.
+   Requested metadata/binding changes at the same step still require exact
+   requested-content comparison and, when not already present, a real write.
+4. Only an authoritative nonterminal state requiring a new effect enters the
+   transition preparation path. Replace any stale/unconfirmed workflow mirror
+   and hydrate from this freshly read operation, then apply the existing step/
+   admission validation, prepare the requested transition, persist, validate the
+   result and mark committed. The guarded SQL/authority reread remains necessary:
+   another writer can win between preflight and mutation. Such a winner is
+   adopted through the same result contract, never overwritten.
 
-Required further witnesses cover all six dispositions, same and competing
-terminal writers, authoritative lost-reply recovery, durable failure adoption,
-wrong identity, interrupted release and restart. Reintroducing the old false-only
-adapter must make the malformed-result witness fail while the ordinary transition
-still succeeds. Restoring a permissive terminal helper must independently fail
-the retention/release negative. Expected answers must not be generated from the
-production policy table under examination.
+`ensureOperationWorkflow` currently hydrates its caller-supplied operation, not
+SQL. Passing it the freshly read validated row (or an owner-controlled snapshot
+of that row) is therefore part of the fix. Removing the local early returns alone
+would rehydrate a terminal workflow and then attempt an illegal new transition,
+potentially wedging every retry before its repository call. The replay/adoption
+branch above must run before both ensureOperationWorkflow and transitionStep.
 
-Two required retry/reconstruction controls make the distinction concrete:
+On malformed/throw after transition preparation, discard only that disposable
+workflow projection through DurableWorkflowCoordinator.removeWorkflow under the
+same operation lane. Preserve the exact retained request, repository visibility
+witness and retry; never roll back a durable write. The next attempt starts at
+the fresh repository observation above, not at the stale supplied operation.
+Remove onIdempotentTransition projections which invent timestamps and remove
+runAtomicTransitionUnderLane's local committed-key return as an authority shortcut.
+Each attempt re-enters repository authority, but a proved replay performs no new
+UPDATE. A test must count the authoritative resolution/repository entry rather
+than require a redundant persistOperationUpdate call once the read already
+established immutable terminal truth. Preserve the original red run before this
+prospective witness refinement, and assert no transitionStep/new history on replay.
 
-1. On the same owner, inject a malformed answer and separately a thrown call at
-   the persistence boundary after the deferred mirror is created. Restore the
-   real collaborator and retry the identical step. Assert that the repository is
-   invoked again, the first attempt did not commit the mirror or release resources,
-   and the retry either persists normally or reconciles an already-landed write.
-   Cover valid non-terminal update/replay as positive controls, alongside terminal
-   completion/failure. A mutant that skips persistence because of the deferred
-   mirror must fail this witness.
-2. Persist a competing terminal winner or a terminal awaiting resource release,
-   close the SQLite connection, discard the coordinator, workflow mirrors,
-   operation objects and retry maps, and construct a fresh owner from the retained
-   database image. Read and adopt the exact durable winner, including failed
-   meaning, then resume only its retained release. The stale losing projection
-   must not overwrite the winner, grant a different replica generation, or release
-   another operation's resources. Reusing the original coordinator or operation
-   object cannot satisfy this control.
+Before throwing INVALID_OPERATION_PERSISTENCE_OUTCOME from any terminal caller,
+armTerminalTransitionRepair with the exact requested snapshot and existing
+persist options, then propagate the named contract error. A real thrown delivery
+error remains that original error; it also retains this repair. Do not overwrite
+the original error with a secondary repair/setup error. Refused and REINSERTED
+take the existing not-committed repair path. Preserve all exact CREATE admission
+and REPLACE terminal-admission conditions when replaying retained work.
 
-**Proposed doneWhen:** use the existing `test-receipt` probe with six required
-receipt identifiers: `strict-persistence-positive-and-malformed-negative`,
-`terminal-dispositions-and-failure-meaning`, `reconstruction-and-interrupted-release`,
-`permissive-path-negative-controls`, `classified-consumer-closure`, and
-`independent-verification`. These names are proposed executable obligations, not
-present receipts. The result is binary: all six admitted is complete; otherwise
-incomplete. The source census belongs to independent review and applicable checks,
-and cannot substitute for any runtime witness.
+Repair itself must validate repository observations/results before adoption,
+confirmation or clearing. TERMINAL_ADOPTED without its exact valid winner is
+malformed, never permission to clear. The existing repair timer catch/rearm path
+owns subsequent failure; no additional retry loop is introduced.
 
-The minimal new evidence producer is a declaration/admission adapter under the
-existing `scripts/quest-evidence/` owner for this successor. It consumes the
-managed classified runner's original execution report and raw output, validates
-the exact source/tree and required file manifest through
-`scripts/test-execution-report.js` (`executionReportProblems`, also consumed by
-`scripts/proof-authority.js`), checks the retained output digests and actual
-runtime/artifact/host metadata, and writes the successor's ordinary
-`test-receipt/1` projection. It must retain command, original request/run ID and
-artifact references, complete phases, exits, executed assertion counts and
-per-file results. It does not launch a second scheduler or invent another report
-format. A bare `runQuestEvidenceHarness` summary is insufficient: that helper
-currently discards successful raw stdout and does not itself establish the full
-source/runtime/substrate provenance.
+Separate durable terminal settlement from release completion. Extract one
+workflow-owned terminal consequence routine from ordinary complete/fail and
+growth release code, callable by both their normal path and the existing repair.
+It receives the validated exact winner and runs the existing ledger-self-move,
+placement-hold and storage-reservation release owners. Only after required release
+effects finish may it clear retained repair state. A known failure winner uses
+failure consequences and can never emit the attempted success event. Replaying
+release must be idempotent and must not increment a new-completion statistic or
+rewrite the winner's timestamp/history.
 
-For the initial red, only the completed, correctly identified baseline witness
-with an actual expected-contract assertion failure establishes a measured failure.
-Reported assertion/command failure remains failure and is never filtered into a
-pass. The admission adapter distinguishes that product failure from missing
-output, zero assertions, skipped native execution, wrong source, incomplete phases
-or corrupt hashes, which remain non-measuring. For green it requires zero
-`executionReportProblems`, valid original outputs and all declared predicates.
-Each negative-control mutation has its own named source and expected failing
-witness, so its rejection is not misreported as a normal candidate failure or
-merged into a green retry. Source review binds to changed content separately.
+`runTerminalTransitionRepairAttempt` must perform the authoritative terminal
+observation/classification before `admitReplaceTerminalRepair`. The latter admits
+NEW persistence only; it is never an admission gate for releasing an already
+committed terminal. Today lines 473-485 can clear repair on admission refusal,
+and admitReplaceTerminalRepair compares a retained FAILED REPLACE's old expected
+step with the now-FAILED durable step. That refusal after successful persistence
+must not discard its known release debt.
 
-**Real red/seal route:** implement only the discriminating witness and its
-execution-derived evidence producer first; execute it on the unchanged baseline
-through the managed lab. Retain its original failing output, source/runtime and
-request/run identity. The probe reads those results without executing a harness.
-Seal only after that measuring red record exists. An absent receipt, fabricated
-failure field, source-marker count or unavailable lab is not the reproduced red.
-The integration owner observes the actual run and owns continuation; no run is
-currently queued or running for this proposal.
+Use the existing repair owner's state with one explicit phase:
+PERSISTENCE_UNCONFIRMED or TERMINAL_RELEASE_PENDING. Entering release-only replaces
+the retained projectedOperation with a protected snapshot of the exact observed
+winner, replaces the old persistOptions with null (there is no new write to admit),
+and retains cleanup-release obligations that belong to that winner. This is a
+domain phase inside the existing repair, not a second state store. Remove the
+old first-value-wins behavior of buildTerminalTransitionRepairState for this
+transition; it currently keeps existingState.projectedOperation/persistOptions
+and would otherwise replay a losing projection or obsolete expected-step CAS.
+Do not downgrade TERMINAL_RELEASE_PENDING to persistence repair on later arming.
+Repeated observations must match the same immutable terminal winner; a conflicting
+or unavailable observation retains the debt and reports the anomaly.
 
-After repair, run the smallest witness, affected classified interaction selection,
-and applicable static checks through existing managed placement, locks and thermal
-policy. Parallelize independent selected invocations across all admitted lab
-machines using the current placement owner, preserving each machine's lock,
-thermal admission and original result. A coupled mutation/control pair needs its
-declared same-host comparison; physical topology requirements still constrain
-formation jobs. The documented changed-cone route is
-`node scripts/lab.js test changed --lane all --sha <candidate> --base-sha <baseline>`;
-use exact recorded commits and preserve the selector's complete invocation set.
-Do not run controller-side proof to substitute for unavailable placement.
+In TERMINAL_RELEASE_PENDING, invoke only the common terminal consequences. Never
+call admitReplaceTerminalRepair, rewrite the row or re-evaluate whether the old
+terminal would be admitted as a new effect today. Failed-create cleanup delivery
+uses the winner's exact cleanup/admission identity. A required cleanup still
+unavailable remains owned in this phase. Successful required release effects are
+the clearing event; throwing/deferred release retains this phase and rearms the
+existing backoff. Durable failed meaning stays FAILED throughout.
 
-Stop when the finite census is closed, real positive/negative/reconstruction
-evidence is admitted, independent review approves the collected candidate and
-applicable interaction gates pass. The existing three-host, three-consecutive,
-420-second formation acceptance and wider service milestone remain item 09's
-separate composed predicates. Root's next action is independent review of the
-concrete recommended shapes, error custody and evidence adapter, then assignment
-of the first real red witness. No implementation, proof run or seal is implied by
-that recommendation.
+In PERSISTENCE_UNCONFIRMED, unavailable observation retains/rearms before any new
+write. A validated terminal observation changes phase as above. Only a current
+nonterminal/confirmed-absent state can proceed to fresh write admission under the
+existing rules. Admission refusal prevents the new effect and remains an explicit
+refusal under the normal recovery owner; it cannot clear a previously established
+release-only obligation. A write that lands while admission is being checked is
+handled by repository CAS/adoption plus the next fresh observation, not a blind
+clear-on-refusal arm.
+
+Ordinary reservation reconstruction uses the existing durable reservation/
+operation sweep; placement hold reconstruction must use its existing owner
+rather than a second ledger. Reconstruct a terminal release phase from the
+observed terminal row and its outstanding durable resource obligation, never
+from the lost first request's options. Do not claim that the initial reservation-
+only reopen witness proves placement hold reconstruction.
+
+Required revised recovery witnesses:
+
+* Same-owner lost reply after a real terminal write: restore delivery, read the
+  winner before transitionStep, release the retained resource and return exact
+  replay/adoption. Assert no new history entry/timestamp/UPDATE, not merely no throw.
+* Fresh owners re-enter completeOperation, failOperation and growth completion
+  after reopening SQLite, using deliberately stale input projections. Assert
+  authoritative resolution precedes transition preparation and exact successful
+  or failed winner meaning survives. The reservation sweep alone is insufficient.
+* Real FAILED REPLACE commits while its resource release is interrupted. Change
+  the current admission state so a NEW FAILED write would be refused (including
+  retained expectedWorkflowStep versus durable FAILED mismatch). Both same-owner
+  repair and reopened-owner recovery must enter release-only and finish the exact
+  winner's release without invoking fresh-write admission. A control where the
+  FAILED write never committed must still be refused and retain the original
+  nonterminal obligation; this prevents bypassing admission for new effects.
+* Fault release again after winner adoption: retained repair contains the winner,
+  release-only phase and no stale persist options. Clear the finite fault and
+  drive the existing wake to completion, preserving other operations' resources.
+
+## Remaining direct persistence migrations
+
+1. persistProjectedStepTransition: mandatory repository record; no returnDisposition
+   option, no Boolean success assumption.
+2. claimPriorityDispatchTransition: inspect canonical result and requested state;
+   no truthiness and no local committed-key shortcut. Retained priority deferral
+   preserves its owner but cannot report durable progress.
+3. completeOperation/failOperation/completeGrowthPromoteOperation: one conversion
+   and terminal consequence path. Delete growth's local REINSERTED persisted:false
+   rewrite and local terminal-success/replay inference.
+4. bindReplaceCreateTargetReplicaId: accept only validated requested durable
+   update/replay, copy binding from result; refusal/uncertainty retains old binding.
+5. ensureReplaceRemovalIntentRecorded: adopt result.operation only after validated
+   requested intent content; undefined/malformed cannot authorize removal.
+6. bootstrap-topology release: source search finds no implementation of the
+   feature-detected compareAndSetPendingBootstrapTopologyRelease method. Remove
+   that phantom alternative and the released:true alternate result. Use the
+   existing expectedWorkflowStep+expectedStepsHistory conditional repository
+   update and validate its exact outcome. Preserve the existing separate public
+   hold-release view after that boundary.
+7. runTerminalTransitionRepairAttempt and facade: consume/forward mandatory
+   results, preserving repair and exact winning operation as above.
+
+Delete returnDisposition only for persistOperationUpdate and its caller/fixture
+contract. persistNewOperation has a different existing insert API and is not
+silently migrated by a global search-and-replace.
+
+## One coherent integration unit
+
+Work in this order inside one isolated unlanded candidate; no intermediate commit
+is shared as an executable compatibility state:
+
+1. Admit the preserved original managed red and its successful controls through
+   the reviewed red-only adapter. Seal via existing Solver only when its probe is
+   measuring. The original failure remains bound to source 58a2080337b56b4e5f97bcb54da59f57b94e6611.
+2. Add owner contract builders/validators and mandatory producer branches, then
+   migrate atomic and direct persistence callers in the same working unit.
+3. Finish retained-error/mirror handling and terminal release/repair paths.
+4. Migrate named progress APIs, Boolean command predicates and all terminal failure
+   classifications; remove old alternate helpers/exports. Update all enumerated
+   fixtures with owner builders, retaining explicit malformed negative values.
+5. Extend the real SQLite test to every allowed disposition, before/after-write
+   loss, exact terminal competition/failure, wrong identity/binding and interrupted
+   release. Keep same-owner retry and reopened-owner proof. Add a nonterminal
+   replay positive (valid shape, no new commit/progress, no release).
+6. Run focused controls through managed labs. Reintroduce the false-only adapter
+   in an isolated mutant and require the original malformed assertions to fail;
+   independently restore the weak release helper and require retention failure.
+   A mutation import/setup failure is non-measuring.
+7. Run the finite affected interaction suite plus necessary static/metadata checks
+   on pinned content. Independent review attacks actual production binding,
+   allowed result combinations, remaining consumers and original proof artifacts.
+8. Integrate the complete migration only after review and applicable gates. Item
+   09 composed physical formation remains a separate acceptance obligation.
+
+This plan does not claim closure from the first witness. Release interruption,
+every producer disposition, failure adoption, dynamic fixture census and all
+consumer propagation remain explicitly required. A new discovered interaction
+is assessed against this semantic boundary before expanding scope; the existing
+single writer and reviewer remain responsible.
+
+## Current evidence and continuation
+
+The original focused run executed at source
+`58a2080337b56b4e5f97bcb54da59f57b94e6611`, managed request
+`3883b67b-2d12-459c-a08e-d8a5f64b4ebe`, with the selected witness on `tv-dator`.
+The independent original-output audit reports 11 parent tests and 129 leaf
+assertions (96 pass, 33 fail): all eight malformed reply cases are red; ordinary
+transition/release, thrown-reply retry and reopened-owner reservation controls
+pass. The runner counts 140 assertions including the 11 parent assertions.
+These are original local SQLite composition results, not physical fleet
+acceptance or full outcome-contract coverage.
+
+Original status, artifact inventory/manifest, placement selection, result ledger,
+raw TAP and stderr are retained under
+`/tmp/lagrange-takeover-20261120/red-originals/`. The integration owner must retain
+these through the repository's existing evidence custody before final acceptance.
+The original test blob is
+`6339350d3c4e4c2658f5ecf1215b073c1bc2c7a287a98a5801780c57cd9ac3ad`.
+Do not rewrite that source or its original evidence to match the new design.
+
+The initial [admission adapter](../../../scripts/quest-evidence/strict-operation-outcomes.js)
+is deliberately red-only: it validates pinned original bytes, request/source/host,
+one selected file, no retry, complete TAP plans, named contract failures and the
+three positive controls. It writes only the existing `test-receipt/1` failure
+projection. It cannot admit a green run, synthesize execution sections, certify
+the other five obligations or substitute an absent receipt for a measuring red.
+The original preflight records Node version and dependency-lock identity, but
+native binary and SQLite build hashes were not captured. The controller status
+reports `source_execution_started:false`; the child placement's source marker,
+selection, ledger and original TAP establish execution. Keep that evidence ceiling
+explicit. Full passing admission later requires original complete-run evidence
+of the required source/runtime/substrate kind, using the existing execution-report
+validator where that report is actually produced; do not invent missing fields.
+
+The Quest's six required receipt IDs remain unchanged:
+`strict-persistence-positive-and-malformed-negative`,
+`terminal-dispositions-and-failure-meaning`,
+`reconstruction-and-interrupted-release`, `permissive-path-negative-controls`,
+`classified-consumer-closure`, and `independent-verification`. All six must be
+admitted for closure. The initial red does not satisfy any complete obligation.
+
+The original witness currently counts a second persistOperationUpdate call on
+same-owner retry. Prospectively, the implementation witness will require fresh
+authoritative repository consultation, exact replay/adoption and unchanged
+durable row/history, allowing that proof to avoid a redundant UPDATE. Keep the
+original witness unchanged until the runtime migration begins. This explicit
+refinement preserves its original safety/red meaning while correcting its
+over-specific recovery observation.
+
+Next action: integration owner completes independent adapter review, executes
+the adapter against retained originals and seals only on admitted measuring red;
+then records the exact reviewed producer/consumer/fixture migration assignment.
+No production implementation is authorized by this document alone. Parallel
+proof uses existing managed placement and actual recorded run identities.
+Required repair, composition and three-host formation claims remain separate.

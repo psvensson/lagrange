@@ -1,7 +1,7 @@
 {
   "schema": "solve-quest/2",
   "id": "strict-operation-outcomes",
-  "statement": "Through the production ReplicaOperationRepository and OperationWorkflowOwner construction, only recognized and internally consistent owner results for the exact operation establish progress or terminal settlement. Competing durable failure remains failure. Malformed, unavailable, refused and unresolved reinsertion answers retain existing recovery and resource obligations. Migrate the finite producer/consumer/fixture census in solve/epics/operation-integrity-and-reliable-formation/strict-operation-outcomes.md together, removing weak alternate result shapes without breaking valid nonterminal updates and replays. Same-owner retries must re-enter persistence after malformed or thrown answers; fresh-owner reconstruction must recover the exact durable winner and its interrupted release.",
+  "statement": "Through the production ReplicaOperationRepository and OperationWorkflowOwner construction, only recognized and internally consistent owner results for the exact operation establish progress or terminal settlement. Competing durable failure remains failure. Malformed, unavailable, refused and unresolved reinsertion answers retain existing recovery and resource obligations. Migrate the finite producer/consumer/fixture census in solve/epics/operation-integrity-and-reliable-formation/strict-operation-outcomes.md together, removing weak alternate result shapes without breaking valid nonterminal updates and replays. Same-owner retries must reconsult authoritative repository state after malformed or thrown answers; proved replay or adoption need not issue another write; fresh-owner reconstruction must recover the exact durable winner and its interrupted release.",
   "epic": "operation-integrity-and-reliable-formation",
   "doneWhen": {
     "probe": "test-receipt",
@@ -34,5 +34,6 @@
       "id": "bounded-interaction",
       "statement": "Initial writable scope is this successor record/log, test/rebalancer/strict-operation-outcomes.test.js, and a minimal execution-artifact-consuming scripts/quest-evidence/strict-operation-outcomes.js after original run shape is known. Runtime implementation requires the measured red and reviewed migration assignment. Item 03 underlying admission lifetime, item 04 completed-growth projection authority, and physical formation/release acceptance remain outside this unit's initial witness scope."
     }
-  ]
+  ],
+  "sealedAt": "58a2080337b56b4e5f97bcb54da59f57b94e6611"
 }

@@ -213,13 +213,36 @@ diagnostics, retries and user backup/restore/PITR are AGPL product obligations.
 
 **Next action:** the explanatory adoption passed independent review and its
 documentation checks; this does not close all of item 01 or the programme.
-Prepare the independently reviewed [strict outcome interaction](operation-integrity-and-reliable-formation/strict-operation-outcomes.md)
-as 02's successor Quest and real SQLite counterexample. In parallel, prepare
-07's [production-owner false-certification witness](operation-integrity-and-reliable-formation/support-envelope-evidence.md); neither witness author may
-change the runtime contract before its genuine red and the required seal.
-Root owns proof placement and integration; `outcome_census` owns the outcome
-witness, `evidence_census` the support-envelope witness, and `lifetime_census`
-the original physical-log attribution. The [lifetime proposal](operation-integrity-and-reliable-formation/admission-release-lifetimes.md)
+The initial witnesses and generated metadata are pinned at
+`58a2080337b56b4e5f97bcb54da59f57b94e6611`. Managed request
+`3883b67b-2d12-459c-a08e-d8a5f64b4ebe`
+([lab issue 5482](https://github.com/psvensson/lagrange-lab/issues/5482)) was
+completed with exit 1 and execution scope closed after 50.556 seconds. Both
+physical shards reached behavioral red: strict outcomes on `tv-dator` (eight
+malformed-result cases; ordinary transition, thrown-reply retry and reopened
+SQLite controls pass), support evidence on `adam-laptop` (five false-certification
+negatives fail; policy control passes). Independent review admits the outcome
+run as a red baseline only. Original native binary/SQLite build identities are
+absent; original discovery Node/version/boot observations do not establish exact
+test-process identity or green/composition acceptance. Eight original artifacts
+were reopened and matched their controller hashes; the
+[retained archive](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz)
+also preserves request, discovery and collection observations. The strict outcome Quest sealed at `58a208033` with all six obligations
+outstanding. Its first obligation has a measured failing baseline. The other
+five await proof. The assigned writer now migrates the repository, workflow
+consumers and affected fixtures under the reviewed
+[strict outcome design](operation-integrity-and-reliable-formation/strict-operation-outcomes.md).
+Root owns evidence admission and integration. The operator's immediate objective
+is a working base system, a successful smoke, then the missing Lagrange GCP
+measurement against the existing comparison results. Verify the clean composed
+candidate, resolve its base-system failures, and pass the existing physical
+formation gate before the comparative smoke and measurement. Use the comparison
+owner's Scenario A runner, original observations and declared profile. Check
+reference workload, topology and artifact applicability before reporting a
+comparison. Backup, restore and PITR follow the measured base system under their
+existing milestones.
+
+The [lifetime proposal](operation-integrity-and-reliable-formation/admission-release-lifetimes.md)
 preserves the source census and prior contracts; the [adoption review](operation-integrity-and-reliable-formation/adoption-review-20261120.md)
 records independent findings and original-evidence custody. Then serialize the affected lifetime/placement/TX/SQL
 repairs and their composition. Freeze supported limits before acceptance;
