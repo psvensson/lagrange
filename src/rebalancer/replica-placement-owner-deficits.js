@@ -175,6 +175,7 @@ function classifyServiceRow(row, promotedVoterReplicaIds = null) {
     isLearner,
     caughtUp,
     failed: status === ReplicaStatus.FAILED || status === SERVICE_STATUS.STOPPED,
+    operationalVoter: activeVoter,
     ...(!isLearner && !isVoterRole(role) ? {unresolvedRole: true} : {}),
     isLeader: activeVoter && role === RAFT_ROLE.LEADER,
   };
@@ -194,7 +195,7 @@ function buildPartitionReplicaRows(
   }
   if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {
     const leaderRow = filtered.find((r) =>
-      !r.failed && !r.isLearner && !r.unresolvedRole && r.nodeId === leaderNodeId);
+      r.operationalVoter === true && r.nodeId === leaderNodeId);
     if (leaderRow) leaderRow.isLeader = true;
   }
   return filtered;
@@ -402,7 +403,8 @@ function underVoterTargetDeficit(context, requiredHosts) {
 /**
  * The one deficit of a partition and its move, or why it waits.
  * @param {Object} input - {partitionId, replicationFactor, replicaRows:
- *   [{replicaId, nodeId, failed, isLeader, isLearner?, role?, caughtUp?}], eligibility}.
+ *   [{replicaId, nodeId, failed, isLeader, operationalVoter,
+ *     isLearner?, role?, caughtUp?}], eligibility}.
  * @return {Object} Frozen {state: NONE} | {state: CANDIDATE, candidate} |
  *   {state: WAITING, waiting}.
  */
@@ -413,7 +415,7 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   const live = retainedReplicasOf(voterRows, eligibility);
   const liveLearners = retainedReplicasOf(learnerRows, eligibility);
   const readyVoters = live.filter((replica) =>
-    !replica.unresolvedRole && isOnEligibleHost(replica, eligibility));
+    replica.operationalVoter === true && isOnEligibleHost(replica, eligibility));
   const liveReplicas = [...live, ...liveLearners];
   const distinctHostCount = hostCountsOf(live, eligibility).size;
   const context = {replicaRows: voterRows, live, liveLearners, liveReplicas, readyVoters,

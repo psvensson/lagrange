@@ -127,7 +127,8 @@ const FIVE_ON_FOUR = Object.freeze([nodeRow('n1', 'h1'), nodeRow('n2', 'h2'),
 
 function replicas(partitionId, placements) {
   return placements.map(([nodeId, isLeader = false, failed = false], index) =>
-    ({replicaId: `${partitionId}-r${index + 1}`, nodeId, isLeader, failed}));
+    ({replicaId: `${partitionId}-r${index + 1}`, nodeId, isLeader, failed,
+      operationalVoter: !failed}));
 }
 
 function deficit(partitionId, placements, nodeRows = FIVE_ON_FOUR, replicationFactor = 3) {
@@ -230,6 +231,39 @@ test('per-target eligibility: a lapsed READY lease or an undeclared host only dr
   assert.deepEqual(failed.candidate.move, {type: OperationType.REMOVE, targetNodeId: 'n2',
     replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null});
 });
+
+test('inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies',
+  () => {
+    const partitionId = 'config-p1';
+    const rows = [
+      ['n1', SERVICE_STATUS.ACTIVE, RAFT_ROLE.LEADER],
+      ['n2', 'syncing', RAFT_ROLE.FOLLOWER],
+      ['n3', SERVICE_STATUS.ACTIVE, RAFT_ROLE.FOLLOWER],
+      ['n4', 'failed', RAFT_ROLE.FOLLOWER],
+    ].map(([nodeId, status, role], index) => ({
+      [COLUMN.REPLICA_ID]: `${partitionId}-r${index + 1}`,
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: status,
+      [COLUMN.RAFT_ROLE]: role,
+    }));
+    const eligibility = buildPlacementNodeEligibility({nodeRows: FIVE_ON_FOUR, nowMs: NOW_MS});
+    function measured(serviceRows, leaderNodeId) {
+      return evaluatePartitionDeficit({partitionId, replicationFactor: 3, eligibility,
+        replicaRows: buildPartitionReplicaRows(serviceRows, leaderNodeId, false)});
+    }
+    const repair = measured(rows, 'n1');
+    assert.equal(repair.candidate.move.type, OperationType.REPLACE);
+    assert.equal(repair.candidate.move.sourceReplicaId, `${partitionId}-r4`);
+    assert.equal(repair.candidate.move.copySourceNodeId, 'n1');
+    const withoutLeader = rows.map((row) => ({...row, [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER}));
+    const waiting = measured(withoutLeader, 'n2');
+    assert.equal(waiting.state, PLACEMENT_DEFICIT_STATE.WAITING);
+    assert.equal(waiting.waiting.reason, PLACEMENT_WAITING_REASON.LEADER_UNKNOWN);
+    const unresolvedRole = withoutLeader.map((row) => row[COLUMN.NODE_ID] === 'n2' ?
+      {...row, [COLUMN.RAFT_ROLE]: null} : row).slice(0, 3);
+    assert.equal(measured(unresolvedRole, 'n2').waiting.reason,
+      PLACEMENT_WAITING_REASON.INCUMBENT_ROLE_UNAVAILABLE);
+  });
 
 test('UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no ' +
   'eligible target waits NO_ELIGIBLE_TARGET', () => {
@@ -1152,7 +1186,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
   const atH1 = evaluatePartitionDeficit({
     partitionId: 'config-p1',
     replicationFactor: 3,
-    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false}],
+    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+      operationalVoter: true}],
     eligibility: buildPlacementNodeEligibility({nodeRows: oneHost, nowMs: NOW_MS}),
   });
   assert.equal(atH1.state, PLACEMENT_DEFICIT_STATE.NONE);
@@ -1161,7 +1196,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
   const atH2NoLearner = evaluatePartitionDeficit({
     partitionId: 'config-p1',
     replicationFactor: 3,
-    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false}],
+    replicaRows: [{replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+      operationalVoter: true}],
     eligibility: buildPlacementNodeEligibility({nodeRows: twoHosts, nowMs: NOW_MS}),
   });
   assert.equal(atH2NoLearner.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
@@ -1174,7 +1210,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
-      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+        operationalVoter: true},
       {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
     ],
     eligibility: buildPlacementNodeEligibility({nodeRows: twoHosts, nowMs: NOW_MS}),
@@ -1186,7 +1223,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
-      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+        operationalVoter: true},
       {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
     ],
     eligibility: buildPlacementNodeEligibility({nodeRows: threeHosts, nowMs: NOW_MS}),
@@ -1201,7 +1239,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
-      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+        operationalVoter: true},
       {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
       {replicaId: 'config-p1-r3', nodeId: 'n3', isLearner: true, caughtUp: false, failed: false},
     ],
@@ -1214,7 +1253,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
-      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+        operationalVoter: true},
       {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
       {replicaId: 'config-p1-r3', nodeId: 'n3', isLearner: true, caughtUp: true, failed: false},
     ],
@@ -1241,7 +1281,8 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
-      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false},
+      {replicaId: 'config-p1-r1', nodeId: 'n1', isLeader: true, failed: false,
+        operationalVoter: true},
       {replicaId: 'config-p1-r2', nodeId: 'n2', isLearner: true, caughtUp: true, failed: false},
     ],
     eligibility: buildPlacementNodeEligibility({nodeRows: expiredN2, nowMs: NOW_MS}),
