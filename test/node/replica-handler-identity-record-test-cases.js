@@ -457,8 +457,8 @@ export async function registerReplicaHandlerIdentityRecordTests({
           'the successor generation is not overwritten by failure repair');
         t.equal(run.outcomes.filter((outcome) =>
           outcome.type === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED).length,
-        1,
-        'ordinary failure settlement is emitted independently');
+        0,
+        'a foreign lifecycle incarnation cannot authorize a terminal failure');
       } finally {
         await run.finish();
       }

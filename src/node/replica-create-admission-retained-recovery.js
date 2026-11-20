@@ -257,7 +257,9 @@ async function recoverRetainedCreateAdmissionRow(
       );
       return;
     }
-    await handler.handleCreateReplica(buildRequest(row, reconciled.evidence));
+    if (!await handler.resumeRetainedReplicaCreateActivation(reconciled.evidence)) {
+      await handler.handleCreateReplica(buildRequest(row, reconciled.evidence));
+    }
   });
 }
 

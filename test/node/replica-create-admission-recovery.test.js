@@ -5,7 +5,11 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
+import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {createHandlerFixture, operationRow, routedCreateRequest,
   sqlOperationsAuthority, targetLifecycle, waitForCreateCompletion, waitForPhysicalStart,
@@ -14,7 +18,8 @@ import {createHandlerFixture, operationRow, routedCreateRequest,
 const CREATE_AUTHORITY_BUDGET_MS = 100;
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 
-async function withHeldActivationRead(t, run, {refuseRead = false} = {}) {
+async function withHeldActivationRead(t, run, {refuseRead = false,
+  loseReleaseReply = false, supersedeBeforeRead = false} = {}) {
   const row = operationRow();
   const clock = new VirtualTimeSource({startMs: 1000});
   const outcomes = [];
@@ -27,6 +32,21 @@ async function withHeldActivationRead(t, run, {refuseRead = false} = {}) {
   handler.syncTimeoutMs = CREATE_AUTHORITY_BUDGET_MS;
   const entered = Promise.withResolvers();
   const held = Promise.withResolvers();
+  const releaseRequests = [];
+  if (loseReleaseReply) {
+    handler.messageRouter = {async deliver(_address, payload) {
+      assert.equal(payload.action, PARTICIPANT_RELEASE_ACTION.RELEASE);
+      releaseRequests.push(payload);
+      if (releaseRequests.length === 1) {
+        entered.resolve();
+        await held.promise;
+        return buildDeliveryEnvelope({acknowledged: false, error: 'release reply lost'});
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER},
+      });
+    }};
+  }
   let armed = false;
   const persist = handler.persistReplicaStatusWithRetry.bind(handler);
   handler.persistReplicaStatusWithRetry = async (replicaId, status, options) => {
@@ -36,10 +56,15 @@ async function withHeldActivationRead(t, run, {refuseRead = false} = {}) {
   };
   const gateway = authority.gateway;
   const read = gateway.readAuthoritativeRows.bind(gateway);
+  const changeOperation = (data) => gateway.updateSystemTableRow(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, {operation_id: row.operation_id}, data);
   gateway.readAuthoritativeRows = async (table, sql, params, options) => {
-    if (armed && table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+    if (armed && !loseReleaseReply && table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
         sql.includes('WHERE operation_id = ?') && params[0] === row.operation_id) {
       armed = false;
+      if (supersedeBeforeRead) {
+        await changeOperation({create_admission_state: CREATE_ADMISSION_STATE.CLOSED});
+      }
       entered.resolve();
       await held.promise;
       if (refuseRead) return {success: false, error: 'held authority became unavailable'};
@@ -61,10 +86,9 @@ async function withHeldActivationRead(t, run, {refuseRead = false} = {}) {
     ]);
     assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
     await run({...fixture, row, clock, outcomes, worker, release: held.resolve,
+      changeOperation, releaseRequests,
       currentStatus: () => fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
-      changeOperation: (data) => gateway.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, {operation_id: row.operation_id}, data,
-      )});
+    });
   } finally {
     held.resolve();
     await worker;
@@ -120,10 +144,49 @@ it('matching final CREATE authority can publish before the original deadline',
     assert.equal(f.physicalShutdowns(), 0);
   }));
 
+it('lost fresh CREATE release reply retains and resumes the exact materialized work',
+  async (t) => withHeldActivationRead(t, async (f) => {
+    const original = f.handler.getTrackedService(f.row.replica_id);
+    f.clock.advance(CREATE_AUTHORITY_BUDGET_MS / 2);
+    f.release();
+    await f.worker;
+    assert.equal(f.physicalShutdowns(), 0, 'the actual release client uncertainty retains its target');
+    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+    assert.equal(f.releaseRequests.length, 1);
+    f.handler.startReplicaCreateAdmissionRecovery();
+    await f.handler.replicaCreateAdmissionRecoveryTask;
+    assert.equal(f.releaseRequests.length, 2);
+    assert.deepEqual(f.releaseRequests[1].createAdmissionIdentity,
+      f.releaseRequests[0].createAdmissionIdentity);
+    assert.equal(f.releaseRequests[1].deadlineAtMs, f.releaseRequests[0].deadlineAtMs);
+    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+    assert.equal(f.physicalStarts(), 1);
+    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+  }, {loseReleaseReply: true}));
+
+for (const beforeRead of [true, false]) {
+  it(`supersession ${beforeRead ? 'before' : 'during'} final CREATE authority retires the old work`,
+    async (t) => withHeldActivationRead(t, async (f) => {
+      if (!beforeRead) {
+        await f.changeOperation({create_admission_owner_incarnation: 103});
+      }
+      f.release();
+      await f.worker;
+      assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+      assert.equal(f.physicalShutdowns(), 1);
+      assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+      assert.equal(f.handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+    }, {supersedeBeforeRead: beforeRead}));
+}
+
 for (const disposition of [
   {name: 'terminal success', status: ReplicaStatus.ACTIVE, step: WORKFLOW_STEP.ACTIVE,
     allowed: true},
   {name: 'terminal failure', status: ReplicaStatus.FAILED, step: WORKFLOW_STEP.FAILED,
+    allowed: false},
+  {name: 'retired target', status: ReplicaStatus.REMOVED, step: WORKFLOW_STEP.REMOVED,
     allowed: false},
   {name: 'conflicting terminal effect', status: ReplicaStatus.ACTIVE, step: WORKFLOW_STEP.FAILED,
     allowed: false},

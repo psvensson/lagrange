@@ -3,6 +3,9 @@ import {
   isReplicaCreateInstallAuthority,
   replicaCreateInstallAuthority,
 } from './replica-create-admission-evidence.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {isTerminalReplicaOperationRecord, OperationType, ReplicaStatus} from
+  '../rebalancer/replica-status.js';
 
 const SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR =
   'snapshot install mutation must answer a boolean synchronously';
@@ -125,8 +128,26 @@ function rowMatchesActivePhysicalWorker(row, evidence) {
     row?.create_admission_attempt_token === evidence.attemptToken &&
     nullableSafeInteger(row?.create_admission_attempt_seq) ===
       evidence.attemptSeq &&
-    row?.completed_at == null &&
-    row?.create_admission_state !== CLOSED_ADMISSION_STATE;
+    row?.create_admission_state !== CLOSED_ADMISSION_STATE &&
+    rowAllowsExistingPhysicalCreate(row);
+}
+
+function rowAllowsExistingPhysicalCreate(row) {
+  if (row.status === ReplicaStatus.FAILED || row.workflow_step === WORKFLOW_STEP.FAILED) {
+    return false;
+  }
+  if (row.type === OperationType.ADD &&
+      (row.status === ReplicaStatus.REMOVED || row.workflow_step === WORKFLOW_STEP.REMOVED)) {
+    return false;
+  }
+  if (row.completed_at == null && !isTerminalReplicaOperationRecord(row)) return true;
+  // Existing materialized work retains its own lifetime after ordinary
+  // success. The ordinary terminal tuple must agree at both endpoints.
+  if (row.type === OperationType.ADD) {
+    return row.status === ReplicaStatus.ACTIVE && row.workflow_step === WORKFLOW_STEP.ACTIVE;
+  }
+  return row.type === OperationType.REPLACE &&
+    row.status === ReplicaStatus.REMOVED && row.workflow_step === WORKFLOW_STEP.REMOVED;
 }
 
 function ownsReplicaCreatePhysicalWorker(owner, claim, expectedEvidence = null) {

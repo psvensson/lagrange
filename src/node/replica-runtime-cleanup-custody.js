@@ -158,6 +158,9 @@ function shutdownReplicaHandler(handler, options) {
         exactFailureIterable(errors), RUNTIME_SHUTDOWN_FAILED);
     }
     handler.creationProgressByReplica.clear();
+    for (const operation of handler.inProgressOperations.values()) {
+      operation.retainedActivation?.release();
+    }
     handler.inProgressOperations.clear();
     handler.localServices.clear();
     handler.localReplicas.clear();
