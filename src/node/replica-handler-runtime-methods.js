@@ -168,7 +168,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           `Replica storage cleanup lacks authority for ${replicaId}`,
         );
       }
-      const requireAuthority = () => requireStorageCleanupAuthority(this, replicaId, storageAuthority);
+      const requireAuthority = () =>
+        requireStorageCleanupAuthority(this, replicaId, storageAuthority);
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.CLEANUP_RESOURCES, {
         replicaId,
