@@ -897,3 +897,49 @@ test('strict outcomes priority claim consumes the exact confirmed operation', as
   t.same(claimed, durable, 'lease, history and semantic fields come from the confirmed row');
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
 });
+
+
+test('strict outcomes unreadable terminal preimage cannot earn recovered credit from a later row',
+  async (t) => {
+    const fixture = createFixture(t).current;
+    const operation = await seedOperation(t, fixture, 'strict-unreadable-preimage');
+    const terminal = await persistTerminalWitness(fixture, operation);
+    const repository = fixture.coordinator.repository;
+    const read = fixture.gateway.executeQuery.bind(fixture.gateway);
+    const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+    let unavailable = true;
+    let mutationAttempts = 0;
+    let refusedReads = 0;
+    fixture.gateway.executeQuery = async (sql, params, options) => {
+      if (unavailable && sql.includes('SELECT') && sql.includes('replica_operations')) {
+        refusedReads++;
+        return {success: false, error: 'injected preimage authority unavailable'};
+      }
+      return read(sql, params, options);
+    };
+    fixture.gateway.submitMutation = async (mutation, options) => {
+      const result = await submit(mutation, options);
+      if (mutation.operation !== 'update' || !mutation.data?.workflow_step) return result;
+      mutationAttempts++;
+      t.equal(result.partitionResult.affectedRows, 0, 'the existing terminal cannot be rewritten');
+      unavailable = false;
+      const participant = {error: 'query_admission_deferred',
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', retryAfterMs: 250,
+        deferRetry: true, failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS};
+      return {success: false, ...participant,
+        firstFailedParticipant: participant, participantFailures: [participant]};
+    };
+    const attempt = await observeAttempt(() => repository.persistOperationUpdate(
+      structuredClone(terminal.operation), {terminalTransition: true}));
+    t.ok(refusedReads > 0, 'the real read transport refused preimage authority');
+    t.equal(attempt.error?.deferRetry, true, 'unproved preimage remains explicit uncertainty');
+    t.equal(attempt.outcome, null, 'later visibility cannot manufacture recovered progress');
+    t.equal(mutationAttempts, 0, 'no mutation is submitted without the required preimage');
+    t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+    unavailable = false;
+    const replay = await repository.persistOperationUpdate(structuredClone(terminal.operation),
+      {terminalTransition: true});
+    t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+    t.equal(buildOperationTransitionOutcome(replay).committed, false);
+    t.same(replay.operation, terminal.operation, 'fresh authority proves the original exact winner');
+  });

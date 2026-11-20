@@ -1,3 +1,5 @@
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway.js';
 import {isDeepStrictEqual} from 'node:util';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
@@ -178,10 +180,30 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         terminalTransition,
       );
       if (terminalTransition) {
-        const terminalPreimage =
-          await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
-        if (terminalPreimage && this.isAuthoritativeOperationTerminal(terminalPreimage)) {
+        // Recovery credit requires a proved preimage. Unavailable authority
+        // cannot establish that a later matching terminal was newly applied.
+        const preimage = await this.queryAuthoritativeOperationVisibilityObservation(
+          operation.operationId, {
+            authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+            requireAbsenceConfirmation: true,
+            expectedOperation: operation,
+            timeoutBudget: options.timeoutBudget,
+          });
+        if (preimage.deferredOutcome) {
+          const error = new Error(preimage.deferredOutcome.reasonCode);
+          error.code = preimage.deferredOutcome.reasonCode;
+          error.deferredOutcome = preimage.deferredOutcome;
+          error.deferRetry = true;
+          error.retryAfterMs = preimage.deferredOutcome.retryAfterMs;
+          throw error;
+        }
+        const terminalPreimage = preimage.operation;
+        if (terminalPreimage) {
+          assertOperationUpdateRecord(terminalPreimage);
           assertOperationUpdateSubject(operation, terminalPreimage);
+        }
+        if (terminalPreimage && this.isAuthoritativeOperationTerminal(terminalPreimage)) {
           const replay = this.isReplicaOperationUpdateSatisfied(operation, terminalPreimage);
           // A known identical terminal preimage is replay before mutation. A
           // lost reply to its inevitable zero-row CAS must never reclassify it
