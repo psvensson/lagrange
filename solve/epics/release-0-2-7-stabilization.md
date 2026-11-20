@@ -51,14 +51,34 @@ authorizes:
   - solve/changes/global-owner-debt-inventory/inventory.json
 ---
 
-# Stable-core corrections for 0.3.1 and completion for 0.3.2
+# Stable-core corrections and inherited acceptance
 
-Preserve this epic's identity, Q01-Q18 owners, seals and evidence. Approved
-allocation retires future 0.2.9: **0.3.1** selected installation/publication
-corrections; **0.3.2** remaining stable-core/composed acceptance. Historical
-roadmap identity is unchanged.
+Preserve this epic's identity, Q01-Q18 owners, seals and evidence. Current
+remaining-work allocation follows the feature map: 0.4.1 bounded correctness
+and claim repairs, 0.5 pilot qualification and service/comparison acceptance,
+and 1.0 stronger production recovery/support. Historical numeric row identities
+and the earlier 0.3.1/0.3.2 allocation do not move acceptance or prove completion.
 
 ## Current coordination summary
+
+Checked 20 November 2026 at candidate
+`6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, remote main
+`5edfcadb508f9a82783159026364d3005836cc5c`, rule-set revision 5.
+[Operation integrity](operation-integrity-and-reliable-formation.md) owns current
+composition and the eighteen programme references. Q01-Q18 keep their unmet
+predicates and original evidence; no historical package is reopened or certified
+by this adoption. Q10/Q11 consume item 11's retained-state inventory, safe
+reclamation, bounded physical storage/replay and resumption after finite blockers.
+Q12-Q14 consume item 07's original execution admission and item 12's public
+retry/retirement contract. Q17 retains the complete composed public journey.
+
+Next: admit component evidence against the current composition, close current
+outcome/lifetime/SQL/transaction defects, then run required formation/drain/smoke
+gates. Current requirements below identify later retention, snapshot and recovery
+owners; future qualification cannot defer safety needed by an earlier claim.
+No new execution or release acceptance accompanies this documentation update.
+
+## Retained coordination summary (30 October 2026)
 
 Checked **2026-10-30 08:02 UTC** on main
 `a43ce6a9fe3c2ffd17fcb084e596a0c709ba88c9`, rule-set 4; adoption uses revision 5

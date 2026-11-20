@@ -9,16 +9,16 @@ This is the contract behind one distributed operation invoked directly over
 | --- | --- |
 | Where does `run()` execute? | On the node hosting the selected partition's leader replica |
 | Do raw selected rows cross shard hosts? | No; the row batch is built from the receiver's local replica |
-| What crosses the reduce boundary? | Bounded finite numeric partials |
+| What crosses the reduce boundary? | Bounded canonical finite-JSON partials under the declared schema |
 | Are partial results returned after a shard failure? | No; one failed shard fails the invocation |
 | Is result publication exactly once? | One atomic visible result per complete invocation |
 | Is function execution exactly once? | No; retries or ambiguous outcomes can re-execute non-coordinated effects |
 | Is there one cross-partition snapshot? | No; shards read independently |
 | Are writes allowed in a call operation? | The current call path does not write user tables |
-| Can the caller cancel? | No; the deadline is the caller-side bound |
+| Can the caller cancel? | Request invocations support cancellation and waiter detachment; cancellation does not establish rollback of committed effects |
 | Can a retired partition target serve the call? | Stale topology is fenced and returned as a typed failure; this is not a global read-freshness guarantee |
-| Can an HTTP handler call several operations? | One nested distributed call per request today |
-| Can one component contain several operations? | The current pre-v2 code-first compiler allows one distributed operation |
+| Can an HTTP handler call several operations? | Bounded sequential calls, one outstanding child at a time and no grandchildren |
+| Can one component contain several operations? | `service-cell-v2` admits zero, one or multiple declared operations |
 
 Here, a **shard** is one selected partition's task. A **slot** is that shard's
 expected contribution to this invocation. A **Cell** is a running component
@@ -35,17 +35,17 @@ rules to `run()`. The receiving call host must read its input locally.
 request or CALL BINDING
   -> authenticate and authorize
   -> resolve immutable Binding and component version
-  -> parse fixed single-table selector
+  -> parse declared single-table selector and normalize typed parameters
   -> resolve selected partitions without fetching rows
   -> for each shard, through a bounded concurrent pool:
        resolve partition-host Cell
        activate one if needed
        re-check topology and deadline on the host
-       read a bounded local batch
-       invoke run(rows, arguments)
-       collect emit(key, numericPartial)
+       read a bounded local batch or advance an explicit paged accumulator
+       invoke run(rows, arguments), or the declared accumulator steps
+       collect emit(groupKey, boundedPartial)
        publish the complete shard slot under a lease
-  -> require every expected slot, fresh and disjoint
+  -> require every expected slot, fresh and complete
   -> invoke reduce(partials, arguments) on the reduce-lease holder
   -> publish one atomic result snapshot
   -> return the reduced JSON
@@ -67,10 +67,20 @@ expired request is refused without running guest code.
 Waiting for a missing Cell is bounded by the earlier of the caller deadline and
 a 15-second activation window.
 
-There is no caller-initiated cancellation. Closing the HTTP or PostgreSQL-wire
-connection does not stop already dispatched work. Once the deadline or a shard
-failure prevents progress, the coordinator stops admitting new shards; started
-work settles and incomplete results remain invisible.
+The request invocation owner accepts cancellation and separates each caller's
+wait from shared execution. Aborting one waiter detaches it; other waiters keep
+the invocation alive. The last waiter leaving, an explicit invocation cancel,
+or shutdown signals cancellation through that owner. This does not prove that
+all remotely dispatched work stopped or that an already recorded transaction
+decision was rolled back. A dropped connection still leaves the caller without
+a terminal answer.
+
+Once the deadline or a shard failure prevents progress, the shard dispatcher
+stops admitting new shards; started work must settle and incomplete results
+remain invisible. The [pilot operations gate](operations-readiness.md#pilot-operations-gate)
+retains qualification of the selected public ingress, cancellation and complete
+resource release on the actual deployment. These source mechanisms do not
+establish that composed gate.
 
 ## Retries
 
@@ -106,8 +116,8 @@ The invocation fails when a slot is:
 - expired or stale;
 - larger than its limit;
 - malformed;
-- non-numeric;
-- duplicated by another shard key; or
+- outside its declared finite-JSON schema;
+- a conflicting duplicate of an existing delivery identity; or
 - produced against stale topology.
 
 A failed shard is not dropped from the answer.
@@ -124,10 +134,12 @@ re-executing the component.
 For an HTTP request, a repeated outer request with the same `Idempotency-Key`
 returns the journaled outer response and does not re-run its nested call.
 
-Direct `CALL BINDING` does not currently accept a caller idempotency key. Two
-identical direct calls are two invocations. HTTP replay is also not a promise
-that repeating the same request body under a new key will reuse an old result.
-Keep invocation identity separate from equality of arguments.
+Direct `CALL BINDING` accepts `invocation_key`. The replay owner scopes it to
+tenant and principal, binds it to invocation intent and the pinned Binding
+generation, and refuses conflicting reuse. Retained terminal outcomes can be
+replayed; an orphaned or uncertain execution remains explicitly ambiguous.
+Unkeyed identical calls are separate invocations. A new key does not reuse an
+old result, and this call-specific key is not a general SQL mutation retry key.
 
 ## Result and side-effect semantics
 
@@ -152,14 +164,27 @@ The coordinator presents a deterministic merged partial list for the same
 complete set. Guest functions should nevertheless be deterministic pure
 functions of their explicit inputs.
 
-Partial keys must be shard-disjoint. A constant key emitted by several shards
-is a contract violation, not a sum operation. Namespace keys with a
-partition-local identity.
+Semantic group keys may repeat across shards. Delivery identity is separate:
+the reducer receives distinct contributions in deterministic order, rejects
+conflicting duplicate deliveries and does not silently sum repeated keys.
+The application's reducer defines how a group is combined.
+
+The codec admits bounded null, Boolean, finite numeric, string, array and plain
+record values. It enforces schema, depth, element and byte limits and rejects
+cyclic values and unsafe integer numbers. This is not an arbitrary JavaScript
+object or unbounded sketch format.
 
 ## Reads and transactions
 
-The selector is one literal single-table `SELECT` fixed in the operation
-declaration. A missing or invalid selector makes the operation non-invocable.
+The selector is one single-table `SELECT` fixed in the operation declaration.
+Typed positional parameters are normalized by the selector-parameter owner and
+bound for each invocation; callers cannot interpolate SQL text. A missing or
+invalid selector makes the operation non-invocable.
+
+An explicit paged operation folds bounded pages through its declared
+accumulator over a pinned shard read view, with page, row, byte, state and time
+limits. That view belongs to one shard and does not create a cluster snapshot
+or an unbounded client streaming cursor.
 
 Each shard reads its local partition independently. The invocation does not
 establish one global snapshot, so concurrent writes may occur between shard
@@ -259,7 +284,7 @@ rolling-upgrade contract.
 | Reduce lease | 30,000 ms |
 | Activation lease | 60,000 ms |
 | Coordination retention | 600,000 ms |
-| Nested distributed calls per HTTP request | 1 |
+| Nested distributed calls per HTTP request | 16 sequential calls, depth 1 |
 | Direct-call payload | 1 MiB |
 
 Binding budgets permit bounded CPU, wall time, memory, input, output, and
@@ -317,14 +342,15 @@ carries no error response at all and must be treated as uncertain.
 
 The public surface does not yet provide:
 
-- caller cancellation;
-- direct-call idempotency keys;
-- structured partial values;
-- streaming or paged shard input;
+- general SQL mutation idempotency keys or public outcome reconciliation;
+- unbounded streaming shard input;
 - concurrent invocations on one component instance;
-- deeper nested calls;
-- a parameterized per-call selector;
+- concurrent child calls or grandchildren;
+- arbitrary per-call selector SQL;
 - a global snapshot for one distributed call; or
 - a JavaScript client SDK for direct external calls.
 
-These are not implied by the mechanics above.
+Typed selector parameters, bounded structured partials, explicit paged
+accumulators and request cancellation are implemented mechanisms. Their full
+composed service qualification remains with the pilot owner; none supplies
+the missing guarantees above.

@@ -42,6 +42,39 @@ policy governs feature completion without widening every bounded repair.
 
 ## Current version allocation
 
+The feature map and the [current integration programme](../../epics/operation-integrity-and-reliable-formation.md)
+now govern remaining work: 0.4.1 bounded correctness/claim corrections, 0.5
+supported pilot retention/retry/recovery and full assigned public comparisons,
+and 1.0 stronger snapshot/backup/restore/PITR/support guarantees. Preserve the
+existing 0.6-0.9 predecessors of 1.0. This continuation leaves Q01-Q18 predicates,
+historical seals and receipts unchanged; it does not use a future release to
+defer a prerequisite of an earlier advertised capability.
+
+Items 11 and 12 require an inventory covering user leaders, followers that never
+lead, control partitions, message groups, CDC debt, transaction decisions and
+reservations, statement outcomes, retired identities, staging/checkpoint files
+and retained readers/pins. Each owner must name safe reclamation evidence and its
+position domain, count/byte/age and occupancy bounds, admission/backpressure,
+restart and diagnostics. Time-to-live alone cannot discharge an obligation.
+Prove physical reclamation over at least two cycles, recovery of every supported
+role, interrupted install/checkpoint, and resumption when a finite blocker clears.
+Public retry identity consumes the retirement contract before outcomes disappear.
+
+For later 1.0 work, the existing feature-map rows own the boundaries:
+`RM-1.0-consistent-snapshot-api` requires a bounded core specification for one
+coherent cluster cut including catalog/partition epochs and distributed decisions;
+`RM-1.0-user-recovery-mechanisms` requires a bounded core owner/spec for
+complete-manifest-last backup, fresh-deployment restore from retained artifacts,
+and transaction-consistent PITR with continuous verified archive history;
+`RM-1.0-support-contract` requires original physical evidence for a frozen
+workload/topology/resource/recovery envelope and usable operator procedures.
+These are AGPL mechanisms. A partition snapshot or independent SQLite snapshots
+do not grant cluster backup, and an internal backup fixture is not a supported
+user recovery product. Establish the missing bounded recovery specification
+before implementation; do not create competing format/retention authorities.
+
+### Historical 30 October allocation
+
 0.2.9 is retired as a future release. Its stable roadmap IDs and all historical
 seals remain. The following allocation assigns each remaining Q obligation;
 proved components are credited, not implemented again. A selected independently
@@ -63,11 +96,9 @@ or Queryable Core milestone passed.
 | Q17 | Correction candidate's selected evidence slice only | Full terminal composed stable-core/public-service certification |
 | Q18 | Simplify touched decisions and route remaining debt | Terminal accounting of touched obligations; broader convergence retains its own epic |
 
-The smaller correction release does not alter full terminal acceptance. Initial
-retention correctness stays in 0.3.2; it cannot be moved to 0.5 by relabeling the
-load as a pilot. Full qualified Scenario A comparison and service expansion stay
-0.4. Backup/PITR, enterprise features and production guarantees retain their
-edition/version homes.
+The historical smaller correction allocation did not alter full terminal
+acceptance. Remaining work uses the current allocation above; no prerequisite
+is discharged by renaming its load or milestone.
 
 ## J1 installed-consumer journey
 

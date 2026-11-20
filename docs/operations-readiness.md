@@ -113,7 +113,7 @@ Current routing limitations make key choice operationally important:
 - partition narrowing effectively expects a key column named `id`;
 - split boundaries and query routing use unified UTF-8 byte-order (`BINARY`) key comparison, while mixed-type key comparisons fail closed;
 - non-usable predicates scatter to all partitions; and
-- secondary indexes are not available through the public SQL surface.
+- partition-local secondary indexes do not narrow cross-partition routing.
 
 Before a pilot load, verify the primary-key shape, expected split points, write
 hot spots, and fan-out behavior with `EXPLAIN DISTRIBUTED` and telemetry.
@@ -135,6 +135,13 @@ rather than using replacement semantics.
 A lost reply or timed-out distributed `COMMIT` is not proof of abort. Until
 a caller-visible idempotency/reconciliation contract is proven on the public
 path, clients must treat an unknown outcome as unknown and avoid blind retries.
+The coordinator prepares participants, including a single participant, and
+records one durable decision before decision fanout. A recorded COMMIT remains
+owned for recovery if participants are unavailable or the caller's budget
+expires; incomplete participant settlement is not permission to roll it back.
+The TX1 transaction owner
+retains the real composition and restart proof; these mechanisms alone do not
+establish a measured recovery bound for the current deployment.
 See the owned [PostgreSQL compatibility contract](../architecture/postgres-wire.md)
 for the required refusal and verification boundary.
 
@@ -145,11 +152,18 @@ are stored in replicated internal tables; local artifact files are caches.
 
 The service runtime currently needs operators to understand these limits:
 
-- one distributed operation per pre-v2 code-first component;
-- one nested distributed call per HTTP request;
-- bounded shard input and partial output;
+- zero, one or multiple declared operations in `service-cell-v2` components;
+- bounded sequential nested calls within the original request budget;
+- typed selector parameters, bounded shard input or explicit paged accumulators,
+  and bounded canonical finite-JSON partial output;
 - one active invocation per component instance; and
-- no caller cancellation.
+- invocation-owned cancellation with separate waiter detachment. Detaching one
+  waiter does not cancel work still awaited by another, and cancellation cannot
+  revoke a recorded transaction decision.
+
+The [pilot operations gate](#pilot-operations-gate) must qualify
+the selected public journey's cancellation, failure and resource-release behavior
+on the actual topology; source implementation does not establish that gate.
 
 Capacity planning must include both storage and service CPU, memory, I/O, and
 failure headroom. Colocation does not make application CPU disappear.
@@ -222,10 +236,10 @@ The revision is a fence, and it fails closed:
   `ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED`, before any founder opens:
   the startup decision refuses it, and so does the original-allocation
   preparation.
-- A release transition or rollback through the management API is admitted only
-  for a version pair certified by a support envelope of this build's revision.
-  Without a configured envelope nothing is certified, and every in-place
-  transition and rollback is refused `OUTSIDE_SUPPORT_ENVELOPE`.
+- A release transition or rollback through the management API checks the
+  configured support envelope and this build's revision. Without an envelope,
+  in-place transitions and rollbacks are refused `OUTSIDE_SUPPORT_ENVELOPE`.
+  This policy check is not proof that the configured artifacts or drills ran.
 
 There is therefore no in-place upgrade, rolling or full-stop, across a cluster
 format revision, and no downgrade. A build older than the cluster's revision
@@ -241,8 +255,9 @@ re-founding.
    application-owned path (SQL export or the pilot dataset reload). There is
    no backup product to carry data across the boundary.
 2. Stop every node of the old cluster.
-3. Remove every node's data directory, the seed's included (on Kubernetes,
-   delete the release's PVCs). The new build never reopens them.
+3. Preserve the old data directories and volumes separately. Allocate empty
+   directories or new volumes for the new cluster; it must not reopen the old
+   revision's storage.
 4. Start the new build's seed on an empty data directory. It founds the
    cluster at the new revision.
 5. Start the other nodes on empty data directories; each is admitted at the
@@ -255,19 +270,23 @@ seed-contact failure and the admitting node's conflict log, or
 failure. Either means a node or data directory of another revision, and the
 answer is re-founding, never a retry.
 
-### Certified pilot support envelope
+### Support-envelope policy and evidence
 
-When a deployment configures the bounded pilot support envelope
-([`support-envelope.json`](support-envelope.json)), admission and recovery are
-pinned to its cluster format revision (`clusterFormatRevision`, which must equal
-the build's), the exact certified version pair (`0.4.1 -> 0.5.0`), topology bounds
-(`3..7` nodes, `RF=3`), rollback cutoff (`BEFORE_TARGET_SCHEMA_FINALIZE`), and
-five drill receipts (`rolling_upgrade`, `downgrade_rollback_boundary`,
-`one_node_failure_recovery`, `wiped_replica_rebuild`, and
-`service_artifact_upgrade`) with zero lost acknowledged writes. Version pairs or
-mixed-version peers outside that envelope are refused with
-`OUTSIDE_SUPPORT_ENVELOPE`, and rollback requests after the cutoff are refused
-with `ROLLBACK_CUTOFF_EXCEEDED`.
+[`support-envelope.json`](support-envelope.json) declares a version pair,
+topology bounds, rollback cutoff and five drill shapes. The builder currently
+supplies default `executed: true` values, literal measurements and placeholder
+dependency receipt strings. These are synthetic policy/fixture records, not
+original physical measurements, and cannot certify upgrade, rollback or recovery.
+
+The management policy can refuse out-of-envelope inputs with
+`OUTSIDE_SUPPORT_ENVELOPE` and post-cutoff rollback with
+`ROLLBACK_CUTOFF_EXCEEDED`. Passing that policy does not establish support.
+The upgrade and recovery owner
+retains qualification of actual old/new artifacts, rolling upgrade, rollback
+boundary, node failure, wiped-replica rebuild and service-artifact upgrade.
+Original execution and write reconciliation must be admitted before advertising
+a supported pair. No supported user backup/restore or certified snapshot follows
+from this envelope.
 
 ## Observability
 

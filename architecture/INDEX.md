@@ -94,12 +94,13 @@ The [related-systems guide](../docs/related-systems.md) provides external
 reference points. For implementation status rather than architecture, use
 [Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md).
 
-## Planned designs, not current guarantees
+## Implementation and qualification
 
-[PostgreSQL Locking Reads](postgres-locking-reads.md) describes the planned
-Phase 0.3 `SELECT ... FOR UPDATE` contract. [Live Query Data Plane](live-query-data-plane.md)
-describes the target for general push-backed query observation. Their presence
-in this index does not mean those product contracts are already supported.
+[PostgreSQL Locking Reads](postgres-locking-reads.md) describes the implemented
+`SELECT ... FOR UPDATE` path, its fail-fast reservation policy and remaining
+cross-node/recovery qualification. [Live Query Data Plane](live-query-data-plane.md)
+describes the target for general push-backed query observation. A source binding
+or design document does not establish complete service acceptance.
 
 ## By question
 
@@ -109,7 +110,7 @@ in this index does not mean those product contracts are already supported.
 | How is a table divided? | [Partitioning](process-partitioning.md) |
 | How does a write become durable? | [Replication](process-replication.md) |
 | How are reads and writes routed? | [Request routing](process-request-routing.md) |
-| How will PostgreSQL `SELECT ... FOR UPDATE` become a real distributed locking read? | [PostgreSQL locking reads](postgres-locking-reads.md) |
+| How does PostgreSQL `SELECT ... FOR UPDATE` acquire reservations, and what remains unverified? | [PostgreSQL locking reads](postgres-locking-reads.md) |
 | How should a query result stay current after remote writes? | [Live query data plane](live-query-data-plane.md) |
 | How does one service call fan out and reduce? | [Execution semantics](../docs/execution-semantics.md), then [minimal deployment surface](minimal-deployment-surface.md) |
 | How is missing compute activated on a data host? | [Data affinity](process-data-affinity.md) |
@@ -125,10 +126,15 @@ in this index does not mean those product contracts are already supported.
   functions into an existing PostgreSQL cluster.
 - The public service paths are HTTP request Bindings and distributed call
   Bindings.
-- A call currently uses one literal single-table selector, one bounded row batch
-  per shard, finite numeric partials, and one reducer.
-- PostgreSQL `SELECT ... FOR UPDATE` is a planned Phase 0.3 core capability, not
-  a current locking-read claim. The current transaction model uses session
+- A call uses a declared single-table selector with typed positional parameters,
+  bounded shard batches or an explicit paged accumulator, bounded canonical
+  finite-JSON partials, and a reducer. Invocation cancellation and waiter
+  detachment are distinct from rollback of effects already committed.
+- PostgreSQL `SELECT ... FOR UPDATE` is parsed and routed through transaction
+  participant enlistment and reservation execution. Its complete cross-node
+  conflict and recovery guarantee remains subject to the
+  [locking-read contract](postgres-locking-reads.md).
+  The current transaction model uses session
   staged read-your-own-writes over current committed state plus
   partition-write-generation first-committer-wins write-conflict detection at
   prepare and apply.
@@ -145,8 +151,8 @@ in this index does not mean those product contracts are already supported.
 
 - [Architecture overview](overview.md) - implementation principles and owner
   boundaries.
-- [PostgreSQL locking reads](postgres-locking-reads.md) - planned locking-read
-  semantic, ownership, and proof boundary.
+- [PostgreSQL locking reads](postgres-locking-reads.md) - locking-read
+  implementation, ownership, and proof boundary.
 - [Live query data plane](live-query-data-plane.md) - target live-observation
   ownership, CDC reuse, grouping, snapshot/frontier, and no-polling contract.
 - [Runtime lifecycle](runtime-lifecycle.md) - runtime readiness and driver

@@ -241,7 +241,7 @@
     {
       "id": "sql-transaction-budget",
       "area": "SQL",
-      "summary": "An explicit transaction has a 60-second budget from BEGIN. When the budget runs out before COMMIT, the server rolls the transaction back within about a second. After that, any later statement in that block, including a new BEGIN, is refused with SQLSTATE 25P04 and never runs outside the transaction; the block is then failed until ROLLBACK, or until a COMMIT, which answers ROLLBACK. A COMMIT of a transaction that expired before COMMIT fails with SQLSTATE 25P04 stating that no changes were committed, and leaves the session idle. A COMMIT that fails after it began committing (for example, the budget ran out while the partitions of a multi-partition transaction were committing) answers SQLSTATE 08007 (transaction_resolution_unknown): some changes may have been committed. Known limitation: in that case the transaction can be left partly committed. If the block is still open after an 08007, the ROLLBACK that ends it carries a WARNING that the previous transaction's outcome is unknown. The embedded application database behaves the same way: a statement of transaction(callback) after the budget ran out is refused (NO_TRANSACTION), and a COMMIT that may have been partly applied rejects with TRANSACTION_OUTCOME_UNKNOWN."
+      "summary": "An explicit transaction has a default 60-second budget from BEGIN. Expiry refuses further statements in that transaction; PostgreSQL-wire reports SQLSTATE 25P04 for an expired block. Coordinator-managed transactions prepare every participant, including a single participant, and record one durable decision before decision fanout. A recorded COMMIT cannot be reversed by timeout, cancellation or a lost reply; incomplete participant settlement remains owned for recovery. When the caller cannot establish the outcome, PostgreSQL-wire reports SQLSTATE 08007 and the embedded application database reports TRANSACTION_OUTCOME_UNKNOWN. Neither proves rollback or permits a blind retry. Full current-candidate conflict, reconstruction and public-path recovery qualification remains unverified under the transaction decision and recovery contract described in architecture/postgres-wire.md; qualification must exercise the real coordinator, native participants and reopened SQLite state."
     },
     {
       "id": "sql-dollar-quoted-literals",
@@ -266,7 +266,7 @@
     {
       "id": "sql-locking-reads",
       "area": "Transactions",
-      "summary": "SELECT ... FOR UPDATE provides partition-row reservation with fail-fast 55P03 conflict refusal, rollback release, and session budget timeout; it does not provide full serializable isolation or waiting lock queues."
+      "summary": "SELECT ... FOR UPDATE is parsed and bound to authoritative participant enlistment and reservation execution with fail-fast 55P03 conflict refusal. Full cross-node conflict, terminal release and restart qualification remains unverified under architecture/postgres-locking-reads.md; qualification must prove every conflicting write consumer through public clients and replicated participant state. Local reservation bookkeeping does not establish distributed exclusion. Serializable isolation and waiting lock queues are not provided."
     },
     {
       "id": "external-cdc-user-tables",
@@ -281,7 +281,7 @@
     {
       "id": "backup-and-upgrades",
       "area": "Operations",
-      "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
+      "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. docs/support-envelope.json contains policy/fixture defaults, including literal drill measurements and placeholder certification strings; it does not certify physical recovery or the declared version pair. The upgrade and recovery policy described in docs/operations-readiness.md requires actual artifacts and original physical drill outputs before support is qualified."
     },
     {
       "id": "cluster-format-revision-fence",

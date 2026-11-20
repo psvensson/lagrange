@@ -41,8 +41,8 @@ uses ordinary ES6 JavaScript and the existing Node runtime, lint, dependency
 checks, test runners and evidence owners.
 
 The user approved this plan and its documentation merge on 19 November 2026.
-The cloud author owns this planning change; the local client owns subsequent
-implementation and integration with its existing candidate work.
+The current integration owner is named in
+[operation integrity](operation-integrity-and-reliable-formation.md#current-integration-summary-20-november-2026---reliability-and-agent-usability).
 
 ## Current summary
 
@@ -52,7 +52,8 @@ implementation and integration with its existing candidate work.
   Solver runbook, roadmap policy, feature map and documentation-only proof policy.
 - **Integration base:** candidate `0970ab012f65456cad34cfadfa92fb420f7f09ef`
   -> `d66a533196b53c2193e8c2baf6e68655d8493e2a` ->
-  `5a5f8baf554129fd7bb335ea837b851106c3683a` on
+  `5a5f8baf554129fd7bb335ea837b851106c3683a` ->
+  `6c0bdff11f24e32459178e9d2c0d9f563e7cd790` on
   `candidate/reconciliation-20261119` (composed with the 20 November 2026
   WP0–WP10 ES6 strengthening and integration programme coordinated in
   [`operation-integrity-and-reliable-formation.md`](operation-integrity-and-reliable-formation.md)).
@@ -67,9 +68,18 @@ implementation and integration with its existing candidate work.
   and late `REFUSED` recovery on `LEADERSHIP_START`, automatic production attachment
   via `PartitionService.prototype.ensureReplicaPlacementOwnerAttached()`, and the
   real `requestPlacementAdmission` / `requestPlacementHoldRelease` formation drain
-  witness. All packages are verified through the classified test runner and recorded
-  in [receipt.json](es6-owner-safety/evidence/receipt.json) with exact source and
-  test digests and independent subagent verification (`independent-verification`).
+  witness. The historical [receipt](es6-owner-safety/evidence/receipt.json)
+  records classified results, source/test digests and independent reviewer names.
+  The recovered task-3804 output confirms 18 passing files and 1,428 assertions,
+  but does not itself bind the executed source, runtime and host. Original-run
+  provenance and composition applicability remain with programme item 07; this
+  is implementation credit, not full current acceptance.
+- **Programme continuation:** items 02-06 consume P1-P5 and the later deadline,
+  terminal-consumer and completed-growth repairs. Close the remaining persistence
+  adapter/policy strictness, admission work custody and real production
+  construction/recovery proofs before dependent service claims. Item 08 applies
+  interface clarity during those owner repairs; no TypeScript/checkJs migration
+  or new dependency-injection framework is introduced.
 - **Remaining physical/service gates:** the placement Quest
   ([`replica-placement-admission-owner`](../quests/replica-placement-admission-owner/quest.json))
   retains its physical lab drain (`lab-drain-mechanism-and-metrics-product-defaults`)

@@ -68,7 +68,30 @@ doneWhen:
 
 # Pilot readiness and public-path proof
 
-## Current convergence decision (2026-11-12)
+## Current programme continuation (20 November 2026)
+
+The [integration owner](operation-integrity-and-reliable-formation.md) reconciles
+candidate `6c0bdff11f24e32459178e9d2c0d9f563e7cd790` under rule-set revision 5.
+Items 09 and 11-14 consume the accepted formation foundation, truthful evidence,
+bounded retention, public mutation retry/retirement, usable diagnostics and the
+existing security/locality/API prerequisites. Initial supported cancellation and
+recovery must be proved for 0.5; 1.0 strengthens that envelope rather than filling
+a missing pilot prerequisite. Preserve the measured thirty-minute installed
+getting-started requirement and separate five-node/public service acceptance.
+
+The Q12 support-envelope builder/JSON currently supplies default drill success
+and placeholder certification strings. Its simulated scenario and source-marker
+guard demonstrate policy/fixture behavior, not measured physical upgrade or
+recovery support. The solved historical Q12 record remains immutable. Item 07,
+through the open evidence-and-candidate-binding owner, corrects current claim
+admission; item 14 retains actual rolling-upgrade, rollback-boundary, node-failure,
+wiped-replica-rebuild and service-artifact drills, plus real full-stop proof if
+advertised. Q12 still consumes Q6, Q7, Q8-Q9 and Q11 with their prerequisites.
+Freeze exact old/new artifacts, formats, topology, retained obligations and bounds
+before execution; qualify each restart/upgrade/rollback matrix cell separately.
+No such physical qualification is created by this documentation adoption.
+
+## Retained convergence decision (12 November 2026)
 
 Planning baseline: main `ef93af85dcd6add82ff5b5fee21ca12d205c61cd`,
 rule-set revision 5. The independent source review also inspected WIP

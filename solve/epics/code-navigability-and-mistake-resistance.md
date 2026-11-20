@@ -71,6 +71,37 @@ in [canonical authority and reliable formation](operation-integrity-and-reliable
 The ratchets outlive this epic as ordinary static gates; a green budget alone
 does not establish global removal.
 
+## Current programme continuation (20 November 2026)
+
+At candidate `6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, rule-set revision 5,
+the [integration summary](operation-integrity-and-reliable-formation.md) owns
+programme items 01 and 08 and the current writer assignments. Existing
+readiness constructor injection and source owner indexes have solved records
+(`readiness-service-constructor-injection`, `source-directory-owner-index`,
+8 November); consume that work and preserve its logs. By contrast,
+`partition-service-constructor-injection` and `source-directory-file-cap` have
+definitions without execution logs at this baseline. They are proposals,
+not running or accepted work. Reconcile their actual owner problem and witness
+before sealing; file count or constructor shape alone is not a usability result.
+The old developer-velocity epic is superseded and supplies no execution authority.
+
+Current-boundary corrections remain 0.4.1; broader qualified usability and
+ownership work remains 0.5 under existing gates. Give each changing interaction
+explicit inputs, collaborators, outcomes, side effects, recovery obligations,
+consumer census and a real witness. Broad core convergence still requires its
+cutover and fresh Q0 READY gate. Existing one-way ratchets remain unchanged.
+
+Reserve four real task classes before a fresh agent sees their solutions:
+producer/consumer repair, policy/state change, interrupted investigation/run
+resumption, and removal of a demonstrated duplicate path. Use the exact candidate,
+writable interaction and ordinary repository entrypoint. Retain actual owner/API
+navigation, proof selection, independent review and reproducible handoff; record
+navigation time, searches, wrong-owner attempts and avoidable rework only where
+observed. Repair demonstrated confusion and evaluate a comparable fresh task.
+WP9 receives credit only where original reservation/setup and evidence establish
+these properties. No task has been executed by this adoption, and no pattern
+budget or assigned agent is evidence of usability acceptance.
+
 ## Budget
 
 Baselines were measured at `e29e295a6` (origin/main, 2026-11-08) by an espree

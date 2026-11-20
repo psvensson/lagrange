@@ -74,6 +74,16 @@ authorizes:
 
 ## Status and activation
 
+The 20 November reliability and agent usability programme consumes this gate;
+it does not activate broad Q1+ work. Its current integration owner and candidate
+are in [operation integrity](operation-integrity-and-reliable-formation.md).
+Necessary bounded repairs and read-only preparation may proceed with their
+existing owners. After activation, item 08's finite census covers partition
+assembly, consensus lifetime/membership, apply, transactions, placement/workflow,
+readiness/publication, CDC/cache, query, runtime lifecycle, transport and
+diagnostics. Evidence-backed no-op dispositions are valid; neither a directory
+reorganization nor a file-count reduction establishes semantic convergence.
+
 ### 2026-10-08 cutover interaction clarification
 
 The approved [contract-first cutover plan](raft-rs-full-cutover/contract-first-2026-10-08.md) belongs to raft-rs-full-cutover, not a bypass of this epic.

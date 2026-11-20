@@ -43,10 +43,9 @@ then call `GET /accounts/health`. The health handler makes no distributed call,
 so you can inspect installation, authentication, and request routing separately
 from the expensive operation.
 
-The current default `service-cell` build requires exactly one distributed
-operation per component. A no-call handler is supported; removing every
-operation to make a request-only component is not this documented workflow.
-Keep the summary operation declared while testing the health route.
+The `service-cell-v2` component contract admits zero, one or multiple declared
+operations. Keep the example's summary operation declared while testing its
+health route; a health response exercises neither that operation nor its data path.
 
 At this stage, verify the build and deployment records, immutable component
 installation, Basic-authenticated HTTP ingress, and ready service instances
@@ -81,17 +80,18 @@ the caller needs only the reduced answer.
 
 A current operation must fit all of these constraints:
 
-- one literal single-table selector;
-- a bounded shard batch;
-- finite numeric partials;
-- shard-disjoint partial keys;
+- one declared single-table selector with typed positional parameters;
+- bounded shard batches, or an explicit bounded paged accumulator;
+- bounded canonical finite-JSON partials;
+- semantic group keys distinct from transport delivery identities;
 - no global cross-partition snapshot requirement;
-- no caller cancellation requirement; and
-- one nested distributed call per request.
+- invocation-owned cancellation and explicit waiter detachment; and
+- bounded sequential nested calls within the request's budget.
 
 Reject the candidate early when it requires streaming, joins in the selector,
-per-call SQL interpolation, structured sketches, or unbounded scans. Those are
-product gaps, not documentation details.
+per-call SQL interpolation or unbounded scans. Structured partials must fit the
+declared schema and codec bounds; their availability does not admit an unbounded
+sketch or aggregation. Verify the complete chosen journey on the target topology.
 
 ## Data loading
 
@@ -177,18 +177,21 @@ current distributed call path does not write user tables, but request handlers
 can use declared write capabilities. A dual-write design therefore needs an
 application-owned reconciliation and idempotency contract.
 
-Do not rely on a caller disconnect to cancel work. A distributed call continues
-until its deadline or completion.
+The request invocation owner supports cancellation and waiter detachment. One
+disconnected waiter does not cancel a shared invocation while other waiters
+remain; cancellation does not prove that an already submitted mutation rolled
+back. Qualify the selected ingress and resource cleanup in the
+[pilot operations gate](operations-readiness.md#pilot-operations-gate).
 
-When operating within the certified pilot support envelope
-([`support-envelope.json`](support-envelope.json)), in-place rollback from
-`0.5.0` to `0.4.1` is permitted only before `BEFORE_TARGET_SCHEMA_FINALIZE`,
-and only when both releases are of the envelope's cluster format revision;
-after that cutoff, rollback is refused with `ROLLBACK_CUTOFF_EXCEEDED` and
-operators must restore from an independent export or certified snapshot.
-Rollback or upgrade across a cluster format revision is never in place: it is
-refused with `OUTSIDE_SUPPORT_ENVELOPE`, and the cluster is re-founded (see
-[operations readiness](operations-readiness.md#cluster-format-revision-no-in-place-upgrade-no-downgrade)).
+The version pair and rollback cutoff in
+[`support-envelope.json`](support-envelope.json) are policy/fixture data, not
+physical upgrade or rollback certification. Its default drill values and
+placeholder receipt strings do not authorize `0.5.0 -> 0.4.1` rollback or imply
+a usable certified snapshot. The
+[upgrade and recovery contract](operations-readiness.md#support-envelope-policy-and-evidence)
+must qualify actual artifacts and retain original drill outputs before a pair
+is advertised. Cluster-format refusal remains in force; see
+[operations readiness](operations-readiness.md#cluster-format-revision-no-in-place-upgrade-no-downgrade).
 
 ## Exit planning
 

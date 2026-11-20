@@ -86,7 +86,34 @@ product results, and deployment guidance permitting local artifact sources,
 external repair or optional-store success. Historical observations and sealed
 records remain intact; successor work records the correction explicitly.
 
-## Current summary (17 November 2026)
+## Current summary (20 November 2026)
+
+- Current candidate and correction integration are owned by
+  [operation integrity](operation-integrity-and-reliable-formation.md), checked
+  at `6c0bdff11f24e32459178e9d2c0d9f563e7cd790` under rule-set revision 5.
+  The 17 November component work below is preserved evidence to reconcile by
+  content; it is not a second live candidate assignment.
+- Programme item 10 first freezes and admits a small smoke profile after
+  evidence/semantic/formation prerequisites, then completes both assigned 0.5
+  obligations: public WASM/conventional and full Scenario A TiDB/TiKV comparisons.
+  The superseded comparative-workload-efficiency-evidence epic is historical;
+  consume its graduated specification and applicable observations here. Full
+  Scenario B remains 2.0; other scenario obligations keep their existing owners.
+- Freeze equivalent semantics, cohort, topology/failure domains, distinct load
+  generator, artifact/runtime identities, retries and paired/repeated measurement
+  plan before execution. Account for every offered request, including unissued,
+  failed, timed-out and unresolved work. Report setup, steady state, recovery,
+  cleanup and resource/cost measurements at their actual scope; preserve cold/warm
+  distinctions. A valid slower result is accepted honestly. Smoke never closes
+  either full comparison.
+- Item 13 consumes this owner's supported installed-consumer journey and the
+  measured thirty-minute onboarding gate. Existing registered artifact deployment
+  and management surfaces retain authority; no node-side author-file access or
+  second workflow/status store is introduced. No comparative run was submitted
+  by this adoption. Root owns the next pre-gate after corrections and evidence
+  admission; later billable GCP provisioning still requires its actual authority.
+
+## Retained summary (17 November 2026)
 
 - The operator assigned the current ChatGPT root session to repair the verified
   latest candidate errors and continue this existing GCP comparative campaign.

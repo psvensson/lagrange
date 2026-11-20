@@ -36,9 +36,10 @@
  * binds those back to INTEGER, REAL, TEXT, BLOB and NULL. A JS number always
  * binds REAL, which is why INTEGER never decodes to a number.
  *
- * Input typing (D3) is the same for row values and parameters: BigInt is
- * INTEGER (int64 range), number is REAL (an integral number too; NaN
- * refused), string is TEXT, Buffer or Uint8Array is BLOB, null is NULL, and
+ * Input typing (D3, D15) is the same for row values and parameters: BigInt is
+ * INTEGER (int64 range), boolean is INTEGER (1 or 0), number is REAL (an
+ * integral number too; NaN refused), string is TEXT, Buffer or Uint8Array is
+ * BLOB, null is NULL, and
  * anything else is refused. A producer reading SQLite must therefore read
  * with safeIntegers(true): an INTEGER read as a JS number would be typed REAL.
  *

@@ -1,19 +1,27 @@
 # PostgreSQL Locking Reads
 
-Status: planned Phase 0.3 core contract
+Status: implemented path; full cross-node and recovery qualification unverified
 
 ## Purpose
 
-Lagrange currently provides epoch-based snapshot isolation, read-your-own-writes,
-and first-committer-wins write-conflict detection at prepare. PostgreSQL clients
-can parse and execute ordinary transactional reads, but the current PostgreSQL
-SELECT AST does not preserve `FOR UPDATE` as an owned locking-read semantic.
+The PostgreSQL parser preserves `FOR UPDATE` in the SELECT AST. The SQL engine
+enlists its participants in authoritative mode and invokes reservation execution;
+the implemented contention policy is fail-fast, with SQLSTATE `55P03`.
+The transaction model uses staged read-your-own-writes over committed state;
+it does not promise full serializable isolation or a global snapshot.
 
-This document prevents `SELECT ... FOR UPDATE` from becoming an adapter-only
-compatibility patch or a benchmark-specific exception. Locking reads are a core
-SQL/transaction capability and must be implemented through the owners that
-already govern parsing, transaction state, participant enlistment, conflict
-handling, timeout/cancellation, and recovery.
+The production binding is
+[`SQLQueryEngineSelectExecution`](../src/query/sql-query-engine-select-execution.js),
+with canonical syntax in
+[`sql-locking-read-grammar.js`](../src/query/sql-locking-read-grammar.js).
+Reservation execution still includes
+[`sql-locking-read-execution.js`](../src/query/sql-locking-read-execution.js) and
+its process-local bookkeeping/SQLite mirror. Their presence alone cannot prove
+distributed exclusion. The
+authoritative-reservations owner
+must reconcile that path with replicated participant authority and prove all
+conflicting write consumers, restart and leader change through public clients.
+The requirements below remain obligations, not claims that those gates passed.
 
 ## Initial supported contract
 
@@ -40,7 +48,7 @@ A successful `FOR UPDATE` statement must:
 8. expose typed diagnostics sufficient to distinguish contention, timeout,
    cancellation, and transaction abort.
 
-The exact wait/deadlock policy must be sealed before implementation. A local
+The sealed initial policy is fail-fast with no waiter queue. A local
 mutex, PG-session-only lock table, benchmark-only retry loop, or per-node cache
 is not an acceptable authority because it would not survive routing, failover,
 or distributed transactions.
@@ -80,18 +88,22 @@ includes:
 
 ## Benchmark consequence
 
-Until this capability lands, TiDB and Lagrange may still be compared under a
-preregistered database-independent snapshot/conflict/retry contract, but the
-benchmark must not claim that TiDB `FOR UPDATE` and Lagrange ordinary snapshot
-reads use equivalent locking mechanisms. Once this capability lands, Scenario A
-should add a contention profile that exercises the public PostgreSQL locking-read
-path directly.
+Comparisons claiming locking-read equivalence must establish equivalent
+declared semantics through the public locking-read path. Parser support, source
+binding and local-map tests do not establish equivalence with TiDB locking
+behavior. A preregistered database-independent snapshot/conflict/retry comparison
+remains possible; it must state that scope and cannot substitute ordinary
+snapshot reads for promised locking reads. See the
+[current capability boundary](../docs/current-capabilities-and-limitations.md).
 
 
 ## Sealed Phase 0.3 wait/conflict policy
 
-The machine-readable wait and conflict policy specification governs
-conflict, release, timeout, cancellation, crash, and recovery behavior.
+The initial machine-readable `locking-read-wait-policy.json`
+records the fail-fast conflict and transaction-owned release contract. The
+current [TX1 decision owner](../src/query/distributed/distributed-transaction-decision-protocol.js)
+also governs timeout, cancellation and recovery: once COMMIT is recorded, the
+transaction must complete that decision rather than roll back.
 
 The initial locking-read slice is deliberately **fail-fast**, not blocking.
 When a partition transaction participant finds a reservation owned by another
@@ -123,8 +135,9 @@ abort.
 
 Reservation lifetime is transaction-owned rather than TTL-owned. A participant
 must not expire an unresolved reservation merely because its local clock
-advances. Commit, rollback, transaction timeout, explicit cancellation, or
-recovery resolution is what authorizes release. If a participant crashes,
+advances. Commit or rollback settlement authorizes release. Timeout and
+cancellation ask the transaction owner to resolve work; they do not revoke a
+recorded COMMIT. If a participant crashes,
 durable reservation state remains unresolved state for transaction recovery;
 restart must neither erase it nor invent a terminal outcome.
 
@@ -133,9 +146,15 @@ transaction timeout, cancellation, and transaction abort must not collapse into
 one generic retry result. This lets callers decide whether and when to retry
 without moving retry correctness into PG wire.
 
-### Exact machine-readable transition mirror
+### Initial policy mirror and current resolution boundary
 
-This prose mirrors the machine policy literally so ownership cannot drift.
+The following table preserves the initial machine policy's exact transition
+vocabulary, required by its source guard. It is a policy record, not execution
+evidence. Its timeout and cancellation rollback actions cannot authorize
+rollback after the current TX1 owner has recorded COMMIT; current resolution
+must consume that decision as described below. The authoritative-reservations
+owner must reconcile the initial policy and its guard with that retained-decision
+contract before claiming complete qualification.
 There is **no waiter queue** and there is no participant **local TTL** release
 authority. On conflict the coordinator must **confirm release** of reservations
 held by earlier participants before the terminal abort is observable.
@@ -157,6 +176,16 @@ The participant-level contention outcome remains
 `typed_locking_read_reservation_conflict`; `transaction_aborted` is the later
 coordinator-owned terminal outcome after whole-transaction rollback and release
 confirmation.
+
+Coordinator-managed transactions prepare every participant, including a single
+participant, and record one decision before fanout. Recovery consumes the exact
+transaction's retained decision. Missing sessions or replies do not prove abort;
+unavailable authority leaves an explicit unresolved obligation. A recorded COMMIT
+can have incomplete participant settlement, which remains owned for recovery.
+Applicable evidence is owned by
+the TX1 transaction owner and the
+authoritative-reservations Quest; full current-candidate composition remains
+unverified until those owners admit it.
 
 Blocking wait semantics, `NOWAIT`, `SKIP LOCKED`, and additional PostgreSQL
 row-lock strengths are not silently layered on this policy. Introducing a

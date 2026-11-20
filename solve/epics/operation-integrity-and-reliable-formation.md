@@ -111,7 +111,119 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
-## Current integration summary (20 November 2026 — ES6 Strengthening & Integration Programme WP0–WP10)
+## Current integration summary (20 November 2026 - reliability and agent usability)
+
+- **Owner and checked source:** the current Codex root session owns integration,
+  taking over the stopped Antigravity session. The clean starting candidate is
+  `candidate/reconciliation-20261119` at
+  `6c0bdff11f24e32459178e9d2c0d9f563e7cd790`. Remote candidate and remote main
+  were checked on 20 November: main is
+  `5edfcadb508f9a82783159026364d3005836cc5c`; local main is older
+  (`428a27fc63fa3cf2af677a9e6a46444f8ac3125e`). Different ancestry does not
+  establish a missing repair: extracted/cherry-picked content must be compared.
+  Other worktrees are preserved, not reset or reassigned.
+- **Governing sources:** rule-set revision 5; AGENTS, rules, router, Quest
+  workflow, delegation, documentation lifecycle, and the user's 20 November
+  reliability and agent usability programme. The programme's numbers below are
+  references to obligations, not new Quest IDs or a second acceptance ledger.
+- **Current bounded unit (01):** reconcile this summary and the named active
+  owner summaries, architecture entrypoint, locking-read explanation, capability
+  source/projection, operations and migration guidance. Writable scope is those
+  explanatory surfaces, `docs/execution-semantics.md`, the codec's input-typing
+  JSDoc, and their existing evidence/review records. The latter two are explicit
+  scope amendments for contradictions found in the same current guidance path.
+  No runtime,
+  test-selection, acceptance threshold, sealed predicate or historical receipt
+  changes are authorized by this documentation unit. Source/proof repairs use
+  their own bounded Quest or eligible direct route and independent review.
+- **Credited implementation:** `530035262` through `6c0bdff11` contains the
+  admission wait's entry/post-await deadline checks, removal of untyped-success
+  exceptions from four reconciliation consumers, unknown growth-policy refusal,
+  bounded worker-start observation, and completed-growth census compensation for
+  delayed role projection. ES6 P1-P5 remain implemented component work. These
+  are not newly assigned untouched defects and do not establish service acceptance.
+- **Evidence ceiling:** the ES6 receipt reports 18 files / 1,428 assertions with
+  zero failures. Item 07 must admit the original execution, source/runtime and
+  composition applicability before this count supports a current acceptance
+  claim. Original task-3804 output has confirmed the count, but omits those
+  execution identities. Preserve the original receipt and failed physical results. The stopped
+  task-3823 formation trial at `6c0bdff11` failed; reported 33/36 system-partition
+  progress is not the complete formation predicate or a passing trial. Its original
+  report first fails `a-serve-lane-open` with `control_snapshot_read_failed`;
+  spread, quiet, user-table routability and observation integrity also fail.
+- **First residuals:** the atomic persistence adapter and shared terminal/release
+  helpers still admit weak result combinations (02). CREATE awaits initial
+  admission before entering the bounded waiter (03). Release has equal outer
+  and leaf RPC limits, but identical in-flight cutovers already coalesce; the
+  handover's claim that each timeout immediately re-pauses requires correction
+  against original logs. Completed-growth compensation needs identity/generation
+  and retirement proof (04). Support-envelope builder defaults and simulated
+  drills cannot certify physical support (07/14).
+- **Execution and continuation:** source reads/edits and Git inspection occur
+  here; runtime proof, audits and generators retain the managed-lab execution
+  boundary. Root observes submitted runs by their actual request identity. No
+  new runtime acceptance run is submitted by this adoption. Root owns documentation and
+  composition; delegated documentation authors and an independent evidence
+  reviewer work in disjoint scopes. Runtime investigations and proposed designs
+  make no implementation or acceptance claim. One writer will own each coupled
+  repair after its scope is recorded.
+
+### Programme adoption and dependency order
+
+Content reconciliation of main's recent extracted repairs is source-only:
+PR230 parser/membership/bulk cleanup, PR231 typed codec, PR232 PreVote recovery,
+PR233 real SQLite fixture and PR234 CONNECTING-abort handling are present in the
+candidate, sometimes with later extensions. The codec's omitted Boolean JSDoc
+is corrected in this unit. The candidate's real CONNECTING-abort witness lacks
+main's explicit no-attachment assertion; item 07 must reconcile that proof
+difference rather than treating the suites as byte-identical. No main repair
+is assigned again merely because `git cherry` reports different patch identity.
+
+The existing owners below retain acceptance. Every item must be accepted in its
+assigned milestone or explicitly superseded by a user-authorized scope decision.
+An assignment, source guard, component closure or later version label does not
+discharge a service claim. The ordered release queue remains 0.4.1, 0.5, then
+the existing 0.6-0.9 predecessors of 1.0. Independent preparation may precede
+publication; it cannot bypass acceptance dependencies. Recovery, ordinary
+diagnostics, retries and user backup/restore/PITR are AGPL product obligations.
+
+| Item | Existing owner / acceptance home | Next bounded result and dependencies |
+| --- | --- | --- |
+| 01 | This epic; documentation lifecycle; `RM-0.2.9-published-operating-contract` | Correct the finite current guidance surface and content reconciliation; distinguish implementation, measurement and support. 0.4.1. |
+| 02 | OperationWorkflowOwner / ReplicaOperationRepository; WP1/4/5/8 | After 01, census persistence, terminal/progress consumers and release fixtures; close recognized result combinations through real SQLite construction, competing writers, lost replies and interrupted release. 0.4.1. |
+| 03 | ReplicaHandler admission/release, dispatch/recovery, merge worker, bulk transport; WP6/D7 | Consume 02 where relevant; trace original budgets, cancellation, continuing obligations and identity-fenced cleanup across create/release, lanes, merge, bulk and public adapters. 0.4.1 corrections; full supported envelope in 0.5. |
+| 04 | ReplicaPlacementOwner, membership and placement/formation Quests | Consume 02/03; prove durable intent, reconstructed attempts/holds, completed-growth generation scope and canonical clearing-event wakes. Physical drain stays in 09. 0.4.1. |
+| 05 | TX1, locking reservations, participant apply and CDC debt | Consume 02/03 and ES6 P1/P2/P4; prove prepare-first single/multi-participant composition, durable decision before fanout, replay and reopened-state conflict recovery. Retired one-phase path stays retired. 0.4.1 corrections; 0.5 supported-path qualification. |
+| 06 | Parser/renderer/codec/catalog/planner/merge/live-query; coordinator-sqlite-merge | Consume 01 and D1-D3; census public parameters through metadata/replay; same recorded SQLite build/settings for the differential oracle, independent PG expectations. 0.4.1 corrections; existing 0.5 query acceptance. |
+| 07 | quest-evidence-and-candidate-binding, proof-authority, classified runners and support-envelope owner | With 01-06, admit original runs and faithful fixtures; reject synthetic/default physical evidence, missing phases and known-bad results. 0.4.1 and each later capability. |
+| 08 | ES6 and [code navigability](code-navigability-and-mistake-resistance.md); gated [core convergence](core-architecture-convergence.md) | Consume 01 and changing owners; explicit interfaces and reserved fresh-agent repair, policy, resume and duplicate-removal tasks. Historical WP9 exercises count only with applicable original setup/evidence. 0.4.1 current boundaries; 0.5 broader work. |
+| 09 | canonical-authority-formation-acceptance, fresh-formation-user-table-routability and stabilization | Consume relevant 02-08 proofs; one pinned composition, affected checks and existing full gates, three consecutive physical successes and comparative smoke. 0.4.1 formation; 0.5 full journey/pilot also consumes 11-14 and existing security/locality/API prerequisites. |
+| 10 | [Developer journey and measured comparisons](developer-journey-and-measured-comparisons.md), graduated comparative specification | After 07/09 and semantic gates, admit small smoke, then both full public WASM/conventional and Scenario A TiDB/TiKV comparisons on real supported systems. Scenario B retains 2.0. 0.5. |
+| 11 | [Stabilization](release-0-2-7-stabilization.md), Raft/CDC/transaction/outcome retention owners | After 02-05/07, bound all retained-state classes, safe horizons, physical bytes/replay and admission; prove two compaction cycles, reconstruction and resumption after finite blockers. 0.5; stronger 1.0 qualification. |
+| 12 | Public SQL/request and statement-outcome owners, TX1, PG and embedded facade | After 02/05/07 and 11 retirement contract, define canonical scoped mutation identity, exact-intent replay/refusal, fenced lookup and retired-identity rejection through real clients. New capability in 0.5. |
+| 13 | CLI/management/diagnostics, pilot-operational-view and installed developer journey | After 01/07/09 and relevant mechanisms, one supported start/join/inspect/diagnose/drain/stop/reconcile route with certainty, debt and safe continuation; measured thirty-minute public onboarding. 0.5, extended with recovery. |
+| 14 | supported-upgrade-and-recovery-envelope and pilot Q12 dependencies | After 07/09/11-13 and existing Q6/Q7/Q8-Q9/Q11 prerequisites, qualify exact artifact pairs and restart/full-stop/rolling/mixed-version/rollback cells with real drills. 0.5 named pairs; 1.0 policy. |
+| 15 | `RM-1.0-consistent-snapshot-api`; partition/TX/catalog/topology owners | After 05/07/11/12 and format contracts, bound a coherent cluster barrier/cut, pins and interruption recovery; independent restore oracle rejects fractured cuts. Establish bounded core specification first. 1.0. |
+| 16 | `RM-1.0-user-recovery-mechanisms`; core recovery/storage/artifact/management owners | After 15/11-13, establish bounded recovery spec; complete-manifest-last backup and fresh-deployment restore from retained artifacts alone, including failures, identity exclusion and measured bounds. 1.0. |
+| 17 | Same recovery owner; durable history/TX1/retention | After 15/16 and archive contract, transaction-consistent target mapping, contiguous verified history, bounded archive debt and restartable recovery; reject gaps and unavailable targets. 1.0. |
+| 18 | `RM-1.0-support-contract`; topology/durability/certification/release owners | After all applicable items and existing release prerequisites, freeze and measure workload/topology/resource/recovery envelope and operational procedures. Separate process-crash from power-loss evidence. 1.0. |
+
+**Next action:** complete 01's current-document contradictions and independent
+review; review the [proposed strict outcome interaction](operation-integrity-and-reliable-formation/strict-operation-outcomes.md)
+and prepare 02's finite persistence-to-release transition and real-producer
+counterexample while 03's ownership matrix and 07's original-evidence census
+proceed independently. The [lifetime proposal](operation-integrity-and-reliable-formation/admission-release-lifetimes.md)
+preserves the source census and prior contracts; the [adoption review](operation-integrity-and-reliable-formation/adoption-review-20261120.md)
+records independent findings and original-evidence custody. Then serialize the affected lifetime/placement/TX/SQL
+repairs and their composition. Freeze supported limits before acceptance;
+preserve failures and use prospective supersession for any changed bound.
+For 09 preserve the three named physical hosts, 420-second bound, all serving
+lanes, six priority-partition spread, original quiet window, CREATE/COUNT,
+every-node INSERT/readback, learner-address, projection and cleanup predicates.
+No polling/resync shortcut supplies an absent owner wake. A later failed gate
+routes its demonstrated blocker without undoing bounded repair credit.
+
+### Retained WP0-WP10 coordination (previous session)
 
 - **Integration owner and authority:** local integration client session (`b978a448-c2c8-4df9-a5cd-2aa151c80592`), executing the complete 11-work-package ES6 strengthening and integration programme (`WP0` through `WP10`). Rule-set revision 5 remains governing (`AGENTS.md`, `docs/steering/rules.md`, `docs/steering/router.md`, `docs/steering/workflow-guidelines/solver-quests.md`).
 - **WP0 Baseline & Branch Reconciliation:**
