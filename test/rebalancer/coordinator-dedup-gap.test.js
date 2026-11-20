@@ -105,12 +105,14 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         const second = await coordinator.createOperation(move);
         t.equal(second.operationId, first.operationId,
           'the exact second call replays the existing operation');
-        await t.rejects(coordinator.createOperation({...move, replicaId: 'replica-2'}), {
-          rebalanceSkipReason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-          conflictingOperationId: first.operationId,
-        }, 'a different explicit replica cannot adopt the same committed operation');
         t.equal(coordinator.stats.operationsCreated, 1,
-          'only one operation should have been created');
+          'exact replay creates only one operation');
+        const distinct = await coordinator.createOperation({...move, replicaId: 'replica-2'});
+        t.not(distinct.operationId, first.operationId,
+          'a different explicit replica has its own admission and operation');
+        t.equal(distinct.replicaId, 'replica-2');
+        t.equal(coordinator.stats.operationsCreated, 2,
+          'this request did not request an exclusive critical creation budget');
       } finally {
         await coordinator.shutdown();
       }

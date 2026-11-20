@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {OperationType, createOperationAt} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -530,7 +531,22 @@ test('exact creation distinguishes a bound zero publication epoch from malformed
   const fixture = createCommittedCreationFixture(t);
   const {coordinator} = fixture;
   const original = buildMove('target-a', {membershipPublicationEpoch: 0});
-  const winner = await coordinator.createOperation(original);
+  const winner = createOperationAt({
+    operationId: 'committed-zero-epoch',
+    type: OperationType.REPLACE,
+    partitionId: PARTITION_ID,
+    replicaId: `${PARTITION_ID}-r3`,
+    sourceReplicaId: original.replicaId,
+    sourceNodeId: original.sourceNodeId,
+    targetNodeId: original.nodeId,
+    membershipPublicationEpoch: 0,
+  }, Date.now());
+  winner.entityType = original.entityType;
+  winner.entityId = original.entityId;
+  t.equal(await coordinator.repository.persistNewOperation(winner), true,
+    'the committed owner row carries a real zero binding');
+  const key = coordinator.buildOperationIntentKey(original, winner.entityType, winner.entityId);
+  coordinator.rememberOperationIntent(key, winner, null);
   const replay = await coordinator.createOperation(original);
   t.equal(replay.operationId, winner.operationId);
   t.equal(replay.membershipPublicationEpoch, 0);
