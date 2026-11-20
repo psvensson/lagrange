@@ -362,11 +362,15 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
         dispatchSnapshot,
         operation,
       );
-    this.schedulePriorityRecoveryTargetProgressReentry(
+    const scheduled = this.schedulePriorityRecoveryTargetProgressReentry(
       targetProgressNormalizedSnapshot,
       operation ? [operation] : operations,
     );
-    return targetProgressNormalizedSnapshot;
+    return scheduled ?
+      normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
+        this, targetProgressNormalizedSnapshot, operation,
+      ) :
+      targetProgressNormalizedSnapshot;
   }
 
   buildPriorityRecoveryDecisionSnapshotForOperations(

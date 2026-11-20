@@ -58,12 +58,14 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         const row = operationRows.get(params[0]) || null;
         return {
           success: true,
+          rowSetComplete: true,
           rows: row ? [{...row}] : [],
           affectedRows: row ? 1 : 0,
         };
       }
       return {
         success: true,
+        rowSetComplete: true,
         rows: [],
         affectedRows: 0,
       };
@@ -200,7 +202,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         error.retryAfterMs = REMOTE_HANDOFF_SNAPSHOT_RETRY_AFTER_MS;
         throw error;
       }
-      return {success: true, rows: [], affectedRows: 0};
+      return {success: true, rowSetComplete: true, rows: [], affectedRows: 0};
     };
 
     const coordinator = new RebalanceCoordinator({
@@ -336,12 +338,14 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         const row = operationRows.get(params[0]) || null;
         return {
           success: true,
+          rowSetComplete: true,
           rows: row ? [{...row}] : [],
           affectedRows: row ? 1 : 0,
         };
       }
       return {
         success: true,
+        rowSetComplete: true,
         rows: [],
         affectedRows: 0,
       };
@@ -524,12 +528,14 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         const row = operationRows.get(params[0]) || null;
         return {
           success: true,
+          rowSetComplete: true,
           rows: row ? [{...row}] : [],
           affectedRows: row ? 1 : 0,
         };
       }
       return {
         success: true,
+        rowSetComplete: true,
         rows: [],
         affectedRows: 0,
       };

@@ -1914,6 +1914,14 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       operation_id: TEST_OPERATION_ID,
       workflow_step: WORKFLOW_STEP.SENDING,
       updated_at: TEST_CAPTURED_AT_MS,
+      steps_history: JSON.stringify([
+        ...operation.stepsHistory,
+        {
+          step: WORKFLOW_STEP.SENDING,
+          previousStep: WORKFLOW_STEP.PENDING,
+          timestamp: TEST_CAPTURED_AT_MS,
+        },
+      ]),
     });
     const persistedSending = await coordinator.repository.persistOperationUpdate(
       coordinator.repository.rowToOperation(sendingOperationRow),

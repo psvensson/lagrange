@@ -1,3 +1,7 @@
+import {
+  createCoordinatorSqlStore, createMockCache, createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -104,7 +108,6 @@ const TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE =
     .REPLICA_OPERATION_DISPATCH;
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_HANDOFF_MESSAGE_NOT_ACKNOWLEDGED = 'Message not acknowledged';
-const TEST_RETRY_DEFERRED_STATUS = 'retry_deferred';
 const TEST_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
 const TEST_RETRYABLE_TRANSITION_FAILURE =
   'retryable transition claim failure';
@@ -553,26 +556,20 @@ function buildTransactionCoordinator() {
 }
 
 function createCoordinator(overrides = {}) {
+  const {operationRows = [], ...coordinatorOptions} = overrides;
+  const store = createCoordinatorSqlStore(createMockCache({replicaOperations: operationRows}));
   const sqlQueryEngine = overrides.sqlQueryEngine || {
-    async executeQuery() {
-      return {success: true, rows: [], affectedRows: 0};
+    async executeQuery(sql, params) {
+      const result = store.execute(sql, params);
+      store.suspend();
+      return result;
     },
   };
 
   return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-    ...overrides,
+    ...coordinatorOptions,
     sqlQueryEngine,
-    controlPlaneSystemTableGateway: {
-      async readAuthoritativeRows(_tableName, sql, params = [], options = {}) {
-        return sqlQueryEngine.executeQuery(sql, params, options);
-      },
-      async readRows(_tableName, sql, params = [], options = {}) {
-        return sqlQueryEngine.executeQuery(sql, params, options);
-      },
-      async executeQuery(sql, params = [], options = {}) {
-        return sqlQueryEngine.executeQuery(sql, params, options);
-      },
-    },
+    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
   }));
 }
 
@@ -633,6 +630,20 @@ function buildPendingOperationRow({
     }]),
     entity_type: TEST_ENTITY_TYPE_PARTITION,
     entity_id: partitionId,
+  };
+}
+
+function buildSendingOperationRow(operation) {
+  return {
+    ...buildPendingOperationRow({
+      operationId: operation.operationId,
+      partitionId: operation.partitionId,
+      replicaId: operation.replicaId,
+      nowMs: operation.createdAt,
+    }),
+    workflow_step: WORKFLOW_STEP.SENDING,
+    updated_at: operation.updatedAt,
+    steps_history: JSON.stringify(operation.stepsHistory),
   };
 }
 
@@ -784,7 +795,6 @@ const registrationDependencies = Object.freeze({
   TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID,
   TEST_REQUIRED_DISTINCT_NODE_COUNT,
   TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME,
-  TEST_RETRY_DEFERRED_STATUS,
   TEST_RETRYABLE_HANDOFF_ERROR,
   TEST_RETRY_AFTER_MS,
   TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME,
@@ -836,6 +846,7 @@ const registrationDependencies = Object.freeze({
   assertTopologyOperatorWitness,
   buildDispatchPendingReentryPlanningSnapshot,
   buildPendingOperationRow,
+  buildSendingOperationRow,
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryObservationSnapshot,
   buildRemoteDispatchPendingOperationOwnerOutcome,
@@ -859,9 +870,15 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
     replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
     createdAt: TEST_CAPTURED_AT_MS,
     updatedAt: TEST_CAPTURED_AT_MS,
+    entityType: TEST_ENTITY_TYPE_PARTITION,
+    entityId: TEST_LOCAL_OWNER_PARTITION_ID,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS),
   });
   const snapshot = Object.freeze({
     operationId: TEST_OPERATION_ID,
+    partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
     actuation: Object.freeze({
       owner: OPERATION_WORKFLOW_OWNER,
       state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
@@ -880,6 +897,7 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
     }),
   });
   const coordinator = createCoordinator({
+    operationRows: [buildSendingOperationRow(operation)],
     nodeId: TEST_OBSERVER_NODE_ID,
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
@@ -968,9 +986,15 @@ registerCase(
       replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
       createdAt: TEST_CAPTURED_AT_MS,
       updatedAt: TEST_CAPTURED_AT_MS,
+      entityType: TEST_ENTITY_TYPE_PARTITION,
+      entityId: TEST_LOCAL_OWNER_PARTITION_ID,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS),
     });
     const snapshot = Object.freeze({
       operationId: TEST_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
       actuation: Object.freeze({
         owner: OPERATION_WORKFLOW_OWNER,
         state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
@@ -989,6 +1013,7 @@ registerCase(
       }),
     });
     const coordinator = createCoordinator({
+      operationRows: [buildSendingOperationRow(operation)],
       nodeId: TEST_OBSERVER_NODE_ID,
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {

@@ -1,3 +1,4 @@
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   registerCase,
@@ -76,7 +77,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
     TEST_REPRESENTATIVE_PUBLICATION_OPERATION_ID,
     TEST_REQUIRED_DISTINCT_NODE_COUNT,
     TEST_RETRY_DEFERRED_HANDOFF_TEST_NAME,
-    TEST_RETRY_DEFERRED_STATUS,
     TEST_RETRYABLE_HANDOFF_ERROR,
     TEST_RETRY_AFTER_MS,
     TEST_RETRY_SCHEDULED_REENTRY_TEST_NAME,
@@ -97,6 +97,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
     WORKFLOW_STEP,
     buildDispatchPendingReentryPlanningSnapshot,
     buildPendingOperationRow,
+    buildSendingOperationRow,
     buildTransactionCoordinator,
     createCoordinator,
   } = dependencies;
@@ -117,7 +118,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   const TEST_OWNER_LANE_HELD_REENTRY_TEST_NAME =
   'priority recovery snapshots defer dispatch-pending re-entry when the ' +
   'operation owner lane is already held';
-  const TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT = 'present';
   const TEST_ACTIVE_HANDOFF_RETRY_TEST_NAME =
   'priority recovery snapshots surface retry-scheduled rebalancer handoff ' +
   'progress while a remote handoff retry is already active';
@@ -453,17 +453,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
 
       try {
         coordinator.initialize();
-        const operation = coordinator.repository.rowToOperation(operationRow);
-        coordinator.workflowOwner.repository
-          .getOperationsByEntityAuthoritativeObservation = async () => {
-            return Object.freeze({
-              state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: 1,
-              operations: Object.freeze([operation]),
-              deferredOutcome: null,
-              retryAfterMs: null,
-            });
-          };
 
         const snapshot =
       await coordinator.workflowOwner
@@ -629,17 +618,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
 
       try {
         coordinator.initialize();
-        const operation = coordinator.repository.rowToOperation(operationRow);
-        coordinator.workflowOwner.repository
-          .getOperationsByEntityAuthoritativeObservation = async () => {
-            return Object.freeze({
-              state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: 1,
-              operations: Object.freeze([operation]),
-              deferredOutcome: null,
-              retryAfterMs: null,
-            });
-          };
         const singleFlightKey =
       coordinator.workflowOwner.getOperationOwnerSingleFlightKey(
         TEST_OPERATION_ID,
@@ -814,16 +792,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       try {
         coordinator.initialize();
         const operation = coordinator.repository.rowToOperation(operationRow);
-        coordinator.workflowOwner.repository
-          .getOperationsByEntityAuthoritativeObservation = async () => {
-            return Object.freeze({
-              state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: 1,
-              operations: Object.freeze([operation]),
-              deferredOutcome: null,
-              retryAfterMs: null,
-            });
-          };
         t.equal(
           coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
             operation,
@@ -904,9 +872,15 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
       createdAt: TEST_CAPTURED_AT_MS,
       updatedAt: TEST_CAPTURED_AT_MS,
+      entityType: TEST_ENTITY_TYPE_PARTITION,
+      entityId: TEST_LOCAL_OWNER_PARTITION_ID,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS),
     });
     const snapshot = Object.freeze({
       operationId: TEST_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
       actuation: Object.freeze({
         owner: OPERATION_WORKFLOW_OWNER,
         state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
@@ -925,6 +899,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       }),
     });
     const coordinator = createCoordinator({
+      operationRows: [buildSendingOperationRow(operation)],
       nodeId: TEST_OBSERVER_NODE_ID,
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
@@ -1018,9 +993,15 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       replicaId: TEST_LOCAL_OWNER_REPLICA_ID,
       createdAt: TEST_CAPTURED_AT_MS,
       updatedAt: TEST_CAPTURED_AT_MS,
+      entityType: TEST_ENTITY_TYPE_PARTITION,
+      entityId: TEST_LOCAL_OWNER_PARTITION_ID,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS),
     });
     const snapshot = Object.freeze({
       operationId: TEST_OPERATION_ID,
+      partitionId: TEST_LOCAL_OWNER_PARTITION_ID,
       capturedAt: TEST_CAPTURED_AT_MS,
       operationOwnerObservation: Object.freeze({
         effectCommand:
@@ -1047,6 +1028,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       }),
     });
     const coordinator = createCoordinator({
+      operationRows: [buildSendingOperationRow(operation)],
       nodeId: TEST_OBSERVER_NODE_ID,
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
@@ -1409,7 +1391,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       ].map(([operationId, partitionId, replicaId]) => Object.freeze({
         ...buildPendingOperationRow({operationId, partitionId, replicaId,
           nowMs: TEST_OPERATION_CREATED_AT_MS}),
-        status: TEST_RETRY_DEFERRED_STATUS,
       })));
       const authoritativeOperationRows = [...witnessOperationRows];
       const sqlQueryEngine = {
@@ -1430,10 +1411,14 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
             };
           }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+            const matching = normalizedSql.includes('WHERE entity_type = ?') ?
+              authoritativeOperationRows.filter((row) =>
+                row.entity_type === params[0] && row.entity_id === params[1]) :
+              authoritativeOperationRows;
             return {
               success: true,
-              rows: authoritativeOperationRows.map((row) => ({...row})),
-              affectedRows: authoritativeOperationRows.length,
+              rows: matching.map((row) => ({...row})),
+              affectedRows: matching.length,
             };
           }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
@@ -1516,16 +1501,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         const operations = witnessOperationRows.map((row) =>
           coordinator.repository.rowToOperation(row),
         );
-        coordinator.workflowOwner.repository
-          .getOperationsByEntityAuthoritativeObservation = async () => {
-            return Object.freeze({
-              state: TEST_AUTHORITATIVE_OBSERVATION_STATE_PRESENT,
-              operationCount: operations.length,
-              operations: Object.freeze(operations),
-              deferredOutcome: null,
-              retryAfterMs: null,
-            });
-          };
         for (const operation of operations) {
           t.equal(
             coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
@@ -1558,7 +1533,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
           operations.map((operation) => [
             operation.partitionId,
             WORKFLOW_STEP.PENDING,
-            TEST_RETRY_DEFERRED_STATUS,
+            TEST_STATUS_PENDING,
             PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
             PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
             TEST_PROGRESS_CONTRACT_STATE_PENDING,
