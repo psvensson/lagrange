@@ -136,8 +136,10 @@ function assertOperationUpdateSubject(expected, actual) {
   }
   // An admitted CREATE owns its exact binding; a pre-admission REPLACE can
   // legitimately allocate a replica before the expected-step write.
-  if (expected.createAdmissionState !== null && expected.createAdmissionState !== undefined) {
-    requireOutcome(expected.replicaId === actual.replicaId, 'admitted replica binding differs');
+  const mayBindReplaceReplica = expected.type === OperationType.REPLACE &&
+    (expected.createAdmissionState === null || expected.createAdmissionState === undefined);
+  if (!mayBindReplaceReplica) {
+    requireOutcome(expected.replicaId === actual.replicaId, 'fixed replica binding differs');
   }
 }
 

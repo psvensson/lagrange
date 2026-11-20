@@ -447,14 +447,11 @@ export function registerReplicaOperationRepositoryTailMoreTests({
         }),
       );
 
-      const result = await repo.persistOperationUpdate(op);
+      await t.rejects(repo.persistOperationUpdate(op),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true,
+          deferRetry: true, retryAfterMs: TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS},
+        'a known write retains retry guidance without claiming authoritative confirmation');
       const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
-
-      t.equal(
-        result.persisted,
-        true,
-        'a recent owner-persisted transition should defer instead of failing hard on one retryable authoritative confirmation failure',
-      );
       t.equal(
         outcome?.confirmationState,
         VISIBILITY_CONFIRMATION_STATE_DEFERRED,

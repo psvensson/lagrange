@@ -1120,16 +1120,12 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         updated_at: 200,
       }));
 
-      const persisted = await repo.persistOperationUpdate(operation);
+      await t.rejects(repo.persistOperationUpdate(operation),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true},
+        'a known write with deferred confirmation cannot return a settled projection');
       const observation = await repo.getOperationsByEntityAuthoritativeObservation(
         TEST_ENTITY_TYPE,
         TEST_PARTITION_ID,
-      );
-
-      t.equal(
-        persisted.persisted,
-        true,
-        'deferred authoritative confirmation should not unwind the persisted update',
       );
       t.equal(
         observation?.state,

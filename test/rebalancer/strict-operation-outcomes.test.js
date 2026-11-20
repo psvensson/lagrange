@@ -250,6 +250,9 @@ const MALFORMED_REPLIES = [
     entityId: 'different-entity'}})],
   ['wrong requested replica', (result) => ({...result, operation: {...result.operation,
     replicaId: 'different-replica'}})],
+  ['adopted different replica', (result) => ({...result, persisted: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+    operation: {...result.operation, replicaId: 'different-incarnation'}})],
   ['refusal with payload', (result) => ({...result, persisted: false,
     disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED})],
 
@@ -812,3 +815,131 @@ test('strict outcomes crash after release before notification resumes through ow
   t.equal(reopened.coordinator.recentOperationIntents.size, 0,
     'the volatile intent cache is empty after process reconstruction');
 });
+
+
+test('strict outcomes known terminal preimage cannot become recovered progress after zero-effect reply loss',
+  async (t) => {
+    const fixture = createFixture(t).current;
+    const operation = await seedOperation(t, fixture, 'strict-zero-effect-lost-reply');
+    const committed = await persistTerminalWitness(fixture, operation);
+    const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+    let mutationAttempts = 0;
+    fixture.gateway.submitMutation = async (mutation, options) => {
+      const result = await submit(mutation, options);
+      if (mutation.operation !== 'update' || !mutation.data?.workflow_step) return result;
+      mutationAttempts++;
+      t.equal(result.partitionResult.affectedRows, 0,
+        'the immutable terminal row cannot be changed by another identical terminal CAS');
+      const participant = {error: 'query_admission_deferred',
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', retryAfterMs: 250,
+        deferRetry: true, failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS};
+      return {success: false, ...participant,
+        firstFailedParticipant: participant, participantFailures: [participant]};
+    };
+    const persisted = await fixture.coordinator.repository.persistOperationUpdate(
+      structuredClone(committed.operation), {terminalTransition: true});
+    const replay = buildOperationTransitionOutcome(persisted);
+    t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+    t.equal(replay.committed, false, 'preexisting settlement is never new recovered progress');
+    t.equal(mutationAttempts, 0, 'known replay does not send an unnecessary mutation');
+    t.same(replay.operation, committed.operation);
+  });
+
+test('strict outcomes competing terminal writer between preimage and SQL cannot be overwritten',
+  async (t) => {
+    const fixture = createFixture(t).current;
+    const operation = await seedOperation(t, fixture, 'strict-terminal-race');
+    const repository = fixture.coordinator.repository;
+    const now = Date.now();
+    const winner = {...operation, workflowStep: WORKFLOW_STEP.FAILED,
+      status: ReplicaStatus.FAILED, updatedAt: now, completedAt: now,
+      errorMessage: 'competing durable failure',
+      stepsHistory: [...operation.stepsHistory, {step: WORKFLOW_STEP.FAILED, timestamp: now}]};
+    const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+    let injected = false;
+    let loserChanges = null;
+    fixture.gateway.submitMutation = async (mutation, options) => {
+      if (!injected && mutation.operation === 'update' && mutation.data?.workflow_step) {
+        injected = true;
+        const committed = await submit({operation: 'update',
+          tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          whereClause: repository.buildReplicaOperationUpdateWhereClause(winner, null,
+            {terminalTransition: true}),
+          data: repository.buildReplicaOperationUpdateData(winner)}, options);
+        t.equal(committed.partitionResult.affectedRows, 1, 'competing SQL terminal CAS commits');
+        const lost = await submit(mutation, options);
+        loserChanges = lost.partitionResult.affectedRows;
+        return lost;
+      }
+      return submit(mutation, options);
+    };
+    const outcome = await fixture.coordinator.workflowOwner.completeOperation(operation);
+    t.equal(loserChanges, 0, 'the actual losing SQLite CAS changes no row');
+    t.equal(outcome.committed, false);
+    t.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED);
+    t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+    t.equal(outcome.operation.errorMessage, winner.errorMessage);
+    t.same(outcome.operation.stepsHistory, winner.stepsHistory);
+    t.same(await repository.queryAuthoritativeOperationById(operation.operationId),
+      outcome.operation);
+    t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+  });
+
+
+test('strict outcomes priority claim consumes the exact confirmed operation', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-priority-claim');
+  const owner = fixture.coordinator.workflowOwner;
+  const claimed = await owner.claimPriorityDispatchTransition(operation);
+  const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
+  t.equal(claimed, operation, 'the caller retains its operation object');
+  t.equal(durable.workflowStep, WORKFLOW_STEP.SENDING, 'the real conditional claim commits');
+  t.same(claimed, durable, 'lease, history and semantic fields come from the confirmed row');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+});
+
+
+test('strict outcomes unreadable terminal preimage cannot earn recovered credit from a later row',
+  async (t) => {
+    const fixture = createFixture(t).current;
+    const operation = await seedOperation(t, fixture, 'strict-unreadable-preimage');
+    const terminal = await persistTerminalWitness(fixture, operation);
+    const repository = fixture.coordinator.repository;
+    const read = fixture.gateway.executeQuery.bind(fixture.gateway);
+    const submit = fixture.gateway.submitMutation.bind(fixture.gateway);
+    let unavailable = true;
+    let mutationAttempts = 0;
+    let refusedReads = 0;
+    fixture.gateway.executeQuery = async (sql, params, options) => {
+      if (unavailable && sql.includes('SELECT') && sql.includes('replica_operations')) {
+        refusedReads++;
+        return {success: false, error: 'injected preimage authority unavailable'};
+      }
+      return read(sql, params, options);
+    };
+    fixture.gateway.submitMutation = async (mutation, options) => {
+      const result = await submit(mutation, options);
+      if (mutation.operation !== 'update' || !mutation.data?.workflow_step) return result;
+      mutationAttempts++;
+      t.equal(result.partitionResult.affectedRows, 0, 'the existing terminal cannot be rewritten');
+      unavailable = false;
+      const participant = {error: 'query_admission_deferred',
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', retryAfterMs: 250,
+        deferRetry: true, failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS};
+      return {success: false, ...participant,
+        firstFailedParticipant: participant, participantFailures: [participant]};
+    };
+    const attempt = await observeAttempt(() => repository.persistOperationUpdate(
+      structuredClone(terminal.operation), {terminalTransition: true}));
+    t.ok(refusedReads > 0, 'the real read transport refused preimage authority');
+    t.equal(attempt.error?.deferRetry, true, 'unproved preimage remains explicit uncertainty');
+    t.equal(attempt.outcome, null, 'later visibility cannot manufacture recovered progress');
+    t.equal(mutationAttempts, 0, 'no mutation is submitted without the required preimage');
+    t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+    unavailable = false;
+    const replay = await repository.persistOperationUpdate(structuredClone(terminal.operation),
+      {terminalTransition: true});
+    t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+    t.equal(buildOperationTransitionOutcome(replay).committed, false);
+    t.same(replay.operation, terminal.operation, 'fresh authority proves the original exact winner');
+  });
