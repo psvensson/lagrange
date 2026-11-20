@@ -420,6 +420,9 @@ class ManagementV1Owner {
     this.decommissionSupported = typeof options.onDecommissionNode === FUNCTION_TYPE;
     this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
       ...pickPorts(options, ROLLING_UPGRADE_PORTS),
+      ...(typeof options.currentVersion === STRING_TYPE ? {currentVersion: options.currentVersion} : {}),
+      ...(typeof options.currentArtifactDigest === STRING_TYPE ?
+        {currentArtifactDigest: options.currentArtifactDigest} : {}),
       supportEnvelopeOwner: this.supportEnvelopeOwner,
     });
     this.backupRestoreOwner = options.backupRestoreOwner ?? createBackupRestoreOwner(this);

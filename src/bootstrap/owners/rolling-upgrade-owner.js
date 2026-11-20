@@ -113,15 +113,17 @@ function isClusterNotReady(snap) {
 // certified by a support envelope of this build's cluster format revision is
 // admitted. Without a configured envelope nothing is certified, so the pair
 // is refused (fail closed), never admitted by the semver rule alone.
-function isOutsideSupportEnvelope(owner, targetVersion, nodeCount) {
-  if (!SupportEnvelopeOwner.isOwner(owner.supportEnvelopeOwner)) return true;
-  return !SupportEnvelopeOwner.prototype.validateUpgradePair.call(owner.supportEnvelopeOwner, {
+function supportAdmission(owner, parameters, snapshot) {
+  if (!SupportEnvelopeOwner.isOwner(owner.supportEnvelopeOwner)) return null;
+  return SupportEnvelopeOwner.prototype.validateUpgradePair.call(owner.supportEnvelopeOwner, {
     sourceVersion: owner.currentVersion,
-    targetVersion,
-    nodeCount,
-  }).admitted;
+    sourceArtifactDigest: owner.currentArtifactDigest,
+    targetVersion: parameters.targetVersion,
+    targetArtifactDigest: parameters.targetArtifactDigest,
+    nodeCount: snapshot.nodeIds.length,
+  });
 }
-function findPreflightFailure(owner, params, snap) {
+function findPreflightFailure(owner, params, snap, admission) {
   const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
   if (!owner.capabilitySupported) return L4_CODE.UPGRADE_CAPABILITY_UNSUPPORTED;
   if (isSnapshotIncomplete(snap)) return L4_CODE.CLUSTER_NOT_READY;
@@ -134,7 +136,7 @@ function findPreflightFailure(owner, params, snap) {
     [snap.hasPartitionQuorum !== true, L4_CODE.QUORUM_SAFETY_HALT],
     [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
-    [isOutsideSupportEnvelope(owner, tVer, snap.nodeIds.length),
+    [admission?.admitted !== true,
       L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
   ].find(([failed]) => failed);
   return hit ? hit[1] : UNSET;
@@ -226,21 +228,26 @@ class RollingUpgradeOwner {
     return Boolean(this.activeOperation && !TERM_STATES.includes(this.activeOperation.state));
   }
   evaluatePreflight(parameters, clusterSnapshot) {
-    const code = findPreflightFailure(this, parameters, clusterSnapshot);
+    const admission = isSnapshotIncomplete(clusterSnapshot) ? null :
+      supportAdmission(this, parameters ?? {}, clusterSnapshot);
+    const code = findPreflightFailure(this, parameters, clusterSnapshot, admission);
     return code ? {ok: false, valid: false, reasonCode: code} : PREFLIGHT_SUCCESS;
   }
   startUpgrade({operationId, lagrangeOperationId, parameters, clusterSnapshot, nowMs}) {
     const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
     if (this.operations.has(operationId)) return this.getOperationStatus(operationId);
     const snap = clusterSnapshot ?? UNSET;
-    const code = findPreflightFailure(this, parameters, snap);
+    const admission = isSnapshotIncomplete(snap) ? null :
+      supportAdmission(this, parameters ?? {}, snap);
+    const code = findPreflightFailure(this, parameters, snap, admission);
     if (code) {
       return commitActiveOp(this, operationId, buildOperationRecord(
         operationId, lagrangeOperationId, OP_STATE.REJECTED, code, parameters, timeMs, timeMs));
     }
-    return this.initiatePlan(operationId, lagrangeOperationId, parameters, snap, timeMs);
+    return this.initiatePlan(operationId, lagrangeOperationId, parameters, snap, timeMs,
+      admission.binding);
   }
-  initiatePlan(opId, lagrangeOpId, params, snap, timeMs) {
+  initiatePlan(opId, lagrangeOpId, params, snap, timeMs, supportBinding = null) {
     const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
     const nodeIds = snap.nodeIds;
     for (const id of nodeIds) {
@@ -259,8 +266,10 @@ class RollingUpgradeOwner {
       startedAtMs: timeMs, updatedAtMs: timeMs, readyzWithdrawn: false, leadershipDrained: false,
     }));
     this.currentNodeIndex = 0;
-    const op = commitActiveOp(this, opId, buildOperationRecord(
-      opId, lagrangeOpId, this.initialOperationState, UNSET, params, timeMs, UNSET, this.nodePlan));
+    const record = buildOperationRecord(
+      opId, lagrangeOpId, this.initialOperationState, UNSET, params, timeMs, UNSET, this.nodePlan);
+    if (supportBinding !== null) record.supportBinding = supportBinding;
+    const op = commitActiveOp(this, opId, record);
     this.drainNodeAtIndex(0, timeMs);
     return op;
   }
@@ -418,7 +427,11 @@ class RollingUpgradeOwner {
   executeRollback(options = {}) {
     const owner = this.supportEnvelopeOwner;
     const eligibility = SupportEnvelopeOwner.isOwner(owner) ?
-      SupportEnvelopeOwner.prototype.evaluateRollback.call(owner, options) :
+      SupportEnvelopeOwner.prototype.evaluateRollback.call(owner, {
+        ...options, activeBinding: this.activeOperation?.supportBinding,
+        cutoffExceeded: options.cutoffExceeded === true || !this.hasActiveUpgrade(),
+        currentArtifactDigest: this.currentArtifactDigest,
+      }) :
       evaluateRollbackEligibility(null, options);
     if (!eligibility.eligible) {
       return {
@@ -429,6 +442,7 @@ class RollingUpgradeOwner {
       };
     }
     this.currentVersion = eligibility.targetVersion;
+    this.currentArtifactDigest = eligibility.targetArtifactDigest;
     for (const nodeId of Object.keys(this.nodeVersions)) {
       this.nodeVersions[nodeId] = eligibility.targetVersion;
     }

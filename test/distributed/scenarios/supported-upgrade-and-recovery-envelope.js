@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_SOURCE_VERSION,
   DEFAULT_TARGET_VERSION,
+  REQUIRED_DRILL_IDS,
   SUPPORT_ENVELOPE_REASON_CODE,
   SupportEnvelopeOwner,
   buildSupportEnvelopeRecord,
@@ -173,9 +174,11 @@ async function runSupportedUpgradeAndRecoveryScenario(cluster = null) {
   const owner = new SupportEnvelopeOwner({envelope: policy});
   const report = {
     byocBackupRestore: await executeByocPartitionBackupRestoreProof(owner),
+    executionKind: 'POLICY_SIMULATION',
     joinHandshake: await executeJoinHandshakeAdmissionProof(),
     managementSummary: owner.getManagementSummary(),
     policy,
+    requiredPhysicalDrillIds: [...REQUIRED_DRILL_IDS],
     scenarioName: SCENARIO_NAME,
     upgradeRefusal: observeUpgradeRefusal(owner),
   };

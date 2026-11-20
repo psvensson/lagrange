@@ -159,3 +159,16 @@ test('source execution inspection refuses a fabricated verdict or physical scope
   assert.equal(forged.outcome, 'REFUSED');
   assert.equal(forged.physicalEvidence, 'UNAVAILABLE');
 });
+
+test('runtime rejects a caller-supplied certification object without recorded originals', () => {
+  const envelope = buildSupportEnvelopeRecord();
+  const owner = new SupportEnvelopeOwner({
+    envelope,
+    executionEvidence: {certified: true, admitted: true, drillIds: REQUIRED_DRILL_IDS},
+  });
+  const facts = owner.getManagementSummary();
+  assert.equal(facts.policyValid, true);
+  assert.equal(facts.evidenceReasonCode, SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_REFUSED);
+  assert.deepEqual(facts.certifiedDrillIds, []);
+  assert.equal(owner.validateUpgradePair(envelope.versionPair).admitted, false);
+});
