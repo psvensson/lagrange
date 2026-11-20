@@ -183,7 +183,8 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
       entity_type: operation.entityType,
       entity_id: operation.entityId,
       partition_id: operation.partitionId,
-      target_node_id: TARGET_NODE_ID,
+      target_node_id: operation.targetNodeId,
+      reason_code: fixture.coordinator.getReservationReasonCode(operation.type),
       estimated_bytes: 1,
       amplification_factor: 1,
       status: RESERVATION_STATUS.ACTIVE,
@@ -525,9 +526,13 @@ test('retained durable FAILED ADD releases during a target authority outage', as
 });
 
 test('priority superseded-target failure requires an exact authoritative observation', async (t) => {
-  const fixture = createFixture(t).current;
   const partitionId = 'sql_transactions-p1';
-  const operation = await seedOperation(t, fixture, 'superseded-target-authority', {
+  const operationId = 'superseded-target-authority';
+  const fixture = createFixture(t, {
+    controlPlaneReadinessService: buildPriorityDrainSupersededReadinessService(
+      partitionId, operationId),
+  }).current;
+  const operation = await seedOperation(t, fixture, operationId, {
     type: OperationType.REPLACE,
     partitionId, entityId: partitionId,
     sourceReplicaId: `${partitionId}-r1`,
