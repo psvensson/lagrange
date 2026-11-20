@@ -871,10 +871,18 @@ test(
             WORKFLOW_STEP.ACTIVE,
           );
           t.equal(
-            activeUpdateCalls.some((record) => record.result === true),
+            activeUpdateCalls.some((record) =>
+              record.result === OPERATION_RECONCILE_OUTCOME.ADVANCED),
             true,
-            'the ACTIVE CAS (expected SYNCING) committed against the ' +
-            'consistent row',
+            'the ACTIVE reconcile reports a committed advance',
+          );
+          t.ok(
+            store.state.updateAttempts.some((attempt) =>
+              attempt.isCas && attempt.applied &&
+              attempt.workflowStep === WORKFLOW_STEP.ACTIVE &&
+              attempt.expectedWorkflowStep === WORKFLOW_STEP.SYNCING &&
+              attempt.authoritativeStepAtWrite === WORKFLOW_STEP.SYNCING),
+            'SQLite applied the ACTIVE CAS against the exact SYNCING row',
           );
           t.not(
             store.state.authoritative.workflowStep,
