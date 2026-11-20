@@ -104,7 +104,8 @@ async function persistFailedCreateLifecycle(
   transitionOptions,
   resolveCreateReplay,
 ) {
-  if (await hasConflictingCreateIncarnation(handler, options)) {
+  if (await hasConflictingCreateIncarnation(handler, options) ||
+      options.isCreateCurrent?.() === false) {
     return {conflict: true, replay: null};
   }
   try {
@@ -122,7 +123,8 @@ async function persistFailedCreateLifecycle(
       options.createAdmissionEvidence,
     );
     if (replay) return {conflict: false, replay};
-    if (await hasConflictingCreateIncarnation(handler, options)) {
+    if (await hasConflictingCreateIncarnation(handler, options) ||
+        options.isCreateCurrent?.() === false) {
       return {conflict: true, replay: null};
     }
     if (isRetryableControlPlaneError(error) !== true) throw error;

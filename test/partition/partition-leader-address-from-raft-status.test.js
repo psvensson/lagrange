@@ -15,6 +15,8 @@
  *       cross-check helper and the hint symbols no longer exist
  */
 
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -205,12 +207,13 @@ test('(n) a deferred answer keeps the accepted hint: the leader that deferred ' 
     resolveLearnerPromotionProofDeliveryTimeoutMs: () => 1000,
     sendReplicaAdmissionRequest:
       PartitionService.prototype.sendReplicaAdmissionRequest,
-    transport: {deliver: async (address) => {
-      delivered.push(address);
-      return buildDeliveryEnvelope({acknowledged: true}, {
-        partitionId: PARTITION_ID, replicaIdentity: SELF, operationId: 'op-1',
-        admission: {outcome: 'deferred', reason: 'quorum'}});
-    }},
+  };
+  bindRegisteredReplicaHandler(target);
+  target.transport.deliver = async (address) => {
+    delivered.push(address);
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      partitionId: PARTITION_ID, replicaIdentity: SELF, operationId: 'op-1',
+      admission: {outcome: 'deferred', reason: 'quorum'}});
   };
   await PartitionService.prototype.driveReplicaAdmission.call(target);
   await PartitionService.prototype.driveReplicaAdmission.call(target);

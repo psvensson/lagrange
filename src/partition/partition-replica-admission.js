@@ -620,7 +620,7 @@ function stopReplicaAdmission(service) {
 function isCurrentAdmissionRequest(service, request, signal) {
   return !signal.aborted && service.isShutdown !== true &&
     service.replicaAdmissionRequest === request &&
-    (!service.transportHandler || isExactReplicaHandlerRegistered(
+    (!service.transport || isExactReplicaHandlerRegistered(
       service.transport, service.unifiedAddress, service.transportHandler));
 }
 

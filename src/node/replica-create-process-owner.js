@@ -126,6 +126,15 @@ function rowMatchesActivePhysicalWorker(row, evidence) {
     row?.create_admission_state !== CLOSED_ADMISSION_STATE;
 }
 
+function ownsReplicaCreatePhysicalWorker(owner, claim, expectedEvidence = null) {
+  const evidence = replicaCreatePhysicalWorkerEvidence(claim);
+  return evidence !== null &&
+    (!expectedEvidence || evidence === expectedEvidence) &&
+    evidence.admissionState !== CLOSED_ADMISSION_STATE &&
+    matchesPhysicalWorkerOwner(owner, evidence) &&
+    owner.activePhysicalWorkerOperationIds.get(evidence.operationId) === claim;
+}
+
 async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
   if (!isReplicaCreateAdmissionEvidence(evidence) ||
       evidence.admissionState === CLOSED_ADMISSION_STATE) return false;
@@ -151,17 +160,9 @@ async function claimReplicaCreateDurablePhysicalWorker(owner, evidence) {
 async function validatePhysicalWorkerClaimInMemory(owner, claim,
   expectedEvidence = null) {
   const evidence = replicaCreatePhysicalWorkerEvidence(claim);
-  if (!isPhysicalWorkerClaim(claim) ||
-      expectedEvidence && evidence !== expectedEvidence ||
-      evidence?.admissionState === CLOSED_ADMISSION_STATE ||
-      !matchesPhysicalWorkerOwner(owner, evidence) ||
-      owner.activePhysicalWorkerOperationIds.get(evidence.operationId) !==
-        claim) {
-    return false;
-  }
+  if (!ownsReplicaCreatePhysicalWorker(owner, claim, expectedEvidence)) return false;
   await owner.requireCurrentBootIncarnation();
-  return owner.activePhysicalWorkerOperationIds.get(evidence.operationId) ===
-    claim && replicaCreatePhysicalWorkerEvidence(claim) === evidence;
+  return ownsReplicaCreatePhysicalWorker(owner, claim, evidence);
 }
 
 async function revalidateReplicaCreatePhysicalWorker(owner, claim,
@@ -321,6 +322,7 @@ export {
   commitReplicaCreateSnapshotInstall,
   hasReplicaCreatePhysicalWorkerForGeneration,
   isReplicaCreateProgressRowSuperseded,
+  ownsReplicaCreatePhysicalWorker,
   releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker,

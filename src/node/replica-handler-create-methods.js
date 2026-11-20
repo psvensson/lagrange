@@ -116,25 +116,54 @@ function lostBootPhysicalWorkerError(message) {
   );
 }
 
-function isCurrentReplicaCreateService(handler, replicaId, service) {
-  return handler.getTrackedService(replicaId) === service &&
-    service.isShutdown !== true;
+function replicaCreateWork(handler, request) {
+  const {operationId, replicaId, partitionId, createPhysicalWorkerClaim: claim} = request;
+  return {
+    operationId, replicaId, partitionId, claim,
+    tracker: handler.inProgressOperations.get(operationId),
+    service: handler.getTrackedService(replicaId),
+    openedService: null,
+    retiring: false,
+    progress: null,
+    owner: claim ? handler.getReplicaCreateAdmissionOwner() : null,
+  };
 }
 
-function retireStaleReplicaCreate(handler, request, service, progress,
-  trackedOperation) {
-  const {replicaId, partitionId, operationId, createPhysicalWorkerClaim} = request;
-  const retirement = handler.fenceFailedReplicaCreateRuntime(
-    replicaId, partitionId, service);
-  if (handler.creationProgressByReplica?.get(replicaId) === progress) {
+function ownsReplicaCreateWork(handler, work) {
+  const currentService = handler.getTrackedService(work.replicaId);
+  return handler.inProgressOperations.get(work.operationId) === work.tracker &&
+    (!work.progress?.replicaId ||
+      handler.creationProgressByReplica.get(work.replicaId) === work.progress) &&
+    (currentService === work.service || work.retiring && currentService === null) &&
+    (!work.claim || work.owner.ownsPhysicalWorker(work.claim));
+}
+
+function requireReplicaCreateWork(handler, work) {
+  if (!ownsReplicaCreateWork(handler, work) || work.openedService?.isShutdown === true) {
+    throw Object.assign(new Error(`CREATE work superseded for ${work.replicaId}`), {
+      code: CREATE_ADMISSION_ERROR_CODE.STALE,
+    });
+  }
+  handler.throwIfShuttingDown();
+}
+
+function releaseReplicaCreateWork(handler, work) {
+  const {operationId, replicaId, progress, tracker, claim, owner} = work;
+  if (progress && handler.creationProgressByReplica?.get(replicaId) === progress) {
     handler.clearReplicaCreationProgress(progress);
   }
-  if (handler.inProgressOperations.get(operationId) === trackedOperation) {
+  if (tracker && handler.inProgressOperations.get(operationId) === tracker) {
     handler.inProgressOperations.delete(operationId);
   }
-  handler.getReplicaCreateAdmissionOwner().releasePhysicalWorker(
-    createPhysicalWorkerClaim);
-  return retirement;
+  if (claim) owner.releasePhysicalWorker(claim);
+}
+
+function retireReplicaCreateWork(handler, work, error) {
+  work.retiring = true;
+  if (work.openedService) {
+    return handler.fenceFailedReplicaCreateRuntime(
+      work.replicaId, work.partitionId, work.openedService, error);
+  }
 }
 
 function learnerAdmissionWaitError(replicaId, outcome) {
@@ -145,17 +174,19 @@ async function settleCreateAdmissionProgress(
   handler,
   evidence,
   nextState,
-  {replicaId = null, partitionId = null, partitionService = null} = {},
+  {replicaId = null, partitionId = null, partitionService = null, isCreateCurrent} = {},
 ) {
   if (!evidence) return true;
   try {
     const progressed = await handler.getReplicaCreateAdmissionOwner()
       .markProgress(evidence, nextState);
-    if (!progressed) armCreateAdmissionRecoveryRearm(handler);
+    if (!progressed && isCreateCurrent?.() !== false) {
+      armCreateAdmissionRecoveryRearm(handler);
+    }
     return true;
   } catch (error) {
     return settleCreateAdmissionProgressFailure(handler, evidence, error,
-      {replicaId, partitionId, partitionService});
+      {replicaId, partitionId, partitionService, isCreateCurrent});
   }
 }
 
@@ -165,7 +196,7 @@ async function settleCreateAdmissionProgressFailure(
   handler,
   evidence,
   error,
-  {replicaId, partitionId, partitionService},
+  {replicaId, partitionId, partitionService, isCreateCurrent},
 ) {
   if (isSupersededAdmissionError(error)) {
     await retireSupersededCreateAdmissionRuntime(handler, {
@@ -179,7 +210,7 @@ async function settleCreateAdmissionProgressFailure(
     });
     return false;
   }
-  armCreateAdmissionRecoveryRearm(handler);
+  if (isCreateCurrent?.() !== false) armCreateAdmissionRecoveryRearm(handler);
   return true;
 }
 
@@ -260,20 +291,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
     startCreateReplicaAsync(request) {
       const operationId = request?.operationId;
       const replicaId = request?.replicaId;
+      const work = replicaCreateWork(this, request);
       // Start async creation after ACK has returned.
       this.registerOperationTask(
         new Promise((resolve) => {
           setImmediate(() => {
             let createStarted = false;
             const start = async () => {
-              if (this.shuttingDown) {
-                this.getReplicaCreateAdmissionOwner()
-                  .releasePhysicalWorker(request?.createPhysicalWorkerClaim);
-                this.inProgressOperations.delete(operationId);
-                this.localServices.delete(replicaId);
-                this.localReplicas.delete(replicaId);
-                return;
-              }
+              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
               const evidence = request?.createAdmissionEvidence;
               if (evidence && !await this.getReplicaCreateAdmissionOwner()
                 .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
@@ -281,18 +306,13 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                   `Current boot lost before queued CREATE ${operationId}`,
                 );
               }
+              if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
               createStarted = true;
-              await this.createReplicaAsync(request);
+              await this.createReplicaAsync(request, work);
             };
             resolve(start().catch((error) => {
-              if (!createStarted) {
-                this.getReplicaCreateAdmissionOwner()
-                  .releasePhysicalWorker(request?.createPhysicalWorkerClaim);
-                this.inProgressOperations.delete(operationId);
-                this.localServices.delete(replicaId);
-                this.localReplicas.delete(replicaId);
-              }
-              if (error?.bootAuthorityUnavailable === true &&
+              if (!createStarted && ownsReplicaCreateWork(this, work) &&
+                  error?.bootAuthorityUnavailable === true &&
                   error?.bootIncarnationSuperseded !== true) {
                 const tracked =
                   this.replicaStateMachine?.replicas?.get?.(replicaId);
@@ -305,6 +325,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
                 error: error.message,
                 stack: error.stack,
               });
+            }).finally(() => {
+              if (!createStarted) releaseReplicaCreateWork(this, work);
             }));
           });
         }),
@@ -334,7 +356,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * @return {Promise<void>}
      * @private
      */
-    async createReplicaAsync(request) {
+    async createReplicaAsync(request, work = replicaCreateWork(this, request)) {
       const {
         operationId,
         explicitOperationType,
@@ -352,28 +374,30 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       } = request;
       let createAdmissionEvidence = requestAdmissionEvidence;
       let createAttemptToken = requestAttemptToken;
-      const trackedOperation = this.inProgressOperations.get(operationId);
-      const createStartedAt = trackedOperation?.startedAt;
+      const createStartedAt = work.tracker?.startedAt;
       const createDeadlineAtMs = Number.isSafeInteger(createStartedAt) ?
         createStartedAt + this.syncTimeoutMs : null;
       const activationDeadlineAtMs = createDeadlineAtMs ??
         readHandlerNowMs(this) + this.syncTimeoutMs;
-      const progress = this.startReplicaCreationProgress({
-        partitionId,
-        replicaId,
-        peerTotal: 0,
-      });
-      let partitionService = null;
+      const isCreateCurrent = () =>
+        ownsReplicaCreateWork(this, work) && !this.shuttingDown;
       // A restart of this identity's own admissible durable row (B1) already
       // carries published admission input before any step of this attempt.
       let createPhase = replicaCreatePhaseAfterResume(
         REPLICA_CREATE_PHASE.BEFORE_RUNTIME, request.resumedLifecycleStatus);
       try {
-        this.throwIfShuttingDown();
+        requireReplicaCreateWork(this, work);
+        const progress = this.startReplicaCreationProgress({
+          partitionId,
+          replicaId,
+          peerTotal: 0,
+        });
+        work.progress = progress;
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
-        this.throwIfShuttingDown();
+        requireReplicaCreateWork(this, work);
         const {existed, record: identityRecord} = await priorExistence
           .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
+        requireReplicaCreateWork(this, work);
         // A refused or unreadable identity observation must not consume the
         // prior incarnation's retirement proof. Drop it only once this birth
         // has passed the authoritative observation.
@@ -387,13 +411,17 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             createAdmissionEvidence,
             createAttemptToken,
             createPhysicalWorkerClaim: request.createPhysicalWorkerClaim,
+            isCreateCurrent,
+            beginRuntimeRetirement: () => {
+              work.retiring = true;
+            },
           };
           const initialStatusPersisted =
             await this.persistReplicaCreateInitialStatus(initialStatusOptions);
-          if (initialStatusPersisted !== true) {
-            this.clearReplicaCreationProgress(progress);
-            return;
-          }
+          requireReplicaCreateWork(this, work);
+          if (initialStatusPersisted !== true) return;
+          work.service = this.getTrackedService(replicaId);
+          work.retiring = false;
           createAdmissionEvidence =
             initialStatusOptions.createAdmissionEvidence;
           createAttemptToken = initialStatusOptions.createAttemptToken;
@@ -425,7 +453,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             explicitOperationType,
           },
         );
-        this.throwIfShuttingDown();
+        requireReplicaCreateWork(this, work);
         const {
           tableName,
           tableId,
@@ -452,7 +480,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             `Current boot lost before physical CREATE ${operationId}`,
           );
         }
-        partitionService = await this.createPartitionService({
+        requireReplicaCreateWork(this, work);
+        const partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
@@ -469,14 +498,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             this.updateReplicaCreationProgress(progress, stageEvent),
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
+        work.openedService = partitionService;
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
-        if (
-          this.shuttingDown &&
-          typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
-        ) {
-          await partitionService.shutdown();
-        }
-        this.throwIfShuttingDown();
+        requireReplicaCreateWork(this, work);
         // Store service reference in localServices
         const admissionOperationId =
           createAdmissionEvidence?.operationId || operationId || null;
@@ -492,6 +516,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           partitionService.createAttemptToken = admissionAttemptToken;
         }
         this.localServices.set(replicaId, partitionService);
+        work.service = partitionService;
         this.setLocalReplica(replicaId, {
           replicaId,
           partitionId,
@@ -512,7 +537,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           stage: ReplicaStatus.SYNCING,
         });
         if (!skipLifecycleStatusPersistence) {
-          await priorExistence.recordReplicaIdentity(this, replicaId, partitionId, identityRecord);
+          await priorExistence.recordReplicaIdentity(
+            this, replicaId, partitionId, identityRecord, isCreateCurrent);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -527,19 +553,13 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // replica-admission-from-committed-operation). A pending answer is
         // re-sent on the learner-promotion cadence. The original CREATE
         // budget bounds this caller's wait independently of delivery effects.
-        if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
-          return retireStaleReplicaCreate(
-            this, request, partitionService, progress, trackedOperation);
-        }
+        requireReplicaCreateWork(this, work);
         if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
             typeof operationId === 'string' && operationId.length > 0) {
           const completed = await awaitBoundedReplicaAdmission(
             this, () => partitionService.requestReplicaAdmission(operationId),
             activationDeadlineAtMs);
-          if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
-            return retireStaleReplicaCreate(
-              this, request, partitionService, progress, trackedOperation);
-          }
+          requireReplicaCreateWork(this, work);
           if (!completed) {
             throw learnerAdmissionWaitError(
               replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
@@ -555,6 +575,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId, {
             deadlineAtMs: activationDeadlineAtMs, expectedService: partitionService,
+            isCreateCurrent,
           });
         } else if (isJoiningExistingGroup && !skipLifecycleStatusPersistence) {
           const admissionWait = await this.waitForLearnerAdmissionActivation(
@@ -567,11 +588,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               replicaId, admissionWait?.outcome);
           }
         }
-        if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
-          return retireStaleReplicaCreate(
-            this, request, partitionService, progress, trackedOperation);
-        }
-        this.throwIfShuttingDown();
+        requireReplicaCreateWork(this, work);
         if (admissionWaitFailure) throw admissionWaitFailure;
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
@@ -585,7 +602,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             identityExisted: existed,
             deadlineAtMs: createDeadlineAtMs,
           });
+          requireReplicaCreateWork(this, work);
         }
+        // The in-memory claim fences local successors. Before the advisory
+        // ACTIVE outcome, confirm that durable admission still names it.
+        if (work.claim && !await work.owner.revalidatePhysicalWorker(work.claim)) {
+          return retireReplicaCreateWork(this, work);
+        }
+        requireReplicaCreateWork(this, work);
         // Voter readiness is executor evidence, not permission to complete
         // the operation. Publish it before the SERVICES write so formation
         // cannot depend on a round-trip through the control plane being
@@ -607,23 +631,18 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               activationService: partitionService,
               createAdmissionEvidence,
               createAttemptToken,
+              isCreateCurrent,
             },
           );
+          requireReplicaCreateWork(this, work);
           const settled = await settleCreateAdmissionProgress(
             this,
             createAdmissionEvidence,
             CREATE_ADMISSION_STATE.ACTIVE,
-            {replicaId, partitionId, partitionService},
+            {replicaId, partitionId, partitionService, isCreateCurrent},
           );
-          if (settled === false) {
-            this.failReplicaCreationProgress(progress, null);
-            if (operationId) {
-              this.inProgressOperations.delete(operationId);
-              this.getReplicaCreateAdmissionOwner()
-                .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-            }
-            return;
-          }
+          if (settled === false) return;
+          requireReplicaCreateWork(this, work);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -634,12 +653,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
         }
         this.finishReplicaCreationProgress(progress, ReplicaStatus.ACTIVE);
-        // Clean up in-progress tracking
-        if (operationId) {
-          this.inProgressOperations.delete(operationId);
-          this.getReplicaCreateAdmissionOwner()
-            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-        }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
           operationId,
           replicaId,
@@ -653,29 +666,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           nodeId: this.nodeId,
         });
       } catch (error) {
+        if (!ownsReplicaCreateWork(this, work) ||
+            isSupersededAdmissionError(error) && !error?.bootAuthorityUnavailable) {
+          return retireReplicaCreateWork(this, work, error);
+        }
         if (this.shuttingDown) {
-          this.clearReplicaCreationProgress(progress);
-          await this.fenceFailedReplicaCreateRuntime(
-            replicaId, partitionId, partitionService, error);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
-          this.localServices.delete(replicaId);
-          this.localReplicas.delete(replicaId);
-          return;
+          return retireReplicaCreateWork(this, work, error);
         }
         if (error?.code ===
             REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
-          this.clearReplicaCreationProgress(progress);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
-          this.localServices.delete(replicaId);
-          this.localReplicas.delete(replicaId);
           this.emitExecutorOutcome(
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
             operationId,
@@ -691,32 +690,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           throw error;
         }
         if (error?.bootAuthorityUnavailable === true) {
-          await this.fenceFailedReplicaCreateRuntime(
-            replicaId,
-            partitionId,
-            partitionService,
-            error,
-          );
-          this.clearReplicaCreationProgress(progress);
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
-          this.localServices.delete(replicaId);
-          this.localReplicas.delete(replicaId);
-          if (error?.bootIncarnationSuperseded !== true) {
+          await retireReplicaCreateWork(this, work, error);
+          if (ownsReplicaCreateWork(this, work) &&
+              error?.bootIncarnationSuperseded !== true) {
             armCreateAdmissionRecoveryRearm(this);
           }
           throw error;
         }
-        await this.fenceFailedReplicaCreateRuntime(
-          replicaId,
-          partitionId,
-          partitionService,
-          error,
-        );
-        this.failReplicaCreationProgress(progress, error);
+        await retireReplicaCreateWork(this, work, error);
+        if (!ownsReplicaCreateWork(this, work) || this.shuttingDown) return;
         this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
           operationId,
           replicaId,
@@ -750,56 +732,34 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (error?.deferRetry === true && !claimCleanup) {
           failedOutcomeOptions.deferRetry = true;
         }
-        try {
-          // Confirm exact FAILED authority before publishing terminal outcome.
-          const failedLifecyclePublished =
-            await this.persistOrConfirmReplicaCreateFailed({
-              operationId,
-              replicaId,
-              partitionId,
-              errorMessage: error.message,
-              claimCleanup,
-              createAdmissionEvidence,
-              createAttemptToken,
-            });
-          if (failedLifecyclePublished) {
-            await settleCreateAdmissionProgress(
-              this,
-              createAdmissionEvidence,
-              CREATE_ADMISSION_STATE.FAILED,
-            );
-          }
-          if (failedLifecyclePublished) {
-            this.setLocalReplica(replicaId, {
-              replicaId,
-              partitionId,
-              status: ReplicaStatus.FAILED,
-            });
-          }
-          // CL-016 failure-path symmetry: a locally-seeded SERVICES row must
-          // never linger as a 'creating' ghost after terminal failure.
-          if (failedLifecyclePublished &&
-              this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-            this.seedLocalPriorityServiceRow(
-              replicaId,
-              partitionId,
-              ReplicaStatus.FAILED,
-            );
-          }
-          this.emitExecutorOutcome(
-            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
-            operationId,
-            WORKFLOW_STEP.FAILED,
-            failedOutcomeOptions,
-          );
-        } finally {
-          // Clean up in-progress tracking even when FAILED status persistence is deferred.
-          if (operationId) {
-            this.inProgressOperations.delete(operationId);
-            this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-          }
+        // Confirm exact FAILED authority before publishing terminal outcome.
+        const failedLifecyclePublished =
+          await this.persistOrConfirmReplicaCreateFailed({
+            operationId, replicaId, partitionId, errorMessage: error.message,
+            claimCleanup, createAdmissionEvidence, createAttemptToken,
+            isCreateCurrent,
+          });
+        if (!isCreateCurrent()) return;
+        if (!failedLifecyclePublished) throw error;
+        const settled = await settleCreateAdmissionProgress(
+          this, createAdmissionEvidence, CREATE_ADMISSION_STATE.FAILED,
+          {isCreateCurrent},
+        );
+        if (!settled || !isCreateCurrent()) return;
+        this.setLocalReplica(replicaId, {
+          replicaId, partitionId, status: ReplicaStatus.FAILED,
+        });
+        // CL-016: a locally seeded CREATING row must not linger after failure.
+        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+          this.seedLocalPriorityServiceRow(replicaId, partitionId, ReplicaStatus.FAILED);
         }
+        this.failReplicaCreationProgress(work.progress, error);
+        this.emitExecutorOutcome(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+          operationId,
+          WORKFLOW_STEP.FAILED,
+          failedOutcomeOptions,
+        );
         this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {
           operationId,
           replicaId,
@@ -809,16 +769,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         });
         throw error;
       } finally {
-        // The exact runtime remains in pendingRuntimeShutdowns when cleanup
-        // fails, but its physical CREATE worker claim must never remain held.
-        // Existing success/error paths delete tracking first; this is the
-        // fail-safe for a cleanup rejection that exits before those paths.
-        if (operationId && trackedOperation &&
-            this.inProgressOperations.get(operationId) === trackedOperation) {
-          this.inProgressOperations.delete(operationId);
-          this.getReplicaCreateAdmissionOwner()
-            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
-        }
+        // Failed retirement retains the exact runtime in cleanup custody.
+        // Volatile tracker/progress and the physical claim release exactly once.
+        releaseReplicaCreateWork(this, work);
       }
     }
   }

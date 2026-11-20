@@ -322,8 +322,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
       let polls = 0;
       while (readHandlerNowMs(this) < deadline) {
         this.throwIfShuttingDown();
-        if (expectedService && (this.getTrackedService(replicaId) !== expectedService ||
-            expectedService.isShutdown === true)) {
+        if (options.isCreateCurrent?.() === false ||
+            (expectedService && (this.getTrackedService(replicaId) !== expectedService ||
+              expectedService.isShutdown === true))) {
           return;
         }
         polls += 1;

@@ -196,6 +196,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         ReplicaStatus.FAILED,
         createAdmissionEvidence,
       );
+      if (options.isCreateCurrent?.() === false) return false;
       if (!replay) {
         const transitionOptions = {
           partitionId,
@@ -203,6 +204,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           cleanupToken,
           createAdmissionEvidence,
           createAttemptToken,
+          isCreateCurrent: options.isCreateCurrent,
         };
         const persisted = await persistFailedCreateLifecycle(
           this,
@@ -213,6 +215,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         if (persisted.conflict) return false;
         replay = persisted.replay;
       }
+      if (options.isCreateCurrent?.() === false) return false;
       if (!claimCleanup) return replay !== null;
       if (!cleanupToken || !replay ||
           await this.replicaStateMachine.claimFailedCreateCleanup(
@@ -241,10 +244,6 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      */
     deferRetryableReplicaCreateStatusWrite(options = {}) {
       const {operationId, partitionId, replicaId, error} = options;
-      if (operationId) {
-        this.inProgressOperations.delete(operationId);
-      }
-      this.localServices.delete(replicaId);
       this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_STATUS_WRITE_DEFERRED, {
         operationId,
         partitionId,
@@ -277,15 +276,18 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       if (await resumePersistedCreateStatus(this, options)) {
         return true;
       }
+      if (options.isCreateCurrent?.() === false) return false;
       try {
         if (!pendingStatusPersisted) {
           await this.persistReplicaStatusWithRetry(
             replicaId,
             ReplicaStatus.PENDING,
-            {partitionId, createAdmissionEvidence, createAttemptToken},
+            {partitionId, createAdmissionEvidence, createAttemptToken,
+              isCreateCurrent: options.isCreateCurrent},
           );
         }
         this.throwIfShuttingDown();
+        if (options.isCreateCurrent?.() === false) return false;
         if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
           return await this.persistPriorityReplicaCreateCreatingStatus(options);
         }
@@ -293,11 +295,13 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           partitionId,
           createAdmissionEvidence,
           createAttemptToken,
+          isCreateCurrent: options.isCreateCurrent,
         });
         return true;
       } catch (error) {
         const currentError = await expiredCreateInitialStatusError(
           this, options, error, observeCreateReplay);
+        if (options.isCreateCurrent?.() === false) return false;
         if (currentError !== error) throw currentError;
         if (shouldRethrowCreateStatusError(error)) throw error;
         this.deferRetryableReplicaCreateStatusWrite({
@@ -321,7 +325,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         ReplicaStatus.CREATING,
         options.createAdmissionEvidence || null,
       );
-      if (!replay) return false;
+      if (!replay || options.isCreateCurrent?.() === false) return false;
       this.setLocalReplica(replicaId, {
         replicaId,
         partitionId,
@@ -356,16 +360,18 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         ReplicaStatus.FAILED,
         createAdmissionEvidence,
       );
-      if (!replay) {
+      if (!replay || options.isCreateCurrent?.() === false) {
         return false;
       }
       if (replay.service.cleanup_token != null) return false;
       const staleRuntime = this.getTrackedService(replicaId);
+      options.beginRuntimeRetirement?.();
       await this.fenceFailedReplicaCreateRuntime(
         replicaId,
         partitionId,
         staleRuntime,
       );
+      if (options.isCreateCurrent?.() === false) return false;
       if (this.getTrackedService(replicaId)) {
         throw new Error(
           `Cannot redrive failed replica ${replicaId} while its runtime is tracked`,
@@ -376,6 +382,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         createAdmissionEvidence,
         options.createPhysicalWorkerClaim,
       );
+      if (options.isCreateCurrent?.() === false) return false;
       if (createAdmissionEvidence && !rotatingEvidence) return false;
       const restarted = await Promise.resolve(
         this.replicaStateMachine.restartFailedCreate(
@@ -389,7 +396,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           },
         ),
       );
-      if (restarted !== true) {
+      if (restarted !== true || options.isCreateCurrent?.() === false) {
         return false;
       }
       if (rotatingEvidence) {
@@ -399,7 +406,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
               rotatingEvidence, options.createPhysicalWorkerClaim);
         options.createAttemptToken = options.createAdmissionEvidence
           ?.attemptToken;
-        if (!options.createAdmissionEvidence) return false;
+        if (!options.createAdmissionEvidence || options.isCreateCurrent?.() === false) {
+          return false;
+        }
       }
       this.setLocalReplica(replicaId, {
         replicaId,
@@ -436,7 +445,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         ReplicaStatus.SYNCING,
         options.createAdmissionEvidence || null,
       );
-      if (!replay) {
+      if (!replay || options.isCreateCurrent?.() === false) {
         return false;
       }
       this.setLocalReplica(replicaId, {
@@ -478,6 +487,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           partitionId,
           createAdmissionEvidence: options.createAdmissionEvidence,
           createAttemptToken: options.createAttemptToken,
+          isCreateCurrent: options.isCreateCurrent,
         });
         return true;
       } catch (error) {
@@ -488,15 +498,15 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         if (isRetryableControlPlaneError(error) !== true) {
           throw error;
         }
-        await this.commitPriorityReplicaCreateStatusLocally({
+        return this.commitPriorityReplicaCreateStatusLocally({
           operationId,
           partitionId,
           replicaId,
           error,
           createAdmissionEvidence: options.createAdmissionEvidence,
           createAttemptToken: options.createAttemptToken,
+          isCreateCurrent: options.isCreateCurrent,
         });
-        return true;
       }
     }
 
@@ -699,6 +709,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      */
     async commitPriorityReplicaCreateStatusLocally(options = {}) {
       const {operationId, partitionId, replicaId, error} = options;
+      if (options.isCreateCurrent?.() === false) return false;
       this.setLocalReplica(replicaId, {
         replicaId,
         partitionId,
@@ -749,6 +760,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           });
         }
       }
+      if (options.isCreateCurrent?.() === false) return false;
       this.seedLocalPriorityServiceRow(
         replicaId,
         partitionId,
