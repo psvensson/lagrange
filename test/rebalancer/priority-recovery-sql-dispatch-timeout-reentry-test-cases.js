@@ -1,3 +1,4 @@
+import {createCoordinatorSqlStore, createMockCache} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase,
@@ -937,8 +938,8 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       );
       t.equal(
         snapshot?.coordinator?.operation?.workflowStep,
-        TEST_STEP_CREATING,
-        TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP,
+        TEST_STEP_SENDING,
+        'a rejected CREATING write cannot replace the last committed operation step',
       );
       t.equal(
         deferredTimers.length,
@@ -946,6 +947,8 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_ASSERT_SQL_PRIORITY_DEFERRED_PROGRESS_TIMER,
       );
 
+      t.ok(coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+        operationRow.operation_id), 'the rejected write retains the same operation’s retry');
       await deferredTimers[0].fn();
 
       t.equal(
@@ -1300,61 +1303,29 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       nowMs: TEST_CAPTURED_AT_MS,
     });
 
+    const ledger = {store: null};
+    let hideCommittedCreating = true;
+    const readLedgerRow = () => ledger.store.execute(
+      'SELECT * FROM replica_operations WHERE operation_id = ?', [operationRow.operation_id],
+    ).rows[0];
     const sqlQueryEngine = {
       async executeQuery(sql, params = [], options = {}) {
         const normalizedSql = String(sql);
         if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
           updateCount += 1;
           updateOptions.push({...options});
-          if (updateCount === 1) {
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[NUM.THREE];
-            operationRow.error_message = params[NUM.FOUR];
-            operationRow.steps_history = params[NUM.FIVE];
-            operationRow.replica_id = params[NUM.SIX];
-          }
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
-        if (
-          normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
-        normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
-        ) {
-          const operationId = params[0];
-          return {
-            success: true,
-            rows: operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
-              [{...operationRow}] :
-              [],
-            affectedRows:
-            operationId === TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID ?
-              1 :
-              0,
-          };
+          const result = ledger.store.execute(sql, params);
+          if (updateCount === 1) Object.assign(operationRow, readLedgerRow());
+          return result;
         }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
-          return {
-            success: true,
-            rows: [{...operationRow}],
-            affectedRows: 1,
-          };
+          const answer = ledger.store.execute(sql, params);
+          if (hideCommittedCreating && updateCount > 1 && answer.rows?.length === 1) {
+            return {...answer, rows: [{...operationRow}]};
+          }
+          return answer;
         }
-        if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
-          return {
-            success: true,
-            rows: [],
-            affectedRows: 0,
-          };
-        }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
+        return {success: true, rows: [], rowSetComplete: true};
       },
     };
 
@@ -1426,6 +1397,8 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
     }]);
 
+    ledger.store = createCoordinatorSqlStore(createMockCache({replicaOperations: [operationRow]}));
+
     try {
       coordinator.initialize();
 
@@ -1464,14 +1437,23 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         updateOptions[0]?.timeoutMs > 0,
         TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
       );
-      t.equal(
-        snapshot?.coordinator?.operation?.workflowStep,
-        TEST_STEP_CREATING,
-        TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP,
-      );
+      t.equal(readLedgerRow().workflow_step, TEST_STEP_CREATING,
+        'SQLite confirms that the hidden CREATING update actually committed');
+      t.equal(snapshot?.coordinator?.operation?.workflowStep, TEST_STEP_SENDING,
+        'a stale authority result cannot publish the hidden step as observed');
+      hideCommittedCreating = false;
+      const restored = await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(TEST_PARTITION_ID, []);
+      t.equal(restored?.coordinator?.operation?.workflowStep, TEST_STEP_CREATING,
+        TEST_ASSERT_SQL_PRIORITY_SNAPSHOT_STEP);
+      t.equal(deliveries.length, 1, 'the recovered step belongs to the dispatch already sent');
     } finally {
       Date.now = originalDateNow;
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.store.suspend();
+      }
     }
   });
 }

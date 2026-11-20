@@ -71,6 +71,16 @@ import {
   applyCommitted,
 } from '../test-helpers/participant-transaction-fixture.js';
 
+function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
+  return {
+    sqlQueryEngine,
+    executeAuthoritativeSystemTableRead: (_tableName, sql, params) =>
+      sqlQueryEngine.execute(sql, params),
+    registerTableChangeCallback: () => {},
+    unregisterTableChangeCallback: () => {},
+  };
+}
+
 const NOW_MS = 1_000_000;
 
 export async function runGrowthPromoteProductionWitness({
@@ -284,11 +294,7 @@ export async function runGrowthPromoteProductionWitness({
           getNodeReadinessSync: () => ({ready: true}),
           getPriorityRecoveryPlanningSnapshotSync: () => null,
         }),
-        cdcIntegrationService: {
-          sqlQueryEngine,
-          registerTableChangeCallback: () => {},
-          unregisterTableChangeCallback: () => {},
-        },
+        cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
         tablePolicyService: {getReplicationFactor: () => 3},
         sqlQueryEngine,
         transactionCoordinator: {
@@ -825,11 +831,7 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
         getNodeReadinessSync: () => ({ready: true}),
         getPriorityRecoveryPlanningSnapshotSync: () => null,
       }),
-      cdcIntegrationService: {
-        sqlQueryEngine,
-        registerTableChangeCallback: () => {},
-        unregisterTableChangeCallback: () => {},
-      },
+      cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
       tablePolicyService: {getReplicationFactor: () => 5},
       sqlQueryEngine,
       transactionCoordinator: {

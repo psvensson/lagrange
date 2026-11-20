@@ -301,15 +301,12 @@ function buildOperationWorkflowOwnerDispatchPendingReentryContextEvidence(
   snapshot,
   operation,
 ) {
-  const ownerLaneHeld =
-    isOperationWorkflowOwnerDispatchPendingOwnerLaneHeld(owner, operation);
   return Object.freeze({
     rebalancerHandoffRetryActive:
       hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(
         owner,
         operation,
-      ) && ownerLaneHeld !== true,
-    ownerLaneHeld,
+      ),
     timeoutReconcileDue: snapshot?.actuation?.timeoutReconcileDue === true,
     timeoutProgressWait:
       snapshot?.progress?.blockingBoundary ===
@@ -381,7 +378,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
         ),
       ),
     );
-  owner.schedulePriorityRecoveryDispatchPendingReentry(
+  const scheduled = owner.schedulePriorityRecoveryDispatchPendingReentry(
     normalizedSnapshot,
     [operation],
     {
@@ -391,6 +388,20 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
         .EXECUTE_OWNER_OBSERVATION_EFFECT]: true,
     },
   );
+  // A held owner lane can arm the retry while normalizing this snapshot.
+  // Describe the now-owned wait without applying the effect a second time.
+  if (scheduled && isOperationWorkflowOwnerDispatchPendingOwnerLaneHeld(owner, operation) &&
+      hasActiveOperationWorkflowOwnerDispatchPendingHandoffRetry(owner, operation)) {
+    return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+      normalizedSnapshot,
+      owner.operationWorkflowOwnerAdapter.decide(
+        operation,
+        buildPriorityRecoveryDispatchPendingOwnerReentryContext(
+          owner, normalizedSnapshot, operation,
+        ),
+      ),
+    );
+  }
   return normalizedSnapshot;
 }
 
