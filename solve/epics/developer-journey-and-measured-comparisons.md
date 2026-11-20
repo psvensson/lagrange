@@ -90,7 +90,8 @@ records remain intact; successor work records the correction explicitly.
 
 - Current candidate and correction integration are owned by
   [operation integrity](operation-integrity-and-reliable-formation.md), checked
-  at `6c0bdff11f24e32459178e9d2c0d9f563e7cd790` under rule-set revision 5.
+  at `58a2080337b56b4e5f97bcb54da59f57b94e6611` under rule-set revision 5.
+  This is a source checkpoint, not a clean verified measurement candidate.
   The 17 November component work below is preserved evidence to reconcile by
   content; it is not a second live candidate assignment.
 - Programme item 10 first freezes and admits a small smoke profile after
@@ -112,6 +113,65 @@ records remain intact; successor work records the correction explicitly.
   second workflow/status store is introduced. No comparative run was submitted
   by this adoption. Root owns the next pre-gate after corrections and evidence
   admission; later billable GCP provisioning still requires its actual authority.
+
+### Recovered comparison originals and immediate priority
+
+The operator requires a clean, independently verified candidate before smoke or
+measurement. Finish the current bounded corrections and their applicable composed
+gates first. Then prioritize the Lagrange arm; recover and assess existing
+external-system observations before scheduling repeats. No campaign is queued by
+this evidence reconciliation, and no new provisioning or spending is authorized
+by these notes.
+
+Read-only inspection on 20 November found originals outside the current worktree
+under `/mnt/data/peter/projects/lagrange-foundation-coordination-20261114/measurement-prep/`:
+
+| Original directory and `raw-observations.ndjson` SHA-256 | Recorded source and result |
+| --- | --- |
+| `gcp-campaign-2026-11-15`; `85a0199647dc84e547ab5bc3e2545d16c58beed39ae44bebc457f10906efcb3e` | `bf56d842f8e3d2494edf13ae6d9e7dc0ee7ff543`; PostgreSQL and TiDB completed smoke; TiDB semantic gate incomplete. Lagrange readiness failed. |
+| `gcp-campaign-2026-11-15-r2`; `b7457560c42da1a20682e646e24edf100dd5ce0581086bdc7e4c249b744e7609` | `cbe2fc0f05b488e5efe44aed5ff0156153b9d127`; PostgreSQL and TiDB each recorded 100 committed requests and a passed semantic gate; Lagrange readiness failed. |
+| `gcp-campaign-2026-11-15-r3`; `7a8419c0ef0f41dcd88b15ef454aa5955536b2190a3082bf316a64027bf2162e` | `456f3d2a435926b0b3c183933f5cb71bf57e8a8c`; PostgreSQL and TiDB each recorded 100 committed measurement requests, ten warmups, reconciled final state, and nine retained semantic-case files reporting 33 passed obligations. Lagrange readiness failed with all 100 requests unissued. |
+
+The r2/r3 original campaign summaries admit the two external arms as
+`valid-observed` smoke with no capacity claim; their recorded reasons still
+include `semantic-gate-incomplete`, despite the nested gate reporting passed.
+Preserve that discrepancy for the admission owner to explain. Campaign exit 1
+reflects Lagrange failure; it does not erase completed external measurements.
+The records use one offered rate (5 requests/second), one repetition per arm,
+and recorded rather than counterbalanced ordering. They are not capacity runs
+or a paired comparison with a future Lagrange run. Current checked-in raw and
+admitted projections omit these GCP campaigns; their older PostgreSQL-only
+summary is not a complete inventory of retained observations.
+
+The bounded search covered sibling `lagrange*/data/tidb-comparison` raw records,
+comparison/campaign directories in the preserved worktrees, and the registered
+comparison evidence-relocation inventories. No separate capacity campaign was
+located in that surface. The registered November 1–2 bundles preserve older
+smoke attempts and withdrawn evidence; their existence does not restore an
+invalidated claim. This is a search result, not proof that no other archive
+exists. The r4 directory has no raw observation file and empty campaign output;
+its provisioning/teardown records cannot substitute for measurement.
+
+Continuation: the comparison/evidence owner must verify the retained originals'
+case bindings, raw digests, actual substrate, artifacts/runtime, cleanup and
+admission-version applicability before updating projections or reusing evidence.
+Retain the original files in place; use the existing custody owner for selected
+artifacts, with no duplicate evidence tree or wholesale directory upload. Shared
+campaign directories also contain credentials and are not evidence bundles.
+A development reuse decision cannot waive the existing final contemporaneous
+paired-comparison contract.
+
+The existing runner accepts `--targets lagrange --profile smoke`:
+`comparative-smoke-v2`, one run at 5 requests/second, a 60-minute campaign budget,
+and `comparable: false`. It requires the verified candidate, pinned image and
+harness, three data hosts and a separate load generator, frozen semantic/workload
+inputs, and the existing placement, thermal, lifetime and cleanup owners.
+`--targets lagrange --profile capacity` is refused by the existing paired-sweep
+owner, which requires at least two systems. The current capacity profile uses
+rates 5 and 10 with balanced repetitions and a 240-minute campaign budget.
+A separate Lagrange-only capacity characterization requires an explicit bounded
+design under this owner; do not bypass that guard or relabel old smoke cells.
+Full assigned comparisons remain open and retain their original acceptance.
 
 ## Retained summary (17 November 2026)
 
@@ -183,8 +243,14 @@ records remain intact; successor work records the correction explicitly.
 
 The [requirements](../specs/developer-journey-and-measured-comparisons/requirements.md#registered-p4-quests)
 map these to P4 and the existing receipt families. Shared semantic-gate changes
-have one writer. Both records remain unsealed with absent receipts, so their
-probes are unmeasured, never passed. Existing comparison acceptance is unchanged.
+have one writer. Both records have historical solved entries and passing component receipts on
+10 November: C1's implementation attempt is `981707bd4c4d6024665d792d57806949f288e65f`,
+and C2's is `4262602338c5948250594941cdbc994d356be855`. Credit that implemented and
+reviewed work; assess its source and original-execution applicability rather
+than assigning it again as untouched. Component closure does not admit the
+complete current comparison. The recovered GCP observations above supply later
+execution to inspect through the existing evidence owner. Existing comparison
+acceptance is unchanged.
 The [formation epic](operation-integrity-and-reliable-formation.md) owns the
 current catalog/CDC/incarnation/ingress repairs and the frozen service gate;
 source changes after its proof require renewed evidence applicability. Successful

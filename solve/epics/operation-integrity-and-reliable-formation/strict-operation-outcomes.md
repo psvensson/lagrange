@@ -1,15 +1,16 @@
 ---
 audience: agent
 documentClass: planning
-status: proposed
+status: active
 ---
 
-# Strict operation outcomes: bounded successor proposal
+# Strict operation outcomes
 
 Prepared 20 November 2026 for programme item 02. This is an owner-local design
 contract under [operation integrity](../operation-integrity-and-reliable-formation.md).
-The successor [Quest](../../quests/strict-operation-outcomes/quest.json) is prepared;
-its seal and runtime implementation remain pending. Independent reviewer
+The successor [Quest](../../quests/strict-operation-outcomes/quest.json) sealed at `58a208033` with six outstanding obligations.
+The managed SQLite witness reproduced the malformed-reply failure.
+The runtime migration is in progress. Independent reviewer
 `subagent:/root/lifetime_census` approved the revised implementation design at
 SHA256 `0c282984a2831b9887f1c1f2f33d65bfc50c325e928d5b3211060a8f4b5083ce`.
 This current contract incorporates that prospective refinement; historical
