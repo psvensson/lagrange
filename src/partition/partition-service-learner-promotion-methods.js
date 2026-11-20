@@ -428,6 +428,7 @@ class PartitionServiceLearnerPromotionMethods {
     // runs before the leader gate: a replica not yet admitted hears no raft
     // leader and asks the leader its committed-membership stamp names.
     await drivePendingReplicaAdmission(this);
+    if (this.isShutdown === true) return;
     // The leader a learner proves itself to is the live raft leader its
     // own status names (C4): never a cached row or a leader-address hint.
     if (!this.leaderId) {

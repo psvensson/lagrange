@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "43415771db2e2cb614c56cf1923ca8e458f9ff35f7e637df6db58ee28001e3a9"
+    "sourceSha256": "e860b5d8eaa3a16b51529c4d12c1634af64fba1e3f6fca2f814b8e00ef6cef77"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,8 +18,8 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 773,
-    "importEdgeCount": 321,
+    "publicExportCount": 774,
+    "importEdgeCount": 323,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -1943,14 +1943,16 @@
       "layer": "raw_observation",
       "rationale": "observation/evidence surface",
       "exports": [
-        "buildPriorityRecoverySupersededTargetError",
-        "getPriorityRecoverySupersededTargetError",
-        "getPriorityRecoverySupersededTargetErrorFromContext"
+        "buildPriorityRecoverySupersededTargetFailure",
+        "getPriorityRecoverySupersededTargetFailure",
+        "getPriorityRecoverySupersededTargetFailureFromContext",
+        "isPriorityRecoverySupersessionCurrent"
       ],
       "localExports": [
-        "buildPriorityRecoverySupersededTargetError",
-        "getPriorityRecoverySupersededTargetError",
-        "getPriorityRecoverySupersededTargetErrorFromContext"
+        "buildPriorityRecoverySupersededTargetFailure",
+        "getPriorityRecoverySupersededTargetFailure",
+        "getPriorityRecoverySupersededTargetFailureFromContext",
+        "isPriorityRecoverySupersessionCurrent"
       ]
     },
     {
@@ -4932,6 +4934,26 @@
       "targetLayer": "owner_decision",
       "crossLayer": true,
       "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "specifier": "./replica-operation-repository-observation-methods.js",
+      "to": "src/rebalancer/replica-operation-repository-observation-methods.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/operation-workflow-priority-recovery-errors.js",
+      "specifier": "util",
+      "to": "util",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",

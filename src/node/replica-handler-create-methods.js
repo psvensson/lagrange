@@ -18,6 +18,11 @@ import {
   isSupersededAdmissionError,
   retireSupersededCreateAdmissionRuntime,
 } from './replica-create-admission-retained-recovery.js';
+import {
+  LEARNER_ADMISSION_WAIT_OUTCOME,
+  awaitBoundedReplicaAdmission,
+  readHandlerNowMs,
+} from './replica-handler-voter-readiness-methods.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import * as priorExistence from './replica-prior-existence.js';
@@ -109,6 +114,31 @@ function lostBootPhysicalWorkerError(message) {
       bootIncarnationSuperseded: true,
     },
   );
+}
+
+function isCurrentReplicaCreateService(handler, replicaId, service) {
+  return handler.getTrackedService(replicaId) === service &&
+    service.isShutdown !== true;
+}
+
+function retireStaleReplicaCreate(handler, request, service, progress,
+  trackedOperation) {
+  const {replicaId, partitionId, operationId, createPhysicalWorkerClaim} = request;
+  const retirement = handler.fenceFailedReplicaCreateRuntime(
+    replicaId, partitionId, service);
+  if (handler.creationProgressByReplica?.get(replicaId) === progress) {
+    handler.clearReplicaCreationProgress(progress);
+  }
+  if (handler.inProgressOperations.get(operationId) === trackedOperation) {
+    handler.inProgressOperations.delete(operationId);
+  }
+  handler.getReplicaCreateAdmissionOwner().releasePhysicalWorker(
+    createPhysicalWorkerClaim);
+  return retirement;
+}
+
+function learnerAdmissionWaitError(replicaId, outcome) {
+  return new Error(`Learner admission wait failed for replica ${replicaId}: ${outcome}`);
 }
 
 async function settleCreateAdmissionProgress(
@@ -322,6 +352,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       } = request;
       let createAdmissionEvidence = requestAdmissionEvidence;
       let createAttemptToken = requestAttemptToken;
+      const trackedOperation = this.inProgressOperations.get(operationId);
+      const createStartedAt = trackedOperation?.startedAt;
+      const createDeadlineAtMs = Number.isSafeInteger(createStartedAt) ?
+        createStartedAt + this.syncTimeoutMs : null;
+      const activationDeadlineAtMs = createDeadlineAtMs ??
+        readHandlerNowMs(this) + this.syncTimeoutMs;
       const progress = this.startReplicaCreationProgress({
         partitionId,
         replicaId,
@@ -489,37 +525,54 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // The SYNCING fact is committed: ask the partition leader to admit
         // this replica from its committed operation (quest
         // replica-admission-from-committed-operation). A pending answer is
-        // re-sent on the learner-promotion cadence; it never fails the
-        // create.
+        // re-sent on the learner-promotion cadence. The original CREATE
+        // budget bounds this caller's wait independently of delivery effects.
+        if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
+          return retireStaleReplicaCreate(
+            this, request, partitionService, progress, trackedOperation);
+        }
         if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
             typeof operationId === 'string' && operationId.length > 0) {
-          await partitionService.requestReplicaAdmission(operationId);
+          const completed = await awaitBoundedReplicaAdmission(
+            this, () => partitionService.requestReplicaAdmission(operationId),
+            activationDeadlineAtMs);
+          if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
+            return retireStaleReplicaCreate(
+              this, request, partitionService, progress, trackedOperation);
+          }
+          if (!completed) {
+            throw learnerAdmissionWaitError(
+              replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
+          }
         }
         this.throwIfShuttingDown();
-        const createStartedAt =
-          this.inProgressOperations.get(operationId)?.startedAt;
-        const createDeadlineAtMs = Number.isSafeInteger(createStartedAt) ?
-          createStartedAt + this.syncTimeoutMs : null;
+        let admissionWaitFailure = null;
         if (this.shouldGateActivationOnVoterReadiness(
           partitionId, operationId, isJoiningExistingGroup, explicitOperationType,
         )) {
           this.updateReplicaCreationProgress(progress, {
             stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
           });
-          await this.waitForVoterReadyActivation(replicaId, partitionId);
+          await this.waitForVoterReadyActivation(replicaId, partitionId, {
+            deadlineAtMs: activationDeadlineAtMs, expectedService: partitionService,
+          });
         } else if (isJoiningExistingGroup && !skipLifecycleStatusPersistence) {
-          const nowMs = this.timeSource?.now ? this.timeSource.now() : Date.now();
           const admissionWait = await this.waitForLearnerAdmissionActivation(
             replicaId, partitionId, {
-              deadlineAtMs: createDeadlineAtMs ?? nowMs + this.syncTimeoutMs,
+              deadlineAtMs: activationDeadlineAtMs,
             },
           );
           if (admissionWait?.ready !== true) {
-            throw new Error(
-              `Learner admission wait failed for replica ${replicaId}: ${admissionWait?.outcome}`,
-            );
+            admissionWaitFailure = learnerAdmissionWaitError(
+              replicaId, admissionWait?.outcome);
           }
         }
+        if (!isCurrentReplicaCreateService(this, replicaId, partitionService)) {
+          return retireStaleReplicaCreate(
+            this, request, partitionService, progress, trackedOperation);
+        }
+        this.throwIfShuttingDown();
+        if (admissionWaitFailure) throw admissionWaitFailure;
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
         // cohort proof used at startup, including control group first,
@@ -760,7 +813,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // fails, but its physical CREATE worker claim must never remain held.
         // Existing success/error paths delete tracking first; this is the
         // fail-safe for a cleanup rejection that exits before those paths.
-        if (operationId && this.inProgressOperations.has(operationId)) {
+        if (operationId && trackedOperation &&
+            this.inProgressOperations.get(operationId) === trackedOperation) {
           this.inProgressOperations.delete(operationId);
           this.getReplicaCreateAdmissionOwner()
             .releasePhysicalWorker(request.createPhysicalWorkerClaim);
