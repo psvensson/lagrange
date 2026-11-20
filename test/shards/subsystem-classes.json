@@ -28,7 +28,7 @@
   "censusSize": 2698,
   "digest": "fnv1a32-ae28989b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b2bfec2d",
+  "observationDigest": "fnv1a32-c1a2fad3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3451,8 +3451,7 @@
     },
     "test/bootstrap/management-v1-l4-l3.test.js": {
       "files": [
-        "src/bootstrap/owners/management-v1-constants.js",
-        "src/bootstrap/owners/support-envelope-owner.js"
+        "src/bootstrap/owners/management-v1-constants.js"
       ]
     },
     "test/bootstrap/management-v1-route-authority.test.js": {
@@ -4121,11 +4120,21 @@
     "test/bootstrap/support-envelope-owner.test.js": {
       "files": [
         "docs/support-envelope.json",
+        "scripts/quest-evidence/support-envelope-execution.js",
+        "scripts/run-classified-test-files.js",
         "src/bootstrap/owners/management-v1-constants.js",
         "test/distributed/run.js"
       ],
       "directories": [
+        "scripts/checks",
+        "solve",
+        "solve/changes/evidence-relocation",
+        "solve/epics",
+        "solve/quests",
         "test/distributed/config"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/bootstrap/system-partition-classification-owner.test.js": {
