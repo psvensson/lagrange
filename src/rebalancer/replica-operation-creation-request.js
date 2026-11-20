@@ -1,4 +1,5 @@
 import {SERVICE_TYPE} from '../constants/service.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {OperationType} from './replica-operation-progress.js';
 import {MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE} from
   './replica-operation-membership-epoch-binding.js';
@@ -8,6 +9,40 @@ const EXPLICIT_CREATION_BINDINGS = Object.freeze([
   'targetNodeStorageIncarnation',
   'copySourceNodeId',
 ]);
+
+const TEXT_CREATION_IDENTITIES = Object.freeze([
+  'entryId', 'operationIntentId', 'replicaIntentId', 'operationId',
+  'partitionId', 'entityType', 'entityId', 'nodeId', 'sourceNodeId',
+  'replicaId', 'sourceReplicaId', 'copySourceNodeId', 'targetClaimKey',
+]);
+const INCARNATION_CREATION_IDENTITIES = Object.freeze([
+  'targetNodeBootIncarnation', 'targetNodeStorageIncarnation',
+]);
+
+function invalidCreationIdentity(field) {
+  const error = new TypeError(`Invalid replica creation request identity: ${field}`);
+  error.code = 'INVALID_REPLICA_CREATION_REQUEST_IDENTITY';
+  error.field = field;
+  return error;
+}
+
+function readCreationRequestIdentity(request) {
+  const move = copyStrictOwnDataRecord(request);
+  if (move === null) throw invalidCreationIdentity('request');
+  for (const field of TEXT_CREATION_IDENTITIES) {
+    const value = move[field];
+    if (value != null && (typeof value !== 'string' || value.length === 0)) {
+      throw invalidCreationIdentity(field);
+    }
+  }
+  for (const field of INCARNATION_CREATION_IDENTITIES) {
+    const value = move[field];
+    if (value != null && (!Number.isSafeInteger(value) || value <= 0)) {
+      throw invalidCreationIdentity(field);
+    }
+  }
+  return move;
+}
 
 function matchesExplicitCreationBindings(operation, move, {complete = false} = {}) {
   return EXPLICIT_CREATION_BINDINGS.every((field) =>
@@ -48,4 +83,8 @@ function operationMatchesCreationRequest(owner, operation, move, placementIntent
       operation.sourceNodeId === (move.sourceNodeId || owner.nodeId));
 }
 
-export {matchesExplicitCreationBindings, operationMatchesCreationRequest};
+export {
+  matchesExplicitCreationBindings,
+  operationMatchesCreationRequest,
+  readCreationRequestIdentity,
+};

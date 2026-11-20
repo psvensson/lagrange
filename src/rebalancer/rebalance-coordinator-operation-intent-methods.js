@@ -171,12 +171,8 @@ class RebalanceCoordinatorOperationIntentMethods {
     }) : null;
   }
 
-  assertNativePlacementCreationIdentity(move) {
+  assertNativePlacementAliasProof(move) {
     const {entryId, operationIntentId, replicaIntentId} = move;
-    if ([entryId, operationIntentId, replicaIntentId].some((value) =>
-      value != null && (typeof value !== 'string' || value.length === 0))) {
-      throw new TypeError('Invalid replica creation request identity');
-    }
     // A caller-supplied native ID can name an earlier durable entry.
     // Without a proved local association its opaque aliases are unknown.
     if (entryId && (operationIntentId || replicaIntentId)) {

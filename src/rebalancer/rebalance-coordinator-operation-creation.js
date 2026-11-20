@@ -1,3 +1,4 @@
+import {readCreationRequestIdentity} from './replica-operation-creation-request.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
@@ -184,14 +185,13 @@ class RebalanceCoordinatorOperationCreation {
    *   observation previously issued by this coordinator owner.
    * @return {Promise<Object>} Created or existing operation record.
    */
-  async createOperation(move) {
+  async createOperation(request) {
     if (this.isShuttingDown || !this.initialized) {
       throw new Error(LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN);
     }
-
+    const move = readCreationRequestIdentity(request);
     this.assertLocalControlPlaneMutationReady(move);
     this.assertCreationRequestEpoch(move);
-
     const {entityType, entityId} = normalizeRebalancerEntityIdentity(move);
     const partitionId = move.partitionId ?? entityId;
     const normalizedMoveType = this.normalizeMoveType(move?.type);

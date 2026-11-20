@@ -578,7 +578,7 @@ const operationCreationSupportMethods = {
 
   async commitSingleCreatedPlacementOperation(context, statement, intentKey) {
     const {requestedMove, entityId} = context;
-    this.assertNativePlacementCreationIdentity(requestedMove);
+    this.assertNativePlacementAliasProof(requestedMove);
     const answer = await this.admitPlacementStatement({
       entryId: requestedMove.entryId ?? null,
       intentKey,
