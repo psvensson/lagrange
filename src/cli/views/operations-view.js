@@ -73,6 +73,7 @@ export const OPERATION_STATUS = {
   REMOVING: LOCAL_STR_REMOVING,
   REMOVED: LOCAL_STR_REMOVED,
   FAILED: LOCAL_STR_FAILED,
+  SUPERSEDED: 'superseded',
 };
 
 /**
@@ -194,6 +195,7 @@ export class OperationsView extends BaseView {
       OPERATION_STATUS.ACTIVE,
       OPERATION_STATUS.REMOVED,
       OPERATION_STATUS.FAILED,
+      OPERATION_STATUS.SUPERSEDED,
     ];
     return !terminalStatuses.includes(operation.status);
   }

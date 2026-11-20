@@ -11,6 +11,7 @@ const ReplicaStatus = {
   ACTIVE: 'active',
   REMOVING: 'removing',
   REMOVED: 'removed',
+  SUPERSEDED: 'superseded',
   FAILED: 'failed',
   HELD: 'held',
 };
@@ -18,6 +19,7 @@ const ReplicaStatus = {
 const TERMINAL_STATUSES = [
   ReplicaStatus.ACTIVE,
   ReplicaStatus.REMOVED,
+  ReplicaStatus.SUPERSEDED,
   ReplicaStatus.FAILED,
 ];
 
@@ -37,6 +39,7 @@ const WORKFLOW_STEP_TO_STATUS = {
   [WORKFLOW_STEP.ACTIVE]: ReplicaStatus.ACTIVE,
   [WORKFLOW_STEP.STOPPING]: ReplicaStatus.REMOVING,
   [WORKFLOW_STEP.REMOVED]: ReplicaStatus.REMOVED,
+  [WORKFLOW_STEP.SUPERSEDED]: ReplicaStatus.SUPERSEDED,
 };
 
 const REPLICA_OPERATION_SEMANTIC_PHASE = Object.freeze({
@@ -45,11 +48,13 @@ const REPLICA_OPERATION_SEMANTIC_PHASE = Object.freeze({
   TARGET_READY: 'target_ready',
   SOURCE_RETIRING: 'source_retiring',
   SETTLED: 'settled',
+  SUPERSEDED: 'superseded',
   FAILED: 'failed',
 });
 
 const TERMINAL_REPLICA_OPERATION_SEMANTIC_PHASES = Object.freeze([
   REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+  REPLICA_OPERATION_SEMANTIC_PHASE.SUPERSEDED,
   REPLICA_OPERATION_SEMANTIC_PHASE.FAILED,
 ]);
 
@@ -172,6 +177,7 @@ const OPERATION_TERMINAL_STATUSES_BY_TYPE = Object.freeze(
       OperationType.REMOVE,
       Object.freeze(new Set([
         ReplicaStatus.REMOVED,
+        ReplicaStatus.SUPERSEDED,
         ReplicaStatus.FAILED,
       ])),
     ],
@@ -205,6 +211,7 @@ const OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE = Object.freeze(
       OperationType.REMOVE,
       Object.freeze(new Set([
         WORKFLOW_STEP.REMOVED,
+        WORKFLOW_STEP.SUPERSEDED,
         WORKFLOW_STEP.FAILED,
       ])),
     ],
@@ -277,6 +284,7 @@ const MONOTONIC_VISIBILITY_WORKFLOW_STEP_ORDER = Object.freeze([
   WORKFLOW_STEP.ACTIVE,
   WORKFLOW_STEP.STOPPING,
   WORKFLOW_STEP.REMOVED,
+  WORKFLOW_STEP.SUPERSEDED,
   WORKFLOW_STEP.FAILED,
 ]);
 
@@ -288,6 +296,7 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(new Map([
     phaseRule(PHASE.ACCEPTED, TARGET_BUILD_WORKFLOW_STEPS, TARGET_BUILD_STATUSES),
   ])],
   [OperationType.REMOVE, Object.freeze([
+    phaseRule(PHASE.SUPERSEDED, [WORKFLOW_STEP.SUPERSEDED], [ReplicaStatus.SUPERSEDED]),
     phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.REMOVED], [ReplicaStatus.REMOVED]),
     phaseRule(PHASE.SOURCE_RETIRING, SOURCE_RETIRING_WORKFLOW_STEPS, SOURCE_RETIRING_STATUSES),
   ])],
@@ -399,7 +408,8 @@ function getWorkflowSteps(operationType) {
  */
 function isValidWorkflowStep(operationType, step) {
   const steps = getWorkflowSteps(operationType);
-  return steps.includes(step);
+  return steps.includes(step) ||
+    (operationType === OperationType.REMOVE && step === WORKFLOW_STEP.SUPERSEDED);
 }
 
 /**
@@ -430,11 +440,7 @@ function isTerminalStep(operationType, step) {
   if (step === WORKFLOW_STEP.FAILED) {
     return true;
   }
-  const steps = getWorkflowSteps(operationType);
-  if (steps.length === 0) {
-    return false;
-  }
-  return step === steps[steps.length - 1];
+  return OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE.get(operationType)?.has(step) === true;
 }
 
 function normalizeWorkflowStepIdentifier(step) {
@@ -737,7 +743,7 @@ function isMonotonicReplicaOperationStepProgression(
     readReplicaOperationRecordType(observedOperation);
   const typeSteps = getWorkflowSteps(operationType);
   const stepOrder = typeSteps.length > 0 ?
-    [...typeSteps, WORKFLOW_STEP.FAILED] :
+    [...typeSteps, ...OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE.get(operationType)] :
     MONOTONIC_VISIBILITY_WORKFLOW_STEP_ORDER;
   const expectedIndex = stepOrder.indexOf(expectedStep);
   const observedIndex = stepOrder.indexOf(observedStep);

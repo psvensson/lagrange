@@ -154,7 +154,12 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
       verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   if (member && !exactServiceGeneration(member, operation, scoped)) {
-    return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
+    const birth = member[COLUMN.CREATED_AT];
+    const successor = member[COLUMN.PARTITION_ID] === operation.partitionId &&
+      member[COLUMN.NODE_ID] === operation.targetNodeId &&
+      Number.isSafeInteger(birth) && birth > scoped.replicaCreatedAt;
+    return verdict(successor ? LEARNER_RETIREMENT_OUTCOME.SUPERSEDED :
+      LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   return routeBoundLearnerRetirement(owner, operation, handlerType, scoped, member);
 }
@@ -190,6 +195,16 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
   // Only the fresh leader's committed absence can cross that boundary.
   return verdict(LEARNER_RETIREMENT_OUTCOME.CLEARED, {
     scope: Object.freeze({...scoped, nodeBootIncarnation: boot}),
+  });
+}
+
+async function completeOwnedLearnerRetirement(owner, operation, retirement) {
+  if (retirement.state !== LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED ||
+      !isScopedPlacementLearnerRetirement(operation)) {
+    throw new Error('Learner retirement requires exact committed cleanup ownership');
+  }
+  return owner.buildTerminalOperationDispatchResult(await owner.completeOperation(operation), {
+    operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
   });
 }
 
@@ -236,7 +251,8 @@ function isScopedPlacementLearnerRetirement(operation) {
 }
 
 export {
-  evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement,
+  completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
+  isScopedPlacementLearnerRetirement,
   isUnscopedPlacementRemoval, recoverCompletedLearnerRetirementCleanup,
   releaseCompletedLearnerRetirementCleanup,
 };

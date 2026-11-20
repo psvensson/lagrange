@@ -572,6 +572,8 @@ class RebalanceCoordinatorLifecycle {
       REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
       this._boundTerminalOperationIntentPruner,
     );
+    this.on(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
+      this._boundTerminalOperationIntentPruner);
   }
 
   /**
@@ -590,6 +592,8 @@ class RebalanceCoordinatorLifecycle {
       REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
       this._boundTerminalOperationIntentPruner,
     );
+    this.removeListener(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED,
+      this._boundTerminalOperationIntentPruner);
   }
 
   /**

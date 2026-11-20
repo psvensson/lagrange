@@ -3,7 +3,8 @@ import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-ident
 import {isDeepStrictEqual} from 'node:util';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {
-  OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS, getWorkflowSteps, isTerminalStep,
+  OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS,
+  isCoordinatorOwnedOperationType, isTerminalStep, isValidWorkflowStep,
 } from './replica-operation-progress.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
   './replica-operation-update-disposition.js';
@@ -105,14 +106,14 @@ function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
   if (operation.entityType === SERVICE_TYPE.PARTITION) {
     requireOutcome(operation.partitionId === operation.entityId, 'partition entity differs');
   }
-  const steps = getWorkflowSteps(operation.type);
-  requireOutcome(steps.length > 0 && (steps.includes(operation.workflowStep) ||
-    operation.workflowStep === WORKFLOW_STEP.FAILED), 'invalid operation type or step');
+  requireOutcome((isValidWorkflowStep(operation.type, operation.workflowStep) ||
+    (isCoordinatorOwnedOperationType(operation.type) &&
+      operation.workflowStep === WORKFLOW_STEP.FAILED)), 'invalid operation type or step');
   const status = operation.workflowStep === WORKFLOW_STEP.FAILED ?
     ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[operation.workflowStep];
   requireOutcome(operation.status === status, 'operation step/status disagree');
   if (terminal || operation.workflowStep === WORKFLOW_STEP.FAILED ||
-      operation.completedAt !== null) {
+      operation.workflowStep === WORKFLOW_STEP.SUPERSEDED || operation.completedAt !== null) {
     requireOutcome(Number.isFinite(operation.completedAt) &&
       isTerminalStep(operation.type, operation.workflowStep), 'invalid terminal operation tuple');
   }

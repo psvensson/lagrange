@@ -360,7 +360,7 @@ class OperationWorkflowTransitionPersistence
     if (!releaseState) throw new Error('Terminal release owner is shutting down');
     if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
       if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
-      else this.stats.operationsCompleted++;
+      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) this.stats.operationsCompleted++;
       releaseState.commitCounted = true;
       releaseState.pendingCommitCredit = false;
     }
@@ -376,9 +376,12 @@ class OperationWorkflowTransitionPersistence
     // release, including lost replies and reconstructed owners. No permanent
     // event history is retained; only new committed results earn stats credit.
     const failed = operation.workflowStep === WORKFLOW_STEP.FAILED;
-    this.emitter.emit(failed ? REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED :
-      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-    failed ? {operation, errorMessage: operation.errorMessage} : {operation});
+    let event = REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED;
+    if (failed) event = REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED;
+    if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
+      event = REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED;
+    }
+    this.emitter.emit(event, failed ? {operation, errorMessage: operation.errorMessage} : {operation});
     clearTerminalTransitionRepair(this, operation.operationId);
     armFailedCreateCleanupRelease(this, operation);
   }
@@ -486,6 +489,37 @@ class OperationWorkflowTransitionPersistence
       // Metrics logging failures must not propagate to callers
     }
     return transitionOutcome;
+  }
+
+  async supersedePlacementRemoval(operation, {expectedWorkflowStep, reason}) {
+    const finalStep = WORKFLOW_STEP.SUPERSEDED;
+    const replay = await this.resolveOperationTransitionBeforeWrite(operation, finalStep,
+      {terminalTransition: true, terminalErrorMessage: null});
+    if (replay) {
+      await this.releaseDurableTerminalOperation(operation, replay);
+      return replay;
+    }
+    if (operation.type !== OperationType.REMOVE || operation.workflowStep !== expectedWorkflowStep) {
+      return null;
+    }
+    const now = Date.now();
+    const transitionReason = OPERATION_TRANSITION_REASON.OPERATION_SUPERSEDED;
+    const evidence = this.buildOperationTransitionStepEntry(
+      operation, finalStep, transitionReason, expectedWorkflowStep, now);
+    const projectedOperation = {
+      ...operation,
+      workflowStep: finalStep,
+      status: ReplicaStatus.SUPERSEDED,
+      updatedAt: now,
+      completedAt: now,
+      errorMessage: null,
+      stepsHistory: [...operation.stepsHistory, {...evidence, supersessionReason: reason}],
+    };
+    return this.persistTerminalOperation(operation, projectedOperation, transitionReason, {
+      ...this.buildOperationTransitionPersistOptions(),
+      expectedWorkflowStep,
+      terminalTransition: true,
+    });
   }
 
   /**

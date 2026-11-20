@@ -10,7 +10,9 @@ import {OPERATION_RECONCILE_OUTCOME as OUTCOME} from './operation-workflow-recon
 
 function terminalOperationReconcileOutcome(operation) {
   assertOperationUpdateRecord(operation, {terminal: true});
-  return operation.workflowStep === WORKFLOW_STEP.FAILED ? OUTCOME.FAILED : OUTCOME.COMPLETED;
+  if (operation.workflowStep === WORKFLOW_STEP.FAILED) return OUTCOME.FAILED;
+  if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) return OUTCOME.SUPERSEDED;
+  return OUTCOME.COMPLETED;
 }
 
 function buildOperationTransitionOutcome(persisted, {repository, requestedOperation} = {}) {

@@ -621,6 +621,10 @@ const OPERATION_STEP_SPECS = Object.freeze({
       OperationType.REPLACE,
     ])),
   }),
+  [WORKFLOW_STEP.SUPERSEDED]: Object.freeze({
+    step: WORKFLOW_STEP.SUPERSEDED,
+    operationTypes: Object.freeze(new Set([OperationType.REMOVE])),
+  }),
   [WORKFLOW_STEP.FAILED]: Object.freeze({
     step: WORKFLOW_STEP.FAILED,
     operationTypes: Object.freeze(new Set([

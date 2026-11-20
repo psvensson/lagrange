@@ -78,7 +78,9 @@ const POST_INTENT_TARGET_DEATH = 'replace_target_dead_source_retained';
 // The edges as the code has them at the frozen production SHA: a changed
 // count or a new file fails here until the new edge has a cell below.
 const TERMINAL_INTENT_SITES = Object.freeze({
-  'operation-workflow-transition-persistence.js': 4,
+  // The scoped PENDING/SENDING REMOVE supersession read and its exact-step CAS
+  // are covered by formation-placement-native-retirement.test.js.
+  'operation-workflow-transition-persistence.js': 6,
   'operation-workflow-terminal-transition-repair.js': 2,
   // GROWTH_PROMOTE completion (never REPLACE: guarded by type === GROWTH_PROMOTE).
   'operation-workflow-growth-promote.js': 2,
@@ -92,6 +94,10 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
+  // Only the scoped learner REMOVE can discharge against committed member
+  // absence and a scoped cleanup receipt. Native custody cases exercise both
+  // receipt/terminal orders in formation-placement-native-retirement.test.js.
+  'operation-workflow-placement-learner-retirement.js': 1,
   'operation-workflow-growth-promote.js': 2,
   // Terminal STOPPING reentry now reconsults the same completion owner.
   'operation-workflow-recovery-reconcile.js': 2,

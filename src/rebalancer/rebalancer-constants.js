@@ -211,6 +211,7 @@ const REBALANCE_COORDINATOR_EVENT = Object.freeze({
   STEP_CHANGED: 'stepChanged',
   OPERATION_COMPLETED: 'operationCompleted',
   OPERATION_FAILED: 'operationFailed',
+  OPERATION_SUPERSEDED: 'operationSuperseded',
   RECOVERY_COMPLETED: 'recoveryCompleted',
   RECOVERY_FAILED: 'recoveryFailed',
   RESERVATION_CREATED: 'reservationCreated',
@@ -495,6 +496,7 @@ const OPERATION_TRANSITION_REASON = Object.freeze({
   EXECUTOR_OUTCOME: 'executor_outcome',
   OPERATION_COMPLETED: 'operation_completed',
   OPERATION_FAILED: 'operation_failed',
+  OPERATION_SUPERSEDED: 'operation_superseded',
   OPERATION_TIMED_OUT: 'operation_timed_out',
   SAFETY_POLICY_BLOCKED: 'safety_policy_blocked',
 });

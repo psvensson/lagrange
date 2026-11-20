@@ -30,7 +30,9 @@ import {
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
-import {evaluatePlacementLearnerRetirement, isUnscopedPlacementRemoval} from
+import {
+  completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement, isUnscopedPlacementRemoval,
+} from
   './operation-workflow-placement-learner-retirement.js';
 import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
   './operation-workflow-remove-effect-admission.js';
@@ -240,6 +242,16 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
 const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
   new Set([ReplicaStatus.SYNCING]),
 );
+async function settleSupersededRemoval(owner, operation, reason) {
+  const outcome = await owner.supersedePlacementRemoval(operation, {
+    expectedWorkflowStep: operation.workflowStep, reason,
+  });
+  return outcome === null ?
+    owner.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+      operation.operationId, {error: reason}) :
+    owner.buildTerminalOperationDispatchResult(outcome, {operationId: operation.operationId});
+}
+
 async function settleDispatchFailure(owner, operation, error, options) {
   const outcome = await owner.failOperation(operation, error, options);
   return owner.buildTerminalOperationDispatchResult(outcome, {
@@ -458,6 +470,14 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         logLevel: FAILURE_LOG_LEVEL.WARN,
       });
     }
+    if (isUnscopedPlacementRemoval(operation)) {
+      const reason = LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED;
+      if (operation.workflowStep === WORKFLOW_STEP.PENDING) {
+        return settleSupersededRemoval(this, operation, reason);
+      }
+      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId, {error: reason});
+    }
     if (
       !replaceRemoveDispatchPhase &&
       !removeRedriveDispatchPhase &&
@@ -483,10 +503,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           return this.buildSkippedOperationResult(progress, operation.operationId);
         }
       }
-    }
-    if (isUnscopedPlacementRemoval(operation)) {
-      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
-        operation.operationId, {error: LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED});
     }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
     let readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
@@ -591,12 +607,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED) {
       // The committed peer is absent and physical cleanup belongs to the
       // exact-generation tombstone. An offline target need not answer.
-      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation), {
-        operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
-      });
+      return completeOwnedLearnerRetirement(this, operation, learnerRetirement);
     }
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) {
-      return settleDispatchFailure(this, operation, learnerRetirement.state);
+      return settleSupersededRemoval(this, operation, learnerRetirement.state);
     }
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED) {
       return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
