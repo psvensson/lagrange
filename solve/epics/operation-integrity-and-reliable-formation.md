@@ -406,12 +406,19 @@ found remaining same-service read and deadline cases.
 [Physical source logs and ledger](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz)
 and [managed paired release and broader results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-registered-release-custody-and-cone-nov20.tar.gz).
 
-The same-service recovery changes at `823799522` retain the materialized
-worker during temporary uncertainty and route the subsequent activation
-through its owner. The exact six-file managed selection passed five files;
-the first unfinished router case did not register the required release
-route. The owner is reconciling callers and fixtures on the registered
-route. Separately, the local authoritative read in
+The composed CREATE at `0760d97d4` retains the materialized worker during
+temporary uncertainty. All eight selected files passed on tv-dator and
+adams-gamla (661 assertions, no retry). Independent review traced the
+registered release route and finite recovery for the same service. A stale
+success or refusal after local replacement could publish neither ACTIVE nor
+FAILED. In the K3 native test the target persisted entries before its ACTIVE
+write was refused, then the owner refused both attempts to reopen the lost
+disk using the same replica ID. The test observes the target's log.
+[Composed source, native custody and routing results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-composed-registered-recovery-0760d-nov20.tar.gz).
+The earlier router failures remain available in the
+[original attempts](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-activation-registered-route-and-native-floor-nov20.tar.gz).
+
+Separately, the local authoritative read in
 `cdc-integration-service-authoritative-read-flow.js` awaits a partition
 query before the owner RPC. With a permanently held read, finite-loss
 tests cannot establish that this underlying work is released or that the
