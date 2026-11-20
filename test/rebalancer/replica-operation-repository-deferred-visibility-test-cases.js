@@ -493,15 +493,14 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           filter: () => [],
         },
       });
-      repo.recordOwnerPersistedTransitionVisibilityWitness(
-        repo.rowToOperation(makeRow({
-          type: OperationType.REPLACE,
-          status: ReplicaStatus.FAILED,
-          workflow_step: WORKFLOW_STEP.FAILED,
-          updated_at: 200,
-          completed_at: 200,
-        })),
-      );
+      const retained = repo.rowToOperation(makeRow({
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.FAILED,
+        workflow_step: WORKFLOW_STEP.FAILED,
+        updated_at: 200,
+        completed_at: 200,
+      }));
+      repo.recordOwnerPersistedTransitionVisibilityWitness(retained);
 
       const observation = await repo.getOperationsByEntityAuthoritativeObservation(
         TEST_ENTITY_TYPE,
@@ -528,6 +527,21 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         [ReplicaStatus.FAILED],
         'the superseded entity row should preserve the terminal status',
       );
+      for (const conflict of [
+        {...retained, sourceNodeId: 'different-source-owner'},
+        {...retained, createdAt: retained.createdAt + 1},
+      ]) {
+        repo.recordOwnerPersistedTransitionVisibilityWitness(conflict);
+        const current = await repo.getOperationsByEntityAuthoritativeObservation(
+          TEST_ENTITY_TYPE, TEST_PARTITION_ID,
+        );
+        t.same(current.ownerTransitionOperations, [],
+          'a stale transition from another owner tuple cannot hide the observed operation');
+        t.same(
+          current.operations.map((operation) => operation.workflowStep),
+          [WORKFLOW_STEP.CREATING],
+        );
+      }
     },
   );
 

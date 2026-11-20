@@ -1,3 +1,4 @@
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
@@ -22,6 +23,18 @@ function assertEntityOperationRows(rows, entityType, entityId) {
         row.entity_type !== entityType || row.entity_id !== entityId) {
       throw malformedEntityOperationRead();
     }
+  }
+}
+
+function isAuthorityMatchedOwnerTransition(operation, transition) {
+  if (!transition || operation === transition ||
+      operation.completedAt !== null ||
+      operation.createdAt !== transition.createdAt) return false;
+  try {
+    assertOperationUpdateSubject(operation, transition);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -258,7 +271,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const observation = this.buildEntityOperationVisibilityObservation(operations, null);
       const ownerTransitionOperations = operations
         .map((operation) => this.resolveEntityOperationVisibilityWithPersistedTransition(operation))
-        .filter((operation, index) => operation !== operations[index]);
+        .filter((transition, index) =>
+          isAuthorityMatchedOwnerTransition(operations[index], transition));
       // Local post-commit progress is tied to a row returned by this census.
       // It remains owner progress, separate from the census membership.
       return Object.freeze({...observation, ownerTransitionOperations});
