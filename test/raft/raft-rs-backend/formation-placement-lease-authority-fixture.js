@@ -172,6 +172,7 @@ function openPlacementNodes(clock, cache, cluster) {
   sweeper.initialize();
   return {
     authority, nodeRow, mutations,
+    readAuthoritativeNodes: (sql, params) => readCommitted(TABLES.NODES, sql, params),
     waitForCommittedTarget: (applicable) => waitForCommittedNode(authority, applicable),
     goPastExpiry() {
       clock.advance(TARGET_DEADLINE - now() + 1);

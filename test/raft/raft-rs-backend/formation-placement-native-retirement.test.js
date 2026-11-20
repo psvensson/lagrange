@@ -2,6 +2,9 @@ import {assertDurableRejoinStorageAdmission} from
   '../../../src/bootstrap/durable-rejoin-storage-admission.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import Database from 'better-sqlite3';
+import {SERVICES_SCHEMA} from '../../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../../src/bootstrap/system-table-schema-sql.js';
 import {STATE, TABLES} from '../../../src/constants/index.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
@@ -81,8 +84,24 @@ function commitLatePromotion(cluster, targetReplicaId) {
   }), 'native promotion must reach its stable committed configuration');
 }
 
+function projectCommittedServices(sql, params, state) {
+  // Preserve the actual schema and SQL SELECT projection at this fixture port.
+  // Its mutation schedule stays controlled by the lifecycle store.
+  const db = new Database(':memory:');
+  try {
+    db.exec(generateCreateTableSQL(SERVICES_SCHEMA));
+    const columns = SERVICES_SCHEMA.columns.map(({name}) => name);
+    const markers = columns.map(() => '?').join(', ');
+    const insert = db.prepare(`INSERT INTO services (${columns.join(', ')}) VALUES (${markers})`);
+    for (const row of state.values()) insert.run(...columns.map((column) => row[column] ?? null));
+    return db.prepare(sql).all(...params);
+  } finally {
+    db.close();
+  }
+}
+
 function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
-  return createRemovalSourceHandler({cluster, replicaId: row.replica_id,
+  const source = createRemovalSourceHandler({cluster, replicaId: row.replica_id,
     partitionId: row.partition_id, nodeId: row.node_id,
     cache: createMockCache({services: [row], partitions: [{partition_id: row.partition_id,
       leader_node_id: SEED}]}),
@@ -90,6 +109,14 @@ function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
     rowOf: (status) => ({...row, status, raftRole: row.raft_role,
       stateEnteredAt: row.state_entered_at, updatedAt: row.updated_at}),
     replicaOperations: operations});
+  const {gateway, durable} = source.lifecycleStore;
+  const read = gateway.readAuthoritativeRows.bind(gateway);
+  gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+    const result = await read(table, sql, params, options);
+    return table === TABLES.SERVICES && result.success === true ?
+      {...result, rows: projectCommittedServices(sql, params, durable.services)} : result;
+  };
+  return source;
 }
 
 function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
@@ -108,7 +135,7 @@ function bindRetirementAuthority(leader, nodes, sourceRow, source = null) {
   const gateway = leader.lifecycleStore.gateway;
   const read = gateway.readAuthoritativeRows.bind(gateway);
   gateway.readAuthoritativeRows = (table, sql, params, options) =>
-    table === TABLES.NODES ? {success: true, rows: [nodes.nodeRow()]} :
+    table === TABLES.NODES ? nodes.readAuthoritativeNodes(sql, params) :
       read(table, sql, params, options);
 }
 
@@ -485,7 +512,14 @@ for (const change of ['boot', 'service birth']) {
         const retained = appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer);
         t.diagnostic(JSON.stringify({change, node: nodes.nodeRow(), retained, deliveries}));
         assert.equal(retained, true, 'a newer committed authority retained the native member');
-        assert.equal(source.serviceChanges.length, 0);
+        assert.equal(source.serviceChanges.some((row) =>
+          row.status !== ReplicaStatus.ACTIVE || row.cleanup_token !== null), false);
+        if (change === 'boot') {
+          const recovered = source.lifecycleStore.durable.services.get(target.replica_id);
+          assert.equal(recovered.created_at, target.created_at);
+          assert.ok(recovered.state_entered_at > target.state_entered_at,
+            'the actual restore owner acquired a newer lifecycle version');
+        }
       } finally {
         resume.resolve();
         await Promise.allSettled([run]);
