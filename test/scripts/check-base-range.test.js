@@ -22,7 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {
   changedRecords,
@@ -162,6 +162,34 @@ test('the source is a named state, never inferred from an empty base', () => {
   assert.equal(publicationBase(repo), null);
   assert.deepEqual(resolvedCheckRange(null, {}, repo),
     {base: null, source: RANGE_SOURCE.WORKTREE});
+});
+
+test('a shallow checkout with publication and HEAD but no merge base refuses', (t) => {
+  const {repo: upstream, shas: upstreamShas} = buildBranchRepo();
+  const shallow = fs.mkdtempSync(path.join(os.tmpdir(), 'check-base-shallow-'));
+  t.after(() => {
+    fs.rmSync(shallow, {recursive: true, force: true});
+    fs.rmSync(upstream, {recursive: true, force: true});
+  });
+  git(upstream, ['branch', 'main', upstreamShas.b]);
+  git(upstream, ['branch', 'candidate', upstreamShas.d]);
+  git(shallow, ['clone', '--quiet', '--depth=1', '--no-single-branch',
+    '--branch=candidate', pathToFileURL(upstream).href, '.']);
+  assert.equal(git(shallow, ['rev-parse', '--is-shallow-repository']).trim(), 'true');
+  assert.equal(git(shallow, ['rev-parse', 'origin/main']).trim(), upstreamShas.b);
+  assert.equal(git(shallow, ['rev-parse', 'HEAD']).trim(), upstreamShas.d);
+  assert.throws(() => git(shallow, ['merge-base', 'origin/main', 'HEAD']), {status: 1});
+  assert.throws(() => resolvedCheckRange(null, {}, shallow), /merge-base/u);
+});
+
+test('a published ref with disconnected histories cannot select the worktree', (t) => {
+  const {repo: disconnected, shas: disconnectedShas} = buildBranchRepo();
+  t.after(() => fs.rmSync(disconnected, {recursive: true, force: true}));
+  const published = git(disconnected, ['commit-tree', `${disconnectedShas.a}^{tree}`,
+    '-m', 'independent publication history']).trim();
+  git(disconnected, ['update-ref', 'refs/remotes/origin/main', published]);
+  assert.throws(() => git(disconnected, ['merge-base', 'origin/main', 'HEAD']), {status: 1});
+  assert.throws(() => resolvedCheckRange(null, {}, disconnected), /merge-base/u);
 });
 
 test('an explicit flag overrides the environment', () => {
