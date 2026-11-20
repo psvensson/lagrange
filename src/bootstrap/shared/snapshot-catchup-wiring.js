@@ -18,10 +18,8 @@
 //     raftGroupId to the local replica and driving
 //     orchestrateSnapshotCatchupInstall with the production partition
 //     factory and ReplicaHandler.replaceLocalReplicaService.
-// Both production factories (bootstrap and join/durable-rejoin) flow
-// through wrapPartitionServiceFactoryWithSnapshotCatchup at the shared
-// ReplicaHandlerSetup; the join durable-rejoin restore path additionally
-// attaches per-service (it constructs services without the handler factory).
+// Each production factory installs the dispatcher on the exact partition
+// it initialized. Snapshot recreation re-enters that node's factory.
 
 import {createPartitionConstructionHandoff, supersededPartitionConstruction} from
   './partition-service-construction.js';
@@ -144,30 +142,6 @@ function attachSnapshotCatchupDispatcher(context) {
   return service;
 }
 
-/**
- * Wrap a production partition-service factory so every service it creates
- * carries the snapshot catch-up dispatcher seam (Phase A link 2 — the
- * shared point BOTH the bootstrap and the join factories flow through via
- * ReplicaHandlerSetup). Replacement services recreated after an install
- * flow through the same wrapped factory, so the seam re-attaches itself.
- * @param {Object} context wiring context
- * @param {Function} context.createPartitionService inner factory
- * @param {Object} context.systemTableCache cached system tables
- * @param {Object} context.messageRouter node message router
- * @return {Function} wrapped async factory
- */
-function wrapPartitionServiceFactoryWithSnapshotCatchup(context) {
-  const {createPartitionService, systemTableCache, messageRouter} = context;
-  return async (serviceOptions) => {
-    const service = await createPartitionService(serviceOptions);
-    if (service) {
-      attachSnapshotCatchupDispatcher(
-        {service, systemTableCache, messageRouter});
-    }
-    return service;
-  };
-}
-
 function isRetiringOrFailedLocalReplica(replicaHandler, service) {
   if (service.removalServingAdmissionFenced === true) {
     return true;
@@ -222,7 +196,8 @@ function armSnapshotOfferRouting(context) {
       orchestrate: ({service, socket}) => {
         const {replicaId, partitionId} = service;
         const requireCurrent = () => {
-          if (replicaHandler.getTrackedService(replicaId) !== service) {
+          if (replicaHandler.shuttingDown ||
+              replicaHandler.getTrackedService(replicaId) !== service) {
             throw supersededPartitionConstruction(replicaId);
           }
         };
@@ -287,5 +262,4 @@ function armSnapshotOfferRouting(context) {
 export {
   armSnapshotOfferRouting,
   attachSnapshotCatchupDispatcher,
-  wrapPartitionServiceFactoryWithSnapshotCatchup,
 };

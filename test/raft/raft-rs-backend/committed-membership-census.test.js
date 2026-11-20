@@ -362,8 +362,6 @@ const PARTITION_CONSTRUCTION_SITES = Object.freeze({
     /new PartitionService\(\{\s*\.\.\.options,/u,
   ],
   'src/bootstrap/shared/snapshot-catchup-wiring.js': [
-    // The catch-up wrapper: the wrapped factory's own options.
-    /const service = await createPartitionService\(serviceOptions\)/u,
     // The replacement's factory: the handler's create with its options.
     /replicaHandler\.createPartitionService\(\{\.\.\.serviceOptions,/u,
   ],

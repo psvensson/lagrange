@@ -1,3 +1,4 @@
+import {attachSnapshotCatchupDispatcher} from './shared/snapshot-catchup-wiring.js';
 import {exposePartitionConstruction} from './shared/partition-service-construction.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
@@ -173,6 +174,8 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
           this.servicesCreated++;
         });
         await partition.initialize();
+        attachSnapshotCatchupDispatcher({service: partition, systemTableCache,
+          messageRouter: this.messageRouter});
 
         const tableName = options.tableName;
         if (tableName &&

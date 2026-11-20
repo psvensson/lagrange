@@ -367,6 +367,18 @@ owner must retain the exact instance before native initialization, then
 exercise both disposal and preservation through CREATE, rejoin and snapshot.
 [Three node logs, guard outputs and original classified run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-composed-1afe-nov21.tar.gz).
 
+At `369c45e64` both production factories require acknowledgement of the
+exact service before native initialization. The seed and join factories
+attach the snapshot dispatcher to their own service. Independent review
+traced CREATE, direct rejoin and snapshot reopening through cleanup and
+shutdown. The same three-process public SQL check took 37.808 seconds and
+all three guards recorded zero admin calls. The four native and wiring
+files on adams-gamla passed 102 assertions, and the three join and workflow
+files on adam-laptop passed 683. This closes the bounded construction
+correction. Fleet formation retains its original predicate and zero streak.
+[Managed public SQL original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-acknowledged-369c-nov21.tar.gz)
+and [opposing native controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--native-construction-custody-b43-2d18-nov21.tar.gz).
+
 Two other decisions can also confuse the scope of an observation. The
 operation owner must distinguish a lane being occupied from evidence that
 the caller's exact move already exists. On `7361ba4bb`, concurrent callers

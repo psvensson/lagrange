@@ -35,7 +35,7 @@ documentClass: generated
 - [node-storage-budget-setup.js](node-storage-budget-setup.js) - NodeStorageBudgetSetup - Shared node storage budget resolution and persistence during bootstrap/join startup. (importers: many)
 - [partition-cdc-propagation-subscriber.js](partition-cdc-propagation-subscriber.js) - No leading comment; first export: buildPartitionCdcPropagationSubscriber. (importers: many)
 - [partition-service-activation.js](partition-service-activation.js) - No leading comment; first export: activatePartitionServiceRows. (importers: many)
-- [partition-service-construction.js](partition-service-construction.js) - The host registry is published by the lifecycle caller once it owns the initialized replica. (importers: few)
+- [partition-service-construction.js](partition-service-construction.js) - The host registry is published by the lifecycle caller once it owns the initialized replica. (importers: many)
 - [query-transport-selection.js](query-transport-selection.js) - No leading comment; first export: resolveQueryTransportSelection. (importers: few)
 - [replica-handler-setup.js](replica-handler-setup.js) - ReplicaHandlerSetup - Shared replica handler creation and configuration. (importers: many)
 - [retryable-control-plane-write.js](retryable-control-plane-write.js) - Report a retryable write whose retry deadline is spent. (importers: many)

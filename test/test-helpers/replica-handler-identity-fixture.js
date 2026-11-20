@@ -6,6 +6,8 @@
  */
 
 import assert from 'node:assert/strict';
+import {createPartitionConstructionHandoff} from
+  '../../src/bootstrap/shared/partition-service-construction.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_RELEASE_TYPE} from
@@ -163,14 +165,9 @@ async function initializePartitionTransportFixture() {
 }
 
 async function createHostPartitionFixture(factory, options) {
-  let opened;
-  let commit;
-  const service = await factory({...options, onPartitionConstructed(instance, publish) {
-    opened = instance;
-    commit = publish;
-  }});
-  assert.equal(service, opened);
-  commit();
+  const construction = createPartitionConstructionHandoff(options.replicaId, () => {});
+  const service = await factory({...options, onPartitionConstructed: construction.retain});
+  construction.publish(service);
   return service;
 }
 
