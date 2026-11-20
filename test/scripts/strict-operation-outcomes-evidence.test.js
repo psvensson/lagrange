@@ -10,6 +10,7 @@ const ADAPTER = fileURLToPath(new URL(
   '../../scripts/quest-evidence/strict-operation-outcomes.js', import.meta.url));
 const MANAGED = '--managed-evidence-dir';
 const RED = '--evidence-dir';
+const HISTORICAL = '--historical-evidence-dir';
 const OUTPUT = '--output';
 const EXISTING_RECEIPT = '{ "status": "pass", "receipts": [{ "passed": true }] }\n';
 
@@ -74,4 +75,27 @@ test('a symlink cannot place derived output inside the retained originals', (t) 
   assert.equal(result.status, 2, result.stderr);
   assert.match(result.stderr, /outside retained original evidence/u);
   assert.deepEqual(fs.readdirSync(originals), []);
+});
+
+
+test('historical originals can extend only the managed positive evidence', (t) => {
+  const {originals, output} = fixture(t);
+  const result = invoke(RED, originals, HISTORICAL, originals, OUTPUT, output);
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /requires --managed-evidence-dir/u);
+  assert.equal(fs.readFileSync(output, 'utf8'), EXISTING_RECEIPT);
+});
+
+test('derived output cannot replace any retained historical original', (t) => {
+  const {root, originals} = fixture(t);
+  const historical = path.join(root, 'historical');
+  const alias = path.join(root, 'historical-alias');
+  fs.mkdirSync(historical);
+  fs.symlinkSync(historical, alias);
+  const original = path.join(historical, 'manifest.json');
+  fs.writeFileSync(original, '{}');
+  const result = invoke(MANAGED, originals, HISTORICAL, alias, OUTPUT, original);
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /outside retained original evidence/u);
+  assert.equal(fs.readFileSync(original, 'utf8'), '{}');
 });
