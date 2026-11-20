@@ -1,3 +1,4 @@
+import {invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   readOperationRecordWorkflowStep,
@@ -85,17 +86,18 @@ function assignReplicaOperationRepositoryRowMethods(
    * @return {object}
    */
     rowToOperation(row) {
-      let stepsHistory = [];
-      if (row.steps_history) {
-        try {
-          stepsHistory = JSON.parse(row.steps_history);
-        } catch (error) {
-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
-            operationId: row.operation_id,
-            error: error.message,
-          });
-          stepsHistory = [];
-        }
+      let stepsHistory;
+      try {
+        stepsHistory = JSON.parse(row.steps_history);
+      } catch (error) {
+        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
+          operationId: row.operation_id,
+          error: error.message,
+        });
+        throw invalidOperationPersistenceOutcome('persisted operation history is invalid JSON');
+      }
+      if (!Array.isArray(stepsHistory)) {
+        throw invalidOperationPersistenceOutcome('persisted operation history is not an array');
       }
       const {entityType, entityId} =
         assertCanonicalRebalancerEntityIdentity({

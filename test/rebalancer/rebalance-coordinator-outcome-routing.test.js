@@ -157,10 +157,11 @@ function createTestCoordinator(options = {}) {
   if (operation && [OperationType.ADD, OperationType.REPLACE].includes(operation.type)) {
     const seeded = store.execute(
       'INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, ' +
-      'partition_id, target_node_id, estimated_bytes, amplification_factor, status, created_at, ' +
-      'updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)',
+      'partition_id, target_node_id, estimated_bytes, amplification_factor, status, reason_code, ' +
+      'created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)',
       [`res-${operation.operationId}`, operation.operationId, operation.entityType, operation.entityId,
-        operation.partitionId, operation.targetNodeId, 'active', operation.createdAt,
+        operation.partitionId, operation.targetNodeId, 'active',
+        operation.type === OperationType.REPLACE ? 'replace_replica' : 'add_replica', operation.createdAt,
         operation.createdAt, operation.createdAt + 300000],
     );
     if (!seeded.success) throw new Error(seeded.error);

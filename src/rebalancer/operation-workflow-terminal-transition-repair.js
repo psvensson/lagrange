@@ -38,12 +38,12 @@ const {
 const TERMINAL_TRANSITION_REPAIR_RETRY_DELAY_MS = TIME_MS.SECOND / 2;
 const TERMINAL_TRANSITION_REPAIR_RETRY_MAX_DELAY_MS = TIME_MS.SECOND * 30;
 const TERMINAL_TRANSITION_REPAIR_RETRY_BACKOFF_MULTIPLIER = 2;
+const TERMINAL_RELEASE_REGISTERED_LOG = 'Durable terminal release obligations registered';
 const FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY =
   'failed-create-cleanup-release-recovery-scan';
 const TERMINAL_TRANSITION_REPAIR_CAUSE = Object.freeze({
   TERMINAL_RELEASE_PENDING: 'terminal_release_pending',
   CONFIRMATION_FAILED: 'confirmation_failed',
-  CONFIRMATION_DEFERRED: 'confirmation_deferred',
   REPAIR_UNCONFIRMED: 'repair_unconfirmed',
   PERSIST_NOT_COMMITTED: 'persist_not_committed',
   FAILED_CREATE_CLEANUP_RELEASE_PENDING:
@@ -274,6 +274,8 @@ function buildTerminalTransitionRepairState(
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING :
       TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
     cleanupRelease: Boolean(existingState?.cleanupRelease) || cleanupOnly,
+    writeCommitted: Boolean(existingState?.writeCommitted) || releaseOnly ||
+      cause === TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
     persistenceRepair: !releaseOnly && !retainRelease &&
       (cause === TERMINAL_TRANSITION_REPAIR_CAUSE.REPAIR_UNCONFIRMED ?
         existingState.persistenceRepair :
@@ -315,6 +317,7 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause,
     cause,
     attempt: state.attempt,
     delayMs,
+    persistenceRepair: state.persistenceRepair,
   });
   // The callback returns its promise so a deterministic test scheduler can
   // await the attempt; production setTimeout ignores the return value.
@@ -343,10 +346,13 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause,
 function logTerminalTransitionRepairArmed(
   owner,
   projectedOperation,
-  {operationId, cause, attempt, delayMs},
+  {operationId, cause, attempt, delayMs, persistenceRepair},
 ) {
-  owner.logger.warn(
-    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED,
+  const log = persistenceRepair ? owner.logger.warn.bind(owner.logger) :
+    owner.logger.debug.bind(owner.logger);
+  log(
+    persistenceRepair ? REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ARMED :
+      TERMINAL_RELEASE_REGISTERED_LOG,
     {
       operationId,
       workflowStep: readStateField(projectedOperation?.workflowStep),
@@ -456,7 +462,6 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         heldState.projectedOperation, {
           ...repairAdmission.persistOptions,
           terminalTransition: true,
-          confirmPersistence: false,
           disableSystemWriteSession: true,
         });
       const outcome = buildOperationTransitionOutcome(persistResult,
@@ -466,8 +471,6 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         return;
       }
       await owner.releaseDurableTerminalOperation(heldState.projectedOperation, outcome);
-      await owner.confirmCommittedTransitionPersistence(outcome.operation,
-        {terminalTransitionRepair: true, repairPersistOptions: heldState.persistOptions});
     },
   );
 }

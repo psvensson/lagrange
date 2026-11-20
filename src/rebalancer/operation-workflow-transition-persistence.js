@@ -211,7 +211,6 @@ class OperationWorkflowTransitionPersistence
         try {
           const persisted = await this.repository.persistOperationUpdate(projectedOperation, {
             ...this.buildOperationTransitionPersistOptions(),
-            confirmPersistence: true,
             expectedWorkflowStep: WORKFLOW_STEP.PENDING,
             timeoutBudget: mutationBudget,
           });
@@ -362,16 +361,13 @@ class OperationWorkflowTransitionPersistence
         {requestedOperation: structuredClone(projectedOperation)});
       await this.resolveNotCommittedTerminalTransition(operation, projectedOperation,
         outcome, projectedOperation.workflowStep, persistOptions);
-      if (outcome.committed) {
-        await this.confirmCommittedTransitionPersistence(outcome.operation,
-          {terminalTransitionRepair: true, repairPersistOptions: persistOptions});
-      }
       return outcome;
     } catch (error) {
       // A failed reply can follow a durable commit. Retain the exact requested
       // effect until the repository resolves it; never promote the mirror.
       armTerminalTransitionRepair(this, projectedOperation,
-        TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
+        error.operationWriteCommitted === true ? TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED :
+          TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
       throw error;
     }
   }

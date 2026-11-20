@@ -5,14 +5,6 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
 import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
-} from './replica-operation-repository.js';
-import {
-  TERMINAL_TRANSITION_REPAIR_CAUSE,
-  armTerminalTransitionRepair,
-  clearTerminalTransitionRepair,
-} from './operation-workflow-terminal-transition-repair.js';
-import {
   OPERATION_OWNER_TURN_POLICY,
 } from './operation-owner-turn-policy.js';
 import {
@@ -592,7 +584,6 @@ class OperationWorkflowOwnerExecutionLane
    */
   buildOperationTransitionPersistOptions() {
     return {
-      confirmPersistence: false,
       disableSystemWriteSession: true,
     };
   }
@@ -614,92 +605,6 @@ class OperationWorkflowOwnerExecutionLane
       return false;
     }
     return this.repository.touchOperationOwnerLease(operation);
-  }
-
-  /**
-   * Confirm one committed transition so post-commit visibility lag cannot
-   * unwind a transition that already durably committed. Confirmation never
-   * throws to the caller; for TERMINAL transitions an unconfirmed outcome
-   * (thrown or deferred) arms the terminal-transition repair instead of being
-   * dropped — a terminal projection the ledger never reflects is an immortal
-   * non-terminal row that no level-triggered path re-drives (run-21 ghost).
-   * @param {Object} operation
-   * @param {Object} [options]
-   * @param {boolean} [options.terminalTransitionRepair] - Arm repair when the
-   *   confirmation does not positively confirm visibility.
-   * @param {Object} [options.repairPersistOptions] - The terminal write's
-   *   admission options (a REPLACE FAILED's step CAS), kept by its repair.
-   * @return {Promise<void>}
-   */
-  async confirmCommittedTransitionPersistence(operation, options = {}) {
-    const repairOnUnconfirmed = options.terminalTransitionRepair === true;
-    let visibility = null;
-    try {
-      visibility =
-        await this.repository.confirmReplicaOperationPersistence(operation);
-    } catch (error) {
-      this.warnCommittedTransitionNotVisible(operation, error);
-      if (repairOnUnconfirmed) {
-        armTerminalTransitionRepair(
-          this,
-          operation,
-          TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
-          options.repairPersistOptions,
-        );
-      }
-      return;
-    }
-    if (!repairOnUnconfirmed) {
-      return;
-    }
-    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility,
-      options.repairPersistOptions);
-  }
-
-  /**
-   * @param {Object} operation
-   * @param {Error} error
-   * @return {void}
-   * @private
-   */
-  warnCommittedTransitionNotVisible(operation, error) {
-    this.logger.warn(
-      OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
-      {
-        operationId: operation?.operationId || null,
-        workflowStep: readStateField(operation?.workflowStep),
-        status: readStateField(operation?.status),
-        error: error?.message || String(error),
-      },
-    );
-  }
-
-  /**
-   * A positively confirmed terminal transition clears any armed repair; every
-   * other outcome (DEFERRED — the silent class) arms it.
-   * @param {Object} operation
-   * @param {Object|null} visibility
-   * @param {Object} [repairPersistOptions] - The options the terminal was
-   *   admitted with, re-used by its repair.
-   * @return {void}
-   * @private
-   */
-  resolveTerminalTransitionConfirmationOutcome(operation, visibility,
-    repairPersistOptions) {
-    if (
-      visibility?.confirmationState ===
-        REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
-      visibility?.operation
-    ) {
-      clearTerminalTransitionRepair(this, operation?.operationId || null);
-      return;
-    }
-    armTerminalTransitionRepair(
-      this,
-      operation,
-      TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
-      repairPersistOptions,
-    );
   }
 
   /**

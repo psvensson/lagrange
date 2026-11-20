@@ -6,14 +6,13 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {createTestCoordinator} from './test-helpers.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 function createSpyLogger() {
   const infoCalls = [];
@@ -28,38 +27,10 @@ function createSpyLogger() {
   };
 }
 
-function createMockSqlEngine() {
-  return {
-    executeQuery() {
-      return Promise.resolve({success: true, rows: []});
-    },
-  };
-}
-
-function createCoordinator(logger) {
-  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-    nodeId: 'test-node-1',
-    authoritativeVisibilityTimeoutMs: 0,
-    authoritativeVisibilityRetryDelayMs: 0,
-    systemTableCache: {getAll: () => []},
-    cdcIntegrationService: {},
-    messageRouter: {},
-    tablePolicyService: {},
-    sqlQueryEngine: createMockSqlEngine(),
-    transactionCoordinator: {
-      begin: async () => ({success: true}),
-      commit: async () => ({success: true}),
-      rollback: async () => ({success: true}),
-    },
-    storageAdmissionService: {
-      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    },
-    storageAccountingService: {
-      estimateReplicaBytes: () => 1,
-    },
-  }));
+function createCoordinator(t, logger) {
+  const coordinator = createTestCoordinator();
   coordinator.logger = logger;
+  t.teardown(() => coordinator.shutdown());
   return coordinator;
 }
 
@@ -75,12 +46,12 @@ function createOperation(overrides = {}) {
     sourceNodeId: 'test-node-1',
     targetNodeId: 'test-node-2',
     status: ReplicaStatus.PENDING,
-    workflowStep: 'pending',
+    workflowStep: 'PENDING',
     createdAt: now - 5000,
     updatedAt: now - 5000,
     completedAt: null,
     errorMessage: null,
-    stepsHistory: [{step: 'pending', timestamp: now - 5000}],
+    stepsHistory: [{step: 'PENDING', timestamp: now - 5000}],
     ...overrides,
   };
 }
@@ -92,9 +63,10 @@ function createOperation(overrides = {}) {
 test('completeOperation emits metrics.rebalance.operation with correct fields',
   async (t) => {
     const logger = createSpyLogger();
-    const coordinator = createCoordinator(logger);
+    const coordinator = createCoordinator(t, logger);
     const operation = createOperation();
 
+    await coordinator.repository.persistOperationInsert(operation);
     await coordinator.completeOperation(operation);
 
     const metric = logger.calls.find(
@@ -112,9 +84,10 @@ test('completeOperation emits metrics.rebalance.operation with correct fields',
 test('completeOperation totalDurationMs reflects operation age',
   async (t) => {
     const logger = createSpyLogger();
-    const coordinator = createCoordinator(logger);
+    const coordinator = createCoordinator(t, logger);
     const operation = createOperation({createdAt: Date.now() - 3000});
 
+    await coordinator.repository.persistOperationInsert(operation);
     await coordinator.completeOperation(operation);
 
     const metric = logger.calls.find(
@@ -133,11 +106,12 @@ test('completeOperation totalDurationMs reflects operation age',
 test('failOperation emits metrics.rebalance.operation with correct fields',
   async (t) => {
     const logger = createSpyLogger();
-    const coordinator = createCoordinator(logger);
+    const coordinator = createCoordinator(t, logger);
     const operation = createOperation({
       entityType: SERVICE_TYPE.MESSAGE_GROUP,
     });
 
+    await coordinator.repository.persistOperationInsert(operation);
     await coordinator.failOperation(operation, 'timeout exceeded');
 
     const metric = logger.calls.find(
@@ -163,9 +137,10 @@ test('rebalance operation metrics use info level not debug',
     logger.debug = (tag, data) => {
       debugCalls.push({tag, data});
     };
-    const coordinator = createCoordinator(logger);
+    const coordinator = createCoordinator(t, logger);
     const operation = createOperation();
 
+    await coordinator.repository.persistOperationInsert(operation);
     await coordinator.completeOperation(operation);
 
     const infoMetric = logger.calls.find(

@@ -1,6 +1,7 @@
 import {isDeepStrictEqual} from 'node:util';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
+  invalidOperationPersistenceOutcome,
 } from './replica-operation-update-outcome.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
@@ -329,23 +330,37 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     async confirmPersistedOperationUpdate(operation, options) {
-      if (options.confirmPersistence === false) {
-        this.recordOwnerPersistedTransitionVisibilityWitness(operation);
-        this.syncIncompleteOperationObservation(operation);
+      // The changed-row result proves a write occurred. Its returned winner
+      // must come from authority, including fields not changed by this UPDATE.
+      try {
         await this.touchOperationOwnerLeaseWhenRequested(operation, options);
+        const visibility = await this.confirmPersistenceThroughWitness(operation);
+        const observed = visibility?.operation;
+        if (!observed || visibility.confirmationState !==
+            REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED) {
+          const error = new Error('Committed operation update confirmation is unresolved');
+          error.code = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
+          error.deferredOutcome = visibility?.deferredOutcome;
+          throw error;
+        }
+        assertOperationUpdateRecord(observed);
+        assertOperationUpdateSubject(operation, observed);
+        const exact = this.isReplicaOperationUpdateSatisfied(operation, observed);
+        if (!exact && observed.completedAt === null) {
+          throw invalidOperationPersistenceOutcome('confirmation does not prove the requested write');
+        }
         return buildOperationUpdateOutcome({
-          persisted: true,
-          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-          operation,
+          persisted: exact,
+          disposition: exact ? REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED :
+            REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+          operation: observed,
         });
+      } catch (error) {
+        // Preserve this fact separately from whether its resulting state is
+        // currently observable. The workflow retains the unresolved obligation.
+        error.operationWriteCommitted = true;
+        throw error;
       }
-      await this.confirmPersistenceThroughWitness(operation);
-      await this.touchOperationOwnerLeaseWhenRequested(operation, options);
-      return buildOperationUpdateOutcome({
-        persisted: true,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        operation,
-      });
     }
 
     // The owner-lease touch is opt-in per write (renewOwnerLease: true): only
@@ -415,6 +430,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       assertOperationUpdateSubject(operation, observed);
       if (!this.isReplicaOperationUpdateSatisfied(operation, observed)) return false;
       this.emitReplicaOperationPersistenceDivergence(observed);
+      Object.assign(operation, structuredClone(observed));
       return true;
     }
 

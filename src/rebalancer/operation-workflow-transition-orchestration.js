@@ -333,9 +333,6 @@ class OperationWorkflowTransitionOrchestration
         persistFn,
         {
           requestedOperation: projectedOperation,
-          afterCommit: async () => {
-            await this.confirmCommittedTransitionPersistence(projectedOperation);
-          },
         },
       );
     } catch (error) {
@@ -369,12 +366,10 @@ class OperationWorkflowTransitionOrchestration
 
     this.commitProjectedStepTransition(
       operation,
-      projectedOperation,
+      transitionOutcome.operation,
       step,
-      persistedStatus,
       transitionReason,
       previousStep,
-      now,
     );
 
     return transitionOutcome.reconcileOutcome;
@@ -387,29 +382,22 @@ class OperationWorkflowTransitionOrchestration
    * @param {Object} operation
    * @param {Object} projectedOperation
    * @param {string} step
-   * @param {string} persistedStatus
    * @param {string} transitionReason
    * @param {string} previousStep
-   * @param {number} now
    * @private
    */
   commitProjectedStepTransition(
     operation,
     projectedOperation,
     step,
-    persistedStatus,
     transitionReason,
     previousStep,
-    now,
   ) {
     this.clearTransitionRetry(operation.operationId);
     if (!shouldRetainPriorityActiveReplaceRetry(step)) {
       this.clearPriorityActiveReplaceRetry(operation.operationId);
     }
-    operation.workflowStep = step;
-    operation.updatedAt = now;
-    operation.status = persistedStatus;
-    operation.stepsHistory = projectedOperation.stepsHistory;
+    Object.assign(operation, structuredClone(projectedOperation));
     if (shouldClearPriorityDeferredClaim(step)) {
       delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
     }

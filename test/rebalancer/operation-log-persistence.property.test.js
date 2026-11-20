@@ -17,6 +17,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {
   createMockCache,
+  createCoordinatorSqlStore,
   createMockPolicyService,
   createMockMessageRouter,
   createMockCdcService,
@@ -29,164 +30,13 @@ const PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID = 'partition';
 const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
 
 function createTestCoordinatorWithPersistence() {
-  const persistedOperations = new Map();
-  const persistedReservations = new Map();
-
-  const sqlQueryEngine = {
-    executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-
-        persistedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        });
-        return {success: true, affectedRows: 1};
-      }
-
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = persistedOperations.get(operationId);
-        if (existing) {
-          persistedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true, affectedRows: 1};
-      }
-
-      if (sql.includes('INTO storage_reservations')) {
-        const [
-          reservationId, operationId, entityType, entityId, partitionId,
-          targetNodeId, estimatedBytes, amplificationFactor, status,
-          reasonCode, createdAt, updatedAt, expiresAt,
-        ] = params;
-        persistedReservations.set(reservationId, {
-          reservation_id: reservationId,
-          operation_id: operationId,
-          entity_type: entityType,
-          entity_id: entityId,
-          partition_id: partitionId,
-          target_node_id: targetNodeId,
-          estimated_bytes: estimatedBytes,
-          amplification_factor: amplificationFactor,
-          status,
-          reason_code: reasonCode,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          expires_at: expiresAt,
-          released_at: null,
-        });
-        return {success: true, affectedRows: 1, changes: 1};
-      }
-
-      if (sql.includes('UPDATE storage_reservations')) {
-        return {success: true, affectedRows: 1};
-      }
-
-      if (sql.includes('FROM storage_reservations')) {
-        const [operationId, status] = params;
-        const rows = Array.from(persistedReservations.values()).filter(
-          (row) => row.operation_id === operationId && row.status === status,
-        );
-        return {success: true, rows, affectedRows: rows.length};
-      }
-
-      if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
-        const [partitionId, targetNodeId] = params;
-        const allOps = Array.from(persistedOperations.values());
-        const matching = allOps.filter((op) =>
-          op.partition_id === partitionId &&
-          op.target_node_id === targetNodeId &&
-          !['active', 'removed', 'failed'].includes(op.status));
-        return {success: true, rows: matching};
-      }
-
-      if (sql.includes('WHERE operation_id = ?')) {
-        const [operationId] = params;
-        const op = persistedOperations.get(operationId);
-        return {success: true, rows: op ? [op] : []};
-      }
-
-      if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('WHERE type = ?')) {
-        const [type] = params;
-        const allOps = Array.from(persistedOperations.values());
-        const matching = allOps.filter((op) => op.type === type);
-        return {success: true, rows: matching};
-      }
-
-      if (sql.includes('replica_operations') &&
-          sql.includes('source_node_id = ?') &&
-          sql.includes('workflow_step IN')) {
-        const [
-          sourceNodeId,
-          pendingStep,
-          sendingStep,
-          creatingStep,
-          syncingStep,
-          stoppingStep,
-          activeStep,
-          replaceType,
-        ] = params;
-        const inFlightSteps = new Set([
-          pendingStep,
-          sendingStep,
-          creatingStep,
-          syncingStep,
-          stoppingStep,
-        ]);
-        const allOps = Array.from(persistedOperations.values());
-        const incompleteOps = allOps.filter((op) => {
-          if (op.source_node_id !== sourceNodeId) {
-            return false;
-          }
-          if (inFlightSteps.has(op.workflow_step)) {
-            return true;
-          }
-          return op.workflow_step === activeStep && op.type === replaceType;
-        });
-        return {success: true, rows: incompleteOps};
-      }
-
-      if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('ORDER BY')) {
-        return {success: true, rows: Array.from(persistedOperations.values())};
-      }
-
-      return {success: true, rows: []};
-    },
+  const cache = createMockCache();
+  const store = createCoordinatorSqlStore(cache);
+  const persistedOperations = {
+    get: (operationId) => store.execute(
+      'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId]).rows[0],
   };
+  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'test-node-1',
@@ -212,6 +62,11 @@ function createTestCoordinatorWithPersistence() {
   });
 
   coordinator.initialize();
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    await shutdown();
+    store.suspend();
+  };
   // Persistence of the created record is under test, not dispatch: a created
   // operation rests at its durable PENDING step (the create arm is inert).
   coordinator.armCoordinatorCreatedOperationProgress = async () => false;
@@ -429,7 +284,8 @@ test('Property 10: Operation Log Persistence', async (t) => {
               buildPersistencePropertyMove(move),
             );
             await coordinator.updateStep(operation, 'SENDING');
-            await coordinator.updateStep(operation, 'CREATING');
+            const nextStep = move.type === OperationType.REMOVE ? 'STOPPING' : 'CREATING';
+            await coordinator.updateStep(operation, nextStep);
 
             const persisted = persistedOperations.get(operation.operationId);
             if (!persisted) return false;
@@ -440,7 +296,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
               stepsHistory.length === 3 &&
               stepsHistory[0].step === 'PENDING' &&
               stepsHistory[1].step === 'SENDING' &&
-              stepsHistory[2].step === 'CREATING';
+              stepsHistory[2].step === nextStep;
           } finally {
             await coordinator.shutdown();
           }

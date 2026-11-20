@@ -232,6 +232,12 @@ const MALFORMED_REPLIES = [
   ['bare false', () => false],
   ['missing fields', () => ({})],
   ['missing operation', (result) => ({persisted: result.persisted, disposition: result.disposition})],
+  ['missing history', (result) => {
+    const operation = {...result.operation};
+    delete operation.stepsHistory;
+    return {...result, operation};
+  }],
+  ['invalid timestamp', (result) => ({...result, operation: {...result.operation, updatedAt: null}})],
   ['unknown disposition', (result) => ({...result, disposition: 'unrecognized-disposition'})],
   ['contradictory updated', (result) => ({...result, persisted: false})],
   ['failed without completion', (result) => ({...result, operation: {...result.operation,
@@ -643,3 +649,20 @@ test('strict outcomes queued terminal writers return the exact durable winner', 
     'the losing caller manufactures no second terminal history entry');
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
 });
+
+for (const history of ['{broken', '{}', 'null']) {
+  test(`strict outcomes reject corrupt durable history ${history}`, async (t) => {
+    const fixture = createFixture(t);
+    const operation = await seedOperation(t, fixture.current, `strict-bad-history-${history}`);
+    fixture.current.database.prepare(
+      'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
+    ).run(history, operation.operationId);
+    const reopened = await fixture.reopen();
+    const attempt = await observeAttempt(() => reopened.coordinator.workflowOwner.completeOperation(operation));
+    t.equal(attempt.error?.code, INVALID_OUTCOME_CODE);
+    t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.ACTIVE);
+    t.equal(reopened.database.prepare(
+      'SELECT steps_history FROM replica_operations WHERE operation_id = ?',
+    ).get(operation.operationId).steps_history, history, 'corrupt evidence is preserved');
+  });
+}

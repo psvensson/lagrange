@@ -17,8 +17,8 @@
 // creation entry on the creating node with the request a placement decider
 // builds (unified-rebalancer-move-execution.js); every terminal is the
 // workflow owner's own transition.
-// DOUBLES: the REPLICA_OPERATIONS store is ONE SQLite database built from
-// REPLICA_OPERATIONS_SCHEMA that executes the repository's statements
+// DOUBLES: operation and reservation authority share one SQLite database
+// built from their production schemas that executes the owners' statements
 // unchanged, behind each node's real gateway (the composite engine below
 // routes statements on that table to it and every other statement to the
 // node's cache seam). Its committed changes are published to every node's
@@ -27,8 +27,8 @@
 // the rows (the partition row names the leader), the transport answers a
 // CREATE as initiated and the committed-membership read from the rows
 // (committed-membership-fixture.js), and the clock does not move.
-// NOT USED: test/rebalancer/test-helpers.js and its createTestCoordinator,
-// whose replica_operations interpreter evaluates OR as AND (lines 1150-1168).
+// The independent node hosts share this store through their normal gateways;
+// the generic createTestCoordinator construction is not used.
 //
 // The property is observed at the durable store and the creation entry's
 // answer, never through a statement shape: on a tree whose admission is one
@@ -47,6 +47,7 @@ import Database from 'better-sqlite3';
 import {
   INITIAL_PARTITION_IDS,
   REPLICA_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -98,7 +99,7 @@ const STORAGE_BUDGET_SOURCE = 'configured';
 const SETTLE_TURNS = 24;
 const ADDED_REPLICA_SUFFIX = '-r4';
 const REPLICA_SUFFIX = '-r';
-const STATEMENT_ON_LEDGER = /\b(?:from|into|update)\s+replica_operations\b/iu;
+const STATEMENT_ON_LEDGER = /\b(?:from|into|update)\s+(?:replica_operations|storage_reservations)\b/iu;
 const LEDGER_PARTITION_ID = INITIAL_PARTITION_IDS.replica_operations;
 const STATEMENT_SHAPE_CHARS = 72;
 const ATTEMPT_READS_SHOWN = 6;
@@ -164,33 +165,38 @@ function seedCache(cache, nowMs) {
 // queues the changes until it is released.
 function createLedgerStore(hostsById) {
   const database = new Database(':memory:');
-  database.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
-  for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) {
-    database.exec(indexSql);
+  for (const schema of [REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA]) {
+    database.exec(generateCreateTableSQL(schema));
+    for (const indexSql of generateCreateIndexSQL(schema)) database.exec(indexSql);
   }
   const selectAll = database.prepare(
     `SELECT * FROM ${REPLICA_OPERATIONS_SCHEMA.tableName}`);
   const held = new Map();
   const reads = [];
-  let published = new Map();
+  const tableKeys = new Map([[TABLES.REPLICA_OPERATIONS, COLUMN.OPERATION_ID],
+    [TABLES.STORAGE_RESERVATIONS, 'reservation_id']]);
+  const published = new Map();
   const apply = (nodeId, change) => {
     hostsById.get(nodeId).cache.applySystemTableChange(
-      TABLES.REPLICA_OPERATIONS, change.operation, {...change.row});
+      change.tableName, change.operation, {...change.row});
   };
   const publish = () => {
-    const current = new Map(selectAll.all().map((row) =>
-      [row[COLUMN.OPERATION_ID], row]));
-    for (const [operationId, row] of current) {
-      const before = published.get(operationId);
-      if (before && JSON.stringify(before) === JSON.stringify(row)) continue;
-      const change = {row,
-        operation: before ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT};
-      for (const nodeId of NODE_IDS) {
-        if (held.has(nodeId)) held.get(nodeId).push(change);
-        else apply(nodeId, change);
+    for (const [tableName, key] of tableKeys) {
+      const current = new Map(database.prepare(`SELECT * FROM ${tableName}`).all()
+        .map((row) => [row[key], row]));
+      const previous = published.get(tableName) || new Map();
+      for (const [id, row] of current) {
+        const before = previous.get(id);
+        if (before && JSON.stringify(before) === JSON.stringify(row)) continue;
+        const change = {tableName, row,
+          operation: before ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT};
+        for (const nodeId of NODE_IDS) {
+          if (held.has(nodeId)) held.get(nodeId).push(change);
+          else apply(nodeId, change);
+        }
       }
+      published.set(tableName, current);
     }
-    published = current;
   };
   // SQLite binds no boolean and no undefined: they bind as 0/1 and NULL.
   const bind = (value) => (typeof value === 'boolean' ? Number(value) :

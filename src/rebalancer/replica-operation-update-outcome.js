@@ -73,7 +73,11 @@ function requireDataFields(record, fields) {
 
 function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
   assertOperationData(operation);
-  requireDataFields(operation, [...SUBJECT_FIELDS, 'workflowStep', 'status', 'completedAt']);
+  requireDataFields(operation, [...SUBJECT_FIELDS, 'workflowStep', 'status', 'completedAt',
+    'createdAt', 'updatedAt', 'stepsHistory']);
+  requireOutcome(Number.isFinite(operation.createdAt) && Number.isFinite(operation.updatedAt),
+    'invalid operation timestamps');
+  requireOutcome(Array.isArray(operation.stepsHistory), 'invalid operation history');
   for (const field of ['operationId', 'type', 'entityType', 'entityId']) {
     requireOutcome(typeof operation[field] === 'string' && operation[field].length > 0,
       `invalid operation ${field}`);

@@ -3,6 +3,13 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 11.4, 12.3
  */
 
+import Database from 'better-sqlite3';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
+import {REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA, SERVICES_SCHEMA,
+  PARTITIONS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -59,154 +66,52 @@ function initializeConfig(overrides = {}) {
   });
 }
 
-function insertReplicaOperation(operations, params) {
-  const [
-    opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-    status, step, created, updated, completed, err, history,
-    entityType, entityId,
-  ] = params;
-  operations.set(opId, {
-    operation_id: opId, type, partition_id: partId,
-    replica_id: repId, target_claim_key: targetClaimKey,
-    source_node_id: srcNode,
-    target_node_id: tgtNode, status, workflow_step: step,
-    created_at: created, updated_at: updated,
-    completed_at: completed, error_message: err,
-    steps_history: history,
-    entity_type: entityType, entity_id: entityId,
-  });
-  return {success: true, changes: 1};
-}
-
-function insertStorageReservation(reservations, params) {
-  const [resId, opId, eType, eId, partId, tgtNode,
-    estBytes, ampFactor, status, reason,
-    created, updated, expires] = params;
-  reservations.set(resId, {
-    reservation_id: resId, operation_id: opId,
-    entity_type: eType, entity_id: eId,
-    partition_id: partId, target_node_id: tgtNode,
-    estimated_bytes: estBytes,
-    amplification_factor: ampFactor,
-    status, reason_code: reason,
-    created_at: created, updated_at: updated,
-    expires_at: expires, released_at: null,
-  });
-  return {success: true, changes: 1};
-}
-
-function updateStorageReservations(reservations, sql, params) {
-  const [newStatus, updated, released, reservationIdOrOperationId,
-    activeStatus] = params;
-  const byReservationId = sql.includes('reservation_id = ?');
-  let changes = 0;
-  for (const [key, row] of reservations) {
-    const matchesIdentity = byReservationId ?
-      row.reservation_id === reservationIdOrOperationId :
-      row.operation_id === reservationIdOrOperationId;
-    if (matchesIdentity && row.status === activeStatus) {
-      reservations.set(key, {
-        ...row,
-        status: newStatus,
-        updated_at: updated,
-        released_at: released,
-      });
-      changes++;
-    }
+// Real schema and SQLite own every conditional mutation and affected-row count.
+// These narrow row views are only seed/inspection conveniences for the tests.
+function createTrackingSqlEngine(t) {
+  const database = new Database(':memory:');
+  for (const schema of [REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA,
+    SERVICES_SCHEMA, PARTITIONS_SCHEMA]) {
+    database.exec(generateCreateTableSQL(schema));
+    for (const sql of generateCreateIndexSQL(schema)) database.exec(sql);
   }
-  return {success: true, changes};
-}
-
-function selectReplicaOperations(operations, sql, params) {
-  const allOps = Array.from(operations.values());
-  if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
-    const [partId, tgtNode] = params;
-    const matching = allOps.filter((op) =>
-      op.partition_id === partId &&
-      op.target_node_id === tgtNode &&
-      !['active', 'removed', 'failed'].includes(op.status));
-    return {success: true, rows: matching};
+  t.teardown(() => database.close());
+  const planner = new ControlPlaneSystemTableGateway();
+  function rows(tableName, identityColumn) {
+    return {
+      get size() {
+        return database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get().count;
+      },
+      values() {
+        return database.prepare(`SELECT * FROM ${tableName}`).all().values();
+      },
+      get(identity) {
+        return database.prepare(`SELECT * FROM ${tableName} WHERE ${identityColumn} = ?`)
+          .get(identity);
+      },
+      set(identity, row) {
+        if (row[identityColumn] !== identity) throw new Error('Fixture row identity mismatch');
+        const {sql, params} = planner.buildSqlMutationPlan({operation: 'insert', tableName, row});
+        database.prepare(sql).run(...params);
+      },
+      delete(identity) {
+        return database.prepare(`DELETE FROM ${tableName} WHERE ${identityColumn} = ?`)
+          .run(identity).changes > 0;
+      },
+    };
   }
-  if (sql.includes('NOT IN') || sql.includes('status <>')) {
-    const incomplete = allOps.filter((op) =>
-      !['active', 'removed', 'failed'].includes(op.status));
-    return {success: true, rows: incomplete};
-  }
-  if (sql.includes('operation_id = ?')) {
-    const [opId] = params;
-    const op = operations.get(opId);
-    return {success: true, rows: op ? [op] : []};
-  }
-  return {success: true, rows: allOps};
-}
-
-function handleStorageReservationQuery(reservations, sql, params) {
-  if (sql.includes('INTO storage_reservations')) {
-    return insertStorageReservation(reservations, params);
-  }
-  if (sql.includes('UPDATE storage_reservations')) {
-    return updateStorageReservations(reservations, sql, params);
-  }
-  if (sql.includes('SELECT * FROM storage_reservations WHERE operation_id = ?')) {
-    const [opId, status] = params;
-    const rows = Array.from(reservations.values())
-      .filter((row) => row.operation_id === opId && row.status === status);
-    return {success: true, rows};
-  }
-  if (sql.includes('SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?')) {
-    const [status, expiryThreshold] = params;
-    const rows = Array.from(reservations.values())
-      .filter((row) => row.status === status && row.expires_at <= expiryThreshold);
-    return {success: true, rows};
-  }
-  if (params.length > 0) {
-    const [status] = params;
-    const active = Array.from(reservations.values())
-      .filter((r) => r.status === status);
-    return {success: true, rows: active};
-  }
-  return {success: true, rows: Array.from(reservations.values())};
-}
-
-function updateReplicaOperation(operations, params) {
-  const [status, step, updated, completed, err,
-    history, repId, opId] = params;
-  const existing = operations.get(opId);
-  if (existing) {
-    operations.set(opId, {
-      ...existing, status, workflow_step: step,
-      updated_at: updated, completed_at: completed,
-      error_message: err, steps_history: history,
-      replica_id: repId,
-    });
-  }
-  return {success: true};
-}
-
-/**
- * In-memory SQL engine that tracks both operations and reservations.
- */
-function createTrackingSqlEngine() {
-  const operations = new Map();
-  const reservations = new Map();
-
   return {
-    operations,
-    reservations,
-    executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        return insertReplicaOperation(operations, params);
+    operations: rows('replica_operations', 'operation_id'),
+    reservations: rows('storage_reservations', 'reservation_id'),
+    async executeQuery(sql, params = []) {
+      try {
+        const statement = database.prepare(sql);
+        return statement.reader ?
+          {success: true, rows: statement.all(...params), rowSetComplete: true} :
+          {success: true, changes: statement.run(...params).changes};
+      } catch (error) {
+        return {success: false, error: error.message, errorCode: error.code};
       }
-      if (sql.includes('storage_reservations')) {
-        return handleStorageReservationQuery(reservations, sql, params);
-      }
-      if (sql.includes('UPDATE replica_operations')) {
-        return updateReplicaOperation(operations, params);
-      }
-      if (sql.includes('replica_operations')) {
-        return selectReplicaOperations(operations, sql, params);
-      }
-      return {success: true, rows: []};
     },
   };
 }
@@ -230,10 +135,10 @@ function createMockAdmissionService(options = {}) {
   };
 }
 
-function createCoordinatorWithStorage(options = {}) {
+function createCoordinatorWithStorage(t, options = {}) {
   const nodeId = options.nodeId || 'test-node-1';
   const sqlEngine = options.sqlQueryEngine ||
-    createTrackingSqlEngine();
+    createTrackingSqlEngine(t);
   const cache = options.systemTableCache || createMockCache();
   const accounting = new StorageCapacityAccountingService({
     systemTableCache: cache,
@@ -258,6 +163,7 @@ function createCoordinatorWithStorage(options = {}) {
       options.storageAdmissionService || createMockAdmissionService(),
   });
   coordinator.initialize();
+  t.teardown(() => coordinator.shutdown());
   return {coordinator, sqlEngine, accounting};
 }
 
@@ -268,7 +174,7 @@ test('createOperation - creates reservation for ADD operation',
   async (t) => {
     initializeConfig();
     const {coordinator, sqlEngine} =
-      createCoordinatorWithStorage();
+      createCoordinatorWithStorage(t);
 
     const move = {
       type: OperationType.ADD,
@@ -298,7 +204,7 @@ test('createOperation - creates reservation for REPLACE operation',
   async (t) => {
     initializeConfig();
     const {coordinator, sqlEngine} =
-      createCoordinatorWithStorage();
+      createCoordinatorWithStorage(t);
 
     const move = {
       type: OperationType.REPLACE,
@@ -323,7 +229,7 @@ test('createOperation uses isolated SQL sessions for operation and reservation w
   async (t) => {
     initializeConfig();
     const observedSessions = [];
-    const baseEngine = createTrackingSqlEngine();
+    const baseEngine = createTrackingSqlEngine(t);
     const sqlEngine = {
       async executeQuery(sql, params, options = {}) {
         if (sql.includes('INSERT INTO replica_operations') ||
@@ -339,7 +245,7 @@ test('createOperation uses isolated SQL sessions for operation and reservation w
         return baseEngine.executeQuery(sql, params, options);
       },
     };
-    const {coordinator} = createCoordinatorWithStorage({sqlQueryEngine: sqlEngine});
+    const {coordinator} = createCoordinatorWithStorage(t, {sqlQueryEngine: sqlEngine});
 
     try {
       const operation = await coordinator.createOperation({
@@ -373,7 +279,7 @@ test('createOperation - no reservation for REMOVE operation',
   async (t) => {
     initializeConfig();
     const {coordinator, sqlEngine} =
-      createCoordinatorWithStorage();
+      createCoordinatorWithStorage(t);
 
     const move = {
       type: OperationType.REMOVE,
@@ -394,7 +300,7 @@ test('createOperation - no reservation for REMOVE operation',
 test('createOperation - fails fast when accounting service is absent',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
     const coordinator = new RebalanceCoordinator({
       nodeId: 'test-node-1',
       systemTableCache: createMockCache(),
@@ -430,7 +336,7 @@ test('createOperation - fails fast when accounting service is absent',
 
 test('createOperation - emits reservationCreated event', async (t) => {
   initializeConfig();
-  const {coordinator} = createCoordinatorWithStorage();
+  const {coordinator} = createCoordinatorWithStorage(t);
   let emitted = null;
 
   coordinator.on(
@@ -459,7 +365,7 @@ test('createOperation - emits reservationCreated event', async (t) => {
 test('completeOperation - releases reservation', async (t) => {
   initializeConfig();
   const {coordinator, sqlEngine} =
-    createCoordinatorWithStorage();
+    createCoordinatorWithStorage(t);
 
   const op = await coordinator.createOperation({
     type: OperationType.ADD,
@@ -486,7 +392,7 @@ test('completeOperation - releases reservation', async (t) => {
 test('releaseReservationForOperation - uses reservation_id keyed update',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
     const reservationUpdates = [];
     const originalExecuteQuery = sqlEngine.executeQuery;
     sqlEngine.executeQuery = async (sql, params) => {
@@ -495,7 +401,7 @@ test('releaseReservationForOperation - uses reservation_id keyed update',
       }
       return originalExecuteQuery(sql, params);
     };
-    const {coordinator} = createCoordinatorWithStorage({
+    const {coordinator} = createCoordinatorWithStorage(t, {
       sqlQueryEngine: sqlEngine,
     });
     const now = Date.now();
@@ -539,7 +445,7 @@ test('releaseReservationForOperation - uses reservation_id keyed update',
 test('failOperation - releases reservation', async (t) => {
   initializeConfig();
   const {coordinator, sqlEngine} =
-    createCoordinatorWithStorage();
+    createCoordinatorWithStorage(t);
 
   const op = await coordinator.createOperation({
     type: OperationType.ADD,
@@ -558,7 +464,7 @@ test('failOperation - releases reservation', async (t) => {
 test('completeOperation - emits reservationReleased event',
   async (t) => {
     initializeConfig();
-    const {coordinator} = createCoordinatorWithStorage();
+    const {coordinator} = createCoordinatorWithStorage(t);
     let emitted = null;
 
     const op = await coordinator.createOperation({
@@ -584,7 +490,7 @@ test('completeOperation - emits reservationReleased event',
 test('failOperation - no release for REMOVE operation', async (t) => {
   initializeConfig();
   const {coordinator, sqlEngine} =
-    createCoordinatorWithStorage();
+    createCoordinatorWithStorage(t);
 
   const op = await coordinator.createOperation({
     type: OperationType.REMOVE,
@@ -608,7 +514,7 @@ test('reservation expires_at uses configured TTL', async (t) => {
   const customTtl = 60000;
   initializeConfig({storageReservationTtlMs: customTtl});
   const {coordinator, sqlEngine} =
-    createCoordinatorWithStorage();
+    createCoordinatorWithStorage(t);
 
   const before = Date.now();
   await coordinator.createOperation({
@@ -629,7 +535,7 @@ test('reservation expires_at uses configured TTL', async (t) => {
 test('reconcileReservations - expires stale reservations',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
 
     // Manually insert an expired reservation
     const pastTime = Date.now() - NUM.THOUSAND;
@@ -650,7 +556,7 @@ test('reconcileReservations - expires stale reservations',
       released_at: null,
     });
 
-    const {coordinator} = createCoordinatorWithStorage({
+    const {coordinator} = createCoordinatorWithStorage(t, {
       sqlQueryEngine: sqlEngine,
     });
 
@@ -665,7 +571,7 @@ test('reconcileReservations - expires stale reservations',
 test('reconcileReservations - releases orphan reservations',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
 
     // Insert an active reservation whose operation is terminal
     sqlEngine.reservations.set('res-orphan', {
@@ -689,6 +595,12 @@ test('reconcileReservations - releases orphan reservations',
     sqlEngine.operations.set('op-done', {
       operation_id: 'op-done',
       type: OperationType.ADD,
+      source_node_id: 'test-node-1',
+      target_node_id: 'node-1',
+      created_at: 1,
+      updated_at: 2,
+      completed_at: 2,
+      steps_history: '[]',
       partition_id: 'p-1',
       entity_type: 'partition',
       entity_id: 'p-1',
@@ -696,7 +608,7 @@ test('reconcileReservations - releases orphan reservations',
       workflow_step: WORKFLOW_STEP.ACTIVE,
     });
 
-    const {coordinator} = createCoordinatorWithStorage({
+    const {coordinator} = createCoordinatorWithStorage(t, {
       sqlQueryEngine: sqlEngine,
     });
 
@@ -711,7 +623,7 @@ test('reconcileReservations - releases orphan reservations',
 test('reconcileReservations - skips non-terminal active reservations',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
 
     // Insert an active reservation with in-flight operation
     sqlEngine.reservations.set('res-inflight', {
@@ -735,6 +647,12 @@ test('reconcileReservations - skips non-terminal active reservations',
     sqlEngine.operations.set('op-inflight', {
       operation_id: 'op-inflight',
       type: OperationType.ADD,
+      source_node_id: 'test-node-1',
+      target_node_id: 'node-1',
+      created_at: 1,
+      updated_at: 2,
+      completed_at: null,
+      steps_history: '[]',
       partition_id: 'p-1',
       entity_type: 'partition',
       entity_id: 'p-1',
@@ -742,7 +660,7 @@ test('reconcileReservations - skips non-terminal active reservations',
       workflow_step: WORKFLOW_STEP.PENDING,
     });
 
-    const {coordinator} = createCoordinatorWithStorage({
+    const {coordinator} = createCoordinatorWithStorage(t, {
       sqlQueryEngine: sqlEngine,
     });
 
@@ -758,7 +676,7 @@ test('reconcileReservations - skips non-terminal active reservations',
 test('reconcileReservations - skips orphan release while operation visibility ' +
   'is deferred', async (t) => {
   initializeConfig();
-  const sqlEngine = createTrackingSqlEngine();
+  const sqlEngine = createTrackingSqlEngine(t);
 
   sqlEngine.reservations.set(TEST_DEFERRED_RESERVATION_ID, {
     reservation_id: TEST_DEFERRED_RESERVATION_ID,
@@ -777,7 +695,7 @@ test('reconcileReservations - skips orphan release while operation visibility ' 
     released_at: null,
   });
 
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = createCoordinatorWithStorage(t, {
     sqlQueryEngine: sqlEngine,
   });
   coordinator.repository.queryOperationById = async () => null;
@@ -805,7 +723,7 @@ test('reconcileReservations - works without accounting service',
       cdcIntegrationService: createMockCdcService(),
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
-      sqlQueryEngine: createTrackingSqlEngine(),
+      sqlQueryEngine: createTrackingSqlEngine(t),
       transactionCoordinator: createMockTransactionCoordinator(),
       controlPlaneReadinessService: createMockControlPlaneReadinessService({
         defaultRepairEligible: true,
@@ -823,7 +741,7 @@ test('reconcileReservations - works without accounting service',
 
 test('reconcileReservations - emits reconciled event', async (t) => {
   initializeConfig();
-  const {coordinator} = createCoordinatorWithStorage();
+  const {coordinator} = createCoordinatorWithStorage(t);
   let emitted = null;
 
   coordinator.on(
@@ -846,7 +764,7 @@ test('reconcileReservations - emits reconciled event', async (t) => {
 test('handleRecovery - reconciles reservations after operations',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createTrackingSqlEngine();
+    const sqlEngine = createTrackingSqlEngine(t);
 
     // Insert orphan reservation with terminal operation
     sqlEngine.reservations.set('res-recovery', {
@@ -870,6 +788,12 @@ test('handleRecovery - reconciles reservations after operations',
     sqlEngine.operations.set('op-failed', {
       operation_id: 'op-failed',
       type: OperationType.ADD,
+      source_node_id: 'test-node-1',
+      target_node_id: 'node-1',
+      created_at: 1,
+      updated_at: 2,
+      completed_at: 2,
+      steps_history: '[]',
       partition_id: 'p-1',
       entity_type: 'partition',
       entity_id: 'p-1',
@@ -877,7 +801,7 @@ test('handleRecovery - reconciles reservations after operations',
       workflow_step: WORKFLOW_STEP.FAILED,
     });
 
-    const {coordinator} = createCoordinatorWithStorage({
+    const {coordinator} = createCoordinatorWithStorage(t, {
       sqlQueryEngine: sqlEngine,
     });
 
@@ -893,7 +817,7 @@ test('handleRecovery - reconciles reservations after operations',
 
 test('stats track reservation lifecycle counts', async (t) => {
   initializeConfig();
-  const {coordinator} = createCoordinatorWithStorage();
+  const {coordinator} = createCoordinatorWithStorage(t);
 
   const op = await coordinator.createOperation({
     type: OperationType.ADD,
@@ -915,7 +839,7 @@ test('stats track reservation lifecycle counts', async (t) => {
 test('reservation ID is derived from operation ID', async (t) => {
   initializeConfig();
   const {coordinator, sqlEngine} =
-    createCoordinatorWithStorage();
+    createCoordinatorWithStorage(t);
 
   const op = await coordinator.createOperation({
     type: OperationType.ADD,
@@ -944,7 +868,7 @@ function createSizedPartitionCoordinator(options = {}) {
       return {allowed: true, decisionType: 'admitted'};
     },
   };
-  const {coordinator, sqlEngine} = createCoordinatorWithStorage({
+  const {coordinator, sqlEngine} = createCoordinatorWithStorage(t, {
     systemTableCache: createMockCache({
       partitions: [
         {
@@ -1014,7 +938,7 @@ test('createOperation - reservation estimate equals the admission-time ' +
 test('reconcileReservations logs no-op sweeps at debug and mutations at info, ' +
   'while checkTimeouts throttles via resolveTimeoutCheckNowMs', async (t) => {
   initializeConfig();
-  const {coordinator, sqlEngine} = createCoordinatorWithStorage();
+  const {coordinator, sqlEngine} = createCoordinatorWithStorage(t);
   const captured = [];
   const origQuery = sqlEngine.executeQuery;
   let reservationReconciles = 0;
