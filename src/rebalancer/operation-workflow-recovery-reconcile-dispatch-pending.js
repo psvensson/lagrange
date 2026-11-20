@@ -1,4 +1,6 @@
-import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
+import {
+  assertOperationUpdateRecord, assertOperationUpdateSubject,
+} from './replica-operation-update-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -927,6 +929,7 @@ function matchesQueuedRemoteReentryOperation(expected, operation) {
     return false;
   }
   try {
+    assertOperationUpdateRecord(operation);
     assertOperationUpdateSubject(expected, operation);
     return true;
   } catch {

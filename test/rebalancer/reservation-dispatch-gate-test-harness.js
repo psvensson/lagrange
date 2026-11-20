@@ -114,7 +114,7 @@ function selectReservationRows(reservations, sql, params) {
 function createTrackingSqlEngine(options = {}) {
   // The faulted reservation store is independent from the committed ledger.
   // Execute operation predicates, projection and change counts in SQLite.
-  const operations = createCoordinatorSqlStore(createMockCache());
+  const operations = createCoordinatorSqlStore(options.systemTableCache || createMockCache());
   const reservations = new Map();
   return {
     getOperationRow(operationId) {

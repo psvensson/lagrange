@@ -680,6 +680,29 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
         t.equal(coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
           snapshot, [invalid]), false, 'foreign, incomplete, and terminal snapshots cannot act');
       }
+      const observe = coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+      const positive = {
+        state: 'present', operationCount: 1, operations: [operation], deferredOutcome: null,
+      };
+      for (const [description, reader] of [
+        ['missing authority method', undefined],
+        ['unknown observation', async () => ({...positive, state: 'unknown'})],
+        ['inconsistent result count', async () => ({...positive, operationCount: 0})],
+        ['missing outcome field', async () => ({...positive, deferredOutcome: undefined})],
+      ]) {
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation = reader;
+        const diagnostic = await coordinator.workflowOwner
+          .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+            operation.partitionId, [operation],
+          );
+        t.equal(diagnostic?.partitionId, operation.partitionId,
+          `${description} preserves the partition planning diagnostic`);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        t.same(deliveries, [], `${description} cannot wake a caller-supplied operation`);
+        t.equal(coordinator.workflowOwner.hasActiveCreatedOperationHandoffRetry(
+          operation.operationId), false, `${description} cannot arm a handoff retry`);
+      }
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation = observe;
       const terminal = {
         ...operation,
         workflowStep: WORKFLOW_STEP.FAILED,

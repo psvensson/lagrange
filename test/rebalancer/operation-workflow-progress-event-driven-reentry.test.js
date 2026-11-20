@@ -48,6 +48,7 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
 import {
   createCoordinatorSqlStore,
   createMockCache,
+  createMockCdcService,
   createMockControlPlaneSystemTableGateway,
 } from './test-helpers.js';
 
@@ -471,6 +472,7 @@ function createEventDrivenCoordinator(
     authoritativeVisibilityRetryDelayMs: 0,
     sqlQueryEngine,
     controlPlaneSystemTableGateway: gateway,
+    cdcIntegrationService: createMockCdcService(),
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),
     controlPlaneReadinessService: {

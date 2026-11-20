@@ -1,3 +1,4 @@
+import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {PriorityPublicationHandoff} from './priority-publication-handoff.js';
 import {normalizePriorityRecoveryDispatchPendingDecisionSnapshot} from '../control-plane/priority-recovery-snapshot.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
@@ -68,6 +69,27 @@ const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE =
       matches: () => true,
     }),
   ]);
+
+function selectAuthoritativePartitionOperations(observation, partitionId) {
+  const operations = observation?.operations;
+  if (observation?.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT ||
+      observation.deferredOutcome !== null ||
+      !Array.isArray(operations) || operations.length === 0 ||
+      operations.length !== observation.operationCount) {
+    return [];
+  }
+  try {
+    for (const operation of operations) {
+      assertOperationUpdateRecord(operation);
+      if (operation.partitionId !== partitionId ||
+          operation.entityType !== SERVICE_TYPE.PARTITION ||
+          operation.entityId !== partitionId) return [];
+    }
+  } catch {
+    return [];
+  }
+  return operations;
+}
 
 class PriorityRecoveryObservation extends PriorityPublicationHandoff {
   decidePriorityRecoveryPartitionObservationSelection(evidence = {}) {
@@ -330,7 +352,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     }) || null;
   }
 
-  buildPriorityRecoveryDecisionSnapshotForOperations(
+  buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
     partitionId,
     operations = [],
     planningSnapshot = null,
@@ -435,6 +457,14 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     );
   }
 
+  buildPriorityRecoveryDecisionSnapshotForOperations(
+    partitionId, operations, planningSnapshot, incompleteObservation,
+  ) {
+    return this.buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
+      partitionId, operations, planningSnapshot, incompleteObservation,
+    );
+  }
+
   async getPriorityRecoveryDecisionSnapshotForOperation(operation) {
     const partitionId = normalizePriorityRecoveryOperationPartitionId(
       operation,
@@ -464,6 +494,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     let operationRecords = (Array.isArray(operations) ? operations : [])
       .filter((operation) => operation && typeof operation === 'object');
     let incompleteObservation = null;
+    let effectOperations = [];
     if (
       this.repository &&
       typeof this.repository.getOperationsByEntityAuthoritativeObservation ===
@@ -474,6 +505,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
           SERVICE_TYPE.PARTITION,
           normalizedPartitionId,
         );
+      effectOperations = selectAuthoritativePartitionOperations(
+        authoritativeObservation, normalizedPartitionId,
+      );
       const adoptedObservation =
         this.adoptPriorityRecoveryPartitionAuthoritativeObservation(
           operationRecords,
@@ -495,7 +529,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     }
     const planningSnapshot =
       await this.readAvailablePriorityRecoveryPlanningSnapshot(representativeOperation);
-    const snapshot = this.buildPriorityRecoveryDecisionSnapshotForOperations(
+    const snapshot = this.buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
       normalizedPartitionId,
       operationRecords,
       planningSnapshot,
@@ -503,8 +537,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     );
     return this.finalizePriorityRecoveryPartitionOperationObservation(
       snapshot,
-      this.isPriorityRecoveryAuthoritativeOperationReadDeferred(incompleteObservation) ?
-        [] : operationRecords,
+      effectOperations,
     );
   }
 
