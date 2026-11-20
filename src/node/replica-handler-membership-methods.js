@@ -112,10 +112,8 @@ async function settleScopedLearnerRemoval(handler, target, scope) {
     }
   }
   if (role === COMMITTED_REPLICA_ROLE.ABSENT) {
-    const adopted = await handOffAbsentLearnerCleanup(handler, durableScope);
-    if (adopted !== null) {
-      return {state: LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED, custody: adopted.ownerToken};
-    }
+    const custody = await handOffAbsentLearnerCleanup(handler, durableScope);
+    if (custody !== null) return {state: LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED, custody};
   }
   if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};
   const custody = await claimNativeLearnerRetirement(handler, durableScope);

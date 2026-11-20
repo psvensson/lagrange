@@ -11,9 +11,11 @@ import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse
 import {PLACEMENT_TRANSITION_KIND} from '../rebalancer/replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from '../rebalancer/replica-placement-owner-deficits.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {observeScopedLearnerCleanup} from './replica-cleanup-tombstone-owner.js';
 import {
   LEARNER_LIFECYCLE_CUSTODY,
   acquireLearnerRetirementCustody,
+  learnerRetirementToken,
   observeLearnerRetirementCustody,
 } from './replica-learner-retirement-lifecycle.js';
 
@@ -28,6 +30,7 @@ async function readOne(handler, table, sql, key) {
       handler.getControlPlaneSystemTableGateway(), table, sql, [key],
       NODE_LIFECYCLE_AUTHORITATIVE_READ);
     if (isAuthoritativeControlPlaneRowReadSuccessful(result) &&
+        result.rowSetComplete === true && result.partial !== true &&
         Array.isArray(result.rows) && result.rows.length === 1) {
       return result.rows[0];
     }
@@ -68,12 +71,16 @@ async function admitsLearnerRetirement(handler, scope) {
 
 async function handOffAbsentLearnerCleanup(handler, scope) {
   if (!await admitsLearnerRetirement(handler, scope)) return null;
+  if (await observeScopedLearnerCleanup(handler.getControlPlaneSystemTableGateway(), scope)) {
+    return learnerRetirementToken(scope.operationId);
+  }
   const node = await readOne(handler, TABLES.NODES, SELECT_NODE_ROW_SQL, scope.targetNodeId);
   if (node?.[COLUMN.NODE_ID] !== scope.targetNodeId || !observesCommittedNodeLoss(node)) {
     return null;
   }
   try {
-    return await handler.getReplicaCleanupTombstoneOwner().takeOverAbsentLearner(scope);
+    const adopted = await handler.getReplicaCleanupTombstoneOwner().takeOverAbsentLearner(scope);
+    return adopted?.ownerToken ?? null;
   } catch (error) {
     handler.logger.debug('offline learner cleanup takeover unavailable',
       {operationId: scope.operationId, error: error.message});

@@ -1,13 +1,16 @@
 import {assertDurableRejoinStorageAdmission} from
   '../../../src/bootstrap/durable-rejoin-storage-admission.js';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
-import {SERVICES_SCHEMA} from '../../../src/bootstrap/system-table-schemas-constants.js';
+import {REPLICA_OPERATIONS_SCHEMA, SERVICES_SCHEMA} from '../../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL} from '../../../src/bootstrap/system-table-schema-sql.js';
-import {STATE, TABLES} from '../../../src/constants/index.js';
+import {SERVICE_TYPE, STATE, TABLES, WORKFLOW_STEP} from '../../../src/constants/index.js';
 import {
-  ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
+  LEARNER_RETIREMENT_OUTCOME, ReplicaOperationField, ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
 } from '../../../src/rebalancer/replica-operation-constants.js';
 import {OperationType, ReplicaStatus} from '../../../src/rebalancer/replica-status.js';
 import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
@@ -84,15 +87,15 @@ function commitLatePromotion(cluster, targetReplicaId) {
   }), 'native promotion must reach its stable committed configuration');
 }
 
-function projectCommittedServices(sql, params, state) {
+function projectCommittedTable(schema, sql, params, state) {
   // Preserve the actual schema and SQL SELECT projection at this fixture port.
   // Its mutation schedule stays controlled by the lifecycle store.
   const db = new Database(':memory:');
   try {
-    db.exec(generateCreateTableSQL(SERVICES_SCHEMA));
-    const columns = SERVICES_SCHEMA.columns.map(({name}) => name);
+    db.exec(generateCreateTableSQL(schema));
+    const columns = schema.columns.map(({name}) => name);
     const markers = columns.map(() => '?').join(', ');
-    const insert = db.prepare(`INSERT INTO services (${columns.join(', ')}) VALUES (${markers})`);
+    const insert = db.prepare(`INSERT INTO ${schema.tableName} (${columns.join(', ')}) VALUES (${markers})`);
     for (const row of state.values()) insert.run(...columns.map((column) => row[column] ?? null));
     return db.prepare(sql).all(...params);
   } finally {
@@ -113,8 +116,10 @@ function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
   const read = gateway.readAuthoritativeRows.bind(gateway);
   gateway.readAuthoritativeRows = async (table, sql, params, options) => {
     const result = await read(table, sql, params, options);
-    return table === TABLES.SERVICES && result.success === true ?
-      {...result, rows: projectCommittedServices(sql, params, durable.services)} : result;
+    const schema = table === TABLES.SERVICES ? SERVICES_SCHEMA :
+      table === TABLES.REPLICA_OPERATIONS ? REPLICA_OPERATIONS_SCHEMA : null;
+    return schema && result.success === true ? {...result, rowSetComplete: true,
+      rows: projectCommittedTable(schema, sql, params, durable[table])} : result;
   };
   return source;
 }
@@ -185,6 +190,13 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
       isOutboundQueueAvailable: () => true,
     },
   });
+  const gateway = coordinator.repository.controlPlaneSystemTableGateway;
+  const ownerRead = gateway.readAuthoritativeRows.bind(gateway);
+  const leaderGateway = leader.lifecycleStore.gateway;
+  gateway.readAuthoritativeRows = (table, sql, params, options) =>
+    table === TABLES.SERVICES && /WHERE service_id = \?/u.test(sql) ?
+      leaderGateway.readAuthoritativeRows(table, sql, params, options) :
+      ownerRead(table, sql, params, options);
   source.handler.messageRouter = coordinator.workflowOwner.messageRouter;
   relayPartitionConsensusObservations(leader.service);
   coordinator.workflowOwner.attachReplicaConsensusEvents(leader.handler.consensusEvents);
@@ -334,8 +346,14 @@ for (const restart of [false, true]) {
       leader.service.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
         (observation) => consensusWakes.push(observation));
       const rejoinDelivery = Promise.withResolvers();
+      const rejoinedNode = Promise.withResolvers();
+      let checkedMembership = false;
       const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
-        deliveries, leader, clock, onLocalDelivery(payload, answer) {
+        deliveries, leader, clock, async beforeDelivery(payload) {
+          if (payload.type !== ReplicaOperationMessageType.REMOVE_LEARNER) return;
+          if (checkedMembership) await rejoinedNode.promise;
+          checkedMembership = true;
+        }, onLocalDelivery(payload, answer) {
           if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
             rejoinDelivery.resolve(answer);
           }
@@ -369,6 +387,7 @@ for (const restart of [false, true]) {
           row.boot_incarnation === rejoinedBoot && row.connection_state === STATE.READY);
         await nodes.renew(rejoinedBoot);
         await readyObserved;
+        rejoinedNode.resolve();
         await context.observeCommittedPlacement();
         // Virtual retry timers do not advance. This turn has to come from the
         // committed owner event after the genuine same-boot READY publication.
@@ -398,6 +417,7 @@ for (const restart of [false, true]) {
         }
         assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
       } finally {
+        rejoinedNode.resolve();
         await coordinator.shutdown();
         await source.dispose();
         await leader.dispose();
@@ -446,9 +466,91 @@ for (const successor of ['boot', 'service generation']) {
     }, {createCluster: addressedCluster}));
 }
 
+test('committed native absence hands a permanently lost learner to restart cleanup before settling',
+  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+    const {cluster, initial, nodes, clock} = context;
+    const targetId = initial.replica_id;
+    cluster.isolate(targetId);
+    const {rows, removal} = await admitRetirement(context);
+    const target = rows.find((row) => row.replica_id === targetId);
+    const source = sourceOf(cluster, target, [removal]);
+    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA), [removal]);
+    const deliveries = [];
+    const commitReached = Promise.withResolvers();
+    const commitReleased = Promise.withResolvers();
+    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
+      deliveries, leader, clock});
+    const gateway = leader.lifecycleStore.gateway;
+    const apply = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.data?.service_type === SERVICE_TYPE.PARTITION_CLEANUP) {
+        commitReached.resolve(mutation);
+        await commitReleased.promise;
+      }
+      return apply(mutation, options);
+    };
+    const readOperation = async () => {
+      const result = await coordinator.repository.controlPlaneSystemTableGateway.readAuthoritativeRows(
+        TABLES.REPLICA_OPERATIONS, 'SELECT * FROM replica_operations WHERE operation_id = ?',
+        [removal.operation_id]);
+      return result.rows[0];
+    };
+    try {
+      const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
+      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
+      await coordinator.dispatchOperation(removal);
+      assert.ok(settleCluster(cluster, () =>
+        !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
+      const redrive = coordinator.dispatchOperation(removal);
+      const takeover = await waitForHeldRequest(commitReached);
+      assert.equal(takeover.whereClause.created_at, target.created_at);
+      assert.equal(takeover.whereClause.cleanup_token,
+        `placement-learner-retire:${removal.operation_id}`);
+      assert.equal((await readOperation()).completed_at, null);
+      assert.equal(source.lifecycleStore.durable.services.get(targetId).service_type,
+        SERVICE_TYPE.PARTITION);
+
+      commitReleased.resolve();
+      await redrive;
+      for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
+          (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
+      const terminal = await readOperation();
+      assert.equal(terminal.workflow_step, WORKFLOW_STEP.REMOVED);
+      assert.ok(Number.isFinite(terminal.completed_at));
+      assert.equal(nodes.nodeRow().connection_state, STATE.DISCONNECTED);
+      assert.equal(deliveries.some(({payload}) =>
+        payload.type === ReplicaOperationMessageType.REMOVE_REPLICA), false);
+      const tombstone = source.lifecycleStore.durable.services.get(targetId);
+      assert.equal(tombstone.service_type, SERVICE_TYPE.PARTITION_CLEANUP);
+      assert.equal(tombstone.created_at, target.created_at);
+      assert.equal(tombstone.cleanup_token, takeover.whereClause.cleanup_token);
+
+      // A fresh process's local cleanup consults the committed ledger and
+      // SERVICES owner receipt, rather than needing the original dispatcher.
+      source.lifecycleStore.durable.replica_operations.set(terminal.operation_id, terminal);
+      const file = path.join(source.handler.dataDir, 'partitions', cluster.partitionId,
+        `${targetId}.db`);
+      fs.mkdirSync(path.dirname(file), {recursive: true});
+      fs.copyFileSync(cluster.replica(targetId).dbFile, file);
+      await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
+        restoreAuthorityOf(target)), {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
+      const restarted = source.restart();
+      await restarted.handler.removedReplicaCleanupDebtSweepTask;
+      assert.equal(fs.existsSync(file), false);
+      assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
+      t.diagnostic(JSON.stringify({takeover, terminal, tombstone, deliveries}));
+    } finally {
+      commitReleased.resolve();
+      await coordinator.shutdown();
+      await source.dispose();
+      await leader.dispose();
+    }
+  }, {createCluster: addressedCluster}));
+
 function restoreAuthorityOf(row) {
   return {restoringExistingReplica: true, replicaId: row.replica_id, lifecycleAuthority: {
-    replicaId: row.replica_id, serviceType: row.service_type, partitionId: row.partition_id,
+    replicaId: row.service_id, replicaCreatedAt: row.created_at,
+    serviceType: row.service_type, partitionId: row.partition_id,
     nodeId: row.node_id, status: row.status, durableVersionColumn: 'state_entered_at',
     durableVersion: row.state_entered_at,
   }};
@@ -563,7 +665,7 @@ test('the committed retire custody wins against a restart using a fresh restore 
       assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer));
       nodes.publishNewBootAtSameWatermark();
       await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
-        restoreAuthorityOf(custody)), {code: 'DURABLE_REJOIN_LIFECYCLE_AUTHORITY_CHANGED'});
+        restoreAuthorityOf(custody)), {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
       resume.resolve();
       const result = await run;
       assert.ok(settleCluster(cluster, () =>
@@ -578,7 +680,8 @@ test('the committed retire custody wins against a restart using a fresh restore 
     }
   }, {createCluster: addressedCluster}));
 
-for (const flaw of ['foreign operation', 'wrong status', 'different birth', 'contradictory proposal']) {
+for (const flaw of ['foreign operation', 'wrong status', 'different birth', 'contradictory proposal',
+  'unpersisted cleanup custody']) {
   test(`a retirement reply with ${flaw} cannot terminate the scoped operation`,
     {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
       const {cluster, initial, nodes, clock} = context;
@@ -604,6 +707,12 @@ for (const flaw of ['foreign operation', 'wrong status', 'different birth', 'con
             answer[ReplicaOperationField.PROPOSAL] = {outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
               reason: RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_REMOVAL_PROPOSED,
               replicaIdentity: initial.replica_id};
+          }
+          if (flaw === 'unpersisted cleanup custody') {
+            answer[ReplicaOperationField.LEARNER_RETIREMENT] =
+              LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED;
+            answer[ReplicaOperationField.LEARNER_RETIREMENT_CUSTODY] =
+              `placement-learner-retire:${payload.operationId}`;
           }
           return answer;
         }});
