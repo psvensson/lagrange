@@ -4,11 +4,16 @@
 import {COLUMN, SERVICE_STATUS, STATE, TABLES} from '../constants/index.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
+import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
+  '../raft/raft-operation-port-constants.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
-import {LEARNER_RETIREMENT_OUTCOME, ReplicaOperationField, ReplicaOperationMessageType} from
-  './replica-operation-constants.js';
+import {
+  LEARNER_RETIREMENT_OUTCOME, ReplicaOperationField, ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
+} from './replica-operation-constants.js';
 import {OPERATION_METADATA_KEY, OperationType} from './replica-operation-progress.js';
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from './replica-placement-owner-deficits.js';
@@ -42,6 +47,42 @@ function exactServiceGeneration(row, operation, scope) {
     row[COLUMN.CREATED_AT] === scope.replicaCreatedAt;
 }
 
+function matchesRetirementScope(replyScope, requestScope) {
+  const reply = copyStrictOwnDataRecord(replyScope);
+  const fields = Object.keys(requestScope);
+  return reply !== null && Object.keys(reply).length === fields.length &&
+    fields.every((field) => Object.hasOwn(reply, field) && reply[field] === requestScope[field]);
+}
+
+function removalProposalConsistent(answer, requestScope) {
+  const proposal = answer[ReplicaOperationField.PROPOSAL];
+  if (proposal === undefined) return true;
+  const recorded = copyStrictOwnDataRecord(proposal);
+  if (!recorded || requestScope.canPropose !== true) return false;
+  const proposed = recorded.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    recorded.reason === RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_REMOVAL_PROPOSED &&
+    recorded.replicaIdentity === answer.replicaId;
+  return proposed && answer[ReplicaOperationField.LEARNER_RETIREMENT] ===
+    LEARNER_RETIREMENT_OUTCOME.CLEARED;
+}
+
+function classifyRetirementReply(answer, request, leaderNodeId) {
+  const reply = copyStrictOwnDataRecord(answer);
+  const requestScope = request[ReplicaOperationField.LEARNER_RETIREMENT];
+  const scope = reply?.[ReplicaOperationField.LEARNER_RETIREMENT_SCOPE];
+  const identity = [ReplicaOperationField.OPERATION_ID, ReplicaOperationField.PARTITION_ID,
+    ReplicaOperationField.REPLICA_ID];
+  if (reply?.status !== ReplicaOperationResponseStatus.COMPLETED ||
+      reply.nodeId !== leaderNodeId || identity.some((field) => reply[field] !== request[field]) ||
+      !matchesRetirementScope(scope, requestScope) ||
+      !removalProposalConsistent(reply, requestScope)) {
+    return LEARNER_RETIREMENT_OUTCOME.DEFERRED;
+  }
+  const outcome = reply[ReplicaOperationField.LEARNER_RETIREMENT];
+  return outcome === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED ||
+    outcome === LEARNER_RETIREMENT_OUTCOME.CLEARED ? outcome : LEARNER_RETIREMENT_OUTCOME.DEFERRED;
+}
+
 async function reachMembershipOwner(owner, operation, handlerType, scoped, canPropose) {
   const leaderNodeId = owner.repository.systemTableCache.get(
     TABLES.PARTITIONS, operation.partitionId)?.[COLUMN.LEADER_NODE_ID];
@@ -66,15 +107,8 @@ async function reachMembershipOwner(owner, operation, handlerType, scoped, canPr
   if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery))) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
-  const answer = deliveryAnswerOf(delivery);
-  if (answer?.replicaId !== operation.replicaId ||
-      answer.partitionId !== operation.partitionId || answer.nodeId !== leaderNodeId) {
-    return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
-  }
-  const outcome = answer[ReplicaOperationField.LEARNER_RETIREMENT];
-  if (outcome === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) return verdict(outcome);
-  return outcome === LEARNER_RETIREMENT_OUTCOME.CLEARED ?
-    verdict(outcome, {scope: scoped}) : verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
+  const outcome = classifyRetirementReply(deliveryAnswerOf(delivery), request, leaderNodeId);
+  return verdict(outcome);
 }
 
 async function evaluatePlacementLearnerRetirement(owner, operation, handlerType) {

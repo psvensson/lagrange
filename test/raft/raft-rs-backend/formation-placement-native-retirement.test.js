@@ -19,7 +19,7 @@ import {
   createMockCache, createMockPolicyService, createTestCoordinator,
 } from '../../rebalancer/test-helpers.js';
 import {
-  COMMITTED_MEMBERSHIP_READ_PURPOSE, RAFT_FOUNDING_GROWTH_OUTCOME,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE, RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME,
   addLearnerReplicaToCluster, admitLearnerAndSettle,
   appliedStateOf, catchUpLearnerAndSettle, peerIdOf, proposeGroupGrowthPromote,
   settleCluster, turnChainValue,
@@ -457,34 +457,47 @@ for (const change of ['boot', 'service birth']) {
     }, {createCluster: addressedCluster}));
 }
 
-test('a foreign retirement reply cannot terminate the scoped placement operation',
-  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
-    const {cluster, initial, nodes, clock} = context;
-    const {rows, removal} = await admitRetirement(context);
-    const source = sourceOf(cluster, rows.find((row) => row.replica_id === initial.replica_id),
-      [removal]);
-    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
-      [removal]);
-    const deliveries = [];
-    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
-      leader, clock, receiverAnswer(payload) {
-        if (payload.type !== ReplicaOperationMessageType.REMOVE_LEARNER) return undefined;
-        return {status: ReplicaOperationResponseStatus.COMPLETED,
-          operationId: 'different-retirement', partitionId: cluster.partitionId,
-          replicaId: initial.replica_id, nodeId: SEED,
-          learnerRetirement: 'learner_retirement_superseded'};
-      }});
-    try {
-      const result = await coordinator.dispatchOperation(removal);
-      const current = await coordinator.getOperation(removal.operation_id);
-      t.diagnostic(JSON.stringify({result, current: current.workflowStep, deliveries}));
-      assert.ok(deliveries.some(({payload}) => payload.operationId === removal.operation_id));
-      assert.equal(current.completedAt, null,
-        'a foreign reply cannot settle an admitted removal');
-      assert.equal(source.serviceChanges.length, 0);
-    } finally {
-      await coordinator.shutdown();
-      await source.dispose();
-      await leader.dispose();
-    }
-  }, {createCluster: addressedCluster}));
+for (const flaw of ['foreign operation', 'wrong status', 'different birth', 'contradictory proposal']) {
+  test(`a retirement reply with ${flaw} cannot terminate the scoped operation`,
+    {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+      const {cluster, initial, nodes, clock} = context;
+      const {rows, removal} = await admitRetirement(context);
+      const source = sourceOf(cluster, rows.find((row) => row.replica_id === initial.replica_id),
+        [removal]);
+      const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+        [removal]);
+      const deliveries = [];
+      const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
+        leader, clock, receiverAnswer(payload) {
+          if (payload.type !== ReplicaOperationMessageType.REMOVE_LEARNER) return undefined;
+          const echo = {...payload.learnerRetirement};
+          const answer = {status: ReplicaOperationResponseStatus.COMPLETED,
+            operationId: payload.operationId, partitionId: cluster.partitionId,
+            replicaId: initial.replica_id, nodeId: SEED,
+            [ReplicaOperationField.LEARNER_RETIREMENT]: 'learner_retirement_superseded',
+            [ReplicaOperationField.LEARNER_RETIREMENT_SCOPE]: echo};
+          if (flaw === 'foreign operation') answer.operationId = 'different-retirement';
+          if (flaw === 'wrong status') answer.status = ReplicaOperationResponseStatus.ERROR;
+          if (flaw === 'different birth') echo.replicaCreatedAt += 1;
+          if (flaw === 'contradictory proposal') {
+            answer[ReplicaOperationField.PROPOSAL] = {outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+              reason: RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_REMOVAL_PROPOSED,
+              replicaIdentity: initial.replica_id};
+          }
+          return answer;
+        }});
+      try {
+        const result = await coordinator.dispatchOperation(removal);
+        const current = await coordinator.getOperation(removal.operation_id);
+        t.diagnostic(JSON.stringify({result, current: current.workflowStep, deliveries}));
+        assert.ok(deliveries.some(({payload}) => payload.operationId === removal.operation_id));
+        assert.equal(current.completedAt, null,
+          'an unbound reply cannot settle an admitted removal');
+        assert.equal(source.serviceChanges.length, 0);
+      } finally {
+        await coordinator.shutdown();
+        await source.dispose();
+        await leader.dispose();
+      }
+    }, {createCluster: addressedCluster}));
+}

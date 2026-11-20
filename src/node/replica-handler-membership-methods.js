@@ -407,7 +407,9 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
       const result = await settleScopedLearnerRemoval(target, scope);
       return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
         [ReplicaOperationField.LEARNER_RETIREMENT]: result.state,
+        [ReplicaOperationField.LEARNER_RETIREMENT_SCOPE]: scope,
         [ReplicaOperationField.PROPOSAL]: result.proposal,
+        operationId: target.fields.operationId,
         partitionId: target.fields.partitionId,
         replicaId: target.fields.replicaId,
         nodeId: this.nodeId,

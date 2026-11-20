@@ -95,6 +95,7 @@ const ReplicaOperationField = Object.freeze({
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
   LEARNER_RETIREMENT: 'learnerRetirement',
+  LEARNER_RETIREMENT_SCOPE: 'learnerRetirementScope',
   // A REMOVE that retires its replica's whole group as a unit carries the
   // workflow's evidence (partition/group-retirement-evidence.js).
   GROUP_RETIREMENT: 'groupRetirement',
