@@ -53,7 +53,8 @@ test('transition marks committed only after persistence then confirms', async (t
   const coordinator = createMinimalCoordinator(t);
   const operation = await seedOperation(t, coordinator);
   const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
-  const confirm = coordinator.repository.confirmReplicaOperationPersistence.bind(coordinator.repository);
+  const confirm = coordinator.repository.confirmReplicaOperationPersistence
+    .bind(coordinator.repository);
   const order = [];
   coordinator.repository.persistOperationUpdate = async (...args) => {
     order.push('persist');
@@ -119,11 +120,16 @@ test('idempotent transition reads the durable winner and does not persist twice'
     return persist(...args);
   };
   await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
-  const original = await coordinator.repository.queryAuthoritativeOperationById(operation.operationId);
+  const original = await coordinator.repository.queryAuthoritativeOperationById(
+    operation.operationId,
+  );
   const result = await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
   t.equal(calls, 1);
   t.equal(result, OPERATION_RECONCILE_OUTCOME.WAITING);
-  t.same(await coordinator.repository.queryAuthoritativeOperationById(operation.operationId), original);
+  t.same(
+    await coordinator.repository.queryAuthoritativeOperationById(operation.operationId),
+    original,
+  );
 });
 
 test('guarded transitions retry the same operation after rejected persistence', async (t) => {
