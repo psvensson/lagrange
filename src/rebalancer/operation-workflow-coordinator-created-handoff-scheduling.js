@@ -1,3 +1,4 @@
+import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
   EXECUTOR_OUTCOME_FIELD,
@@ -508,6 +509,17 @@ function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
   );
 }
 
+async function readScheduledHandoffOperation(owner, operationId, operation, delayMs, options) {
+  if (options.requireExactPriorityRecoveryReentry !== true) {
+    return owner.getDeferredDispatchRetryOperation(operationId, operation);
+  }
+  const observation = await observeRemoteReentryAuthority(owner.repository, operation);
+  if (observation.deferredOutcome) {
+    owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(operation, delayMs, options);
+  }
+  return observation.operation;
+}
+
 function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
   owner,
   operation,
@@ -553,9 +565,10 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     if (owner.isShuttingDown) {
       return;
     }
-    return owner.getDeferredDispatchRetryOperation(operationId, operationSnapshot)
+    return readScheduledHandoffOperation(owner, operationId, operationSnapshot, delayMs, options)
       .then((currentOperation) => {
         if (!currentOperation) {
+          if (options.requireExactPriorityRecoveryReentry === true) return false;
           return retryCoordinatorCreatedRemoteHandoffFromSnapshot(
             owner,
             operationId,

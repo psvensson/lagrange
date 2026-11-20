@@ -1,6 +1,4 @@
-import {
-  assertOperationUpdateRecord, assertOperationUpdateSubject,
-} from './replica-operation-update-outcome.js';
+import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -30,6 +28,10 @@ const {
   TRANSITION_RETRY_DELAY_MS,
   normalizeNodeIdList,
 } = SHARED;
+
+const AUTHORITATIVE_REMOTE_REENTRY = Object.freeze({
+  requireExactPriorityRecoveryReentry: true,
+});
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
 
@@ -230,6 +232,7 @@ function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
       decisionSnapshot,
     );
   return owner.operationWorkflowOwnerPorts.wakeRemoteOwner(operation, {
+    ...AUTHORITATIVE_REMOTE_REENTRY,
     nowMs: capturedAtMs ?? Date.now(),
   });
 }
@@ -270,7 +273,8 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
         .RECONCILE_STALE_PROGRESS,
       (owner, operation) =>
-        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(operation),
+        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(
+          operation, AUTHORITATIVE_REMOTE_REENTRY),
     ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
@@ -433,6 +437,7 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
     return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
       operation,
       TRANSITION_RETRY_DELAY_MS,
+      AUTHORITATIVE_REMOTE_REENTRY,
     );
   }
   if (
@@ -921,22 +926,6 @@ function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
   );
 }
 
-function matchesQueuedRemoteReentryOperation(expected, operation) {
-  if (!operation || operation.completedAt !== null ||
-      operation.replicaId !== expected.replicaId ||
-      operation.createdAt !== expected.createdAt ||
-      operation.workflowStep !== expected.workflowStep) {
-    return false;
-  }
-  try {
-    assertOperationUpdateRecord(operation);
-    assertOperationUpdateSubject(expected, operation);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   owner,
   operation,
@@ -948,8 +937,13 @@ async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   // have settled or replaced its routing tuple while the work was queued.
   let current = operation;
   if (!owner.repository.isOperationLocallyOwned(operation)) {
-    current = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
-    if (!matchesQueuedRemoteReentryOperation(operation, current)) return false;
+    const observation = await observeRemoteReentryAuthority(owner.repository, operation);
+    if (observation.deferredOutcome) {
+      return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+        operation, TRANSITION_RETRY_DELAY_MS, AUTHORITATIVE_REMOTE_REENTRY);
+    }
+    current = observation.operation;
+    if (!current || current.workflowStep !== operation.workflowStep) return false;
   }
   const action = resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
     owner,

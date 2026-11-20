@@ -181,7 +181,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         },
       );
       if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
-      if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
+      const completeRead = result.success && result.rowSetComplete === true;
+      if (completeRead) assertEntityOperationRows(result.rows, entityType, entityId);
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
       const cachedRows = this.getEntityInFlightOperationRows({
@@ -203,7 +204,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           ),
         );
 
-      if (!result.success) {
+      if (!completeRead) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           // This boundary requires the operation-ledger owner. An unavailable
           // owner cannot prove that the entity has no operation, even when a
@@ -228,13 +229,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         return this.buildEntityOperationVisibilityObservation([], null);
       }
 
-      const operations =
-        this.reconcileEntityOperationVisibilityWithPersistedTransitions(
-          this.mergeIncompleteOperationVisibilityOperations(
-            result.rows.map((row) => this.rowToOperation(row)),
-            ownerPersistedFallbackOperations,
-          ),
-        );
+      const operations = result.rows.map((row) => this.rowToOperation(row));
       if (this.shouldDeferEntityOperationEmptyRead(result, queryDurationMs, planningSnapshot)) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           priorityRecoveryActive: true,

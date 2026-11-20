@@ -1,3 +1,5 @@
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   buildTerminalOperationFixtureOutcome, completeServicesFixtureRead,
   installCommittedOperationMutationFixture,
@@ -452,7 +454,9 @@ function createEventDrivenCoordinator(
   operationRow,
   planningOptions = {},
 ) {
-  const sqlStore = createCoordinatorSqlStore(createMockCache({replicaOperations: [operationRow]}));
+  const sqlStore = createCoordinatorSqlStore(createMockCache({
+    replicaOperations: operationRow ? [operationRow] : [],
+  }));
   const execute = (sql, params) => {
     const result = sqlStore.execute(sql, params);
     sqlStore.suspend();
@@ -1076,17 +1080,9 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
 
   try {
     coordinator.initialize();
-    coordinator.workflowOwner.repository
-      .getOperationsByEntityAuthoritativeObservation = async () => {
-        return Object.freeze({
-          state: 'present',
-          operationCount: 1,
-          operations: Object.freeze([operation]),
-          deferredOutcome: null,
-          retryAfterMs: null,
-        });
-      };
-
+    const committed = await coordinator.repository.queryAuthoritativeOperationById(
+      operation.operationId);
+    t.same(committed.stepsHistory, operation.stepsHistory);
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
       OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
@@ -1127,7 +1123,7 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
     t.equal(
       coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
         snapshot,
-        [snapshot.coordinator.operation],
+        [committed],
       ),
       true,
       'diagnostic snapshots should enqueue the workflow owner re-entry',
@@ -1231,10 +1227,13 @@ test(
 
     try {
       coordinator.initialize();
+      const committed = await coordinator.repository.queryAuthoritativeOperationById(
+        operationRow.operation_id);
+
       t.equal(
         coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
           snapshot,
-          [snapshot.coordinator.operation],
+          [committed],
         ),
         true,
         'baseline diagnostic re-entry should arm the first remote retry',
@@ -1251,7 +1250,7 @@ test(
       t.equal(
         coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
           firstTimeoutSnapshot,
-          [firstTimeoutSnapshot.coordinator.operation],
+          [committed],
         ),
         true,
         'first-timeout diagnostics should refresh the remote retry',
@@ -1269,6 +1268,113 @@ test(
     }
   },
 );
+
+test('operation census requires complete authority and a keyed refusal retains the same wake',
+  async (t) => {
+    const originalNow = Date.now;
+    Date.now = () => TEST_CAPTURED_AT_MS;
+    const deliveries = [];
+    const deferredTimers = [];
+    const operation = buildEventDrivenOperation({
+      workflowStep: WORKFLOW_STEP.PENDING,
+      updatedAt: TEST_CAPTURED_AT_MS,
+    });
+    const planningOptions = {
+      operationId: operation.operationId,
+      partitionId: operation.partitionId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    };
+    const coordinator = createEventDrivenCoordinator(
+      deliveries, deferredTimers, null, planningOptions,
+    );
+    try {
+      coordinator.initialize();
+      const {repository, workflowOwner: owner} = coordinator;
+      const read = () => repository.getOperationsByEntityAuthoritativeObservation(
+        operation.entityType, operation.entityId,
+      );
+      const localRetained = {
+        ...operation,
+        targetNodeId: TEST_OBSERVER_NODE_ID,
+      };
+      repository.recordOwnerPersistedTransitionVisibilityWitness(localRetained);
+      t.equal(repository.getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity(
+        operation.entityType, operation.entityId).length, 1, 'the local obligation is visible');
+      t.same((await read()).operations, [], 'an empty SQLite census cannot publish a local witness');
+      await owner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        operation.partitionId, [localRetained],
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.same(deliveries, [], 'the complete empty census sends no wake');
+      t.same(deferredTimers, [], 'the complete empty census schedules no handoff');
+
+      repository.clearOwnerPersistedTransitionVisibilityWitness(localRetained.operationId);
+      t.equal(await repository.persistNewOperation(operation), true, 'commit the exact operation');
+      const gateway = coordinator.controlPlaneSystemTableGateway;
+      const authoritative = gateway.readAuthoritativeRows.bind(gateway);
+      let partialEntityRead = true;
+      let keyedFault = 'duplicate';
+      const keyedModes = [];
+      gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+        const result = await authoritative(table, sql, params, options);
+        if (table !== TABLES.REPLICA_OPERATIONS) return result;
+        if (sql.includes('entity_type = ?') && partialEntityRead && result.rows.length > 0) {
+          return {...result, rowSetComplete: false};
+        }
+        if (sql.includes('WHERE operation_id = ?') && params[0] === operation.operationId) {
+          keyedModes.push(options.authoritativeReadMode);
+          if (keyedFault === 'duplicate') return {...result, rows: [...result.rows, ...result.rows]};
+          if (keyedFault === 'refusal') return {success: false, error: 'owner refused keyed read'};
+        }
+        return result;
+      };
+      const partial = await read();
+      t.ok(partial.deferredOutcome, 'partial successful SQLite results are deferred');
+      await owner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        operation.partitionId, [operation],
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.same(deliveries, [], 'an incomplete positive census never wakes');
+      t.same(deferredTimers, [], 'an incomplete positive census never schedules');
+
+      partialEntityRead = false;
+      const decision = buildEventDrivenPlanningSnapshot(planningOptions)
+        .priorityRecoveryDecisionSnapshots.snapshots[0];
+      t.equal(await owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
+        operation, decision), true, 'the duplicate keyed answer retains the owed wake');
+      t.same(deliveries, [], 'a duplicate key cannot authorize dispatch');
+      t.equal(deferredTimers.length, 1, 'exactly one existing handoff timer owns the obligation');
+
+      keyedFault = 'refusal';
+      await deferredTimers[0].fn();
+      t.same(deliveries, [], 'the transient keyed refusal cannot authorize dispatch');
+      t.equal(deferredTimers.length, 2, 'the sole retry re-arms without a new census');
+      keyedFault = null;
+      const send = owner.messageRouter.deliver.bind(owner.messageRouter);
+      owner.messageRouter.deliver = async (target, payload, options) => {
+        if (payload.operationId === operation.operationId) {
+          const progress = await repository.persistOperationUpdate(
+            {...operation, workflowStep: WORKFLOW_STEP.SENDING,
+              stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS)},
+            {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+          t.equal(progress.persisted, true, 'the woken operation advances in SQLite');
+        }
+        return send(target, payload, options);
+      };
+      await deferredTimers[1].fn();
+      t.same(deliveries.map(({payload}) => payload.operationId), [operation.operationId],
+        'one authoritative wake resumes the same operation without a new census');
+      t.ok(keyedModes.slice(0, 3).every((mode) =>
+        mode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) &&
+        keyedModes.length >= 3, 'each attempted reentry used the strict owner read');
+      const progressed = await repository.queryAuthoritativeOperationById(operation.operationId);
+      t.equal(progressed.workflowStep, WORKFLOW_STEP.SENDING, 'read back the committed progress');
+    } finally {
+      await coordinator.shutdown();
+      Date.now = originalNow;
+    }
+  });
 
 test(
   'authoritative visibility owner progress does not receive workflow progress contract',
@@ -1800,7 +1906,7 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
     const sendingOperationRow = buildEventDrivenOperationRow({
       operation_id: TEST_OPERATION_ID,
       workflow_step: WORKFLOW_STEP.SENDING,
-      updated_at: TEST_UPDATED_AT_MS,
+      updated_at: TEST_CAPTURED_AT_MS,
     });
     const persistedSending = await coordinator.repository.persistOperationUpdate(
       coordinator.repository.rowToOperation(sendingOperationRow),

@@ -1,3 +1,4 @@
+import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {
   assignReplicaOperationRepositoryEntityReadMethods,
 } from './replica-operation-repository-entity-read-methods.js';
@@ -386,6 +387,32 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         },
       );
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
+      if (options.requireCompleteExactKey === true) {
+        const defer = () => Object.freeze({
+          operation: null,
+          deferredOutcome: this.buildUnconfirmedAbsenceVisibilityOutcome({
+            operationId,
+            queryDurationMs,
+            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
+          }),
+        });
+        if (result?.success !== true || result.rowSetComplete !== true ||
+            !Array.isArray(result.rows) || result.rows.length > 1) {
+          return defer();
+        }
+        if (result.rows.length === 0) {
+          return Object.freeze({operation: null, deferredOutcome: null});
+        }
+        if (result.rows[0]?.operation_id !== operationId) return defer();
+        try {
+          const operation = this.rowToOperation(result.rows[0]);
+          assertOperationUpdateRecord(operation);
+          return Object.freeze({operation, deferredOutcome: null});
+        } catch {
+          return defer();
+        }
+      }
+
 
       if (!result.success || !Array.isArray(result.rows) || result.rows.length === 0) {
         const isEmptyRead =
