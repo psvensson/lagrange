@@ -287,6 +287,7 @@ function moveOf(type, fields) {
     sourceReplicaId: fields.sourceReplicaId ?? null,
     copySourceNodeId: fields.copySourceNodeId ?? null,
   };
+  if (fields.voterRetirement !== undefined) move.voterRetirement = fields.voterRetirement;
   if (fields.learnerRetirement !== undefined) move.learnerRetirement = fields.learnerRetirement;
   if (Array.isArray(fields.promoteReplicaIds)) {
     move.promoteReplicaIds = Object.freeze([...fields.promoteReplicaIds]);
@@ -348,12 +349,22 @@ function learnerRetirementDeficit(context, replica) {
     {targetNodeId: replica.nodeId, replicaId: replica.replicaId, learnerRetirement}));
 }
 
+function voterRetirementDeficit(context, kind, replica) {
+  const nodeBootIncarnation = context.eligibility.nodeBoots.get(replica.nodeId);
+  if (!isVoterRole(replica.role) || !Number.isSafeInteger(nodeBootIncarnation) ||
+      !Number.isSafeInteger(replica.createdAt) || replica.createdAt <= 0) {
+    return waitingOf(context, kind, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
+  }
+  const voterRetirement = Object.freeze({nodeBootIncarnation, replicaCreatedAt: replica.createdAt});
+  return candidateOf(context, kind, moveOf(OperationType.REMOVE,
+    {targetNodeId: replica.nodeId, replicaId: replica.replicaId, voterRetirement}));
+}
+
 function failedOrDeadDeficit(context) {
   const dead = context.replicaRows.find((replica) =>
     !context.live.includes(replica));
   if (context.readyVoters.length >= context.replicationFactor) {
-    return candidateOf(context, KIND.FAILED_OR_DEAD, moveOf(OperationType.REMOVE,
-      {targetNodeId: dead.nodeId, replicaId: dead.replicaId}));
+    return voterRetirementDeficit(context, KIND.FAILED_OR_DEAD, dead);
   }
   return copyMoveOf({...context, live: context.liveReplicas}, KIND.FAILED_OR_DEAD,
     OperationType.REPLACE, {sourceReplicaId: dead.replicaId});
@@ -368,8 +379,7 @@ function spreadDeficit(context) {
 
 function surplusDeficit(context) {
   const removed = overRepresentedReplicaOf(context.live, context.eligibility);
-  return candidateOf(context, KIND.SURPLUS, moveOf(OperationType.REMOVE,
-    {targetNodeId: removed.nodeId, replicaId: removed.replicaId}));
+  return voterRetirementDeficit(context, KIND.SURPLUS, removed);
 }
 
 function promotableLearnersOf(liveLearners, liveVoters, eligibility) {

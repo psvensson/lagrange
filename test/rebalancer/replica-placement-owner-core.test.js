@@ -117,7 +117,7 @@ const LEASE_MS = 60_000;
 
 function nodeRow(nodeId, hostId, {leaseExpiresAt = NOW_MS + LEASE_MS} = {}) {
   return {[COLUMN.NODE_ID]: nodeId, [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: leaseExpiresAt,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: leaseExpiresAt, [COLUMN.BOOT_INCARNATION]: 1,
     ...(hostId === null ? {} : {[COLUMN.HOST_ID]: hostId})};
 }
 
@@ -128,6 +128,7 @@ const FIVE_ON_FOUR = Object.freeze([nodeRow('n1', 'h1'), nodeRow('n2', 'h2'),
 function replicas(partitionId, placements) {
   return placements.map(([nodeId, isLeader = false, failed = false], index) =>
     ({replicaId: `${partitionId}-r${index + 1}`, nodeId, isLeader, failed,
+      role: isLeader ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER, createdAt: NOW_MS,
       operationalVoter: !failed}));
 }
 
@@ -229,7 +230,8 @@ test('per-target eligibility: a lapsed READY lease or an undeclared host only dr
   const failed = deficit('indices-p1', [['n1', true], ['n4'], ['n5'], ['n2', false, true]], nodes);
   assert.equal(failed.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD);
   assert.deepEqual(failed.candidate.move, {type: OperationType.REMOVE, targetNodeId: 'n2',
-    replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null});
+    replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null,
+    voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: NOW_MS}});
 });
 
 test('inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies',

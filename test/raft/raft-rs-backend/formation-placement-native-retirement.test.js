@@ -22,7 +22,7 @@ import {
 import {PARTITION_SERVICE_EVENT} from '../../../src/partition/partition-service-constants.js';
 import {relayPartitionConsensusObservations} from
   '../../../src/partition/partition-service-raft-lifecycle-wiring.js';
-import {ledgerRows} from '../../partition/placement-admission-fixture.js';
+import {commitLedgerStatement, ledgerRows} from '../../partition/placement-admission-fixture.js';
 import {createLifecycleServiceRow} from '../../test-helpers/lifecycle-state-store.js';
 import {
   createMockCache, createMockPolicyService, createTestCoordinator,
@@ -255,6 +255,45 @@ test('late native promotion preserves an incumbent named by an admitted learner 
       assert.equal(changed, null, 'no generic REMOVING row may trigger native peer removal');
       assert.equal(durableLifecycleState(cluster.replica(initial.replica_id).dbFile,
         cluster.partitionId), observed);
+    } finally {
+      await coordinator.shutdown();
+      await source.dispose();
+      await leader.dispose();
+    }
+  }, {createCluster: addressedCluster}));
+
+test('a historical unscoped learner REMOVE never dispatches after the learner becomes a voter',
+  async (t) => withPlacementLeaseAuthority(async (context) => {
+    const {cluster, initial, nodes, ledger} = context;
+    const admitted = await admitRetirement(context);
+    const history = JSON.parse(admitted.removal.steps_history);
+    delete history[0].placementAdmission.learnerRetirement;
+    assert.equal(commitLedgerStatement(ledger, 'historical-unscoped-removal',
+      'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
+      [JSON.stringify(history), admitted.removal.operation_id]), null);
+    const historical = ledgerRows(ledger).find((row) =>
+      row.operation_id === admitted.removal.operation_id);
+    const rows = admitted.rows.map((row) => row.replica_id !== initial.replica_id ? row :
+      {...row, raft_role: 'follower'});
+    const target = rows.find((row) => row.replica_id === initial.replica_id);
+    const peer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
+    commitLatePromotion(cluster, initial.replica_id);
+    assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
+    const source = sourceOf(cluster, target, [historical]);
+    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+      [historical]);
+    const deliveries = [];
+    const coordinator = openDispatchOwner({source, rows, removal: historical, nodes, cluster,
+      leader, deliveries});
+    try {
+      const result = await coordinator.dispatchOperation(historical);
+      const pending = await coordinator.getOperation(historical.operation_id);
+      assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+      assert.equal(pending.completedAt, null);
+      assert.deepEqual(deliveries, []);
+      assert.deepEqual(source.serviceChanges, []);
+      assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
+      t.diagnostic(JSON.stringify({result, pendingStep: pending.workflowStep, peer}));
     } finally {
       await coordinator.shutdown();
       await source.dispose();

@@ -30,7 +30,7 @@ import {
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
-import {evaluatePlacementLearnerRetirement} from
+import {evaluatePlacementLearnerRetirement, isUnscopedPlacementRemoval} from
   './operation-workflow-placement-learner-retirement.js';
 import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
   './operation-workflow-remove-effect-admission.js';
@@ -484,6 +484,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
       }
     }
+    if (isUnscopedPlacementRemoval(operation)) {
+      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId, {error: LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED});
+    }
     // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
     let readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
@@ -594,6 +598,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) {
       return settleDispatchFailure(this, operation, learnerRetirement.state);
     }
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED) {
+      return this.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        operation.operationId, {error: learnerRetirement.state});
+    }
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.DEFERRED) {
       const reason = REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
       this.scheduleDeferredSafetyRetry(operation, reason, learnerRetirement.state);
@@ -646,6 +654,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEARED) {
       request[ReplicaOperationField.LEARNER_RETIREMENT] = learnerRetirement.scope;
       registerReplaceOwnerWaiter(this, operation, readinessEntryLevel);
+    }
+    if (learnerRetirement.voterScope !== undefined) {
+      request[ReplicaOperationField.VOTER_RETIREMENT] = learnerRetirement.voterScope;
     }
     if (operation.type === OperationType.GROWTH_PROMOTE) {
       applyGrowthPromoteRequestFields(request, operation);

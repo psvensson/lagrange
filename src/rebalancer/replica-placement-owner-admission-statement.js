@@ -39,6 +39,9 @@ const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
 const LEARNER_RETIREMENT = ReplicaOperationField.LEARNER_RETIREMENT;
+const VOTER_RETIREMENT = ReplicaOperationField.VOTER_RETIREMENT;
+const VOTER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, VOTER_RETIREMENT]);
+const VOTER_RETIREMENT_FIELDS = Object.freeze(['nodeBootIncarnation', 'replicaCreatedAt']);
 const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, LEARNER_RETIREMENT]);
 const LEARNER_RETIREMENT_FIELDS = Object.freeze([
   'nodeBootIncarnation', 'replicaCreatedAt', 'lifecycleVersion', 'lifecycleVersionColumn',
@@ -133,9 +136,22 @@ function isMoveShapeValid(kind, move) {
     isNullOrPositiveInteger(move.targetNodeStorageIncarnation);
 }
 
+function canonicalVoterRetirement(value) {
+  const scope = copyStrictOwnDataRecord(value);
+  return hasExactFields(scope, VOTER_RETIREMENT_FIELDS) &&
+    isPositiveInteger(scope.nodeBootIncarnation) &&
+    isPositiveInteger(scope.replicaCreatedAt) ? ordered(scope, VOTER_RETIREMENT_FIELDS) : null;
+}
+
 function canonicalMove(kind, value) {
   const move = copyStrictOwnDataRecord(value);
   if (move === null || !MOVE_TYPES.has(move.type) || !isMoveShapeValid(kind, move)) return null;
+  if (Object.hasOwn(move, VOTER_RETIREMENT)) {
+    const scope = canonicalVoterRetirement(move[VOTER_RETIREMENT]);
+    return kind === KIND.PLACEMENT && move.type === OperationType.REMOVE &&
+      hasExactFields(move, VOTER_RETIREMENT_MOVE_FIELDS) && scope !== null ?
+      ordered({...move, [VOTER_RETIREMENT]: scope}, VOTER_RETIREMENT_MOVE_FIELDS) : null;
+  }
   if (!Object.hasOwn(move, LEARNER_RETIREMENT)) {
     return hasExactFields(move, MOVE_FIELDS) ? ordered(move, MOVE_FIELDS) : null;
   }
@@ -254,6 +270,7 @@ function isFullSourceCapacity(placementClass, repair) {
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
   ...LEARNER_RETIREMENT_MOVE_FIELDS,
+  VOTER_RETIREMENT,
   'promoteReplicaIds',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
@@ -312,6 +329,8 @@ function moveOf(value) {
     copySourceNodeId: move.copySourceNodeId ?? null,
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
     targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
+    ...(Object.hasOwn(move, VOTER_RETIREMENT) ?
+      {[VOTER_RETIREMENT]: move[VOTER_RETIREMENT]} : {}),
     ...(Object.hasOwn(move, LEARNER_RETIREMENT) ?
       {learnerRetirement: move.learnerRetirement} : {})};
 }
@@ -329,6 +348,8 @@ function buildPlacementAdmissionStatement(candidate, context) {
   if (!isValidCandidateRecord(candidateRecord) ||
       !hasExactFields(contextRecord, CONTEXT_FIELDS) ||
       move === null ||
+      (move.type === OperationType.REMOVE && move[LEARNER_RETIREMENT] === undefined &&
+        move[VOTER_RETIREMENT] === undefined) ||
       !(contextRecord.repairWaitingSourceNodeIds instanceof Set)) {
     return requireStatement(null);
   }
@@ -423,5 +444,6 @@ export {
   buildPlacementAdmissionStatement,
   buildRuntimeServiceAdmissionStatement,
   canonicalPlacementStatement,
+  canonicalVoterRetirement,
   resolveSourceCapacityForClass,
 };

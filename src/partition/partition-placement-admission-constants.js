@@ -13,6 +13,7 @@ const PLACEMENT_RESULT_FIELD = 'placementResult';
 const PLACEMENT_ADMISSION_ERROR = Object.freeze({
   ORIGIN: 'placement_admission_origin_refused',
   BYTES: 'placement_admission_bytes_invalid',
+  REMOVE_INTENT_UNSCOPED: 'placement_remove_intent_unscoped',
   TARGET: 'placement_admission_target_invalid',
   RESULT: 'placement_admission_result_unavailable',
 });

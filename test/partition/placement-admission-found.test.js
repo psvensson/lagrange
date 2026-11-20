@@ -120,7 +120,11 @@ test('the engaged ledger hold is released only at copy-phase idle; removal-phase
     placementStatement({partitionId: 'tables-p1', target: NODE.B}));
   const remove = await admitOnLeader(leader, proposed, 'remove-1', placementStatement({
     partitionId: 'indices-p1', type: OperationType.REMOVE, target: NODE.A,
-    replicaId: 'indices-p1-r3'}));
+    replicaId: 'indices-p1-r3',
+    voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}}));
+  assert.deepEqual(JSON.parse(ledgerRows(leader).find((row) =>
+    row.partition_id === 'indices-p1').steps_history)[0].placementAdmission.voterRetirement,
+  {nodeBootIncarnation: 1, replicaCreatedAt: 1});
   assert.equal(resultOf(remove.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
   // Admitted while other rows are incomplete (it is first in order).
   const ledger = await admitOnLeader(leader, proposed, 'ledger-1', placementStatement({

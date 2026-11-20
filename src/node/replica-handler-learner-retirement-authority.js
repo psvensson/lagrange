@@ -5,12 +5,15 @@ import {
 } from '../control-plane/node-lifecycle-publication.js';
 import {isAuthoritativeControlPlaneRowReadSuccessful, readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
-import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
 import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {PLACEMENT_TRANSITION_KIND} from '../rebalancer/replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from '../rebalancer/replica-placement-owner-deficits.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {canonicalVoterRetirement} from '../rebalancer/replica-placement-owner-admission-statement.js';
+import {durableRowVersion, installAuthoritativeReplicaLifecycleSnapshot} from
+  './replica-state-machine-lifecycle-observation.js';
 import {observeScopedLearnerCleanup} from './replica-cleanup-tombstone-owner.js';
 import {
   LEARNER_LIFECYCLE_CUSTODY,
@@ -41,15 +44,14 @@ async function readOne(handler, table, sql, key) {
   return null;
 }
 
-function admittedScopeMatches(operation, scope) {
+function admittedRemoval(operation, scope) {
   if (operation?.operation_id !== scope.operationId || operation.type !== OperationType.REMOVE ||
       operation.completed_at !== null || operation.partition_id !== scope.partitionId ||
       operation.replica_id !== scope.replicaId || operation.target_node_id !== scope.targetNodeId ||
-      typeof operation.steps_history !== 'string') return false;
+      typeof operation.steps_history !== 'string') return null;
   const history = memoizedParseStepsHistoryString(operation.steps_history);
   const admission = history[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
-  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT &&
-    ADMITTED_SCOPE.every((field) => admission.learnerRetirement?.[field] === scope[field]);
+  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ? admission : null;
 }
 
 async function observesCurrentRisk(handler, scope, row) {
@@ -64,9 +66,35 @@ async function observesCurrentRisk(handler, scope, row) {
     LEARNER_LIFECYCLE_CUSTODY.ACQUIRED : LEARNER_LIFECYCLE_CUSTODY.CHANGED;
 }
 
-async function admitsLearnerRetirement(handler, scope) {
-  return admittedScopeMatches(await readOne(handler, TABLES.REPLICA_OPERATIONS,
+async function readAdmittedRemoval(handler, scope) {
+  return admittedRemoval(await readOne(handler, TABLES.REPLICA_OPERATIONS,
     SELECT_OPERATION, scope.operationId), scope);
+}
+
+async function admitsLearnerRetirement(handler, scope) {
+  const admission = await readAdmittedRemoval(handler, scope);
+  return admission !== null && admission.voterRetirement === undefined &&
+    ADMITTED_SCOPE.every((field) => admission.learnerRetirement?.[field] === scope[field]);
+}
+
+async function installsPlacementVoterRetirementGeneration(handler, scope) {
+  if (handler.ownerIncarnation !== scope.nodeBootIncarnation) return false;
+  const admission = await readAdmittedRemoval(handler, scope);
+  const voter = canonicalVoterRetirement(admission?.voterRetirement);
+  if (voter === null || admission.learnerRetirement !== undefined ||
+      voter.nodeBootIncarnation !== scope.nodeBootIncarnation ||
+      voter.replicaCreatedAt !== scope.replicaCreatedAt) return false;
+  const node = await readOne(handler, TABLES.NODES, SELECT_NODE_ROW_SQL, scope.targetNodeId);
+  if (node?.[COLUMN.NODE_ID] !== scope.targetNodeId ||
+      node[COLUMN.BOOT_INCARNATION] !== voter.nodeBootIncarnation) return false;
+  const observation = await handler.replicaStateMachine
+    .observeAuthoritativeReplicaLifecycle(scope.replicaId);
+  const row = observation?.row;
+  return observation?.available === true && row?.[COLUMN.CREATED_AT] === voter.replicaCreatedAt &&
+    row[COLUMN.NODE_ID] === scope.targetNodeId && row[COLUMN.PARTITION_ID] === scope.partitionId &&
+    row[COLUMN.REPLICA_ID] === scope.replicaId && isVoterRaftRole(row[COLUMN.RAFT_ROLE]) &&
+    installAuthoritativeReplicaLifecycleSnapshot(handler.replicaStateMachine,
+      row, handler.nodeId, durableRowVersion(row));
 }
 
 async function handOffAbsentLearnerCleanup(handler, scope) {
@@ -100,4 +128,7 @@ async function claimNativeLearnerRetirement(handler, scope) {
     {state: risk, row: null};
 }
 
-export {claimNativeLearnerRetirement, handOffAbsentLearnerCleanup};
+export {
+  claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
+  installsPlacementVoterRetirementGeneration,
+};

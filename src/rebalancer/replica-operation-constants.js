@@ -95,6 +95,7 @@ const ReplicaOperationField = Object.freeze({
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
   LEARNER_RETIREMENT: 'learnerRetirement',
+  VOTER_RETIREMENT: 'voterRetirement',
   LEARNER_RETIREMENT_SCOPE: 'learnerRetirementScope',
   LEARNER_RETIREMENT_CUSTODY: 'learnerRetirementCustody',
   // A REMOVE that retires its replica's whole group as a unit carries the
@@ -144,6 +145,7 @@ const LEARNER_RETIREMENT_OUTCOME = Object.freeze({
   SUPERSEDED: 'learner_retirement_superseded',
   CLEARED: 'learner_membership_cleared',
   CLEANUP_OWNED: 'learner_membership_cleared_cleanup_owned',
+  INTENT_UNSCOPED: 'placement_remove_intent_unscoped',
 });
 
 export {
