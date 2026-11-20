@@ -831,12 +831,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
   });
 
   const completeOnSeed = async (operation) =>
-    seed.completeOperation({
-      ...operation,
-      workflowStep:
-        trackedOperations.get(operation.operationId)?.workflow_step ||
-        operation.workflowStep,
-    });
+    seed.completeOperation(operationOf(operation.operationId));
 
   // Modeled replica activation of an acknowledged ADD, recorded through the
   // owner's real terminal transition and reflected in the placement rows.
@@ -1264,11 +1259,13 @@ async function runSelfMovePlannedBeforeAddsScenario(
         record(EVENT.SELF_MOVE_ACKED);
         timeSource.setTimeout(() => {
           const row = trackedOperations.get(operationId);
+          if (row.completed_at !== null) return;
           row.workflow_step = WORKFLOW_STEP.ACTIVE;
           row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.ACTIVE];
           record(EVENT.SELF_MOVE_ACTIVE);
           applySelfMoveActivePlacement(row);
           timeSource.setTimeout(() => {
+            if (row.completed_at !== null) return;
             row.workflow_step = WORKFLOW_STEP.STOPPING;
             row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
             recordModelledRemovalIntent(row, replaceWitnesses.witnessFor(operationId));

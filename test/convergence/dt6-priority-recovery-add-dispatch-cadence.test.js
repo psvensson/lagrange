@@ -2,7 +2,7 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationType, WORKFLOW_STEP_TO_STATUS} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -586,10 +586,8 @@ async function runFormationCadenceScenario() {
 
   const completeSibling = async (sibling) => {
     await coordinator.completeOperation({
-      ...sibling.operation,
-      workflowStep:
-        trackedOperations.get(sibling.operation.operationId)?.workflow_step ||
-        sibling.operation.workflowStep,
+      ...coordinator.repository.rowToOperation(
+        trackedOperations.get(sibling.operation.operationId)),
     });
     sibling.completedAtMs = elapsed();
     record(EVENT.SIBLING_COMPLETED, {tableId: sibling.tableId});
@@ -749,7 +747,7 @@ async function runFormationCadenceScenario() {
     anchorMs = timeSource.now();
     const selfMoveRow = trackedOperations.get(selfMove.operationId);
     selfMoveRow.workflow_step = WORKFLOW_STEP.STOPPING;
-    selfMoveRow.status = WORKFLOW_STEP.STOPPING.toLowerCase();
+    selfMoveRow.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
     recordModelledRemovalIntent(selfMoveRow,
       replaceWitnesses.witnessFor(selfMove.operationId));
     refreshStartupAuthority();
@@ -757,8 +755,7 @@ async function runFormationCadenceScenario() {
     timeSource.setTimeout(() => {
       replaceWitnesses.witnessFor(selfMove.operationId).commitRemoval();
       coordinator
-        .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING,
-          stepsHistory: JSON.parse(selfMoveRow.steps_history)})
+        .completeOperation(coordinator.repository.rowToOperation(selfMoveRow))
         .then(() => {
           state.selfMoveTerminalAtMs = elapsed();
           const movedReplica = serviceRows.find(

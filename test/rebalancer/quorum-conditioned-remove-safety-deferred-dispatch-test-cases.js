@@ -253,7 +253,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
 
       const progressed =
         await coordinator.workflowOwner
-          .reconcileOperationProgress(operation, {
+          .reconcileOperationLifecycle(operation, {
             cause: 'timeout',
           });
 

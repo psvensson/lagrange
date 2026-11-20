@@ -1,3 +1,6 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 /**
  * Operation ownership lease + fencing regression tests (verified-audit
  * findings 5 and 14, quest operation-ownership-lease-fencing).
@@ -73,9 +76,6 @@ import {
 import {
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
-import {
-  REPLICA_OPERATION_UPDATE_DISPOSITION,
-} from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -473,10 +473,6 @@ const DRAIN_SETTLEMENT = Object.freeze({
   COMPLETE: 'complete',
   FAIL: 'fail',
 });
-const WITNESS_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
-  committed: true,
-  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-});
 // REPLACE phases crossed with the verdict: ACTIVE and STOPPING are
 // release-eligible by step; SYNCING is release-eligible once the target is
 // observed ACTIVE.
@@ -689,14 +685,15 @@ function armDrainOwner(owner, {
   owner.isPriorityRecoveryOperationDrainStepStale = () => stepStale;
   owner.repository.getObservedReplicaStatusFromCache = () =>
     targetDead ? ReplicaStatus.FAILED : phase.targetStatus;
-  owner.completeOperation = async () => {
+  owner.completeOperation = async (operation) => {
     settlements.push(DRAIN_SETTLEMENT.COMPLETE);
-    return WITNESS_COMMITTED_TRANSITION_OUTCOME;
+    return buildTerminalOperationFixtureOutcome(operation);
   };
-  owner.failOperation = async (_operation, message) => {
+  owner.failOperation = async (operation, message) => {
     settlements.push(DRAIN_SETTLEMENT.FAIL);
     failMessages.push(message);
-    return WITNESS_COMMITTED_TRANSITION_OUTCOME;
+    return buildTerminalOperationFixtureOutcome(
+      {...operation, errorMessage: message}, {failed: true});
   };
   return {settlements, failMessages};
 }
@@ -957,7 +954,7 @@ test(
       coordinator.workflowOwner.reconcileOperationLifecycle =
         async (operation) => {
           reconciled.push(operation.operationId);
-          return operation;
+          return OPERATION_RECONCILE_OUTCOME.WAITING;
         };
 
       await coordinator.workflowOwner.reconcileOrphanedOperations();

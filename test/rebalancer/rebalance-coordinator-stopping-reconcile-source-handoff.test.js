@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainPeerVoterRows, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
@@ -111,13 +113,13 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
     );
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.ADVANCED,
       'source-present priority recovery drain should continue lifecycle work',
     );
     t.equal(
@@ -250,13 +252,13 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.ADVANCED,
       'observed active target cache state should continue source removal',
     );
     t.equal(
@@ -391,13 +393,13 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
       reconcileResult,
-      true,
+      OPERATION_RECONCILE_OUTCOME.ADVANCED,
       'stale authoritative target state should still continue source removal',
     );
     t.equal(

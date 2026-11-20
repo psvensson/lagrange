@@ -1,5 +1,5 @@
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
-import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-growth-promote.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
 import {ReplicaStatus, REPLICA_OPERATION_SEMANTIC_PHASE} from './replica-status.js';

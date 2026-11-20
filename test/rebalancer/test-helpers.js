@@ -1381,7 +1381,8 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 
 export {
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
-  createAllowAllStorageAdmissionService, createMockCache, createMockCdcService,
+  createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
+  createMockCdcService,
   createMockControlPlaneSystemTableGateway, createMockTransactionCoordinator,
   createMockPolicyService, createMockMessageRouter, createMockSqlQueryEngine,
   createMockControlPlaneReadinessService, createMockCoordinator, createMockReplicaHandler,

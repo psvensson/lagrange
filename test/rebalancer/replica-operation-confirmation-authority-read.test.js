@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {createTestCoordinator} from './test-helpers.js';
 import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
@@ -35,7 +36,6 @@ const TEST_CREATED_AT_MS = 1_000;
 const TEST_TERMINAL_AT_MS = 2_000;
 const TEST_RETRY_DELAY_MS = 1;
 const TEST_VISIBILITY_TIMEOUT_MS = 0;
-const TEST_OWNER_KEY_PREFIX = 'operation-owner';
 
 function makeRow(overrides = {}) {
   return {
@@ -90,33 +90,24 @@ function cloneOperation(operation) {
   };
 }
 
-function createRepairOwner(repository, projectedOperation) {
-  const stateByOperationId = new Map([
-    [
-      projectedOperation.operationId,
-      {
-        projectedOperation: cloneOperation(projectedOperation),
-        attempt: 0,
-      },
-    ],
-  ]);
-  return {
-    repository,
-    isInitialized: true,
-    isShuttingDown: false,
-    terminalTransitionRepairStateByOperationId: stateByOperationId,
-    terminalTransitionRepairTimerByOperationId: new Map(),
-    logger: {info() {}, warn() {}, error() {}, debug() {}},
-    cloneOperationSnapshot: cloneOperation,
-    clearTimeoutFn: () => {},
+function createRepairOwner(t, repository, projectedOperation) {
+  // Keep production workflow construction and terminal release. Only the
+  // repository observation transport below substitutes local/authority timing.
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_NODE_ID,
     setTimeoutFn: () => ({armed: true}),
-    getOperationOwnerSingleFlightKey(operationId) {
-      return `${TEST_OWNER_KEY_PREFIX}:${operationId}`;
-    },
-    async operationWorkflowRunExclusive(_key, callback) {
-      return callback();
-    },
-  };
+    clearTimeoutFn: () => {},
+  });
+  t.teardown(() => coordinator.shutdown());
+  const owner = coordinator.workflowOwner;
+  owner.repository = repository;
+  owner.terminalTransitionRepairStateByOperationId.set(projectedOperation.operationId, {
+    projectedOperation: cloneOperation(projectedOperation),
+    persistenceRepair: true,
+    persistOptions: {},
+    attempt: 0,
+  });
+  return owner;
 }
 
 function makeReadRouter({localRows, authorityRows, readModes}) {
@@ -155,7 +146,7 @@ test(
       readModes,
     }));
     const projectedOperation = repository.rowToOperation(terminalRow);
-    const owner = createRepairOwner(repository, projectedOperation);
+    const owner = createRepairOwner(t, repository, projectedOperation);
 
     await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
 
@@ -184,7 +175,7 @@ test(
       readModes,
     }));
     const projectedOperation = repository.rowToOperation(terminalRow);
-    const owner = createRepairOwner(repository, projectedOperation);
+    const owner = createRepairOwner(t, repository, projectedOperation);
 
     await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
 
@@ -220,9 +211,11 @@ test(
       readModes,
     }));
     const projectedOperation = repository.rowToOperation(terminalRow);
-    const owner = createRepairOwner(repository, projectedOperation);
+    const owner = createRepairOwner(t, repository, projectedOperation);
 
-    await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
+    await t.rejects(runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId),
+      {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED', operationWriteCommitted: true},
+      'a changed-row answer with unavailable authority stays explicitly unresolved');
 
     t.equal(
       owner.terminalTransitionRepairStateByOperationId.has(projectedOperation.operationId),
@@ -299,7 +292,7 @@ test(
       return {success: true, rows: [terminalRow]};
     });
     const projectedOperation = repository.rowToOperation(terminalRow);
-    const owner = createRepairOwner(repository, projectedOperation);
+    const owner = createRepairOwner(t, repository, projectedOperation);
 
     await runTerminalTransitionRepairAttempt(owner, projectedOperation.operationId);
 
@@ -424,7 +417,7 @@ test(
 
     const updateResult = await repository.persistOperationUpdate(
       workflowUpdate,
-      {returnDisposition: true, disableSystemWriteSession: true},
+      {disableSystemWriteSession: true},
     );
     t.equal(updateResult.persisted, true, 'workflow UPDATE confirms despite concurrent admission progression');
     t.equal(
@@ -554,7 +547,6 @@ test(
 
     const result = await repository.persistOperationUpdate(losingProjection, {
       terminalTransition: true,
-      returnDisposition: true,
     });
     t.equal(
       result.disposition,
@@ -756,7 +748,7 @@ test('exact CAS: a zero-change expected-step update against a row that ' +
     zeroChange);
   const refused = await progressed.persistOperationUpdate(
     progressed.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
   t.equal(refused.persisted, false);
   t.equal(refused.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
     'SENDING written, CREATING durable: the CAS lost');
@@ -764,7 +756,7 @@ test('exact CAS: a zero-change expected-step update against a row that ' +
   const exact = rowsRepository(casWriteRow(), zeroChange);
   const replay = await exact.persistOperationUpdate(
     exact.rowToOperation(casWriteRow()),
-    {expectedWorkflowStep: WORKFLOW_STEP.PENDING, returnDisposition: true});
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
   t.equal(replay.persisted, true);
   t.equal(replay.disposition,
     REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
@@ -808,7 +800,7 @@ test('exact CAS: a durable terminal row that progressed past a write is a ' +
 });
 
 test('exact CAS: a retryable failed mutation is not recovered by a durable ' +
-  'row that progressed past the write (recoverPersistedReplicaOperationMutation)',
+  'row that progressed past the write (recoverPersistedReplicaOperationUpdate)',
 async (t) => {
   const retryableFailure = {
     success: false,
@@ -820,12 +812,12 @@ async (t) => {
     [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE, true],
   ]) {
     const progressed = rowsRepository(casProgressedRow(step, status, terminal));
-    t.equal(await progressed.recoverPersistedReplicaOperationMutation(
+    t.equal(await progressed.recoverPersistedReplicaOperationUpdate(
       progressed.rowToOperation(casWriteRow()), retryableFailure), false,
     `SENDING written, ${step} durable: the failed write is not recovered`);
   }
   const exact = rowsRepository(casWriteRow());
-  t.equal(await exact.recoverPersistedReplicaOperationMutation(
+  t.equal(await exact.recoverPersistedReplicaOperationUpdate(
     exact.rowToOperation(casWriteRow()), retryableFailure), true,
   'control: the durable row IS the write, so it landed');
 });

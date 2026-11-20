@@ -1,3 +1,5 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {registerReplicaOperationRepositoryTailMoreTests} from './replica-operation-repository-tail-more-test-cases.js';
 import {
   REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
@@ -176,7 +178,8 @@ export function registerReplicaOperationRepositoryTailTests({
       },
     });
 
-    const result = repo.filterReplicaOperationRowsFromCache((row) => row.type === OperationType.ADD);
+    const result = repo.filterReplicaOperationRowsFromCache(
+      (row) => row.type === OperationType.ADD);
     t.equal(result.length, 1);
     t.equal(result[0].operation_id, 'op-1');
   });
@@ -744,8 +747,10 @@ export function registerReplicaOperationRepositoryTailTests({
       });
 
       const op = repo.rowToOperation(makeRow());
-      await repo.persistOperationUpdate(op);
+      const outcome = await repo.persistOperationUpdate(op);
 
+      t.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+        'a proved changed-row count reports the actual update');
       t.equal(gatewayMutations.length, 1);
       t.equal(gatewayMutations[0].tableName, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
       t.same(
@@ -782,7 +787,7 @@ export function registerReplicaOperationRepositoryTailTests({
   );
 
   test(
-    'persistOperationUpdate falls back to raw query mutations for reduced ' + 'gateway stubs',
+    'persistOperationUpdate observes exact replay for raw query replies without a change count',
     async (t) => {
       const executedQueries = [];
       const repo = createTestRepository({
@@ -796,12 +801,14 @@ export function registerReplicaOperationRepositoryTailTests({
       });
 
       const op = repo.rowToOperation(makeRow());
-      await repo.persistOperationUpdate(op);
+      const outcome = await repo.persistOperationUpdate(op);
+      t.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+        'a matching read without a mutation count proves replay, not a new commit');
 
       t.equal(executedQueries.length, 1);
       t.ok(
         executedQueries[0].sql.includes('UPDATE'),
-        'fallback stubs should continue to use the raw query path',
+        'the reduced fixture submits the owner SQL through its query transport',
       );
     },
   );
@@ -851,7 +858,8 @@ export function registerReplicaOperationRepositoryTailTests({
 
       releaseOrdinaryTransition();
 
-      const [ordinaryResult, priorityResult] = await Promise.all([ordinaryPromise, priorityPromise]);
+      const [ordinaryResult, priorityResult] =
+        await Promise.all([ordinaryPromise, priorityPromise]);
       t.equal(ordinaryResult, 'ordinary');
       t.equal(priorityResult, 'priority');
     },
@@ -876,7 +884,9 @@ export function registerReplicaOperationRepositoryTailTests({
     });
 
     const op = repo.rowToOperation(makeRow());
-    await repo.persistOperationUpdate(op, {timeoutBudget});
+    const outcome = await repo.persistOperationUpdate(op, {timeoutBudget});
+    t.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      'a count-free reply does not establish a new commit');
 
     t.equal(executedQueries.length, 1, 'persistOperationUpdate should issue one mutation');
     t.equal(

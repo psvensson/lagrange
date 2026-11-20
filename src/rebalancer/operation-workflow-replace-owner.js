@@ -1,3 +1,4 @@
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 /**
  * Owner contract:
  * Owner: the REPLACE owner's source-removal decisions (quest
@@ -229,8 +230,8 @@ async function completionVerdictOf(owner, operation, observation) {
  */
 function buildReplaceCompletionRefusal(decision) {
   return Object.freeze({
-    committed: false,
-    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+    ...buildOperationTransitionOutcome({persisted: false,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null}),
     refusal: REPLACE_OWNER_REFUSAL.COMPLETION_WITHOUT_SOURCE_RETIREMENT,
     verdict: decision.verdict,
   });
@@ -238,8 +239,8 @@ function buildReplaceCompletionRefusal(decision) {
 
 function buildReplaceFailureRefusal() {
   return Object.freeze({
-    committed: false,
-    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+    ...buildOperationTransitionOutcome({persisted: false,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null}),
     refusal: REPLACE_OWNER_REFUSAL.POST_INTENT_TIMER_FAILURE,
   });
 }

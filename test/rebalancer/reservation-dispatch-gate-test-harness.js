@@ -120,6 +120,10 @@ function updateOperationRow(operations, params) {
 }
 
 function selectReservationRows(reservations, sql, params) {
+  if (sql.includes('WHERE reservation_id = ?')) {
+    const row = reservations.get(params[0]);
+    return {success: true, rows: row ? [row] : []};
+  }
   if (sql.includes('WHERE operation_id = ?')) {
     const [opId, status] = params;
     const rows = Array.from(reservations.values())
