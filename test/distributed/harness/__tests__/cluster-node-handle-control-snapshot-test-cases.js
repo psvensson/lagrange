@@ -99,7 +99,7 @@ export function registerClusterNodeHandleControlSnapshotTests() {
         NODE_ROLES.SEED,
         {getContainerLogs: async () => ''},
         adminApiPort,
-        {adminQueryTimeoutMs: 4321},
+        {adminQueryTimeoutMs: 4321, adminRequestNow: () => 0},
       );
 
       try {
