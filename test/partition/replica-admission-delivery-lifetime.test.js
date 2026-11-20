@@ -6,9 +6,9 @@ import {test} from 'node:test';
 import {setImmediate as turn} from 'node:timers/promises';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {TABLES} from '../../src/constants/index.js';
+import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {ReplicaHandler, REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
@@ -81,7 +81,7 @@ async function withAdmissionGroup(t, routerClock) {
     bootstrapMembership: stamp, isJoiningExistingGroup: true});
   await learner.initialize();
   assert.equal(learner.role, RAFT_ROLE.LEARNER);
-  return {leader, learner, directory};
+  return {leader, learner, directory, router};
 }
 
 function runLearnerCadenceTurn(learner) {
@@ -230,3 +230,129 @@ test('the first real admission delivery cannot renew the original CREATE budget'
       ({replicaIdentity}) => replicaIdentity === LEARNER),
     OBSERVATION_BOUND_MS), true, 'the answering leader still owns any native effect');
   });
+
+for (const replace of [false, true]) {
+  for (const refuseRelease of [false, true]) {
+    test(`held participant release ${refuseRelease ? 'refuses' : 'settles'} with ` +
+      `${replace ? 'a successor' : 'the same CREATE'} in custody`,
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const {leader, directory, router} = await withAdmissionGroup(t);
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const releaseError = new Error('held participant release refused');
+      const outcomes = [];
+      const events = [];
+      const writes = [];
+      const releases = [];
+      const originalClaim = Object.freeze({});
+      const successorClaim = Object.freeze({});
+      let claim = originalClaim;
+      const handler = new ReplicaHandler({
+        nodeId: NODE, ownerIncarnation: TEST_BOOT_INCARNATION, dataDir: directory,
+        systemTableCache: new SystemTableCache(), cdcIntegrationService: {},
+        replicaStateMachine: {}, createPartitionService: async () => leader,
+        executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
+      });
+      handler.registerWithRouter(router);
+      t.after(() => handler.shutdown());
+      handler.on(REPLICA_HANDLER_EVENT.CREATED, () => events.push(ReplicaStatus.ACTIVE));
+      handler.on(REPLICA_HANDLER_EVENT.CREATION_FAILED, () => events.push(ReplicaStatus.FAILED));
+      handler.participantReleaseRecovery.releaseFreshCreate = () => {
+        entered.resolve();
+        return release.promise;
+      };
+      handler.replicaCreateAdmissionOwner = {
+        ownsPhysicalWorker: (candidate) => claim === candidate,
+        revalidatePhysicalWorker: async (candidate) => claim === candidate,
+        releasePhysicalWorker: (candidate) => {
+          releases.push(candidate);
+          if (claim === candidate) claim = null;
+        },
+        markProgress: async (evidence) => evidence,
+      };
+      // The native service, registered route, worker and local projections run
+      // through CREATE. Only the ledger boundary and release reply are held.
+      handler.persistReplicaCreateInitialStatus = async () => true;
+      handler.resolveReplicaContextWithRetry = async () => ({
+        tableId: TABLE_NAME, tableName: TABLE_NAME, existingReplicaCount: 0,
+        replicaIds: [LEADER], bootstrapMembership: leader.bootstrapMembership,
+      });
+      handler.persistReplicaStatusWithRetry = async (_replicaId, status) => {
+        writes.push(status);
+      };
+      handler.persistOrConfirmReplicaCreateFailed = async ({claimCleanup}) => {
+        assert.equal(claimCleanup, true);
+        writes.push(ReplicaStatus.FAILED);
+        return true;
+      };
+      const operationId = 'founding-create-release';
+      handler.trackReplicaCreateOperation(operationId, PARTITION, LEADER, TABLE_NAME);
+      const execution = handler.createReplicaAsync({
+        operationId, partitionId: PARTITION, replicaId: LEADER,
+        createAdmissionEvidence: {operationId, attemptToken: 'old-attempt'},
+        createPhysicalWorkerClaim: originalClaim,
+      }).then(() => null, (error) => error);
+      await Promise.race([
+        entered.promise,
+        execution.then((answer) => {
+          throw new Error('CREATE left before the held participant release', {cause: answer});
+        }),
+      ]);
+      const successorService = {shutdown: async () => {
+        assert.fail('the obsolete worker must not close the successor service');
+      }};
+      let successorTracker;
+      let successorProgress;
+      let successorReplica;
+      if (replace) {
+        claim = successorClaim;
+        handler.trackReplicaCreateOperation(operationId, PARTITION, LEADER, TABLE_NAME);
+        successorTracker = handler.inProgressOperations.get(operationId);
+        successorProgress = handler.startReplicaCreationProgress({
+          partitionId: PARTITION, replicaId: LEADER, peerTotal: 0,
+        });
+        handler.localServices.set(LEADER, successorService);
+        successorReplica = handler.setLocalReplica(LEADER, {
+          partitionId: PARTITION, service: successorService,
+          createAttemptToken: 'successor-attempt', status: ReplicaStatus.SYNCING,
+        });
+      }
+      if (refuseRelease) release.reject(releaseError);
+      else release.resolve();
+      const answer = await execution;
+      try {
+        if (replace) {
+          assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING],
+            'a superseded CREATE emits neither ACTIVE nor FAILED');
+          assert.deepEqual(writes, [ReplicaStatus.SYNCING],
+            'a superseded CREATE initiates no terminal write');
+          assert.deepEqual(events, []);
+          assert.equal(handler.localServices.get(LEADER), successorService);
+          assert.equal(handler.localReplicas.get(LEADER), successorReplica);
+          assert.equal(handler.inProgressOperations.get(operationId), successorTracker);
+          assert.equal(handler.creationProgressByReplica.get(LEADER), successorProgress);
+          assert.equal(claim, successorClaim);
+          assert.equal(leader.isShutdown, true, 'the old native service is retired');
+        } else {
+          const terminal = refuseRelease ? ReplicaStatus.FAILED : ReplicaStatus.ACTIVE;
+          assert.equal(answer, refuseRelease ? releaseError : null);
+          assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING,
+            refuseRelease ? WORKFLOW_STEP.FAILED : WORKFLOW_STEP.ACTIVE]);
+          assert.deepEqual(writes, [ReplicaStatus.SYNCING, terminal]);
+          assert.deepEqual(events, [terminal]);
+          assert.equal(handler.inProgressOperations.has(operationId), false);
+          assert.equal(handler.creationProgressByReplica.has(LEADER), false);
+          assert.equal(claim, null);
+        }
+        assert.deepEqual(releases, [originalClaim], 'only the old worker claim is released');
+      } finally {
+        if (handler.localServices.get(LEADER) === successorService) {
+          handler.localServices.delete(LEADER);
+        }
+        if (handler.localReplicas.get(LEADER)?.service === successorService) {
+          handler.localReplicas.delete(LEADER);
+        }
+      }
+    });
+  }
+}
