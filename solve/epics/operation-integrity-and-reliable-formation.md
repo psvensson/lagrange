@@ -272,8 +272,10 @@ findings, this distinction determines which source an agent should reproduce.
   On the same worker, `200142a3` passes both. Selecting the later canonical
   gateway fixture on that exact source at `8ede43d60` reproduces both failures.
   Each pressure probe times both the gateway read and its nested SQL call.
-  The convergence fixture owner must count each underlying read once and
-  retain both original bounds.
+  At `9ea3e4f90` the convergence fixture counts each underlying SQL read
+  once. Both original bounds and the two neighboring fairness and holder-release
+  files pass on tv-dator (32 assertions). Independent review approved this
+  bounded fixture change.
   [Single-change control and original outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-cadence-gateway-pair-nov20.tar.gz). The passing
   physical streak is zero of three. Lab smoke and the GCP Lagrange arm follow
   the accepted formation gate.
@@ -395,6 +397,18 @@ when deciding which observation can authorize each effect.
 [current placement authority](../quests/replica-placement-admission-owner/quest.json),
 [etcd learner design](https://etcd.io/docs/v3.5/learning/design-learner/) and
 [Kubernetes API concurrency](https://kubernetes.io/docs/reference/using-api/api-concepts/).
+
+On the composed `18d2d6482`, managed tv-dator request
+`42d96bf9-6ad8-4837-be72-054a55e21503` ran the existing distributed SQL
+differential oracle against SQLite 3.49.2. All 522 runner assertions passed
+on their first attempt. The original artifact records the test executable,
+loaded native SQLite binding, engine build and compile settings. In parallel,
+five prepared-transaction and locking-read control files passed on adam-laptop.
+Four exercise native participant paths. The J4 locking-read journey uses a
+participant delivery double. Public SQL on three physical nodes and the
+comparative workload still need their own measured outcomes.
+[SQL oracle originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--base-sql-oracle-original-5497-nov20.tar.gz)
+and [prepared and locking-read controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--prepared-path-and-locking-controls-nov20.tar.gz).
 
 ### Programme adoption and dependency order
 

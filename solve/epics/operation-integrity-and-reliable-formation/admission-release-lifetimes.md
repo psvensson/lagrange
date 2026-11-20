@@ -15,6 +15,15 @@ runtime reproduction, execution receipt or formation acceptance. No test or lab
 run was launched for this note. Existing receipts and historical seals remain
 unchanged.
 
+For current execution, the integration summary records the composed RELEASE
+budget, the managed CREATE replacement tests and the physical missing replies.
+The next activation decision is whether unresolved evidence after release can
+retire a materialized service or publish a terminal result. The exact
+operation, boot, replica and service must survive a temporary loss of the
+reply while the existing recovery owner reconciles the outcome. The census
+below describes the planning commit.
+[Current formation and placement evidence](../operation-integrity-and-reliable-formation.md#physical-formation-and-placement-stability).
+
 Loaded instructions were AGENTS, rules, router, Quest workflow, authority and
 recovery, and investigation/navigation skills. Source navigation used direct
 reads and Git inspection; no successful Serena invocation is claimed. The
@@ -62,7 +71,7 @@ that the new source findings reproduce the same physical failure. Before calling
 a regression, compare the discriminating witness on the current and relevant
 predecessor content under the same managed substrate, preserving the first red.
 
-## Current ownership and budget census
+## Ownership and budget census at the planning commit
 
 Paths are relative to `src/`; line numbers refer to the inspected candidate.
 
