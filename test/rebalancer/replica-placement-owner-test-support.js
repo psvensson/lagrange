@@ -24,7 +24,7 @@ import {
   assignReplicaHandlerVoterReadinessMethods,
 } from '../../src/node/replica-handler-voter-readiness-methods.js';
 import {
-  LEDGER_PARTITION_ID,
+  LEDGER_PARTITION_ID, readPlacementCensus,
 } from '../../src/partition/partition-placement-admission-decision.js';
 import {
   readCommittedConfChangeState,
@@ -70,6 +70,21 @@ import {
 import {
   applyCommitted,
 } from '../test-helpers/participant-transaction-fixture.js';
+
+function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
+  return {
+    sqlQueryEngine,
+    executeAuthoritativeSystemTableRead: (_tableName, sql, params) =>
+      sqlQueryEngine.execute(sql, params),
+    registerTableChangeCallback: () => {},
+    unregisterTableChangeCallback: () => {},
+  };
+}
+
+function hasIncompletePlacementOperation(db, operationId) {
+  return readPlacementCensus(db).some((row) =>
+    row.operationId === operationId && row.incomplete);
+}
 
 const NOW_MS = 1_000_000;
 
@@ -190,7 +205,6 @@ export async function runGrowthPromoteProductionWitness({
 
     let interruptFirstPromote = true;
     let disableGrowthPromoteDispatch = false;
-    let releasedHoldCount = 0;
 
     class GrowthPromoteHandler {
       constructor() {
@@ -284,11 +298,7 @@ export async function runGrowthPromoteProductionWitness({
           getNodeReadinessSync: () => ({ready: true}),
           getPriorityRecoveryPlanningSnapshotSync: () => null,
         }),
-        cdcIntegrationService: {
-          sqlQueryEngine,
-          registerTableChangeCallback: () => {},
-          unregisterTableChangeCallback: () => {},
-        },
+        cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
         tablePolicyService: {getReplicationFactor: () => 3},
         sqlQueryEngine,
         transactionCoordinator: {
@@ -300,9 +310,6 @@ export async function runGrowthPromoteProductionWitness({
         },
       });
       instance.initialize();
-      instance.workflowOwner.releasePlacementHold = async () => {
-        releasedHoldCount += 1;
-      };
       return instance;
     };
     const coordinator = createTestCoordinator();
@@ -592,7 +599,8 @@ export async function runGrowthPromoteProductionWitness({
     );
     assert.equal(stillJointRow.workflow_step, WORKFLOW_STEP.SYNCING);
     assert.equal(stillJointRow.completed_at, null);
-    assert.equal(releasedHoldCount, 0);
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, promoteRow.operation_id), true,
+      'joint consensus retains the same durable growth occupancy');
 
     // Leave joint consensus (votersOutgoing empty) -> now authoritative committed
     // membership is non-joint, learners transition to FOLLOWER (clearing isJoiningExistingGroup),
@@ -634,7 +642,8 @@ export async function runGrowthPromoteProductionWitness({
       ),
       'COMPLETE_ACTIVE',
     );
-    assert.ok(releasedHoldCount >= 1);
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, promoteRow.operation_id), false,
+      'the terminal row clears growth occupancy in the placement census');
 
     await recoveredCoordinator.shutdown();
   }, {systemTableCache: cache});
@@ -754,7 +763,6 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
 
     const dispatchedTargets = [];
     let forcePersistentNotLeader = false;
-    let releasedHoldCount = 0;
 
     const messageRouter = {
       deliver: async (target, payload) => {
@@ -825,11 +833,7 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
         getNodeReadinessSync: () => ({ready: true}),
         getPriorityRecoveryPlanningSnapshotSync: () => null,
       }),
-      cdcIntegrationService: {
-        sqlQueryEngine,
-        registerTableChangeCallback: () => {},
-        unregisterTableChangeCallback: () => {},
-      },
+      cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
       tablePolicyService: {getReplicationFactor: () => 5},
       sqlQueryEngine,
       transactionCoordinator: {
@@ -841,9 +845,6 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       },
     });
     coordinator.initialize();
-    coordinator.workflowOwner.releasePlacementHold = async () => {
-      releasedHoldCount += 1;
-    };
 
     // 1. 3->5 growth operation admitted under old leader 'n1', then 'n2' elected leader while
     // 'n1' remains alive as a follower returning `not_leader` (pointing to r2 on 'n2'):
@@ -883,11 +884,15 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       cache.get(TABLES.REPLICA_OPERATIONS, opId1),
     );
     // First dispatch goes to old leader 'n1', receives `not_leader` with leaderId=r2,
-    // updates targetNodeId to 'n2', and defers to SYNCING:
+    // records the new administration route to 'n2', and defers to SYNCING:
     const firstAttempt = await coordinator.workflowOwner.executeOperationFromReconcilePath(op1);
     assert.equal(firstAttempt.status, 'in_progress');
     assert.equal(dispatchedTargets[0], 'n1/service/replica-handler');
-    assert.equal(op1.targetNodeId, 'n2');
+    assert.equal(op1.administrationRouteNodeId, 'n2', 'the live attempt retains the redirected route');
+    assert.equal(leaderService.db.prepare(
+      'SELECT target_node_id FROM replica_operations WHERE operation_id = ?',
+    ).get(opId1).target_node_id, 'n1', 'a routing hint does not change the durable growth target');
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), true);
     assert.equal(op1.operationId, opId1);
     assert.deepEqual(op1[ReplicaOperationField.PROMOTE_REPLICA_IDS], [l4, l5]);
 
@@ -900,7 +905,8 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
     assert.equal(dispatchedTargets[1], 'n2/service/replica-handler');
     assert.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
     assert.equal(op1.status, ReplicaStatus.ACTIVE);
-    assert.equal(releasedHoldCount, 1);
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), false,
+      'successful redirected promotion clears growth occupancy');
 
     // 2. Persistent refusal case: once in SYNCING, repeated retryable refusals do NOT count
     // as workflow progress, so reconcileTimeoutOperation enforces the step timeout budget
@@ -951,12 +957,15 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       'waiting',
       'in-place SYNCING retry deferral must report waiting (not progress) to timeout reconciliation',
     );
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), true,
+      'a refusal keeps the timed operation in the placement census while the step is live');
     await coordinator.workflowOwner.reconcileTimeoutOperation(op2, NOW_MS);
     syncCacheFromDb();
     const timedOutRow = cache.get(TABLES.REPLICA_OPERATIONS, opId2);
     assert.equal(timedOutRow.workflow_step, WORKFLOW_STEP.FAILED);
     assert.equal(timedOutRow.status, ReplicaStatus.FAILED);
-    assert.equal(releasedHoldCount, 2);
+    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), false,
+      'durable timeout releases the same operation’s growth occupancy');
 
     await coordinator.shutdown();
   }, {systemTableCache: cache});

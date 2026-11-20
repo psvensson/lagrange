@@ -1,7 +1,13 @@
-import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {
+  buildTerminalOperationFixtureOutcome, completeServicesFixtureRead,
+  installCommittedOperationMutationFixture,
+  installServicesAuthorityFixture, workflowFixtureHistory,
+} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NUM, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -41,7 +47,12 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
   '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
-import {createMockCache} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore,
+  createMockCache,
+  createMockCdcService,
+  createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 
 import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
@@ -115,7 +126,6 @@ const TEST_READY_DISTINCT_NODE_COUNT = 1;
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 const TEST_MIN_REPLICA_COUNT = 3;
 const TEST_EMPTY_LIST = Object.freeze([]);
-const TEST_EMPTY_ROWS = Object.freeze([]);
 const TEST_UNDEFINED_VALUE = undefined;
 const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
@@ -123,7 +133,6 @@ const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET =
   'control-plane-publication-target-node/service/replica-dispatch';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
-const TEST_SERVICES_TABLE = 'services';
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
 const TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED = 'not_executed';
@@ -278,7 +287,7 @@ const TEST_SPREAD_SATISFIED_DRAIN_WITNESSES = Object.freeze([
 ]);
 
 function buildEventDrivenOperation(overrides = {}) {
-  return Object.freeze({
+  const operation = {
     operationId: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partitionId: TEST_PARTITION_ID,
@@ -292,11 +301,17 @@ function buildEventDrivenOperation(overrides = {}) {
     createdAt: TEST_CREATED_AT_MS,
     updatedAt: TEST_UPDATED_AT_MS,
     ...overrides,
+  };
+  return Object.freeze({
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(operation.workflowStep, operation.updatedAt),
+    ...operation,
   });
 }
 
 function buildEventDrivenOperationRow(overrides = {}) {
-  return Object.freeze({
+  const operation = {
     operation_id: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
     partition_id: TEST_PARTITION_ID,
@@ -310,7 +325,9 @@ function buildEventDrivenOperationRow(overrides = {}) {
     created_at: TEST_CREATED_AT_MS,
     updated_at: TEST_UPDATED_AT_MS,
     ...overrides,
-  });
+  };
+  return Object.freeze({completed_at: null, error_message: null,
+    steps_history: JSON.stringify(workflowFixtureHistory(operation.workflow_step, operation.updated_at)), ...operation});
 }
 
 function buildEventDrivenPlanningSnapshot(options = {}) {
@@ -431,56 +448,37 @@ function buildTransactionCoordinator() {
   };
 }
 
-function buildSqlQueryEngine(operationRow) {
-  return {
-    async executeQuery(sql) {
-      const normalizedSql = String(sql);
-      if (normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)) {
-        const operationRows = [operationRow];
-        return {
-          success: true,
-          rows: operationRows,
-          affectedRows: operationRows.length,
-        };
-      }
-      if (normalizedSql.includes(TEST_SERVICES_TABLE)) {
-        return {
-          success: true,
-          rows: TEST_EMPTY_ROWS,
-          affectedRows: 0,
-        };
-      }
-      return {
-        success: true,
-        rows: TEST_EMPTY_ROWS,
-        affectedRows: 0,
-      };
-    },
-  };
-}
-
 function createEventDrivenCoordinator(
   deliveries,
   deferredTimers,
   operationRow,
   planningOptions = {},
 ) {
+  const sqlStore = createCoordinatorSqlStore(createMockCache({
+    replicaOperations: operationRow ? [operationRow] : [],
+  }));
+  const execute = (sql, params) => {
+    const result = sqlStore.execute(sql, params);
+    sqlStore.suspend();
+    return result;
+  };
+  const sqlQueryEngine = {executeQuery: async (sql, params) => execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  gateway.submitMutation = async (mutation) => {
+    const result = sqlStore.submitMutation(mutation);
+    sqlStore.suspend();
+    return result;
+  };
+  installCommittedOperationMutationFixture(gateway);
   return new RebalanceCoordinator({
     nodeId: TEST_OBSERVER_NODE_ID,
     authoritativeVisibilityTimeoutMs: 0,
     authoritativeVisibilityRetryDelayMs: 0,
-    sqlQueryEngine: buildSqlQueryEngine(operationRow),
+    sqlQueryEngine,
+    controlPlaneSystemTableGateway: gateway,
+    cdcIntegrationService: createMockCdcService(),
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        return {
-          success: true,
-          rows: TEST_EMPTY_ROWS,
-          affectedRows: 0,
-        };
-      },
-    },
     controlPlaneReadinessService: {
       getPriorityRecoveryPlanningAnswerSync: () =>
         buildEventDrivenPlanningSnapshot(planningOptions),
@@ -1080,19 +1078,13 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
     },
   });
 
+  const originalNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
   try {
     coordinator.initialize();
-    coordinator.workflowOwner.repository
-      .getOperationsByEntityAuthoritativeObservation = async () => {
-        return Object.freeze({
-          state: 'present',
-          operationCount: 1,
-          operations: Object.freeze([operation]),
-          deferredOutcome: null,
-          retryAfterMs: null,
-        });
-      };
-
+    const committed = await coordinator.repository.queryAuthoritativeOperationById(
+      operation.operationId);
+    t.same(committed.stepsHistory, operation.stepsHistory);
     t.equal(
       snapshot?.operationOwnerObservation?.outcome,
       OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
@@ -1133,7 +1125,7 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
     t.equal(
       coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
         snapshot,
-        [snapshot.coordinator.operation],
+        [committed],
       ),
       true,
       'diagnostic snapshots should enqueue the workflow owner re-entry',
@@ -1157,6 +1149,7 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
       'diagnostic owner re-entry should arm bounded handoff verification',
     );
   } finally {
+    Date.now = originalNow;
     await coordinator.shutdown();
   }
 });
@@ -1235,12 +1228,17 @@ test(
       }),
     });
 
+    const originalNow = Date.now;
+    Date.now = () => TEST_CAPTURED_AT_MS;
     try {
       coordinator.initialize();
+      const committed = await coordinator.repository.queryAuthoritativeOperationById(
+        operationRow.operation_id);
+
       t.equal(
         coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
           snapshot,
-          [snapshot.coordinator.operation],
+          [committed],
         ),
         true,
         'baseline diagnostic re-entry should arm the first remote retry',
@@ -1257,7 +1255,7 @@ test(
       t.equal(
         coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
           firstTimeoutSnapshot,
-          [firstTimeoutSnapshot.coordinator.operation],
+          [committed],
         ),
         true,
         'first-timeout diagnostics should refresh the remote retry',
@@ -1271,10 +1269,118 @@ test(
         'first-timeout diagnostics should wake and re-arm verification',
       );
     } finally {
+      Date.now = originalNow;
       await coordinator.shutdown();
     }
   },
 );
+
+test('operation census requires complete authority and a keyed refusal retains the same wake',
+  async (t) => {
+    const originalNow = Date.now;
+    Date.now = () => TEST_CAPTURED_AT_MS;
+    const deliveries = [];
+    const deferredTimers = [];
+    const operation = buildEventDrivenOperation({
+      workflowStep: WORKFLOW_STEP.PENDING,
+      updatedAt: TEST_CAPTURED_AT_MS,
+    });
+    const planningOptions = {
+      operationId: operation.operationId,
+      partitionId: operation.partitionId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    };
+    const coordinator = createEventDrivenCoordinator(
+      deliveries, deferredTimers, null, planningOptions,
+    );
+    try {
+      coordinator.initialize();
+      const {repository, workflowOwner: owner} = coordinator;
+      const read = () => repository.getOperationsByEntityAuthoritativeObservation(
+        operation.entityType, operation.entityId,
+      );
+      const localRetained = {
+        ...operation,
+        targetNodeId: TEST_OBSERVER_NODE_ID,
+      };
+      repository.recordOwnerPersistedTransitionVisibilityWitness(localRetained);
+      t.equal(repository.getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity(
+        operation.entityType, operation.entityId).length, 1, 'the local obligation is visible');
+      t.same((await read()).operations, [], 'an empty SQLite census cannot publish a local witness');
+      await owner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        operation.partitionId, [localRetained],
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.same(deliveries, [], 'the complete empty census sends no wake');
+      t.same(deferredTimers, [], 'the complete empty census schedules no handoff');
+
+      repository.clearOwnerPersistedTransitionVisibilityWitness(localRetained.operationId);
+      t.equal(await repository.persistNewOperation(operation), true, 'commit the exact operation');
+      const gateway = coordinator.controlPlaneSystemTableGateway;
+      const authoritative = gateway.readAuthoritativeRows.bind(gateway);
+      let partialEntityRead = true;
+      let keyedFault = 'duplicate';
+      const keyedModes = [];
+      gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+        const result = await authoritative(table, sql, params, options);
+        if (table !== TABLES.REPLICA_OPERATIONS) return result;
+        if (sql.includes('entity_type = ?') && partialEntityRead && result.rows.length > 0) {
+          return {...result, rowSetComplete: false};
+        }
+        if (sql.includes('WHERE operation_id = ?') && params[0] === operation.operationId) {
+          keyedModes.push(options.authoritativeReadMode);
+          if (keyedFault === 'duplicate') return {...result, rows: [...result.rows, ...result.rows]};
+          if (keyedFault === 'refusal') return {success: false, error: 'owner refused keyed read'};
+        }
+        return result;
+      };
+      const partial = await read();
+      t.ok(partial.deferredOutcome, 'partial successful SQLite results are deferred');
+      await owner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        operation.partitionId, [operation],
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.same(deliveries, [], 'an incomplete positive census never wakes');
+      t.same(deferredTimers, [], 'an incomplete positive census never schedules');
+
+      partialEntityRead = false;
+      const decision = buildEventDrivenPlanningSnapshot(planningOptions)
+        .priorityRecoveryDecisionSnapshots.snapshots[0];
+      t.equal(await owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
+        operation, decision), true, 'the duplicate keyed answer retains the owed wake');
+      t.same(deliveries, [], 'a duplicate key cannot authorize dispatch');
+      t.equal(deferredTimers.length, 1, 'exactly one existing handoff timer owns the obligation');
+
+      keyedFault = 'refusal';
+      await deferredTimers[0].fn();
+      t.same(deliveries, [], 'the transient keyed refusal cannot authorize dispatch');
+      t.equal(deferredTimers.length, 2, 'the sole retry re-arms without a new census');
+      keyedFault = null;
+      const send = owner.messageRouter.deliver.bind(owner.messageRouter);
+      owner.messageRouter.deliver = async (target, payload, options) => {
+        if (payload.operationId === operation.operationId) {
+          const progress = await repository.persistOperationUpdate(
+            {...operation, workflowStep: WORKFLOW_STEP.SENDING,
+              stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.SENDING, TEST_CAPTURED_AT_MS)},
+            {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+          t.equal(progress.persisted, true, 'the woken operation advances in SQLite');
+        }
+        return send(target, payload, options);
+      };
+      await deferredTimers[1].fn();
+      t.same(deliveries.map(({payload}) => payload.operationId), [operation.operationId],
+        'one authoritative wake resumes the same operation without a new census');
+      t.ok(keyedModes.slice(0, 3).every((mode) =>
+        mode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) &&
+        keyedModes.length >= 3, 'each attempted reentry used the strict owner read');
+      const progressed = await repository.queryAuthoritativeOperationById(operation.operationId);
+      t.equal(progressed.workflowStep, WORKFLOW_STEP.SENDING, 'read back the committed progress');
+    } finally {
+      await coordinator.shutdown();
+      Date.now = originalNow;
+    }
+  });
 
 test(
   'authoritative visibility owner progress does not receive workflow progress contract',
@@ -1356,7 +1462,15 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   const coordinator = createEventDrivenCoordinator(
     deliveries,
     deferredTimers,
-    buildEventDrivenOperationRow(),
+    buildEventDrivenOperationRow({
+      operation_id: operation.operationId,
+      partition_id: operation.partitionId,
+      entity_id: operation.entityId,
+      replica_id: operation.replicaId,
+      source_node_id: operation.sourceNodeId,
+      target_node_id: operation.targetNodeId,
+      workflow_step: operation.workflowStep,
+    }),
   );
 
   const failedOperationIds = [];
@@ -1611,8 +1725,8 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
       () => completion;
     coordinator.workflowOwner.buildPriorityRecoveryAssessmentContextForOperation =
       () => priorityRecoveryContext;
-    coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
-      () => ReplicaStatus.ACTIVE;
+    const activeTarget = buildFixtureActiveTargetRow(operation);
+    coordinator.workflowOwner.repository.systemTableCache.upsert(TABLES.SERVICES, activeTarget);
 
     const completedWithLiveOwnerAndCacheProjectionOnly =
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
@@ -1632,34 +1746,20 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
 
     coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
       () => true;
-    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
-      async () => ({
-        observedRow: null,
-        authoritativeReadAttempted: true,
-        authoritativeReadFailed: true,
-      });
+    const restoreRead = installServicesAuthorityFixture(
+      coordinator.controlPlaneSystemTableGateway,
+      () => ({success: false, error: 'fixture SERVICES authority unavailable'}),
+    );
     t.equal(
       await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(operation),
       false,
       'cache-only ACTIVE with unavailable authoritative read must not settle',
     );
-    coordinator.workflowOwner.repository.readAuthoritativeReplicaRowForObservation =
-      async (replicaId, partitionId, targetNodeId) => ({
-        observedRow: {
-          service_id: replicaId, replica_id: replicaId, service_type: 'partition',
-          partition_id: partitionId, node_id: targetNodeId,
-          status: ReplicaStatus.ACTIVE, raft_role: 'follower', address: 'node-2:1',
-          created_at: 1, state_entered_at: 1,
-        },
-        authoritativeReadAttempted: true,
-        authoritativeReadFailed: false,
-      });
-
-    const completed =
-      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
-        operation,
-      );
-
+    restoreRead();
+    installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
+      () => completeServicesFixtureRead([activeTarget]));
+    const completed = await coordinator.workflowOwner
+      .reconcilePriorityRecoveryOperationDrain(operation);
     t.equal(
       completed,
       true,
@@ -1789,9 +1889,10 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       true,
       'PENDING priority cache rows should re-enter the workflow owner lane',
     );
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await coordinator.workflowOwner.operationWorkflowRunExclusive(
+      coordinator.workflowOwner.getOperationOwnerSingleFlightKey(operation.operationId),
+      async () => {},
+    );
 
     t.equal(
       deliveries.length,
@@ -1812,8 +1913,20 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
     const sendingOperationRow = buildEventDrivenOperationRow({
       operation_id: TEST_OPERATION_ID,
       workflow_step: WORKFLOW_STEP.SENDING,
-      updated_at: TEST_UPDATED_AT_MS,
+      updated_at: TEST_CAPTURED_AT_MS,
+      steps_history: JSON.stringify([
+        ...operation.stepsHistory,
+        {
+          step: WORKFLOW_STEP.SENDING,
+          previousStep: WORKFLOW_STEP.PENDING,
+          timestamp: TEST_CAPTURED_AT_MS,
+        },
+      ]),
     });
+    const persistedSending = await coordinator.repository.persistOperationUpdate(
+      coordinator.repository.rowToOperation(sendingOperationRow),
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    t.equal(persistedSending.persisted, true, 'the SENDING cache event follows a committed step');
     coordinator.workflowOwner.clearCreatedOperationHandoffRetry(
       operation.operationId,
     );
@@ -1830,9 +1943,10 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       true,
       'SENDING priority cache rows should re-enter the workflow owner lane',
     );
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await coordinator.workflowOwner.operationWorkflowRunExclusive(
+      coordinator.workflowOwner.getOperationOwnerSingleFlightKey(operation.operationId),
+      async () => {},
+    );
 
     t.equal(
       deliveries.length,
@@ -2666,6 +2780,21 @@ test(
 // target ACTIVE. An available owner completes its own ADD. Without the
 // operation-fact arm a dead-owner ADD (orphan adoption skips priority
 // partitions) would wait for its step timeout.
+function buildFixtureActiveTargetRow(operation) {
+  return {
+    service_id: operation.replicaId,
+    replica_id: operation.replicaId,
+    service_type: 'partition',
+    partition_id: operation.partitionId,
+    node_id: operation.targetNodeId,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: 'follower',
+    address: operation.targetNodeId + ':1',
+    created_at: 1,
+    state_entered_at: 1,
+  };
+}
+
 async function runIntermediateAddDrain(
   t,
   {ownerUnavailable, locallyOwned, authoritativeTargetRow},
@@ -2733,26 +2862,17 @@ async function runIntermediateAddDrain(
     owner.repository.isOperationLocallyOwned = () => locallyOwned;
     owner.repository.resolveOperationOwnerNodeId = () => 'node-owner';
     owner.isPriorityRecoveryDrainOwnerUnavailable = () => ownerUnavailable;
-    owner.repository.getObservedReplicaStatusFromCache = () => ReplicaStatus.ACTIVE;
-    const defaultVoterTargetRow = {
-      service_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
-      replica_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
-      service_type: 'partition', partition_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
-      node_id: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID, status: ReplicaStatus.ACTIVE,
-      raft_role: 'follower', address: 'node-target:1', created_at: 1, state_entered_at: 1,
-    };
+    const defaultVoterTargetRow = buildFixtureActiveTargetRow(operation);
+    owner.repository.systemTableCache.upsert(TABLES.SERVICES, defaultVoterTargetRow);
     const resolvedRow = authoritativeTargetRow === undefined ?
       defaultVoterTargetRow : authoritativeTargetRow;
-    // The real status read (authoritative row -> lifecycle normalization).
-    owner.repository.readAuthoritativeReplicaRowForObservation =
-      async (...args) => {
-        authoritativeReads.push(args.slice(0, 3));
-        return {
-          observedRow: resolvedRow,
-          authoritativeReadAttempted: true,
-          authoritativeReadFailed: false,
-        };
-      };
+    const readActual = owner.repository.getActualReplicaObservation.bind(owner.repository);
+    owner.repository.getActualReplicaObservation = (replicaId, partitionId, nodeId, options) => {
+      authoritativeReads.push([replicaId, partitionId, nodeId]);
+      return readActual(replicaId, partitionId, nodeId, options);
+    };
+    installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
+      () => completeServicesFixtureRead(resolvedRow === null ? [] : [resolvedRow]));
     const drainSnapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     const settled =

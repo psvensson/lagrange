@@ -403,7 +403,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
     async (t) => {
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          readRows: async () => ({success: true, rows: []}),
+          readRows: async () => ({success: true, rowSetComplete: true, rows: []}),
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
@@ -468,13 +468,13 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'getOperationsByEntityAuthoritativeObservation replaces stale ' +
-      'authoritative rows with newer locally owned terminal transition witnesses',
+    'entity census preserves raw rows and exposes newer local terminal progress separately',
     async (t) => {
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
           readRows: async () => ({
             success: true,
+            rowSetComplete: true,
             rows: [
               makeRow({
                 type: OperationType.REPLACE,
@@ -493,15 +493,14 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
           filter: () => [],
         },
       });
-      repo.recordOwnerPersistedTransitionVisibilityWitness(
-        repo.rowToOperation(makeRow({
-          type: OperationType.REPLACE,
-          status: ReplicaStatus.FAILED,
-          workflow_step: WORKFLOW_STEP.FAILED,
-          updated_at: 200,
-          completed_at: 200,
-        })),
-      );
+      const retained = repo.rowToOperation(makeRow({
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.FAILED,
+        workflow_step: WORKFLOW_STEP.FAILED,
+        updated_at: 200,
+        completed_at: 200,
+      }));
+      repo.recordOwnerPersistedTransitionVisibilityWitness(retained);
 
       const observation = await repo.getOperationsByEntityAuthoritativeObservation(
         TEST_ENTITY_TYPE,
@@ -515,14 +514,34 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.same(
         observation?.operations?.map((operation) => operation.workflowStep),
+        [WORKFLOW_STEP.CREATING],
+        'the authority census remains the exact observed row set',
+      );
+      t.same(
+        observation?.ownerTransitionOperations?.map((operation) => operation.workflowStep),
         [WORKFLOW_STEP.FAILED],
         'entity visibility should supersede the stale creating row with the newer failed transition',
       );
       t.same(
-        observation?.operations?.map((operation) => operation.status),
+        observation?.ownerTransitionOperations?.map((operation) => operation.status),
         [ReplicaStatus.FAILED],
         'the superseded entity row should preserve the terminal status',
       );
+      for (const conflict of [
+        {...retained, sourceNodeId: 'different-source-owner'},
+        {...retained, createdAt: retained.createdAt + 1},
+      ]) {
+        repo.recordOwnerPersistedTransitionVisibilityWitness(conflict);
+        const current = await repo.getOperationsByEntityAuthoritativeObservation(
+          TEST_ENTITY_TYPE, TEST_PARTITION_ID,
+        );
+        t.same(current.ownerTransitionOperations, [],
+          'a stale transition from another owner tuple cannot hide the observed operation');
+        t.same(
+          current.operations.map((operation) => operation.workflowStep),
+          [WORKFLOW_STEP.CREATING],
+        );
+      }
     },
   );
 
@@ -1237,6 +1256,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
             }
             return {
               success: true,
+              rowSetComplete: true,
               rows: [publishedAuthoritativeRow],
             };
           },

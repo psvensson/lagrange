@@ -1,3 +1,4 @@
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {readPlacementCensus} from '../../src/partition/partition-placement-admission-decision.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {admitReplaceTerminalRepair} from '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
@@ -98,14 +99,7 @@ function openCoordinator(file, coordinatorOptions) {
     return result.success ?
       {success: true, partitionResult: {affectedRows: result.changes}} : result;
   };
-  gateway.cdcIntegrationService = {
-    insertSystemTableRow: (tableName, row) => gateway.submitMutation({
-      operation: 'insert', tableName, row,
-    }),
-    updateSystemTableRow: (tableName, whereClause, data) => gateway.submitMutation({
-      operation: 'update', tableName, whereClause, data,
-    }),
-  };
+  installCommittedOperationMutationFixture(gateway);
   const timers = createDeterministicTimerQueue();
   const coordinator = createTestCoordinator({
     ...coordinatorOptions,
@@ -669,6 +663,45 @@ test('retained FAILED ADD repair waits for exact target authority before a new w
     operation.operationId);
   t.equal(settled.workflowStep, WORKFLOW_STEP.FAILED);
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+});
+
+test('retained FAILED ADD repair completes instead on exact authoritative ACTIVE', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'retained-add-target-active');
+  const owner = fixture.coordinator.workflowOwner;
+  const now = Date.now();
+  const inserted = await fixture.gateway.submitMutation({
+    operation: 'insert',
+    tableName: SYSTEM_TABLE_NAME.SERVICES,
+    row: {
+      service_id: operation.replicaId,
+      replica_id: operation.replicaId,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: operation.partitionId,
+      node_id: operation.targetNodeId,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+      created_at: now,
+      updated_at: now,
+    },
+  });
+  t.equal(inserted.success, true, 'the exact voter target is committed in SQLite');
+  const observation = await owner.repository.getActualReplicaObservation(
+    operation.replicaId, operation.partitionId, operation.targetNodeId);
+  t.equal(observation.lifecycleStatus, ReplicaStatus.ACTIVE,
+    'the real repository sees the committed voting target as ACTIVE');
+  armTerminalTransitionRepair(owner, terminalWitnessProjection(operation, true),
+    TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+    {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+  await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+
+  const settled = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(settled.workflowStep, WORKFLOW_STEP.ACTIVE);
+  t.equal(settled.replicaId, operation.replicaId);
+  t.equal(settled.errorMessage, null, 'no FAILED projection was committed');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
+  t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), false);
 });
 
 test('retained durable FAILED ADD releases during a target authority outage', async (t) => {

@@ -1,3 +1,4 @@
+import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {PriorityPublicationHandoff} from './priority-publication-handoff.js';
 import {normalizePriorityRecoveryDispatchPendingDecisionSnapshot} from '../control-plane/priority-recovery-snapshot.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
@@ -69,6 +70,37 @@ const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE =
     }),
   ]);
 
+function selectAuthoritativePartitionOperations(observation, partitionId) {
+  const operations = observation?.operations;
+  if (observation?.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT ||
+      observation.deferredOutcome !== null ||
+      !Array.isArray(operations) || operations.length === 0 ||
+      operations.length !== observation.operationCount) {
+    return [];
+  }
+  try {
+    for (const operation of operations) {
+      assertOperationUpdateRecord(operation);
+      if (operation.partitionId !== partitionId ||
+          operation.entityType !== SERVICE_TYPE.PARTITION ||
+          operation.entityId !== partitionId) return [];
+    }
+  } catch {
+    return [];
+  }
+  // A newer local commit is evidence of progress, so the stale census row
+  // cannot act as an authority to repeat its effect.
+  return operations.filter((operation) =>
+    !findOwnerTransitionOperation(observation, operation.operationId));
+}
+
+function findOwnerTransitionOperation(observation, operationId) {
+  return Array.isArray(observation?.ownerTransitionOperations) ?
+    observation.ownerTransitionOperations.find(
+      (operation) => operation?.operationId === operationId) :
+    null;
+}
+
 class PriorityRecoveryObservation extends PriorityPublicationHandoff {
   decidePriorityRecoveryPartitionObservationSelection(evidence = {}) {
     return (
@@ -112,7 +144,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
         .USE_AUTHORITATIVE_OBSERVATION
     ) {
       return Object.freeze({
-        operationRecords: authoritativeOperations,
+        operationRecords: authoritativeOperations.map((operation) =>
+          findOwnerTransitionOperation(authoritativeObservation, operation.operationId) ||
+            operation),
         incompleteObservation:
           authoritativeObservation &&
           typeof authoritativeObservation === 'object' ?
@@ -330,7 +364,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     }) || null;
   }
 
-  buildPriorityRecoveryDecisionSnapshotForOperations(
+  buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
     partitionId,
     operations = [],
     planningSnapshot = null,
@@ -435,6 +469,14 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     );
   }
 
+  buildPriorityRecoveryDecisionSnapshotForOperations(
+    partitionId, operations, planningSnapshot, incompleteObservation,
+  ) {
+    return this.buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
+      partitionId, operations, planningSnapshot, incompleteObservation,
+    );
+  }
+
   async getPriorityRecoveryDecisionSnapshotForOperation(operation) {
     const partitionId = normalizePriorityRecoveryOperationPartitionId(
       operation,
@@ -464,6 +506,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     let operationRecords = (Array.isArray(operations) ? operations : [])
       .filter((operation) => operation && typeof operation === 'object');
     let incompleteObservation = null;
+    let effectOperations = [];
     if (
       this.repository &&
       typeof this.repository.getOperationsByEntityAuthoritativeObservation ===
@@ -474,6 +517,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
           SERVICE_TYPE.PARTITION,
           normalizedPartitionId,
         );
+      effectOperations = selectAuthoritativePartitionOperations(
+        authoritativeObservation, normalizedPartitionId,
+      );
       const adoptedObservation =
         this.adoptPriorityRecoveryPartitionAuthoritativeObservation(
           operationRecords,
@@ -495,12 +541,20 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     }
     const planningSnapshot =
       await this.readAvailablePriorityRecoveryPlanningSnapshot(representativeOperation);
-    return this.buildPriorityRecoveryDecisionSnapshotForOperations(
+    const snapshot = this.buildPriorityRecoveryPlanningDecisionSnapshotForOperations(
       normalizedPartitionId,
       operationRecords,
       planningSnapshot,
       incompleteObservation,
     );
+    return this.finalizePriorityRecoveryPartitionOperationObservation(
+      snapshot,
+      effectOperations,
+    );
+  }
+
+  finalizePriorityRecoveryPartitionOperationObservation(snapshot) {
+    return snapshot;
   }
 }
 

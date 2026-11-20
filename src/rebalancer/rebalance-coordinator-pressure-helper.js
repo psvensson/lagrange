@@ -1,3 +1,5 @@
+import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE} from
+  './replica-operation-repository-constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
@@ -101,7 +103,9 @@ function shouldAllowPriorityRecoveryDeferredObservation(
   observation = null,
 ) {
   if (
-    observation?.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED
+    observation?.state !== INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
+    observation.deferredOutcome?.reasonCode ===
+      REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_INCOMPLETE
   ) {
     return false;
   }

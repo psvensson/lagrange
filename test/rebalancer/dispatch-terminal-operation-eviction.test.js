@@ -1,3 +1,4 @@
+import {createMockCache} from './test-helpers.js';
 /**
  * Terminal operation eviction & reconciliation in reservation and epoch gates.
  * Verifies that when an operation becomes terminal authoritatively or is failed
@@ -12,7 +13,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ensureDispatchReservationOrSkip} from '../../src/rebalancer/operation-workflow-dispatch-reservation-gate.js';
 import {
@@ -91,20 +92,21 @@ test('terminal authoritative operation in reservation gate reconciles local stat
 
 test('stale epoch in epoch gate marks terminal, updates cache progress row and clears retries', async (t) => {
   initializeConfig();
+  const systemTableCache = createMockCache();
+  const sqlEngine = createTrackingSqlEngine({systemTableCache});
   const {coordinator} = createEpochCoordinator({
     currentEpoch: PLANNING_EPOCH + 1,
+    sqlQueryEngine: sqlEngine,
+    systemTableCache,
   });
   const operation = buildEpochBoundAddOperation(PLANNING_EPOCH, {
     operationId: 'epoch-stale-terminal-test',
     type: OperationType.ADD,
+    sourceNodeId: coordinator.nodeId,
     workflowStep: WORKFLOW_STEP.PENDING,
   });
+  seedAuthoritativeOperation(sqlEngine, operation);
 
-  let progressRowApplied = null;
-  coordinator.repository.applyLocalPriorityOperationProgressRow = (op) => {
-    progressRowApplied = op;
-    return true;
-  };
   coordinator.workflowOwner.repository.isOperationLocallyOwned = () => true;
   let retriesCleared = false;
   coordinator.workflowOwner.clearTerminalOperationRetryState = () => {
@@ -124,7 +126,12 @@ test('stale epoch in epoch gate marks terminal, updates cache progress row and c
       new RegExp(STALE_DISPATCH_EPOCH_PREFIX),
       'error matches stale epoch prefix',
     );
-    t.ok(progressRowApplied, 'progress row was applied to cache');
+    const durable = sqlEngine.getOperationRow(operation.operationId);
+    t.equal(durable.workflow_step, WORKFLOW_STEP.FAILED, 'SQLite committed FAILED');
+    const cached = systemTableCache.get(TABLES.REPLICA_OPERATIONS, operation.operationId);
+    t.equal(cached.workflow_step, durable.workflow_step,
+      'the committed operation update was mirrored in the fixture cache');
+    t.equal(cached.completed_at, durable.completed_at, 'cache preserves the committed terminal');
     t.equal(retriesCleared, true, 'coordinator terminal retries were cleared');
   } finally {
     await coordinator.shutdown();

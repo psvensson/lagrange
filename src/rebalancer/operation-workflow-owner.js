@@ -347,36 +347,30 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     }
   }
 
-  async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
-    partitionId,
-    operations = [],
-  ) {
-    const snapshot =
-      await super.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
-        partitionId,
-        operations,
-      );
+  finalizePriorityRecoveryPartitionOperationObservation(snapshot, operations) {
+    const dispatchSnapshot = super.finalizePriorityRecoveryPartitionOperationObservation(
+      snapshot, operations,
+    );
     const operation =
       this.selectPriorityRecoveryDispatchPendingReentryOperation(
-        snapshot,
+        dispatchSnapshot,
         operations,
-      );
-    const normalizedSnapshot =
-      this.normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
-        snapshot,
-        operation,
       );
     const targetProgressNormalizedSnapshot =
       normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
         this,
-        normalizedSnapshot,
+        dispatchSnapshot,
         operation,
       );
-    this.schedulePriorityRecoveryTargetProgressReentry(
+    const scheduled = this.schedulePriorityRecoveryTargetProgressReentry(
       targetProgressNormalizedSnapshot,
       operation ? [operation] : operations,
     );
-    return targetProgressNormalizedSnapshot;
+    return scheduled ?
+      normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot(
+        this, targetProgressNormalizedSnapshot, operation,
+      ) :
+      targetProgressNormalizedSnapshot;
   }
 
   buildPriorityRecoveryDecisionSnapshotForOperations(
@@ -391,6 +385,9 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       planningSnapshot,
       incompleteOperationObservation,
     );
+    if (this.isPriorityRecoveryAuthoritativeOperationReadDeferred(incompleteOperationObservation)) {
+      return snapshot;
+    }
     const operation =
       this.selectPriorityRecoveryDispatchPendingReentryOperation(
         snapshot,

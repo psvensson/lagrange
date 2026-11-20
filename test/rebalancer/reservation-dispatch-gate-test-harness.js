@@ -1,3 +1,5 @@
+import {TABLES} from '../../src/constants/index.js';
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
   '../../src/constants/index.js';
@@ -13,6 +15,7 @@ import {
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockCdcService,
   createMockPolicyService,
@@ -41,23 +44,6 @@ function initializeConfig(overrides = {}) {
       ...overrides,
     },
   });
-}
-
-function insertOperationRow(operations, params) {
-  const [
-    opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-    status, step, created, updated, completed, err, history,
-    entityType, entityId,
-  ] = params;
-  operations.set(opId, {
-    operation_id: opId, type, partition_id: partId,
-    replica_id: repId, target_claim_key: targetClaimKey,
-    source_node_id: srcNode, target_node_id: tgtNode,
-    status, workflow_step: step, created_at: created, updated_at: updated,
-    completed_at: completed, error_message: err, steps_history: history,
-    entity_type: entityType, entity_id: entityId,
-  });
-  return {success: true, changes: 1};
 }
 
 function insertReservationRow(reservations, params, options) {
@@ -105,20 +91,6 @@ function updateReservationRows(reservations, sql, params) {
   return {success: true, changes};
 }
 
-function updateOperationRow(operations, params) {
-  const [status, step, updated, completed, err,
-    history, repId, opId] = params;
-  const existing = operations.get(opId);
-  if (existing) {
-    operations.set(opId, {
-      ...existing, status, workflow_step: step,
-      updated_at: updated, completed_at: completed,
-      error_message: err, steps_history: history, replica_id: repId,
-    });
-  }
-  return {success: true};
-}
-
 function selectReservationRows(reservations, sql, params) {
   if (sql.includes('WHERE reservation_id = ?')) {
     const row = reservations.get(params[0]);
@@ -139,26 +111,30 @@ function selectReservationRows(reservations, sql, params) {
   return {success: true, rows: Array.from(reservations.values())};
 }
 
-function selectOperationRows(operations, sql, params) {
-  const allOps = Array.from(operations.values());
-  if (sql.includes('operation_id = ?')) {
-    const [opId] = params;
-    const operation = operations.get(opId);
-    return {success: true, rows: operation ? [operation] : []};
-  }
-  return {success: true, rows: allOps};
-}
-
 function createTrackingSqlEngine(options = {}) {
-  const operations = new Map();
+  // The faulted reservation store is independent from the committed ledger.
+  // Execute operation predicates, projection and change counts in SQLite.
+  const operations = createCoordinatorSqlStore(options.systemTableCache || createMockCache());
   const reservations = new Map();
   return {
-    operations,
+    getOperationRow(operationId) {
+      const result = operations.execute(
+        'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
+      );
+      operations.suspend();
+      return result.rows[0];
+    },
+    insertOperationRow(row) {
+      const result = operations.submitMutation({
+        operation: 'insert', tableName: TABLES.REPLICA_OPERATIONS, row,
+      });
+      operations.suspend();
+      if (result.success !== true) {
+        throw new Error(`reservation fixture operation seed failed: ${result.error}`);
+      }
+    },
     reservations,
     executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        return insertOperationRow(operations, params);
-      }
       if (sql.includes('INTO storage_reservations')) {
         const result = insertReservationRow(reservations, params, options);
         if (result.success === true &&
@@ -170,16 +146,15 @@ function createTrackingSqlEngine(options = {}) {
       if (sql.includes('UPDATE storage_reservations')) {
         return updateReservationRows(reservations, sql, params);
       }
-      if (sql.includes('UPDATE replica_operations')) {
-        return updateOperationRow(operations, params);
-      }
       if (sql.includes('SELECT * FROM storage_reservations')) {
         return selectReservationRows(reservations, sql, params);
       }
-      if (sql.includes('replica_operations')) {
-        return selectOperationRows(operations, sql, params);
+      if (sql.includes(TABLES.REPLICA_OPERATIONS)) {
+        const result = operations.execute(sql, params);
+        operations.suspend();
+        return result;
       }
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     },
   };
 }
@@ -339,25 +314,29 @@ function seedActiveReservation(sqlEngine, operationId) {
 }
 
 function buildStorageIncreasingOperation(overrides = {}) {
+  const now = Date.now();
   return {
     operationId: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_PARTITION_ID + '-r1',
+    sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
     entityType: SERVICE_TYPE.PARTITION,
     entityId: TEST_PARTITION_ID,
     status: 'pending',
     workflowStep: WORKFLOW_STEP.PENDING,
-    stepsHistory: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.PENDING, now),
+    createdAt: now,
+    updatedAt: now,
     completedAt: null,
+    errorMessage: null,
     ...overrides,
   };
 }
 
 function seedAuthoritativeOperation(sqlEngine, operation) {
-  sqlEngine.operations.set(operation.operationId, {
+  sqlEngine.insertOperationRow({
     operation_id: operation.operationId,
     type: operation.type,
     partition_id: operation.partitionId,
@@ -374,6 +353,7 @@ function seedAuthoritativeOperation(sqlEngine, operation) {
     steps_history: JSON.stringify(operation.stepsHistory || []),
     entity_type: operation.entityType,
     entity_id: operation.entityId,
+    membership_publication_epoch: operation.membershipPublicationEpoch ?? null,
   });
 }
 

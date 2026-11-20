@@ -189,18 +189,6 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
 
     try {
       coordinator.initialize();
-      const operation = coordinator.repository.rowToOperation(operationRow);
-      coordinator.workflowOwner.repository
-        .getOperationsByEntityAuthoritativeObservation = async () => {
-          return Object.freeze({
-            state: 'present',
-            operationCount: 1,
-            operations: Object.freeze([operation]),
-            deferredOutcome: null,
-            retryAfterMs: null,
-          });
-        };
-
       const snapshot =
       await coordinator.workflowOwner
         .getPriorityRecoveryDecisionSnapshotForPartitionOperations(

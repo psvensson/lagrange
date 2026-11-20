@@ -1,3 +1,4 @@
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
@@ -22,6 +23,18 @@ function assertEntityOperationRows(rows, entityType, entityId) {
         row.entity_type !== entityType || row.entity_id !== entityId) {
       throw malformedEntityOperationRead();
     }
+  }
+}
+
+function isAuthorityMatchedOwnerTransition(operation, transition) {
+  if (!transition || operation === transition ||
+      operation.completedAt !== null ||
+      operation.createdAt !== transition.createdAt) return false;
+  try {
+    assertOperationUpdateSubject(operation, transition);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -181,6 +194,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         },
       );
       if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
+      const completeRead = result.success && result.rowSetComplete === true;
       if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
@@ -203,7 +217,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           ),
         );
 
-      if (!result.success) {
+      if (!completeRead) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           // This boundary requires the operation-ledger owner. An unavailable
           // owner cannot prove that the entity has no operation, even when a
@@ -222,19 +236,17 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         if (deferredOutcome) {
           return this.buildEntityOperationVisibilityObservation(
             fallbackOperations,
-            deferredOutcome,
+            result.success ? {
+              ...deferredOutcome,
+              reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE
+                .ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+            } : deferredOutcome,
           );
         }
         return this.buildEntityOperationVisibilityObservation([], null);
       }
 
-      const operations =
-        this.reconcileEntityOperationVisibilityWithPersistedTransitions(
-          this.mergeIncompleteOperationVisibilityOperations(
-            result.rows.map((row) => this.rowToOperation(row)),
-            ownerPersistedFallbackOperations,
-          ),
-        );
+      const operations = result.rows.map((row) => this.rowToOperation(row));
       if (this.shouldDeferEntityOperationEmptyRead(result, queryDurationMs, planningSnapshot)) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           priorityRecoveryActive: true,
@@ -256,7 +268,14 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         }
       }
 
-      return this.buildEntityOperationVisibilityObservation(operations, null);
+      const observation = this.buildEntityOperationVisibilityObservation(operations, null);
+      const ownerTransitionOperations = operations
+        .map((operation) => this.resolveEntityOperationVisibilityWithPersistedTransition(operation))
+        .filter((transition, index) =>
+          isAuthorityMatchedOwnerTransition(operations[index], transition));
+      // Local post-commit progress is tied to a row returned by this census.
+      // It remains owner progress, separate from the census membership.
+      return Object.freeze({...observation, ownerTransitionOperations});
     }
 
     /**

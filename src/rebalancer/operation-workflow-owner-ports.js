@@ -785,7 +785,9 @@ async function wakeOperationWorkflowRemoteOwner(
     owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
     return false;
   }
-  return owner.wakeCoordinatorCreatedRemoteOwner(operation);
+  return owner.wakeCoordinatorCreatedRemoteOwner(operation, {
+    requireExactPriorityRecoveryReentry: context.requireExactPriorityRecoveryReentry === true,
+  });
 }
 
 async function reconcileOperationWorkflowStaleProgress(
@@ -798,7 +800,7 @@ async function reconcileOperationWorkflowStaleProgress(
       OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
     owner.repository.isOperationLocallyOwned(operation) !== true
   ) {
-    return wakeOperationWorkflowRemoteOwner(owner, operation);
+    return wakeOperationWorkflowRemoteOwner(owner, operation, context);
   }
   return didOperationReconcileAdvanceOrComplete(
     await owner.reconcileOperationLifecycle(operation, context),

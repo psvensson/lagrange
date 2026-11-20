@@ -28,7 +28,7 @@
   "censusSize": 2702,
   "digest": "fnv1a32-85148c0c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9c46134e",
+  "observationDigest": "fnv1a32-c0a12417",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17711,12 +17711,14 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/timeout-budget.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -18307,9 +18309,11 @@
     },
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/priority-recovery-snapshot.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
       ]

@@ -1,3 +1,4 @@
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
@@ -17,6 +18,7 @@ import {
 import {
   createAllowAllStorageAdmissionService,
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
@@ -480,7 +482,10 @@ export function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
   });
 }
 
-export function createRemotePriorityVisibilityCoordinator() {
+export function createRemotePriorityVisibilityCoordinator({
+  sqlQueryEngine = null,
+  deliveries = [],
+} = {}) {
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService({defaultRepairEligible: true}),
     async getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -506,7 +511,8 @@ export function createRemotePriorityVisibilityCoordinator() {
       },
     },
     messageRouter: {
-      async deliver() {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
         return buildDeliveryEnvelope({acknowledged: true});
       },
     },
@@ -515,11 +521,14 @@ export function createRemotePriorityVisibilityCoordinator() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
-    sqlQueryEngine: {
+    sqlQueryEngine: sqlQueryEngine || {
       async executeQuery() {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
+    ...(sqlQueryEngine ? {
+      controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+    } : {}),
     controlPlaneReadinessService,
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
@@ -559,7 +568,9 @@ export function createRemoteHandoffCoordinator({
         return authoritativeRead(tableName, sql, params);
       },
       async readAuthoritativeRows(tableName, sql, params = []) {
-        return authoritativeRead(tableName, sql, params);
+        const result = await authoritativeRead(tableName, sql, params);
+        return result?.success === true && Array.isArray(result.rows) ?
+          {...result, rowSetComplete: true} : result;
       },
       async executeQuery(sql, params = []) {
         return executeQuery(sql, params);
@@ -610,6 +621,9 @@ export function buildRemotePriorityVisibilityOperation() {
     targetNodeId: REMOTE_PRIORITY_VISIBILITY_TARGET_NODE_ID,
     replicaId: REMOTE_PRIORITY_VISIBILITY_REPLICA_ID,
     status: ReplicaStatus.PENDING,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.PENDING, 3001),
     workflowStep: WORKFLOW_STEP.PENDING,
     createdAt: 3000,
     updatedAt: 3001,
@@ -626,6 +640,9 @@ export function buildRemotePriorityTimeoutOperation(startedAtMs) {
     targetNodeId: REMOTE_PRIORITY_TIMEOUT_TARGET_NODE_ID,
     replicaId: REMOTE_PRIORITY_TIMEOUT_REPLICA_ID,
     status: ReplicaStatus.PENDING,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.CREATING, startedAtMs),
     workflowStep: WORKFLOW_STEP.CREATING,
     createdAt: startedAtMs,
     updatedAt: startedAtMs,
@@ -644,6 +661,9 @@ export function buildRemotePriorityDispatchPendingOperation(
     targetNodeId: REMOTE_PRIORITY_DISPATCH_PENDING_TARGET_NODE_ID,
     replicaId: REMOTE_PRIORITY_DISPATCH_PENDING_REPLICA_ID,
     status: ReplicaStatus.PENDING,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.PENDING, progressAtMs),
     workflowStep: WORKFLOW_STEP.PENDING,
     createdAt: progressAtMs,
     updatedAt: progressAtMs,

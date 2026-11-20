@@ -1,3 +1,8 @@
+import {
+  completeServicesFixtureRead,
+  installCommittedOperationMutationFixture,
+  installServicesAuthorityFixture,
+} from './operation-outcome-fixture.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -613,6 +618,7 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
     },
   });
 
+  installCommittedOperationMutationFixture(coordinator.controlPlaneSystemTableGateway);
   try {
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
@@ -900,26 +906,23 @@ async function runPriorityAddAuthoritativeDrainProbe(options) {
       coordinator.repository.getActualReplicaObservation = async () =>
         options.stubObservation({cachedActiveTarget, replicaId, partitionId});
     } else if (options.stubObservedRow) {
-      coordinator.repository.readAuthoritativeReplicaRowForObservation =
-        async () => ({
-          observedRow: options.stubObservedRow({
-            cachedActiveTarget, replicaId, partitionId,
-          }),
-          authoritativeReadAttempted: true,
-          authoritativeReadFailed: false,
+      coordinator.repository.getActualReplicaObservation = async () => {
+        const row = options.stubObservedRow({
+          cachedActiveTarget, replicaId, partitionId,
         });
-    } else {
-      const baseRead = coordinator.controlPlaneSystemTableGateway
-        .readAuthoritativeRows.bind(coordinator.controlPlaneSystemTableGateway);
-      coordinator.controlPlaneSystemTableGateway.readAuthoritativeRows =
-        async (tableName, sql, params) => {
-          if (sql.includes('FROM services')) {
-            return options.readServices({
-              cachedActiveTarget, replicaId, partitionId,
-            });
-          }
-          return baseRead(tableName, sql, params);
+        return {
+          state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+          source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+          lifecycleStatus: coordinator.repository.normalizeObservedReplicaLifecycle(row),
+          observedTargetIdentity: coordinator.repository.buildObservedReplicaTargetIdentity(row),
+          lifecyclePrecondition: Object.freeze({}),
         };
+      };
+    } else {
+      installServicesAuthorityFixture(
+        coordinator.controlPlaneSystemTableGateway,
+        () => options.readServices({cachedActiveTarget, replicaId, partitionId}),
+      );
     }
     const operation = await coordinator.getOperation(operationId);
     const decisionSnapshot = Object.freeze({completion});
@@ -958,35 +961,26 @@ async (t) => {
     },
     {
       label: 'authoritative CREATING',
-      readServices: async ({cachedActiveTarget}) => ({
-        success: true,
-        rows: [{...cachedActiveTarget, status: ReplicaStatus.CREATING}],
-      }),
+      readServices: async ({cachedActiveTarget}) =>
+        completeServicesFixtureRead([{...cachedActiveTarget, status: ReplicaStatus.CREATING}]),
     },
     {
       label: 'authoritative ACTIVE on wrong node_id',
-      readServices: async ({cachedActiveTarget}) => ({
-        success: true,
-        rows: [{...cachedActiveTarget, node_id: 'other-node-99'}],
-      }),
+      readServices: async ({cachedActiveTarget}) =>
+        completeServicesFixtureRead([{...cachedActiveTarget, node_id: 'other-node-99'}]),
     },
     {
       label: 'authoritative ACTIVE on wrong partition_id',
-      readServices: async ({cachedActiveTarget}) => ({
-        success: true,
-        rows: [{...cachedActiveTarget, partition_id: 'other-partition-p1'}],
-      }),
+      readServices: async ({cachedActiveTarget}) =>
+        completeServicesFixtureRead([{...cachedActiveTarget, partition_id: 'other-partition-p1'}]),
     },
     {
       label: 'authoritative ACTIVE on wrong replica_id',
-      readServices: async ({cachedActiveTarget}) => ({
-        success: true,
-        rows: [{
-          ...cachedActiveTarget,
-          service_id: 'other-replica-r99',
-          replica_id: 'other-replica-r99',
-        }],
-      }),
+      readServices: async ({cachedActiveTarget}) => completeServicesFixtureRead([{
+        ...cachedActiveTarget,
+        service_id: 'other-replica-r99',
+        replica_id: 'other-replica-r99',
+      }]),
     },
   ];
 
@@ -1010,10 +1004,8 @@ async (t) => {
     }
   }
 
-  const exactActiveRead = async ({cachedActiveTarget}) => ({
-    success: true,
-    rows: [{...cachedActiveTarget}],
-  });
+  const exactActiveRead = async ({cachedActiveTarget}) =>
+    completeServicesFixtureRead([{...cachedActiveTarget}]);
 
   // Live remote owner refuses non-owner completion even with authoritative ACTIVE.
   for (const completionState of [
@@ -1069,7 +1061,7 @@ async function assertAdversarialRowsRejected(
         emptyCache,
         localOwner: false,
         ownerUnavailable: true,
-        readServices: async (ctx) => ({success: true, rows: [buildRow(ctx)]}),
+        readServices: async (ctx) => completeServicesFixtureRead([buildRow(ctx)]),
       });
       t.equal(viaGateway.settled, false,
         `${entrypoint}/${completionState} (emptyCache=${emptyCache}) rejects ${label}`);
@@ -1132,10 +1124,8 @@ async function assertExactTargetOwnershipPolarity(
   t, entrypoint, completionState,
 ) {
   for (const stateEnteredAt of [null, 1700000000000]) {
-    const exactRowRead = async ({cachedActiveTarget}) => ({
-      success: true,
-      rows: [{...cachedActiveTarget, state_entered_at: stateEnteredAt}],
-    });
+    const exactRowRead = async ({cachedActiveTarget}) =>
+      completeServicesFixtureRead([{...cachedActiveTarget, state_entered_at: stateEnteredAt}]);
     const validDeadOwner = await runPriorityAddAuthoritativeDrainProbe({
       entrypoint,
       completionState,

@@ -1,4 +1,4 @@
-import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
+import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -29,6 +29,10 @@ const {
   normalizeNodeIdList,
 } = SHARED;
 
+const AUTHORITATIVE_REMOTE_REENTRY = Object.freeze({
+  requireExactPriorityRecoveryReentry: true,
+});
+
 const HAND_BACK_VERDICT_SEPARATOR = '|';
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
@@ -40,16 +44,6 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   OWNER_LANE_HELD: 'owner_lane_held',
   REMOTE_RETRY_ACTIVE: 'remote_retry_active',
   REENTER: 'reenter',
-});
-
-const PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD = Object.freeze({
-  CONDITIONS: 'conditions',
-  LATEST_OPERATION_STATUS: 'latestOperationStatus',
-  LATEST_OPERATION_WORKFLOW_STEP: 'latestOperationWorkflowStep',
-  LATEST_TIMELINE_STATUS: 'latestTimelineStatus',
-  LATEST_TIMELINE_STEP: 'latestTimelineStep',
-  STATUS: 'status',
-  WORKFLOW_STEP: 'workflowStep',
 });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION = Object.freeze({
@@ -238,6 +232,7 @@ function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
       decisionSnapshot,
     );
   return owner.operationWorkflowOwnerPorts.wakeRemoteOwner(operation, {
+    ...AUTHORITATIVE_REMOTE_REENTRY,
     nowMs: capturedAtMs ?? Date.now(),
   });
 }
@@ -278,7 +273,8 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
         .RECONCILE_STALE_PROGRESS,
       (owner, operation) =>
-        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(operation),
+        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(
+          operation, AUTHORITATIVE_REMOTE_REENTRY),
     ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
@@ -306,51 +302,22 @@ function selectPriorityRecoveryDispatchPendingReentryOperation(
       snapshot?.operationId ||
       OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
   ).trim();
-  const operationRecords = Array.isArray(operations) ? operations : [];
-  const matchingOperation = operationRecords.find((operation) => {
-    return (
-      operation &&
-      typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
-      operation.operationId === snapshotOperationId
-    );
-  });
-  if (matchingOperation) {
-    return matchingOperation;
-  }
-  const snapshotOperation = snapshot?.coordinator?.operation || null;
-  if (
-    !snapshotOperation ||
-    typeof snapshotOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
-    snapshotOperationId.length === 0
-  ) {
-    return null;
-  }
-  const snapshotConditions =
-    snapshot?.[
-      PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.CONDITIONS
-    ] || {};
-  const field = PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD;
-  // The snapshot's named sources in authority order; a state none of them
-  // carries is left off the operation.
-  const workflowStep = readStateField(
-    snapshotOperation[field.WORKFLOW_STEP],
-    snapshotOperation[field.LATEST_TIMELINE_STEP],
-    snapshotConditions[field.LATEST_OPERATION_WORKFLOW_STEP],
-  );
-  const status = readStateField(
-    snapshotOperation[field.STATUS],
-    snapshotOperation[field.LATEST_TIMELINE_STATUS],
-    snapshotConditions[field.LATEST_OPERATION_STATUS],
-  );
-  return Object.freeze({
-    ...snapshotOperation,
-    operationId: snapshotOperationId,
-    ...(workflowStep === STATE_ABSENT ? {} : {workflowStep: workflowStep.trim()}),
-    ...(status === STATE_ABSENT ? {} : {status: status.trim()}),
-    createdAt: snapshotOperation.createdAtMs,
-    updatedAt: snapshotOperation.updatedAtMs,
-    completedAt: snapshotOperation.completedAtMs,
-  });
+  if (!snapshotOperationId || !Array.isArray(operations)) return null;
+  const snapshotOperation = snapshot?.coordinator?.operation;
+  const partitionId = snapshot?.partitionId;
+  // Planning snapshots have only routing and progress diagnostics. Reentry
+  // requires the matching live operation with its durable history.
+  return operations.find((operation) =>
+    typeof partitionId === 'string' &&
+    operation?.operationId === snapshotOperationId &&
+    operation.partitionId === partitionId &&
+    operation.completedAt === null &&
+    Array.isArray(operation.stepsHistory) &&
+    (snapshotOperation?.targetNodeId == null ||
+      operation.targetNodeId === snapshotOperation.targetNodeId) &&
+    (snapshotOperation?.replicaId == null ||
+      operation.replicaId === snapshotOperation.replicaId),
+  ) || null;
 }
 
 function buildPriorityRecoveryDispatchPendingReentryEvidence(
@@ -470,6 +437,7 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
     return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
       operation,
       TRANSITION_RETRY_DELAY_MS,
+      AUTHORITATIVE_REMOTE_REENTRY,
     );
   }
   if (
@@ -958,21 +926,34 @@ function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
   );
 }
 
-function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
+async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   owner,
   operation,
   decisionSnapshot,
   options,
 ) {
+  // The local arm already reads the operation inside its owner lane.
+  // An observer's queued remote handoff has no such preflight: the ledger may
+  // have settled or replaced its routing tuple while the work was queued.
+  let current = operation;
+  if (!owner.repository.isOperationLocallyOwned(operation)) {
+    const observation = await observeRemoteReentryAuthority(owner.repository, operation);
+    if (observation.deferredOutcome) {
+      return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+        operation, TRANSITION_RETRY_DELAY_MS, AUTHORITATIVE_REMOTE_REENTRY);
+    }
+    current = observation.operation;
+    if (!current || current.workflowStep !== operation.workflowStep) return false;
+  }
   const action = resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
     owner,
-    operation,
+    current,
     decisionSnapshot,
     options,
   );
   return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER.get(action)(
     owner,
-    operation,
+    current,
     decisionSnapshot,
   );
 }

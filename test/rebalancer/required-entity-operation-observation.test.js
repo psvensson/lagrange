@@ -86,7 +86,7 @@ for (const retained of [false, true]) {
     const blocker = await f.rebalancer.revalidateCriticalSystemTopologySettlingBlocker(null);
     t.equal(blocker?.reason, 'unavailable', 'actual topology consumer keeps the refusal');
     t.ok(f.reads >= 4, 'all paths used the actual operation read owner');
-    f.setResult({success: true, rows: f.rows});
+    f.setResult({success: true, rowSetComplete: true, rows: f.rows});
     const recovered = await f.coordinator.getEntityAuthoritativeOperationObservation(
       ENTITY.entityType, ENTITY.entityId);
     t.equal(recovered.deferredOutcome, null);
@@ -190,9 +190,77 @@ test('replica ID allocation and retired-source safety retain required-read refus
     replicaId: `${ENTITY.entityId}-r4`, sourceReplicaId: `${ENTITY.entityId}-r1`,
     sourceNodeId: 'node-1', nodeId: 'node-3'};
   await t.rejects(f.coordinator.getRetiredReplaceSourceMoveSafetyError(move), REFUSAL);
-  f.setResult({success: true, rows: []});
+  f.setResult({success: true, rowSetComplete: true, rows: []});
   t.match(await f.coordinator.allocateCanonicalReplicaId({...ENTITY, partitionId: ENTITY.entityId}), /-r1$/);
   t.equal(await f.coordinator.getRetiredReplaceSourceMoveSafetyError(move), null);
+});
+
+test('explicitly incomplete census cannot acquire contained-pressure permission', async (t) => {
+  const f = fixture(t);
+  const {coordinator} = f;
+  coordinator.getLocalRouterPressureDecision = () => ({
+    summary: {backpressured: true},
+  });
+  const readForRecovery = () => coordinator.getEntityRecoveryOperationObservation(
+    ENTITY.entityType, ENTITY.entityId,
+  );
+  const bounded = await readForRecovery();
+  t.equal(bounded.boundedDeferredVisibility, true,
+    'without evidence of incomplete membership, the established pressure owner can bound refusal');
+
+  const partialOwnerRow = {
+    operation_id: 'partial-owner-op',
+    type: OperationType.ADD,
+    entity_type: ENTITY.entityType,
+    entity_id: ENTITY.entityId,
+    partition_id: ENTITY.entityId,
+    replica_id: `${ENTITY.entityId}-r4`,
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    workflow_step: 'CREATING',
+    status: 'creating',
+    created_at: 10,
+    updated_at: 10,
+    completed_at: null,
+    steps_history: '[]',
+  };
+  const incomplete = {
+    ...REFUSAL, reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE
+      .ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+  };
+  for (const rows of [[], [partialOwnerRow]]) {
+    f.setResult({success: true, rowSetComplete: false, rows});
+    const observation = await readForRecovery();
+    t.equal(observation.state, 'deferred');
+    t.equal(observation.deferredOutcome?.reasonCode, incomplete.reasonCode);
+    t.notOk(observation.boundedDeferredVisibility,
+      `${rows.length} partial rows cannot supply bounded pressure permission`);
+    await t.rejects(
+      coordinator.getOperationsByEntity(ENTITY.entityType, ENTITY.entityId, REQUIRED),
+      incomplete,
+    );
+    const guard = await coordinator.buildTopologyGuardSnapshot({
+      ...ENTITY, partitionId: ENTITY.entityId, normalizedMoveType: OperationType.ADD,
+      move: {nodeId: 'node-3', enforceConcurrentOperationBudget: true},
+    });
+    t.equal(guard.admissionResult?.allowed, false, 'partial census cannot authorize placement');
+  }
+
+  f.setResult({success: true, rowSetComplete: false, rows: [null]});
+  await t.rejects(readForRecovery(), {
+    ...REFUSAL,
+    reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED,
+  });
+
+  let resolveQueuedRead;
+  f.setResult(new Promise((resolve) => {
+    resolveQueuedRead = resolve;
+  }));
+  const queuedRead = readForRecovery();
+  resolveQueuedRead({success: true, rowSetComplete: true, rows: []});
+  const restored = await queuedRead;
+  t.equal(restored.state, 'empty', 'a later complete owner read can establish genuine absence');
+  t.equal(restored.deferredOutcome, null);
 });
 
 test('malformed gateway members cannot turn into empty or bounded recovery permission', async (t) => {
