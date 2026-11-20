@@ -41,10 +41,13 @@ const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
 const TEST_FIRST_CONNECTION_COUNT = 1;
 const TEST_QUERY_RESULT_COUNT = 1;
 
-async function withTestAdminWebSocketNode(onConnection, options, callback) {
+async function withTestAdminWebSocketNode(
+  onConnection, options, callback, serverOptions = {},
+) {
   const server = new WebSocketServer({
     host: TEST_ADMIN_HOST,
     port: TEST_ADMIN_PORT_ANY,
+    ...serverOptions,
   });
   await new Promise((resolve, reject) => {
     server.once('listening', resolve);
@@ -80,6 +83,182 @@ async function withTestAdminWebSocketNode(onConnection, options, callback) {
     });
   }
 }
+
+const CONNECTION_BUDGET_MS = 5000;
+const PEER_BUDGET_MS = 10000;
+
+function observeAdminQueries(socket, onQuery) {
+  socket.on('message', (data) => {
+    const query = JSON.parse(data.toString());
+    onQuery(query, () => socket.send(JSON.stringify({
+      type: TEST_QUERY_RESULT_MESSAGE_TYPE,
+      queryId: query.queryId,
+      results: [{sql: query.sql}],
+    })));
+  });
+}
+
+test('Unit: NodeHandle refuses to send after a shared handshake spends its request deadline',
+  async () => {
+    const opening = Promise.withResolvers();
+    const forwarded = [];
+    let elapsedMs = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      observeAdminQueries(socket, (query, answer) => {
+        forwarded.push({sql: query.sql, timeoutMs: query.timeoutMs});
+        answer();
+      });
+    }, {adminRequestNow: () => elapsedMs}, async (node) => {
+      const realNow = Date.now;
+      const startedAt = realNow();
+      let wallClockMs = startedAt;
+      Date.now = () => wallClockMs;
+      try {
+        const results = Promise.allSettled([
+          node.queryWithTimeout('SELECT expired', [], {timeoutMs: CONNECTION_BUDGET_MS}),
+          node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS}),
+        ]);
+        const open = await opening.promise;
+        // Run the actual opening callback after the short budget has expired
+        // while its timer is queued and the wall clock has moved backwards.
+        elapsedMs = CONNECTION_BUDGET_MS + 1;
+        wallClockMs -= CONNECTION_BUDGET_MS;
+        open(true);
+        const [expired, peer] = await results;
+        assert.equal(expired.status, 'rejected');
+        assert.match(expired.reason.message, /timed out/i);
+        assert.equal(peer.status, 'fulfilled');
+        assert.deepEqual(peer.value.rows, [{sql: 'SELECT peer'}]);
+        assert.deepEqual(forwarded, [{
+          sql: 'SELECT peer',
+          timeoutMs: PEER_BUDGET_MS - elapsedMs,
+        }]);
+        const expiry = node.getAdminQueryTraceSnapshot()
+          .find(({statementPreview}) => statementPreview === 'SELECT expired');
+        assert.equal(expiry.outcome, 'timeout');
+        assert.equal(expiry.sentAtMs, null);
+        assert.equal(expiry.durationMs, elapsedMs);
+      } finally {
+        Date.now = realNow;
+      }
+    }, {verifyClient: (_request, open) => opening.resolve(open)});
+  });
+
+test('Unit: NodeHandle rejects an actual delivered response after its original deadline',
+  async () => {
+    const sent = Promise.withResolvers();
+    const held = new Map();
+    let elapsedMs = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      observeAdminQueries(socket, (query, answer) => {
+        held.set(query.sql, answer);
+        if (held.size === 2) sent.resolve();
+      });
+    }, {adminRequestNow: () => elapsedMs}, async (node) => {
+      const results = Promise.allSettled([
+        node.queryWithTimeout('SELECT late', [], {timeoutMs: CONNECTION_BUDGET_MS}),
+        node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS}),
+      ]);
+      await sent.promise;
+      elapsedMs = CONNECTION_BUDGET_MS + 1;
+      held.get('SELECT late')();
+      held.get('SELECT peer')();
+      const [late, peer] = await results;
+      assert.equal(late.status, 'rejected');
+      assert.match(late.reason.message, /timed out/i);
+      assert.equal(peer.status, 'fulfilled');
+      assert.deepEqual(peer.value.rows, [{sql: 'SELECT peer'}]);
+      const expiry = node.getAdminQueryTraceSnapshot()
+        .find(({statementPreview}) => statementPreview === 'SELECT late');
+      assert.equal(expiry.outcome, 'timeout');
+      assert.ok(Number.isFinite(expiry.sentAtMs));
+      assert.equal(expiry.resolvedAtMs, null);
+    });
+  });
+
+test('Unit: NodeHandle request timer detaches only the expired query on a shared lane',
+  async () => {
+    const sent = Promise.withResolvers();
+    const held = new Map();
+    let connections = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      connections += 1;
+      observeAdminQueries(socket, (query, answer) => {
+        if (query.sql === 'SELECT warm' || query.sql === 'SELECT followup') {
+          answer();
+        } else {
+          held.set(query.sql, answer);
+          if (held.size === 2) sent.resolve();
+        }
+      });
+    }, {}, async (node) => {
+      await node.query('SELECT warm');
+      const short = assert.rejects(node.queryWithTimeout('SELECT expired', [], {
+        timeoutMs: ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+      }), /timed out/i);
+      const peer = node.queryWithTimeout('SELECT peer', [], {timeoutMs: PEER_BUDGET_MS});
+      // Preserve its rejection on the known-bad implementation while checking
+      // the independent request timer and then permitting the peer to reply.
+      const peerOutcome = Promise.allSettled([peer]);
+      await sent.promise;
+      await short;
+      held.get('SELECT expired')();
+      held.get('SELECT peer')();
+      const [survivor] = await peerOutcome;
+      assert.equal(survivor.status, 'fulfilled');
+      assert.deepEqual(survivor.value.rows, [{sql: 'SELECT peer'}]);
+      assert.deepEqual((await node.query('SELECT followup')).rows,
+        [{sql: 'SELECT followup'}]);
+      assert.equal(connections, 1);
+      assert.equal(node._getPendingQueries('default').size, 0);
+    });
+  });
+
+test('Unit: NodeHandle retires an opening attempt without replacing its successor socket',
+  async () => {
+    const forwarded = [];
+    let connections = 0;
+    await withTestAdminWebSocketNode((socket) => {
+      connections += 1;
+      observeAdminQueries(socket, (query, answer) => {
+        forwarded.push(query.sql);
+        answer();
+      });
+    }, {}, async (node) => {
+      const expired = assert.rejects(node.queryWithTimeout('SELECT retired', [],
+        {lane: TEST_SNAPSHOT_LANE}), /connection reset/i);
+      node._resetAdminSocket(TEST_SNAPSHOT_LANE);
+      const successor = node.queryWithTimeout('SELECT successor', [],
+        {lane: TEST_SNAPSHOT_LANE});
+      const [, result] = await Promise.all([expired, successor]);
+      assert.deepEqual(result.rows, [{sql: 'SELECT successor'}]);
+      assert.deepEqual(forwarded, ['SELECT successor']);
+      assert.equal(connections, 1);
+      assert.equal(node._getPendingQueries(TEST_SNAPSHOT_LANE).size, 0);
+    });
+  });
+
+test('Unit: NodeHandle encoding failure only rejects the malformed request',
+  async () => {
+    const peerHeld = Promise.withResolvers();
+    await withTestAdminWebSocketNode((socket) => {
+      observeAdminQueries(socket, (query, answer) => {
+        assert.equal(query.sql, 'SELECT peer');
+        peerHeld.resolve(answer);
+      });
+    }, {}, async (node) => {
+      const peer = node.query('SELECT peer');
+      const peerOutcome = Promise.allSettled([peer]);
+      const answerPeer = await peerHeld.promise;
+      await assert.rejects(node.queryWithTimeout('SELECT malformed', [1n]),
+        /serialize a BigInt/i);
+      answerPeer();
+      const [survivor] = await peerOutcome;
+      assert.equal(survivor.status, 'fulfilled');
+      assert.deepEqual(survivor.value.rows, [{sql: 'SELECT peer'}]);
+      assert.equal(node._getPendingQueries('default').size, 0);
+    });
+  });
 
 test('Unit: NodeHandle reads process memory from the node diagnostics owner',
   async () => {
@@ -182,7 +361,7 @@ test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
   let capturedQuery = null;
   await withTestAdminWebSocketNode(
     (socket) => {
-      socket.once('message', (data) => {
+      socket.on('message', (data) => {
         capturedQuery = JSON.parse(data.toString());
         socket.send(JSON.stringify({
           type: 'query_result',
@@ -192,14 +371,19 @@ test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
         }));
       });
     },
-    {adminQueryTimeoutMs: 4321},
+    {adminQueryTimeoutMs: 4321, adminRequestNow: () => 0},
     async (node) => {
       await node.query('SELECT 1');
       assert.strictEqual(
         capturedQuery.timeoutMs,
         4321,
-        'query() should inherit the injected default admin timeout',
+        'without elapsed time query() forwards the configured default',
       );
+      await node._sendAdminRequest({
+        type: 'query', sql: 'SELECT 1', timeoutMs: 120,
+      }, 'query', {timeoutMs: CONNECTION_BUDGET_MS});
+      assert.strictEqual(capturedQuery.timeoutMs, 120,
+        'an explicit shorter server cap remains in force');
     },
   );
 });
@@ -427,11 +611,9 @@ test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
       assert.strictEqual(traces.length, 1, 'timeout query should capture one trace');
       const trace = traces[0];
       assert.strictEqual(trace.queryId, capturedQuery.queryId);
-      assert.strictEqual(
-        capturedQuery.timeoutMs,
-        ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-        'query payload should include the per-request timeout override',
-      );
+      assert.ok(capturedQuery.timeoutMs > 0 &&
+        capturedQuery.timeoutMs <= ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+      'query payload carries only the remaining per-request timeout grant');
       assert.strictEqual(trace.lane, 'default');
       assert.strictEqual(trace.operation, 'query');
       assert.strictEqual(trace.outcome, 'timeout');
