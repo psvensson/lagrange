@@ -554,14 +554,20 @@ composed review have distinct records.
 [Managed native originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-native-8281e61d-5487-nov20.tar.gz).
 
 Continue from the existing [Quest log](../../quests/strict-operation-outcomes/log.ndjson).
-At `d4f4c69cd` independent review approved the complete entity census,
-partial-read pressure handling and newly armed dispatch-pending timer.
-The workflow owner is now testing an ordinary timer that was already armed
-when strict reentry joined it, and the remote target-progress wake after
-planning. Release the timer while the exact row is withheld, then restore
-the row and observe the same logical operation wake. The integration
-owner is checking the affected dispatch, reservation and recovery suites
-on `58ec69a2a`.
-[Latest original controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--workflow-wake-strict-census-and-growth-d4f-nov20.tar.gz).
-The integration owner admits the remaining receipt rows after their original
-controls, classified checks and independent review are complete.
+The managed rolling-restart witness at `3892d4372` used the production
+row builder and a real SQLite owner read. The correct queued handoff woke,
+and both absent and wrong-replica rows produced zero deliveries.
+Independent review approved the queued handoff and the retained re-drive
+extraction. The seven affected files passed 1,230 assertions.
+[Rolling and re-drive originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--rolling-real-sql-and-redrive-extraction-nov21.tar.gz).
+
+The creation owner now owns a separate outstanding decision. Requests with
+different targets can join the same in-progress creation before its first
+insert, or receive an old holder from a cache after an unavailable read.
+Preserve one durable operation per constrained entity and require evidence
+for each request's exact intent before reporting its successful replay.
+The integration owner must rerun the affected classified selection on the
+resulting composition, then bind the remaining receipt rows to original
+execution and independent review. The historical policy controls already
+have original named TAP and native identities from jobs 5491 through 5493.
+[Historical policy controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-native-historical-controls-5491-5493-nov20.tar.gz).

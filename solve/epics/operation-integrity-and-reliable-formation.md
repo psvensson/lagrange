@@ -345,6 +345,16 @@ The management guard recorded zero calls on each node. Physical formation,
 the subsequent smoke and the Lagrange GCP measurement remain open.
 [Original failed public journey and worker logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-formation-af9-nov20.tar.gz).
 
+At `471a8e1f7`, the join factory handed publication to the caller.
+The same public check passed on tv-dator in 38.839 seconds with 20
+assertions and zero admin snapshot calls in all three processes.
+The native controls exercised successful handoff, a concurrent replacement
+and a rejected CDC subscription after the partition opened. The construction
+owners still owe rejection of a factory that omits the handoff, the updated
+constructor census, and independent review before composed fleet acceptance.
+[Public SQL original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-join-construction-471-nov21.tar.gz)
+and [native construction and snapshot controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--join-publication-and-compaction-controls-471-nov21.tar.gz).
+
 After repairing startup, run `e068cbdc` first observed six-partition spread at
 36.629 seconds; run `57e4db30` observed it at 90.548 seconds. Each run
 started 46 system partitions with a configured replica count of three. For
