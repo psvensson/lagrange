@@ -1,4 +1,10 @@
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {getOperationMetadataObject} from './replica-status.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
@@ -12,6 +18,7 @@ const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   NUM,
+  OPERATION_METADATA_KEY,
   OperationType,
   PRIORITY_RECENT_INTENT_TTL_MS,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -30,7 +37,6 @@ const REUSED_OPERATION_REARM_ACTION = Object.freeze({
   SKIP_LIVE_DEFERRED_RETRY: 'skip_live_deferred_retry',
   REARM_DISPATCH: 'rearm_dispatch',
 });
-const LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN = 'Failed to refresh recent operation intent from cache-visible state';
 const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES = new Set([
   OperationType.ADD,
   OperationType.REPLACE,
@@ -140,120 +146,205 @@ class RebalanceCoordinatorOperationIntentMethods {
     }
 
     if (moveType === OperationType.REPLACE) {
-      return this.getReplaceSourceReplicaId(operation) === move.replicaId;
+      return this.getReplaceSourceReplicaId(operation) ===
+        (move.sourceReplicaId || move.replicaId);
     }
 
     return true;
   }
 
+  assertCreationRequestEpoch(move) {
+    return assertMembershipPublicationEpochBinding(move.membershipPublicationEpoch, {
+      source: 'coordinator creation request',
+      operationId: move.operationIntentId,
+    });
+  }
+
+  buildPlacementCreationIntent(operation, move) {
+    const metadata = getOperationMetadataObject(
+      operation?.stepsHistory, OPERATION_METADATA_KEY.PLACEMENT_ADMISSION,
+    );
+    return typeof metadata?.entryId === 'string' ? Object.freeze({
+      entryId: metadata.entryId,
+      operationIntentId: move.operationIntentId || null,
+    }) : null;
+  }
+
+  operationMatchesCreationRequest(operation, move, placementIntent = null) {
+    const moveType = this.normalizeMoveType(move.type);
+    const explicitTargetReplicaId = moveType === OperationType.ADD ?
+      move.replicaId || move.replicaIntentId :
+      move.replicaIntentId || (move.sourceReplicaId ? move.replicaId : null);
+    const epoch = this.assertCreationRequestEpoch(move);
+    const placementEntry = this.buildPlacementCreationIntent(operation, move);
+    const exactPlacementIntent = placementIntent && placementEntry &&
+      placementEntry.entryId === placementIntent.entryId &&
+      placementIntent.operationIntentId === (move.operationIntentId || null);
+    return operation.partitionId === move.partitionId &&
+      this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
+      (!move.entryId || placementEntry?.entryId === move.entryId) &&
+      (!move.operationIntentId || operation.operationId === move.operationIntentId ||
+        exactPlacementIntent) &&
+      (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
+      (!Object.hasOwn(move, 'targetClaimKey') ||
+        operation.targetClaimKey === move.targetClaimKey) &&
+      (epoch.state === MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND ||
+        operation.membershipPublicationEpoch === epoch.epoch) &&
+      (moveType !== OperationType.REPLACE ||
+        operation.sourceNodeId === (move.sourceNodeId || this.nodeId));
+  }
+
+  async refuseConflictingCreation(operation, move) {
+    const moveType = this.normalizeMoveType(move.type);
+    if (this.isDisruptiveOperationLedgerSelfMove(moveType, move.partitionId)) {
+      await this.assertNoRegisteredLedgerSelfMove([operation], moveType, move.partitionId);
+    }
+    throw this.createConcurrentOperationBudgetError(moveType, 1, {
+      message: `Partition ${move.partitionId} already has a different create intent`,
+      conflictingOperationId: operation.operationId,
+    });
+  }
+
+  async resolveKnownCreationOperation(candidate, move, {
+    allowAbsent = false,
+    retireRecentHint = false,
+    placementIntent = null,
+  } = {}) {
+    if (!candidate) return null;
+    const observation = await this.observeExactCreationOperation(candidate.operationId);
+    const operation = observation.operation;
+    if (operation) {
+      let sameSubject = false;
+      try {
+        assertOperationUpdateSubject(candidate, operation);
+        sameSubject = operation.createdAt === candidate.createdAt &&
+          operation.replicaId === candidate.replicaId &&
+          (operation.membershipPublicationEpoch ?? null) ===
+            (candidate.membershipPublicationEpoch ?? null);
+      } catch {
+        // A foreign row cannot settle this caller's request.
+      }
+      if (sameSubject) {
+        if (this.isRecentOperationIntentTerminal(operation)) {
+          if (retireRecentHint || allowAbsent) {
+            this.pruneRecentOperationIntentsForOperation(operation);
+            return null;
+          }
+          if (operation.workflowStep === WORKFLOW_STEP.FAILED) {
+            throw this.createDeferredOperationVisibilityError(
+              this.normalizeMoveType(move.type), observation, move,
+            );
+          }
+        }
+        if (!this.operationMatchesCreationRequest(operation, move, placementIntent)) {
+          return this.refuseConflictingCreation(operation, move);
+        }
+        return operation;
+      }
+    }
+    if (!operation && !observation.deferredOutcome) {
+      if (allowAbsent) return null;
+      if (retireRecentHint) {
+        const census = await this.inspectRecentOperationIntentEntityVisibility(candidate);
+        if (census.state === RECENT_OPERATION_INTENT_VISIBILITY_STATE.MISSING ||
+            (census.operation && this.isRecentOperationIntentTerminal(census.operation))) {
+          this.pruneRecentOperationIntentsForOperation(candidate);
+          return null;
+        }
+      }
+    }
+    if (!this.operationMatchesCreationRequest(candidate, move, placementIntent)) {
+      return this.refuseConflictingCreation(candidate, move);
+    }
+    throw this.createDeferredOperationVisibilityError(
+      this.normalizeMoveType(move.type), observation, move,
+    );
+  }
+
+  async runCreateOperationForIntent(context) {
+    const {singleFlightKey, canonicalMove, moveForCreate, replaceIntentIdentity,
+      dedupeKey, criticalAddLikeIntentKey} = context;
+    for (const allowOneRetry of [true, false]) {
+      let factoryRan = false;
+      const result = await this.operationWorkflowRunExclusive(singleFlightKey, async () => {
+        factoryRan = true;
+        let attemptedOperation = null;
+        try {
+          for (const key of new Set([dedupeKey, criticalAddLikeIntentKey])) {
+            if (!key) continue;
+            const recent = await this.getRecentOperationIntent(key);
+            const reusable = await this.resolveKnownCreationOperation(
+              recent?.operation, canonicalMove, {
+                retireRecentHint: true,
+                placementIntent: recent?.placementIntent,
+              },
+            );
+            if (!reusable) continue;
+            const {placementIntent} = recent;
+            this.rememberOperationIntents(
+              [dedupeKey, criticalAddLikeIntentKey], reusable, placementIntent,
+            );
+            const operation = await this.maybeRearmReusedPendingOperation(reusable);
+            return {operation, attemptedOperation, placementIntent, error: null};
+          }
+          const operation =
+            await this.runOperationLedgerInterlockAccountedCreate(moveForCreate, () =>
+              this.createOperationInternal(moveForCreate, {
+                replaceIntentIdentity,
+                requestedMove: canonicalMove,
+                observeAttempt: (candidate) => {
+                  attemptedOperation = candidate;
+                },
+              }),
+            );
+          const placementIntent = this.buildPlacementCreationIntent(operation, canonicalMove);
+          return {operation, attemptedOperation, placementIntent, error: null};
+        } catch (error) {
+          return {operation: null, attemptedOperation, error};
+        }
+      });
+      if (factoryRan) {
+        if (result.error) throw result.error;
+        return result.operation;
+      }
+      const existing = await this.resolveKnownCreationOperation(
+        result.operation || result.attemptedOperation, canonicalMove,
+        {allowAbsent: result.error !== null, placementIntent: result.placementIntent},
+      );
+      if (existing) {
+        if (result.error) await this.ensureReservationForOperation(existing);
+        return this.maybeRearmReusedPendingOperation(existing);
+      }
+      if (!allowOneRetry) {
+        throw this.createDeferredOperationVisibilityError(
+          this.normalizeMoveType(canonicalMove.type), null, canonicalMove,
+        );
+      }
+    }
+  }
+
   /**
    * Get a recently remembered operation intent.
    * @param {string} dedupeKey - Intent key.
-   * @return {Object|null} Cached operation or null.
+   * @return {Object|null} Recent operation hint or null.
    * @private
    */
-  async getRecentOperationIntent(dedupeKey) {
+  getRecentOperationIntent(dedupeKey) {
     const cached = this.recentOperationIntents.get(dedupeKey);
-    if (!cached) {
-      return null;
-    }
-    if (cached.expiresAt <= Date.now()) {
+    if (!cached) return null;
+    if (cached.expiresAt <= Date.now() ||
+        this.isRecentOperationIntentTerminal(cached.operation)) {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
-    const cachedOperation = cached.operation;
-    if (!cachedOperation || this.isRecentOperationIntentTerminal(cachedOperation)) {
-      this.recentOperationIntents.delete(dedupeKey);
-      return null;
-    }
+    return cached;
+  }
 
-    const cachedOperationId = cachedOperation.operationId;
-    if (
-      typeof cachedOperationId !== LOCAL_STR_STRING ||
-      cachedOperationId.length === 0
-    ) {
-      this.recentOperationIntents.delete(dedupeKey);
-      return null;
-    }
-
-    let cacheVisibleOperation = null;
-    try {
-      cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
-    } catch (error) {
-      this.logger.debug(
-        LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN,
-        {
-          operationId: cachedOperationId,
-          dedupeKey,
-          error: error?.message || String(error),
-        },
-      );
-    }
-    if (
-      cacheVisibleOperation &&
-      this.isRecentOperationIntentTerminal(cacheVisibleOperation)
-    ) {
-      this.pruneRecentOperationIntentsForOperation(cacheVisibleOperation);
-      return null;
-    }
-    const operationForMissReuse =
-      cacheVisibleOperation && !this.isOperationTerminal(cacheVisibleOperation) ?
-        cacheVisibleOperation :
-        cachedOperation;
-
-    const authoritativeOperation =
-      await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      });
-    if (!authoritativeOperation) {
-      const authoritativeEntityVisibility =
-        await this.inspectRecentOperationIntentEntityVisibility(
-          operationForMissReuse,
-        );
-      if (
-        authoritativeEntityVisibility.state ===
-        RECENT_OPERATION_INTENT_VISIBILITY_STATE.MATCHING
-      ) {
-        if (this.isRecentOperationIntentTerminal(
-          authoritativeEntityVisibility.operation,
-        )) {
-          this.pruneRecentOperationIntentsForOperation(
-            authoritativeEntityVisibility.operation,
-          );
-          return null;
-        }
-        this.rememberOperationIntent(
-          dedupeKey,
-          authoritativeEntityVisibility.operation,
-        );
-        return authoritativeEntityVisibility.operation;
-      }
-      if (
-        authoritativeEntityVisibility.state ===
-        RECENT_OPERATION_INTENT_VISIBILITY_STATE.MISSING
-      ) {
-        this.pruneRecentOperationIntentsForOperation(operationForMissReuse);
-        return null;
-      }
-      if (
-        this.shouldReuseRecentOperationIntentOnAuthoritativeMiss(
-          operationForMissReuse,
-        )
-      ) {
-        this.rememberOperationIntent(dedupeKey, operationForMissReuse);
-        return structuredClone(operationForMissReuse);
-      }
-      this.recentOperationIntents.delete(dedupeKey);
-      return null;
-    }
-    if (this.isRecentOperationIntentTerminal(authoritativeOperation)) {
-      this.pruneRecentOperationIntentsForOperation(authoritativeOperation);
-      return null;
-    }
-
-    this.rememberOperationIntent(dedupeKey, authoritativeOperation);
-    return authoritativeOperation;
+  observeExactCreationOperation(operationId) {
+    return this.repository.queryAuthoritativeOperationVisibilityObservation(operationId, {
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      requireCompleteExactKey: true,
+    });
   }
 
   /**
@@ -342,15 +433,17 @@ class RebalanceCoordinatorOperationIntentMethods {
    * it back out to the next re-creating caller.
    * @param {string} dedupeKey - Intent key.
    * @param {Object} operation - Operation payload.
+   * @param {Object|null} placementIntent - Confirmed placement entry and request key.
    * @private
    */
-  rememberOperationIntent(dedupeKey, operation) {
+  rememberOperationIntent(dedupeKey, operation, placementIntent) {
     if (!operation || this.isRecentOperationIntentTerminal(operation)) {
       this.recentOperationIntents.delete(dedupeKey);
       return;
     }
     this.recentOperationIntents.set(dedupeKey, {
       operation: structuredClone(operation),
+      placementIntent,
       expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
   }
@@ -383,9 +476,10 @@ class RebalanceCoordinatorOperationIntentMethods {
    * Remember one operation under one or more intent keys.
    * @param {string[]|Set<string>} intentKeys
    * @param {Object} operation
+   * @param {Object|null} [placementIntent]
    * @private
    */
-  rememberOperationIntents(intentKeys, operation) {
+  rememberOperationIntents(intentKeys, operation, placementIntent = null) {
     const keys = Array.isArray(intentKeys) ?
       intentKeys :
       Array.from(intentKeys || []);
@@ -393,7 +487,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       if (typeof key !== LOCAL_STR_STRING || key.length === 0) {
         continue;
       }
-      this.rememberOperationIntent(key, operation);
+      this.rememberOperationIntent(key, operation, placementIntent);
     }
   }
 

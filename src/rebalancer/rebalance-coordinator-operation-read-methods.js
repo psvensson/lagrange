@@ -338,13 +338,16 @@ class RebalanceCoordinatorOperationReadMethods {
     move,
     options = {},
   ) {
+    const matchesMove = options.requireCompleteRows === true ?
+      (operation, requestedMove) => this.operationMatchesCreationRequest(operation, requestedMove) :
+      this.operationMatchesMoveIntent.bind(this);
     return this.repository.queryExistingInFlightOperation(
       partitionId,
       targetNodeId,
       entityType,
       entityId,
       move,
-      this.operationMatchesMoveIntent.bind(this),
+      matchesMove,
       options,
     );
   }

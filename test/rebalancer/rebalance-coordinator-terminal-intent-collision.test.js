@@ -16,6 +16,8 @@
  * as do REPLACE-identity creators (successor generation).
  */
 import {test} from '../../src/test-helpers/tap.js';
+import {applyRebalanceCoordinatorOperationIntentMethods} from
+  '../../src/rebalancer/rebalance-coordinator-operation-intent-methods.js';
 import {
   applyRebalanceCoordinatorOperationPersistenceCollisionMethods,
 } from
@@ -29,6 +31,7 @@ const INTENT_ID = 'schema-job-deadbeef:operation:node-a';
 
 class CollisionHost {}
 applyRebalanceCoordinatorOperationPersistenceCollisionMethods(CollisionHost);
+applyRebalanceCoordinatorOperationIntentMethods(CollisionHost);
 
 function buildHost() {
   const host = new CollisionHost();
@@ -54,23 +57,50 @@ function buildHost() {
   host.ensureReservationForOperation = async (operation) => {
     host.calls.reservation.push(operation);
   };
-  host.queryExistingOperationAfterInsertConflict = async () => null;
+  host.getReplaceSourceReplicaId = (record) => record.sourceReplicaId;
   return host;
 }
 
-function buildContext(existing, overrides = {}) {
+function buildOperation(overrides) {
   return {
-    operation: {operationId: INTENT_ID},
-    persistResult: {operation: existing},
-    move: {operationIntentId: INTENT_ID, nodeId: 'node-a'},
+    operationId: INTENT_ID,
     partitionId: PARTITION_ID,
     entityType: 'partition',
     entityId: PARTITION_ID,
-    normalizedMove: {},
+    type: 'ADD',
+    targetNodeId: 'node-a',
+    sourceNodeId: 'node-seed',
+    replicaId: `${PARTITION_ID}-r2`,
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+    completedAt: null,
+    stepsHistory: [],
+    ...overrides,
+  };
+}
+
+function buildContext(operation, overrides = {}) {
+  const move = {
+    type: operation.type,
+    nodeId: operation.targetNodeId,
+    sourceNodeId: operation.sourceNodeId,
+    replicaId: operation.type === 'REPLACE' ? operation.sourceReplicaId : operation.replicaId,
+    partitionId: PARTITION_ID,
+    entityType: 'partition',
+    entityId: PARTITION_ID,
+    operationIntentId: operation.operationId,
+  };
+  return {
+    operation,
+    persistResult: {operation},
+    move,
+    requestedMove: move,
+    partitionId: PARTITION_ID,
+    entityType: 'partition',
+    entityId: PARTITION_ID,
     dedupeKey: 'dedupe-key',
     criticalAddLikeIntentKey: null,
     replaceIntentIdentity: null,
-    shouldEmitOperationCreated: false,
     ...overrides,
   };
 }
@@ -78,14 +108,11 @@ function buildContext(existing, overrides = {}) {
 test('a terminal-successful deterministic-intent winner is returned as the ' +
   'create outcome, never rearmed or remembered in-flight', async (t) => {
   const host = buildHost();
-  const existing = {
-    operationId: INTENT_ID,
-    partitionId: PARTITION_ID,
-    type: 'ADD',
+  const existing = buildOperation({
     status: 'active',
     workflowStep: 'ACTIVE',
     completedAt: 1700000000000,
-  };
+  });
   const resolved = await host.resolveCreatedOperationPersistenceCollision(
     buildContext(existing),
   );
@@ -103,15 +130,12 @@ test('a terminal-successful deterministic-intent winner is returned as the ' +
 test('a terminal-failed deterministic-intent winner is surfaced, not ' +
   'reused as in-flight', async (t) => {
   const host = buildHost();
-  const existing = {
-    operationId: INTENT_ID,
-    partitionId: PARTITION_ID,
-    type: 'ADD',
+  const existing = buildOperation({
     status: 'failed',
     workflowStep: 'FAILED',
     completedAt: 1700000000000,
     errorMessage: 'creation failed terminally',
-  };
+  });
   await t.rejects(
     host.resolveCreatedOperationPersistenceCollision(buildContext(existing)),
     /terminal/i,
@@ -128,13 +152,10 @@ test('a terminal-failed deterministic-intent winner is surfaced, not ' +
 test('a non-terminal deterministic-intent winner keeps the CL-008 reuse ' +
   'decision verbatim', async (t) => {
   const host = buildHost();
-  const existing = {
-    operationId: INTENT_ID,
-    partitionId: PARTITION_ID,
-    type: 'ADD',
+  const existing = buildOperation({
     status: 'pending',
     workflowStep: 'PENDING',
-  };
+  });
   const resolved = await host.resolveCreatedOperationPersistenceCollision(
     buildContext(existing),
   );
@@ -149,18 +170,18 @@ test('a non-terminal deterministic-intent winner keeps the CL-008 reuse ' +
 test('a REPLACE-identity terminal winner still advances the successor ' +
   'generation', async (t) => {
   const host = buildHost();
-  host.assertReplaceIntentCollisionMatches = () => {};
-  const existing = {
+  const existing = buildOperation({
     operationId: 'replace-op-1',
     partitionId: PARTITION_ID,
     type: 'REPLACE',
+    sourceReplicaId: `${PARTITION_ID}-r1`,
     status: 'removed',
     workflowStep: 'REMOVED',
     completedAt: 1700000000000,
-  };
+  });
   const resolved = await host.resolveCreatedOperationPersistenceCollision(
     buildContext(existing, {
-      move: {nodeId: 'node-a'},
+      move: {nodeId: 'node-a', replicaId: existing.sourceReplicaId},
       replaceIntentIdentity: {intent: 'replace-intent'},
     }),
   );

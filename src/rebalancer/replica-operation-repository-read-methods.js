@@ -659,6 +659,9 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         [partitionId, targetNodeId, entityType, entityId],
         readOptions,
       );
+      if (options.requireCompleteRows === true && result.rowSetComplete !== true) {
+        return null;
+      }
       if (result.success && Array.isArray(result.rows)) {
         if (result.rows.length === 0) {
           return null;

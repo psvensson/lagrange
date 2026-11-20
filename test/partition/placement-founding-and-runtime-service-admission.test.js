@@ -163,6 +163,15 @@ function createAuthoritativeLedgerRepository(leader) {
   // Retain the repository owner's exact projection comparison.
   return Object.assign(Object.create(ReplicaOperationRepository.prototype), {
     nodeId: NODE.A,
+    timeSource: leader.timeSource,
+    rowToOperation: mapLedgerRowToOperation,
+    async executeReplicaOperationsRead(sql, params) {
+      return {
+        success: true,
+        rowSetComplete: true,
+        rows: leader.db.prepare(sql).all(...params),
+      };
+    },
     getInFlightOperations: async () => [],
     getExistingReplicaRows: async () => [],
     queryIncompleteOperations: async () => [],
@@ -501,6 +510,70 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
         );
         assert.ok(addOp.operationId.startsWith(`pl-${SERVICE_ID}-`));
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('requires exact committed placement visibility before resolving a retained create', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        coordinator.recentOperationIntents = new Map();
+        delete coordinator.getRecentOperationIntent;
+        delete coordinator.rememberOperationIntents;
+        const submit = coordinator.submitPlacementPayload.bind(coordinator);
+        const attempts = [];
+        coordinator.submitPlacementPayload = async (request, timeoutMs) => {
+          attempts.push(request.entryId);
+          const answer = await submit(request, timeoutMs);
+          return attempts.length === 1 ? {
+            success: false,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          } : answer;
+        };
+        const repo = coordinator.repository;
+        const read = repo.executeReplicaOperationsRead.bind(repo);
+        let readable = false;
+        repo.executeReplicaOperationsRead = async (sql, params) =>
+          readable ? read(sql, params) : {success: false, retryAfterMs: 20};
+        const original = {
+          type: OperationType.ADD,
+          partitionId: USER_PARTITION_ID,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          operationIntentId: 'retained-placement-create',
+        };
+        const conflicting = {...original, nodeId: NODE.C};
+
+        await assert.rejects(
+          () => coordinator.createOperation(original),
+          (error) => error.admissionAnswer?.failureCode ===
+            PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+        );
+        const [held] = ledgerRows(leader);
+        assert.equal(held.target_node_id, original.nodeId);
+        await assert.rejects(() => coordinator.createOperation(conflicting),
+          {rebalanceSkipReason: 'deferred_retry_pending'});
+        assert.deepEqual(ledgerRows(leader), [held]);
+
+        readable = true;
+        await assert.rejects(() => coordinator.createOperation(conflicting),
+          {rebalanceSkipReason: 'budget_exceeded'});
+        const resolved = await coordinator.createOperation(original);
+        assert.equal(resolved.operationId, held.operation_id);
+        assert.equal(resolved.targetNodeId, original.nodeId);
+        const replay = await coordinator.createOperation(original);
+        assert.equal(replay.operationId, held.operation_id);
+        await assert.rejects(() => coordinator.createOperation({
+          ...original, operationIntentId: 'different-placement-intent',
+        }), {rebalanceSkipReason: 'budget_exceeded'});
+        assert.deepEqual(attempts, [attempts[0], attempts[0]],
+          'settled retained admission needs owner visibility, without another proposal');
+        assert.deepEqual(ledgerRows(leader), [held]);
       } finally {
         await stopAutoCommit();
       }

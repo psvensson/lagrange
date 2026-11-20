@@ -104,7 +104,7 @@ function removeHost(host) {
   fs.rmSync(host.dataDir, {recursive: true, force: true});
 }
 
-async function seedReleaseFailureOf(host) {
+async function readSeedReleaseFailure(host) {
   let failure = null;
   try {
     await host.workflow.releaseSeedParticipantCohorts();
@@ -113,8 +113,13 @@ async function seedReleaseFailureOf(host) {
   }
   assert.notEqual(failure, null, 'the focused workflow must retain its typed failure');
   assert.ok(failure.message.startsWith(FAILURE_PREFIX), failure.message);
-  host.assertReleaseRequests();
   return JSON.parse(failure.message.slice(FAILURE_PREFIX.length));
+}
+
+async function seedReleaseFailureOf(host) {
+  const failure = await readSeedReleaseFailure(host);
+  host.assertReleaseRequests();
+  return failure;
 }
 
 function blockedDrainFixture() {
@@ -297,10 +302,11 @@ test('seed release workflow types terminal clock faults without changing refusal
   }
   assert.notEqual(unsafeState, measured.projection.clockState);
 
+  // Both dispatch reads are valid with deadline = MAX_SAFE_INTEGER.
+  // Only the terminal observation makes the signed elapsed value unsafe.
+  const latestValidStart = Number.MAX_SAFE_INTEGER - TEST_BUDGET_MS;
   const overflow = await observeTerminalClock([
-    -Number.MAX_SAFE_INTEGER,
-    -Number.MAX_SAFE_INTEGER,
-    Number.MAX_SAFE_INTEGER,
+    latestValidStart, latestValidStart, -Number.MAX_SAFE_INTEGER,
   ]);
   assert.equal(overflow.projection.clockState, unsafeState,
     'unsafe derived spend shares the typed unsafe state');
@@ -313,27 +319,6 @@ test('seed release workflow types terminal clock faults without changing refusal
   assert.equal(backward.projection.elapsedMs, null);
   assert.equal(backward.projection.remainingMs, null);
 
-  const unsafeBackwardTimeSource = scriptedTimeSource([
-    Number.MAX_SAFE_INTEGER,
-    -Number.MAX_SAFE_INTEGER,
-  ]);
-  const unsafeBackwardHost = await createSeedReleaseHost({
-    timeSource: unsafeBackwardTimeSource,
-    reply: (request) => releaseAnswer(OUTCOME.UNAVAILABLE, request,
-      {missingFact: 'unsafe-backward-owner-refusal'}),
-  });
-  try {
-    const failure = await seedReleaseFailureOf(unsafeBackwardHost);
-    assert.deepEqual(failure.answer, unsafeBackwardHost.delivered[0].answer);
-    assert.equal(failure.seedRelease?.clockState, unsafeState,
-      'unsafe derived spend takes precedence over the same backward observation');
-    assert.equal(failure.seedRelease?.budgetMs, TEST_BUDGET_MS);
-    assert.equal(failure.seedRelease?.elapsedMs, null);
-    assert.equal(failure.seedRelease?.remainingMs, null);
-  } finally {
-    removeHost(unsafeBackwardHost);
-  }
-
   const unavailable = await observeTerminalClock([
     100,
     100,
@@ -344,29 +329,55 @@ test('seed release workflow types terminal clock faults without changing refusal
   assert.notEqual(unavailable.projection.clockState, backward.projection.clockState);
   assert.equal(unavailable.projection.elapsedMs, null);
   assert.equal(unavailable.projection.remainingMs, null);
+});
 
-  const invalidBudgetTimeSource = scriptedTimeSource([100, 101]);
-  const invalidBudgetHost = await createSeedReleaseHost({
-    timeSource: invalidBudgetTimeSource,
-    budgetMs: 1.5,
-    reply: (request) => releaseAnswer(OUTCOME.UNAVAILABLE, request,
-      {missingFact: 'configured-budget-owner-refusal'}),
-  });
-  try {
-    const failure = await seedReleaseFailureOf(invalidBudgetHost);
-    assert.equal(invalidBudgetHost.delivered.length, 1,
-      'an invalid diagnostic budget still preserves the actual owner refusal');
-    assert.deepEqual(failure.answer, invalidBudgetHost.delivered[0].answer);
-    assert.equal(failure.seedRelease?.attemptCount, 1);
-    assert.equal(failure.seedRelease?.budgetMs, null);
-    assert.equal(failure.seedRelease?.elapsedMs, null);
-    assert.equal(failure.seedRelease?.remainingMs, null);
-    assert.equal(invalidBudgetTimeSource.reads(), 2,
-      'only the seed start and terminal diagnostic observations read the owner clock');
-  } finally {
-    removeHost(invalidBudgetHost);
+test('invalid seed entry budgets refuse dispatch with typed deadline evidence', async () => {
+  for (const [start, budgetMs, expectedBudget] of [
+    [100, 1.5, null],
+    [-Number.MAX_SAFE_INTEGER, TEST_BUDGET_MS, TEST_BUDGET_MS],
+    [Number.MAX_SAFE_INTEGER, TEST_BUDGET_MS, TEST_BUDGET_MS],
+  ]) {
+    const timeSource = scriptedTimeSource([start, start]);
+    const host = await createSeedReleaseHost({timeSource, budgetMs, reply() {
+      assert.fail('invalid entry deadline must never reach the partition owner');
+    }});
+    await withSeedHost(host, async () => {
+      const failure = await readSeedReleaseFailure(host);
+      assert.deepEqual(host.delivered, []);
+      assert.deepEqual(host.delays, []);
+      assert.equal(failure.answer.missingFact, 'release_deadline');
+      assert.equal(failure.seedRelease.attemptCount, 1);
+      assert.equal(failure.seedRelease.budgetMs, expectedBudget);
+    });
   }
 });
+
+test('seed consumes the completed decision without reading the routed outcome again', async () => {
+  for (const outcome of [OUTCOME.CUT_OVER, OUTCOME.OPERATOR_REQUIRED]) {
+    let observations = 0;
+    const answer = {};
+    Object.defineProperty(answer, 'outcome', {get() {
+      observations += 1;
+      if (observations <= 2) return outcome;
+      return outcome === OUTCOME.CUT_OVER ? OUTCOME.OPERATOR_REQUIRED : OUTCOME.CUT_OVER;
+    }});
+    const host = await createSeedReleaseHost({timeSource: scriptedTimeSource([100, 100, 101]),
+      reply: () => answer});
+    await withSeedHost(host, async () => {
+      if (outcome === OUTCOME.CUT_OVER) {
+        await host.workflow.releaseSeedParticipantCohorts();
+      } else {
+        const failure = await seedReleaseFailureOf(host);
+        assert.deepEqual(failure.answer, {});
+      }
+      host.assertReleaseRequests();
+      assert.equal(host.delivered.length, 1);
+      assert.deepEqual(host.delays, []);
+      assert.equal(observations, 2);
+    });
+  }
+});
+
 
 async function withSeedHost(host, body) {
   let primary;

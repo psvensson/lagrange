@@ -145,7 +145,7 @@ documentClass: generated
 - [rebalance-coordinator-operation-creation-admission.js](rebalance-coordinator-operation-creation-admission.js) - Fail closed at the one creation boundary: no ADD, REPLACE or REMOVE of a group its durable record retires as a unit... (importers: few)
 - [rebalance-coordinator-operation-creation-support.js](rebalance-coordinator-operation-creation-support.js) - No leading comment; first export: applyRebalanceCoordinatorOperationCreationSupportMethods. (importers: one)
 - [rebalance-coordinator-operation-creation.js](rebalance-coordinator-operation-creation.js) - The runtime target claim refusal: when it is the spent retry bound (not a missing claim key or conflict id), one... (importers: few)
-- [rebalance-coordinator-operation-intent-methods.js](rebalance-coordinator-operation-intent-methods.js) - Normalize one move type to canonical upper-case enum representation. (importers: one)
+- [rebalance-coordinator-operation-intent-methods.js](rebalance-coordinator-operation-intent-methods.js) - Normalize one move type to canonical upper-case enum representation. (importers: few)
 - [rebalance-coordinator-operation-persistence-collision.js](rebalance-coordinator-operation-persistence-collision.js) - Resolve the authoritative winner of a deterministic insert collision. (importers: few)
 - [rebalance-coordinator-operation-read-methods.js](rebalance-coordinator-operation-read-methods.js) - Query an operation by ID using SQL engine. (importers: few)
 - [rebalance-coordinator-owner-delegation-methods.js](rebalance-coordinator-owner-delegation-methods.js) - Prune expired recent operation intents. (importers: one)

@@ -258,11 +258,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     // holds this primary key. Verify that claim at the partition leader:
     // routing to an arbitrary owner can hit a lagging co-located replica and
     // turn a durable idempotent retry into a false missing-row failure.
-    const existingOperation =
-      await repository.queryAuthoritativeOperationById(operation.operationId, {
+    const {operation: existingOperation} =
+      await repository.queryAuthoritativeOperationVisibilityObservation(operation.operationId, {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        requireCompleteExactKey: true,
       });
     if (!existingOperation) {
       const conflictingMembershipOperation =

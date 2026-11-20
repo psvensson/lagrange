@@ -28,7 +28,7 @@
   "censusSize": 2703,
   "digest": "fnv1a32-fcdeacc2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fbb44ce0",
+  "observationDigest": "fnv1a32-5b5d547b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18683,6 +18683,7 @@
     },
     "test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js": {
       "files": [
+        "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
         "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js"
       ]
     },
@@ -18715,9 +18716,18 @@
     },
     "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/rebalancer/rebalancer-shutdown-guard.test.js": {
