@@ -185,8 +185,20 @@ test('an unreachable base is reported, never silently narrowed', () => {
   // collected. That fallback belongs to the workflow; the library must refuse
   // rather than quietly proving the working tree only.
   const missing = '0'.repeat(40);
-  assert.equal(changedRecords({root: repo, base: missing, head: shas.d}), null,
-    'an undiffable range returns null so the caller fails closed');
+  assert.throws(() => changedRecords({root: repo, base: missing, head: shas.d}),
+    /Invalid revision range/u);
+});
+
+test('valid empty committed and worktree ranges are successful', () => {
+  assert.deepEqual(changedRecords({root: repo, base: shas.d, head: shas.d}), []);
+  assert.deepEqual(changedRecords({root: repo}), []);
+});
+
+test('an unreadable worktree diff cannot certify an empty candidate set', (t) => {
+  const {repo: broken} = buildBranchRepo();
+  t.after(() => fs.rmSync(broken, {recursive: true, force: true}));
+  fs.writeFileSync(path.join(broken, '.git', 'index'), 'bad', UTF8);
+  assert.throws(() => changedRecords({root: broken}), /index file/u);
 });
 
 // The history walks (closed-quest shape, quest-log append-only) ask ONE owner
