@@ -403,7 +403,7 @@ function startupRecoveryFixture(t) {
   }
   const planner = new ControlPlaneSystemTableGateway();
   const state = {available: true, snapshotReads: 0, sweepCalls: 0,
-    beforeSnapshot: null, wake: null, wakeArms: 0, readOptions: []};
+    beforeSnapshot: null, beforePointRead: null, wake: null, wakeArms: 0, readOptions: []};
   const gateway = {
     async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
       if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -413,6 +413,8 @@ function startupRecoveryFixture(t) {
         await state.beforeSnapshot?.();
         if (!state.available) return {success: false, error: 'owner unavailable'};
       }
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          params[0] === TEST_ORPHAN_REPLICA_ID) await state.beforePointRead?.();
       return {success: true, rows: db.prepare(sql).all(...params)};
     },
     async submitMutation(mutation) {
@@ -552,4 +554,39 @@ test('shutdown fences a late successful startup snapshot before filesystem clean
     'the exact cleanup token remains for the next incarnation');
     t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'shutdown retains no rearmed recovery timer');
+  });
+
+
+test('shutdown joins an admitted sweep and fences its paused authority read',
+  async (t) => {
+    const {handler, state, dataDir, db} = startupRecoveryFixture(t);
+    const {authority} = await acquireStartupMarker(handler);
+    const dbPath = seedOrphanFiles(dataDir, TEST_ORPHAN_PARTITION_ID,
+      TEST_ORPHAN_REPLICA_ID);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    state.beforePointRead = async () => {
+      entered.resolve();
+      await release.promise;
+    };
+    handler.initialize();
+    await boundedStartupObservation(entered.promise);
+    t.equal(state.snapshotReads, 1, 'the pre-admission snapshot succeeded');
+    t.equal(state.sweepCalls, 1, 'one real sweep is awaiting current authority');
+    await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
+    let shutdownSettled = false;
+    const shutdown = handler.shutdown().then(() => { shutdownSettled = true; });
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(shutdownSettled, false, 'shutdown waits for its in-flight sweep');
+    release.resolve();
+    await boundedStartupObservation(shutdown);
+    await boundedStartupObservation(handler.removedReplicaCleanupDebtSweepTask);
+    t.ok(fs.existsSync(dbPath), 'the resumed read cannot authorize database deletion');
+    t.ok(fs.existsSync(`${dbPath}-wal`), 'the resumed read cannot authorize WAL deletion');
+    t.equal(db.prepare('SELECT cleanup_token FROM services WHERE service_id = ?')
+      .get(TEST_ORPHAN_REPLICA_ID)?.cleanup_token, authority.ownerToken,
+    'shutdown retains the exact token for the next incarnation');
+    t.equal(state.sweepCalls, 1, 'shutdown starts no replacement cleanup work');
+    t.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'shutdown owns no recovery timer');
   });
