@@ -355,6 +355,31 @@ constructor census, and independent review before composed fleet acceptance.
 [Public SQL original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-join-construction-471-nov21.tar.gz)
 and [native construction and snapshot controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--join-publication-and-compaction-controls-471-nov21.tar.gz).
 
+The composed CREATE path at `1afe9cc02` repeated the public journey on
+tv-dator in 38.685 seconds. All 20 assertions passed and all three admin
+guards recorded zero calls. Nine affected fixture and construction files
+passed 752 assertions on adam-laptop. Independent source review found two
+remaining cases at the factory boundary. A callback can discard the newly
+constructed handle before initialization, leaving no cleanup owner if CDC
+subscription fails. A malformed factory can also return a service it never
+handed over, causing cleanup to shut down an unrelated instance. The CREATE
+owner must retain the exact instance before native initialization, then
+exercise both disposal and preservation through CREATE, rejoin and snapshot.
+[Three node logs, guard outputs and original classified run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-composed-1afe-nov21.tar.gz).
+
+Two other decisions can also confuse the scope of an observation. The
+operation owner must distinguish a lane being occupied from evidence that
+the caller's exact move already exists. On `7361ba4bb`, concurrent callers
+for different moves received the same successful operation. A complete
+SQLite-backed test also reproduced replay from cached state after an absent,
+unavailable or foreign owner answer. Placement must separately distinguish
+temporary ineligibility as a new target from the authority to remove an
+existing member. Their causal evidence and clearing events belong to their
+respective owners. For the composed candidate, verify the same subject can
+recover, a different subject cannot consume its result, and a returning host
+can resume without an ADD/REMOVE reversal. Then run the existing three-host
+formation predicate before smoke and GCP measurement.
+
 After repairing startup, run `e068cbdc` first observed six-partition spread at
 36.629 seconds; run `57e4db30` observed it at 90.548 seconds. Each run
 started 46 system partitions with a configured replica count of three. For
