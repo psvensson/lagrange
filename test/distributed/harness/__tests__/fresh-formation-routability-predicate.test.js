@@ -372,35 +372,36 @@ function satisfiedWriteReadback() {
   };
 }
 
-test('write/readback rejects missing writers and count-only or wrong-row evidence', () => {
-  assert.equal(evaluateWriteReadback(satisfiedWriteReadback()).met, true);
+test('write/readback rejects missing writers and count-only or wrong-row evidence', (t) => {
+  t.equal(evaluateWriteReadback(satisfiedWriteReadback()).met, true);
   const missingWriter = satisfiedWriteReadback();
   missingWriter.nodeWrites.pop();
-  assert.equal(evaluateWriteReadback(missingWriter).met, false, 'every node must write');
+  t.equal(evaluateWriteReadback(missingWriter).met, false, 'every node must write');
   const duplicateWriter = satisfiedWriteReadback();
   duplicateWriter.nodeWrites[2] = duplicateWriter.nodeWrites[0];
-  assert.equal(evaluateWriteReadback(duplicateWriter).met, false, 'duplicates cannot cover a writer');
+  t.equal(evaluateWriteReadback(duplicateWriter).met, false, 'duplicates cannot cover a writer');
   const missingPublic = satisfiedWriteReadback();
   missingPublic.readbacks.shift();
-  assert.equal(evaluateWriteReadback(missingPublic).met, false, 'public read remains required');
+  t.equal(evaluateWriteReadback(missingPublic).met, false, 'public read remains required');
   const countOnly = satisfiedWriteReadback();
   countOnly.readbacks[0].rows = [];
-  assert.equal(evaluateWriteReadback(countOnly).met, false, 'rowCount alone is insufficient');
+  t.equal(evaluateWriteReadback(countOnly).met, false, 'rowCount alone is insufficient');
   const malformedPgValue = satisfiedWriteReadback();
   malformedPgValue.readbacks[0].rows[0].probe_value = '01';
-  assert.equal(evaluateWriteReadback(malformedPgValue).met, false, 'exact pg text is required');
+  t.equal(evaluateWriteReadback(malformedPgValue).met, false, 'exact pg text is required');
   const wrongPublicRow = satisfiedWriteReadback();
   wrongPublicRow.readbacks[1].rows[0].probe_value = 99;
-  assert.equal(evaluateWriteReadback(wrongPublicRow).met, false, 'public probe value must match');
+  t.equal(evaluateWriteReadback(wrongPublicRow).met, false, 'public probe value must match');
   const wrongNodeRow = satisfiedWriteReadback();
   wrongNodeRow.nodeWrites[1].readback.rows[0].probe_id = 'different-probe';
-  assert.equal(evaluateWriteReadback(wrongNodeRow).met, false, 'writer probe identity must match');
+  t.equal(evaluateWriteReadback(wrongNodeRow).met, false, 'writer probe identity must match');
   const missingNodeRow = satisfiedWriteReadback();
   missingNodeRow.nodeWrites[0].readback.rows = [];
-  assert.equal(evaluateWriteReadback(missingNodeRow).met, false, 'affectedRows alone is insufficient');
+  t.equal(evaluateWriteReadback(missingNodeRow).met, false, 'affectedRows alone is insufficient');
   const sameNodeRead = satisfiedWriteReadback();
   sameNodeRead.nodeWrites[0].readerNodeId = NODE_IDS[0];
-  assert.equal(evaluateWriteReadback(sameNodeRead).met, false, 'another node must read the write');
+  t.equal(evaluateWriteReadback(sameNodeRead).met, false, 'another node must read the write');
+  t.end();
 });
 
 test('constructed satisfying state is green on every predicate', (t) => {
@@ -1244,16 +1245,16 @@ test('formation and routability bounds include time spent awaiting successful re
   assert.equal(lateCreate.countCalls, 0, 'a spent CREATE budget cannot start a new COUNT');
 });
 
-test('scenario writes distinct bound values through every node and rejects a refused writer', async () => {
+test('scenario writes distinct bound values through every node and rejects a refused writer', async (t) => {
   const result = await observeScenarioTiming({snapshotDelay: 0, countDelay: 0});
-  assert.equal(result.passed, true);
-  assert.deepEqual(result.writerCalls, [
+  t.equal(result.passed, true);
+  t.same(result.writerCalls, [
     {nodeId: NODE_IDS[0], params: [`ffr-node-${NODE_IDS[0]}`, 2]},
     {nodeId: NODE_IDS[1], params: [`ffr-node-${NODE_IDS[1]}`, 3]},
     {nodeId: NODE_IDS[2], params: [`ffr-node-${NODE_IDS[2]}`, 4]},
   ]);
   const refused = await observeScenarioTiming({snapshotDelay: 0, countDelay: 0,
     rejectedWriter: NODE_IDS[1]});
-  assert.equal(refused.passed, false);
-  assert.equal(refused.report.firstUnmet.id, PREDICATE.WRITE_READBACK);
+  t.equal(refused.passed, false);
+  t.equal(refused.report.firstUnmet.id, PREDICATE.WRITE_READBACK);
 });
