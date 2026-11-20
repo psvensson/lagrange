@@ -2,8 +2,10 @@
 // These values explain a refusal; they never decide release, drain, retry,
 // admission, recovery, or deadline policy.
 import {types} from 'node:util';
-import {PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND} from
+import {PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME} from
   '../partition/partition-participant-transaction-cutover-constants.js';
+import {participantReleaseGenerationValid} from
+  '../partition/partition-participant-release-contract.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 
 const numberIsSafeInteger = Number.isSafeInteger;
@@ -12,36 +14,137 @@ const objectIs = Object.is;
 const reflectApply = Reflect.apply;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
+const arrayIsArray = Array.isArray;
 const isProxy = types.isProxy;
+const isModuleNamespaceObject = types.isModuleNamespaceObject;
 const stringSlice = String.prototype.slice;
 const DESCRIPTOR_VALUE = 'value';
-const CONTROL_REFUSAL_FIELD = objectFreeze({
-  MISSING_FACT: 'missingFact', PHASE: 'phase', REASON: 'reason',
+const OBSERVATION_TEXT_LIMIT = PARTICIPANT_CUTOVER_BOUND.CONTROL_REFUSAL_TEXT_MAX_LENGTH;
+const {DRAIN_PENDING} = PARTICIPANT_CUTOVER_OUTCOME;
+const NO_DRAIN_OBSERVATION = null;
+const FIELD = objectFreeze({
+  LIFECYCLE_INCARNATION: 'lifecycleIncarnation',
+  NODE_ID: 'nodeId',
+  OWNER_INCARNATION: 'ownerIncarnation',
+  REPLICA_ID: 'replicaId',
+  RUNTIME_GENERATION: 'runtimeGeneration',
+  CONNECTION_GENERATION: 'connectionGeneration',
+  ADMISSION_GENERATION: 'admissionGeneration',
+  SQLITE_TRANSACTION_OPEN: 'sqliteTransactionOpen',
+  PARTICIPANT_STAGING: 'participantStaging',
+  PARTICIPANT_PREPARED: 'participantPrepared',
+  PROPOSALS: 'proposals',
+  PENDING_OUTCOMES: 'pendingOutcomes',
+  APPLIED_INDEX: 'appliedIndex',
+  COMMIT_INDEX: 'commitIndex',
+  LAST_INDEX: 'lastIndex',
+  GENERATION: 'generation',
+  WORK: 'work',
+  OUTCOME: 'outcome',
+  BLOCKED_DRAIN: 'blockedDrain',
+  MISSING_FACT: 'missingFact',
+  PHASE: 'phase',
+  REASON: 'reason',
+  CONTROL_PARTITION_ID: 'controlPartitionId',
+  CONTROL_OUTCOME: 'controlOutcome',
+  CONTROL_BLOCKED_DRAIN: 'controlBlockedDrain',
+  CONTROL_NODE_ID: 'controlNodeId',
+  CONTROL_MISSING_FACT: 'controlMissingFact',
+  CONTROL_PHASE: 'controlPhase',
+  CONTROL_REASON: 'controlReason',
 });
 
-function controlRefusalText(answer, field) {
-  if (answer === null || typeof answer !== 'object' || isProxy(answer)) return null;
-  let descriptor;
-  try {
-    descriptor = objectGetOwnPropertyDescriptor(answer, field);
-  } catch {
-    // Exotic own properties may be unavailable without invoking a getter.
-    return null;
-  }
-  if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE) ||
-      typeof descriptor.value !== 'string') return null;
-  return reflectApply(stringSlice, descriptor.value,
-    [0, PARTICIPANT_CUTOVER_BOUND.CONTROL_REFUSAL_TEXT_MAX_LENGTH]);
+function ownDataField(record, field) {
+  // Uninitialized module bindings can throw during descriptor inspection.
+  if (record === null || typeof record !== 'object' || isProxy(record) ||
+      arrayIsArray(record) || isModuleNamespaceObject(record)) return null;
+  const descriptor = objectGetOwnPropertyDescriptor(record, field);
+  return descriptor && objectHasOwn(descriptor, DESCRIPTOR_VALUE) ? descriptor.value : null;
 }
 
-// Own-data observations only: no getter/coercion, no retained nested answer.
-// Strings are prefixes bounded by CONTROL_REFUSAL_TEXT_MAX_LENGTH, not identities.
+function controlRefusalText(answer, field) {
+  const value = ownDataField(answer, field);
+  return typeof value === 'string' ? reflectApply(stringSlice, value, [0, OBSERVATION_TEXT_LIMIT]) :
+    null;
+}
+
+function boundedIdentity(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= OBSERVATION_TEXT_LIMIT ?
+    value : null;
+}
+
+function releaseDrainGeneration(record) {
+  const lifecycle = ownDataField(record, FIELD.LIFECYCLE_INCARNATION);
+  const generation = {
+    nodeId: boundedIdentity(ownDataField(record, FIELD.NODE_ID)),
+    ownerIncarnation: ownDataField(record, FIELD.OWNER_INCARNATION),
+    replicaId: boundedIdentity(ownDataField(record, FIELD.REPLICA_ID)),
+    lifecycleIncarnation: typeof lifecycle === 'string' ? boundedIdentity(lifecycle) : lifecycle,
+    runtimeGeneration: ownDataField(record, FIELD.RUNTIME_GENERATION),
+    connectionGeneration: ownDataField(record, FIELD.CONNECTION_GENERATION),
+    admissionGeneration: ownDataField(record, FIELD.ADMISSION_GENERATION),
+  };
+  return participantReleaseGenerationValid(generation) ? objectFreeze(generation) : null;
+}
+
+function releaseDrainWork(record) {
+  const work = {
+    sqliteTransactionOpen: ownDataField(record, FIELD.SQLITE_TRANSACTION_OPEN),
+    participantStaging: ownDataField(record, FIELD.PARTICIPANT_STAGING),
+    participantPrepared: ownDataField(record, FIELD.PARTICIPANT_PREPARED),
+    proposals: ownDataField(record, FIELD.PROPOSALS),
+    pendingOutcomes: ownDataField(record, FIELD.PENDING_OUTCOMES),
+    appliedIndex: ownDataField(record, FIELD.APPLIED_INDEX),
+    commitIndex: ownDataField(record, FIELD.COMMIT_INDEX),
+    lastIndex: ownDataField(record, FIELD.LAST_INDEX),
+  };
+  return typeof work.sqliteTransactionOpen === 'boolean' &&
+    typeof work.participantStaging === 'boolean' &&
+    [work.participantPrepared, work.proposals, work.pendingOutcomes,
+      work.appliedIndex, work.commitIndex, work.lastIndex].every((value) =>
+      safeClockInteger(value) && value >= 0) ? objectFreeze(work) : null;
+}
+
+function blockedDrainOf(answer, field) {
+  const blockedDrain = ownDataField(answer, field);
+  const generation = releaseDrainGeneration(ownDataField(blockedDrain, FIELD.GENERATION));
+  if (generation === null) return NO_DRAIN_OBSERVATION;
+  const work = releaseDrainWork(ownDataField(blockedDrain, FIELD.WORK));
+  return work === null ? NO_DRAIN_OBSERVATION : objectFreeze({generation, work});
+}
+
+// Bounded text prefixes and one exact diagnostic drain. The canonical
+// release answer supplies every value without granting authority here.
 function captureParticipantControlRefusal(answer) {
+  const controlBlockedDrain = ownDataField(answer, FIELD.OUTCOME) === DRAIN_PENDING ?
+    blockedDrainOf(answer, FIELD.BLOCKED_DRAIN) : null;
   return objectFreeze({
-    controlMissingFact: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.MISSING_FACT),
-    controlPhase: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.PHASE),
-    controlReason: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.REASON),
+    controlMissingFact: controlRefusalText(answer, FIELD.MISSING_FACT),
+    controlPhase: controlRefusalText(answer, FIELD.PHASE),
+    controlReason: controlRefusalText(answer, FIELD.REASON),
+    ...(controlBlockedDrain === null ? {} : {controlBlockedDrain}),
   });
+}
+
+function captureParticipantReleaseRecoveryDetail(answer) {
+  if (ownDataField(answer, FIELD.OUTCOME) === DRAIN_PENDING) {
+    const blockedDrain = blockedDrainOf(answer, FIELD.BLOCKED_DRAIN);
+    return blockedDrain === null ? {} : {blockedDrain};
+  }
+  const controlPartitionId = boundedIdentity(ownDataField(answer, FIELD.CONTROL_PARTITION_ID));
+  if (controlPartitionId === null) return {};
+  const controlOutcome = boundedIdentity(ownDataField(answer, FIELD.CONTROL_OUTCOME));
+  const controlBlockedDrain = controlOutcome === DRAIN_PENDING ?
+    blockedDrainOf(answer, FIELD.CONTROL_BLOCKED_DRAIN) : null;
+  return {
+    controlPartitionId,
+    controlNodeId: boundedIdentity(ownDataField(answer, FIELD.CONTROL_NODE_ID)),
+    controlOutcome,
+    controlMissingFact: controlRefusalText(answer, FIELD.CONTROL_MISSING_FACT),
+    controlPhase: controlRefusalText(answer, FIELD.CONTROL_PHASE),
+    controlReason: controlRefusalText(answer, FIELD.CONTROL_REASON),
+    ...(controlBlockedDrain === null ? {} : {controlBlockedDrain}),
+  };
 }
 
 const CLOCK_STATE = objectFreeze({
@@ -152,6 +255,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 
 export {
   captureParticipantControlRefusal,
+  captureParticipantReleaseRecoveryDetail,
   captureParticipantReleaseDiagnosticTrigger,
   observeParticipantReleaseClockValue,
   safeClockInteger as participantReleaseSafeClockInteger,
