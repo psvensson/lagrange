@@ -1347,14 +1347,17 @@ test('operation census requires complete authority and a keyed refusal retains t
       partialEntityRead = false;
       const decision = buildEventDrivenPlanningSnapshot(planningOptions)
         .priorityRecoveryDecisionSnapshots.snapshots[0];
+      t.equal(owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(operation, 1), true,
+        'an earlier ordinary handoff timer owns the same operation');
       t.equal(await owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
         operation, decision), true, 'the duplicate keyed answer retains the owed wake');
       t.same(deliveries, [], 'a duplicate key cannot authorize dispatch');
-      t.equal(deferredTimers.length, 1, 'exactly one existing handoff timer owns the obligation');
+      t.equal(deferredTimers.length, 1,
+        'the strict request joins the original ordinary timer without replacing it');
 
       keyedFault = 'refusal';
       await deferredTimers[0].fn();
-      t.same(deliveries, [], 'the transient keyed refusal cannot authorize dispatch');
+      t.same(deliveries, [], 'the original timer cannot reuse its snapshot on keyed refusal');
       t.equal(deferredTimers.length, 2, 'the sole retry re-arms without a new census');
       keyedFault = null;
       const send = owner.messageRouter.deliver.bind(owner.messageRouter);
@@ -2080,7 +2083,29 @@ test(TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   try {
     coordinator.initialize();
 
-    const snapshot =
+    const gateway = coordinator.controlPlaneSystemTableGateway;
+    const authoritative = gateway.readAuthoritativeRows.bind(gateway);
+    const keyedModes = [];
+    let reply = 'absent';
+    gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+      const result = await authoritative(table, sql, params, options);
+      if (table !== TABLES.REPLICA_OPERATIONS ||
+          !sql.includes('WHERE operation_id = ?') || params[0] !== operation.operationId) {
+        return result;
+      }
+      keyedModes.push(options.authoritativeReadMode);
+      if (reply === 'absent') return {...result, rows: []};
+      if (reply === 'refused') return {success: false, error: 'owner read refused'};
+      if (reply === 'different-attempt') {
+        return {...result, rows: result.rows.map((row) => ({
+          ...row,
+          create_admission_attempt_token: 'new-attempt',
+          create_admission_attempt_seq: 2,
+        }))};
+      }
+      return result;
+    };
+    const plan = () =>
       coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
         operation.partitionId,
         [operationWithTargetProgress],
@@ -2094,10 +2119,27 @@ test(TEST_REMOTE_TARGET_PROGRESS_REENTRY_TEST_NAME, async (t) => {
           coordinatorOperation: operationWithTargetProgress,
         }),
       );
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
 
+    plan();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    t.same(deliveries, [], 'complete keyed absence retires the target-progress wake');
+    t.equal(deferredTimers.length, 0, 'complete keyed absence is not a deferred read');
+
+    reply = 'different-attempt';
+    plan();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    t.same(deliveries, [], 'another create attempt cannot wake the old target progress');
+
+    reply = 'refused';
+    const snapshot = plan();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    t.same(deliveries, [], 'refused target-progress authority cannot wake the owner');
+    t.equal(deferredTimers.length, 1, 'target progress retains one bounded handoff retry');
+
+    reply = 'exact';
+    if (deferredTimers.length === 1) await deferredTimers[0].fn();
+    t.same(keyedModes.slice(0, 4),
+      Array(4).fill(CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED));
     t.equal(
       snapshot?.progress?.workflowProgressPhaseId,
       PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
