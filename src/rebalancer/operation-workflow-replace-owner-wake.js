@@ -203,7 +203,7 @@ function readReplaceOwnerLevel(owner, operation, nodeIds) {
 // The REPLACE source replica's lifecycle row as the cache holds it.
 function sourceRowLevel(owner, operation) {
   if (isScopedPlacementLearnerRetirement(operation)) {
-    const row = owner.systemTableCache.get(TABLES.SERVICES, operation.replicaId);
+    const row = owner.repository.systemTableCache.get(TABLES.SERVICES, operation.replicaId);
     return row ? JSON.stringify([row[COLUMN.CREATED_AT], row[COLUMN.NODE_ID],
       row[COLUMN.STATUS], row[COLUMN.RAFT_ROLE]]) : NO_CONSENSUS_OBSERVATION;
   }

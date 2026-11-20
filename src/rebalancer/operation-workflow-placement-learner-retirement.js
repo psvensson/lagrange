@@ -40,7 +40,7 @@ function exactServiceGeneration(row, operation, scope) {
 }
 
 async function reachMembershipOwner(owner, operation, handlerType, scoped, canPropose) {
-  const leaderNodeId = owner.systemTableCache.get(
+  const leaderNodeId = owner.repository.systemTableCache.get(
     TABLES.PARTITIONS, operation.partitionId)?.[COLUMN.LEADER_NODE_ID];
   if (!leaderNodeId) return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   const request = {
