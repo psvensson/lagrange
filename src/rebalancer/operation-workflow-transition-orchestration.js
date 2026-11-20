@@ -110,6 +110,16 @@ class OperationWorkflowTransitionOrchestration
         throw error;
       }
       const persistResult = await persistFn();
+      // Historical accepting arm restored for a known-bad control only.
+      if (persistResult !== false && persistResult?.persisted !== false) {
+        this.operationWorkflowCoordinator.markTransitionCommitted(operation.operationId, step);
+        if (typeof options.afterCommit === 'function') await options.afterCommit();
+        return Object.freeze({
+          committed: true,
+          disposition: typeof persistResult?.disposition === 'string' ?
+            persistResult.disposition : null,
+        });
+      }
       const outcome = buildOperationTransitionOutcome(persistResult, {
         repository: this.repository,
         requestedOperation: options.requestedOperation,
