@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {createHostPartitionFixture, createIdentityTransport, initializePartitionTransportFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
@@ -218,6 +219,8 @@ async function createPartition(createPartitionService, tableName, nodeId) {
     nodeId,
     isJoiningExistingGroup: true,
   });
+  assert.equal(typeof partition.onSnapshotCatchupNeeded, 'function',
+    'the concrete seed factory attaches the snapshot dispatcher');
   if (partition && typeof partition.shutdown === 'function') {
     await partition.shutdown();
   }

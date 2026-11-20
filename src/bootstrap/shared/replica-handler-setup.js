@@ -18,10 +18,7 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
 import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
-import {
-  armSnapshotOfferRouting,
-  wrapPartitionServiceFactoryWithSnapshotCatchup,
-} from './snapshot-catchup-wiring.js';
+import {armSnapshotOfferRouting} from './snapshot-catchup-wiring.js';
 
 /**
  * Subsystem identifier for logging.
@@ -239,18 +236,6 @@ class ReplicaHandlerSetup {
         ownerIncarnation,
       });
 
-    // S6 snapshot catch-up wiring: BOTH production factories (bootstrap and
-    // join/durable-rejoin) flow through this shared setup, so wrapping HERE
-    // sets the onSnapshotCatchupNeeded dispatcher seam on every
-    // factory-built service — including install replacements, which are
-    // recreated through this same wrapped factory.
-    const snapshotWiredCreatePartitionService =
-      wrapPartitionServiceFactoryWithSnapshotCatchup({
-        createPartitionService,
-        systemTableCache,
-        messageRouter,
-      });
-
     // Create ReplicaHandler for CREATE_REPLICA/REMOVE_REPLICA execution
     const replicaHandler = new ReplicaHandler({
       nodeId,
@@ -258,7 +243,7 @@ class ReplicaHandlerSetup {
       cdcIntegrationService,
       replicaStateMachine,
       messageRouter,
-      createPartitionService: snapshotWiredCreatePartitionService,
+      createPartitionService,
       dataDir,
       executorOutcomeEmitter,
       ownerIncarnation,

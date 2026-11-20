@@ -135,9 +135,10 @@ function createHandlerSetup(options = {}) {
       status: 'active',
     })],
   });
+  const messageRouter = createStubRouter(options.bulkChannelRegistry);
   const setup = ReplicaHandlerSetup.create({
     nodeId: NODE_ID,
-    messageRouter: createStubRouter(options.bulkChannelRegistry),
+    messageRouter,
     cdcIntegrationService: createLifecycleCdcService({store: lifecycleStore}),
     systemTableCache: lifecycleStore.cache,
     createPartitionService: async (serviceOptions) => {
@@ -150,6 +151,8 @@ function createHandlerSetup(options = {}) {
       };
       created.push(service);
       completePartitionConstructionFixture(service, serviceOptions);
+      attachSnapshotCatchupDispatcher({service, systemTableCache: lifecycleStore.cache,
+        messageRouter});
       await options.holdConstruction?.(service);
       return service;
     },
@@ -183,25 +186,6 @@ async function createProductionShapedGeneration(prefix) {
     },
   };
 }
-
-test('PRECONDITION WITNESS: a service built through the shared ' +
-  'ReplicaHandlerSetup factory has the dispatcher seam set', async (t) => {
-  const setup = createHandlerSetup();
-  try {
-    const service = await setup.replicaHandler.createPartitionService({
-      partitionId: PARTITION_ID,
-      tableName: STATE_TABLE,
-      replicaId: REPLICA_ID,
-      dbPath: path.join(os.tmpdir(), 'wiring-witness.db'),
-      onPartitionConstructed: (_service, publish) => publish(),
-    });
-    t.equal(typeof service.onSnapshotCatchupNeeded, 'function',
-      'the factory-built service carries the onSnapshotCatchupNeeded seam ' +
-      '(reverting the ReplicaHandlerSetup wrapper reds this)');
-  } finally {
-    setup.replicaStateMachine.stopTimeoutChecker();
-  }
-});
 
 test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
   async (t) => {
@@ -430,7 +414,7 @@ async function checkBulkOfferAdoption(t, shuttingDown) {
     t.equal(setup.created.includes(replacement), true,
       'the replacement came from the production factory');
     t.equal(typeof replacement.onSnapshotCatchupNeeded, 'function',
-      'the replacement flowed through the WRAPPED factory — the seam ' +
+      'the replacement flowed through the concrete factory — the seam ' +
       're-attached itself');
     t.equal(
       setup.replicaHandler.localReplicas.get(REPLICA_ID).service,
@@ -448,7 +432,7 @@ async function checkBulkOfferAdoption(t, shuttingDown) {
   }
 }
 
-test('an adopted bulk OFFER recreates through the wrapped factory and swaps the live replica',
+test('an adopted bulk OFFER recreates through the concrete factory and swaps the live replica',
   (t) => checkBulkOfferAdoption(t, false));
 
 test('an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption',

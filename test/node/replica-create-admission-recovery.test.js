@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {NodeJoiningPublicationActivation} from '../../src/bootstrap/node-joining-publication-activation.js';
-import {wrapPartitionServiceFactoryWithSnapshotCatchup} from '../../src/bootstrap/shared/snapshot-catchup-wiring.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -120,7 +119,7 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
       authorityFor: (cache) => sqlOperationsAuthority(cache, [row]),
       executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
     });
-    const {handler, authority, cache} = fixture;
+    const {handler, authority} = fixture;
     const openedAndHeld = Promise.withResolvers();
     const finishFactory = Promise.withResolvers();
     const unacknowledged = scenario === 'unacknowledged CDC path';
@@ -159,6 +158,7 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
     });
     let opened;
     let other;
+    let foreignSnapshotDispatcher;
     const createOther = async (options) => {
       const replicaId = 'unowned-native-replica';
       other = new PartitionService({...options,
@@ -168,37 +168,34 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
         transport: handler.messageRouter,
       });
       await other.initialize();
+      foreignSnapshotDispatcher = other.onSnapshotCatchupNeeded;
       return other;
     };
-    handler.createPartitionService = wrapPartitionServiceFactoryWithSnapshotCatchup({
-      systemTableCache: cache,
-      messageRouter: handler.messageRouter,
-      createPartitionService: async (options) => {
-        if (uncapturedReturn) {
-          const foreign = await createOther(options);
-          openedAndHeld.resolve();
-          await finishFactory.promise;
-          return foreign;
-        }
-        const initialized = await joining.createJoinLocalPartitionService({
-          ...options,
-          onPartitionConstructed(service, publish) {
-            opened = service;
-            if (unacknowledged) return undefined;
-            const acknowledgement = options.onPartitionConstructed(service, publish);
-            if (scenario === 'repeated handoff') {
-              assert.throws(() => options.onPartitionConstructed(service, publish),
-                /one exact construction handoff/u);
-            }
-            return acknowledgement;
-          },
-        });
-        if (mismatchedReturn) await createOther(options);
+    handler.createPartitionService = async (options) => {
+      if (uncapturedReturn) {
+        const foreign = await createOther(options);
         openedAndHeld.resolve();
         await finishFactory.promise;
-        return mismatchedReturn ? other : initialized;
-      },
-    });
+        return foreign;
+      }
+      const initialized = await joining.createJoinLocalPartitionService({
+        ...options,
+        onPartitionConstructed(service, publish) {
+          opened = service;
+          if (unacknowledged) return undefined;
+          const acknowledgement = options.onPartitionConstructed(service, publish);
+          if (scenario === 'repeated handoff') {
+            assert.throws(() => options.onPartitionConstructed(service, publish),
+              /one exact construction handoff/u);
+          }
+          return acknowledgement;
+        },
+      });
+      if (mismatchedReturn) await createOther(options);
+      openedAndHeld.resolve();
+      await finishFactory.promise;
+      return mismatchedReturn ? other : initialized;
+    };
     try {
       handler.initialize();
       await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
@@ -244,6 +241,8 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
         assert.deepEqual(outcomes, [WORKFLOW_STEP.FAILED]);
         if (mismatchedReturn) assert.equal(opened.isShutdown, true, 'only the captured runtime retires');
         assert.equal(other.isShutdown, false, 'the foreign runtime remains live');
+        assert.equal(other.onSnapshotCatchupNeeded, foreignSnapshotDispatcher,
+          'the concrete factory never wires the foreign return');
         assert.equal(router.getRegisteredHandler(other.unifiedAddress), other.transportHandler);
       } else if (rejectedSubscription || scenario.endsWith('handoff')) {
         assert.equal(opened.isShutdown, true);

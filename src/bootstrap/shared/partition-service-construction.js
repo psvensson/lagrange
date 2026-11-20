@@ -51,6 +51,11 @@ function createPartitionConstructionHandoff(replicaId, requireCurrent) {
   });
 }
 
+function isPartitionConstructionAcknowledged(acknowledgement, service, publish) {
+  return acknowledgement?.[CONSTRUCTION_RETAINED] === true &&
+    acknowledgement.service === service && acknowledgement.publish === publish;
+}
+
 function exposePartitionConstruction(options, service, registry, onPublished) {
   const {replicaId, unifiedAddress, transport} = service;
   const previous = registry.get(replicaId);
@@ -66,8 +71,7 @@ function exposePartitionConstruction(options, service, registry, onPublished) {
     onPublished?.();
   };
   const acknowledgement = options.onPartitionConstructed?.(service, publish);
-  if (acknowledgement?.[CONSTRUCTION_RETAINED] !== true ||
-      acknowledgement.service !== service || acknowledgement.publish !== publish) {
+  if (!isPartitionConstructionAcknowledged(acknowledgement, service, publish)) {
     throw invalidPartitionConstruction(replicaId);
   }
   // initialize registers its transport synchronously on entry. A live
