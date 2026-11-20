@@ -260,7 +260,7 @@ test('inactive voter rows reserve occupancy without adding to the REMOVE floor o
     assert.equal(waiting.state, PLACEMENT_DEFICIT_STATE.WAITING);
     assert.equal(waiting.waiting.reason, PLACEMENT_WAITING_REASON.LEADER_UNKNOWN);
     const unresolvedRole = withoutLeader.map((row) => row[COLUMN.NODE_ID] === 'n2' ?
-      {...row, [COLUMN.RAFT_ROLE]: null} : row).slice(0, 3);
+      {...row, [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE, [COLUMN.RAFT_ROLE]: null} : row).slice(0, 3);
     assert.equal(measured(unresolvedRole, 'n2').waiting.reason,
       PLACEMENT_WAITING_REASON.INCUMBENT_ROLE_UNAVAILABLE);
   });
