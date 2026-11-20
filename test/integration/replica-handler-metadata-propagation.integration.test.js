@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Integration test: ReplicaHandler metadata propagation handling.
  *
@@ -31,7 +32,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {
-  bindRegisteredReplicaHandler,
+  createRegisteredPartitionFactoryFixture,
   createIdentityTransport,
 } from '../test-helpers/replica-handler-identity-fixture.js';
 import {createLifecycleCdcServiceForCache} from
@@ -139,6 +140,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           transport: createIdentityTransport(),
           resolveHandlerRetirementLane: options.resolveHandlerRetirementLane,
         }));
+        completePartitionConstructionFixture(service, options);
         await service.initialize();
         return service;
       },
@@ -214,7 +216,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
         systemTableCache: cache,
         cdcIntegrationService,
         dataDir: tempDir,
-        createPartitionService: async (options) => bindRegisteredReplicaHandler({
+        createPartitionService: async (options) => createRegisteredPartitionFactoryFixture({
           replicaId: options.replicaId,
           async shutdown() {},
           async syncFromLeader() {},

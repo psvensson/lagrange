@@ -2,7 +2,7 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
+import {createRegisteredPartitionFactoryFixture, registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -125,7 +125,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const createPartitionService = async (options) => {
         physicalStarts += 1;
         await physicalStartGate;
-        return bindRegisteredReplicaHandler({
+        return createRegisteredPartitionFactoryFixture({
           partitionId: options.partitionId,
           replicaId: options.replicaId,
           initialized: true,
@@ -243,7 +243,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         systemTableCache: cache,
         createPartitionService: async (options) => {
           createdReplicaIds.push(options.replicaId);
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -344,7 +344,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         systemTableCache: cache,
         createPartitionService: async (options) => {
           createdReplicaIds.push(options.replicaId);
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -501,7 +501,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             handler.getLocalReplica(options.replicaId)?.status || null;
           stateMachineStatusAtFactory =
             replicaStateMachine.getState(options.replicaId)?.state || null;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -648,7 +648,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -707,7 +707,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -813,7 +813,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           localOnlyAtFactory = replicaStateMachine.isServiceRowLocalOnly(
             options.replicaId,
           );
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -923,7 +923,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           replicaStateMachine,
           createPartitionService: async (options) => {
             if (failurePoint === 'before-runtime-open') throw deferred();
-            return bindRegisteredReplicaHandler({
+            return createRegisteredPartitionFactoryFixture({
               partitionId: options.partitionId,
               replicaId: options.replicaId,
               initialized: true,

@@ -23,6 +23,8 @@
 // ReplicaHandlerSetup; the join durable-rejoin restore path additionally
 // attaches per-service (it constructs services without the handler factory).
 
+import {createPartitionConstructionHandoff, supersededPartitionConstruction} from
+  './partition-service-construction.js';
 import {
   buildSnapshotCatchupIdentityFromCache,
   dispatchSnapshotCatchup,
@@ -217,8 +219,23 @@ function armSnapshotOfferRouting(context) {
       connection,
       resolveLocalReplica: (raftGroupId) =>
         resolveLocalReplicaService(replicaHandler, raftGroupId),
-      orchestrate: ({service, socket}) =>
-        orchestrateSnapshotCatchupInstall({
+      orchestrate: ({service, socket}) => {
+        const {replicaId, partitionId} = service;
+        const requireCurrent = () => {
+          if (replicaHandler.getTrackedService(replicaId) !== service) {
+            throw supersededPartitionConstruction(replicaId);
+          }
+        };
+        const construction = createPartitionConstructionHandoff(replicaId, requireCurrent);
+        const retireOpening = async (error) => {
+          const {opened} = construction;
+          if (opened) {
+            await replicaHandler.fenceFailedReplicaCreateRuntime(
+              replicaId, partitionId, opened, error);
+          }
+          throw error;
+        };
+        return orchestrateSnapshotCatchupInstall({
           service,
           receiveOptions: {
             socket,
@@ -236,11 +253,23 @@ function armSnapshotOfferRouting(context) {
               serviceOptions.replicaId,
               serviceOptions.partitionId,
             );
-            return replicaHandler.createPartitionService(serviceOptions);
+            requireCurrent();
+            try {
+              return await replicaHandler.createPartitionService({...serviceOptions,
+                onPartitionConstructed: construction.retain,
+              });
+            } catch (error) {
+              return retireOpening(error);
+            }
           },
-          registerReplacementService: (replacement) =>
-            replicaHandler.replaceLocalReplicaService(
-              service.replicaId, replacement),
+          registerReplacementService: async (replacement) => {
+            try {
+              construction.publish(replacement);
+              replicaHandler.replaceLocalReplicaService(replicaId, replacement);
+            } catch (error) {
+              await retireOpening(error);
+            }
+          },
         }).catch((error) => {
           resolveWiringLogger().warn(
             SNAPSHOT_WIRING_LOG_MSG.OFFER_ORCHESTRATION_FAILED, {
@@ -248,7 +277,8 @@ function armSnapshotOfferRouting(context) {
               error: error?.message,
             });
           return null;
-        }),
+        });
+      },
       onOutcome: context.onRouteOutcome,
     });
   });

@@ -4,7 +4,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {createParticipantReleaseRecovery} from
+import {FRESH_CREATE_RELEASE_UNAVAILABLE, createParticipantReleaseRecovery} from
   '../../src/node/replica-handler-release-recovery.js';
 import {createParticipantReleaseAuthorizationOwner} from
   '../../src/node/participant-release-authorization-owner.js';
@@ -250,28 +250,33 @@ test('completion fixture preserves primary and cleanup error identities', async 
     error instanceof AggregateError && error.errors[0] === primary && error.errors[1] === cleanup);
 });
 
-test('fresh CREATE preserves original outcome getter reads on success and terminal refusal', async () => {
-  for (const outcome of [OUTCOME.CUT_OVER, OUTCOME.UNAVAILABLE]) {
-    const limit = outcome === OUTCOME.CUT_OVER ? 2 : 3;
+test('fresh CREATE observes the routed outcome once per redirect and completion policy', async () => {
+  for (const outcome of [OUTCOME.CUT_OVER, OUTCOME.OPERATOR_REQUIRED, OUTCOME.UNAVAILABLE]) {
     let reads = 0;
-    const answer = {retryAfterMs: undefined};
-    // The actual client accepts an object reply without requiring own-data
-    // outcome. Non-enumerability isolates policy reads from failure JSON.
+    const answer = {};
+    // A repeated policy observation would reverse the observed disposition.
+    // The non-enumerable getter separates policy reads from failure diagnostics.
     Object.defineProperty(answer, 'outcome', {get() {
       reads += 1;
-      if (reads > limit) throw new Error('completion added an outcome observation');
-      return outcome;
+      return reads <= 2 ? outcome : OUTCOME.NOT_LEADER;
     }});
     const host = createHost({reply: () => answer});
     await withHost(host, async () => {
       if (outcome === OUTCOME.CUT_OVER) {
         assert.equal(await host.run(), answer);
       } else {
-        const failure = await failureOf(host);
-        assert.deepEqual(failure.answer, {});
+        await assert.rejects(host.run(), (error) => {
+          assert.ok(error.message.startsWith(FAILURE_PREFIX));
+          assert.equal(error.participantReleaseAnswer, answer);
+          const expectedCode = outcome === OUTCOME.UNAVAILABLE ?
+            FRESH_CREATE_RELEASE_UNAVAILABLE : undefined;
+          assert.equal(error.code, expectedCode);
+          return true;
+        });
       }
       host.assertRequests();
-      assert.equal(reads, limit, 'single-attempt redirect check plus original caller reads only');
+      assert.equal(host.delivered.length, 1);
+      assert.equal(reads, 2, 'one redirect check and one completion policy observation');
       assert.deepEqual(host.clock.waits, []);
     });
   }

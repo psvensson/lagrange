@@ -1069,14 +1069,17 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
   });
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
+    const partition = {
       initialized: true,
       transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
-    });
+    };
+    options.onPartitionConstructed(partition,
+      () => service.partitionServices.set(options.replicaId, partition));
+    return partition;
   };
   const initializeJoiningLifecycleOwners =
       service.initializeJoiningLifecycleOwners.bind(service);
@@ -1239,14 +1242,17 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   };
   service.createJoinLocalPartitionService = async (options) => {
     calls.push(`create:${options.replicaId}`);
-    service.partitionServices.set(options.replicaId, {
+    const partition = {
       initialized: true,
       transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
       },
-    });
+    };
+    options.onPartitionConstructed(partition,
+      () => service.partitionServices.set(options.replicaId, partition));
+    return partition;
   };
 
   const schemaDefinition = {

@@ -129,9 +129,14 @@ async function rotateFailedCreateEvidence(handler, evidence, physicalClaim) {
     rotating : null;
 }
 
-function buildRotatingReplayContext(handler, replicaId, partitionId,
-  service, rotatingEvidence) {
-  const context = buildFailedCreateReplayContext(partitionId, service);
+function buildRotatingReplayContext(partitionId, service, rotatingEvidence) {
+  const context = {
+    partitionId,
+    nodeId: service.node_id,
+    serviceId: service.service_id,
+    serviceType: service.service_type,
+    serviceAddress: service.address,
+  };
   if (!rotatingEvidence) return context;
   return {
     ...context,
@@ -163,16 +168,6 @@ async function resolveCreateReplay(handler, replicaId, partitionId, status,
     replicaId,
   ).trackedState;
   return trackedState?.state === status ? {service: observation.row} : null;
-}
-
-function buildFailedCreateReplayContext(partitionId, service) {
-  return {
-    partitionId,
-    nodeId: service.node_id,
-    serviceId: service.service_id,
-    serviceType: service.service_type,
-    serviceAddress: service.address,
-  };
 }
 
 function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
@@ -387,9 +382,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       const restarted = await Promise.resolve(
         this.replicaStateMachine.restartFailedCreate(
           replicaId,
-          buildRotatingReplayContext(
-            this, replicaId, partitionId, replay.service, rotatingEvidence,
-          ),
+          buildRotatingReplayContext(partitionId, replay.service, rotatingEvidence),
           {
             persist: true,
             expectedSourceEvidence: replay.service,

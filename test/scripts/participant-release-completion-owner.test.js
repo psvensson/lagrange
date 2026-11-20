@@ -87,6 +87,16 @@ test('completion audit rejects renewed deadlines, changed guards and wait contro
     'const deadline = now() + options.deadlineAtMs;'), FRESH);
 });
 
+test('completion audit requires current reply classification and typed CREATE uncertainty', async () => {
+  const sources = await currentSources();
+  rejectsContract(changed(sources, OWNER,
+    'completion = {completed: false, outcome, retryAfterMs};',
+    'completion = {completed: false, outcome: answer.outcome, retryAfterMs};'), OWNER);
+  rejectsContract(changed(sources, FRESH,
+    'error.code = FRESH_CREATE_RELEASE_UNAVAILABLE;',
+    'error.code = OUTCOME.OPERATOR_REQUIRED;'), FRESH);
+});
+
 test('completion audit rejects spoofed imports, shadowed bindings and an extra aliased caller', async () => {
   const sources = await currentSources();
   rejectsContract(changed(sources, OWNER,

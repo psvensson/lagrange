@@ -1,3 +1,6 @@
+import {createPartitionConstructionHandoff, supersededPartitionConstruction} from
+  './shared/partition-service-construction.js';
+import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS} from './node-joining-constants.js';
 import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
@@ -47,7 +50,39 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     if (options.createDelayMs > 0) {
       await this.sleep(options.createDelayMs);
     }
-    await this.createJoinLocalPartitionService(options);
+    const {replicaId, partitionId} = options;
+    if (this.partitionServices.has(replicaId)) {
+      throw supersededPartitionConstruction(replicaId);
+    }
+    const handler = this.replicaHandler;
+    const tracked = handler?.localServices.get(replicaId);
+    const requireCurrent = () => {
+      if (this.replicaHandler !== handler || handler?.localServices.get(replicaId) !== tracked) {
+        throw supersededPartitionConstruction(replicaId);
+      }
+    };
+    const construction = createPartitionConstructionHandoff(replicaId, requireCurrent);
+    try {
+      const opened = await this.createJoinLocalPartitionService({...options,
+        onPartitionConstructed: construction.retain,
+      });
+      construction.publish(opened);
+      this.trackJoinPartitionReplica(replicaId, partitionId, opened);
+    } catch (error) {
+      const {opened} = construction;
+      if (opened) {
+        if (handler) {
+          await handler.fenceFailedReplicaCreateRuntime(replicaId, partitionId, opened, error);
+        } else {
+          try {
+            await opened.shutdown();
+          } catch (cleanup) {
+            throw withRaftOpeningCleanupFailure(error, cleanup);
+          }
+        }
+      }
+      throw error;
+    }
     return {status: SERVICE_LIFECYCLE_STATE.CREATED};
   }
   /**
@@ -102,14 +137,23 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     if (!partition) {
       return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
     }
+    const handler = this.replicaHandler;
     if (typeof partition.shutdown === 'function') {
       await partition.shutdown();
     }
     // partition.shutdown() already retired its exact transport handler in the
     // replica lane; a raw by-address unregister here could remove a successor's.
-    this.partitionServices.delete(options.replicaId);
-    this.replicaHandler?.localServices?.delete?.(options.replicaId);
-    this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
+    const replicaId = options.replicaId;
+    if (this.partitionServices.get(replicaId) === partition) {
+      this.partitionServices.delete(replicaId);
+    }
+    if (handler === this.replicaHandler && handler?.localServices.get(replicaId) === partition) {
+      handler.localServices.delete(replicaId);
+    }
+    if (handler === this.replicaHandler &&
+        handler?.localReplicas.get(replicaId)?.service === partition) {
+      handler.localReplicas.delete(replicaId);
+    }
     return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
   }
   /**

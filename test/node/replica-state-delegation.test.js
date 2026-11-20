@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 /**
  * Unit tests verifying replica state delegation.
  *
@@ -63,12 +64,12 @@ function createMockCache() {
  * @return {Function} Factory function.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => ({
+  return async (options) => completePartitionConstructionFixture({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     async shutdown() {},
     async syncFromLeader() {},
-  });
+  }, options);
 }
 
 test('Replica state delegation', async (t) => {

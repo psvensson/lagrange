@@ -1,3 +1,4 @@
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 // Production-bound witness, quest fresh-create-failure-after-committed-admission
 // (receipt superseded under R09 on 2026-11-02: an INDUCED authority-read
 // unavailability replaces the live lottery). A real ReplicaHandler runs the real
@@ -159,6 +160,7 @@ async function runCreate(t, {label, refusals}) {
     createPartitionService: async (options) => {
       const service = new PartitionService(withFoundingStamp({
         ...options, transport, systemTableCache: cache}));
+      completePartitionConstructionFixture(service, options);
       await service.initialize();
       // The lone founder of this fixture group leads (as a founded group's
       // first election would); the subject is the release, not the election.

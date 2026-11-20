@@ -1,3 +1,5 @@
+import {createIdentityTransport} from '../test-helpers/replica-handler-identity-fixture.js';
+import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -144,7 +146,7 @@ function createHandlerSetup(options = {}) {
         shutdown: async () => {},
       };
       created.push(service);
-      return service;
+      return completePartitionConstructionFixture(service, serviceOptions);
     },
     dataDir: os.tmpdir(),
   });
@@ -186,6 +188,7 @@ test('PRECONDITION WITNESS: a service built through the shared ' +
       tableName: STATE_TABLE,
       replicaId: REPLICA_ID,
       dbPath: path.join(os.tmpdir(), 'wiring-witness.db'),
+      onPartitionConstructed: (_service, publish) => publish(),
     });
     t.equal(typeof service.onSnapshotCatchupNeeded, 'function',
       'the factory-built service carries the onSnapshotCatchupNeeded seam ' +
@@ -202,7 +205,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
     fs.mkdirSync(path.dirname(dbPath), {recursive: true});
     const stubJoinService = {
       nodeId: NODE_ID,
-      transport: null,
+      transport: createIdentityTransport(),
       messageRouter: createStubRouter(),
       rebalanceCoordinator: null,
       replicaStateMachine: null,
@@ -214,6 +217,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
       trackJoinPartitionReplica() {},
     };
     let service = null;
+    let attach;
     try {
       service = await NodeJoiningPublicationActivation.prototype
         .createJoinLocalPartitionService.call(stubJoinService, {
@@ -233,7 +237,12 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
           },
           deferElection: true,
           messageGroupService: {},
+          onPartitionConstructed: (_service, publish) => {
+            attach = publish;
+          },
         });
+      t.equal(stubJoinService.partitionServices.has(REPLICA_ID), false);
+      attach();
       t.equal(typeof service.onSnapshotCatchupNeeded, 'function',
         'the join-factory-built service carries the seam (durable-rejoin ' +
         'restores use THIS path — reverting the join attach reds this)');

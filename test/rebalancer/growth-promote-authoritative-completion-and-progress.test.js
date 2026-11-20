@@ -18,7 +18,7 @@ import {
   PARTICIPANT_CUTOVER_OUTCOME, PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_ROUTE_SUFFIX, PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_RELEASE_TYPE,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
-import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
+import {completePartitionConstructionFixture, createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   LEARNER_ADMISSION_WAIT_OUTCOME, assignReplicaHandlerVoterReadinessMethods,
 } from '../../src/node/replica-handler-voter-readiness-methods.js';
@@ -1289,7 +1289,7 @@ test(
     transport.register(releaseAddress, releaseHandler);
     createHandler.messageRouter = transport;
     createHandler.registeredRouterHandler = releaseHandler;
-    createHandler.createPartitionService = async () => {
+    createHandler.createPartitionService = async (options) => {
       const svc = makePrototypeService(TEST_LEARNER_2, 'op-create-budget');
       svc.participantTransactionCoordinator = {};
       svc.requestReplicaAdmission = async (opId) => {
@@ -1318,7 +1318,7 @@ test(
         admitted = true;
         return {outcome: 'proposed', nodeId: TEST_LEADER_NODE_2};
       };
-      return svc;
+      return completePartitionConstructionFixture(svc, options);
     };
 
     await t.rejects(

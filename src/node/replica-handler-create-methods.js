@@ -1,3 +1,5 @@
+import {createPartitionConstructionHandoff} from
+  '../bootstrap/shared/partition-service-construction.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {REPLICA_CREATE_PHASE, failedReplicaCreateClaimsCleanup,
   replicaCreatePhaseAfterResume} from './replica-create-admission-input.js';
@@ -9,7 +11,6 @@ import {
   ReplicaStatus,
 } from '../rebalancer/replica-status.js';
 import {
-  CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
 } from './replica-create-admission-owner.js';
 import {assignReplicaHandlerCreateAdmissionMethods} from
@@ -25,14 +26,22 @@ import {
 } from './replica-handler-voter-readiness-methods.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
-import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
-import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
-import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
-  '../partition/partition-participant-transaction-cutover-constants.js';
+import {
+  armCreateAdmissionRecoveryRearm,
+  canRetainCreateActivation,
+  lostBootPhysicalWorkerError,
+  matchesRetainedCreateActivation,
+  observeCreateActivation,
+  ownsReplicaCreateWork,
+  releaseReplicaCreateWork,
+  replicaCreateWork,
+  requireFreshCreateReleaseRoute,
+  requireReplicaCreateWork,
+  retireReplicaCreateWork,
+} from './replica-handler-create-work.js';
 import * as priorExistence from './replica-prior-existence.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
-  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_PROGRESS,
@@ -72,129 +81,6 @@ const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
 // never opened; SYNCING is the ack-loss wedge, resumed at its own row (F3 c).
 const RESTARTABLE_CREATE_STATUSES = new Set([
   ReplicaStatus.PENDING, ReplicaStatus.SYNCING]);
-
-function requireFreshCreateReleaseRoute(handler) {
-  const router = handler.messageRouter;
-  if (typeof router?.deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
-      !isExactReplicaHandlerRegistered(router,
-        handler.nodeId + PARTICIPANT_RELEASE_ROUTE_SUFFIX, handler.registeredRouterHandler)) {
-    throw Object.assign(new Error('Fresh CREATE participant release route unavailable'),
-      {code: FRESH_CREATE_RELEASE_UNAVAILABLE});
-  }
-}
-
-function armCreateAdmissionRecoveryRearm(handler) {
-  if (handler.shuttingDown ||
-      handler.replicaCreateAdmissionRecoveryRearmOwner?.current()) return;
-  handler.replicaCreateAdmissionRecoveryRearmOwner?.arm?.(
-    () => handler.startReplicaCreateAdmissionRecovery(),
-    REPLICA_HANDLER_DEFAULT.CREATE_ADMISSION_RECOVERY_RETRY_MS,
-  );
-}
-
-function lostBootPhysicalWorkerError(message) {
-  return Object.assign(
-    new Error(message),
-    {
-      code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-      errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
-      deferRetry: true,
-      bootAuthorityUnavailable: true,
-      bootIncarnationSuperseded: true,
-    },
-  );
-}
-
-function replicaCreateWork(handler, request) {
-  const {operationId, replicaId, partitionId, createPhysicalWorkerClaim: claim} = request;
-  return {
-    operationId, replicaId, partitionId, claim,
-    tracker: handler.inProgressOperations.get(operationId),
-    service: handler.getTrackedService(replicaId),
-    openedService: null,
-    retiring: false,
-    progress: null,
-    owner: claim ? handler.getReplicaCreateAdmissionOwner() : null,
-  };
-}
-
-function ownsReplicaCreateWork(handler, work) {
-  const currentService = handler.getTrackedService(work.replicaId);
-  return handler.inProgressOperations.get(work.operationId) === work.tracker &&
-    (!work.progress?.replicaId ||
-      handler.creationProgressByReplica.get(work.replicaId) === work.progress) &&
-    (currentService === work.service || work.retiring && currentService === null) &&
-    (!work.claim || work.owner.ownsPhysicalWorker(work.claim));
-}
-
-function requireReplicaCreateWork(handler, work) {
-  if (!ownsReplicaCreateWork(handler, work) || work.openedService?.isShutdown === true) {
-    throw Object.assign(new Error(`CREATE work superseded for ${work.replicaId}`), {
-      code: CREATE_ADMISSION_ERROR_CODE.STALE,
-    });
-  }
-  handler.throwIfShuttingDown();
-}
-
-function releaseReplicaCreateWork(handler, work) {
-  if (work.released) return;
-  work.released = true;
-  const {operationId, replicaId, progress, tracker, claim, owner} = work;
-  if (progress && handler.creationProgressByReplica?.get(replicaId) === progress) {
-    handler.clearReplicaCreationProgress(progress);
-  }
-  if (tracker && handler.inProgressOperations.get(operationId) === tracker) {
-    handler.inProgressOperations.delete(operationId);
-  }
-  if (claim) owner.releasePhysicalWorker(claim);
-}
-
-function deferredCreateActivation(work) {
-  return Object.assign(new Error(`CREATE activation observation deferred for ${work.replicaId}`),
-    {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
-}
-
-async function observeCreateActivation(handler, work, deadlineAtMs, observe) {
-  if (work.activationObservation) throw deferredCreateActivation(work);
-  let observed;
-  const withinBudget = await awaitBoundedReplicaAdmission(handler, () => {
-    const observation = Promise.resolve().then(observe);
-    work.activationObservation = observation;
-    return observation.then((value) => {
-      observed = value;
-    }).finally(() => {
-      work.activationObservation = null;
-      if (work.retained && ownsReplicaCreateWork(handler, work)) {
-        armCreateAdmissionRecoveryRearm(handler);
-      }
-    });
-  }, deadlineAtMs);
-  if (!withinBudget) throw deferredCreateActivation(work);
-  return observed;
-}
-
-function canRetainCreateActivation(handler, work, error) {
-  return work.tracker && work.claim && !handler.shuttingDown &&
-    ownsReplicaCreateWork(handler, work) && !isSupersededAdmissionError(error) &&
-    [CREATE_ADMISSION_ERROR_CODE.DEFERRED, FRESH_CREATE_RELEASE_UNAVAILABLE]
-      .includes(error?.code);
-}
-
-function matchesRetainedCreateActivation(expected, observed) {
-  return expected?.operationId === observed.operationId &&
-    expected.replicaCreatedAt === observed.replicaCreatedAt &&
-    expected.admissionToken === observed.admissionToken &&
-    expected.attemptToken === observed.attemptToken &&
-    expected.ownerIncarnation === observed.ownerIncarnation;
-}
-
-function retireReplicaCreateWork(handler, work, error) {
-  work.retiring = true;
-  if (work.openedService) {
-    return handler.fenceFailedReplicaCreateRuntime(
-      work.replicaId, work.partitionId, work.openedService, error);
-  }
-}
 
 function learnerAdmissionWaitError(replicaId, outcome) {
   return new Error(`Learner admission wait failed for replica ${replicaId}: ${outcome}`);
@@ -644,6 +530,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           );
         }
         requireReplicaCreateWork(this, work);
+        const construction = createPartitionConstructionHandoff(replicaId,
+          () => requireReplicaCreateWork(this, work));
+        const capturePartition = (service, publish) => {
+          try {
+            construction.retain(service, publish);
+          } finally {
+            work.openedService = construction.opened;
+          }
+        };
         const partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
@@ -661,10 +556,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             if (isCreateCurrent()) this.updateReplicaCreationProgress(progress, stageEvent);
           },
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
+          onPartitionConstructed: capturePartition,
         });
-        work.openedService = partitionService;
+        // A returned object that is already tracked elsewhere is never
+        // adopted as cleanup custody merely because a malformed factory
+        // returned it. A captured opened resource always takes precedence.
+        if (!work.openedService && partitionService !== this.getTrackedService(replicaId)) {
+          work.openedService = partitionService;
+        }
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
-        requireReplicaCreateWork(this, work);
+        construction.publish(partitionService);
         // Store service reference in localServices
         const admissionOperationId =
           createAdmissionEvidence?.operationId || operationId || null;
@@ -730,7 +631,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           }
         }
         this.throwIfShuttingDown();
-        let admissionWaitFailure = null;
         if (this.shouldGateActivationOnVoterReadiness(
           partitionId, operationId, isJoiningExistingGroup, explicitOperationType,
         )) {
@@ -748,12 +648,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             },
           );
           if (admissionWait?.ready !== true) {
-            admissionWaitFailure = learnerAdmissionWaitError(
-              replicaId, admissionWait?.outcome);
+            requireReplicaCreateWork(this, work);
+            throw learnerAdmissionWaitError(replicaId, admissionWait?.outcome);
           }
         }
         requireReplicaCreateWork(this, work);
-        if (admissionWaitFailure) throw admissionWaitFailure;
         // A retained local identity, an ACTIVE-runtime repair, or bootstrap
         // without operation admission already belongs to its own release
         // owner. Fresh materialized CREATE always enters the release protocol.

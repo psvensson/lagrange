@@ -10,7 +10,7 @@ import {
   genesisStampFor,
   withBootstrapStamp,
 } from './replica-handler-bootstrap-stamps.js';
-import {bindRegisteredReplicaHandler, createInProcessMockTransport,
+import {createRegisteredPartitionFactoryFixture, createInProcessMockTransport,
   registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {
@@ -88,7 +88,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -160,7 +160,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -378,7 +378,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -510,7 +510,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         createPartitionService: async (options) => {
           capturedOptions = options;
           resolveFactoryCalled();
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -599,7 +599,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -676,7 +676,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -782,7 +782,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -964,7 +964,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
@@ -1036,7 +1036,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,

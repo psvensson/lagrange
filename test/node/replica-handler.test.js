@@ -49,7 +49,7 @@ import {registerReplicaHandlerIdentityEntryTests} from
   './replica-handler-identity-entry-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler, registerCompletedFreshCreateReleaseFixture} from
+import {createRegisteredPartitionFactoryFixture, registerCompletedFreshCreateReleaseFixture} from
   '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
@@ -214,7 +214,7 @@ function createMockCDCService(cache, options = {}) {
  * @return {Function} Factory function.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => bindRegisteredReplicaHandler({
+  return async (options) => createRegisteredPartitionFactoryFixture({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
@@ -836,7 +836,7 @@ test('ReplicaHandler', async (t) => {
         cdcIntegrationService: mockCDC,
         createPartitionService: async (options) => {
           createCalls.push(options);
-          return bindRegisteredReplicaHandler({
+          return createRegisteredPartitionFactoryFixture({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,

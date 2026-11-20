@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
+import {NodeJoiningPublicationActivation} from '../../src/bootstrap/node-joining-publication-activation.js';
+import {wrapPartitionServiceFactoryWithSnapshotCatchup} from '../../src/bootstrap/shared/snapshot-catchup-wiring.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
@@ -103,6 +106,121 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
     await handler.shutdown();
     authority.close();
   }
+}
+
+for (const scenario of ['owned join factory', 'replaced during join factory',
+  'refused CDC subscription', 'missing handoff', 'repeated handoff']) {
+  it(`fresh CREATE custody with the production factory: ${scenario}`, {timeout: 10_000}, async () => {
+    const row = operationRow();
+    const outcomes = [];
+    const fixture = await createHandlerFixture({
+      row, targetRow: targetLifecycle(row),
+      authorityFor: (cache) => sqlOperationsAuthority(cache, [row]),
+      executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
+    });
+    const {handler, authority, cache} = fixture;
+    const openedAndHeld = Promise.withResolvers();
+    const finishFactory = Promise.withResolvers();
+    const rejectedSubscription = scenario === 'refused CDC subscription';
+    const joining = Object.assign(Object.create(NodeJoiningPublicationActivation.prototype), {
+      nodeId: row.target_node_id,
+      replicaHandler: handler,
+      replicaStateMachine: handler.replicaStateMachine,
+      partitionServices: new Map(),
+      transport: handler.messageRouter,
+      messageRouter: handler.messageRouter,
+      tablePolicyService: {},
+      createCdcIntegrationService: () => null,
+      getLeaderMessageGroupService: () => null,
+      resolveOperationalMessageGroupSelectionAsync: async () => ({
+        service: {async subscribeToCDC() {
+          openedAndHeld.resolve();
+          await finishFactory.promise;
+          throw new Error('controlled CDC refusal after native initialization');
+        }},
+      }),
+    });
+    const resolveContext = handler.resolveReplicaContextWithRetry.bind(handler);
+    handler.resolveReplicaContextWithRetry = async (...args) => ({
+      ...await resolveContext(...args),
+      ...(rejectedSubscription ? {tableName: SYSTEM_TABLE_NAME.NODES} : {}),
+      // The ownership handoff is independent of group growth. Use one real
+      // native voter so this fixture needs no synthetic remote membership.
+      replicaIds: [row.replica_id],
+      existingReplicaCount: 0,
+      bootstrapMembership: genesisStamp([row.replica_id], {[row.replica_id]: row.target_node_id}),
+    });
+    let opened;
+    handler.createPartitionService = wrapPartitionServiceFactoryWithSnapshotCatchup({
+      systemTableCache: cache,
+      messageRouter: handler.messageRouter,
+      createPartitionService: async (options) => {
+        const initialized = await joining.createJoinLocalPartitionService({
+          ...options,
+          onPartitionConstructed(service, publish) {
+            opened = service;
+            if (scenario !== 'missing handoff') options.onPartitionConstructed(service, publish);
+            if (scenario === 'repeated handoff') {
+              assert.throws(() => options.onPartitionConstructed(service, publish),
+                /one exact construction handoff/u);
+            }
+          },
+        });
+        openedAndHeld.resolve();
+        await finishFactory.promise;
+        return initialized;
+      },
+    });
+    try {
+      handler.initialize();
+      await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+      const worker = Promise.allSettled([...handler.operationTasks]);
+      await Promise.race([openedAndHeld.promise, worker.then(() => {
+        assert.fail('CREATE completed before reaching the held factory or CDC checkpoint');
+      })]);
+      assert.ok(opened?.raft, 'production join factory opened the native port');
+      assert.equal(handler.getTrackedService(row.replica_id), null);
+      assert.equal(joining.partitionServices.has(row.replica_id), false);
+      const address = opened.unifiedAddress;
+      const router = handler.messageRouter;
+      const replacement = {
+        replicaId: row.replica_id, partitionId: row.partition_id,
+        transportHandler: () => ({}),
+      };
+      if (scenario === 'replaced during join factory') {
+        joining.partitionServices.set(row.replica_id, replacement);
+        handler.localServices.set(row.replica_id, replacement);
+        handler.setLocalReplica(row.replica_id, replacement);
+        router.register(address, replacement.transportHandler);
+      }
+      finishFactory.resolve();
+      await worker;
+      if (rejectedSubscription || scenario.endsWith('handoff')) {
+        assert.equal(opened.isShutdown, true);
+        assert.deepEqual(outcomes, [WORKFLOW_STEP.FAILED]);
+        assert.equal(handler.getTrackedService(row.replica_id), null);
+        assert.equal(joining.partitionServices.has(row.replica_id), false);
+        assert.equal(router.getRegisteredHandler(address), null);
+      } else if (scenario === 'replaced during join factory') {
+        assert.equal(opened.isShutdown, true);
+        assert.deepEqual(outcomes, []);
+        assert.equal(handler.getTrackedService(row.replica_id), replacement);
+        assert.equal(joining.partitionServices.get(row.replica_id), replacement);
+        assert.equal(router.getRegisteredHandler(address), replacement.transportHandler);
+      } else {
+        assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+        assert.equal(handler.getTrackedService(row.replica_id), opened);
+        assert.equal(joining.partitionServices.get(row.replica_id), opened);
+        assert.equal(authority.lifecycleStore.durableRow(
+          SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status, ReplicaStatus.ACTIVE);
+      }
+    } finally {
+      finishFactory.resolve();
+      await handler.shutdown();
+      if (opened && !opened.isShutdown) await opened.shutdown();
+      authority.close();
+    }
+  });
 }
 
 it('unavailable final CREATE authority retains the live work for existing admission recovery',
