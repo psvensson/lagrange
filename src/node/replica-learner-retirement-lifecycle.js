@@ -30,7 +30,13 @@ function learnerRetirementToken(operationId) {
 }
 
 function isLearnerRetirementToken(token) {
-  return typeof token === 'string' && token.startsWith(RETIREMENT_TOKEN_PREFIX);
+  return learnerRetirementOperationId(token) !== null;
+}
+
+function learnerRetirementOperationId(token) {
+  return typeof token === 'string' && token.startsWith(RETIREMENT_TOKEN_PREFIX) &&
+    token.length > RETIREMENT_TOKEN_PREFIX.length ?
+    token.slice(RETIREMENT_TOKEN_PREFIX.length) : null;
 }
 
 function claimOf(state, row = null) {
@@ -126,6 +132,7 @@ export {
   acquireLearnerRetirementCustody,
   claimLearnerDiskRejoin,
   isLearnerRetirementToken,
+  learnerRetirementOperationId,
   learnerRetirementToken,
   observeLearnerRetirementCustody,
   releaseLearnerRetirementCustody,

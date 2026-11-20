@@ -3,7 +3,7 @@ import {
   NODE_LIFECYCLE_AUTHORITATIVE_READ,
   SELECT_NODE_ROW_SQL,
 } from '../control-plane/node-lifecycle-publication.js';
-import {readAuthoritativeControlPlaneRows} from
+import {isAuthoritativeControlPlaneRowReadSuccessful, readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
@@ -27,7 +27,8 @@ async function readOne(handler, table, sql, key) {
     const result = await readAuthoritativeControlPlaneRows(
       handler.getControlPlaneSystemTableGateway(), table, sql, [key],
       NODE_LIFECYCLE_AUTHORITATIVE_READ);
-    if (result?.success === true && Array.isArray(result.rows) && result.rows.length === 1) {
+    if (isAuthoritativeControlPlaneRowReadSuccessful(result) &&
+        Array.isArray(result.rows) && result.rows.length === 1) {
       return result.rows[0];
     }
   } catch (error) {
@@ -60,10 +61,28 @@ async function observesCurrentRisk(handler, scope, row) {
     LEARNER_LIFECYCLE_CUSTODY.ACQUIRED : LEARNER_LIFECYCLE_CUSTODY.CHANGED;
 }
 
+async function admitsLearnerRetirement(handler, scope) {
+  return admittedScopeMatches(await readOne(handler, TABLES.REPLICA_OPERATIONS,
+    SELECT_OPERATION, scope.operationId), scope);
+}
+
+async function handOffAbsentLearnerCleanup(handler, scope) {
+  if (!await admitsLearnerRetirement(handler, scope)) return null;
+  const node = await readOne(handler, TABLES.NODES, SELECT_NODE_ROW_SQL, scope.targetNodeId);
+  if (node?.[COLUMN.NODE_ID] !== scope.targetNodeId || !observesCommittedNodeLoss(node)) {
+    return null;
+  }
+  try {
+    return await handler.getReplicaCleanupTombstoneOwner().takeOverAbsentLearner(scope);
+  } catch (error) {
+    handler.logger.debug('offline learner cleanup takeover unavailable',
+      {operationId: scope.operationId, error: error.message});
+    return null;
+  }
+}
+
 async function claimNativeLearnerRetirement(handler, scope) {
-  const operation = await readOne(handler, TABLES.REPLICA_OPERATIONS,
-    SELECT_OPERATION, scope.operationId);
-  if (!admittedScopeMatches(operation, scope)) {
+  if (!await admitsLearnerRetirement(handler, scope)) {
     return {state: LEARNER_LIFECYCLE_CUSTODY.UNKNOWN, row: null};
   }
   const held = await observeLearnerRetirementCustody(handler.replicaStateMachine, scope);
@@ -74,4 +93,4 @@ async function claimNativeLearnerRetirement(handler, scope) {
     {state: risk, row: null};
 }
 
-export {claimNativeLearnerRetirement};
+export {claimNativeLearnerRetirement, handOffAbsentLearnerCleanup};

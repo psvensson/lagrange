@@ -584,6 +584,13 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     const handlerType = resolveOperationHandlerType(entityType);
     const learnerRetirement = await evaluatePlacementLearnerRetirement(
       this, operation, handlerType);
+    if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED) {
+      // The committed peer is absent and physical cleanup belongs to the
+      // exact-generation tombstone. An offline target need not answer.
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation), {
+        operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED,
+      });
+    }
     if (learnerRetirement.state === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED) {
       return settleDispatchFailure(this, operation, learnerRetirement.state);
     }

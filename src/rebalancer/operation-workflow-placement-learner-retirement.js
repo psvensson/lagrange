@@ -7,6 +7,7 @@ import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {observeScopedLearnerCleanup} from '../node/replica-cleanup-tombstone-owner.js';
 import {learnerRetirementToken} from '../node/replica-learner-retirement-lifecycle.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
@@ -81,6 +82,11 @@ function classifyRetirementReply(answer, request, leaderNodeId) {
     return LEARNER_RETIREMENT_OUTCOME.DEFERRED;
   }
   const outcome = reply[ReplicaOperationField.LEARNER_RETIREMENT];
+  if (outcome === LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED &&
+      reply[ReplicaOperationField.LEARNER_RETIREMENT_CUSTODY] ===
+        learnerRetirementToken(request[ReplicaOperationField.OPERATION_ID])) {
+    return outcome;
+  }
   return outcome === LEARNER_RETIREMENT_OUTCOME.SUPERSEDED ||
     outcome === LEARNER_RETIREMENT_OUTCOME.CLEARED ? outcome : LEARNER_RETIREMENT_OUTCOME.DEFERRED;
 }
@@ -117,7 +123,7 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
   const admission = scopedOperationAdmission(operation);
   if (admission === NO_PLACEMENT_ADMISSION) return NO_PLACEMENT_ADMISSION;
   const rows = await owner.getCriticalReplicaRowsForSafety(operation.partitionId);
-  if (!Array.isArray(rows) || rows.length === 0) {
+  if (!Array.isArray(rows) || rows.authoritativeReadAvailable === false) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   const member = rows.find((row) => row[COLUMN.REPLICA_ID] === operation.replicaId);
@@ -128,7 +134,7 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
     return verdict(isCatchupLearnerRaftRole(member?.[COLUMN.RAFT_ROLE]) ?
       LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE);
   }
-  if (!exactServiceGeneration(member, operation, scoped)) {
+  if (member && !exactServiceGeneration(member, operation, scoped)) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
   }
   return routeBoundLearnerRetirement(owner, operation, handlerType, scoped, member);
@@ -140,14 +146,25 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
   if (!Number.isSafeInteger(boot) || boot < scoped.nodeBootIncarnation) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
-  const status = member[COLUMN.STATUS];
+  const status = member?.[COLUMN.STATUS];
   const canPropose = boot === scoped.nodeBootIncarnation &&
-    isCatchupLearnerRaftRole(member[COLUMN.RAFT_ROLE]) &&
+    isCatchupLearnerRaftRole(member?.[COLUMN.RAFT_ROLE]) &&
     (observesCommittedNodeLoss(node) || status === ReplicaStatus.FAILED ||
       status === SERVICE_STATUS.STOPPED);
   const membership = await reachMembershipOwner(owner, operation, handlerType, scoped, canPropose);
+  if (membership.state === LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED) {
+    const custody = await observeScopedLearnerCleanup(
+      owner.repository.controlPlaneSystemTableGateway, {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId,
+        replicaId: operation.replicaId,
+        targetNodeId: operation.targetNodeId,
+        replicaCreatedAt: scoped.replicaCreatedAt,
+      });
+    return custody ? membership : verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
+  }
   if (membership.state !== LEARNER_RETIREMENT_OUTCOME.CLEARED) return membership;
-  if (node[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED) {
+  if (!member || node[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   // A durable rejoin keeps the same SERVICES birth, but changes process boot.

@@ -39,7 +39,8 @@ import {
 } from '../partition/partition-service-raft-membership-administration.js';
 import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
   '../raft/raft-rs-committed-membership-read.js';
-import {claimNativeLearnerRetirement} from './replica-handler-learner-retirement-authority.js';
+import {claimNativeLearnerRetirement, handOffAbsentLearnerCleanup} from
+  './replica-handler-learner-retirement-authority.js';
 import {
   LEARNER_LIFECYCLE_CUSTODY, learnerRetirementToken, observeLearnerRetirementCustody,
   releaseLearnerRetirementCustody,
@@ -108,6 +109,12 @@ async function settleScopedLearnerRemoval(handler, target, scope) {
         !await releaseLearnerRetirementCustody(
           handler.replicaStateMachine, held.row, operationId)) {
       return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
+    }
+  }
+  if (role === COMMITTED_REPLICA_ROLE.ABSENT) {
+    const adopted = await handOffAbsentLearnerCleanup(handler, durableScope);
+    if (adopted !== null) {
+      return {state: LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED, custody: adopted.ownerToken};
     }
   }
   if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};

@@ -143,6 +143,7 @@ const LEARNER_RETIREMENT_OUTCOME = Object.freeze({
   DEFERRED: 'learner_membership_deferred',
   SUPERSEDED: 'learner_retirement_superseded',
   CLEARED: 'learner_membership_cleared',
+  CLEANUP_OWNED: 'learner_membership_cleared_cleanup_owned',
 });
 
 export {
