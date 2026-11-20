@@ -263,14 +263,17 @@ findings, this distinction determines which source an agent should reproduce.
   The native control drain in this run cleared approximately 1.3 seconds after
   its refusal. Its timing alone cannot explain the missing formation progress.
   [Original report and node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz)
-- The lifetime owner must measure the NodeHandle connect/response budget and
-  independent use of a shared socket, then verify the initial CREATE delivery
-  and late completion against the exact service. The placement owner must fence
-  absent-target evidence through persistence. The support owner must distinguish
-  verified execution scope at management and upgrade admission. The integration
-  owner composes these changes and runs the affected suites before the next
-  physical gate. The passing formation streak is zero. Lab smoke and the GCP
-  Lagrange arm follow a successful physical gate.
+- The direct admin read now shares one budget across connection and response.
+  Its managed real-socket witness also covers independent waiters. CREATE
+  finalization after participant release still needs proof against a replaced
+  service and tracker. A composed run at `b4a5bb898` passed 45 of 53 files
+  across three lab workers. Six failures involve workflow fixtures or their
+  contracts. Two deterministic formation cadence assertions also failed on
+  this composition and passed on the predecessor on the same worker. Preserve
+  their original bounds while locating the first changed event. The passing
+  physical streak is zero of three. Lab smoke and the GCP Lagrange arm follow
+  the accepted formation gate.
+  [Managed suite selections and outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-placement-outcome-composition-b4a5bb898-nov20.tar.gz).
 
 ### Physical formation and placement stability
 
@@ -312,14 +315,35 @@ spent 30.888 s there. Both full logs record repeated, same-operation
 authority-read timeouts before the leader accepted the work. What occupied
 that authority and how much time the duplicate delivery added remain open.
 
-The next coupled witness must feed the same exact learner temporary loss of
-fresh READY evidence, recovery of that same incarnation, and delayed role
-publication through the real owners. Pair it with genuine retirement or
-replacement and with a held then released clearing event. Check durable
-mutation counts, correct refusal to target an ineligible node, same-operation
-resumption, copy capacity and the voter floor at every edge. Retain ordinary
-background scheduling during formation. An intentional admission pause could
-manufacture a quiet window while leaving the work unfinished.
+Managed native diagnostic `ac19b2e2-a695-47c8-a8b3-a50547c3f53d`
+on tv-dator exercised three schedules against a committed SQLite node census
+and actual Raft membership at `b990d1b18`. Timely renewal preserved the
+learner. Delaying renewal until one millisecond after expiry admitted REMOVE.
+Renewing the same incarnation while REMOVE was pending still led to removal
+and another ADD on that host. A durable FAILED input allowed removal and
+kept the host ineligible. Workflow completion and lease changes were
+controlled inputs in this diagnostic.
+[Original native TAP, transitions, runtime and artifact manifests](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-learner-reversal-native-5496-nov20.tar.gz).
+
+In the physical run, at 21:18:02.111Z, 1.125 s after the REMOVE admission,
+the lease service on d8b38f9c explicitly skipped disconnecting 6998462b
+because its transport was connected. The seed recorded the same decision
+at 21:18:05.099Z. The decision-time NODES read for the REMOVE is missing.
+The active lease owner already distinguishes expiry from disconnect. Its
+guarded write matches node ID, observed lease and heartbeat before clearing
+the lease and recording DISCONNECTED. Placement collapses those cases for
+an existing learner and also uses the eligible-node set for voter repair.
+[Physical node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz).
+
+The placement owner must preserve the exact existing replica across an overdue
+renewal, keep the host ineligible for new work, and prove removal and recovery
+after an owned disconnect or confirmed replica failure. Trace missing rows,
+reconnection, changed incarnations and voter repair before choosing what
+authorizes irreversible removal. Exercise the production guarded write racing
+renewal, the committed wake and revalidation at the effect. Preserve voter
+floor, per-host capacity, ledger exclusivity and original quiet window. The
+remaining formation throughput investigation follows the completed operations
+and the exact delayed authority request. Background work continues throughout.
 
 Historical counterparts include the repository's single terminal winner and
 the formation repair that joined admission and its clearing event. The
