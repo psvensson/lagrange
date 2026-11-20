@@ -8,13 +8,10 @@ status: proposed
 
 Prepared 20 November 2026 for programme item 07 under the existing open
 `quest-evidence-and-candidate-binding` owner. Investigation source:
-`6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, rule-set revision 5. This temporary
-note is a proposal for independent review, not an implementation, reproduced
-failure, seal or passing receipt. No test, generator or lab run was performed.
-The integration owner approved source finding and real-red witness preparation
-after documentation commit `f5d5d1c13d90fb58e3c5299d1e096fb53dfc7db1`. Full
-admission migration remains unapproved; the original proposal hash was
-`a798d4b8d6c7d52de5ac919ddfe19b66f9bd1ecf775c647356540b380b00e910`.
+`6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, rule-set revision 5. The source investigation led to a managed negative witness.
+The existing [evidence Quest log](../../quests/quest-evidence-and-candidate-binding/log.ndjson)
+records its independent review and original execution. The support-envelope,
+management and rolling-upgrade owners now own the bounded admission repair.
 
 Loaded sources: AGENTS, rules/router, Quest workflow, artifact custody owner,
 the investigation/navigation skills, current operation-integrity summary and
@@ -251,28 +248,16 @@ execution, rather than accepting a digest of the claim itself. This proposal
 does not adopt SLSA, assert SLSA compliance, add signatures or claim that build
 provenance proves physical service behavior.
 
-### Prepared witness, still unexecuted
+### Measured baseline
 
-`test/bootstrap/support-envelope-execution-evidence.test.js` is the new bounded
-red witness. It consumes actual builder/validator/summary methods and real
-ManagementV1Owner-to-RollingUpgradeOwner construction. Declared effect callbacks
-only count drain/restart calls. It includes policy/format/default-null positives,
-default and explicitly rehashed synthetic record negatives, invalid-summary
-certified-ID refusal, and effect-bearing startUpgrade refusal through both
-rolling and management construction. No validator is substituted. The management
-case matches its existing default source version, preventing unrelated version
-mismatch from hiding the evidence failure. It has not been run, measured or
-accepted. Root owns review, metadata, managed execution and original outputs.
-
-First implement only the smallest real-red witness after independent proposal
-review, preserving the unchanged production baseline. Invoke the actual default
-builder, SupportEnvelopeOwner, ManagementV1Owner and RollingUpgradeOwner with
-ordinary declared effect ports. No fake support validator. Positive control:
-ordinary policy inputs and same-build format checks remain valid. Negative:
-default/copy/simulated records must not report physical certification, list
-certified drills, or reach drain/restart; assert actual callback count zero and
-public facts, not a source marker. On the baseline this intended-contract
-assertion should fail. A setup/import/native/lab failure is non-measuring.
+Managed request `3883b67b-2d12-459c-a08e-d8a5f64b4ebe` ran
+`test/bootstrap/support-envelope-execution-evidence.test.js` on adam-laptop
+at `58a208033`. The policy, default-null and same-build control passed.
+Five negative cases failed. Default-built and explicitly rehashed synthetic
+records produced certified claims, including admission through the real
+rolling-upgrade and management constructors. The effect callbacks counted
+drain and restart calls. The run did not restart a physical node.
+[Original support witness output](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz).
 
 Include an explicitly rehashed synthetic record so removing just defaults cannot
 make the witness pass; malformed/missing evidence and failed overall validation
@@ -325,7 +310,10 @@ drills plus any advertised full-stop case, admits original results and establish
 the runtime attachment before advertising support. No policy limit is enlarged
 retrospectively to certify a failed run.
 
-Next owner/action: root independently reviews this proposal and reconciles its
-runtime bridge/fixture decision with the existing evidence writer. Then assign
-the bounded real-red witness and append the source finding to the open Quest.
-No test or physical run is queued by this note.
+The support-envelope owner must remove default success records, validate
+execution evidence independently of policy fields, and pass the same admission
+decision to management summaries and rolling-upgrade preflight. Reuse the
+measured negative cases and the passing policy control. The integration owner
+must verify that a genuine original can be admitted at its measured scope
+and that synthetic records cannot reach drain or restart. Qualification of
+the five physical drills remains with the pilot owner.

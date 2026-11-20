@@ -474,9 +474,9 @@ silently migrated by a global search-and-replace.
 Work in this order inside one isolated unlanded candidate; no intermediate commit
 is shared as an executable compatibility state:
 
-1. Admit the preserved original managed red and its successful controls through
-   the reviewed red-only adapter. Seal via existing Solver only when its probe is
-   measuring. The original failure remains bound to source 58a2080337b56b4e5f97bcb54da59f57b94e6611.
+1. The original managed red and its controls are retained and admitted for
+   source `58a2080337b56b4e5f97bcb54da59f57b94e6611`. The Quest sealed on
+   that failing witness. Continue the migration from its existing assignment.
 2. Add owner contract builders/validators and mandatory producer branches, then
    migrate atomic and direct persistence callers in the same working unit.
 3. Finish retained-error/mirror handling and terminal release/repair paths.
@@ -517,8 +517,8 @@ acceptance or full outcome-contract coverage.
 
 Original status, artifact inventory/manifest, placement selection, result ledger,
 raw TAP and stderr are retained under
-`/tmp/lagrange-takeover-20261120/red-originals/`. The integration owner must retain
-these through the repository's existing evidence custody before final acceptance.
+`/tmp/lagrange-takeover-20261120/red-originals/`. The evidence store holds the verified original archive.
+[Original SQLite and support witness outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-outcomes-and-support-original-red-3883b67b.tar.gz).
 The original test blob is
 `6339350d3c4e4c2658f5ecf1215b073c1bc2c7a287a98a5801780c57cd9ac3ad`.
 Do not rewrite that source or its original evidence to match the new design.
@@ -544,17 +544,19 @@ The Quest's six required receipt IDs remain unchanged:
 `classified-consumer-closure`, and `independent-verification`. All six must be
 admitted for closure. The initial red does not satisfy any complete obligation.
 
-The original witness currently counts a second persistOperationUpdate call on
-same-owner retry. Prospectively, the implementation witness will require fresh
-authoritative repository consultation, exact replay/adoption and unchanged
-durable row/history, allowing that proof to avoid a redundant UPDATE. Keep the
-original witness unchanged until the runtime migration begins. This explicit
-refinement preserves its original safety/red meaning while correcting its
-over-specific recovery observation.
+The assigned repository and workflow owners have a separate implementation
+checkpoint. On `8281e61d2`, managed request
+`2378f3a8-3dc2-4ddf-982b-d8d13b6efe3a` passed the native SQLite witness
+with 51 parent cases and 470 leaf assertions. The current evidence adapter
+on WIP binds this run to the first three receipt rows. The original red,
+isolated negative controls, classified consumer suite and independent
+composed review have distinct records.
+[Managed native originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-native-8281e61d-5487-nov20.tar.gz).
 
-Next action: integration owner completes independent adapter review, executes
-the adapter against retained originals and seals only on admitted measuring red;
-then records the exact reviewed producer/consumer/fixture migration assignment.
-No production implementation is authorized by this document alone. Parallel
-proof uses existing managed placement and actual recorded run identities.
-Required repair, composition and three-host formation claims remain separate.
+Continue from the existing [Quest log](../../quests/strict-operation-outcomes/log.ndjson).
+The repository owner must preserve uncertainty on malformed target reads.
+The workflow owner must bind superseded-target failure to the target state at
+the conditional write and retain outstanding release and retry work. Run the
+affected dispatch, reservation and recovery suites on the composed source.
+The integration owner admits the remaining receipt rows after their original
+controls, classified checks and independent review are complete.
