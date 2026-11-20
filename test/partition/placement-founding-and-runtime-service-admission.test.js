@@ -550,8 +550,6 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           entityId: USER_PARTITION_ID,
           partitionId: USER_PARTITION_ID,
           nodeId: NODE.B,
-          operationIntentId: 'shared-opaque-creation-request',
-          replicaIntentId: 'shared-opaque-replica-request',
           entryId: 'original-placement-entry-x',
         };
         await assert.rejects(
@@ -671,6 +669,19 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           });
         }
         assert.equal(proposed.length, 1);
+        assert.deepEqual(ledgerRows(leader), [held]);
+
+        const rebuilt = createCoordinatorWithLedger(leader);
+        delete rebuilt.queryExistingInFlightOperation;
+        rebuilt.armCoordinatorCreatedOperationProgress =
+          coordinator.armCoordinatorCreatedOperationProgress;
+        const count = wakes.length;
+        await assert.rejects(() => rebuilt.createOperation({
+          ...original, copySourceNodeId: NODE.C,
+        }), {failureCode: PLACEMENT_REFUSAL.PARTITION_BUSY});
+        assert.equal(wakes.length, count, 'a fresh census does not rearm mismatched work');
+        const censusReplay = await rebuilt.createOperation(original);
+        assert.equal(censusReplay.operationId, created.operationId);
         assert.deepEqual(ledgerRows(leader), [held]);
       } finally {
         await stopAutoCommit();

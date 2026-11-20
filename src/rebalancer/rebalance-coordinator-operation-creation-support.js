@@ -552,17 +552,7 @@ const operationCreationSupportMethods = {
 
   async commitSingleCreatedPlacementOperation(context, statement, intentKey) {
     const {requestedMove, entityId} = context;
-    const identities = [
-      requestedMove.entryId,
-      requestedMove.operationIntentId,
-      requestedMove.replicaIntentId,
-    ];
-    if (identities.some((value) => value != null &&
-        (typeof value !== 'string' || value.length === 0))) {
-      throwRuntimeServicePlacementError(entityId, null, {
-        reason: PLACEMENT_ADMISSION_ERROR.BYTES,
-      });
-    }
+    this.assertNativePlacementCreationIdentity(requestedMove);
     const answer = await this.admitPlacementStatement({
       entryId: requestedMove.entryId ?? null,
       intentKey,

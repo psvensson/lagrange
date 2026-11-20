@@ -8,6 +8,7 @@
 // ledger's dispatch hold, the formation latch epoch, the founding intent,
 // the planned input positions and the moves.
 import {isDeepStrictEqual} from 'node:util';
+import {matchesExplicitCreationBindings} from './replica-operation-creation-request.js';
 import {placementReplicaIdOf} from '../partition/partition-placement-admission-identity.js';
 import {buildRuntimeServiceTargetClaimKey} from './runtime-service-replica-identity.js';
 import {ALLOWED_UNIFIED_SERVICE_TYPES, UNIFIED_SERVICE_TYPE} from
@@ -414,8 +415,7 @@ function matchesCommittedSinglePlacementStatement(operation, requested, admitted
     operation.sourceNodeId === requested.sourceNodeId &&
     (operation.membershipPublicationEpoch ?? null) === requested.membershipPublicationEpoch &&
     operation.replicaId === replicaId &&
-    (operation.targetNodeBootIncarnation ?? null) === move.targetNodeBootIncarnation &&
-    (operation.targetNodeStorageIncarnation ?? null) === move.targetNodeStorageIncarnation &&
+    matchesExplicitCreationBindings(operation, move, {complete: true}) &&
     (operation.targetClaimKey ?? null) === claimKey;
 }
 
