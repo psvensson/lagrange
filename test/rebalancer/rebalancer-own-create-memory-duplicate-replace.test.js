@@ -1,10 +1,13 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {createNodeHosts} from '../integration/membership-consistency-integration-test-helpers.js';
 import {
   buildSuccessorReplaceIntentIdentity,
 } from '../../src/rebalancer/rebalance-replace-intent-identity.js';
 import {
   createCoordinatorSqlStore,
-  createMockControlPlaneSystemTableGateway,
   createTestCoordinator,
 } from './test-helpers.js';
 
@@ -13,6 +16,9 @@ const PENDING = 'PENDING';
 const FAILED = 'FAILED';
 const PARTITION_ID = 'sql_transactions-p1';
 const SOURCE_REPLICA_ID = `${PARTITION_ID}-r2`;
+const INSERT_OBSERVATION_DEADLINE_MS = 2_000;
+const LEDGER_TABLE_NAME = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
+const LEDGER_PARTITION_ID = INITIAL_PARTITION_IDS[LEDGER_TABLE_NAME];
 
 function createSharedOperationGateway() {
   const operations = new Map();
@@ -316,45 +322,50 @@ test('collision visibility loss defers only the colliding move identity', async 
 });
 
 function createCommittedCreationFixture(t, {hideCensus = false} = {}) {
-  const ledger = createCoordinatorSqlStore({});
-  const readCalls = [];
+  const cache = new SystemTableCache();
+  const ledger = createCoordinatorSqlStore(cache);
   let beforeInsert = null;
   let readMode = 'normal';
   let insertCount = 0;
-  const gateway = createMockControlPlaneSystemTableGateway({
-    executeQuery(sql, params) {
-      if (!sql.includes('FROM replica_operations')) {
-        return ledger.execute(sql, params);
+  const sqlQueryEngine = {
+    async executeQuery(sql, params) {
+      if (/^INSERT(?: OR IGNORE)? INTO replica_operations\s/iu.test(sql)) {
+        insertCount++;
+        await beforeInsert?.();
       }
-      const result = ledger.execute(sql, params);
-      const isPoint = sql.includes('WHERE operation_id = ?');
-      readCalls.push({isPoint, result});
-      if (isPoint && readMode === 'unavailable') {
-        return {success: false, error: 'owner not reachable'};
-      }
-      if (isPoint && readMode === 'absent') {
-        return ledger.execute(sql, ['missing-commit-at-owner']);
-      }
-      if (isPoint && readMode === 'foreign') {
-        return {...result, rows: result.rows.map((row) => ({
-          ...row, operation_id: 'foreign-owner-record',
-        }))};
-      }
-      if (!isPoint && hideCensus) {
-        return {...result, rows: []};
-      }
-      return result;
+      return ledger.execute(sql, params);
     },
-  });
-  gateway.reservations = new Map();
-  gateway.submitMutation = async (mutation) => {
-    if (mutation.tableName === 'replica_operations' && mutation.operation === 'insert') {
-      insertCount++;
-      await beforeInsert?.(mutation);
+    queryExecutor: {
+      async executeOnPartition(partitionId, sql, params) {
+        const result = ledger.execute(sql, params);
+        if (partitionId !== LEDGER_PARTITION_ID) return result;
+        const isPoint = sql.includes('WHERE operation_id = ?');
+        if (isPoint && readMode === 'unavailable') {
+          return {success: false, error: 'owner not reachable'};
+        }
+        if (isPoint && readMode === 'absent') {
+          return ledger.execute(sql, ['missing-commit-at-owner']);
+        }
+        if (isPoint && readMode === 'foreign') {
+          return {...result, rows: result.rows.map((row) => ({
+            ...row, operation_id: 'foreign-owner-record',
+          }))};
+        }
+        return !isPoint && hideCensus ? {...result, rows: []} : result;
+      },
+    },
+  };
+  const hosts = createNodeHosts(cache, {nodeId: 'creator-sqlite', sqlQueryEngine});
+  const {controlPlaneSystemTableGateway: gateway, cdcIntegrationService: cdc} = hosts;
+  gateway.submitMutation = (mutation, options) => {
+    if (mutation.operation === 'insert') {
+      return cdc.insertSystemTableRow(mutation.tableName, mutation.row, options);
     }
-    return ledger.submitMutation(mutation);
+    return cdc.updateSystemTableRow(mutation.tableName,
+      mutation.whereClause, mutation.data, options);
   };
   const {coordinator} = createCoordinator('creator-sqlite', gateway);
+  delete coordinator.createReservationForOperation;
   delete coordinator.queryExistingInFlightOperation;
   coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
   t.teardown(async () => {
@@ -363,7 +374,6 @@ function createCommittedCreationFixture(t, {hideCensus = false} = {}) {
   });
   return {
     coordinator,
-    readCalls,
     get insertCount() {
       return insertCount;
     },
@@ -385,6 +395,25 @@ function captureCreation(promise) {
   return promise.then((operation) => ({operation}), (error) => ({error}));
 }
 
+async function waitForHeldInsert(entered, firstResult) {
+  let timeout;
+  try {
+    await Promise.race([
+      entered,
+      firstResult.then(({operation, error}) => {
+        throw new Error(`creation settled before reaching held SQL insert: ${operation?.operationId}`,
+          {cause: error});
+      }),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('creation never reached the held SQL insert')),
+          INSERT_OBSERVATION_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 test('one critical lane serializes concurrent subjects and replays the exact winner', async (t) => {
   const fixture = createCommittedCreationFixture(t);
   const {coordinator} = fixture;
@@ -395,15 +424,18 @@ test('one critical lane serializes concurrent subjects and replays the exact win
     await release.promise;
   });
   const original = buildMove('target-a');
-  const first = coordinator.createOperation(original);
-  await entered.promise;
+  const first = captureCreation(coordinator.createOperation(original));
+  t.teardown(() => release.resolve());
+  await waitForHeldInsert(entered.promise, first);
   const matching = captureCreation(coordinator.createOperation(original));
   const conflicting = captureCreation(coordinator.createOperation(buildMove('target-b')));
   await new Promise((resolve) => setImmediate(resolve));
   t.same(fixture.rows(), [], 'both callers arrive before the first insert');
   release.resolve();
 
-  const [winner, replay, conflict] = await Promise.all([first, matching, conflicting]);
+  const [initial, replay, conflict] = await Promise.all([first, matching, conflicting]);
+  if (initial.error) throw initial.error;
+  const winner = initial.operation;
   t.equal(replay.operation?.operationId, winner.operationId);
   t.equal(replay.operation?.targetNodeId, original.nodeId);
   t.notOk(conflict.operation, 'a different move cannot receive a successful operation');
@@ -441,7 +473,8 @@ test('the critical follower can acquire its own subject after a pre-insert failu
     throw new Error('original insert was refused before SQLite');
   });
   const first = captureCreation(fixture.coordinator.createOperation(buildMove('target-a')));
-  await entered.promise;
+  t.teardown(() => release.resolve());
+  await waitForHeldInsert(entered.promise, first);
   const second = captureCreation(fixture.coordinator.createOperation(buildMove('target-b')));
   await new Promise((resolve) => setImmediate(resolve));
   release.resolve();
