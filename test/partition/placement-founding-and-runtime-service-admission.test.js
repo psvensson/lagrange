@@ -580,6 +580,95 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
     });
   });
 
+  it('retains the original explicit placement entry when a different entry requests its move', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        const submit = coordinator.submitPlacementPayload.bind(coordinator);
+        const submitted = [];
+        coordinator.submitPlacementPayload = async (request, timeoutMs) => {
+          submitted.push(request.entryId);
+          const answer = await submit(request, timeoutMs);
+          return submitted.length === 1 ? {
+            success: false,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          } : answer;
+        };
+        const original = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          operationIntentId: 'shared-opaque-creation-request',
+          entryId: 'original-placement-entry-x',
+        };
+        await assert.rejects(
+          () => coordinator.createOperation(original),
+          (error) => error.admissionAnswer?.failureCode ===
+            PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+        );
+        const [held] = ledgerRows(leader);
+        assert.equal(held.target_node_id, original.nodeId);
+        await assert.rejects(() => coordinator.createOperation({
+          ...original, entryId: 'conflicting-placement-entry-y',
+        }), {rebalanceSkipReason: 'budget_exceeded'});
+        const replay = await coordinator.createOperation(original);
+        assert.equal(replay.operationId, held.operation_id);
+        assert.deepEqual(submitted, [original.entryId, original.entryId]);
+        assert.deepEqual(ledgerRows(leader), [held]);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('keeps exact epoch zero in partition and runtime-service native commits', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        let publishedEpoch = 0;
+        coordinator.controlPlaneReadinessService.getCurrentPublishedMembershipEpochSync =
+          () => publishedEpoch;
+        const partition = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          membershipPublicationEpoch: 0,
+        };
+        const runtime = {
+          ...partition,
+          entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+          entityId: SERVICE_ID,
+          partitionId: SERVICE_ID,
+          nodeId: NODE.C,
+          replicaId: `${SERVICE_ID}-r2`,
+        };
+        const partitionOperation = await coordinator.createOperation(partition);
+        const runtimeOperation = await coordinator.createOperation(runtime);
+        assert.equal(partitionOperation.membershipPublicationEpoch, 0);
+        assert.equal(runtimeOperation.membershipPublicationEpoch, 0);
+        const held = ledgerRows(leader);
+        assert.deepEqual(held.map((row) => row.membership_publication_epoch), [0, 0]);
+        await assert.rejects(() => coordinator.createOperation({
+          ...partition, membershipPublicationEpoch: 1,
+        }), {rebalanceSkipReason: 'membership_epoch_changed'});
+        publishedEpoch = Number.MAX_SAFE_INTEGER + 1;
+        await assert.rejects(() => coordinator.createOperation({
+          ...runtime, membershipPublicationEpoch: publishedEpoch,
+        }));
+        assert.deepEqual(ledgerRows(leader), held);
+        assert.equal(proposed.filter(({type}) => type === 'PLACEMENT_ADMIT').length, 2);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
   it('retains {entryId, statement} across OUTCOME_UNKNOWN retry and allocates fresh entryId when retained attempt settled as REFUSED and statement changed (Finding 5)', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       // First: create an in-flight ledger move so FOUND attempt A commits as
