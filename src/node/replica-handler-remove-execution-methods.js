@@ -20,7 +20,7 @@ import {
 } from './replica-handler-constants.js';
 import {
   REPLICA_CONSENSUS_EXIT_REASON,
-  awaitReplicaConsensusExit,
+  awaitReplicaConsensusExit, leaveConsensus,
 } from './replica-removal-consensus-exit.js';
 import {
   REPLICA_LEADER_CLEAR_DEFERRED,
@@ -222,41 +222,6 @@ async function runRemovalEffectsOrThrow(
     );
   if (applied !== true) throw removalRowDeleteDeferred(replicaId);
   return true;
-}
-
-/**
- * When the retiring replica leaves consensus. A replica of a group retired
- * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
- * leaves at once: its whole group ends at the durable workflow transition,
- * nobody proposes a conf change for it, and nothing commits in it again.
- * Every other removal keeps participating until its own removal applies
- * (ruling F2).
- * @param {Object} handler
- * @param {Object} request
- * @param {Object|null} service
- * @return {Promise<Object>} Frozen {reason}.
- */
-function leaveConsensus(handler, request, service) {
-  const {operationId, partitionId, replicaId} = request;
-  if (request.groupRetirement?.retire === true) {
-    const exit = Object.freeze({
-      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
-    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
-      operationId, replicaId, partitionId, nodeId: handler.nodeId,
-      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
-    });
-    return Promise.resolve(exit);
-  }
-  if (request.learnerRetirement !== undefined) {
-    const exit = Object.freeze({reason: REPLICA_CONSENSUS_EXIT_REASON.LEADER_REMOVAL_COMMITTED});
-    logReplicaRemovalConsensusExit(handler, exit, {operationId, replicaId, partitionId});
-    return Promise.resolve(exit);
-  }
-  return handler.awaitReplicaRemovalConsensusExit(service, {
-    operationId,
-    replicaId,
-    partitionId,
-  });
 }
 
 async function performReplicaRemoval(handler, request, service, lifecycle,

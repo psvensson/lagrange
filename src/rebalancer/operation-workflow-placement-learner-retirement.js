@@ -18,10 +18,13 @@ function verdict(state, fields = {}) {
   return Object.freeze({state, ...fields});
 }
 
+const NO_PLACEMENT_ADMISSION = Object.freeze({state: LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE});
+
 function scopedOperationAdmission(operation) {
-  if (operation.type !== OperationType.REMOVE) return null;
+  if (operation.type !== OperationType.REMOVE) return NO_PLACEMENT_ADMISSION;
   const admission = operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
-  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ? admission : null;
+  return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ?
+    admission : NO_PLACEMENT_ADMISSION;
 }
 
 async function currentNode(owner, targetNodeId) {
@@ -75,7 +78,7 @@ async function reachMembershipOwner(owner, operation, handlerType, scoped, canPr
 
 async function evaluatePlacementLearnerRetirement(owner, operation, handlerType) {
   const admission = scopedOperationAdmission(operation);
-  if (admission === null) return verdict(LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE);
+  if (admission === NO_PLACEMENT_ADMISSION) return NO_PLACEMENT_ADMISSION;
   const rows = await owner.getCriticalReplicaRowsForSafety(operation.partitionId);
   if (!Array.isArray(rows) || rows.length === 0) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);

@@ -6,12 +6,10 @@ import {
 } from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
-  captureReplaceOwnerLevel, registerReplaceOwnerWaiter, resolveReplaceOwnerEntryLevel,
+  captureReplaceOwnerLevel, registerReplaceOwnerWaiter,
 } from './operation-workflow-replace-owner-wake.js';
 import {
-  REPLACE_EFFECT_ADMISSION, REPLACE_WAIT_REASON, admitReplaceSourceRemovalEffect,
   isPartitionReplace, isReplaceRemovalIntentDurable, recordReplaceOwnerWait,
-  recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
@@ -34,6 +32,8 @@ import {
 import {LEARNER_RETIREMENT_OUTCOME} from './replica-operation-constants.js';
 import {evaluatePlacementLearnerRetirement} from
   './operation-workflow-placement-learner-retirement.js';
+import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
+  './operation-workflow-remove-effect-admission.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL, OPERATION_OWNER_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -284,48 +284,6 @@ function buildReplicaOperationDispatchTimeoutError(operation) {
 function isReplaceStoppingOwnerEntry(operation, options) {
   return isReplaceRemovalIntentDurable(operation) &&
     options?.replaceStoppingEffect !== true;
-}
-
-// The removal-effect boundary after SAFE for a partition REPLACE or initial
-// REMOVE: null when the effect is sent now; otherwise the owner's result.
-async function holdReplaceSourceRemovalEffect(
-  owner, operation, replaceRemoveDispatchPhase, entryLevel) {
-  if (!replaceRemoveDispatchPhase || !isPartitionReplace(operation)) {
-    const resolvedEntry = resolveReplaceOwnerEntryLevel(owner, entryLevel);
-    if (
-      owner.isRemoveInitialDispatchPhase(operation) &&
-      resolvedEntry &&
-      captureReplaceOwnerLevel(owner, operation)?.levelKey !==
-        resolvedEntry.levelKey
-    ) {
-      owner.armReplaceOwnerWait(
-        operation,
-        REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED,
-        resolvedEntry,
-      );
-      return owner.buildSkippedOperationResult(
-        REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
-        operation.operationId,
-        {deferReason: REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED},
-      );
-    }
-    return null;
-  }
-  const effect = await admitReplaceSourceRemovalEffect(
-    owner, operation, entryLevel);
-  if (effect.admission === REPLACE_EFFECT_ADMISSION.SEND) {
-    return null;
-  }
-  return effect.admission === REPLACE_EFFECT_ADMISSION.STOPPING_OWNER ?
-    owner.runReplaceStoppingOwner(operation) :
-    owner.waitReplaceSourceRemovalEffect(operation, effect, entryLevel);
-}
-
-function noteReplaceSourceRemovalEffect(
-  owner, operation, response, replaceRemoveDispatchPhase) {
-  if (replaceRemoveDispatchPhase && isPartitionReplace(operation)) {
-    recordReplaceSourceRemovalEffect(owner, operation, response);
-  }
 }
 
 const DISPATCH_RESPONSE_RECONCILE_METHODS = {

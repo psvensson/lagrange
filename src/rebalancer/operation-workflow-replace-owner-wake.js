@@ -411,7 +411,7 @@ function consensusLevelOf(event, previous) {
 
 // Forward consensus wakes to remote operation owners through their existing
 // ingress. A scoped learner retirement can settle on a surviving replica.
-function wakeRemoteRetirementOwners(owner, partitionId, replicaId) {
+function wakeRemoteReplaceOwners(owner, partitionId, replicaId) {
   if (typeof owner.repository?.filterReplicaOperationRowsFromCache !==
       'function' ||
       typeof owner.wakeCoordinatorCreatedRemoteOwner !== 'function') {
@@ -443,7 +443,7 @@ function handleConsensusObservation(owner, event) {
   wakeWaiters(owner, state,
     (waiter) => waiter.operation?.partitionId === partitionId);
   Promise.resolve().then(() =>
-    wakeRemoteRetirementOwners(owner, partitionId, event?.replicaId));
+    wakeRemoteReplaceOwners(owner, partitionId, event?.replicaId));
 }
 
 function ensureWakeSubscriptions(owner, state) {

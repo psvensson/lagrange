@@ -14,6 +14,7 @@ import {
   copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
 import {OperationType} from './replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
@@ -37,7 +38,8 @@ const STATEMENT_FIELDS = Object.freeze(['transitionKind', 'entityType',
 const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
-const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, 'learnerRetirement']);
+const LEARNER_RETIREMENT = ReplicaOperationField.LEARNER_RETIREMENT;
+const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, LEARNER_RETIREMENT]);
 const LEARNER_RETIREMENT_FIELDS = Object.freeze(['nodeBootIncarnation', 'replicaCreatedAt']);
 const KINDS = Object.freeze(new Set(Object.values(KIND)));
 const MOVE_TYPES = Object.freeze(new Set([
@@ -129,7 +131,7 @@ function isMoveShapeValid(kind, move) {
 function canonicalMove(kind, value) {
   const move = copyStrictOwnDataRecord(value);
   if (move === null || !MOVE_TYPES.has(move.type) || !isMoveShapeValid(kind, move)) return null;
-  if (!Object.hasOwn(move, 'learnerRetirement')) {
+  if (!Object.hasOwn(move, LEARNER_RETIREMENT)) {
     return hasExactFields(move, MOVE_FIELDS) ? ordered(move, MOVE_FIELDS) : null;
   }
   const retirement = copyStrictOwnDataRecord(move.learnerRetirement);
@@ -244,7 +246,7 @@ function isFullSourceCapacity(placementClass, repair) {
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
   ...MOVE_FIELDS,
-  'promoteReplicaIds', 'learnerRetirement',
+  'promoteReplicaIds',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
   'partitionId', 'placementClass', 'repair', 'move',
@@ -302,7 +304,8 @@ function moveOf(value) {
     copySourceNodeId: move.copySourceNodeId ?? null,
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
     targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
-    ...(Object.hasOwn(move, 'learnerRetirement') ? {learnerRetirement: move.learnerRetirement} : {})};
+    ...(Object.hasOwn(move, LEARNER_RETIREMENT) ?
+      {learnerRetirement: move.learnerRetirement} : {})};
 }
 
 function isValidCandidateRecord(record) {

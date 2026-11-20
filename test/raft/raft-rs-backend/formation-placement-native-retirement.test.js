@@ -18,7 +18,8 @@ import {
   createMockCache, createMockPolicyService, createTestCoordinator,
 } from '../../rebalancer/test-helpers.js';
 import {
-  RAFT_FOUNDING_GROWTH_OUTCOME, addLearnerReplicaToCluster, admitLearnerAndSettle,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE, RAFT_FOUNDING_GROWTH_OUTCOME,
+  addLearnerReplicaToCluster, admitLearnerAndSettle,
   appliedStateOf, catchUpLearnerAndSettle, peerIdOf, proposeGroupGrowthPromote,
   settleCluster, turnChainValue,
 } from './founding-growth-test-support.js';
@@ -109,7 +110,8 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
     }},
     messageRouter: {
       async deliver(address, payload) {
-        deliveries.push({address, payload});
+        const entry = {address, payload};
+        deliveries.push(entry);
         const receiver = address.startsWith(`${SEED}/`) ? leader : source;
         if (receiver === source && cluster.isolated.has(removal.replica_id)) {
           return buildDeliveryEnvelope({errorCode: ROUTER_NO_CONNECTION_ERROR_CODE});
@@ -117,6 +119,7 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
         const answer = await receiver.handler.handleMessage({
           payload, correlationId: removal.operation_id,
         });
+        entry.answer = answer;
         if (receiver === source) onLocalDelivery?.(payload, answer);
         return buildDeliveryEnvelope({acknowledged: true}, answer);
       },
@@ -222,7 +225,7 @@ test('guarded disconnect can clear the exact learner on the leader while its hos
   }, {createCluster: addressedCluster}));
 
 async function seeRejoinedCleanup(context, t) {
-  const {first, rejoinDelivery, coordinator, removal, nodes, deliveries} = context;
+  const {first, rejoinDelivery, coordinator, removal, nodes, deliveries, cluster} = context;
   const bounded = Promise.withResolvers();
   const timeout = setTimeout(() => bounded.reject(new Error(
     'same-boot committed rejoin did not wake the retained cleanup')),
@@ -232,8 +235,11 @@ async function seeRejoinedCleanup(context, t) {
   } finally {
     clearTimeout(timeout);
     const state = await coordinator.getOperation(removal.operation_id);
+    const membership = cluster.node(SEED_REPLICA).readCommittedMembership({
+      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
+    });
     t.diagnostic(JSON.stringify({first, step: state?.workflowStep, node: nodes.nodeRow(),
-      deliveries}));
+      membership, deliveries}));
   }
 }
 
@@ -269,7 +275,7 @@ test('the workflow clears a lost learner before its captured generation can clea
       // Virtual retry timers do not advance. This turn has to come from the
       // committed owner event after the genuine same-boot READY publication.
       const retried = await seeRejoinedCleanup({
-        first, rejoinDelivery, coordinator, removal, nodes, deliveries,
+        first, rejoinDelivery, coordinator, removal, nodes, deliveries, cluster,
       }, t);
       assert.equal(retried.status, ReplicaOperationResponseStatus.INITIATED);
       const cleanup = await deliverCommittedSourceChange(source, cluster);
