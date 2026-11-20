@@ -130,7 +130,6 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           this.dataDirectoryManager.getDataDir() :
           null,
         nodeId: this.nodeId,
-        formationReleaseAuthorityNodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         bootIncarnation: this.bootIncarnation,
         advertisedNodeWsAddress: this.advertisedNodeWsAddress,

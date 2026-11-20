@@ -11,6 +11,11 @@
  * thermal gate runs on every held host before deployment. GCP is explicit
  * (`--execution-target gcp --hosts ...`) and creates no infrastructure.
  *
+ * A campaign never obtains an image, the harness commit or a reference-client
+ * package itself. On GCP, `--provision` is the separate, explicit step that
+ * places them (comparative-benchmark-provisioning.js) and exits; the campaign
+ * is the next invocation with the same options.
+ *
  * The campaign runs a frozen manifest (written and digested before any run)
  * and APPENDS a v2 campaign header and one record per attempted run to the
  * raw observation store. Publication is not this runner's business: stream
@@ -58,6 +63,12 @@ import {
   createWorkloadRunExecutor,
   prepareLoadGeneratorCheckout,
 } from '../../../test/distributed/harness/comparative-benchmark-workload-call-site.js';
+import {
+  comparativeProvisioningPlan,
+  harnessCommitPusher,
+  provisionComparativeHosts,
+  readReferenceClientLock,
+} from '../../../test/distributed/harness/comparative-benchmark-provisioning.js';
 import {
   loadRawObservationRecordOwner,
 } from '../../../test/distributed/harness/comparative-benchmark-record-owner.js';
@@ -110,12 +121,22 @@ Options:
   --execution-target <lab|gcp>  Where the campaign runs (default: lab)
                                 lab: hosts from the registered lab inventory
                                 (node scripts/lab.js), locked per host
+  --load-generator <name>       lab only: the registered harness host that runs the
+                                workload; refused, never substituted, if ineligible
+                                (default: chosen after the data hosts)
   --hosts <ip,...>              gcp only: 3 data hosts first, load generator last
   --ssh-hosts <ip,...>          gcp only: external SSH addresses matching --hosts
-  --ssh-user <user>             gcp only: SSH user (default: $SSH_USER or $USER)
+  --ssh-user <user>             gcp only: SSH user (default: $SSH_USER)
   --ssh-key <path>              gcp only: SSH private key
   --client-checkout <path>      gcp only: checkout on the load generator, at this commit
   --client-node <path>          gcp only: Node >= 22 on the load generator (default: node)
+  --vm-image-family <f>, --vm-image-project <p>, --vm-boot-disk-size <s>,
+  --vm-boot-disk-type <t>, --vm-firewall-allow <rules>
+                                with --provision, all required: how the hosts were
+                                created (provision-gcp.sh prints each); recorded per host
+  --provision                   gcp only: place every image each role runs, the harness
+                                commit in --client-checkout (absolute) and the reference
+                                client's npm cache, verify them, and exit (no campaign)
   --targets <a,b,...>           ${Object.values(COMPARATIVE_TARGET).join(', ')}
                                 (default: ${DEFAULT_TARGETS.join(',')})
   --profile <smoke|capacity>    smoke (default): one run per arm, not a comparison;
@@ -145,6 +166,12 @@ Options:
 
 class UsageError extends Error {}
 
+const LOAD_GENERATOR_FLAG = '--load-generator';
+// How the GCP hosts were created; --provision records them for every host.
+const VM_FLAGS = Object.freeze([['--vm-image-family', 'vmImageFamily'],
+  ['--vm-image-project', 'vmImageProject'], ['--vm-boot-disk-size', 'vmBootDiskSize'],
+  ['--vm-boot-disk-type', 'vmBootDiskType'], ['--vm-firewall-allow', 'vmFirewallAllow']]);
+
 const VALUE_FLAGS = Object.freeze({
   '--execution-target': 'executionTarget', '--hosts': 'hostsRaw',
   '--ssh-hosts': 'sshHostsRaw', '--ssh-user': 'sshUser', '--ssh-key': 'sshKey',
@@ -152,10 +179,14 @@ const VALUE_FLAGS = Object.freeze({
   '--storage-root': 'storageRoot', '--lagrange-image': 'lagrangeImage',
   '--raw-observations': 'rawObservationsPath', '--output': 'outputPath',
   '--lock-wait-minutes': 'lockWaitMinutes', '--client-checkout': 'clientCheckout',
-  '--client-node': 'clientNode', '--lagrange-version': 'lagrangeVersion',
+  [LOAD_GENERATOR_FLAG]: 'loadGeneratorName', '--client-node': 'clientNode',
+  '--lagrange-version': 'lagrangeVersion',
   '--lagrange-image-digest': 'lagrangeImageDigest',
   '--lagrange-image-content': 'lagrangeImageContent',
   '--lagrange-revision': 'lagrangeRevision',
+  '--vm-image-family': 'vmImageFamily', '--vm-image-project': 'vmImageProject',
+  '--vm-boot-disk-size': 'vmBootDiskSize', '--vm-boot-disk-type': 'vmBootDiskType',
+  '--vm-firewall-allow': 'vmFirewallAllow',
   '--lagrange-src-fingerprint': 'lagrangeSrcFingerprint',
 });
 
@@ -170,7 +201,7 @@ function generatedCampaignId() {
 
 const BOOLEAN_FLAGS = Object.freeze({
   '--help': 'help', '-h': 'help', '--dry-run': 'dryRun',
-  '--from-recorded-facts': 'fromRecordedFacts',
+  '--from-recorded-facts': 'fromRecordedFacts', '--provision': 'provision',
 });
 
 function validateCliOptions(opts) {
@@ -181,17 +212,50 @@ function validateCliOptions(opts) {
     throw new UsageError('lab hosts come from the registered lab inventory ' +
       '(node scripts/lab.js); --hosts/--ssh-hosts are for --execution-target gcp');
   }
+  if (opts.executionTarget !== TARGET.LAB && opts.loadGeneratorName !== null) {
+    throw new UsageError('--load-generator is only for --execution-target lab');
+  }
+  if (opts.loadGeneratorName !== null && !/^[^\s-]\S*$/u.test(opts.loadGeneratorName)) {
+    throw new UsageError('--load-generator needs a registered lab host name, got ' +
+      JSON.stringify(opts.loadGeneratorName));
+  }
   if (!PROFILES[opts.profile]) throw new UsageError(`unknown profile ${opts.profile}`);
+  if (opts.provision) validateProvisionOptions(opts);
+}
+
+function validateProvisionOptions(opts) {
+  if (opts.executionTarget !== TARGET.GCP) {
+    throw new UsageError('--provision is only for --execution-target gcp (lab hosts are ' +
+      'provisioned through the lab controller)');
+  }
+  if (opts.dryRun) throw new UsageError('--provision and --dry-run are separate invocations');
+  const missing = VM_FLAGS.filter(([, key]) => !opts[key]).map(([flag]) => flag);
+  if (missing.length > 0) {
+    throw new UsageError(`--provision needs ${missing.join(', ')} (how the hosts were created, ` +
+      'as the create step printed), recorded for every host');
+  }
+  if (!path.isAbsolute(opts.clientCheckout)) {
+    throw new UsageError('--provision needs --client-checkout <absolute path> on the load ' +
+      'generator');
+  }
+}
+
+// Two explicit load generators are ambiguous operator intent, never "the last one".
+function rejectRepeatedLoadGenerator(argv) {
+  if (argv.filter((arg) => arg === LOAD_GENERATOR_FLAG).length > 1) {
+    throw new UsageError(`${LOAD_GENERATOR_FLAG} may be given once`);
+  }
 }
 
 function parseCliArgs(argv, env) {
+  rejectRepeatedLoadGenerator(argv);
   const opts = {executionTarget: env.EXECUTION_TARGET || TARGET.LAB, hostsRaw: '',
-    sshHostsRaw: '', sshUser: env.SSH_USER || env.USER || '', sshKey: env.SSH_KEY || '',
+    sshHostsRaw: '', sshUser: env.SSH_USER || '', sshKey: env.SSH_KEY || '',
     targetsRaw: DEFAULT_TARGETS.join(','), profile: 'smoke', campaignId: '',
     storageRoot: '', lagrangeImage: LAGRANGE_IMAGE_DEFAULT,
     rawObservationsPath: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH, outputPath: '',
     lockWaitMinutes: String(DEFAULT_LOCK_WAIT_MINUTES), clientCheckout: '', clientNode: 'node',
-    dryRun: false, help: false};
+    loadGeneratorName: null, dryRun: false, provision: false, help: false};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (BOOLEAN_FLAGS[arg]) opts[BOOLEAN_FLAGS[arg]] = true;
@@ -231,14 +295,17 @@ function gcpHosts(opts, dataHostCount) {
     host(ips.length - 1, 'client')];
 }
 
+function sshOptions(opts) {
+  return ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
+    ...(opts.sshKey ? ['-i', opts.sshKey] : [])];
+}
+
 function createSshRun(hosts, opts) {
   const targetOf = new Map(hosts.map((host) => [host.ip, host.sshTarget]));
   return async (ip, _opts, command, timeoutMs = SSH_TIMEOUT_MS) => {
     const target = targetOf.get(ip);
     if (!target) throw new Error(`host ${ip} is not part of this campaign`);
-    const args = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'];
-    if (opts.sshKey) args.push('-i', opts.sshKey);
-    const {stdout} = await execFileAsync('ssh', [...args, target, command],
+    const {stdout} = await execFileAsync('ssh', [...sshOptions(opts), target, command],
       {timeout: timeoutMs, maxBuffer: SSH_MAX_BUFFER});
     return String(stdout || '').trim();
   };
@@ -274,10 +341,11 @@ async function runCampaign({opts, manifest, hosts, physicalExtras}) {
     opts}) : null;
   const images = campaignImagesByRole({targets: manifest.targets,
     lagrangeImage: opts.lagrangeImage});
-  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'data'), sshRun, opts,
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'data'), role: 'data',
+    sshRun, opts,
     images: images.data.filter((image) => !(pinned && image === opts.lagrangeImage))});
-  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'client'), sshRun,
-    opts, images: images.client});
+  await ensureProductImages({hosts: hosts.filter((host) => host.role === 'client'),
+    role: 'client', sshRun, opts, images: images.client});
   const recordOwner = await loadRawObservationRecordOwner();
   const client = hosts.find((host) => host.role === 'client');
   if (!client.repoPath || !client.nodePath) {
@@ -374,6 +442,28 @@ function campaignExitCode(runExitCode, outcome) {
   return outcome === SCENARIO_OUTCOME.REFUSED ? EXIT_CODES.REFUSED : EXIT_CODES.FAILURE;
 }
 
+// The explicit GCP provisioning step: what the campaign with these options will
+// check for, placed and verified on its hosts. The harness commit is the
+// controller's HEAD (the commit the campaign records), pushed over the same ssh.
+async function provisionGcpHosts({opts, manifest, dataHostCount}) {
+  const hosts = gcpHosts(opts, dataHostCount);
+  if (manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
+    opts.lagrangeImage = resolveLagrangeContainerImage(opts);
+  }
+  // The same harness identity the campaign records (awaited, as runCampaign does).
+  const {gitCommit} = await harnessIdentity(manifest);
+  const plan = comparativeProvisioningPlan({targets: manifest.targets,
+    lagrangeImage: opts.lagrangeImage, harnessCommit: gitCommit,
+    referenceClientLock: readReferenceClientLock(REPO_ROOT, gitCommit),
+    vm: {imageFamily: opts.vmImageFamily, imageProject: opts.vmImageProject,
+      bootDiskSize: opts.vmBootDiskSize, bootDiskType: opts.vmBootDiskType,
+      firewallAllow: opts.vmFirewallAllow},
+    nodeMinimum: fleetRequirement(REPO_ROOT, gitCommit).nodeMinimum});
+  return provisionComparativeHosts({hosts, plan, sshRun: createSshRun(hosts, opts), opts,
+    pushHarnessCommit: harnessCommitPusher({controllerRoot: REPO_ROOT,
+      sshCommand: ['ssh', ...sshOptions(opts)]})});
+}
+
 async function runLabCampaign({opts, manifest, dataHostCount}) {
   const state = await loadState({allowMissing: false});
   const {requirement, fleet} = await discoverLabFleet(state);
@@ -381,7 +471,8 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
   // with the load generator in the campaign header.
   const loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
   const hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-    nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement});
+    nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
+    loadGeneratorName: opts.loadGeneratorName});
   const budgetMs = manifest.campaignBudgetMinutes * MS_PER_MINUTE;
   const sessions = await holdLabBenchmarkHosts({hosts, campaignId: manifest.campaignId,
     waitMs: Number(opts.lockWaitMinutes) * MS_PER_MINUTE, expectedMs: budgetMs});
@@ -403,7 +494,8 @@ async function runLabCampaign({opts, manifest, dataHostCount}) {
 async function discoverLabFleet(state) {
   const requirement = fleetRequirement(REPO_ROOT);
   return {requirement, fleet: await discoverFleet({nodes: selectNodesByRole(state, HARNESS_ROLE),
-    controllerRepoPath: REPO_ROOT, lockGraphSha256: requirement.lockGraphSha256,
+    controllerRepoPath: REPO_ROOT, controllerThermalEndpoint: state.controller?.thermalEndpoint,
+    lockGraphSha256: requirement.lockGraphSha256,
     nodeMinimum: requirement.nodeMinimum})};
 }
 
@@ -417,7 +509,8 @@ async function dryRunPlan({opts, manifest, dataHostCount}) {
       {requirement: fleetRequirement(REPO_ROOT), fleet: null} : await discoverLabFleet(state);
     loadGeneratorRequirement = measureLoadGeneratorRequirement(REPO_ROOT);
     hosts = selectLabBenchmarkHosts({state, fleet, dataHostCount,
-      nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement});
+      nodeMinimum: requirement.nodeMinimum, loadGeneratorRequirement,
+      loadGeneratorName: opts.loadGeneratorName});
   } else {
     hosts = gcpHosts(opts, dataHostCount);
   }
@@ -447,6 +540,11 @@ async function main() {
   if (opts.dryRun) {
     const plan = await dryRunPlan({opts, manifest, dataHostCount});
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+    return;
+  }
+  if (opts.provision) {
+    const placed = await provisionGcpHosts({opts, manifest, dataHostCount});
+    process.stdout.write(`${JSON.stringify({provisioned: placed}, null, 2)}\n`);
     return;
   }
   const summary = opts.executionTarget === TARGET.LAB ?

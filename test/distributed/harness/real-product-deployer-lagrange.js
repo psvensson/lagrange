@@ -43,6 +43,7 @@ import {
 import {
   DEPLOYMENT_FAILURE,
   LAGRANGE_IMAGE_DEFAULT,
+  POSTGRES_IMAGE_DEFAULT,
   READINESS_STATE,
   deploymentFailure,
   requireCampaignId,
@@ -67,7 +68,9 @@ import {
 import {pollReadiness} from './real-product-readiness.js';
 import {
   dockerRunDetached,
+  dockerRunOnceCommand,
   errorText,
+  execWithStatus,
   httpFromHost,
   shellWord,
 } from './real-product-remote-shell.js';
@@ -82,6 +85,12 @@ const PORT = Object.freeze({REST: 8080, ADMIN: 8081, TRANSPORT: 8082});
 // runtime USER (`chown 10001:10001 /data`); a path outside it fails with
 // EACCES at startup.
 const DATA_DIR = '/data';
+// The Dockerfile's runtime USER, the owner of DATA_DIR in the image; a test
+// holds the two equal.
+const RUNTIME_USER = '10001:10001';
+// Where the throwaway container that prepares a node's storage directory
+// mounts <storage-root>/<campaign>.
+const STORAGE_MOUNT = '/campaign';
 const NODE_ROLE = 'lagrange-node';
 const LISTENER_ROLE = 'sys-postgres-wire';
 const PG_WIRE_SERVICE_ID = 'sys-postgres-wire';
@@ -109,6 +118,11 @@ const REVISION_LABEL = 'org.opencontainers.image.revision';
 // recorded with the outcome, and exhaustion is the arm's product failure.
 const ROUTABLE_ATTEMPTS = 900;
 const BOOT_PROVENANCE_MARKER = 'bootedSrcFingerprint';
+// Cross-VM (--network host) transport ACK and join timeouts, matching
+// cluster-class-lifecycle-base.js (commit 5ff58af0c, CL-007).
+const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
+const JOINING_HTTP_TIMEOUT_MS = 60000;
+const JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = 240000;
 
 function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(String(index + 1), NODE_ID_WIDTH, '0')}`;
@@ -120,16 +134,66 @@ function nodeEnv({nodeId, host, seedHost, connection}) {
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
+    LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS: HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS,
     PGWIRE_AUTH_USER: connection.user, PGWIRE_AUTH_PASSWORD: connection.password,
     PGWIRE_AUTH_DATABASE: connection.database,
   };
-  if (seedHost !== host) env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+  if (seedHost !== host) {
+    env.SEED_NODE_ADDRESS = `${seedHost}:${PORT.REST}`;
+    env.NODE_JOINING_HTTP_TIMEOUT_MS = JOINING_HTTP_TIMEOUT_MS;
+    env.NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS = JOINING_LEADERSHIP_WAIT_TIMEOUT_MS;
+  }
   return arrayFlatMap(Object.entries(env), ([key, value]) => ['-e', `${key}=${value}`]);
+}
+
+function storageLabel(index) {
+  return `lagrange-${index + 1}`;
 }
 
 function storageArgs(opts, campaignId, index) {
   return opts.storageRoot ?
-    ['-v', `${opts.storageRoot}/${campaignId}/lagrange-${index + 1}:${DATA_DIR}`] : [];
+    ['-v', `${opts.storageRoot}/${campaignId}/${storageLabel(index)}:${DATA_DIR}`] : [];
+}
+
+// With --storage-root, dockerd would create a node's missing bind-mount source
+// as 0:0 755, which the image's runtime user cannot write (lab experiment
+// 16dce80a, tv-dator 2026-11-14: EACCES at uid 10001). The directory is made
+// beforehand, owned by that user, through a throwaway container of the
+// PostgreSQL image every data host holds (campaignImagesByRole); the product
+// never runs as root and nothing is made world-writable. Re-owning is limited
+// to what carries no one else's data: an absent directory, an empty one (as
+// dockerd leaves behind) or one the runtime user owns (an earlier run of the
+// same campaign). A non-empty directory of another owner is foreign data: the
+// node is refused, typed, and the directory is left as it is.
+const FOREIGN_STORAGE_EXIT = 3;
+
+// The shell script the throwaway container runs for one node directory.
+function storagePreparationScript(dir) {
+  return `if [ -d ${dir} ] && [ -n "$(ls -A ${dir})" ] && ` +
+    `[ "$(stat -c %u:%g ${dir})" != "${RUNTIME_USER}" ]; then ` +
+    `echo "foreign $(stat -c %u:%g ${dir})"; exit ${FOREIGN_STORAGE_EXIT}; fi; ` +
+    `mkdir -p ${dir} && chown ${RUNTIME_USER} ${dir}`;
+}
+
+async function prepareNodeStorage({sshRun, opts, host, campaignId, index}) {
+  if (!opts.storageRoot) return;
+  const storagePath = `${opts.storageRoot}/${campaignId}/${storageLabel(index)}`;
+  const result = await execWithStatus(sshRun, host, opts, `${dockerRunOnceCommand({campaignId,
+    image: POSTGRES_IMAGE_DEFAULT,
+    dockerArgs: ['-v', `${opts.storageRoot}/${campaignId}:${STORAGE_MOUNT}`],
+    commandArgs: ['sh', '-c',
+      storagePreparationScript(`${STORAGE_MOUNT}/${storageLabel(index)}`)]})} 2>&1`);
+  if (result.exitCode === 0) return;
+  const output = stringTrim(result.stdout);
+  if (result.exitCode === FOREIGN_STORAGE_EXIT && stringStartsWith(output, 'foreign ')) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, `${storagePath} on ${host} ` +
+      `already holds data owned by ${output.slice('foreign '.length)}, not the runtime user ` +
+      `${RUNTIME_USER}; it is never re-owned`, {host, reason: 'storage_foreign_owner', path: storagePath,
+      owner: output.slice('foreign '.length)});
+  }
+  throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED, 'could not prepare ' +
+    `${storagePath} on ${host} for the runtime user ${RUNTIME_USER} (exit ${result.exitCode}): ` +
+    output, {host, reason: 'storage_owner_unprepared', path: storagePath, output});
 }
 
 function normalizeImageDigest(digest, image) {
@@ -523,21 +587,31 @@ function exhaustedEndpoint(listener, roles) {
     port: listener.port, containerId: node.containerId, binding: null};
 }
 
+async function startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId,
+  index}) {
+  const nodeId = nodeIdOf(index);
+  const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
+    ordinal: index + 1, image: imageForHost(opts, host, image),
+    dockerArgs: [...storageArgs(opts, campaignId, index),
+      ...nodeEnv({nodeId, host, seedHost, connection})]});
+  return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
+}
+
 async function formLagrangeCluster({ctx, hosts, image, connection, roles, nodeReadiness,
   formed, campaignId}) {
   const {sshRun, opts} = ctx;
   const seedHost = hosts[0];
+  await Promise.all(arrayMap(hosts, (host, index) =>
+    prepareNodeStorage({sshRun, opts, host, campaignId, index})));
+  roles.push(await startLagrangeNode({sshRun, opts, host: seedHost, seedHost, image, connection,
+    campaignId, index: 0}));
+  const joinerIndices = [];
+  for (let index = 1; index < hosts.length; index += 1) joinerIndices.push(index);
+  const joinerRoles = await Promise.all(arrayMap(joinerIndices, (index) =>
+    startLagrangeNode({sshRun, opts, host: hosts[index], seedHost, image, connection, campaignId,
+      index})));
+  for (const role of joinerRoles) roles.push(role);
   for (let index = 0; index < hosts.length; index += 1) {
-    const host = hosts[index];
-    const nodeId = nodeIdOf(index);
-    const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
-      ordinal: index + 1, image: imageForHost(opts, host, image),
-      dockerArgs: [...storageArgs(opts, campaignId, index),
-        ...nodeEnv({nodeId, host, seedHost, connection})]});
-    roles.push({role: NODE_ROLE, host, containerId: started.containerId, nodeId});
-    if (index === 0) nodeReadiness.push(await nodeReady(ctx, host));
-  }
-  for (let index = 1; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
   const membership = await membershipReady(ctx, seedHost, hosts.length);

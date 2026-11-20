@@ -10,17 +10,6 @@ import {
   resolveCriticalPlacementConvergence,
 } from '../../src/bootstrap/critical-placement-convergence.js';
 import {
-  CRITICAL_PLACEMENT_EPOCH_STATE,
-  CRITICAL_PLACEMENT_OBSERVATION_REASON,
-  observeCriticalPlacement,
-  resolveCriticalPlacementEvidenceCurrency,
-} from '../../src/bootstrap/critical-placement-formation-observer.js';
-import {
-  OPERATION_LEDGER_FORMATION_BARRIER_STATE,
-  buildOperationLedgerFormationBarrierLogFields,
-  resolveOperationLedgerFormationBarrierState,
-} from '../../src/bootstrap/node-joining-operation-ledger-formation-readiness.js';
-import {
   CRITICAL_SYSTEM_PARTITION_IDS,
 } from '../../src/bootstrap/system-partition-classification.js';
 import {
@@ -28,13 +17,8 @@ import {
   REPLICATION_TARGET_SOURCE,
 } from '../../src/bootstrap/replication-target-authority.js';
 import {
-  SYSTEM_TABLE_NAME,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  MEMBERSHIP_EPOCH_FENCE_STATE,
-  isMembershipEpochFenceCurrent,
-} from '../../src/control-plane/membership-epoch-contract.js';
 
 const STATE = CRITICAL_PLACEMENT_EVIDENCE_STATE;
 
@@ -89,23 +73,6 @@ function serviceRowsFor({omit = [], soloPartitionIds = [], seedOnly = false} = {
     });
   });
   return rows;
-}
-
-function publicationRows(epoch) {
-  return epoch === null ? [] : [{status: 'PUBLISHED', publication_epoch: epoch}];
-}
-
-// A cache exposing the filter surface over exactly the three evidence tables.
-function cacheOf({services = [], partitions = [], publications = []} = {}) {
-  const tables = {
-    [SYSTEM_TABLE_NAME.SERVICES]: services,
-    [SYSTEM_TABLE_NAME.PARTITIONS]: partitions,
-    [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: publications,
-  };
-  return {
-    filter: (tableName, predicate) =>
-      (tables[tableName] || []).filter(predicate),
-  };
 }
 
 test('fresh-seed-critical-set-fully-inspected', () => {
@@ -311,249 +278,18 @@ test('bootstrap-expected-rf-cannot-turn-unknown-into-known', () => {
     'the creation default must not be readable as this row\'s requirement');
 });
 
-test('unreadable-cache-is-typed-unknown', () => {
-  // Every unreadable evidence surface is typed UNKNOWN with the surface
-  // named; none is a deficit verdict. Six whole-cache shapes, then each
-  // single-table failure in isolation.
-  const wholeCacheShapes = [
-    ['absent cache', undefined],
-    ['null cache', null],
-    ['no read surface', {}],
-    ['non-function filter', {filter: 42}],
-    ['filter answering null', {filter: () => null}],
-    ['filter answering a string', {filter: () => 'rows'}],
-  ];
-  for (const [label, systemTableCache] of wholeCacheShapes) {
-    const observation = observeCriticalPlacement({systemTableCache});
-    assert.equal(observation.evidenceState, STATE.UNKNOWN, label);
-    assert.equal(observation.converged, false, label);
-    assert.ok(observation.reasonCodes.includes(
-      CRITICAL_PLACEMENT_OBSERVATION_REASON.SERVICES_EVIDENCE_UNREADABLE),
-    `${label} names the services surface`);
-    assert.ok(observation.reasonCodes.includes(
-      CRITICAL_PLACEMENT_OBSERVATION_REASON
-        .PARTITION_POLICY_EVIDENCE_UNREADABLE),
-    `${label} names the policy surface`);
-    assert.deepEqual([...observation.pendingPartitionIds], [],
-      `${label} mints no deficit`);
-  }
-
-  // Only the PARTITIONS table unreadable: holder evidence alone answers
-  // nothing, and the reason names exactly the failed surface.
-  const partitionsThrow = {
-    filter: (tableName, predicate) => {
-      if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
-        throw new Error('policy surface refused');
-      }
-      const tables = {
-        [SYSTEM_TABLE_NAME.SERVICES]: serviceRowsFor(),
-        [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: publicationRows(1),
-      };
-      return (tables[tableName] || []).filter(predicate);
-    },
-  };
-  const policyUnreadable = observeCriticalPlacement({
-    systemTableCache: partitionsThrow});
-  assert.equal(policyUnreadable.evidenceState, STATE.UNKNOWN);
-  assert.deepEqual([...policyUnreadable.reasonCodes], [
-    CRITICAL_PLACEMENT_OBSERVATION_REASON.PARTITION_POLICY_EVIDENCE_UNREADABLE,
-  ], 'exactly the policy surface is named, and nothing is projected');
-
-  // An async cache answers thenables for every table: typed unreadable, and
-  // the promise is never mistaken for rows.
-  const asyncCache = {filter: async () => []};
-  const asyncObservation = observeCriticalPlacement({
-    systemTableCache: asyncCache});
-  assert.equal(asyncObservation.evidenceState, STATE.UNKNOWN);
-});
-
-test('stale-topology-evidence-cannot-authorize-current-topology', () => {
-  // The observation is stamped with the membership publication epoch it was
-  // computed under; the evidence-currency boundary then runs the membership
-  // epoch owner's fence over that stamp. A consumer that would authorize on
-  // this evidence asks the boundary, never a local comparison.
-  const observedUnderEpoch4 = observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: serviceRowsFor(),
-      partitions: freshSeedPolicyRows(),
-      publications: publicationRows(4),
-    }),
-  });
-  assert.equal(observedUnderEpoch4.evidenceState, STATE.KNOWN_CONVERGED,
-    'the evidence itself is a genuine KNOWN_CONVERGED');
-  assert.equal(observedUnderEpoch4.membershipEpoch.state,
-    CRITICAL_PLACEMENT_EPOCH_STATE.AVAILABLE);
-  assert.equal(observedUnderEpoch4.membershipEpoch.value, 4);
-
-  // Superseded membership: the consumer's current epoch has moved to 5.
-  const staleFence = resolveCriticalPlacementEvidenceCurrency(
-    observedUnderEpoch4, 5);
-  assert.equal(staleFence.state, MEMBERSHIP_EPOCH_FENCE_STATE.STALE,
-    'a KNOWN_CONVERGED from a superseded membership is refused');
-  assert.equal(isMembershipEpochFenceCurrent(staleFence), false);
-
-  // The topology the evidence actually described: still current.
-  const currentFence = resolveCriticalPlacementEvidenceCurrency(
-    observedUnderEpoch4, 4);
-  assert.equal(currentFence.state, MEMBERSHIP_EPOCH_FENCE_STATE.CURRENT);
-  assert.equal(isMembershipEpochFenceCurrent(currentFence), true,
-    'the same evidence IS current for the topology it described');
-
-  // Evidence from a membership the consumer has not yet seen is refused too:
-  // both directions of divergence fail closed.
-  const futureFence = resolveCriticalPlacementEvidenceCurrency(
-    observedUnderEpoch4, 3);
-  assert.equal(futureFence.state, MEMBERSHIP_EPOCH_FENCE_STATE.FUTURE);
-  assert.equal(isMembershipEpochFenceCurrent(futureFence), false);
-
-  // An unreadable publications surface stamps the epoch UNAVAILABLE, and the
-  // boundary resolves an unavailable stamp to UNKNOWN currency — never to
-  // CURRENT.
-  const publicationsThrow = {
-    filter: (tableName, predicate) => {
-      if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
-        throw new Error('publication surface refused');
-      }
-      const tables = {
-        [SYSTEM_TABLE_NAME.SERVICES]: serviceRowsFor(),
-        [SYSTEM_TABLE_NAME.PARTITIONS]: freshSeedPolicyRows(),
-      };
-      return (tables[tableName] || []).filter(predicate);
-    },
-  };
-  const unstamped = observeCriticalPlacement({
-    systemTableCache: publicationsThrow});
-  assert.equal(unstamped.membershipEpoch.state,
-    CRITICAL_PLACEMENT_EPOCH_STATE.UNAVAILABLE);
-  assert.ok(unstamped.reasonCodes.includes(
-    CRITICAL_PLACEMENT_OBSERVATION_REASON.MEMBERSHIP_EPOCH_UNAVAILABLE));
-  assert.equal(unstamped.evidenceState, STATE.KNOWN_CONVERGED,
-    'the placement measurement itself survives: only currency is unknown');
-  const unstampedFence = resolveCriticalPlacementEvidenceCurrency(
-    unstamped, 4);
-  assert.equal(unstampedFence.state, MEMBERSHIP_EPOCH_FENCE_STATE.UNKNOWN);
-  assert.equal(isMembershipEpochFenceCurrent(unstampedFence), false);
-});
-
-test('observer-mints-no-readiness-state', () => {
-  const observation = observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: serviceRowsFor(),
-      partitions: freshSeedPolicyRows(),
-      publications: publicationRows(1),
-    }),
-  });
-
-  const forbidden = ['ready', 'active', 'phase', 'verdict', 'status',
-    'trafficReady', 'lifecycle', 'state'];
-  for (const key of forbidden) {
-    assert.equal(Object.hasOwn(observation, key), false,
-      `observation must not mint ${key}`);
-  }
-  assert.equal(Object.isFrozen(observation), true);
-  assert.equal(Object.isFrozen(observation.reasonCodes), true);
-  assert.equal(Object.isFrozen(observation.pendingPartitionIds), true);
-  assert.equal(Object.isFrozen(observation.unknownPartitionIds), true);
-  assert.equal(Object.isFrozen(observation.membershipEpoch), true);
-});
-
-test('barrier-release-is-unchanged-by-the-observation', () => {
-  // The barrier's release decision is a pure function of cohort engagement,
-  // the discovery deadline and startup authority; the critical-placement
-  // observation rides the snapshot as reported evidence only. Identical
-  // inputs with and without the observation must resolve the identical
-  // state, across every reachable release state.
-  const scenarios = [
-    [{barrierEngaged: false, discoveryDeadline: 100,
-      snapshot: {now: 50, startupAuthorityReady: false}},
-    OPERATION_LEDGER_FORMATION_BARRIER_STATE.WAITING_COHORT],
-    [{barrierEngaged: false, discoveryDeadline: 100,
-      snapshot: {now: 150, startupAuthorityReady: false}},
-    OPERATION_LEDGER_FORMATION_BARRIER_STATE.BYPASSED_INSUFFICIENT_COHORT],
-    [{barrierEngaged: true, discoveryDeadline: 100,
-      snapshot: {now: 50, startupAuthorityReady: false}},
-    OPERATION_LEDGER_FORMATION_BARRIER_STATE.WAITING_STARTUP_AUTHORITY],
-    [{barrierEngaged: true, discoveryDeadline: 100,
-      snapshot: {now: 50, startupAuthorityReady: true}},
-    OPERATION_LEDGER_FORMATION_BARRIER_STATE.SATISFIED],
-  ];
-
-  const pendingObservation = observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: serviceRowsFor({seedOnly: true}),
-      partitions: freshSeedPolicyRows(),
-      publications: publicationRows(1),
-    }),
-  });
-  assert.equal(pendingObservation.evidenceState, STATE.KNOWN_NOT_CONVERGED,
-    'the observation genuinely reports a deficit while release proceeds');
-
-  for (const [input, expected] of scenarios) {
-    const without = resolveOperationLedgerFormationBarrierState(input);
-    const withObservation = resolveOperationLedgerFormationBarrierState({
-      ...input,
-      snapshot: {...input.snapshot, criticalPlacement: pendingObservation},
-    });
-    assert.equal(without, expected);
-    assert.equal(withObservation, expected,
-      'the observation must not move the release decision');
-  }
-});
-
-test('barrier-log-fields-carry-the-observation', () => {
-  const observation = observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: serviceRowsFor({seedOnly: true}),
-      partitions: freshSeedPolicyRows(),
-      publications: publicationRows(2),
-    }),
-  });
-  const fields = buildOperationLedgerFormationBarrierLogFields({
-    partitionId: 'replica_operations-p1',
-    candidateNodeIds: [],
-    preReadyCandidateNodeIds: [],
-    targetReplicaCount: 3,
-    criticalPlacement: observation,
-  });
-
-  assert.equal(fields.criticalPlacementEvidenceState,
-    STATE.KNOWN_NOT_CONVERGED);
-  assert.equal(fields.criticalPlacementConverged, false);
-  assert.deepEqual([...fields.criticalPlacementPendingPartitionIds].sort(),
-    declaredCriticalPartitionIds());
-  assert.deepEqual([...fields.criticalPlacementUnknownPartitionIds], []);
-  assert.ok(fields.criticalPlacementObservedPartitionCount > 0);
-  assert.equal(fields.criticalPlacementMembershipEpochState,
-    CRITICAL_PLACEMENT_EPOCH_STATE.AVAILABLE);
-  assert.equal(fields.criticalPlacementMembershipEpoch, 2);
-
-  // A snapshot without the observation still logs typed absence.
-  const absent = buildOperationLedgerFormationBarrierLogFields({
-    partitionId: 'replica_operations-p1',
-    candidateNodeIds: [],
-    preReadyCandidateNodeIds: [],
-    targetReplicaCount: 3,
-  });
-  assert.equal(absent.criticalPlacementEvidenceState, null);
-  assert.equal(absent.criticalPlacementConverged, false);
-});
-
 test('witness-deterministic', () => {
-  const build = () => observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: serviceRowsFor({soloPartitionIds:
-        [declaredCriticalPartitionIds()[0]]}),
-      partitions: freshSeedPolicyRows(),
-      publications: publicationRows(3),
+  const build = () => resolveCriticalPlacementConvergence({
+    serviceRows: serviceRowsFor({
+      soloPartitionIds: [declaredCriticalPartitionIds()[0]],
     }),
+    partitionRows: freshSeedPolicyRows(),
   });
-  const reversed = () => observeCriticalPlacement({
-    systemTableCache: cacheOf({
-      services: [...serviceRowsFor({soloPartitionIds:
-        [declaredCriticalPartitionIds()[0]]})].reverse(),
-      partitions: [...freshSeedPolicyRows()].reverse(),
-      publications: publicationRows(3),
-    }),
+  const reversed = () => resolveCriticalPlacementConvergence({
+    serviceRows: [...serviceRowsFor({
+      soloPartitionIds: [declaredCriticalPartitionIds()[0]],
+    })].reverse(),
+    partitionRows: [...freshSeedPolicyRows()].reverse(),
   });
 
   const first = JSON.parse(JSON.stringify(build()));

@@ -297,3 +297,19 @@ test('predicate step 5: time-to-routable is recorded per canonical table', {time
       'new_order', 'order_line', 'orders', 'stock', 'warehouse']);
     assert.ok(arrayEvery(Object.values(perTable), (ms) => Number.isFinite(ms) && ms >= 0));
   });
+
+test('CL-007: Lagrange cross-host deployment sets 30s transport message timeout and join timeouts',
+  {timeout: 300000}, async () => {
+    const ledger = createContainerLedger();
+    const {sshRun, calls} = createScriptedSsh(lagrangeHealthyRules(ledger, {hosts: HOSTS}));
+    await deployers.deployLagrangeCluster(baseInput(sshRun));
+    const runs = arrayFilter(calls, (call) => /^docker run -d /u.test(call.command));
+    assert.equal(runs.length, HOSTS.length);
+    for (const run of runs) {
+      assert.match(run.command, /LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS=30000/u);
+    }
+    for (const joinerRun of runs.slice(1)) {
+      assert.match(joinerRun.command, /NODE_JOINING_HTTP_TIMEOUT_MS=60000/u);
+      assert.match(joinerRun.command, /NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS=240000/u);
+    }
+  });

@@ -5,12 +5,8 @@ import {
   applyUnifiedRebalancerCriticalTopologyMethods,
 } from './unified-rebalancer-critical-topology-methods.js';
 import {
-  FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
-  classifyFormationCohortSpreadCureNode,
-  isStartupAuthorityControlPlanePlacementEligibleNode as
-  isStartupAuthorityPlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
-} from '../control-plane/startup-authority-placement-eligibility.js';
+} from '../control-plane/startup-authority-snapshot-owner.js';
 import {
   resolvePublishedActiveNodeIds,
 } from '../control-plane/active-node-publication-snapshots.js';
@@ -28,7 +24,6 @@ import {
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
@@ -229,18 +224,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         nodeId,
         readinessOptions,
       );
-      if (
-        this.isStartupAuthorityControlPlanePlacementEligibleNode(
-          node,
-          readinessDecisionDimension,
-        )
-      ) {
-        return this.isStartupAuthorityPlacementDispatchReady(
-          nodeId,
-          readiness,
-          readinessDecisionDimension,
-        );
-      }
+      // A placement target holds a current READY lease, for every partition.
       return this.isCandidateActiveLeasedNode(
         node,
         readiness,
@@ -316,71 +300,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     } catch (_error) {
       return null;
     }
-  }
-
-  isStartupAuthorityControlPlanePlacementEligibleNode(
-    nodeOrId,
-    readinessDecisionDimension = null,
-  ) {
-    if (
-      readinessDecisionDimension &&
-      readinessDecisionDimension !==
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-    ) {
-      return false;
-    }
-    if (!this.isControlPlanePriorityPartition()) {
-      return false;
-    }
-    const nodeId =
-      typeof nodeOrId === 'string' ?
-        nodeOrId :
-        nodeOrId?.node_id || nodeOrId?.nodeId || null;
-    if (
-      typeof nodeId !== 'string' ||
-      nodeId.length === 0
-    ) {
-      return false;
-    }
-    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
-    if (
-      !(startupAuthorityNodeIds instanceof Set) ||
-      !startupAuthorityNodeIds.has(nodeId)
-    ) {
-      return false;
-    }
-    const node =
-      typeof nodeOrId === 'string' ?
-        this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
-        nodeOrId;
-    return isStartupAuthorityPlacementEligibleNode({
-      node,
-      startupAuthorityNodeIds,
-      messageRouter: this.messageRouter,
-      localNodeId: this.nodeId,
-      includeSelf: true,
-    });
-  }
-
-  isFormationCohortSpreadCureTarget(nodeOrId) {
-    const node = typeof nodeOrId === 'string' ?
-      this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeOrId) :
-      nodeOrId;
-    const startupAuthority = this.getStartupAuthoritySnapshot();
-    const startupAuthorityNodeIds =
-      resolveStartupAuthorityNodeIdSet(startupAuthority);
-    return classifyFormationCohortSpreadCureNode({
-      node,
-      startupAuthorityNodeIds,
-      messageRouter: this.messageRouter,
-      localNodeId: this.nodeId,
-      includeSelf: true,
-      priorityRecoveryLane: this.isControlPlanePriorityPartition(),
-      priorityRecoveryActive:
-        this.isGlobalPriorityControlPlaneRecoveryActive(),
-      formationReleaseHandoffActive:
-        startupAuthority?.formationReleaseHandoff?.active === true,
-    }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 
   /**

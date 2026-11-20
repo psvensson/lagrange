@@ -293,8 +293,10 @@ const RATCHET_TARGETS = [
     // 2026-11-09 (candidate-integration): tightened 629/23624 -> 624/23388 -> 623/23344 -> 623/23339 on the checker hint.
     // 2026-11-11: retiring failure-bundle forwarding aggregates tightened
     // 623/23339 -> 620/22292 on the canonical checker's measured hint.
-    baselineCloneGroupCount: 620,
-    baselineDuplicatedLineCount: 22292,
+    // 2026-11-15: tightened 620/22292 -> 618/22225 on the checker hint after
+    // consolidating loadMysql2Promise in the comparative OLTP reference client.
+    baselineCloneGroupCount: 618,
+    baselineDuplicatedLineCount: 22225,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

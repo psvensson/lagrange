@@ -260,23 +260,31 @@ test('an asynchronous pg connection error is kept, never a process crash', async
   assert.equal(client.connectionError, terminated);
 });
 
-test('no other benchmark-chain module constructs a pg client', async () => {
+test('no other benchmark-chain module constructs a pg client or imports mysql2 directly', async () => {
   const {readdirSync, readFileSync} = await import('node:fs');
   // The scenarios too (coordinator decision 3, 2026-11-02): every pg-wire
-  // client of the repository's distributed tests comes from the one owner.
+  // client of the repository's distributed tests comes from pg-wire-client.js
+  // and every mysql2/promise import comes from native-clients.js.
   const roots = [new URL('../../reference-client/', import.meta.url),
     new URL('../', import.meta.url), new URL('../../scenarios/', import.meta.url)];
-  const offenders = [];
+  const pgOffenders = [];
+  const mysqlOffenders = [];
   for (const root of roots) {
     for (const name of readdirSync(root)) {
-      if (!stringEndsWith(name, '.js') || name === 'pg-wire-client.js') continue;
+      if (!stringEndsWith(name, '.js')) continue;
       if (stringEndsWith(root.href, '/harness/') && !/^(benchmark-|comparative-benchmark-|real-product-)/u
         .test(name)) continue;
       const text = readFileSync(new URL(name, root), 'utf8');
-      if (/new (pg\.|pgModule\.)?Client\(/u.test(text)) offenders.push(name);
+      if (name !== 'pg-wire-client.js' && /new (pg\.|pgModule\.)?Client\(/u.test(text)) {
+        pgOffenders.push(name);
+      }
+      if (name !== 'native-clients.js' && /import\(['"]mysql2/u.test(text)) {
+        mysqlOffenders.push(name);
+      }
     }
   }
-  assert.deepEqual(offenders, []);
+  assert.deepEqual(pgOffenders, []);
+  assert.deepEqual(mysqlOffenders, []);
 });
 
 // The same campaign's load generator lacked mysql2, which only the TiDB arm

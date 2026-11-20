@@ -4,15 +4,15 @@
   "counts": {
     "admin-diagnostics": 121,
     "architecture-governance": 21,
-    "bootstrap-membership": 345,
+    "bootstrap-membership": 343,
     "cdc-metadata": 70,
     "cli-tooling": 99,
-    "control-plane": 238,
+    "control-plane": 234,
     "convergence-topology": 83,
-    "distributed-harness": 216,
+    "distributed-harness": 220,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 281,
+    "placement-rebalance": 280,
     "query-sql": 194,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 228,
     "storage-raft": 151,
-    "test-infrastructure": 172,
+    "test-infrastructure": 166,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2661,
-  "digest": "fnv1a32-e4e31b18",
+  "censusSize": 2652,
+  "digest": "fnv1a32-4f00193e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8172836",
+  "observationDigest": "fnv1a32-f4ba29b7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -179,7 +179,6 @@
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": "bootstrap-membership",
     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "bootstrap-membership",
-    "test/bootstrap/formation-readiness-owner-single-form.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "bootstrap-membership",
@@ -190,7 +189,6 @@
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap-membership",
     "test/bootstrap/join-coordinator.test.js": "bootstrap-membership",
     "test/bootstrap/join-delegate-bundles.test.js": "bootstrap-membership",
-    "test/bootstrap/join-formation-discovery-window-budget.test.js": "bootstrap-membership",
     "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/join-message-group-identity-record.test.js": "bootstrap-membership",
     "test/bootstrap/join-message-group-phase.test.js": "bootstrap-membership",
@@ -231,7 +229,6 @@
     "test/bootstrap/node-joining-cdc-readiness-gate.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-cdc-subscription.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-control-plane-heartbeat.test.js": "bootstrap-membership",
-    "test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-http-post-timeout.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-lease-registration.test.js": "bootstrap-membership",
@@ -274,6 +271,7 @@
     "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
     "test/bootstrap/registered-service-row-raft-role.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
+    "test/bootstrap/removed-formation-barrier-and-handoff-census.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
     "test/bootstrap/replication-target-authority.test.js": "bootstrap-membership",
@@ -586,10 +584,6 @@
     "test/control-plane/failure-class-owner-path-regression.test.js": "control-plane",
     "test/control-plane/failure-class-registry.test.js": "control-plane",
     "test/control-plane/formation-placement-membership-handoff.test.js": "control-plane",
-    "test/control-plane/formation-release-handoff-closure.test.js": "control-plane",
-    "test/control-plane/formation-release-handoff-consumer-parity.test.js": "control-plane",
-    "test/control-plane/formation-release-handoff-interaction-registry.test.js": "control-plane",
-    "test/control-plane/formation-release-handoff-post-reopen-capture.test.js": "control-plane",
     "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js": "control-plane",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-liveness-at-commit.test.js": "control-plane",
@@ -759,7 +753,7 @@
     "test/convergence/baseline-discovered-regressions.test.js": "convergence-topology",
     "test/convergence/deterministic-convergence-harness.test.js": "convergence-topology",
     "test/convergence/dt-admin-event-loop-isolation-discriminator.test.js": "convergence-topology",
-    "test/convergence/dt-formation-barrier-spread-release-oscillation.test.js": "convergence-topology",
+    "test/convergence/dt-formation-joint-admission-release-liveness.test.js": "convergence-topology",
     "test/convergence/dt-formation-priority-placement-before-active.test.js": "convergence-topology",
     "test/convergence/dt-ledger-completion-continuity-discriminator.test.js": "convergence-topology",
     "test/convergence/dt-local-leader-seed-safety-merge.test.js": "convergence-topology",
@@ -910,6 +904,9 @@
     "test/distributed/harness/__tests__/cluster.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-chain-acceptance.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-defect-regressions.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-harness-identity.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": "distributed-harness",
@@ -993,6 +990,7 @@
     "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-scale-and-failure-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
@@ -1932,7 +1930,6 @@
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "placement-rebalance",
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": "placement-rebalance",
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "placement-rebalance",
-    "test/rebalancer/formation-spread-progress-at-cause.test.js": "placement-rebalance",
     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "placement-rebalance",
     "test/rebalancer/in-flight-aware-replica-count.test.js": "placement-rebalance",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
@@ -2269,7 +2266,6 @@
     "test/scripts/agent-tooling-process.test.js": "test-infrastructure",
     "test/scripts/analyze-cl039-link-rate.test.js": "test-infrastructure",
     "test/scripts/analyze-fix-engagement.test.js": "test-infrastructure",
-    "test/scripts/analyze-formation-release-phases.test.js": "test-infrastructure",
     "test/scripts/analyze-latent-blockers.test.js": "test-infrastructure",
     "test/scripts/analyze-monotone-drain.test.js": "test-infrastructure",
     "test/scripts/analyze-precondition-recurrence.test.js": "test-infrastructure",
@@ -2338,7 +2334,6 @@
     "test/scripts/fallback-branch-census-launch-coordinators.test.js": "test-infrastructure",
     "test/scripts/fallback-branch-census.test.js": "test-infrastructure",
     "test/scripts/formation-health.test.js": "test-infrastructure",
-    "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "test-infrastructure",
     "test/scripts/gen-solve-commands-index.test.js": "test-infrastructure",
     "test/scripts/generate-source-owner-index.test.js": "test-infrastructure",
     "test/scripts/git-invocation-owner.test.js": "test-infrastructure",
@@ -2399,10 +2394,6 @@
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "test-infrastructure",
     "test/scripts/rule-set-revision.test.js": "test-infrastructure",
     "test/scripts/run-classified-test-files.test.js": "test-infrastructure",
-    "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js": "test-infrastructure",
-    "test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js": "test-infrastructure",
-    "test/scripts/run-formation-release-handoff-gcp-streak.test.js": "test-infrastructure",
-    "test/scripts/run-formation-release-handoff-gcp.test.js": "test-infrastructure",
     "test/scripts/run-formation-seed-budget.test.js": "test-infrastructure",
     "test/scripts/run-live-repetitions.test.js": "test-infrastructure",
     "test/scripts/run-test-ci.test.js": "test-infrastructure",
@@ -3290,11 +3281,6 @@
         "src/bootstrap/pipeline/startup-pipeline-runner.js"
       ]
     },
-    "test/bootstrap/join-formation-discovery-window-budget.test.js": {
-      "files": [
-        "test/integration/three-node-seed-rebalance.integration.test.js"
-      ]
-    },
     "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -3648,6 +3634,32 @@
     "test/bootstrap/registered-service-row-raft-role.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-registration-methods.js"
+      ]
+    },
+    "test/bootstrap/removed-formation-barrier-and-handoff-census.test.js": {
+      "files": [
+        "docs/bootstrap-readiness-probes.md",
+        "test/convergence/dt-formation-joint-admission-release-liveness.test.js",
+        "test/convergence/formation-joint-admission-rounds.js",
+        "test/convergence/formation-joint-admission-scenario.js",
+        "test/convergence/formation-joint-admission-world.js",
+        "test/shards/impact-contracts.json"
+      ],
+      "directories": [
+        "docs/specs/decision-tables",
+        "scripts",
+        "scripts/checks",
+        "scripts/quest-evidence",
+        "src",
+        "src/bootstrap",
+        "src/control-plane",
+        "test",
+        "test/bootstrap",
+        "test/control-plane",
+        "test/convergence",
+        "test/rebalancer",
+        "test/scripts",
+        "test/shards"
       ]
     },
     "test/bootstrap/replica-runtime-attachment-authority.test.js": {
@@ -4765,47 +4777,6 @@
         "src"
       ]
     },
-    "test/control-plane/formation-release-handoff-closure.test.js": {
-      "files": [
-        "src/bootstrap/node-joining-publication-activation.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/formation-release-handoff-identity.js",
-        "src/control-plane/formation-release-handoff-publication-coordinator.js"
-      ]
-    },
-    "test/control-plane/formation-release-handoff-consumer-parity.test.js": {
-      "files": [
-        "src/bootstrap/node-joining-publication-activation.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/formation-release-handoff-publication.js",
-        "test/control-plane/formation-release-handoff-closure.test.js"
-      ]
-    },
-    "test/control-plane/formation-release-handoff-interaction-registry.test.js": {
-      "files": [
-        "scripts/checks/impact-contract-registry.js",
-        "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-        "src/control-plane/control-plane-readiness-formation-release-methods.js",
-        "src/control-plane/formation-release-handoff-closure-owner.js",
-        "src/control-plane/formation-release-handoff-contract.js",
-        "src/control-plane/formation-release-handoff-evidence.js",
-        "src/control-plane/formation-release-handoff-publication.js",
-        "test/control-plane/formation-release-handoff-closure.test.js",
-        "test/control-plane/formation-release-handoff-consumer-parity.test.js",
-        "test/shards/impact-contracts.json",
-        "test/shards/primary-classes.json"
-      ],
-      "directories": [
-        "scripts",
-        "scripts/checks",
-        "test"
-      ]
-    },
-    "test/control-plane/formation-release-handoff-post-reopen-capture.test.js": {
-      "files": [
-        "src/control-plane/control-plane-system-table-gateway-constants.js"
-      ]
-    },
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -4975,7 +4946,6 @@
         "src/control-plane/control-plane-readiness-service-node-methods.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/current-priority-placement-observation.js",
-        "src/control-plane/formation-release-handoff-publication.js",
         "src/control-plane/membership-lifecycle-constants.js",
         "src/control-plane/membership-lifecycle-controller.js",
         "src/control-plane/membership-publication-acknowledgement.js",
@@ -5061,7 +5031,6 @@
       "files": [
         "src/control-plane/control-plane-readiness-node-service-rows.js",
         "src/control-plane/lease-service.js",
-        "src/control-plane/startup-authority-placement-eligibility.js",
         "test/query/provision-target-live-transport-rescue.test.js"
       ]
     },
@@ -5087,7 +5056,6 @@
         "src/control-plane/control-plane-readiness-evidence-reasons.js",
         "src/control-plane/control-plane-readiness-snapshot-store.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/formation-release-handoff-evidence.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/node-liveness-semantic-projection.js",
         "src/control-plane/node-trust-state.js",
@@ -5727,12 +5695,28 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
-    "test/convergence/dt-formation-barrier-spread-release-oscillation.test.js": {
+    "test/convergence/dt-formation-joint-admission-release-liveness.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/replica-dispatch-retry-scheduling.js",
+        "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-observed-progress-retention.js",
+        "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/convergence/dt-formation-priority-placement-before-active.test.js": {
@@ -7280,6 +7264,94 @@
         "test/distributed/harness"
       ]
     },
+    "test/distributed/harness/__tests__/comparative-benchmark-generated-commands.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning-entrypoint.test.js": {
+      "files": [
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js",
+        "test/distributed/reference-client/package-lock.json"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "FAKE_REMOTE_HOSTS_STATE",
+        "GIT_SSH_COMMAND",
+        "PATH"
+      ]
+    },
+    "test/distributed/harness/__tests__/comparative-benchmark-provisioning.test.js": {
+      "files": [
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/run-benchmark-workload.js"
+      ],
+      "directories": [
+        "src",
+        "test/distributed/reference-client"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-campaign.test.js": {
       "files": [
         "Dockerfile",
@@ -7348,7 +7420,10 @@
     },
     "test/distributed/harness/__tests__/comparative-benchmark-runner-lab-default.test.js": {
       "files": [
-        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+        "Dockerfile",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json"
       ],
       "directories": [
         "data"
@@ -7371,7 +7446,8 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/scripts/native-thermal-fixture.js"
       ],
       "directories": [
         "src"
@@ -8049,6 +8125,15 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/provision-gcp-script.test.js": {
+      "files": [
+        "docs/benchmarks/cloud/provision-gcp.sh",
+        "docs/benchmarks/cloud/run-comparative-benchmarks.mjs"
+      ],
+      "env": [
+        "PATH"
       ]
     },
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": {
@@ -16963,14 +17048,6 @@
         "test"
       ]
     },
-    "test/rebalancer/formation-spread-progress-at-cause.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js",
-        "test/test-helpers/endpoint-incarnation-fixture.js"
-      ]
-    },
     "test/rebalancer/interlock-skip-label-fidelity.test.js": {
       "files": [
         "scripts/check-cognitive-complexity.js",
@@ -19013,13 +19090,6 @@
         "PROCESS_TEST_VALUE"
       ]
     },
-    "test/scripts/analyze-formation-release-phases.test.js": {
-      "files": [
-        "package.json",
-        "scripts/checks/analyze-formation-release-phases.js",
-        "src/control-plane/formation-release-handoff-identity.js"
-      ]
-    },
     "test/scripts/analyze-latent-blockers.test.js": {
       "files": [
         "solve/epics/latent-convergence-blocker-census.md"
@@ -19428,7 +19498,6 @@
         "src/admin/admin-control-snapshot-local-build-base.js",
         "src/bootstrap/bootstrap-service-runtime-methods.js",
         "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-        "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
         "src/cdc/cdc-integration-service-authoritative-read-flow.js",
         "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
         "src/config/config-key-constants.js",
@@ -20096,12 +20165,6 @@
       ],
       "directories": [
         "src"
-      ]
-    },
-    "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": {
-      "files": [
-        "scripts/checks/formation-release-handoff-gcp-analysis.js",
-        "src/control-plane/formation-release-handoff-identity.js"
       ]
     },
     "test/scripts/gen-solve-commands-index.test.js": {
@@ -21291,88 +21354,6 @@
         "XDG_CONFIG_HOME"
       ]
     },
-    "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js": {
-      "files": [
-        "Dockerfile",
-        "README.md",
-        "scripts/checks/formation-release-handoff-gcp-analysis.js",
-        "scripts/solve/probes.js",
-        "scripts/solve/store.js",
-        "src/admin/admin-authoritative-repair-policy.js",
-        "src/admin/admin-owner-operations.js",
-        "src/admin/static/playback-viewer.html",
-        "src/control-plane/formation-release-handoff-contract.js",
-        "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js",
-        "src/utils/canonical-json-data.js",
-        "test/distributed/config/convergence-sealed-bars.json",
-        "test/distributed/config/local.json",
-        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
-        "test/distributed/harness/cluster-node-owner-operations.js",
-        "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "scripts/checks",
-        "solve/epics",
-        "solve/epics/raft-rs-full-cutover",
-        "solve/quests",
-        "src"
-      ]
-    },
-    "test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js": {
-      "files": [
-        "README.md",
-        "scripts/checks/formation-release-handoff-gcp-analysis.js",
-        "scripts/checks/run-formation-release-handoff-gcp.js",
-        "scripts/solve/store.js",
-        "src/control-plane/formation-release-handoff-contract.js",
-        "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js",
-        "test/distributed/config/convergence-sealed-bars.json"
-      ],
-      "directories": [
-        "scripts/checks",
-        "solve/epics",
-        "solve/quests",
-        "src"
-      ]
-    },
-    "test/scripts/run-formation-release-handoff-gcp-streak.test.js": {
-      "files": [
-        "README.md",
-        "scripts/checks/formation-release-handoff-gcp-analysis.js",
-        "scripts/checks/run-formation-release-handoff-gcp-streak.js",
-        "scripts/checks/run-formation-release-handoff-gcp.js",
-        "scripts/solve/store.js",
-        "src/control-plane/formation-release-handoff-contract.js",
-        "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js",
-        "test/distributed/config/convergence-sealed-bars.json"
-      ],
-      "directories": [
-        "scripts/checks",
-        "solve/epics",
-        "solve/quests",
-        "src"
-      ]
-    },
-    "test/scripts/run-formation-release-handoff-gcp.test.js": {
-      "files": [
-        "README.md",
-        "scripts/checks/formation-release-handoff-gcp-analysis.js",
-        "scripts/solve/store.js",
-        "src/control-plane/formation-release-handoff-contract.js",
-        "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js",
-        "test/distributed/config/convergence-sealed-bars.json"
-      ],
-      "directories": [
-        "scripts/checks",
-        "solve/epics",
-        "solve/quests",
-        "src"
-      ]
-    },
     "test/scripts/run-formation-seed-budget.test.js": {
       "files": [
         "examples/service-data-affinity/run-affinity-demo.js",
@@ -21430,7 +21411,6 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/certification-verdict.js",
-        "scripts/checks/run-formation-release-handoff-gcp-streak.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-classified-test-files.js",

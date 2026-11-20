@@ -397,12 +397,12 @@ const CONTROLLED_PLAN_READS = Object.freeze({
   'message-group': Object.freeze({'filter:replica_operations': 8}),
   'runtime-service': Object.freeze({'filter:replica_operations': 8}),
   'partition-no-cure': Object.freeze({
-    'get:partitions': 24,
+    'get:partitions': 14,
     'getAll:nodes': 6,
     'filter:replica_operations': 10,
   }),
   'partition-over-target-cure': Object.freeze({
-    'get:partitions': 113,
+    'get:partitions': 63,
     'getAll:nodes': 30,
     'filter:replica_operations': 13,
   }),

@@ -64,10 +64,8 @@ const NO_PROJECTION_NEEDED = Object.freeze({
   // readers: control-plane-readiness-node-service-rows and
   // replica-dispatch-service-dispatch-observation-methods - Group A (C5).
   'control-plane/owners/services-owner.js:OWNER_TABLE': FACADE,
-  // Writers: membership-publication-coordinator-persist (the persist loop,
-  // covered) and formation-release-handoff-publication-coordinator (R17,
-  // participant release/cutover owner). Cached reader:
-  // membership-publication-coordinator-reads.
+  // Writer: membership-publication-coordinator-persist (the persist loop,
+  // covered). Cached reader: membership-publication-coordinator-reads.
   'control-plane/owners/control-plane-publications-owner.js:OWNER_TABLE':
     FACADE,
   // No caller writes through this facade (replica_operations rows are

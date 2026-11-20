@@ -78,7 +78,6 @@ const VERIFICATION_QUESTS = Object.freeze([
   'catalog-authority-and-visible-reconciliation',
   'cdc-recipient-domain-and-retained-debt',
   'contract-first-authoring-and-producer-fidelity',
-  'formation-spread-progress-at-cause',
   'fresh-seed-activation',
   'lab-census-benchmark-evidence-custody',
   'load-admission-ingress-identity',

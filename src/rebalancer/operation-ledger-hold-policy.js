@@ -490,14 +490,12 @@ function shouldLeaseRecentCompletedLedgerSelfMove({
  * @param {string|null} params.partitionId
  * @param {string|null} params.sourceReplicaNodeId
  * @param {string|null} params.targetNodeId
- * @param {Array<string>} params.placementEligibleNodeIds
  * @return {boolean}
  */
 function isEngagedLedgerQuorumSpreadCureMove({
   systemTableCache,
   moveType,
   partitionId,
-  placementEligibleNodeIds,
   sourceReplicaNodeId,
   targetNodeId,
 }) {
@@ -511,9 +509,7 @@ function isEngagedLedgerQuorumSpreadCureMove({
     return false;
   }
   const evaluation =
-    evaluateOperationLedgerQuorumConcentration(systemTableCache, {
-      placementEligibleNodeIds,
-    });
+    evaluateOperationLedgerQuorumConcentration(systemTableCache);
   const concentratedPartition = evaluation.concentratedPartitions.find(
     (partition) => partition.partitionId === partitionId,
   );
