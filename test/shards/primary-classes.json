@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2344,
-    "integration": 124,
+    "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2701,
-  "digest": "fnv1a32-a6e98be0",
+  "censusSize": 2702,
+  "digest": "fnv1a32-4acc3b0c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1118,6 +1118,7 @@
     "test/integration/debug-join-flow.test.js": "integration",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "integration",
     "test/integration/failure-scenarios.integration.test.js": "integration",
+    "test/integration/fresh-formation-same-peer-owner-read-transport.integration.test.js": "integration",
     "test/integration/fresh-formation-without-admin-polling.integration.test.js": "integration",
     "test/integration/http-to-call-composition.integration.test.js": "integration",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "integration",

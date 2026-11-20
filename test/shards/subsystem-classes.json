@@ -22,13 +22,13 @@
     "storage-raft": 156,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 115,
+    "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2701,
-  "digest": "fnv1a32-09df5946",
+  "censusSize": 2702,
+  "digest": "fnv1a32-e3f1b9dc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6a888470",
+  "observationDigest": "fnv1a32-c2e9e676",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1137,6 +1137,7 @@
     "test/integration/debug-join-flow.test.js": "admin-diagnostics",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "services-runtime",
     "test/integration/failure-scenarios.integration.test.js": "distributed-harness",
+    "test/integration/fresh-formation-same-peer-owner-read-transport.integration.test.js": "transport-messaging",
     "test/integration/fresh-formation-without-admin-polling.integration.test.js": "admin-diagnostics",
     "test/integration/http-to-call-composition.integration.test.js": "services-runtime",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "storage-raft",
@@ -10102,6 +10103,18 @@
       ],
       "env": [
         "TAP"
+      ]
+    },
+    "test/integration/fresh-formation-same-peer-owner-read-transport.integration.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/integration/helpers/embedded-node-worker.js",
+        "test/integration/helpers/held-add-authority-reply-preload.js"
+      ],
+      "env": [
+        "NODE_OPTIONS"
       ]
     },
     "test/integration/fresh-formation-without-admin-polling.integration.test.js": {

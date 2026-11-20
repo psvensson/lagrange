@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2675,
+    "ordinary": 2676,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2701,
-  "digest": "fnv1a32-5afbdc21",
+  "censusSize": 2702,
+  "digest": "fnv1a32-774701e7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1117,6 +1117,7 @@
     "test/integration/debug-join-flow.test.js": "ordinary",
     "test/integration/developer-journey-j1-j2-j3.integration.test.js": "ordinary",
     "test/integration/failure-scenarios.integration.test.js": "ordinary",
+    "test/integration/fresh-formation-same-peer-owner-read-transport.integration.test.js": "ordinary",
     "test/integration/fresh-formation-without-admin-polling.integration.test.js": "ordinary",
     "test/integration/http-to-call-composition.integration.test.js": "ordinary",
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": "ordinary",
