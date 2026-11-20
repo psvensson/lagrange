@@ -383,47 +383,6 @@ function canContinueCoordinatorCreatedRemoteHandoff(
   return owner.hasActiveTransitionRetryGrace(operationId);
 }
 
-function resolveSnapshotHandoffRetryStop(
-  owner,
-  operationSnapshot,
-  options,
-) {
-  const hasBoundingTimestamp = [
-    operationSnapshot?.createdAt,
-    operationSnapshot?.createdAtMs,
-    operationSnapshot?.updatedAt,
-    operationSnapshot?.updatedAtMs,
-  ].some((value) => Number.isFinite(value));
-  if (!hasBoundingTimestamp) {
-    return {stop: true, degenerateSnapshot: true};
-  }
-  if (
-    owner.repository.isOperationTerminal(operationSnapshot) ||
-    !owner.shouldRetryCoordinatorCreatedRemoteHandoff(
-      operationSnapshot,
-      options,
-    )
-  ) {
-    return {stop: true};
-  }
-  const handoffTimeoutDecision =
-    owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
-      operationSnapshot,
-      owner.resolveTimeoutCheckNowMs(),
-      options,
-    );
-  if (handoffTimeoutDecision.shouldStop) {
-    return {
-      stop: true,
-      timedOut: true,
-      workflowStep: handoffTimeoutDecision.workflowStep,
-      operationBudgetDeadlineMs:
-        handoffTimeoutDecision.operationBudgetDeadlineMs,
-    };
-  }
-  return {stop: false};
-}
-
 function resolveCoordinatorCreatedHandoffDiagnosticDestination(
   owner,
   operation,
@@ -443,81 +402,6 @@ function resolveCoordinatorCreatedHandoffDiagnosticDestination(
         {targetNodeId: nodeId},
     ),
   });
-}
-
-function buildSnapshotHandoffRetryLogFields(
-  owner,
-  operationId,
-  operationSnapshot,
-  options,
-  stopDecision = {},
-) {
-  return {
-    operationId,
-    partitionId: operationSnapshot?.partitionId || null,
-    ...resolveCoordinatorCreatedHandoffDiagnosticDestination(
-      owner,
-      operationSnapshot,
-      options,
-    ).logFields,
-    workflowStep: operationSnapshot ? operationSnapshot.workflowStep : null,
-    degenerateSnapshot: stopDecision.degenerateSnapshot === true,
-    operationBudgetDeadlineMs:
-      stopDecision.operationBudgetDeadlineMs || null,
-  };
-}
-
-function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
-  owner,
-  operationId,
-  operationSnapshot,
-  options,
-) {
-  const stopDecision = resolveSnapshotHandoffRetryStop(
-    owner,
-    operationSnapshot,
-    options,
-  );
-  if (stopDecision.stop) {
-    logCoordinatorHandoffRetryStopped(
-      owner,
-      operationSnapshot,
-      buildSnapshotHandoffRetryLogFields(
-        owner,
-        operationId,
-        operationSnapshot,
-        options,
-        stopDecision,
-      ),
-      stopDecision.timedOut,
-    );
-    owner.clearCreatedOperationHandoffRetry(operationId);
-    return false;
-  }
-  owner.logger.warn(
-    REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT,
-    buildSnapshotHandoffRetryLogFields(
-      owner,
-      operationId,
-      operationSnapshot,
-      options,
-    ),
-  );
-  return owner.wakeCoordinatorCreatedRemoteOwner(
-    owner.cloneOperationSnapshot(operationSnapshot),
-    options,
-  );
-}
-
-async function readScheduledHandoffOperation(owner, operationId, operation, delayMs, options) {
-  if (options.requireExactPriorityRecoveryReentry !== true) {
-    return owner.getDeferredDispatchRetryOperation(operationId, operation);
-  }
-  const observation = await observeRemoteReentryAuthority(owner.repository, operation);
-  if (observation.deferredOutcome) {
-    owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(operation, delayMs, options);
-  }
-  return observation.operation;
 }
 
 function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
@@ -565,43 +449,33 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     if (owner.isShuttingDown) {
       return;
     }
-    return readScheduledHandoffOperation(owner, operationId, operationSnapshot, delayMs, options)
-      .then((currentOperation) => {
-        if (!currentOperation) {
-          if (options.requireExactPriorityRecoveryReentry === true) return false;
-          return retryCoordinatorCreatedRemoteHandoffFromSnapshot(
-            owner,
-            operationId,
-            operationSnapshot,
-            options,
-          );
+    return observeRemoteReentryAuthority(owner.repository, operationSnapshot)
+      .then(({operation: currentOperation, deferredOutcome}) => {
+        if (owner.isShuttingDown || owner.hasActiveCreatedOperationHandoffRetry(operationId)) {
+          return false;
         }
-        if (
-          owner.repository.isOperationTerminal(currentOperation) ||
-          !owner.shouldRetryCoordinatorCreatedRemoteHandoff(
-            currentOperation,
-            options,
-          )
-        ) {
+        const boundedOperation = currentOperation || (deferredOutcome ? operationSnapshot : null);
+        if (!boundedOperation ||
+            !owner.shouldRetryCoordinatorCreatedRemoteHandoff(boundedOperation, options)) {
           owner.clearCreatedOperationHandoffRetry(operationId);
           return false;
         }
         const handoffTimeoutDecision =
           owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
-            currentOperation,
+            boundedOperation,
             owner.resolveTimeoutCheckNowMs(),
             options,
           );
         if (handoffTimeoutDecision.shouldStop) {
           logCoordinatorHandoffRetryStopped(
             owner,
-            currentOperation,
+            boundedOperation,
             {
               operationId,
-              partitionId: currentOperation?.partitionId || null,
+              partitionId: boundedOperation?.partitionId || null,
               ...resolveCoordinatorCreatedHandoffDiagnosticDestination(
                 owner,
-                currentOperation,
+                boundedOperation,
                 options,
               ).logFields,
               workflowStep: handoffTimeoutDecision.workflowStep,
@@ -612,6 +486,12 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
           );
           owner.clearCreatedOperationHandoffRetry(operationId);
           return false;
+        }
+        if (deferredOutcome) {
+          const retryDelayMs = Math.max(delayMs, deferredOutcome.retryAfterMs ?? 0);
+          return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+            operationSnapshot, retryDelayMs, options,
+          );
         }
         return owner.wakeCoordinatorCreatedRemoteOwner(
           currentOperation,

@@ -1332,6 +1332,7 @@ test('operation census requires complete authority and a keyed refusal retains t
           keyedModes.push(options.authoritativeReadMode);
           if (keyedFault === 'duplicate') return {...result, rows: [...result.rows, ...result.rows]};
           if (keyedFault === 'refusal') return {success: false, error: 'owner refused keyed read'};
+          if (keyedFault === 'absent') return {...result, rows: []};
         }
         return result;
       };
@@ -1379,6 +1380,11 @@ test('operation census requires complete authority and a keyed refusal retains t
         keyedModes.length >= 3, 'each attempted reentry used the strict owner read');
       const progressed = await repository.queryAuthoritativeOperationById(operation.operationId);
       t.equal(progressed.workflowStep, WORKFLOW_STEP.SENDING, 'read back the committed progress');
+      keyedFault = 'absent';
+      await deferredTimers.at(-1).fn();
+      t.equal(deliveries.length, 1, 'complete absence suppresses another queued wake');
+      t.equal(owner.hasActiveCreatedOperationHandoffRetry(operation.operationId), false,
+        'a complete empty owner read retires the verification timer');
     } finally {
       await coordinator.shutdown();
       Date.now = originalNow;

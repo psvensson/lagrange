@@ -29,10 +29,6 @@ const {
   normalizeNodeIdList,
 } = SHARED;
 
-const AUTHORITATIVE_REMOTE_REENTRY = Object.freeze({
-  requireExactPriorityRecoveryReentry: true,
-});
-
 const HAND_BACK_VERDICT_SEPARATOR = '|';
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
@@ -232,7 +228,6 @@ function applyPriorityRecoveryDispatchPendingAdvanceExistingOperationEffect(
       decisionSnapshot,
     );
   return owner.operationWorkflowOwnerPorts.wakeRemoteOwner(operation, {
-    ...AUTHORITATIVE_REMOTE_REENTRY,
     nowMs: capturedAtMs ?? Date.now(),
   });
 }
@@ -273,8 +268,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER =
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
         .RECONCILE_STALE_PROGRESS,
       (owner, operation) =>
-        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(
-          operation, AUTHORITATIVE_REMOTE_REENTRY),
+        owner.operationWorkflowOwnerPorts.reconcileStaleProgress(operation),
     ],
     [
       PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION
@@ -437,7 +431,6 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
     return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
       operation,
       TRANSITION_RETRY_DELAY_MS,
-      AUTHORITATIVE_REMOTE_REENTRY,
     );
   }
   if (
@@ -940,7 +933,9 @@ async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
     const observation = await observeRemoteReentryAuthority(owner.repository, operation);
     if (observation.deferredOutcome) {
       return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
-        operation, TRANSITION_RETRY_DELAY_MS, AUTHORITATIVE_REMOTE_REENTRY);
+        operation,
+        Math.max(TRANSITION_RETRY_DELAY_MS, observation.deferredOutcome.retryAfterMs ?? 0),
+      );
     }
     current = observation.operation;
     if (!current || current.workflowStep !== operation.workflowStep) return false;

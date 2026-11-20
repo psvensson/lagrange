@@ -785,9 +785,7 @@ async function wakeOperationWorkflowRemoteOwner(
     owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
     return false;
   }
-  return owner.wakeCoordinatorCreatedRemoteOwner(operation, {
-    requireExactPriorityRecoveryReentry: context.requireExactPriorityRecoveryReentry === true,
-  });
+  return owner.wakeCoordinatorCreatedRemoteOwner(operation);
 }
 
 async function reconcileOperationWorkflowStaleProgress(
