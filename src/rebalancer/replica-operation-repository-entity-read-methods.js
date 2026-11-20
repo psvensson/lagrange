@@ -223,7 +223,11 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         if (deferredOutcome) {
           return this.buildEntityOperationVisibilityObservation(
             fallbackOperations,
-            deferredOutcome,
+            result.success ? {
+              ...deferredOutcome,
+              reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE
+                .ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+            } : deferredOutcome,
           );
         }
         return this.buildEntityOperationVisibilityObservation([], null);

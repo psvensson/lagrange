@@ -1,4 +1,5 @@
 const REPLICA_OPERATION_REPOSITORY_ERROR_CODE = Object.freeze({
+  ENTITY_OPERATION_OBSERVATION_INCOMPLETE: 'entity_operation_observation_incomplete',
   ENTITY_OPERATION_OBSERVATION_MALFORMED: 'entity_operation_observation_malformed',
 });
 
