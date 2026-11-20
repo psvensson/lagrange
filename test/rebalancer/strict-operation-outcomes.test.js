@@ -277,6 +277,74 @@ test('ADD terminal failure retains the operation during exact target read unavai
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
 });
 
+test('malformed authoritative gateway rows cannot prove ADD target absence', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'malformed-add-target-read');
+  const owner = fixture.coordinator.workflowOwner;
+  await owner.updateStep(operation, WORKFLOW_STEP.SYNCING);
+  const read = fixture.gateway.readAuthoritativeRows.bind(fixture.gateway);
+  let shape = (answer) => answer;
+  const realGateway = new ControlPlaneSystemTableGateway({
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(_tableName, sql, params) {
+        return shape(await fixture.gateway.executeQuery(sql, params));
+      },
+    },
+  });
+  fixture.gateway.readAuthoritativeRows = (tableName, ...args) =>
+    tableName === SYSTEM_TABLE_NAME.SERVICES ?
+      realGateway.readAuthoritativeRows(tableName, ...args) :
+      read(tableName, ...args);
+  const observe = (targetNodeId = operation.targetNodeId) =>
+    owner.repository.getActualReplicaObservation(
+      operation.replicaId, operation.partitionId, targetNodeId);
+
+  for (const [label, alter] of [
+    ['nested rows without an outer row array', (answer) => ({
+      success: true, rowSetComplete: true, result: answer,
+    })],
+    ['non-array rows', (answer) => ({
+      ...answer, rows: {items: answer.rows},
+    })],
+    ['incomplete row set', (answer) => ({
+      ...answer, rowSetComplete: false,
+    })],
+  ]) {
+    shape = alter;
+    t.equal((await observe()).state, 'unavailable', label);
+  }
+  const refused = await owner.failOperation(operation, 'Create timed out');
+  const retained = await owner.repository.queryAuthoritativeOperationById(
+    operation.operationId);
+  t.equal(refused.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+  t.equal(retained.workflowStep, WORKFLOW_STEP.SYNCING);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+
+  shape = (answer) => answer;
+  t.equal((await observe()).state, 'absent', 'a complete empty SQLite result still proves absence');
+  const now = Date.now();
+  const inserted = await fixture.gateway.submitMutation({
+    operation: 'insert',
+    tableName: SYSTEM_TABLE_NAME.SERVICES,
+    row: {
+      service_id: operation.replicaId,
+      replica_id: operation.replicaId,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: operation.partitionId,
+      node_id: operation.targetNodeId,
+      status: ReplicaStatus.CREATING,
+      created_at: now,
+      updated_at: now,
+    },
+  });
+  t.equal(inserted.success, true);
+  const observed = await observe();
+  t.equal(observed.state, 'observed');
+  t.equal(observed.lifecycleStatus, ReplicaStatus.CREATING);
+  t.equal((await observe('another-target-node')).state, 'unavailable',
+    'a foreign identity cannot serve as absence of the requested target');
+});
+
 test('priority ADD dispatch reports a refused failure as unsettled', async (t) => {
   const partitionId = 'sql_transactions-p1';
   const operationId = 'priority-add-dispatch-unsettled';
@@ -564,6 +632,14 @@ test('priority superseded-target failure requires an exact authoritative observa
   t.match(await decide(), /eligible cohort/i, 'genuine absence still permits supersession');
   t.match(await decideRemotely(), /eligible cohort/i, 'remote drain accepts genuine absence');
   t.equal((await staleDrainSource()).state, staleState, 'genuine absence can be stale');
+  const observeReplica = owner.repository.getActualReplicaObservation.bind(owner.repository);
+  owner.repository.getActualReplicaObservation = async (...args) => ({
+    ...await observeReplica(...args),
+    lifecycleStatus: ReplicaStatus.ACTIVE,
+  });
+  t.equal(await decide(), null, 'an ABSENT answer carrying ACTIVE is unavailable');
+  t.equal(await decideRemotely(), null, 'remote supersession rejects contradictory ABSENT');
+  owner.repository.getActualReplicaObservation = observeReplica;
 
   const now = Date.now();
   const inserted = await fixture.gateway.submitMutation({
