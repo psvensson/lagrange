@@ -57,7 +57,9 @@ const MEMBERSHIP_OBSERVATION_FIELD = Object.freeze({
   GATE_OPEN: 'gateOpen',
   LEADER_REPLICA_ID: 'leaderReplicaId',
   VOTER_REPLICA_IDS: 'voterReplicaIds',
+  LEARNER_REPLICA_IDS: 'learnerReplicaIds',
   OUTGOING_REPLICA_IDS: 'votersOutgoingReplicaIds',
+  ROLE: 'role',
   TRANSFER_WINDOW_MAX_MS: 'transferWindowMaxMs',
 });
 const MEMBERSHIP_OBSERVATION_FIELDS = Object.freeze([
@@ -72,6 +74,11 @@ const MEMBERSHIP_OBSERVATION_FIELDS = Object.freeze([
   MEMBERSHIP_OBSERVATION_FIELD.VOTER_REPLICA_IDS,
   MEMBERSHIP_OBSERVATION_FIELD.OUTGOING_REPLICA_IDS,
   MEMBERSHIP_OBSERVATION_FIELD.TRANSFER_WINDOW_MAX_MS,
+]);
+const MEMBERSHIP_OBSERVATION_EXTENDED_FIELDS = Object.freeze([
+  ...MEMBERSHIP_OBSERVATION_FIELDS,
+  MEMBERSHIP_OBSERVATION_FIELD.LEARNER_REPLICA_IDS,
+  MEMBERSHIP_OBSERVATION_FIELD.ROLE,
 ]);
 const COMMITTED_STAMP_FIELDS = Object.freeze([
   'kind',
@@ -522,8 +529,33 @@ function isOptionalObservationReplicaId(value) {
   return value === null || isNonemptyReplicaIdentity(value);
 }
 
+const REPLACE_OBSERVATION_ROLES = Object.freeze(new Set([
+  'VOTER',
+  'LEARNER',
+  'ABSENT',
+]));
+
+function isValidOptionalObservationLearnersAndRole(value, isExtended) {
+  if (!isExtended) {
+    return {valid: true, learners: null, role: null};
+  }
+  const learners = canonicalArray(
+    ownDataValue(
+      value, MEMBERSHIP_OBSERVATION_FIELD.LEARNER_REPLICA_IDS).value,
+    isOptionalObservationReplicaId);
+  const role = ownDataValue(value, MEMBERSHIP_OBSERVATION_FIELD.ROLE).value;
+  if (learners === null || hasDuplicates(learners) ||
+      !REPLACE_OBSERVATION_ROLES.has(role)) {
+    return {valid: false, learners: null, role: null};
+  }
+  return {valid: true, learners, role};
+}
+
 function canonicalReplaceMembershipObservation(value, expected = {}) {
-  if (!isExactRecord(value, MEMBERSHIP_OBSERVATION_FIELDS)) {
+  const isBase = isExactRecord(value, MEMBERSHIP_OBSERVATION_FIELDS);
+  const isExtended = !isBase &&
+    isExactRecord(value, MEMBERSHIP_OBSERVATION_EXTENDED_FIELDS);
+  if (!isBase && !isExtended) {
     return null;
   }
   const observation = canonicalObservationScalars(value);
@@ -535,7 +567,9 @@ function canonicalReplaceMembershipObservation(value, expected = {}) {
     ownDataValue(
       value, MEMBERSHIP_OBSERVATION_FIELD.OUTGOING_REPLICA_IDS).value,
     isOptionalObservationReplicaId);
-  if (!hasValidObservationScalars(observation) ||
+  const extended = isValidOptionalObservationLearnersAndRole(value, isExtended);
+  if (!extended.valid ||
+      !hasValidObservationScalars(observation) ||
       !isNonemptyReplicaIdentity(expected.replicaId) ||
       !isNonemptyReplicaIdentity(expected.partitionId) ||
       observation.replicaId !== expected.replicaId ||
@@ -548,6 +582,10 @@ function canonicalReplaceMembershipObservation(value, expected = {}) {
     ...observation,
     voterReplicaIds: incoming,
     votersOutgoingReplicaIds: outgoing,
+    ...(isExtended ? {
+      learnerReplicaIds: extended.learners,
+      role: extended.role,
+    } : {}),
   }));
 }
 
