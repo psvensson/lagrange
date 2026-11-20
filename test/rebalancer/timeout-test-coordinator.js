@@ -12,6 +12,7 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {
   buildMockPolicyAuthorityWitness,
   createMockCache,
+  createMockControlPlaneSystemTableGateway,
   createCoordinatorSqlStore,
   createMockPolicyService,
   createMockMessageRouter,
@@ -144,14 +145,7 @@ function createTimeoutTestCoordinator(options = {}) {
     nodeId: options.nodeId || 'test-node-1',
     systemTableCache: createMockCache(),
     cdcIntegrationService: cdcService,
-    controlPlaneSystemTableGateway: {
-      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      executeQuery: async (sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-    },
+    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
     tablePolicyService: createMockPolicyService(),
     // The committed-membership read of a join is the fixture world's (O1),
     // however a witness later re-points deliver.

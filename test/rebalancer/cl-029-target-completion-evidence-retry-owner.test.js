@@ -409,7 +409,9 @@ async function quiesce() {
  * Build the real coordinator/owner wired to the CAS-backed store,
  * mirroring rebalance-coordinator-outcome-routing.test.js conventions.
  */
-function createHarness(store) {
+function createHarness(store, witness = createReplaceWitness({
+  leaderReplicaId: TEST_TARGET_REPLICA_ID,
+})) {
   const emitter = new ExecutorOutcomeEmitter({
     logger: {debug() {}, info() {}, warn() {}, error() {}},
   });
@@ -421,10 +423,6 @@ function createHarness(store) {
   // The REPLACE's witness replica (quest replace-source-removal-owner): the
   // target's committed configuration still holds the source, and the target
   // leads.
-  const witness = createReplaceWitness({
-    leaderReplicaId: TEST_TARGET_REPLICA_ID,
-  });
-
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createTransactionCoordinator(),
@@ -1626,16 +1624,16 @@ test(
           timestamp: operation.createdAt,
           sourceReplicaId: TEST_SOURCE_REPLICA_ID,
         });
-        const store = createCasBackedReplicaOperationStore(operation);
-        const harness = createHarness(store);
-        const {owner} = harness;
-        // Its removal intent was recorded against the witness's commit index
-        // (quest replace-source-removal-owner: R-1a completes only a REPLACE
-        // with a recorded intent, C0).
+        // R-1a uses the committed STOPPING intent. Seed C0 before SQLite
+        // commits the row so the authority read sees the same history.
+        const witness = createReplaceWitness({leaderReplicaId: TEST_TARGET_REPLICA_ID});
         Object.assign(operation.stepsHistory.at(-1), {
           replaceRemovalIntent: true,
-          replaceWitnessCommitIndex: harness.witness.commitIndex,
+          replaceWitnessCommitIndex: witness.commitIndex,
         });
+        const store = createCasBackedReplicaOperationStore(operation);
+        const harness = createHarness(store, witness);
+        const {owner} = harness;
 
         // The armed retry owner: retained ACTIVE evidence plus its timed
         // retry, exactly what the visibility-deferral loop holds
