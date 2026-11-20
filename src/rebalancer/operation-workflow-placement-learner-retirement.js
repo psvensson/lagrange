@@ -49,6 +49,7 @@ async function reachMembershipOwner(owner, operation, handlerType, scoped, canPr
   const request = {
     [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.REMOVE_LEARNER,
     [ReplicaOperationField.OPERATION_ID]: operation.operationId,
+    [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
     [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
     [ReplicaOperationField.REPLICA_ID]: operation.replicaId,
     [ReplicaOperationField.LEARNER_RETIREMENT]: {

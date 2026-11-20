@@ -17,6 +17,8 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
+import {OperationType} from '../rebalancer/replica-status.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
@@ -46,6 +48,7 @@ const REPLICA_MEMBERSHIP_ERROR = Object.freeze({
     'membership request requires partitionId, replicaId and sourceReplicaId',
   PARTITION_REQUIRED: 'membership request requires partitionId',
   NOT_A_PARTITION_REPLICA: 'replica has no partition consensus port',
+  SCOPED_LEARNER_REMOVAL_REQUIRED: 'learner removal requires an exact placement REMOVE scope',
 });
 
 async function observeScopedLearner(service, replicaId) {
@@ -64,16 +67,36 @@ function scopedLearnerOutcome(role) {
   return LEARNER_RETIREMENT_OUTCOME.DEFERRED;
 }
 
+const LEARNER_SCOPE_UNAVAILABLE = Object.freeze({});
+const LEARNER_SCOPE_FIELDS = Object.freeze([
+  'targetNodeId', 'nodeBootIncarnation', 'replicaCreatedAt', 'canPropose',
+]);
+
+function scopedLearnerRetirementOf(request) {
+  if (request?.[ReplicaOperationField.OPERATION_TYPE] !== OperationType.REMOVE ||
+      typeof request[ReplicaOperationField.OPERATION_ID] !== 'string' ||
+      request[ReplicaOperationField.OPERATION_ID].length === 0) {
+    return LEARNER_SCOPE_UNAVAILABLE;
+  }
+  const scope = copyStrictOwnDataRecord(request[ReplicaOperationField.LEARNER_RETIREMENT]);
+  if (scope === null || Object.keys(scope).length !== LEARNER_SCOPE_FIELDS.length ||
+      !LEARNER_SCOPE_FIELDS.every((field) => Object.hasOwn(scope, field))) {
+    return LEARNER_SCOPE_UNAVAILABLE;
+  }
+  const wellFormed = typeof scope.targetNodeId === 'string' && scope.targetNodeId.length > 0 &&
+    Number.isSafeInteger(scope.nodeBootIncarnation) && scope.nodeBootIncarnation > 0 &&
+    Number.isSafeInteger(scope.replicaCreatedAt) && scope.replicaCreatedAt > 0 &&
+    typeof scope.canPropose === 'boolean';
+  return wellFormed ? Object.freeze(scope) : LEARNER_SCOPE_UNAVAILABLE;
+}
+
 async function settleScopedLearnerRemoval(target, scope) {
   const {service, fields: {operationId, replicaId}} = target;
-  if (typeof scope?.targetNodeId !== 'string' || scope.targetNodeId.length === 0 ||
-      !Number.isSafeInteger(scope.nodeBootIncarnation) || scope.nodeBootIncarnation <= 0 ||
-      !Number.isSafeInteger(scope.replicaCreatedAt) || scope.replicaCreatedAt <= 0) {
-    return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
-  }
   const role = await observeScopedLearner(service, replicaId);
-  if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};
-  if (scope.canPropose !== true) return {state: LEARNER_RETIREMENT_OUTCOME.SUPERSEDED};
+  if (role !== COMMITTED_REPLICA_ROLE.LEARNER || scope.canPropose !== true) {
+    return {state: role === COMMITTED_REPLICA_ROLE.LEARNER ?
+      LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : scopedLearnerOutcome(role)};
+  }
   const proposal = await turnChainValue(removePartitionRaftLearner(service, {
     operationId, replicaIdentity: replicaId, expectedNodeId: scope.targetNodeId,
   }));
@@ -372,35 +395,23 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
     }
 
     async handleRemoveLearner(request) {
-      const target = this.resolvePartitionAdministrationTarget(request);
-      if (target.response) return target.response;
-      const scoped = request?.[ReplicaOperationField.LEARNER_RETIREMENT];
-      if (scoped !== undefined) {
-        const result = await settleScopedLearnerRemoval(target, scoped);
-        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
-          [ReplicaOperationField.LEARNER_RETIREMENT]: result.state,
-          [ReplicaOperationField.PROPOSAL]: result.proposal,
-          partitionId: target.fields.partitionId,
-          replicaId: target.fields.replicaId,
+      const scope = scopedLearnerRetirementOf(request);
+      if (scope === LEARNER_SCOPE_UNAVAILABLE) {
+        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
+          error: REPLICA_MEMBERSHIP_ERROR.SCOPED_LEARNER_REMOVAL_REQUIRED,
           nodeId: this.nodeId,
         });
       }
-      const proposal = await turnChainValue(removePartitionRaftLearner(
-        target.service,
-        {
-          operationId: target.fields.operationId,
-          replicaIdentity: target.fields.replicaId,
-        },
-      ));
-      return this.buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.INITIATED,
-        {
-          [ReplicaOperationField.PROPOSAL]: proposal,
-          partitionId: target.fields.partitionId,
-          replicaId: target.fields.replicaId,
-          nodeId: this.nodeId,
-        },
-      );
+      const target = this.resolvePartitionAdministrationTarget(request);
+      if (target.response) return target.response;
+      const result = await settleScopedLearnerRemoval(target, scope);
+      return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.COMPLETED, {
+        [ReplicaOperationField.LEARNER_RETIREMENT]: result.state,
+        [ReplicaOperationField.PROPOSAL]: result.proposal,
+        partitionId: target.fields.partitionId,
+        replicaId: target.fields.replicaId,
+        nodeId: this.nodeId,
+      });
     }
   }
   for (const methodName of Object.getOwnPropertyNames(

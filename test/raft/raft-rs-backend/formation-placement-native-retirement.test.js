@@ -205,14 +205,30 @@ test('guarded disconnect can clear the exact learner on the leader while its hos
     const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
       [removal]);
     try {
-      const answer = await leader.handler.handleMessage({payload: {
+      const payload = {
         [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.REMOVE_LEARNER,
         [ReplicaOperationField.OPERATION_ID]: removal.operation_id,
+        [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
         [ReplicaOperationField.PARTITION_ID]: cluster.partitionId,
         [ReplicaOperationField.REPLICA_ID]: targetId,
+      };
+      const omittedScope = await leader.handler.handleMessage({
+        payload, correlationId: removal.operation_id,
+      });
+      assert.equal(omittedScope.status, ReplicaOperationResponseStatus.ERROR);
+      const malformedScope = await leader.handler.handleMessage({payload: {...payload,
+        [ReplicaOperationField.LEARNER_RETIREMENT]: {targetNodeId: TARGET, canPropose: true},
       }, correlationId: removal.operation_id});
-      t.diagnostic(JSON.stringify(answer));
-      assert.equal(answer.status, ReplicaOperationResponseStatus.INITIATED);
+      assert.equal(malformedScope.status, ReplicaOperationResponseStatus.ERROR);
+      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
+      const admitted = JSON.parse(removal.steps_history)[0].placementAdmission.learnerRetirement;
+      const answer = await leader.handler.handleMessage({payload: {...payload,
+        [ReplicaOperationField.LEARNER_RETIREMENT]: {
+          ...admitted, targetNodeId: TARGET, canPropose: true,
+        },
+      }, correlationId: removal.operation_id});
+      t.diagnostic(JSON.stringify({omittedScope, answer}));
+      assert.equal(answer.status, ReplicaOperationResponseStatus.COMPLETED);
       assert.equal(answer[ReplicaOperationField.PROPOSAL].reason,
         RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_REMOVAL_PROPOSED);
       assert.ok(settleCluster(cluster, () =>
