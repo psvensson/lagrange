@@ -45,6 +45,7 @@ import {
   evaluateScenarioTopologyRequirement,
 } from '../scenario-host-topology.js';
 import {
+  run as runFormation,
   SCENARIO_TOPOLOGY_REQUIREMENT,
 } from '../../scenarios/fresh-formation-user-table-routability.js';
 
@@ -1095,4 +1096,73 @@ test('end-to-end authority transport preserves rowSetComplete, leader witness, a
       'replica_operations_observation_incomplete',
     ),
   );
+});
+
+// Exercise the scenario's actual clock checks around successful asynchronous
+// observations. These controlled facts qualify only the harness timing decision.
+async function observeScenarioTiming({snapshotDelay, countDelay, createDelay = 0}) {
+  let now = T0;
+  let created = false;
+  let countCalls = 0;
+  const authority = satisfiedAuthority();
+  const table = {table_name: 'ffr_probe', partition_id: PRIORITY_PARTITION_IDS[0],
+    replica_count: NODE_IDS.length, leader_node_id: NODE_IDS[0]};
+  const afterCreate = {tables: {rows: [table]}, services: authority.services,
+    partitions: {rows: [table]}};
+  async function query(sql) {
+    if (stringStartsWith(sql, 'CREATE')) {
+      created = true;
+      now += createDelay;
+      return {contractState: 'ready'};
+    }
+    if (stringStartsWith(sql, 'SELECT COUNT')) {
+      countCalls++;
+      now += countDelay;
+      return {rows: [{cnt: 0}]};
+    }
+    if (stringStartsWith(sql, 'SELECT probe_id')) return {rows: [{probe_id: 'ffr-probe-1', probe_value: 1}]};
+    const key = stringSplit(sql, ' ')[3];
+    return created ? afterCreate[key] : key === 'replica_operations' ? authority.replicaOperations : authority[key];
+  }
+  const nodes = arrayMap(NODE_IDS, (id, index) => ({
+    id, role: index === 0 ? 'seed' : 'joiner', queryWithTimeout: query,
+    getControlSnapshot: async () => {
+      if (index === 0 && now > T0) now += snapshotDelay;
+      return {rows: [satisfiedPayload()]};
+    },
+    getLogs: async () => Buffer.alloc(0),
+  }));
+  const cluster = {getNodes: () => nodes, _config: {benchmark: {controlQueryTimeoutMs: 15000}},
+    _scenarioOverrides: {freshFormationRoutability: {formationBoundMs: 1200,
+      quietWindowMs: 1000, routabilityBoundMs: 100, now: () => now,
+      sleep: async (ms) => {
+        now += ms;
+      },
+      openPublicPg: async () => ({connection: {}, endpoint: {host: 'test', port: 1}}),
+      pgClient: () => ({connect: async () => {}, end: async () => {},
+        query: async () => ({rowCount: 1})}),
+    }}};
+  try {
+    return {passed: true, report: await runFormation(cluster), countCalls};
+  } catch (error) {
+    if (!error.diagnostics?.freshFormationRoutability) throw error;
+    return {passed: false, report: error.diagnostics.freshFormationRoutability, countCalls};
+  }
+}
+
+test('formation and routability bounds include time spent awaiting successful reads', async () => {
+  const onTime = await observeScenarioTiming({snapshotDelay: 200, countDelay: 100});
+  assert.equal(onTime.passed, true, JSON.stringify(onTime.report.predicates));
+  const lateFormation = await observeScenarioTiming({snapshotDelay: 201, countDelay: 0});
+  assert.equal(lateFormation.report.formationSatisfied, false);
+  assert.equal(lateFormation.passed, false);
+  const lateRoute = await observeScenarioTiming({snapshotDelay: 0, countDelay: 101});
+  assert.equal(lateRoute.report.formationSatisfied, true);
+  assert.equal(lateRoute.report.firstUnmet?.id, PREDICATE.USER_TABLE_ROUTABLE);
+  assert.equal(lateRoute.report.timings.timeToUserTableRoutableSinceScenarioStartMs, null);
+  const lateCreate = await observeScenarioTiming({
+    snapshotDelay: 0, countDelay: 0, createDelay: 101,
+  });
+  assert.equal(lateCreate.passed, false);
+  assert.equal(lateCreate.countCalls, 0, 'a spent CREATE budget cannot start a new COUNT');
 });
