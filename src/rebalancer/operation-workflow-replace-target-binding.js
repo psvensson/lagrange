@@ -172,7 +172,6 @@ async function bindReplaceCreateTargetReplicaId(
     projectedOperation,
     {
       ...owner.buildOperationTransitionPersistOptions(),
-      confirmPersistence: true,
       expectedWorkflowStep: operation.workflowStep,
     },
   );

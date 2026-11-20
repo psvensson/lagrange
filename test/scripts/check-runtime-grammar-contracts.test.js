@@ -1,3 +1,4 @@
+import {readFile} from 'node:fs/promises';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS,
@@ -31,6 +32,14 @@ const STATE_MACHINE_PRESSURE_PREFLIGHT_FILE_PATH =
   'test/distributed/harness/state-machine-pressure-preflight.js';
 const DISTRIBUTED_RUN_RUNTIME_HELPERS_FILE_PATH =
   'test/distributed/run-runtime-helpers.js';
+const OPERATION_EXECUTION_LANE_FILE_PATH =
+  'src/rebalancer/operation-workflow-owner-execution-lane.js';
+const OPERATION_UPDATE_REPOSITORY_FILE_PATH =
+  'src/rebalancer/replica-operation-repository-mutation-update-methods.js';
+const OPERATION_TRANSITION_ORCHESTRATION_FILE_PATH =
+  'src/rebalancer/operation-workflow-transition-orchestration.js';
+const OPERATION_TRANSITION_PERSISTENCE_FILE_PATH =
+  'src/rebalancer/operation-workflow-transition-persistence.js';
 const EXTRACT_LEADERS_FUNCTION = 'extractControlSnapshotLeaders';
 const HANDLE_COORDINATOR_PROGRESS_FUNCTION = 'handleCoordinatorProgressEvent';
 const CALCULATE_MOVES_FUNCTION = 'calculateMoves';
@@ -487,6 +496,55 @@ test('ignores non-hotspot files', async (t) => {
   t.equal(violations.length, 0);
 });
 
+test('guards the repository confirmation and retained workflow effects in real source',
+  async (t) => {
+    const cases = [
+      [OPERATION_EXECUTION_LANE_FILE_PATH, [
+        ['disableSystemWriteSession: true',
+          'disableSystemWriteSession: true, confirmPersistence: false',
+          'confirmPersistence:'],
+      ]],
+      [OPERATION_UPDATE_REPOSITORY_FILE_PATH, [
+        ['assertOperationUpdateSubject(operation, terminalPreimage)',
+          'void terminalPreimage'],
+        ['this.isReplicaOperationUpdateSatisfied(operation, observed)',
+          'true'],
+        ['operation: observed', 'operation: operation'],
+        [
+          'visibility?.confirmationState !==\n' +
+            '          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED',
+          'visibility?.confirmationState ===\n' +
+            '          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED',
+        ],
+      ]],
+      [OPERATION_TRANSITION_ORCHESTRATION_FILE_PATH, [
+        ['if (outcome.committed)', 'if (persistResult)'],
+        ['removeWorkflow(operation.operationId);\n      throw error;',
+          'removeWorkflow(operation.operationId);\n      return null;'],
+      ]],
+      [OPERATION_TRANSITION_PERSISTENCE_FILE_PATH, [
+        ['error.operationWriteCommitted === true', 'false'],
+        ['TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING',
+          'TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED'],
+        ['const failed = operation.workflowStep === WORKFLOW_STEP.FAILED;',
+          'const failed = false;'],
+      ]],
+    ];
+
+    for (const [filePath, mutations] of cases) {
+      const source = await readFile(new URL(`../../${filePath}`, import.meta.url), 'utf8');
+      t.same(collectRuntimeGrammarContractViolationsFromSource(source, filePath),
+        [], `${filePath} matches the current owner contracts`);
+      for (const [fragment, replacement, target = fragment] of mutations) {
+        const mutated = source.replace(fragment, replacement);
+        t.not(mutated, source, `applied mutation of ${fragment}`);
+        const violations = collectRuntimeGrammarContractViolationsFromSource(mutated, filePath);
+        t.ok(violations.some((violation) => violation.target === target),
+          `${filePath} rejects mutation of ${fragment}`);
+      }
+    }
+  });
+
 test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
   t.same(
     Object.keys(RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS).sort(),
@@ -500,10 +558,13 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'src/node/replica-handler-remove-execution-methods.js',
       'src/node/replica-handler-remove-request-methods.js',
       'src/rebalancer/move-planner-move-calculation-methods.js',
-      'src/rebalancer/operation-workflow-owner-execution-lane.js',
+      OPERATION_EXECUTION_LANE_FILE_PATH,
+      OPERATION_TRANSITION_ORCHESTRATION_FILE_PATH,
+      OPERATION_TRANSITION_PERSISTENCE_FILE_PATH,
       'src/rebalancer/priority-publication-handoff.js',
       'src/rebalancer/priority-publication-leader-safety.js',
       'src/rebalancer/priority-publication-safety-topology.js',
+      OPERATION_UPDATE_REPOSITORY_FILE_PATH,
       'src/rebalancer/unified-rebalancer-lifecycle-base.js',
       'src/rebalancer/unified-rebalancer-priority-recovery-coordination.js',
       'test/distributed/harness/assertions-consistency-comparison.js',
