@@ -314,13 +314,16 @@ class QueryGroup extends EventEmitter {
     const keyColumns = (this.partitionKeyColumn && tableName === this.table) ?
       [this.partitionKeyColumn] : undefined;
     const lowerTarget = String(tableName).toLowerCase();
+    const matchingBindings = extractTableBindings(this.parsedQuery)
+      .filter((b) => b.tableName.toLowerCase() === lowerTarget);
+    const whereClauseForRouting = matchingBindings.length > 1 ? null : this.whereClause;
     const tableAliases = [
       tableName,
-      ...extractTableBindings(this.parsedQuery)
-        .filter((b) => b.tableName.toLowerCase() === lowerTarget && b.alias)
+      ...matchingBindings
+        .filter((b) => b.alias)
         .map((b) => b.alias),
     ];
-    return resolver.resolvePartitions(tableName, this.whereClause, partitions, {
+    return resolver.resolvePartitions(tableName, whereClauseForRouting, partitions, {
       tableInfo, tableMetadata: tableInfo, keyColumns, params: this.params, tableAliases,
     });
   }

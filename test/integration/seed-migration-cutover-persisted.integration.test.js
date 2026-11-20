@@ -222,7 +222,7 @@ async function witnessCommitDecidedUndelivered(seed,
   const observedEffects = [];
   for (const [partitionId, sql, params] of selections) {
     const group = seed.replicas.filter((replica) => getPartitionId(replica) === partitionId);
-    assert.equal(group.length, 3, 'each witness group has three real SQLite replicas');
+    assert.equal(group.length, 1, 'each witness group has one real founding SQLite replica');
     const expected = await seed.readLocal(partitionId, sql, params);
     assert.ok(expected.length > 0, 'each durable observation must be populated');
     await assertGroupConverges(group, sql, params, expected,
@@ -250,7 +250,7 @@ async function witnessCommitDecidedUndelivered(seed,
   assert.ok(observedEffects[1].rows.every((row) =>
     row.status !== MIGRATION_STATUS.COMPLETED),
   'migration-partition update must not apply before participant COMMIT');
-  assert.equal(new Set(requests.map((request) => request.dbPath)).size, 12);
+  assert.equal(new Set(requests.map((request) => request.dbPath)).size, 4);
   publishMarker(markerPath, {schemaVersion: 1, kind: 'TX1_M1_COMMIT_DECIDED_UNDELIVERED',
     pid: process.pid, transactionId: tx.transaction_id, dataDir,
     requests, expectedRows, persistedDecision: tx,
@@ -334,7 +334,7 @@ async function assertCommittedRowsConverged(seed,
   const retainedReplicas = [];
   for (const [partitionId, sql, params] of selections) {
     const group = seed.replicas.filter((replica) => getPartitionId(replica) === partitionId);
-    assert.equal(group.length, 3, 'each M1 system-table group has three real local replicas');
+    assert.equal(group.length, 1, 'each M1 system-table group has one real local founding replica');
     const expected = await seed.readLocal(partitionId, sql, params);
     assert.ok(expected.length > 0, 'every persisted-state observation must be populated');
     await assertGroupConverges(group, sql, params, expected,
@@ -347,8 +347,8 @@ async function assertCommittedRowsConverged(seed,
       retainedReplicas.push(replica);
     }
   }
-  assert.equal(new Set(requests.map((request) => request.dbPath)).size, 12,
-    'the four RF3 system groups must use twelve independent SQLite files');
+  assert.equal(new Set(requests.map((request) => request.dbPath)).size, 4,
+    'the four system groups must use four independent SQLite files');
   return {requests, expectedDiskRows, retainedReplicas};
 }
 
@@ -367,7 +367,7 @@ async function witnessPreKill(seed, {dataDir, markerPath, transactionRows, trans
     const params = [transactionRows[0].transaction_id];
     const expected = await seed.readLocal(partitionId, sql, params);
     const group = seed.replicas.filter((replica) => getPartitionId(replica) === partitionId);
-    assert.equal(group.length, 3, 'every coordinator recovery group has RF3');
+    assert.equal(group.length, 1, 'every coordinator recovery group has one founding replica');
     await assertGroupConverges(group, sql, params, expected,
       'the coordinator rows must converge before SIGKILL');
     for (const replica of group) {

@@ -208,6 +208,10 @@ async function reconcileDispatchWakePendingTargetProgress(
       operation?.targetNodeId,
       {
         entityType: operation?.entityType || operation?.entity_type || null,
+        allowActiveLearner:
+          operation?.type === OperationType.ADD &&
+          (Boolean(context?.placementAdmissionEnabled) ||
+            Boolean(operation?.placementHoldKey)),
       },
     ) :
     OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;

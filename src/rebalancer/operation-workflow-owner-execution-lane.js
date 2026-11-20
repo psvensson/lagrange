@@ -141,13 +141,19 @@ class OperationWorkflowOwnerExecutionLane
    * @param {string} targetNodeId
    * @return {Promise<string|null>}
    */
-  buildReconciledReplicaObservationOptions(baseOptions, options) {
-    if (options?.ignoreUnclaimedPreRuntimeFailedCreate !== true) {
+  buildReconciledReplicaObservationOptions(baseOptions, options = {}) {
+    const ignoreUnclaimed =
+      options?.ignoreUnclaimedPreRuntimeFailedCreate === true;
+    const allowActiveLearner = options?.allowActiveLearner === true;
+    if (!ignoreUnclaimed && !allowActiveLearner) {
       return baseOptions;
     }
     return {
       ...baseOptions,
-      ignoreUnclaimedPreRuntimeFailedCreate: true,
+      ...(ignoreUnclaimed ?
+        {ignoreUnclaimedPreRuntimeFailedCreate: true} :
+        {}),
+      ...(allowActiveLearner ? {allowActiveLearner: true} : {}),
     };
   }
 

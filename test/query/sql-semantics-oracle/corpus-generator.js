@@ -263,6 +263,7 @@ const PREDICATE_BUILDERS = Object.freeze([
     `${p.pick(['3', '10', '2.5'])}`,
   (p) => `${p.pick(COLUMNS.any)} IN (${literal(p)}, ${literal(p)}, ${literal(p)})`,
   (p) => `${p.pick(COLUMNS.any)} IS ${p.chance(0.5) ? '' : 'NOT '}NULL`,
+  (p) => `${p.pick(COLUMNS.any)} IS ${p.chance(0.5) ? '' : 'NOT '}${p.pick(['TRUE', 'FALSE'])}`,
   (p) => `NOT (${comparison(p, p.pick(COLUMNS.any))})`,
   (p) => `${comparison(p, p.pick(COLUMNS.any))} ${p.pick(['AND', 'OR'])} ` +
     `${comparison(p, p.pick(COLUMNS.any))}`,
@@ -613,6 +614,10 @@ const PARAMETER_CASES = Object.freeze([
     params: [p.pick(PARAMETER_VALUES)]}),
   (p) => ({sql: 'SELECT x AS c0, SUM(i) AS c1 FROM t GROUP BY x HAVING SUM(i) > ? ORDER BY c0',
     params: [p.pick([1n, 1, 2.5])]}),
+  (p) => ({sql: 'SELECT id AS c0, SUM(?) OVER (ORDER BY ?, id) AS c1 FROM t ORDER BY id',
+    params: [p.pick([2n, 3n, 5n]), p.pick([1n, -1n])]}),
+  (p) => ({sql: 'SELECT id AS c0, LAG(?, 1, ?) OVER (ORDER BY ?, id) AS c1 FROM t ORDER BY id',
+    params: [p.pick([10n, 20n, 'x']), p.pick([-1n, 0n, 'none']), p.pick([1n, 2n])]}),
 ]);
 
 function parameterCase(prng) {

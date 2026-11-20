@@ -92,6 +92,7 @@ import {
 } from '../partition/placement-admission-fixture.js';
 import {
   runCorrectionBProductionAssemblyWitness,
+  runGrowthPromoteLeaderRedirectAndTimeoutWitness,
   runGrowthPromoteProductionWitness,
 } from './replica-placement-owner-test-support.js';
 import {
@@ -1426,6 +1427,19 @@ test('Correction B production-assembly witness: ControlPlaneSetup.create binds R
       createSimpleSystemCache,
       seededPartitionRow,
       seededServiceRows,
+    });
+  } finally {
+    clearFixtureSingletons();
+  }
+});
+
+test('Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal', async () => {
+  resetFixtureSingletons();
+  try {
+    await runGrowthPromoteLeaderRedirectAndTimeoutWitness({
+      createSimpleSystemCache,
+      nodeRow,
+      seededPartitionRow,
     });
   } finally {
     clearFixtureSingletons();

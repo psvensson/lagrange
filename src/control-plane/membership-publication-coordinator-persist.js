@@ -309,7 +309,11 @@ class MembershipPublicationCoordinatorPersist extends
           const finalRow = serializeMembershipPublicationRow(
             mergePublicationRows(durableRow, persistedRow),
           );
-          await this._maybeLatchFormationAfterPublicationWrite(finalRow);
+          const latchPromise =
+            this._maybeLatchFormationAfterPublicationWrite(finalRow);
+          if (latchPromise) {
+            await latchPromise;
+          }
           return finalRow;
         }
         persistedRow = serializeMembershipPublicationRow(
@@ -322,18 +326,30 @@ class MembershipPublicationCoordinatorPersist extends
         row: persistedRow,
       });
     }
-    await this._maybeLatchFormationAfterPublicationWrite(persistedRow);
+    const latchPromise =
+      this._maybeLatchFormationAfterPublicationWrite(persistedRow);
+    if (latchPromise) {
+      await latchPromise;
+    }
     return persistedRow;
   }
 
-  async _maybeLatchFormationAfterPublicationWrite(publicationRow) {
+  _maybeLatchFormationAfterPublicationWrite(publicationRow) {
     if (
-      readUpperStateField(publicationRow?.status) ===
-      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+      !this.getPublicationsLeaderPartitionService() ||
+      readUpperStateField(publicationRow?.status) !==
+        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
     ) {
-      await this.evaluateAndLatchFormationIfEligible({
-        publicationRow,
-      });
+      return;
+    }
+    const check = this._checkFormationLatchEligibility?.({publicationRow});
+    if (check?.shouldLatch === true) {
+      return submitFormationLatchCommand(
+        this,
+        check.partitionService,
+        check.evaluation,
+        check.nowMs,
+      ).catch(() => {});
     }
   }
 
@@ -372,9 +388,9 @@ class MembershipPublicationCoordinatorPersist extends
     }
   }
 
-  async evaluateAndLatchFormationIfEligible(context = {}) {
+  _checkFormationLatchEligibility(context = {}) {
     if (shouldDeferMembershipReconcileToWriteLeader(this)) {
-      return {latched: false, deferred: true};
+      return {shouldLatch: false, result: {latched: false, deferred: true}};
     }
     const partitionService = this.getPublicationsLeaderPartitionService();
     const committedFormationRow = syncCommittedFormationRow(
@@ -390,9 +406,25 @@ class MembershipPublicationCoordinatorPersist extends
       publicationRow: context.publicationRow || null,
       nowMs,
     });
-    return evaluation.shouldLatch === true ?
-      submitFormationLatchCommand(this, partitionService, evaluation, nowMs) :
-      {latched: false, evaluation};
+    return {
+      shouldLatch: evaluation.shouldLatch === true,
+      partitionService,
+      evaluation,
+      nowMs,
+      result: {latched: false, evaluation},
+    };
+  }
+
+  async evaluateAndLatchFormationIfEligible(context = {}) {
+    const check = this._checkFormationLatchEligibility(context);
+    return check.shouldLatch === true ?
+      submitFormationLatchCommand(
+        this,
+        check.partitionService,
+        check.evaluation,
+        check.nowMs,
+      ) :
+      check.result;
   }
 
   attachFormationLatchTriggers(options = {}) {

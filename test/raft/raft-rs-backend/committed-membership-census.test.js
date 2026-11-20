@@ -210,10 +210,11 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     // The replacement options builder (snapshot install, release reopen).
     'src/partition/partition-reopen-options.js',
     // Carriers: the dispatch request, row rehydration (two readers), the
-    // owner-port merge.
+    // owner-port merge, and placement-admitted CREATE dispatch binding.
     'src/control-plane/replica-dispatch-readiness-capture.js',
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
+    'src/rebalancer/operation-workflow-replace-target-binding.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
     // Reader (quest fresh-create-release-authority-from-committed-operation):
     // the answering leader reads the GENESIS founding stamp the provisioning

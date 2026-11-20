@@ -742,3 +742,158 @@ test('Review 4 Item 1: two-partition public INSERT and UPDATE preserve storage c
     db2.close();
   }
 });
+
+test('IS TRUE / IS NOT TRUE / IS FALSE / IS NOT FALSE preserve SQLite boolean truth-test semantics in distributed UPDATE and DELETE mutations', async () => {
+  const schema = {
+    tableName: 'truth_targets',
+    columns: [
+      {name: 'id', type: 'INTEGER', primaryKey: true},
+      {name: 'n', type: 'ANY'},
+      {name: 'tag', type: 'TEXT'},
+    ],
+    primaryKey: ['id'],
+  };
+  const ddl = renderTableDefinitionSql('truth_targets', schema);
+  const db1 = new Database(':memory:');
+  const db2 = new Database(':memory:');
+  try {
+    db1.defaultSafeIntegers(true);
+    db2.defaultSafeIntegers(true);
+    db1.exec(ddl);
+    db2.exec(ddl);
+
+    // Seed truth-value edge cases across two partitions:
+    // Partition 1: id=1 (n=0), id=2 (n=1), id=3 (n=2, truthy non-1!), id=4 (n=NULL)
+    // Partition 2: id=201 (n=-1, truthy non-1!), id=202 (n=0.0), id=203 (n='2'), id=204 (n='abc')
+    const seedP1 = [
+      [1n, 0n, 'init'],
+      [2n, 1n, 'init'],
+      [3n, 2n, 'init'],
+      [4n, null, 'init'],
+    ];
+    const seedP2 = [
+      [201n, -1n, 'init'],
+      [202n, 0.0, 'init'],
+      [203n, '2', 'init'],
+      [204n, 'abc', 'init'],
+    ];
+    for (const row of seedP1) {
+      db1.prepare('INSERT INTO "truth_targets" (id, n, tag) VALUES (?, ?, ?)').run(...row);
+    }
+    for (const row of seedP2) {
+      db2.prepare('INSERT INTO "truth_targets" (id, n, tag) VALUES (?, ?, ?)').run(...row);
+    }
+
+    const dbs = new Map([
+      ['truth_targets-p1', db1],
+      ['truth_targets-p2', db2],
+    ]);
+    const tableRecord = {
+      table_name: 'truth_targets',
+      partition_key: 'id',
+      schema_definition: JSON.stringify(schema),
+    };
+    const partitionRows = [
+      {
+        partition_id: 'truth_targets-p1',
+        table_name: 'truth_targets',
+        start_key: '00000000000000000000',
+        end_key: '00000000000000000100',
+        state: 'NORMAL',
+        partition_version: 1,
+      },
+      {
+        partition_id: 'truth_targets-p2',
+        table_name: 'truth_targets',
+        start_key: '00000000000000000100',
+        end_key: '99999999999999999999',
+        state: 'NORMAL',
+        partition_version: 1,
+      },
+    ];
+    const queryExecutor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache([tableRecord], partitionRows, [], []),
+    });
+    queryExecutor.executeOnPartition = async (partitionId, sql, params = [], forRead = false) => {
+      const db = dbs.get(partitionId);
+      const stmt = db.prepare(sql);
+      if (forRead || stmt.reader) {
+        return {
+          partitionId,
+          success: true,
+          rows: stmt.all(...params),
+          rowSetComplete: true,
+        };
+      }
+      const info = stmt.run(...params);
+      return {
+        partitionId,
+        success: true,
+        rowsAffected: info.changes,
+        changes: info.changes,
+        rows: [],
+      };
+    };
+    queryExecutor.executeOnPartitions = async (
+      partitionIds,
+      sql,
+      params = [],
+      _ts,
+      forRead = false,
+    ) => Promise.all(
+      partitionIds.map((pid) => queryExecutor.executeOnPartition(pid, sql, params, forRead)),
+    );
+
+    const coordinator = new DistributedWriteCoordinator({
+      queryExecutor,
+      getTableInfo: () => tableRecord,
+      getTablePartitions: () => partitionRows,
+    });
+    const parseSql = (sql) => new SQLParser(sql, {dialect: 'sqlite'}).parse();
+
+    // 1. UPDATE WHERE n IS TRUE must update n=1, n=2, n=-1, n='2' (all truthy values in SQLite,
+    // NOT just n=1!):
+    for (const pid of ['truth_targets-p1', 'truth_targets-p2']) {
+      const updateTrueRes = await coordinator.executeUpdate(
+        parseSql('UPDATE truth_targets SET tag = \'truthy\' WHERE n IS TRUE'),
+        [],
+        {partitionIds: [pid]},
+      );
+      assert.equal(updateTrueRes.success, true);
+    }
+    const allAfterUpdate = [
+      ...db1.prepare('SELECT id, tag FROM "truth_targets" ORDER BY id').all(),
+      ...db2.prepare('SELECT id, tag FROM "truth_targets" ORDER BY id').all(),
+    ];
+    assert.deepEqual(allAfterUpdate, [
+      {id: 1n, tag: 'init'},
+      {id: 2n, tag: 'truthy'},
+      {id: 3n, tag: 'truthy'},
+      {id: 4n, tag: 'init'},
+      {id: 201n, tag: 'truthy'},
+      {id: 202n, tag: 'init'},
+      {id: 203n, tag: 'truthy'},
+      {id: 204n, tag: 'init'},
+    ]);
+
+    // 2. DELETE WHERE n IS NOT TRUE must delete ONLY rows whose truth value is NOT true
+    // (id=1 [n=0], id=4 [n=NULL], id=202 [n=0.0], id=204 [n='abc']) and MUST KEEP
+    // id=2 (n=1), id=3 (n=2), id=201 (n=-1), and id=203 (n='2')!
+    const deleteNotTrueRes = await queryExecutor.executeDelete(
+      parseSql('DELETE FROM truth_targets WHERE n IS NOT TRUE'),
+      ['truth_targets-p1', 'truth_targets-p2'],
+      [],
+    );
+    assert.equal(deleteNotTrueRes.success, true);
+    const remainingIds = [
+      ...db1.prepare('SELECT id FROM "truth_targets" ORDER BY id').pluck().all(),
+      ...db2.prepare('SELECT id FROM "truth_targets" ORDER BY id').pluck().all(),
+    ];
+    assert.deepEqual(remainingIds, [2n, 3n, 201n, 203n]);
+  } finally {
+    db1.close();
+    db2.close();
+  }
+});

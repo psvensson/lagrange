@@ -223,3 +223,66 @@ test('aliased QueryGroup forwards params and tableAliases to PartitionResolver',
     'aliased key predicate with positional parameter prunes to the single matching partition',
   );
 });
+
+test('self-join QueryGroup with two aliases of the same table registers, initializes snapshot, and refreshes on CDC UPDATE while preserving NOCASE collation', async (t) => {
+  const {db, systemCache, sqlQueryEngine} = createUsersBackingStore();
+  t.teardown(() => db.close());
+
+  const selfJoinSql =
+    'SELECT u1.id, u2.name, u2.score FROM users AS u1 JOIN users AS u2 ON u1.id = u2.id WHERE u2.name = \'ALICE\'';
+  const group = new QueryGroup({
+    parsedQuery: new SQLParser(selfJoinSql).parse(),
+    rawSql: selfJoinSql,
+    systemCache,
+    sqlQueryEngine,
+  });
+  t.teardown(() => group.cleanup());
+
+  t.equal(group.isComplex, true, 'self-join QueryGroup is classified as complex (Tier 2)');
+
+  const notifications = [];
+  group.addClient({
+    id: 'client-self-join',
+    send: (msg) => notifications.push(JSON.parse(msg)),
+  });
+
+  const subscribedPartitions = [];
+  const initialRows = await group.initialize({
+    subscribeToPartition: async (partitionId) => {
+      subscribedPartitions.push(partitionId);
+    },
+    options: {attachAfterVersion: 1},
+  });
+
+  t.same(
+    subscribedPartitions.sort(),
+    ['users-p0', 'users-p1'],
+    'self-join subscribes to all visible partitions of the joined table',
+  );
+  t.same(
+    initialRows,
+    [{id: 1, name: 'alice', score: 10}],
+    'initial self-join snapshot matches lowercase alice under NOCASE on u2.name',
+  );
+
+  // Apply an update in the backing store and deliver the CDC UPDATE event:
+  db.prepare('UPDATE users SET score = 77 WHERE id = 1').run();
+  await group.handleCDCEvent(
+    {
+      operation: LIVE_QUERY_OPERATION.UPDATE,
+      old_data: {id: 1, name: 'alice', score: 10},
+      data: {id: 1, name: 'alice', score: 77},
+      hlc_timestamp: '2000:1',
+      logIndex: 2,
+    },
+    'users-p0',
+  );
+
+  t.equal(notifications.length, 1, 'self-join group emits a reset notification on CDC update');
+  t.equal(notifications[0].type, LIVE_QUERY_EVENT.RESET, 'Tier 2 refresh emits RESET notification');
+  t.same(
+    notifications[0].rows,
+    [{id: 1, name: 'alice', score: 77}],
+    'refreshed self-join rows reflect the updated score',
+  );
+});

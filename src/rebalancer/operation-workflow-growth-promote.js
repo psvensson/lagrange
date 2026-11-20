@@ -5,6 +5,7 @@
  * @module rebalancer/operation-workflow-growth-promote
  */
 
+import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
@@ -44,6 +45,9 @@ const GROWTH_PROMOTE_RETRYABLE_REASONS = Object.freeze(
   ]),
 );
 
+const NOT_LEADER_REASONS = Object.freeze(
+  new Set(['not_leader', 'membership-change-not-leader']),
+);
 const VOTER_ROLES = Object.freeze(new Set(['follower', 'candidate', 'leader']));
 const GROWTH_PROMOTE_OBSERVED_STATE = Object.freeze({
   UNAPPLICABLE: 'UNAPPLICABLE',
@@ -52,6 +56,7 @@ const GROWTH_PROMOTE_OBSERVED_STATE = Object.freeze({
 });
 const LOCAL_STR_CORE_OK = 'CORE_OK';
 const LOCAL_STR_GROWTH_PROMOTE_REFUSED = 'growth_promote_refused';
+const LOCAL_STR_LEADER = 'leader';
 
 function isHeldGrowthPromoteOperation(operation) {
   return (
@@ -115,11 +120,174 @@ async function completeAndBuildGrowthPromoteResult(owner, operation) {
   });
 }
 
-function isObservedCompleteActive(owner, operation) {
+function resolveOwnerSystemTableCache(owner) {
+  if (owner?.systemTableCache) {
+    return owner.systemTableCache;
+  }
+  if (owner?.repository?.systemTableCache) {
+    return owner.repository.systemTableCache;
+  }
+  return null;
+}
+
+function listPartitionServiceRows(cache, partitionId) {
+  if (!cache?.getAll || !partitionId) {
+    return [];
+  }
+  const all = cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+  return all.filter((row) => row?.partition_id === partitionId);
+}
+
+function matchesLeaderReplicaIdentity(row, leaderReplicaId) {
+  const target = String(leaderReplicaId || '');
+  if (!target) {
+    return false;
+  }
+  const replicaId = String(row?.replica_id || row?.service_id || '');
+  if (!replicaId) {
+    return false;
+  }
   return (
-    observeGrowthPromoteIncompleteState(owner, operation) ===
-    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE
+    replicaId === target ||
+    String(deriveRaftRsPeerId(replicaId)) === target
   );
+}
+
+function readNodeIdFromRow(row) {
+  const nodeId = row?.node_id || '';
+  return typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : '';
+}
+
+function resolveLeaderNodeFromResponse(cache, partitionId, response) {
+  const directNodeId = response?.leaderNodeId || '';
+  if (typeof directNodeId === 'string' && directNodeId.length > 0) {
+    return directNodeId;
+  }
+  const leaderReplicaId = response?.leaderId || '';
+  if (!leaderReplicaId) {
+    return '';
+  }
+  const rows = listPartitionServiceRows(cache, partitionId);
+  const matchingRow = rows.find((row) =>
+    matchesLeaderReplicaIdentity(row, leaderReplicaId),
+  );
+  return readNodeIdFromRow(matchingRow);
+}
+
+function resolveLeaderNodeFromCache(cache, partitionId, excludedNodeIds) {
+  const rows = listPartitionServiceRows(cache, partitionId);
+  const activeLeaderRow = rows.find((row) => {
+    if (readLowerStateField(row?.status) !== ReplicaStatus.ACTIVE) {
+      return false;
+    }
+    const role = readLowerStateField(row?.raft_role);
+    const nodeId = readNodeIdFromRow(row);
+    return (
+      role === LOCAL_STR_LEADER &&
+      nodeId.length > 0 &&
+      !excludedNodeIds.has(nodeId)
+    );
+  });
+  const activeLeaderNodeId = readNodeIdFromRow(activeLeaderRow);
+  if (activeLeaderNodeId.length > 0) {
+    return activeLeaderNodeId;
+  }
+  const partitionRow = cache?.get ?
+    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId) :
+    null;
+  const partitionLeaderNodeId = partitionRow?.leader_node_id || '';
+  if (
+    typeof partitionLeaderNodeId === 'string' &&
+    partitionLeaderNodeId.length > 0 &&
+    !excludedNodeIds.has(partitionLeaderNodeId)
+  ) {
+    return partitionLeaderNodeId;
+  }
+  const alternateVoterRow = rows.find((row) => {
+    if (readLowerStateField(row?.status) !== ReplicaStatus.ACTIVE) {
+      return false;
+    }
+    const role = readLowerStateField(row?.raft_role);
+    const nodeId = readNodeIdFromRow(row);
+    return (
+      VOTER_ROLES.has(role) &&
+      nodeId.length > 0 &&
+      !excludedNodeIds.has(nodeId)
+    );
+  });
+  return readNodeIdFromRow(alternateVoterRow);
+}
+
+function redirectGrowthPromoteTargetNode(owner, operation, response = null) {
+  if (!operation || operation.type !== OperationType.GROWTH_PROMOTE) {
+    return '';
+  }
+  const currentTarget = String(operation.targetNodeId || '');
+  const cache = resolveOwnerSystemTableCache(owner);
+  const proposal = response?.[ReplicaOperationField.PROPOSAL] || null;
+  const normalizedReason = readLowerStateField(proposal?.reason);
+  const isNotLeaderRefusal = NOT_LEADER_REASONS.has(normalizedReason);
+  const fromResponse = resolveLeaderNodeFromResponse(
+    cache,
+    operation.partitionId,
+    response,
+  );
+  if (fromResponse.length > 0 && fromResponse !== currentTarget) {
+    operation.targetNodeId = fromResponse;
+    return fromResponse;
+  }
+  if (!isNotLeaderRefusal) {
+    return currentTarget;
+  }
+  if (!Array.isArray(operation.refusedLeaderNodeIds)) {
+    operation.refusedLeaderNodeIds = [];
+  }
+  if (
+    currentTarget.length > 0 &&
+    !operation.refusedLeaderNodeIds.includes(currentTarget)
+  ) {
+    operation.refusedLeaderNodeIds.push(currentTarget);
+  }
+  const excluded = new Set(operation.refusedLeaderNodeIds);
+  let nextTarget = resolveLeaderNodeFromCache(
+    cache,
+    operation.partitionId,
+    excluded,
+  );
+  if (nextTarget.length === 0 && currentTarget.length > 0) {
+    operation.refusedLeaderNodeIds = [currentTarget];
+    nextTarget = resolveLeaderNodeFromCache(
+      cache,
+      operation.partitionId,
+      new Set([currentTarget]),
+    );
+  }
+  if (nextTarget.length > 0) {
+    operation.targetNodeId = nextTarget;
+    return nextTarget;
+  }
+  return currentTarget;
+}
+
+function resolveGrowthPromoteTargetNodeId(owner, operation) {
+  if (!operation) {
+    return '';
+  }
+  const currentTarget = String(operation.targetNodeId || '');
+  if (currentTarget.length > 0) {
+    return currentTarget;
+  }
+  const cache = resolveOwnerSystemTableCache(owner);
+  const resolved = resolveLeaderNodeFromCache(
+    cache,
+    operation.partitionId,
+    new Set(),
+  );
+  if (resolved.length > 0) {
+    operation.targetNodeId = resolved;
+    return resolved;
+  }
+  return currentTarget;
 }
 
 async function reconcileGrowthPromoteDispatchResponse(
@@ -136,27 +304,20 @@ async function reconcileGrowthPromoteDispatchResponse(
     const normalizedReason = readLowerStateField(proposal.reason);
     if (normalizedOutcome === LOCAL_STR_CORE_OK) {
       if (response?.committedVotersReached === false) {
-        return isObservedCompleteActive(owner, operation) ?
-          completeAndBuildGrowthPromoteResult(owner, operation) :
-          deferGrowthPromoteToSyncing(owner, operation);
+        return deferGrowthPromoteToSyncing(owner, operation);
       }
-      return completeAndBuildGrowthPromoteResult(owner, operation);
-    }
-    if (isObservedCompleteActive(owner, operation)) {
       return completeAndBuildGrowthPromoteResult(owner, operation);
     }
     if (
       proposal.retryable === true ||
       GROWTH_PROMOTE_RETRYABLE_REASONS.has(normalizedReason)
     ) {
+      redirectGrowthPromoteTargetNode(owner, operation, response);
       return deferGrowthPromoteToSyncing(owner, operation);
     }
     const refusalReason = proposal.reason || LOCAL_STR_GROWTH_PROMOTE_REFUSED;
     await owner.failOperation(operation, refusalReason);
     return owner.buildFailedOperationResult(operation.operationId, refusalReason);
-  }
-  if (isObservedCompleteActive(owner, operation)) {
-    return completeAndBuildGrowthPromoteResult(owner, operation);
   }
   if (
     response?.status === ReplicaOperationResponseStatus.INITIATED ||
@@ -321,15 +482,15 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
   ) {
     return false;
   }
+  const previousStep = operation.workflowStep;
+  const replayResult = await owner.executeOperationFromReconcilePath(operation);
   if (
-    owner.observeIncompleteOperationState(operation) ===
-    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE
+    owner.repository.isOperationTerminal(operation) ||
+    replayResult?.status === ReplicaOperationResponseStatus.COMPLETED
   ) {
-    await owner.completeOperation(operation);
     return true;
   }
-  const replayResult = await owner.executeOperationFromReconcilePath(operation);
-  return replayResult?.success === true;
+  return operation.workflowStep !== previousStep;
 }
 
 export {
@@ -340,4 +501,5 @@ export {
   reconcileGrowthPromoteDispatchResponse,
   reconcileGrowthPromoteLifecycle,
   resolveGrowthPromoteReplicaIds,
+  resolveGrowthPromoteTargetNodeId,
 };

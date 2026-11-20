@@ -6,12 +6,12 @@
     "test/query/sql-semantics-differential-oracle.test.js": "35a71c2ef63c2051042bf02bc701489be9d4dbc317f5a8a5ecd4184e461dfd0a",
     "test/query/coordinator-sql-evaluation-census.test.js": "7e7c32f047d6c051f298e9df40f432e2c42712583e2270754349413a5e7565d1",
     "test/query/sql-table-definition.test.js": "22d0ab0eca2d6ba0e03dea813228a203ff1588e7221b190192ea5b123b13d6f8",
-    "test/query/sql-mutation-and-constraint-stabilization.test.js": "c7bfdbde9fadb69483193d1c3c74810cc342c7df6799c5f51917d66f873870a7",
-    "test/query/distributed-merge-engine.test.js": "8339a949f89a965574c88e0575e40f136d7e4cc84053a0509c06dd73af6ccdea",
+    "test/query/sql-mutation-and-constraint-stabilization.test.js": "24d9b585b9899d0e78a007cca11a03333543e0a569d4f7dd81a421adbd589772",
+    "test/query/distributed-merge-engine.test.js": "8544e04d7e2cf5eae28ce5815a7c1f310134d489f5d93970f670bb43b8a11d93",
     "test/query/coordinator-interim-refusals.test.js": "1a98a8a84833ccf43dc945f47b638080eca0d3c7774656f353d044fcd7f0ccd4",
-    "test/live-query/live-query-group.test.js": "c7f0ce75747641e1b363b2178c4f271c61f2ec136ed3759cf48c357eedd6a0b1"
+    "test/live-query/live-query-group.test.js": "d108826d19e173247b48ba101f28600269319e203a05a4177e4ea1c0f15d6b20"
   },
-  "generatedAt": "2026-11-20T07:39:15.542Z",
+  "generatedAt": "2026-11-20T10:18:48.593Z",
   "receipts": [
     {
       "id": "sqlite-differential-oracle-green",

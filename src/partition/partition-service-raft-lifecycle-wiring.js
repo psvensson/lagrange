@@ -139,8 +139,23 @@ function wirePartitionRaftLifecycleEvents(
  * port.
  * @param {Object} service - The partition service.
  */
+function isJointConfStateObservation(observation) {
+  if (observation?.joint === true) {
+    return true;
+  }
+  const outgoing = observation?.confState?.votersOutgoing;
+  return Array.isArray(outgoing) && outgoing.length > 0;
+}
+
 function isPromotedLearnerVoterObservation(service, observation) {
-  if (service?.role !== RaftRole.LEARNER) {
+  const growthPromoteOwned =
+    service?.learnerFirstAdmission === true ||
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true;
+  if (
+    !growthPromoteOwned ||
+    service?.role !== RaftRole.LEARNER ||
+    isJointConfStateObservation(observation)
+  ) {
     return false;
   }
   if (observation?.role === LOCAL_STR_VOTER) {
@@ -172,9 +187,13 @@ function relayPartitionConsensusObservations(service) {
   service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) => {
     if (isPromotedLearnerVoterObservation(service, observation)) {
       service.role = RaftRole.FOLLOWER;
+      service.isJoiningExistingGroup = false;
       service.learnerBootstrapped = true;
       service.cancelLearnerPromotionMonitor?.();
       service.queueRoleUpdate?.(RaftRole.FOLLOWER);
+      if (service.isLeader === true) {
+        service.updateRebalancerLeadership?.();
+      }
     }
     emit({confState: observation?.confState ?? null,
       commitIndex: observation?.commitIndex ?? null,

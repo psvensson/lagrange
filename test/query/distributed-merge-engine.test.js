@@ -605,6 +605,42 @@ test('Review 4 Item 4: CoordinatorMergeProcessPool handles already-aborted reque
       {parity: 0, total: 60},
       {parity: 1, total: 40},
     ]);
+
+    // 5. Parameterized aggregate window and generic window functions bind positional
+    // parameters in SQL lexical order (function args before OVER (ORDER BY ?)):
+    const aggWindowAst = new SQLParser(
+      'SELECT id, SUM(?) OVER (ORDER BY ?, id) AS win_sum FROM t ORDER BY id',
+    ).parse();
+    const aggWindowRes = await executor.executeSelect(
+      aggWindowAst,
+      ['t-p1', 't-p2'],
+      [2n, 1n],
+      {deadlineMs: Date.now() + 5000},
+    );
+    t.equal(aggWindowRes.success, true);
+    t.same(aggWindowRes.rows, [
+      {id: 1, win_sum: 2},
+      {id: 2, win_sum: 4},
+      {id: 3, win_sum: 6},
+      {id: 4, win_sum: 8},
+    ]);
+
+    const genericWindowAst = new SQLParser(
+      'SELECT id, LAG(?, 1, ?) OVER (ORDER BY ?, id) AS lag_val FROM t ORDER BY id',
+    ).parse();
+    const genericWindowRes = await executor.executeSelect(
+      genericWindowAst,
+      ['t-p1', 't-p2'],
+      [100n, -1n, 1n],
+      {deadlineMs: Date.now() + 5000},
+    );
+    t.equal(genericWindowRes.success, true);
+    t.same(genericWindowRes.rows, [
+      {id: 1, lag_val: -1},
+      {id: 2, lag_val: 100},
+      {id: 3, lag_val: 100},
+      {id: 4, lag_val: 100},
+    ]);
   } finally {
     close();
   }

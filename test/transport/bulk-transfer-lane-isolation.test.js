@@ -1,3 +1,4 @@
+import net from 'node:net';
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -343,3 +344,56 @@ t.test('a stale socket close cannot evict a live replacement connection',
       registry.closeAll();
     }
   });
+
+t.test('aborting an in-flight CONNECTING bulk dial rejects with CANCELLED ' +
+  'without an uncaught WebSocket error', async (t) => {
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+  });
+  const openSockets = new Set();
+  let connectionSeenResolve = null;
+  const connectionSeen = new Promise((resolve) => {
+    connectionSeenResolve = resolve;
+  });
+  const holdServer = net.createServer((socket) => {
+    openSockets.add(socket);
+    socket.on('close', () => openSockets.delete(socket));
+    connectionSeenResolve();
+  });
+  await new Promise((resolve) => holdServer.listen(0, '127.0.0.1', resolve));
+  const {port} = holdServer.address();
+  const uncaughtErrors = [];
+  const onUncaught = (err) => uncaughtErrors.push(err);
+  process.on('uncaughtException', onUncaught);
+  try {
+    const controller = new AbortController();
+    const dialPromise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: `ws://127.0.0.1:${port}`,
+      identify: {
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        bootIncarnation: TEST_BOOT_INCARNATION,
+      },
+      signal: controller.signal,
+    });
+    await connectionSeen;
+    controller.abort();
+    await t.rejects(
+      dialPromise,
+      {message: BULK_CHANNEL_SEND_OUTCOME.CANCELLED},
+      'in-flight CONNECTING dial rejects with CANCELLED when aborted',
+    );
+    await flushDeliveries();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    t.same(uncaughtErrors, [],
+      'terminating the CONNECTING WebSocket emits no uncaught error');
+  } finally {
+    process.removeListener('uncaughtException', onUncaught);
+    registry.closeAll();
+    for (const socket of openSockets) {
+      socket.destroy();
+    }
+    await new Promise((resolve) => holdServer.close(resolve));
+  }
+});

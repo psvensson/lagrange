@@ -150,7 +150,7 @@ function assignReplicaOperationRepositoryObservationMethods(
      * @param {Object} row
      * @return {string|null}
      */
-    normalizeObservedReplicaLifecycle(row) {
+    normalizeObservedReplicaLifecycle(row, options = {}) {
       const decoded = decodeCanonicalObservedReplicaRow(row);
       if (!decoded || !decoded.status) {
         return null;
@@ -159,7 +159,10 @@ function assignReplicaOperationRepositoryObservationMethods(
         return decoded.status;
       }
       if (decoded.status === ReplicaStatus.ACTIVE) {
-        if (!isVoterRaftRole(decoded.raftRole)) {
+        if (
+          options?.allowActiveLearner !== true &&
+          !isVoterRaftRole(decoded.raftRole)
+        ) {
           return ReplicaStatus.SYNCING;
         }
         return ReplicaStatus.ACTIVE;
@@ -330,7 +333,7 @@ function assignReplicaOperationRepositoryObservationMethods(
       ) {
         return null;
       }
-      return this.normalizeObservedReplicaLifecycle(observedRow);
+      return this.normalizeObservedReplicaLifecycle(observedRow, options);
     }
 
     getObservedReplicaStatusFromCache(
@@ -484,7 +487,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         readOptions,
       );
       const contradictingLifecycle = contradictingCacheRow ?
-        this.normalizeObservedReplicaLifecycle(contradictingCacheRow) :
+        this.normalizeObservedReplicaLifecycle(contradictingCacheRow, readOptions) :
         null;
       if (
         contradictingLifecycle !== null &&

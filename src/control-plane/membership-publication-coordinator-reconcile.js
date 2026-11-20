@@ -369,9 +369,11 @@ class MembershipPublicationCoordinatorReconcile extends
           );
           const normalizedPersistedRow =
             normalizeControlPlanePublicationRow(persistedRow);
-          await this.evaluateAndLatchFormationIfEligible({
-            publicationRow: persistedRow,
-          });
+          const latchPromise =
+            this._maybeLatchFormationAfterPublicationWrite?.(persistedRow);
+          if (latchPromise) {
+            await latchPromise;
+          }
           return {
             candidate,
             publicationRow: normalizedPersistedRow,
@@ -434,8 +436,12 @@ class MembershipPublicationCoordinatorReconcile extends
       return false;
     }
     this.attachFormationLatchTriggers?.();
-    if (becameLeader) {
-      await this.evaluateAndLatchFormationIfEligible().catch(() => {});
+    if (
+      becameLeader &&
+      this.getPublicationsLeaderPartitionService?.() &&
+      this._checkFormationLatchEligibility?.().shouldLatch === true
+    ) {
+      await this.evaluateAndLatchFormationIfEligible?.().catch(() => {});
     }
     this.assertSingleMembershipPartition();
     this.ownerMembershipReconcileInFlight = true;
@@ -491,7 +497,12 @@ class MembershipPublicationCoordinatorReconcile extends
           });
         }
         await this.refreshDeferredPublicationsCacheFromAuthority();
-        await this.evaluateAndLatchFormationIfEligible().catch(() => {});
+        if (
+          this.getPublicationsLeaderPartitionService?.() &&
+          this._checkFormationLatchEligibility?.().shouldLatch === true
+        ) {
+          await this.evaluateAndLatchFormationIfEligible?.().catch(() => {});
+        }
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,
@@ -510,7 +521,6 @@ class MembershipPublicationCoordinatorReconcile extends
       const reconcileStartedAtMs = Date.now();
       await Promise.race([
         this.reconcileActiveGateMembershipPublication(handoffContract, {
-          ...planningSnapshot,
           reconcileAuthoritativeMembershipPublication: true,
         }).then(() => {
           timedOut = false;
@@ -572,7 +582,12 @@ class MembershipPublicationCoordinatorReconcile extends
       return false;
     } finally {
       await this.refreshDeferredPropagatedCachesFromAuthority();
-      await this.evaluateAndLatchFormationIfEligible().catch(() => {});
+      if (
+        this.getPublicationsLeaderPartitionService?.() &&
+        this._checkFormationLatchEligibility?.().shouldLatch === true
+      ) {
+        await this.evaluateAndLatchFormationIfEligible?.().catch(() => {});
+      }
       this.ownerMembershipReconcileInFlight = false;
     }
   }

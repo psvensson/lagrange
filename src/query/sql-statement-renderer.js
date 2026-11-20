@@ -67,8 +67,8 @@ const SQL = Object.freeze({
   ESCAPED_QUOTE: '\'\'',
   DOUBLE_QUOTE: '"',
   ESCAPED_DOUBLE_QUOTE: '""',
-  TRUE_INTEGER: '1',
-  FALSE_INTEGER: '0',
+  TRUE_KEYWORD: 'TRUE',
+  FALSE_KEYWORD: 'FALSE',
   REAL_FRACTION: '.0',
   NEGATIVE_ZERO_REAL: '-0.0',
   BLOB_PREFIX: 'X\'',
@@ -107,7 +107,7 @@ function quoteText(value) {
 }
 
 function renderIntegerLiteral(value) {
-  if (typeof value === 'boolean') return value ? SQL.TRUE_INTEGER : SQL.FALSE_INTEGER;
+  if (typeof value === 'boolean') return value ? SQL.TRUE_KEYWORD : SQL.FALSE_KEYWORD;
   if (typeof value === 'bigint') {
     if (value >= SQLITE_INT64_MIN && value <= SQLITE_INT64_MAX) return String(value);
     throw renderError(RENDER_ERROR_MSG.UNREPRESENTABLE_LITERAL_PREFIX + SQL_STORAGE_CLASS.INTEGER);

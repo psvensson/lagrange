@@ -79,7 +79,7 @@ const TERMINAL_PERSIST_SITES = Object.freeze({
   'operation-workflow-transition-persistence.js': 2,
   'operation-workflow-terminal-transition-repair.js': 1,
   // GROWTH_PROMOTE completion (never REPLACE: guarded by type === GROWTH_PROMOTE).
-  'operation-workflow-recovery-reconcile.js': 1,
+  'operation-workflow-growth-promote.js': 1,
 });
 const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-recovery-drain.js': 1,
@@ -89,8 +89,9 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-recovery-observation.js': 2,
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
-  'operation-workflow-dispatch-response-reconcile.js': 7,
-  'operation-workflow-recovery-reconcile.js': 2,
+  'operation-workflow-dispatch-response-reconcile.js': 2,
+  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-recovery-reconcile.js': 1,
   // M2: a refused failure of a partition ADD whose target is live completes
   // it (never a REPLACE: its post-intent refusal completes nothing).
   'operation-workflow-transition-persistence.js': 1,
@@ -103,6 +104,7 @@ const FAIL_OPERATION_CALLER_FILES = Object.freeze([
   'operation-workflow-dispatch-epoch-gate.js',
   'operation-workflow-dispatch-response-reconcile.js',
   'operation-workflow-executor-outcome-reconcile-methods.js',
+  'operation-workflow-growth-promote.js',
   'operation-workflow-owner-execution-lane.js',
   'operation-workflow-recovery-drain.js',
   'operation-workflow-recovery-observation.js',

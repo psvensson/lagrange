@@ -414,6 +414,7 @@ describe('ControlPlaneSetup', () => {
         const existingCoordinator = {
           nodeId: 'test-node',
           initialize: () => {},
+          bindReplicaPlacementOwnerFactory: () => {},
         };
 
         const result = await ControlPlaneSetup.create({

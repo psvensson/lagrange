@@ -99,16 +99,14 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
         if (this.isShutdown || !this.isLeader) {
           return;
         }
+        this.isJoiningExistingGroup = false;
         this.reassertDurableLeaderNodeId();
-        if (!this.isJoiningExistingGroup) {
-          this.updateRebalancerLeadership();
-        }
+        this.updateRebalancerLeadership();
         this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
           term,
           replicaId: this.replicaId,
           partitionId: this.partitionId,
-          rebalancerActive:
-            !this.isJoiningExistingGroup && this.isBackgroundWorkReady(),
+          rebalancerActive: this.isBackgroundWorkReady(),
         });
         this.resumeDurableMirrorReplicationWorkers();
         this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {

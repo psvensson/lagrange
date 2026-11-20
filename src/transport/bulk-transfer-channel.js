@@ -399,10 +399,17 @@ function createBulkTransferChannelRegistry(options = {}) {
         throw new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
       }
       const ws = createWebSocket(address, {maxPayload});
+      const ignorePostAbortSocketError = () => {};
       await new Promise((resolve, reject) => {
+        let settled = false;
         let onAbort = null;
+        let onOpen = null;
         let failDial = null;
         const cleanupDial = () => {
+          if (onOpen !== null) {
+            ws.removeListener(TRANSPORT_EVENT.OPEN, onOpen);
+            onOpen = null;
+          }
           if (failDial !== null) {
             ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
             failDial = null;
@@ -412,12 +419,24 @@ function createBulkTransferChannelRegistry(options = {}) {
             onAbort = null;
           }
         };
-        failDial = (error) => {
+        onOpen = () => {
+          if (settled) return;
+          settled = true;
           cleanupDial();
+          resolve();
+        };
+        failDial = (error) => {
+          if (settled) return;
+          settled = true;
+          cleanupDial();
+          ws.on(TRANSPORT_EVENT.ERROR, ignorePostAbortSocketError);
           reject(error);
         };
         onAbort = () => {
+          if (settled) return;
+          settled = true;
           cleanupDial();
+          ws.on(TRANSPORT_EVENT.ERROR, ignorePostAbortSocketError);
           ws.terminate();
           reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
         };
@@ -425,10 +444,7 @@ function createBulkTransferChannelRegistry(options = {}) {
           onAbort();
           return;
         }
-        ws.once(TRANSPORT_EVENT.OPEN, () => {
-          cleanupDial();
-          resolve();
-        });
+        ws.once(TRANSPORT_EVENT.OPEN, onOpen);
         ws.once(TRANSPORT_EVENT.ERROR, failDial);
         signal?.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
       });

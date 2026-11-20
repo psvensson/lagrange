@@ -282,12 +282,14 @@ function encodeTypedRowSet(columns, rows) {
 }
 
 /**
- * Encode statement parameters as TypedParams under the input-typing table.
+ * Encode statement parameters as TypedParams under the input-typing table
+ * (boolean inputs are encoded as INTEGER '1'/'0').
  * @param {Array<*>} values - Positional parameter values.
  * @return {{v: number, classes: string, cells: Array<?string>}}
  * @throws {SqlValueCodecError} UNREPRESENTABLE for a value outside the table
- *   (boolean, undefined, objects, NaN, a BigInt outside int64, a string with
- *   an unpaired surrogate) or a non-array (named parameters are not typed).
+ *   (undefined, functions, symbols, non-Uint8Array objects, NaN, a BigInt
+ *   outside int64, a string with an unpaired surrogate) or a non-array
+ *   (named parameters are not typed).
  */
 function encodeTypedParams(values) {
   if (!arrayIsArray(values)) throw unrepresentable(SQL_VALUE_CODEC_REFUSAL.SHAPE_INVALID);

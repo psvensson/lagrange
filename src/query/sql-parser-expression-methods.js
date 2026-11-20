@@ -526,8 +526,8 @@ const sqlParserExpressionMethods = {
 
   convertFunction(expr) {
     const {firstPart, funcName, argValues} = extractFunctionCallParts(expr, this.dialect);
-    const {over, orderBy} = convertWindowOrOrderOver(this, expr.over);
     if (funcName.toUpperCase() === PG_EXISTS_NAME) {
+      convertWindowOrOrderOver(this, expr.over);
       return convertExistsSubquery(this, argValues[0]);
     }
     const lowerFunc = funcName.toLowerCase();
@@ -535,26 +535,32 @@ const sqlParserExpressionMethods = {
       if (argValues.length !== 1) {
         throw unsupportedFeature(PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + funcName);
       }
+      const argument = this.convertExpression(argValues[0]);
+      const {over, orderBy} = convertWindowOrOrderOver(this, expr.over);
       return {
         type: EXPR_TYPE.AGGREGATE,
         function: DISTINCT_AGGREGATE_BY_SENTINEL[lowerFunc],
-        argument: this.convertExpression(argValues[0]),
+        argument,
         distinct: true,
         ...(orderBy ? {orderBy} : {}),
         ...(over ? {over} : {}),
       };
     }
     if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
+      convertWindowOrOrderOver(this, expr.over);
       return translateFunctionCall(funcName, argValues, this.convertExpression.bind(this));
     }
     if (firstPart?.type === KEYWORD_FUNCTION_NAME_TYPE && !expr.args) {
+      convertWindowOrOrderOver(this, expr.over);
       return {type: PG_EXPR_TYPE.FUNCTION_CALL, name: funcName.toUpperCase(), args: [],
         keyword: true};
     }
+    const args = argValues.map((arg) => this.convertExpression(arg));
+    const {over, orderBy} = convertWindowOrOrderOver(this, expr.over);
     return {
       type: PG_EXPR_TYPE.FUNCTION_CALL,
       name: funcName,
-      args: argValues.map((arg) => this.convertExpression(arg)),
+      args,
       ...(orderBy ? {orderBy} : {}),
       ...(over ? {over} : {}),
     };
@@ -633,7 +639,9 @@ const sqlParserExpressionMethods = {
 
   convertIsNull(expr, operator) {
     const leftOperand = this.convertExpression(expr.left);
-    const rightOperand = this.convertExpression(expr.right);
+    const rightOperand = expr.right?.type === EXT_EXPR_TYPE.BOOL ?
+      convertExternalLiteral(expr.right) :
+      this.convertExpression(expr.right);
     if (rightOperand !== null &&
       !(rightOperand.type === EXPR_TYPE.LITERAL && rightOperand.value === null)) {
       return {type: EXPR_TYPE.BINARY, operator, left: leftOperand, right: rightOperand};
@@ -718,11 +726,6 @@ const sqlParserExpressionMethods = {
     if (expr.args) {
       refuseUnreadKeys(expr.args, READ_AGGREGATE_ARG_KEYS, UNREAD_SYNTAX_SCOPE.AGGREGATE_ARGUMENTS);
     }
-    const {over, orderBy: overOrderBy} = convertWindowOrOrderOver(this, expr.over);
-    const argOrderBy = carriesValue(expr.args?.orderby) ?
-      this.convertOrderBy(expr.args.orderby) :
-      null;
-    const orderBy = overOrderBy || argOrderBy;
     let argument;
     if (expr.args?.expr?.type === EXT_EXPR_TYPE.STAR) {
       argument = {type: EXPR_TYPE.STAR, value: STAR_VALUE};
@@ -731,6 +734,11 @@ const sqlParserExpressionMethods = {
     } else {
       argument = {type: EXPR_TYPE.STAR, value: STAR_VALUE};
     }
+    const argOrderBy = carriesValue(expr.args?.orderby) ?
+      this.convertOrderBy(expr.args.orderby) :
+      null;
+    const {over, orderBy: overOrderBy} = convertWindowOrOrderOver(this, expr.over);
+    const orderBy = overOrderBy || argOrderBy;
     return {
       type: EXPR_TYPE.AGGREGATE,
       function: expr.name.toUpperCase(),

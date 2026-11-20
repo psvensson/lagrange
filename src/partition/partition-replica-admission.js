@@ -264,8 +264,7 @@ async function readCommittedConfChangeState(service) {
   }
   const includeLearners =
     service?.learnerFirstAdmission === true ||
-    service?.rebalanceCoordinator?.placementAdmissionEnabled === true ||
-    service?.role === RAFT_ROLE.LEARNER;
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true;
   const peerIds = includeLearners ?
     [
       ...(membership.voters || []),
@@ -439,7 +438,7 @@ const UNCOMMITTED_ADMISSION_OUTCOMES = Object.freeze(new Set([
 
 async function isOwnCommittedVoter(service) {
   const state = await readCommittedConfChangeState(service);
-  if (!state.available) {
+  if (!state.available || state.voterCount <= 0) {
     return false;
   }
   return state.peerIds.some(

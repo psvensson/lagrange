@@ -5,7 +5,7 @@
   "testFileDigests": {
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "efa0258beaaa77d2f6250b29d8efdd713d71824475895d6c8c649c65dc27503d",
     "test/partition/partition-participant-transaction-apply.test.js": "e831cd12a988324fb5ae9ab49139749b90236f41d44317830911850babe0789d",
-    "test/rebalancer/replica-placement-owner-core.test.js": "20419217f52b28f6fa07d111bfc0f10bd04bd793850240d0d1f8253202b291eb",
+    "test/rebalancer/replica-placement-owner-core.test.js": "32e43109042a032046049d1b0456560bccc08f12dbe7e8cbac6daacb5864e578",
     "test/partition/placement-admission-apply.test.js": "e646bb234508cd8b33037292110e4947f9fcef3096a9af395f9fd85cf1398d56",
     "test/convergence/dt-placement-owner-formation-drain.test.js": "027cd703d0077f0d0d193ea981d95149858a0f9797815c5e26d687625cff8df4",
     "test/convergence/formation-placement-drain-scenario.js": "c3f4aa5b9b39072f7cd3bbf367e59ba27f8dc57e955a9ac5416743f671b87b83"
@@ -25,8 +25,8 @@
     "src/rebalancer/replica-placement-owner-admission-statement.js": "7d9654f62cb107229e6f8ef438b00da2f2c699caefcd247e6840cc7e0e8dfcce",
     "src/rebalancer/rebalance-coordinator-operation-creation-support.js": "6cb2795a73999542beb8cc9d312f1d038819401339988fa856e7c251c719893a",
     "src/rebalancer/replica-status.js": "da0d75bea5e3ba4c49b57663b2a66da25a6a0ee340361116f3a3d797f21f16d5",
-    "src/bootstrap/shared/control-plane-setup.js": "969de0fdeee19b8ac7e0767ae7f9d051fb6b89f07d121783eaa2c911a08b66be",
-    "src/control-plane/membership-publication-coordinator-reconcile.js": "093052558e123888b332fb909a54753f915e293d190c9473d6d12e9e9aa16ff5",
+    "src/bootstrap/shared/control-plane-setup.js": "7664f0cd94023fd95d1f38a75eedcdb3069451f58b7c58c220cbce13d5a3ed87",
+    "src/control-plane/membership-publication-coordinator-reconcile.js": "6b5469bddc9c52f3ebb5261fc1394a977d4baf45e88f887e648a6287b1f2864e",
     "dependency-cruiser.config.cjs": "e5edb028bdf55d736c6654a701c0e1c4b310ff713b8b633cbac5f1405ba55665"
   },
   "source": {

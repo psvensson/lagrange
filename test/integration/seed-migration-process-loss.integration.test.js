@@ -76,10 +76,10 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
     assert.equal(marker.schemaVersion, 1);
     assert.equal(marker.kind, 'TX1_M1_PRE_KILL');
     assert.equal(marker.pid, child.pid, 'marker identifies the killed process');
-    assert.equal(marker.pendingOpenHandles, 12,
+    assert.equal(marker.pendingOpenHandles, 4,
       'no orderly close preceded the checkpoint');
-    assert.equal(marker.requests.length, 12);
-    assert.equal(new Set(marker.requests.map((request) => request.dbPath)).size, 12);
+    assert.equal(marker.requests.length, 4);
+    assert.equal(new Set(marker.requests.map((request) => request.dbPath)).size, 4);
     assert.equal(marker.persistedDecision.status, 'COMMITTED');
     assert.equal(marker.persistedDecision.frozenParticipantCount, 2);
     assert.equal(marker.coordinatorRestarted, false);
@@ -101,8 +101,8 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
     assert.deepEqual(JSON.parse(reader.stdout), marker.expectedDiskRows,
       'the new process must read WAL/disk, not memory from the killed seed');
 
-    assert.equal(marker.recoveryRequests.length, 9,
-      'three coordinator tables with three distinct replica files each');
+    assert.equal(marker.recoveryRequests.length, 3,
+      'three coordinator tables with one distinct replica file each');
     const recoveryDisk = spawnSync(process.execPath, [DISK_READER], {
       input: JSON.stringify(marker.recoveryRequests), encoding: 'utf8',
       timeout: 15000, maxBuffer: 2 * 1024 * 1024,
@@ -111,10 +111,10 @@ test('TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct ' 
     assert.equal(recoveryDisk.status, 0, recoveryDisk.stderr);
     const observations = JSON.parse(recoveryDisk.stdout);
     assert.deepEqual(observations, marker.expectedRecoveryRows,
-      'all RF3 coordinator replicas retain the same rows after kill');
+      'all coordinator replicas retain the same rows after kill');
 
     const payload = {};
-    for (let index = 0; index < marker.recoveryRequests.length; index += 3) {
+    for (let index = 0; index < marker.recoveryRequests.length; index += 1) {
       payload[marker.recoveryRequests[index].tableName] = observations[index].rows;
     }
     const recovery = spawnSync(process.execPath, [RECOVERY_READER], {

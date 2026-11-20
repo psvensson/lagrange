@@ -89,9 +89,13 @@ function transitionLocalPromotedLearners(handler, promoteReplicaIds) {
     const svc = handler.localServices.get(replicaId);
     if (svc && svc.role === RAFT_ROLE.LEARNER) {
       svc.role = RAFT_ROLE.FOLLOWER;
+      svc.isJoiningExistingGroup = false;
       svc.learnerBootstrapped = true;
       svc.cancelLearnerPromotionMonitor?.();
       svc.queueRoleUpdate?.(RAFT_ROLE.FOLLOWER);
+      if (svc.isLeader === true) {
+        svc.updateRebalancerLeadership?.();
+      }
     }
   }
 }
@@ -294,11 +298,13 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
       if (committedVotersReached) {
         transitionLocalPromotedLearners(this, promoteReplicaIds);
       }
+      const leaderId = target.service.readLiveRaftLeaderId?.() || null;
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.INITIATED,
         {
           [ReplicaOperationField.PROPOSAL]: proposal,
           committedVotersReached,
+          leaderId,
           partitionId: target.fields.partitionId,
           replicaId: target.service.replicaId,
           nodeId: this.nodeId,

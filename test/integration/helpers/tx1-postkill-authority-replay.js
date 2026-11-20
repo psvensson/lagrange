@@ -11,8 +11,8 @@ import {DistributedTransactionCoordinator} from
 
 const {transactionId, transactionRequests, participantRequests} =
   JSON.parse(fs.readFileSync(process.stdin.fd, 'utf8'));
-assert.equal(transactionRequests.length, 3);
-assert.equal(participantRequests.length, 3);
+assert.equal(transactionRequests.length, 1);
+assert.equal(participantRequests.length, 1);
 let scans = 0;
 const fanouts = [];
 let rollbacks = 0;
@@ -137,7 +137,8 @@ assert.equal(JSON.stringify(diskRows()), original,
 assert.ok(statusWrites.every((row) => row.status !== 'COMMITTED'));
 process.stdout.write(JSON.stringify({
   kind: 'TX1_M1_POSTKILL_DISK_REREAD', transactionId,
-  physicalReplicaFiles: 6, scans, forgedRollbackIgnored: true,
+  physicalReplicaFiles: transactionRequests.length + participantRequests.length,
+  scans, forgedRollbackIgnored: true,
   unavailableHeld: true, malformedAuthorityHeld: true,
   boundCommitAttempts: fanouts.length,
   rollbackCalls: rollbacks, decisionWrites,

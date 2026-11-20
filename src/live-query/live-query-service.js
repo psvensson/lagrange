@@ -349,41 +349,56 @@ function buildProbeTableDefinitions(normalizedWhere, schemas, options = {}) {
   const primarySourceName = primaryBinding?.tableName || primaryTableName;
 
   const uniqueEntries = [];
-  const entriesByName = new Map();
+  const entriesByProbeKey = new Map();
+  const entriesBySourceKey = new Map();
+  const addSourceMapping = (sourceKey, entry) => {
+    const bucket = entriesBySourceKey.get(sourceKey) || [];
+    if (!bucket.includes(entry)) bucket.push(entry);
+    entriesBySourceKey.set(sourceKey, bucket);
+  };
   const ensureTable = (probeName, sourceTableName = probeName) => {
     const probeKey = probeName.toLowerCase();
-    const sourceKey = (sourceTableName || probeName).toLowerCase();
-    const existing = entriesByName.get(probeKey) || entriesByName.get(sourceKey);
+    const sourceName = sourceTableName || probeName;
+    const sourceKey = sourceName.toLowerCase();
+    const existing = entriesByProbeKey.get(probeKey);
     if (existing) {
-      entriesByName.set(probeKey, existing);
-      entriesByName.set(sourceKey, existing);
+      addSourceMapping(sourceKey, existing);
       return existing;
     }
-    const entry = {
-      tableName: probeName,
-      sourceTableName: sourceTableName || probeName,
-      columnsByLower: new Map(),
-    };
+    const entry = {tableName: probeName, sourceTableName: sourceName, columnsByLower: new Map()};
     uniqueEntries.push(entry);
-    entriesByName.set(probeKey, entry);
-    entriesByName.set(sourceKey, entry);
+    entriesByProbeKey.set(probeKey, entry);
+    addSourceMapping(sourceKey, entry);
     return entry;
   };
 
   const primaryEntry = ensureTable(primaryTableName, primarySourceName);
-  for (const binding of bindings) {
-    ensureTable(binding.alias || binding.tableName, binding.tableName);
-  }
+  for (const b of bindings) ensureTable(b.alias || b.tableName, b.tableName);
   for (const schema of schemaList) {
-    const targetEntry = schema.tableName ?
-      (entriesByName.get(schema.tableName.toLowerCase()) || ensureTable(schema.tableName)) :
-      primaryEntry;
-    registerSchemaColumns(targetEntry, schema.columns);
+    if (!schema.tableName) {
+      registerSchemaColumns(primaryEntry, schema.columns);
+      continue;
+    }
+    const schemaKey = schema.tableName.toLowerCase();
+    const sourceTargets = entriesBySourceKey.get(schemaKey) || [];
+    const targets = sourceTargets.length > 0 ?
+      sourceTargets :
+      [entriesByProbeKey.get(schemaKey) || ensureTable(schema.tableName)];
+    for (const targetEntry of targets) registerSchemaColumns(targetEntry, schema.columns);
   }
   for (const ref of refs) {
-    const targetEntry = ref.table ?
-      (entriesByName.get(ref.table.toLowerCase()) || ensureTable(ref.table)) :
-      primaryEntry;
+    let targetEntry = primaryEntry;
+    if (ref.table) {
+      targetEntry = entriesByProbeKey.get(ref.table.toLowerCase()) || null;
+      if (!targetEntry) {
+        const singleSchema = schemaList.length === 1 ? schemaList[0] : null;
+        const inferredSource = singleSchema?.tableName ?
+          singleSchema.tableName :
+          ref.table;
+        targetEntry = ensureTable(ref.table, inferredSource);
+        if (singleSchema) registerSchemaColumns(targetEntry, singleSchema.columns);
+      }
+    }
     const lowerCol = ref.column.toLowerCase();
     if (!targetEntry.columnsByLower.has(lowerCol)) {
       targetEntry.columnsByLower.set(lowerCol, {name: ref.column});

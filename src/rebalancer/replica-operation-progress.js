@@ -504,20 +504,17 @@ function readReplicaOperationRecordStatus(record) {
 }
 
 function resolveReplicaOperationSemanticPhaseFromRecord(record) {
-  const explicitSemanticPhase =
-    record?.[REPLICA_OPERATION_RECORD_FIELD.SEMANTIC_PHASE];
-  if (
-    typeof explicitSemanticPhase === LOCAL_STR_STRING &&
-    Object.values(REPLICA_OPERATION_SEMANTIC_PHASE)
-      .includes(explicitSemanticPhase)
-  ) {
-    return explicitSemanticPhase;
-  }
-  return resolveReplicaOperationSemanticPhase(
+  const computedPhase = resolveReplicaOperationSemanticPhase(
     readReplicaOperationRecordType(record),
     readReplicaOperationRecordWorkflowStep(record),
     readReplicaOperationRecordStatus(record),
   );
+  if (computedPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN) return computedPhase;
+  const explicit = record?.[REPLICA_OPERATION_RECORD_FIELD.SEMANTIC_PHASE];
+  return typeof explicit === LOCAL_STR_STRING &&
+      Object.values(REPLICA_OPERATION_SEMANTIC_PHASE).includes(explicit) ?
+    explicit :
+    computedPhase;
 }
 
 function isTerminalReplicaOperationStatusForType(operationType, status) {

@@ -163,13 +163,30 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
+  isLearnerTargetAddOperation(operation) {
+    return Boolean(
+      operation &&
+      operation.type === OperationType.ADD &&
+      (operation.asLearner === true ||
+        operation.as_learner === true ||
+        this.placementAdmissionEnabled === true),
+    );
+  }
+
   buildObservedTargetReplicaObservationOptions(operation) {
-    return this.isPreSyncCreateOperation(operation) ?
-      {
-        ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
-        ignoreUnclaimedPreRuntimeFailedCreate: true,
-      } :
-      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
+    const ignoreUnclaimedPreRuntimeFailedCreate =
+      this.isPreSyncCreateOperation(operation);
+    const allowActiveLearner = this.isLearnerTargetAddOperation(operation);
+    if (!ignoreUnclaimedPreRuntimeFailedCreate && !allowActiveLearner) {
+      return EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS;
+    }
+    return {
+      ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+      ...(ignoreUnclaimedPreRuntimeFailedCreate ?
+        {ignoreUnclaimedPreRuntimeFailedCreate: true} :
+        {}),
+      ...(allowActiveLearner ? {allowActiveLearner: true} : {}),
+    };
   }
 
   hasObservedOperationRowTargetProgress(operation) {

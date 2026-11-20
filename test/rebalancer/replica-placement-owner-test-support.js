@@ -402,6 +402,7 @@ export async function runGrowthPromoteProductionWitness({
         replicaId,
         nodeId,
         role: RAFT_ROLE.LEARNER,
+        learnerFirstAdmission: true,
         learnerBootstrapped: false,
         raft: {
           subscribe: (evt, cb) => {
@@ -488,8 +489,36 @@ export async function runGrowthPromoteProductionWitness({
       deriveRaftRsPeerId(firstLearnerId),
       deriveRaftRsPeerId(secondLearnerId),
     ];
+    let jointPhase = true;
     leaderService.controllablePort.setConfChangeHandler((change) => {
       if (change?.type === 'growth-promote') {
+        if (jointPhase) {
+          // Finding 3 witness: enter joint consensus (votersOutgoing non-empty).
+          // Even if MEMBERSHIP_CHANGED fires and even if SERVICES rows are updated,
+          // learners must not transition to FOLLOWER while joint, and GROWTH_PROMOTE
+          // must remain incomplete with its placement hold retained.
+          learnerSvc1.triggerMembershipChanged({
+            joint: true,
+            role: 'voter',
+            confState: {
+              voters: committedVoters,
+              votersOutgoing: [deriveRaftRsPeerId(leaderService.replicaId)],
+            },
+          });
+          learnerSvc2.triggerMembershipChanged({
+            joint: true,
+            role: 'voter',
+            confState: {
+              voters: committedVoters,
+              votersOutgoing: [deriveRaftRsPeerId(leaderService.replicaId)],
+            },
+          });
+          return {
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            operationId: change.operationId,
+            promotedReplicaIds: change.promoteReplicaIds,
+          };
+        }
         learnerSvc1.triggerMembershipChanged({
           role: 'voter',
           confState: {voters: committedVoters, votersOutgoing: []},
@@ -508,12 +537,10 @@ export async function runGrowthPromoteProductionWitness({
     });
     leaderService.controllablePort.committedMembershipHandler = () => ({
       kind: 'committed',
-      voters:
-        learnerSvc1.role === RAFT_ROLE.FOLLOWER &&
-        learnerSvc2.role === RAFT_ROLE.FOLLOWER ?
-          committedVoters :
-          [deriveRaftRsPeerId(leaderService.replicaId)],
-      votersOutgoing: [],
+      voters: committedVoters,
+      votersOutgoing: jointPhase ?
+        [deriveRaftRsPeerId(leaderService.replicaId)] :
+        [],
       learners: [],
       learnersNext: [],
       identities: {
@@ -523,8 +550,52 @@ export async function runGrowthPromoteProductionWitness({
       },
     });
 
-    const reconciled = await coordinator.workflowOwner.reconcileOperationLifecycle(
+    // While in joint consensus (votersOutgoing non-empty), learner role observations
+    // do not promote learners early, and even if SERVICES rows report FOLLOWER,
+    // GROWTH_PROMOTE stays in SYNCING with its placement hold retained:
+    const jointReconciled = await coordinator.workflowOwner.reconcileOperationLifecycle(
       decodedInterruptedOp,
+      {cause: 'recovery'},
+    );
+    assert.equal(jointReconciled, false);
+    assert.equal(learnerSvc1.role, RAFT_ROLE.LEARNER);
+    assert.equal(learnerSvc2.role, RAFT_ROLE.LEARNER);
+    syncCacheFromDb();
+    // Simulate premature SERVICES role update during joint consensus and verify
+    // recovery / reconcile still refuses terminal completion until leave-joint commits:
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
+      ...cache.get(TABLES.SERVICES, firstLearnerId),
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
+      ...cache.get(TABLES.SERVICES, secondLearnerId),
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    });
+    const jointWithFollowerServices =
+      await coordinator.workflowOwner.reconcileOperationLifecycle(
+        coordinator.repository.rowToOperation(
+          cache.get(TABLES.REPLICA_OPERATIONS, promoteRow.operation_id),
+        ),
+        {cause: 'recovery'},
+      );
+    assert.equal(jointWithFollowerServices, false);
+    syncCacheFromDb();
+    const stillJointRow = cache.get(
+      TABLES.REPLICA_OPERATIONS,
+      promoteRow.operation_id,
+    );
+    assert.equal(stillJointRow.workflow_step, WORKFLOW_STEP.SYNCING);
+    assert.equal(stillJointRow.completed_at, null);
+    assert.equal(releasedHoldCount, 0);
+
+    // Leave joint consensus (votersOutgoing empty) -> now authoritative committed
+    // membership is non-joint, learners transition to FOLLOWER (clearing isJoiningExistingGroup),
+    // and GROWTH_PROMOTE completes and releases its placement hold:
+    jointPhase = false;
+    const reconciled = await coordinator.workflowOwner.reconcileOperationLifecycle(
+      coordinator.repository.rowToOperation(stillJointRow),
       {cause: 'recovery'},
     );
     assert.equal(reconciled, true);
@@ -532,6 +603,8 @@ export async function runGrowthPromoteProductionWitness({
 
     assert.equal(learnerSvc1.role, RAFT_ROLE.FOLLOWER);
     assert.equal(learnerSvc2.role, RAFT_ROLE.FOLLOWER);
+    assert.equal(learnerSvc1.isJoiningExistingGroup, false);
+    assert.equal(learnerSvc2.isJoiningExistingGroup, false);
     assert.equal(
       cache.get(TABLES.SERVICES, firstLearnerId)[COLUMN.RAFT_ROLE],
       RAFT_ROLE.FOLLOWER,
@@ -560,6 +633,337 @@ export async function runGrowthPromoteProductionWitness({
     assert.ok(releasedHoldCount >= 1);
 
     attachment.detach();
+    await coordinator.shutdown();
+  }, {systemTableCache: cache});
+}
+
+export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
+  createSimpleSystemCache,
+  nodeRow,
+  seededPartitionRow,
+}) {
+  const fiveNodes = [
+    nodeRow('n1', 'h1'),
+    nodeRow('n2', 'h2'),
+    nodeRow('n3', 'h3'),
+    nodeRow('n4', 'h4'),
+    nodeRow('n5', 'h5'),
+  ];
+  const nodeAuthority = {
+    subscribe: () => () => {},
+    scheduleRefresh: () => {},
+    answerCommittedNodes: () => ({
+      state: 'ready',
+      epoch: {publicationEpoch: 12},
+      nodeRows: fiveNodes,
+      formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 12},
+    }),
+  };
+
+  const r1 = `${LEDGER_PARTITION_ID}-r1`;
+  const r2 = `${LEDGER_PARTITION_ID}-r2`;
+  const r3 = `${LEDGER_PARTITION_ID}-r3`;
+  const l4 = `${LEDGER_PARTITION_ID}-r4`;
+  const l5 = `${LEDGER_PARTITION_ID}-r5`;
+
+  const servicesRows = [
+    {
+      [COLUMN.REPLICA_ID]: r1,
+      [COLUMN.SERVICE_ID]: r1,
+      [COLUMN.PARTITION_ID]: LEDGER_PARTITION_ID,
+      [COLUMN.NODE_ID]: 'n1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: r2,
+      [COLUMN.SERVICE_ID]: r2,
+      [COLUMN.PARTITION_ID]: LEDGER_PARTITION_ID,
+      [COLUMN.NODE_ID]: 'n2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: r3,
+      [COLUMN.SERVICE_ID]: r3,
+      [COLUMN.PARTITION_ID]: LEDGER_PARTITION_ID,
+      [COLUMN.NODE_ID]: 'n3',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: l4,
+      [COLUMN.SERVICE_ID]: l4,
+      [COLUMN.PARTITION_ID]: LEDGER_PARTITION_ID,
+      [COLUMN.NODE_ID]: 'n4',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+    },
+    {
+      [COLUMN.REPLICA_ID]: l5,
+      [COLUMN.SERVICE_ID]: l5,
+      [COLUMN.PARTITION_ID]: LEDGER_PARTITION_ID,
+      [COLUMN.NODE_ID]: 'n5',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEARNER,
+    },
+  ];
+  const cache = createSimpleSystemCache(
+    [seededPartitionRow(LEDGER_PARTITION_ID, 'n2')],
+    servicesRows,
+  );
+  cache.get = (tableName, id) => {
+    if (tableName === TABLES.PARTITIONS) {
+      return cache.getAll(TABLES.PARTITIONS).find(
+        (r) => r[COLUMN.PARTITION_ID] === id,
+      ) || null;
+    }
+    if (tableName === TABLES.SERVICES) {
+      return servicesRows.find(
+        (r) => r[COLUMN.REPLICA_ID] === id || r[COLUMN.SERVICE_ID] === id,
+      ) || null;
+    }
+    if (tableName === TABLES.REPLICA_OPERATIONS) {
+      return cache.getAll(TABLES.REPLICA_OPERATIONS).find(
+        (r) => r.operation_id === id,
+      ) || null;
+    }
+    return null;
+  };
+  const baseGetAll = cache.getAll.bind(cache);
+  cache.getAll = (tableName) =>
+    tableName === TABLES.SERVICES ? [...servicesRows] : baseGetAll(tableName);
+  cache.filter = (tableName, pred) => cache.getAll(tableName).filter(pred);
+
+  await onLedgerLeader(async (leaderService) => {
+    leaderService.controllablePort.setProposeHandler(async (entry) => {
+      assert.equal(applyCommitted(leaderService, entry), null);
+    });
+    const syncCacheFromDb = () => {
+      for (const row of ledgerRows(leaderService)) {
+        cache.applySystemTableChange(
+          TABLES.REPLICA_OPERATIONS,
+          CDC_OPERATION.UPDATE,
+          row,
+        );
+      }
+    };
+
+    const dispatchedTargets = [];
+    let forcePersistentNotLeader = false;
+    let releasedHoldCount = 0;
+
+    const messageRouter = {
+      deliver: async (target, payload) => {
+        dispatchedTargets.push(target);
+        const targetNodeId = target.split('/')[0];
+        if (forcePersistentNotLeader || targetNodeId === 'n1') {
+          return buildDeliveryEnvelope(
+            {acknowledged: true},
+            {
+              status: ReplicaOperationResponseStatus.INITIATED,
+              [ReplicaOperationField.PROPOSAL]: {
+                outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+                reason: 'not_leader',
+                retryable: true,
+                leaderId: deriveRaftRsPeerId(r2),
+                operationId: payload[ReplicaOperationField.OPERATION_ID],
+              },
+              leaderId: deriveRaftRsPeerId(r2),
+              committedVotersReached: false,
+            },
+          );
+        }
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          {
+            status: ReplicaOperationResponseStatus.INITIATED,
+            [ReplicaOperationField.PROPOSAL]: {
+              outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+              operationId: payload[ReplicaOperationField.OPERATION_ID],
+              promotedReplicaIds: payload[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+            },
+            committedVotersReached: true,
+          },
+        );
+      },
+      registerHandler: () => {},
+      unregisterHandler: () => {},
+    };
+
+    const sqlQueryEngine = {
+      execute: async (sql, params = []) => {
+        const stmt = leaderService.db.prepare(sql);
+        if (/^\s*SELECT/iu.test(sql)) {
+          return {rows: stmt.all(...params)};
+        }
+        const info = stmt.run(...params);
+        syncCacheFromDb();
+        return {rows: [], changes: info.changes};
+      },
+    };
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'n2',
+      systemTableCache: cache,
+      messageRouter,
+      controlPlaneReadinessService: {
+        serveEligibilityOwner: nodeAuthority,
+        getNodeReadinessSync: () => ({ready: true}),
+        getPriorityRecoveryPlanningSnapshotSync: () => null,
+      },
+      cdcIntegrationService: {
+        sqlQueryEngine,
+        registerTableChangeCallback: () => {},
+        unregisterTableChangeCallback: () => {},
+      },
+      tablePolicyService: {getReplicationFactor: () => 5},
+      sqlQueryEngine,
+      transactionCoordinator: {
+        begin: async () => ({
+          execute: async (sql, params = []) => sqlQueryEngine.execute(sql, params),
+          commit: async () => {},
+          rollback: async () => {},
+        }),
+      },
+    });
+    coordinator.repository.persistOperationUpdate = async (projected, options = {}) => {
+      leaderService.db.prepare(
+        `UPDATE replica_operations
+            SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+                error_message = ?, steps_history = ?
+          WHERE operation_id = ?`,
+      ).run(
+        projected.status,
+        projected.workflowStep,
+        projected.updatedAt ?? NOW_MS,
+        projected.completedAt ?? null,
+        projected.errorMessage ?? null,
+        JSON.stringify(projected.stepsHistory ?? []),
+        projected.operationId,
+      );
+      syncCacheFromDb();
+      return options.returnDisposition ?
+        {persisted: true, disposition: 'applied'} :
+        true;
+    };
+    coordinator.initialize();
+    coordinator.workflowOwner.releasePlacementHold = async () => {
+      releasedHoldCount += 1;
+    };
+
+    // 1. 3->5 growth operation admitted under old leader 'n1', then 'n2' elected leader while
+    // 'n1' remains alive as a follower returning `not_leader` (pointing to r2 on 'n2'):
+    const opId1 = 'pl-promote-3to5-redirect';
+    const initialHistory = JSON.stringify([
+      {
+        step: WORKFLOW_STEP.PENDING,
+        timestamp: NOW_MS,
+        promoteReplicaIds: [l4, l5],
+      },
+    ]);
+    leaderService.db.prepare(
+      `INSERT INTO replica_operations (
+        operation_id, type, partition_id, entity_type, entity_id,
+        replica_id, source_node_id, target_node_id,
+        source_replica_id, status, workflow_step, created_at, updated_at, steps_history
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      opId1,
+      OperationType.GROWTH_PROMOTE,
+      LEDGER_PARTITION_ID,
+      'partition',
+      LEDGER_PARTITION_ID,
+      l4,
+      'n2',
+      'n1',
+      l5,
+      ReplicaStatus.PENDING,
+      WORKFLOW_STEP.PENDING,
+      NOW_MS,
+      NOW_MS,
+      initialHistory,
+    );
+    syncCacheFromDb();
+
+    const op1 = coordinator.repository.rowToOperation(
+      cache.get(TABLES.REPLICA_OPERATIONS, opId1),
+    );
+    // First dispatch goes to old leader 'n1', receives `not_leader` with leaderId=r2,
+    // updates targetNodeId to 'n2', and defers to SYNCING:
+    const firstAttempt = await coordinator.workflowOwner.executeOperationFromReconcilePath(op1);
+    assert.equal(firstAttempt.status, 'in_progress');
+    assert.equal(dispatchedTargets[0], 'n1/service/replica-handler');
+    assert.equal(op1.targetNodeId, 'n2');
+    assert.equal(op1.operationId, opId1);
+    assert.deepEqual(op1[ReplicaOperationField.PROMOTE_REPLICA_IDS], [l4, l5]);
+
+    // Second reconcile dispatches to new leader 'n2' and completes:
+    const secondAttempt = await coordinator.workflowOwner.reconcileOperationLifecycle(
+      op1,
+      {cause: 'observed_progress'},
+    );
+    assert.equal(secondAttempt, true);
+    assert.equal(dispatchedTargets[1], 'n2/service/replica-handler');
+    assert.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
+    assert.equal(op1.status, ReplicaStatus.ACTIVE);
+    assert.equal(releasedHoldCount, 1);
+
+    // 2. Persistent refusal case: once in SYNCING, repeated retryable refusals do NOT count
+    // as workflow progress, so reconcileTimeoutOperation enforces the step timeout budget
+    // and fails the operation cleanly (releasing its placement hold):
+    forcePersistentNotLeader = true;
+    const opId2 = 'pl-promote-3to5-timeout';
+    const staleStartMs = NOW_MS - 120_000;
+    const staleHistory = JSON.stringify([
+      {
+        step: WORKFLOW_STEP.SYNCING,
+        timestamp: staleStartMs,
+        promoteReplicaIds: [l4, l5],
+      },
+    ]);
+    leaderService.db.prepare(
+      `INSERT INTO replica_operations (
+        operation_id, type, partition_id, entity_type, entity_id,
+        replica_id, source_node_id, target_node_id,
+        source_replica_id, status, workflow_step, created_at, updated_at, steps_history
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      opId2,
+      OperationType.GROWTH_PROMOTE,
+      LEDGER_PARTITION_ID,
+      'partition',
+      LEDGER_PARTITION_ID,
+      l4,
+      'n2',
+      'n1',
+      l5,
+      ReplicaStatus.SYNCING,
+      WORKFLOW_STEP.SYNCING,
+      staleStartMs,
+      staleStartMs,
+      staleHistory,
+    );
+    syncCacheFromDb();
+
+    const op2 = coordinator.repository.rowToOperation(
+      cache.get(TABLES.REPLICA_OPERATIONS, opId2),
+    );
+    const inPlaceProgress = await coordinator.workflowOwner.reconcileOperationLifecycle(
+      op2,
+      {cause: 'timeout', now: NOW_MS},
+    );
+    assert.equal(
+      inPlaceProgress,
+      false,
+      'in-place SYNCING retry deferral must not report workflow progress to timeout reconciliation',
+    );
+    await coordinator.workflowOwner.reconcileTimeoutOperation(op2, NOW_MS);
+    syncCacheFromDb();
+    const timedOutRow = cache.get(TABLES.REPLICA_OPERATIONS, opId2);
+    assert.equal(timedOutRow.workflow_step, WORKFLOW_STEP.FAILED);
+    assert.equal(timedOutRow.status, ReplicaStatus.FAILED);
+    assert.equal(releasedHoldCount, 2);
+
     await coordinator.shutdown();
   }, {systemTableCache: cache});
 }

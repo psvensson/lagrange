@@ -448,4 +448,36 @@ test('aliased live query preserves declared COLLATE NOCASE and affinity on compi
   );
   aliasedService.cleanup();
   unaliasedService.cleanup();
+
+  // Self-join with two aliases (u1 and u2) of the same table preserves both probe tables
+  // and their declared NOCASE collation:
+  const selfJoinAst = new SQLParser(
+    'SELECT u1.id FROM users AS u1 JOIN users AS u2 ON u1.id = u2.id WHERE u1.name = \'ALICE\' AND u2.name = \'alice\'',
+  ).parse();
+  t.same(
+    extractTableBindings(selfJoinAst),
+    [
+      {tableName: 'users', alias: 'u1'},
+      {tableName: 'users', alias: 'u2'},
+    ],
+    'extractTableBindings preserves both self-join aliases',
+  );
+  const selfJoinService = new LiveQueryService({parsedQuery: selfJoinAst, systemCache});
+  t.equal(
+    selfJoinService.evaluatePredicate({
+      u1: {id: 1, name: 'alice'},
+      u2: {id: 1, name: 'ALICE'},
+    }),
+    true,
+    'self-join predicate creates both u1 and u2 probe tables with NOCASE collation',
+  );
+  t.equal(
+    selfJoinService.evaluatePredicate({
+      u1: {id: 1, name: 'alice'},
+      u2: {id: 1, name: 'bob'},
+    }),
+    false,
+    'self-join predicate distinguishes u1 and u2 values',
+  );
+  selfJoinService.cleanup();
 });

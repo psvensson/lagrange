@@ -491,6 +491,7 @@ class OperationWorkflowTransitionPersistence
     // The holder's own committed terminal row releases the ledger self-move
     // hold it registered on this node (a no-op for every other operation).
     releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
+    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
 
     await this.releaseReservationForOperation(operation);
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -732,6 +733,7 @@ class OperationWorkflowTransitionPersistence
     // The holder's own committed terminal row releases the ledger self-move
     // hold it registered on this node (a no-op for every other operation).
     releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
+    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
 
     await this.releaseReservationForOperation(operation);
     this.clearDeferredSafetyBlockState(operation.operationId);

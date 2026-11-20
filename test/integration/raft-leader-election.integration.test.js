@@ -112,14 +112,14 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
         replicasPerPartition.set(partitionId, count + 1);
       }
 
-      // Verify key system partitions have 3 replicas
+      // Verify key system partitions have 1 founding replica on the virgin seed
       const systemPartitions = ['nodes-p1', 'services-p1', 'tables-p1', 'partitions-p1'];
       for (const partitionId of systemPartitions) {
         const replicaCount = replicasPerPartition.get(partitionId) || 0;
         t.equal(
           replicaCount,
-          3,
-          `${partitionId} should have 3 replicas (has ${replicaCount})`,
+          1,
+          `${partitionId} should have 1 founding replica on virgin seed (has ${replicaCount})`,
         );
       }
 
@@ -255,10 +255,10 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
       }
 
       // =========================================================================
-      // PHASE 3: Verify leader/follower relationship
+      // PHASE 3: Verify leader/follower relationship (1-voter founding on seed)
       // =========================================================================
       t.ok(leaderService, 'should have a leader for nodes-p1');
-      t.ok(followerServices.length > 0, 'should have followers for nodes-p1');
+      t.equal(followerServices.length, 0, 'single-node seed has no co-located follower replicas under 1-voter founding');
 
       if (leaderService) {
         // Leader should know it's the leader
@@ -270,27 +270,6 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
         t.ok(
           leaderReportedId.includes(leaderService.replicaId),
           'leader should report itself as leader',
-        );
-
-        // Verify followers know who the leader is
-        let followersWithLeader = 0;
-        for (const follower of followerServices) {
-          const followerLeaderId = follower.getLeaderId();
-          if (followerLeaderId) {
-            followersWithLeader++;
-            // Follower's leader ID should contain the leader's replica ID
-            t.ok(
-              followerLeaderId.includes(leaderService.replicaId),
-              `follower ${follower.replicaId} should recognize leader`,
-            );
-          }
-        }
-
-        // At least some followers should recognize the leader
-        const followerCount = followerServices.length;
-        t.ok(
-          followersWithLeader > 0,
-          `some followers should recognize leader (${followersWithLeader}/${followerCount})`,
         );
       }
     } finally {

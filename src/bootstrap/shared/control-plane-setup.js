@@ -412,7 +412,7 @@ class ControlPlaneSetup {
     if (!rebalanceCoordinator.transactionCoordinator) {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
-    rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
+    rebalanceCoordinator.bindReplicaPlacementOwnerFactory?.(
       (ledgerPartitionService) =>
         ControlPlaneSetup.attachReplicaPlacementOwner({
           nodeId,

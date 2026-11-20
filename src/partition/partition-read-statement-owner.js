@@ -12,9 +12,13 @@ const readStatementByDatabase = /* @__PURE__ */ new WeakMap();
 function preparePartitionReadStatement(database, sql) {
   const retained = readStatementByDatabase.get(database);
   if (retained?.sql === sql) {
+    retained.statement.raw?.(false);
+    retained.statement.safeIntegers?.(false);
     return retained.statement;
   }
   const statement = database.prepare(sql);
+  statement.raw?.(false);
+  statement.safeIntegers?.(false);
   readStatementByDatabase.set(database, {sql, statement});
   return statement;
 }

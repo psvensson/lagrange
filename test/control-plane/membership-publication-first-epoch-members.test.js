@@ -698,6 +698,10 @@ const NOT_READERS = Object.freeze({
     'producer',
   'src/control-plane/membership-publication-coordinator-reconcile-helpers.js':
     'producer',
+  'src/control-plane/membership-publication-formation-record.js':
+    'producer (formation latch record)',
+  'src/control-plane/membership-publication-formation-transition-command.js':
+    'producer (formation transition record)',
   'src/control-plane/membership-publication-lifecycle-summary.js': 'producer',
   'src/control-plane/membership-publication-planning-evidence.js': 'producer',
   'src/control-plane/membership-publication-priority-partition-readiness-data.js':

@@ -943,9 +943,10 @@ function seedSystemRows(cache, nowMs) {
     }));
   });
   for (const schema of SYSTEM_TABLE_SCHEMAS) {
-    const replicaIds = getInitialReplicaIds(schema.tableName);
+    const initialReplicaIds = getInitialReplicaIds(schema.tableName);
     const partitionId = INITIAL_PARTITION_IDS[schema.tableName];
-    if (!partitionId || !replicaIds) continue;
+    if (!partitionId || !initialReplicaIds) continue;
+    const replicaIds = [`${partitionId}-r1`, `${partitionId}-r2`, `${partitionId}-r3`];
     insert(TABLES.TABLES, seedTableRow(schema, nowMs));
     insert(TABLES.PARTITIONS, seedPartitionRow(schema, SEED_NODE_ID, nowMs));
     replicaIds.forEach((replicaId, index) => {

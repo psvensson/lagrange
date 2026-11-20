@@ -670,10 +670,9 @@ test(SUITE_NAME, {timeout: scaleByMachineFactor(SUITE_TIMEOUT_MS)}, async (t) =>
 
       t.equal(nodes1.length, nodes2.length,
         'both rebalancers should see same node count');
-      // was: 'should see at least seed node'
-      t.same(nodes1.map((node) => node.node_id), [seedNodeId],
+      t.same(nodes1.map((node) => node.node_id), publishedNodeIds,
         'both rebalancers see the published members the readiness owner ' +
-        'holds eligible: the seed');
+        'holds eligible');
 
       // Trigger rebalance on both (simulating concurrent decisions)
       rebalancer1.lastStateChangeTime = now - TEST_TIMEOUTS.STABILIZATION_PERIOD - 1;

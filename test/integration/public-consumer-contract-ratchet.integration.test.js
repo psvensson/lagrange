@@ -74,6 +74,7 @@ const SQL = Object.freeze({
   INSERT_VALUE: 'INSERT INTO consumer_values (id, text_value, int_value) ' +
     'VALUES (?, ?, ?)',
   INSERT_BYTES: 'INSERT INTO consumer_values (id, body) VALUES (?, ?)',
+  READ_BYTES: 'SELECT id, body FROM consumer_values WHERE id = ?',
   READ_VALUE: 'SELECT id, text_value, int_value FROM consumer_values WHERE id = ?',
   CREATE_OBJECTS: 'CREATE TABLE IF NOT EXISTS consumer_objects (id TEXT PRIMARY KEY, ' +
     'record_key TEXT NOT NULL, version INTEGER NOT NULL, payload TEXT NOT NULL)',
@@ -170,28 +171,28 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
       t.same(fulfilledRows(read), [{id, text_value: text, int_value: expected}],
         `${id}: exact value back`);
     }
-    const unsafe = await query('unsafe integer', SQL.READ_VALUE,
-      [Number.MAX_SAFE_INTEGER + 1]);
-    t.equal(exposedProperty(unsafe.value, 'code'), CODE.INVALID_ARGUMENT,
-      'a non-safe integer is INVALID_ARGUMENT');
+    const unpaired = await query('unpaired surrogate', SQL.READ_VALUE,
+      ['\ud800']);
+    t.equal(exposedProperty(unpaired.value, 'code'), CODE.INVALID_ARGUMENT,
+      'an unpaired UTF-16 surrogate is INVALID_ARGUMENT');
     const record = await query('object param', SQL.READ_VALUE, [{id: 'v:max'}]);
     t.equal(exposedProperty(record.value, 'code'), CODE.INVALID_ARGUMENT,
       'an object param is INVALID_ARGUMENT');
   });
 
-  // WITNESS F-BLOB-ROUTED-BYTES. Contract: bytes are accepted and come back
-  // exactly. Observed: the write is refused (the committed Raft entry is
-  // applied from its JSON copy, so SQLite is handed {type:'Buffer',...}).
-  // Flip this to the exact Buffer round trip when the codec quest lands.
-  await t.test('F-BLOB-ROUTED-BYTES witness: a Buffer bind is refused on one runtime', async (t) => {
+  await t.test('F-BLOB-ROUTED-BYTES witness: a Buffer bind round-trips exact bytes on one runtime', async (t) => {
     const blobId = `img:${SHA_A}:blob`;
-    const write = await query('F-BLOB insert', SQL.INSERT_BYTES,
-      [blobId, Buffer.from([0x00, 0xff, 0x10, 0x80])]);
-    t.equal(write.outcome, OUTCOME.REJECTED, 'observed today: refused');
-    t.equal(exposedProperty(write.value, 'code'),
-      CODE.DISTRIBUTED_PARTICIPANT_FAILURE, 'as a participant failure');
-    t.same(fulfilledRows(await must('F-BLOB absent', SQL.READ_VALUE, [blobId])),
-      [], 'nothing was written (never a corrupted value)');
+    const blobBytes = Buffer.from([0x00, 0xff, 0x10, 0x80]);
+    const write = await must('F-BLOB insert', SQL.INSERT_BYTES,
+      [blobId, blobBytes]);
+    t.equal(affected(write), 1, 'Buffer bind insert succeeds with affectedRows 1');
+    const read = await must('F-BLOB read', SQL.READ_BYTES, [blobId]);
+    const rows = fulfilledRows(read);
+    t.equal(rows.length, 1);
+    t.equal(rows[0].id, blobId);
+    t.equal(Buffer.isBuffer(rows[0].body), true);
+    t.equal(Buffer.compare(rows[0].body, blobBytes), 0,
+      'exact bytes round-trip (never a corrupted value)');
   });
 
   await t.test('I5.4 TEXT primary key: PK lookup, bounded ranges, CAS by affectedRows', async (t) => {

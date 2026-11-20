@@ -64,6 +64,8 @@ function assertQueryResultDeadline(options, progress) {
 }
 
 function collectBoundedSqliteRows(statement, params = [], options = {}) {
+  statement.raw?.(false);
+  statement.safeIntegers?.(false);
   const maxBytes = positiveSafeLimit(options.maxBytes);
   const maxRows = positiveSafeLimit(options.maxRows);
   const deadlineMs = positiveSafeLimit(options.deadlineMs);
@@ -129,52 +131,57 @@ function collectBoundedTypedRowSet(statement, params = [], options = {}) {
   const maxBytes = positiveSafeLimit(options.maxBytes);
   const maxRows = positiveSafeLimit(options.maxRows);
   statement.raw(true).safeIntegers(true);
-  const columns = statement.columns().map((column) => column.name);
-  const rawRows = [];
-  const encodedRows = [];
-  let totalBytes = 0;
-  assertQueryResultDeadline(options, {rowsCollected: 0, bytesCollected: 0});
-  for (const rawRow of statement.iterate(...params)) {
+  try {
+    const columns = statement.columns().map((column) => column.name);
+    const rawRows = [];
+    const encodedRows = [];
+    let totalBytes = 0;
+    assertQueryResultDeadline(options, {rowsCollected: 0, bytesCollected: 0});
+    for (const rawRow of statement.iterate(...params)) {
+      assertQueryResultDeadline(options, {
+        rowsCollected: encodedRows.length,
+        bytesCollected: totalBytes,
+      });
+      const nextRowCount = encodedRows.length + 1;
+      if (maxRows !== null && nextRowCount > maxRows) {
+        throw new QueryResultBudgetError(
+          QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
+          QUERY_RESULT_BUDGET_ERROR_MESSAGE.ROWS_EXHAUSTED,
+          {actual: nextRowCount, limit: maxRows},
+        );
+      }
+      const {encoded, byteLength} = encodeAndMeasureTypedRow(
+        rawRow,
+        columns.length,
+        encodedRows.length,
+      );
+      const nextBytes = totalBytes + byteLength;
+      if (maxBytes !== null && nextBytes > maxBytes) {
+        throw new QueryResultBudgetError(
+          QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
+          QUERY_RESULT_BUDGET_ERROR_MESSAGE.BYTES_EXHAUSTED,
+          {actual: nextBytes, limit: maxBytes},
+        );
+      }
+      rawRows.push(rawRow);
+      encodedRows.push(encoded);
+      totalBytes = nextBytes;
+    }
     assertQueryResultDeadline(options, {
       rowsCollected: encodedRows.length,
       bytesCollected: totalBytes,
+      iterationComplete: true,
     });
-    const nextRowCount = encodedRows.length + 1;
-    if (maxRows !== null && nextRowCount > maxRows) {
-      throw new QueryResultBudgetError(
-        QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
-        QUERY_RESULT_BUDGET_ERROR_MESSAGE.ROWS_EXHAUSTED,
-        {actual: nextRowCount, limit: maxRows},
-      );
-    }
-    const {encoded, byteLength} = encodeAndMeasureTypedRow(
-      rawRow,
-      columns.length,
-      encodedRows.length,
-    );
-    const nextBytes = totalBytes + byteLength;
-    if (maxBytes !== null && nextBytes > maxBytes) {
-      throw new QueryResultBudgetError(
-        QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
-        QUERY_RESULT_BUDGET_ERROR_MESSAGE.BYTES_EXHAUSTED,
-        {actual: nextBytes, limit: maxBytes},
-      );
-    }
-    rawRows.push(rawRow);
-    encodedRows.push(encoded);
-    totalBytes = nextBytes;
+    return {
+      rowSet: assembleTypedRowSet(columns, encodedRows),
+      columns,
+      rawRows,
+      byteLength: totalBytes,
+    };
+  } finally {
+    statement.raw?.(false);
+    statement.safeIntegers?.(false);
   }
-  assertQueryResultDeadline(options, {
-    rowsCollected: encodedRows.length,
-    bytesCollected: totalBytes,
-    iterationComplete: true,
-  });
-  return {
-    rowSet: assembleTypedRowSet(columns, encodedRows),
-    columns,
-    rawRows,
-    byteLength: totalBytes,
-  };
 }
 
 export {

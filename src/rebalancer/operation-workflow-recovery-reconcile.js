@@ -105,9 +105,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   async releasePlacementHoldIfNeeded(operation) {
     if (!operation) return;
     releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
-    if (this.releasePlacementHold) {
-      await this.releasePlacementHold(operation);
-    }
+    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
   }
 
   async completeOperation(operation) {

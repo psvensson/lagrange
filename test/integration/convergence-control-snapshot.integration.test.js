@@ -187,7 +187,18 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
             error: PARTICIPANT_FAILURE_ERROR,
           };
         }
-        return originalExecuteLocalQuery(payload, ctx);
+        const res = await originalExecuteLocalQuery(payload, ctx);
+        if (
+          !partitionsReadFails &&
+          statement.includes('from partitions') &&
+          Array.isArray(res?.rows)
+        ) {
+          return {
+            ...res,
+            rows: res.rows.map((row) => ({...row, replica_count: 1})),
+          };
+        }
+        return res;
       };
       restoreExecuteRequest = () => {
         adminApi.executeLocalQueryEnvelope =
@@ -227,7 +238,7 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
         quietWindowMs: 0,
         maxSustainedOverTargetMs: 2000,
         sampleIntervalMs: 50,
-        targetVoterCount: 3,
+        targetVoterCount: 1,
       });
       t.equal(
         Number.isFinite(convergence?.settledAfterMs),

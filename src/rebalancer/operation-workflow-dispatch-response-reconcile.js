@@ -30,9 +30,8 @@ import {
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
 import {
-  applyGrowthPromoteRequestFields,
-  isHeldGrowthPromoteOperation,
-  reconcileGrowthPromoteDispatchResponse,
+  applyGrowthPromoteRequestFields, isHeldGrowthPromoteOperation,
+  reconcileGrowthPromoteDispatchResponse, resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
@@ -629,7 +628,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       messageType = ReplicaOperationMessageType.REMOVE_REPLICA;
     } else if (operation.type === OperationType.GROWTH_PROMOTE) {
       messageType = ReplicaOperationMessageType.PROPOSE_GROWTH_PROMOTE;
-      dispatchNodeId = operation.targetNodeId;
+      dispatchNodeId = resolveGrowthPromoteTargetNodeId(this, operation);
     } else if (operation.type === OperationType.REPLACE) {
       if (replaceRemoveDispatchPhase) {
         dispatchNodeId = operation.sourceNodeId;

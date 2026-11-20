@@ -487,12 +487,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     let actualStatus = null;
     try {
       actualStatus = await this.getReconciledReplicaStatus(
-        op.replicaId,
-        op.partitionId,
-        op.targetNodeId,
+        op.replicaId, op.partitionId, op.targetNodeId,
         {
-          ignoreUnclaimedPreRuntimeFailedCreate:
-            this.isPreSyncCreateOperation(op),
+          ignoreUnclaimedPreRuntimeFailedCreate: this.isPreSyncCreateOperation(op),
+          allowActiveLearner: this.isLearnerTargetAddOperation(op),
         },
       );
     } catch {

@@ -56,8 +56,8 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
       assert.equal(marker.kind, 'TX1_M1_COMMIT_DECIDED_UNDELIVERED');
       assert.equal(marker.pid, child.pid);
-      assert.equal(marker.requests.length, 12);
-      assert.equal(marker.pendingOpenHandles, 12);
+      assert.equal(marker.requests.length, 4);
+      assert.equal(marker.pendingOpenHandles, 4);
       assert.equal(marker.neverDeliveredCommitCalls, 1);
       assert.equal(marker.persistedDecision.decision, 'COMMIT');
       assert.equal(marker.effectRowsNotApplied, true);
@@ -70,8 +70,8 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       assert.deepEqual(JSON.parse(read.stdout), marker.expectedRows);
       const rebuilt = spawnSync(process.execPath, [READER], {
         input: JSON.stringify({transactionId: marker.transactionId,
-          transactions: marker.expectedRows[6].rows,
-          participants: marker.expectedRows[9].rows}),
+          transactions: marker.expectedRows[2].rows,
+          participants: marker.expectedRows[3].rows}),
         encoding: 'utf8', timeout: 15000,
       });
       assert.equal(rebuilt.status, 0, rebuilt.stderr);
@@ -84,8 +84,8 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       assert.equal(recovered.fanoutCalls, 0);
       // A separate process rereads the actual SQLite files again, then
       // attempts the recorded bound COMMIT with no live participant transport.
-      const transactionRequests = marker.requests.slice(6, 9);
-      const participantRequests = marker.requests.slice(9, 12);
+      const transactionRequests = marker.requests.slice(2, 3);
+      const participantRequests = marker.requests.slice(3, 4);
       assert.equal(new Set(transactionRequests.map((row) => row.partitionId)).size, 1);
       assert.equal(new Set(participantRequests.map((row) => row.partitionId)).size, 1);
       assert.notEqual(transactionRequests[0].partitionId,
@@ -100,7 +100,7 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       const bridge = JSON.parse(reread.stdout);
       assert.equal(bridge.kind, 'TX1_M1_POSTKILL_DISK_REREAD');
       assert.equal(bridge.transactionId, marker.transactionId);
-      assert.equal(bridge.physicalReplicaFiles, 6);
+      assert.equal(bridge.physicalReplicaFiles, 2);
       assert.equal(bridge.forgedRollbackIgnored, true);
       assert.equal(bridge.unavailableHeld, true);
       assert.equal(bridge.malformedAuthorityHeld, true);

@@ -70,19 +70,11 @@ const HINT_TABLE = 'acceptance_hints';
 const COMMITTED_SHAPE_TITLE = 'on the committed shape (one runtime; ' +
   'three-process shape recorded on the lab, blocked on ' +
   'F-FORMATION-WRITE-READINESS and F-TX-REPLICATED-APPLY)';
-// Observed on the lab (single runtime, local partition leader): the committed
-// Raft entry is re-parsed from JSON before apply, so the Buffer bind arrives
-// as {"type":"Buffer","data":[...]} and better-sqlite3 reads that object as a
-// named-parameter bag: "Too few parameter values were provided".
-const SQLITE_BIND_ERROR_TEXT = 'Too few parameter values were provided';
-const JSON_DECODED_BUFFER_TEXT = '{"type":"Buffer","data":[';
-const BLOB_LOG_CONTEXT_LINES = 6;
 const RANGE_LOW = 'img:';
 const RANGE_HIGH = 'img;';
 const PUBLIC_RESULT_KEYS = ['affectedRows', 'rows'];
 const ERROR_CODE = Object.freeze({
   DIAGNOSTIC_STATEMENT_RESERVED: 'DIAGNOSTIC_STATEMENT_RESERVED',
-  DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   INVALID_ARGUMENT: 'INVALID_ARGUMENT',
 });
 
@@ -148,43 +140,22 @@ test('public application database routes by primary key through embedded process
     t.comment(`cross-session visibility window (insert): ${onB.windowMs} ms`);
   });
 
-  // FINDING F-BLOB-ROUTED-BYTES (witness, asserts the CURRENT defect; flips
-  // when the owner fixes it): a BLOB bind value does not survive the write.
-  // Mechanism: partition hops and the Raft log are ad hoc JSON with no byte
-  // codec; even with a LOCAL leader the committed entry is applied from its
-  // JSON copy, so SQLite is handed {type:'Buffer',data:[...]}. The same
-  // statement with a TEXT or NULL body succeeds (I1.1). When bytes are
-  // carried, replace this witness with the exact Buffer round-trip.
-  await t.test('F-BLOB-ROUTED-BYTES witness: a BLOB bind is rejected on the routed write', async (t) => {
-    const blobInsert = keep('F-BLOB insert', await seed.query(sessionA,
+  await t.test('F-BLOB-ROUTED-BYTES witness: a BLOB bind round-trips exact bytes on the routed write', async (t) => {
+    const blobInsert = keep('F-BLOB insert', await mustQuery(seed, sessionA,
       `INSERT INTO ${TABLE} (id, body, note) VALUES (?, ?, ?)`,
       [BLOB_ROW_ID, BLOB_BYTES, 'blob']));
-    if (blobInsert.outcome !== EMBEDDED_STEP_OUTCOME.REJECTED) {
-      t.comment(`F-BLOB flipped: ${JSON.stringify(blobInsert.outcome)}`);
-    }
-    t.equal(blobInsert.outcome, EMBEDDED_STEP_OUTCOME.REJECTED,
-      'observed today: the BLOB insert is rejected');
-    t.equal(exposedProperty(blobInsert.value, 'code'),
-      ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-      'as a participant failure (the SQLite bind of the JSON-decoded value)');
-    const absent = await mustQuery(joiner, sessionB,
-      `SELECT id FROM ${TABLE} WHERE id = ?`, [BLOB_ROW_ID]);
-    t.same(fulfilledRows(absent), [], 'and nothing was written');
-    // The public code cannot tell byte loss from participant unavailability;
-    // the harness-side node log names the mechanism (never consumer code).
-    const tableLines = cluster.nodes.flatMap((node) =>
-      cluster.nodeLogLines(node, TABLE));
-    const bindErrors = tableLines.filter((line) =>
-      line.includes(SQLITE_BIND_ERROR_TEXT) &&
-      line.includes(JSON_DECODED_BUFFER_TEXT));
-    if (bindErrors.length === 0) {
-      t.comment(`F-BLOB log lines naming ${TABLE}:\n` +
-        tableLines.slice(-BLOB_LOG_CONTEXT_LINES).join('\n'));
-    }
-    t.ok(bindErrors.length > 0,
-      'the node log shows the apply-time SQLite bind refusal of the ' +
-      'JSON-decoded Buffer (bytes lost in the JSON log round trip, not an ' +
-      'unavailable participant)');
+    t.equal(exposedProperty(blobInsert.value, 'affectedRows'), 1,
+      'the BLOB insert succeeds and reports one affected row');
+    const onB = await readUntil(t, joiner, sessionB,
+      `SELECT id, body, note FROM ${TABLE} WHERE id = ?`, [BLOB_ROW_ID],
+      (rows) => rows.length === 1);
+    keep('select blob row on B', onB.outcome);
+    t.equal(onB.rows.length, 1);
+    t.equal(onB.rows[0].id, BLOB_ROW_ID);
+    t.equal(onB.rows[0].note, 'blob');
+    t.equal(Buffer.isBuffer(onB.rows[0].body), true);
+    t.equal(Buffer.compare(onB.rows[0].body, BLOB_BYTES), 0,
+      'session B returns the exact BLOB bytes by PK');
   });
 
   await t.test('I1.2 update on session A becomes visible on session B ' +
@@ -204,9 +175,6 @@ test('public application database routes by primary key through embedded process
   });
 
   await t.test('I1.3 bounded key and range reads over string ids', async (t) => {
-    keep('insert blob-id row without bytes', await mustQuery(seed, sessionA,
-      `INSERT INTO ${TABLE} (id, body, note) VALUES (?, ?, ?)`,
-      [BLOB_ROW_ID, null, 'blob placeholder (see F-BLOB-ROUTED-BYTES)']));
     for (const id of RANGE_IDS) {
       keep(`insert ${id}`, await mustQuery(seed, sessionA,
         `INSERT INTO ${TABLE} (id, body, note) VALUES (?, ?, ?)`,
