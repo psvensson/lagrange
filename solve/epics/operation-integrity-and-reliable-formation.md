@@ -251,10 +251,9 @@ findings, this distinction determines which source an agent should reproduce.
   passed 521 runner assertions through the real SQLite strict-outcome witness.
   Its reviewed partial receipt admits three of six obligations. The receiver
   still owes broad fixture coverage, historical controls and final composed
-  review. At `f4a1df473`, six of the seven previously failing suites passed.
-  The remaining CL-029 check compared the successful workflow result with a
-  bare Boolean. The same run reached durable STOPPING and dispatched REMOVE.
-  The fixture owner must check the exact typed CAS result and rerun the suite.
+  review. At `98e2cc397`, all seven previously failing suites passed 265
+  assertions on adam-laptop. CL-029 checks the typed ACTIVE advance and the
+  exact applied SQLite CAS against SYNCING before source removal.
 - Physical run `57e4db30-f269-468b-931e-46ce809818a5` measured `1bd94e2b3`
   on tv-dator, adam-laptop and adams-gamla. The last sample inside 420 seconds
   still had three incomplete operations. Eleven observation reads failed. A
@@ -272,6 +271,66 @@ findings, this distinction determines which source an agent should reproduce.
   owner composes these changes and runs the affected suites before the next
   physical gate. The passing formation streak is zero. Lab smoke and the GCP
   Lagrange arm follow a successful physical gate.
+
+### Physical formation and placement stability
+
+After repairing startup, run `e068cbdc` first observed six-partition spread at
+36.629 seconds; run `57e4db30` observed it at 90.548 seconds. Each run
+started 46 system partitions with a configured replica count of three. For
+each non-priority ledger operation, take its creation through completion, or
+only through its latest observed update if incomplete. Combine overlapping
+intervals and clip them to the first spread observation and the original
+420-second boundary. Non-priority work covered 383.194 of 383.371 remaining
+seconds in the first run and all 329.452 remaining seconds in the second.
+The longest uncovered gap was 122 ms. These recorded intervals preclude the
+required five seconds of global quiet even if every admin read succeeds.
+Public SQL remains an independent service criterion.
+[First original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-e068cbdc-nov20.tar.gz)
+and [second original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz).
+
+The second ledger also records an actual reversal on adam-laptop. ADD
+`pl-contexts-p1-505-0` completed, then REMOVE `pl-contexts-p1-559-0` was
+admitted 6.280 seconds later for the same replica. After the REMOVE committed,
+ADD `pl-contexts-p1-619-0` targeted the same node again. The sampled node
+incarnation remained 1. Its READY lease was expired 3.614 seconds before the
+REMOVE admission and valid again in a sample 29.68 seconds afterward. The
+admission records a repair but omits the precise deficit kind. The placement
+source classifies a learner outside the READY set as dead; the component test
+expects removal even when the lease expired by one millisecond. Compare the
+exact decision-time input and current Raft membership before attributing this
+physical REMOVE to that classification. A genuine failure and a changed
+incarnation must still recover.
+
+The placement and formation owners should follow the same operation IDs from
+durable admission through dispatch, committed membership, terminal release and
+recensus. Measure completed distinct target placements against outstanding
+work, using the existing source/target slot limits and original physical
+profile. Separate useful progress from retries and inverse moves. For example,
+in the first run ADD `pl-package_registry_mappings-p1-909-0` spent 50.003 s
+between SYNCING and ACTIVE. In the second, `pl-debug_breakpoints-p1-522-0`
+spent 30.888 s there. Both full logs record repeated, same-operation
+authority-read timeouts before the leader accepted the work. What occupied
+that authority and how much time the duplicate delivery added remain open.
+
+The next coupled witness must feed the same exact learner temporary loss of
+fresh READY evidence, recovery of that same incarnation, and delayed role
+publication through the real owners. Pair it with genuine retirement or
+replacement and with a held then released clearing event. Check durable
+mutation counts, correct refusal to target an ineligible node, same-operation
+resumption, copy capacity and the voter floor at every edge. Retain ordinary
+background scheduling during formation. An intentional admission pause could
+manufacture a quiet window while leaving the work unfinished.
+
+Historical counterparts include the repository's single terminal winner and
+the formation repair that joined admission and its clearing event. The
+current placement owner superseded older timer and dual-owner wake schemes.
+Compare etcd's membership catch-up check and Kubernetes' conditional writes
+when deciding which observation can authorize each effect.
+[Terminal CAS](../quests/replica-operation-terminal-cas/quest.json),
+[formation admission history](../quests/formation-barrier-spread-cure-admission-liveness/quest.json),
+[current placement authority](../quests/replica-placement-admission-owner/quest.json),
+[etcd learner design](https://etcd.io/docs/v3.5/learning/design-learner/) and
+[Kubernetes API concurrency](https://kubernetes.io/docs/reference/using-api/api-concepts/).
 
 ### Programme adoption and dependency order
 
