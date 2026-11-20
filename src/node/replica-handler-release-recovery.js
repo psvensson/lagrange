@@ -4,6 +4,7 @@ import {readStateField} from '../utils/state-field-read.js';
 // membership, build and live service facts through the release algorithm.
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {ROLE as RAFT_RS_ROLE} from '../raft/raft-rs-runtime-owner-constants.js';
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
   '../diagnostics/runtime-build-provenance.js';
 import {readPartitionWriteOrigin} from '../partition/partition-participant-transaction-store.js';
@@ -32,9 +33,17 @@ const RELEASE_RECOVERY_ERROR = Object.freeze({
   OPERATOR_DEADLINE: 'Operator participant release deadline unavailable',
 });
 
+const PRE_CANDIDATE_RAFT_STATE = 3;
+const PRE_CANDIDATE_ROLE = RAFT_RS_ROLE[PRE_CANDIDATE_RAFT_STATE];
+
 function ordinaryNonleaderStatus(status) {
+  // PRE_VOTE is enabled on every group (raft-rs-group-constants.js), so
+  // raft-rs can report StateRole::PreCandidate (`'pre-candidate'`) on an
+  // otherwise healthy non-leader follower without holding unavailable status.
   return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
-    (status.role === RAFT_ROLE.FOLLOWER || status.role === RAFT_ROLE.CANDIDATE);
+    (status.role === RAFT_ROLE.FOLLOWER ||
+      status.role === RAFT_ROLE.CANDIDATE ||
+      status.role === PRE_CANDIDATE_ROLE);
 }
 
 function statusReason(status) {

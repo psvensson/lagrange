@@ -5,6 +5,7 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {ROLE as RAFT_RS_ROLE} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
@@ -1459,3 +1460,20 @@ async () => withActualHandler(async ({handler, leader}) => {
   assert.equal(participantReleaseAdmissionOf(leader).proof.term,
     leader.controllablePort.term);
 }));
+
+test('pre-candidate PreVote nonleader stays silent and event-driven without semantic_raft_status',
+  async () => withRecoveryHandler(async ({handler, timeSource, reports}) => {
+    const preCandidate = recoveryService({partitionId: 'prevote-p1',
+      replicaId: 'prevote-r1', timeSource, readStatus: () => coreStatus(RAFT_RS_ROLE[3])});
+    const unknownRole = recoveryService({partitionId: 'unknown-role-p1',
+      replicaId: 'unknown-role-r1', timeSource, readStatus: () => coreStatus('unknown')});
+    handler.localServices.set(preCandidate.replicaId, preCandidate);
+    handler.localServices.set(unknownRole.replicaId, unknownRole);
+    timeSource.advance(0);
+    await settleOwnerTurns();
+    assert.equal(timeSource.pendingTimerCount(), 0);
+    assert.equal(reports.length, 1);
+    assert.deepEqual(
+      {id: reports[0].partitionId, out: reports[0].outcome, fact: reports[0].missingFact},
+      {id: unknownRole.partitionId, out: OUTCOME.UNAVAILABLE, fact: 'semantic_raft_status'});
+  }));
