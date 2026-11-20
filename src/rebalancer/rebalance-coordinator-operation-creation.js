@@ -162,6 +162,28 @@ class RebalanceCoordinatorOperationCreation {
     );
   }
 
+  async resolveReusableCreationIntent(operation, move, normalizedMoveType) {
+    if (
+      !operation ||
+      !this.isDisruptiveOperationLedgerSelfMove(
+        normalizedMoveType, move.partitionId,
+      ) ||
+      (
+        this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
+        operation.sourceNodeId === (move.sourceNodeId || this.nodeId)
+      )
+    ) {
+      return operation;
+    }
+
+    // The broad critical key preserves the exclusive ledger hold across
+    // target changes. Only the matching move may replay the incumbent.
+    await this.assertNoRegisteredLedgerSelfMove(
+      [operation], normalizedMoveType, move.partitionId,
+    );
+    return null;
+  }
+
   /**
    * Create an operation record (persisted via SQL engine).
    * Includes deduplication check to prevent duplicate operations.
@@ -232,13 +254,19 @@ class RebalanceCoordinatorOperationCreation {
     );
     this.pruneExpiredOperationIntents();
 
-    const recentOperation = await this.getRecentOperationIntent(dedupeKey);
+    const recentOperation = await this.resolveReusableCreationIntent(
+      await this.getRecentOperationIntent(dedupeKey),
+      moveForCreate,
+      normalizedMoveType,
+    );
     if (recentOperation) {
       return this.maybeRearmReusedPendingOperation(recentOperation);
     }
     if (criticalAddLikeIntentKey && criticalAddLikeIntentKey !== dedupeKey) {
-      const recentCriticalOperation = await this.getRecentOperationIntent(
-        criticalAddLikeIntentKey,
+      const recentCriticalOperation = await this.resolveReusableCreationIntent(
+        await this.getRecentOperationIntent(criticalAddLikeIntentKey),
+        moveForCreate,
+        normalizedMoveType,
       );
       if (recentCriticalOperation) {
         this.rememberOperationIntents(
@@ -458,13 +486,17 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     // Deduplication: check for existing in-flight operation
-    const existing = await this.queryExistingInFlightOperation(
-      partitionId,
-      move.nodeId,
-      entityType,
-      entityId,
+    const existing = await this.resolveReusableCreationIntent(
+      await this.queryExistingInFlightOperation(
+        partitionId,
+        move.nodeId,
+        entityType,
+        entityId,
+        normalizedMove,
+        STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
+      ),
       normalizedMove,
-      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
+      normalizedMoveType,
     );
 
     if (existing) {
@@ -484,8 +516,10 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     if (criticalAddLikeIntentKey) {
-      const recentCriticalOperation = await this.getRecentOperationIntent(
-        criticalAddLikeIntentKey,
+      const recentCriticalOperation = await this.resolveReusableCreationIntent(
+        await this.getRecentOperationIntent(criticalAddLikeIntentKey),
+        normalizedMove,
+        normalizedMoveType,
       );
       if (recentCriticalOperation) {
         this.rememberOperationIntents(

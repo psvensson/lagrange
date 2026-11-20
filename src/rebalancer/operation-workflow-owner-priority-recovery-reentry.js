@@ -31,6 +31,10 @@ import {
   OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
 } from './operation-workflow-owner-constants.js';
 
+import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+
+const {TRANSITION_RETRY_DELAY_MS} = OPERATION_WORKFLOW_OWNER_SHARED;
 const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_OWNER_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME =
@@ -547,6 +551,17 @@ function resolveOperationWorkflowOwnerTargetProgressReentryAction(
   );
 }
 
+async function wakeRemoteTargetProgressOwner(owner, operation) {
+  const authority = await observeRemoteReentryAuthority(owner.repository, operation);
+  if (authority.deferredOutcome) {
+    return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+      operation, Math.max(TRANSITION_RETRY_DELAY_MS, authority.deferredOutcome.retryAfterMs ?? 0),
+    );
+  }
+  return authority.operation ?
+    owner.wakeCoordinatorCreatedRemoteOwner(authority.operation) : false;
+}
+
 function applyOperationWorkflowOwnerTargetProgressReentryAction(
   owner,
   operation,
@@ -576,7 +591,7 @@ function applyOperationWorkflowOwnerTargetProgressReentryAction(
       action ===
       OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.WAKE_REMOTE_OWNER
     ) {
-      owner.wakeCoordinatorCreatedRemoteOwner(operation).catch((error) => {
+      wakeRemoteTargetProgressOwner(owner, operation).catch((error) => {
         owner.handleObservedProgressFailure(
           operationId,
           OPERATION_WORKFLOW_OWNER_PRIORITY_RECOVERY_REENTRY_TABLE_NAME,
