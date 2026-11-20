@@ -1,3 +1,4 @@
+import {createPartitionConstructionHandoff} from '../../src/bootstrap/shared/partition-service-construction.js';
 import {createIdentityTransport} from '../test-helpers/replica-handler-identity-fixture.js';
 import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 import fs from 'node:fs';
@@ -143,10 +144,14 @@ function createHandlerSetup(options = {}) {
       const service = {
         ...serviceOptions,
         isShutdown: false,
-        shutdown: async () => {},
+        async shutdown() {
+          this.isShutdown = true;
+        },
       };
       created.push(service);
-      return completePartitionConstructionFixture(service, serviceOptions);
+      completePartitionConstructionFixture(service, serviceOptions);
+      await options.holdConstruction?.(service);
+      return service;
     },
     dataDir: os.tmpdir(),
   });
@@ -217,7 +222,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
       trackJoinPartitionReplica() {},
     };
     let service = null;
-    let attach;
+    const construction = createPartitionConstructionHandoff(REPLICA_ID, () => {});
     try {
       service = await NodeJoiningPublicationActivation.prototype
         .createJoinLocalPartitionService.call(stubJoinService, {
@@ -237,12 +242,10 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
           },
           deferElection: true,
           messageGroupService: {},
-          onPartitionConstructed: (_service, publish) => {
-            attach = publish;
-          },
+          onPartitionConstructed: construction.retain,
         });
       t.equal(stubJoinService.partitionServices.has(REPLICA_ID), false);
-      attach();
+      construction.publish(service);
       t.equal(typeof service.onSnapshotCatchupNeeded, 'function',
         'the join-factory-built service carries the seam (durable-rejoin ' +
         'restores use THIS path — reverting the join attach reds this)');
@@ -349,14 +352,19 @@ async (t) => {
   }
 });
 
-test('ENGAGEMENT: ReplicaHandlerSetup arms the offer router — an adopted ' +
-  'bulk OFFER drives install, recreate via the wrapped factory, and the ' +
-  'replaceLocalReplicaService swap', async (t) => {
+async function checkBulkOfferAdoption(t, shuttingDown) {
   const fixture = await createProductionShapedGeneration('wiring-loop-');
   const registry = createBulkTransferChannelRegistry({nodeId: NODE_ID});
   const serveRegistry = createBulkTransferChannelRegistry(
     {nodeId: PEER_NODE_ID});
-  const setup = createHandlerSetup({bulkChannelRegistry: registry});
+  const opened = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const setup = createHandlerSetup({bulkChannelRegistry: registry,
+    holdConstruction: async (service) => {
+      opened.resolve(service);
+      await resume.promise;
+    },
+  });
   const replicaDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wiring-loop-replica-'));
   try {
@@ -400,6 +408,15 @@ test('ENGAGEMENT: ReplicaHandlerSetup arms the offer router — an adopted ' +
     t.equal(served.outcome, RAFT_SNAPSHOT_TRANSFER_OUTCOME.COMPLETED,
       'the leader-side serve completes against the production-armed router');
 
+    const candidate = await opened.promise;
+    setup.replicaHandler.shuttingDown = shuttingDown;
+    resume.resolve();
+    if (shuttingDown) {
+      await waitForCondition(() => candidate.isShutdown, 'the rejected replacement is retired');
+      t.equal(setup.replicaHandler.getTrackedService(REPLICA_ID), targetService);
+      t.equal(setup.replicaHandler.localReplicas.get(REPLICA_ID).service, targetService);
+      return;
+    }
     const replacement = await waitForCondition(
       () => {
         const current = setup.replicaHandler.localServices.get(REPLICA_ID);
@@ -422,10 +439,17 @@ test('ENGAGEMENT: ReplicaHandlerSetup arms the offer router — an adopted ' +
     t.ok(fs.existsSync(targetDbPath),
       'the installed replica database exists at the target path');
   } finally {
+    resume.resolve();
     setup.replicaStateMachine.stopTimeoutChecker();
     registry.closeAll();
     serveRegistry.closeAll();
     fs.rmSync(replicaDir, {recursive: true, force: true});
     fixture.close();
   }
-});
+}
+
+test('an adopted bulk OFFER recreates through the wrapped factory and swaps the live replica',
+  (t) => checkBulkOfferAdoption(t, false));
+
+test('an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption',
+  (t) => checkBulkOfferAdoption(t, true));

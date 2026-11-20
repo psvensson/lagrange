@@ -57,11 +57,13 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const handler = this.replicaHandler;
     const tracked = handler?.localServices.get(replicaId);
     const requireCurrent = () => {
-      if (this.replicaHandler !== handler || handler?.localServices.get(replicaId) !== tracked) {
+      if (this.shuttingDown || this.aborted || handler?.shuttingDown ||
+          this.replicaHandler !== handler || handler?.localServices.get(replicaId) !== tracked) {
         throw supersededPartitionConstruction(replicaId);
       }
     };
     const construction = createPartitionConstructionHandoff(replicaId, requireCurrent);
+    requireCurrent();
     try {
       const opened = await this.createJoinLocalPartitionService({...options,
         onPartitionConstructed: construction.retain,

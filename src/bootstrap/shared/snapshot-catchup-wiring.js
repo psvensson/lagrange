@@ -222,7 +222,8 @@ function armSnapshotOfferRouting(context) {
       orchestrate: ({service, socket}) => {
         const {replicaId, partitionId} = service;
         const requireCurrent = () => {
-          if (replicaHandler.getTrackedService(replicaId) !== service) {
+          if (replicaHandler.shuttingDown ||
+              replicaHandler.getTrackedService(replicaId) !== service) {
             throw supersededPartitionConstruction(replicaId);
           }
         };

@@ -213,7 +213,7 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
         await worker;
         assert.ok(opened, 'the native factory presented a concrete instance');
         assert.equal(enteredCdc, false, 'no CDC work starts without retained opening custody');
-        assert.equal(opened.raft, null);
+        assert.equal(Boolean(opened.raft), false);
         assert.equal(opened.db, null);
         assert.equal(handler.messageRouter.getRegisteredHandler(opened.unifiedAddress), null);
         return;
@@ -273,6 +273,54 @@ for (const scenario of ['owned join factory', 'replaced during join factory',
     }
   });
 }
+
+it('direct join lifecycle refuses adoption after shutdown starts', {timeout: 10_000}, async () => {
+  const row = operationRow();
+  const {handler} = await createHandlerFixture({row, targetRow: targetLifecycle(row)});
+  const ready = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const joining = Object.assign(Object.create(NodeJoiningPublicationActivation.prototype), {
+    nodeId: row.target_node_id,
+    replicaHandler: handler,
+    replicaStateMachine: handler.replicaStateMachine,
+    partitionServices: new Map(),
+    transport: handler.messageRouter,
+    messageRouter: handler.messageRouter,
+    tablePolicyService: {},
+    createCdcIntegrationService: () => null,
+    getLeaderMessageGroupService: () => null,
+    async createJoinLocalPartitionService(options) {
+      const service = await NodeJoiningPublicationActivation.prototype
+        .createJoinLocalPartitionService.call(this, options);
+      ready.resolve(service);
+      await resume.promise;
+      return service;
+    },
+  });
+  const {replica_id: replicaId, partition_id: partitionId, target_node_id: nodeId} = row;
+  const creation = joining.createJoinPartitionReplica({replicaOptions: {
+    replicaId, partitionId, nodeId, replicaIds: [replicaId], dbPath: ':memory:',
+    tableId: 'table-1', tableName: 'test_table',
+    schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+    bootstrapMembership: genesisStamp([replicaId], {[replicaId]: nodeId}),
+  }});
+  creation.catch(ready.reject);
+  try {
+    const service = await ready.promise;
+    assert.ok(service.raft && service.db.open);
+    joining.shuttingDown = true;
+    resume.resolve();
+    await assert.rejects(creation, /Partition construction was superseded/u);
+    assert.equal(service.isShutdown, true);
+    assert.equal(joining.partitionServices.has(replicaId), false);
+    assert.equal(handler.getTrackedService(replicaId), null);
+    assert.equal(handler.messageRouter.getRegisteredHandler(service.unifiedAddress), null);
+  } finally {
+    resume.resolve();
+    await Promise.allSettled([creation]);
+    await handler.shutdown();
+  }
+});
 
 it('unavailable final CREATE authority retains the live work for existing admission recovery',
   async (t) => withHeldActivationRead(t, async (f) => {

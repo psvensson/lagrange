@@ -534,7 +534,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           () => requireReplicaCreateWork(this, work));
         const capturePartition = (service, publish) => {
           try {
-            construction.retain(service, publish);
+            return construction.retain(service, publish);
           } finally {
             work.openedService = construction.opened;
           }
@@ -558,12 +558,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
           onPartitionConstructed: capturePartition,
         });
-        // A returned object that is already tracked elsewhere is never
-        // adopted as cleanup custody merely because a malformed factory
-        // returned it. A captured opened resource always takes precedence.
-        if (!work.openedService && partitionService !== this.getTrackedService(replicaId)) {
-          work.openedService = partitionService;
-        }
         createPhase = REPLICA_CREATE_PHASE.RUNTIME_OPENED;
         construction.publish(partitionService);
         // Store service reference in localServices
