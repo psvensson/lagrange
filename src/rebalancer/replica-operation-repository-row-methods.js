@@ -264,6 +264,9 @@ function assignReplicaOperationRepositoryRowMethods(
         operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
           targetNodeStorageIncarnation;
       }
+      if (typeof row.copy_source_node_id === 'string') {
+        operation.copySourceNodeId = row.copy_source_node_id;
+      }
       attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
       return operation;
     }

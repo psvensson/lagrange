@@ -340,6 +340,22 @@ class ReplicaCleanupTombstoneOwner {
     throw error;
   }
 
+  async releaseCompletedScopedLearnerCleanup(scope) {
+    const observed = await this.observeAuthority(scope.replicaId);
+    if (!observed.available) throw cleanupDeferredError(scope.replicaId);
+    const {authority} = observed;
+    if (!matchesScopedLearnerCleanup(authority, scope) ||
+        authority.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) return;
+    if (!await this.isReceiptOperationTerminal(authority)) {
+      throw cleanupDeferredError(scope.replicaId);
+    }
+    if (await this.release(authority, {artifactsAbsent: true})) return;
+    const after = await this.observeAuthority(scope.replicaId);
+    if (!after.available || matchesScopedLearnerCleanup(after.authority, scope)) {
+      throw cleanupDeferredError(scope.replicaId);
+    }
+  }
+
   async requireCurrent(authority) {
     const observation = await this.observeReplica(authority.replicaId);
     return observation.available === true &&

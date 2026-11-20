@@ -51,11 +51,12 @@ async function onLedgerLeader(measure, extra = {}) {
  */
 function placementStatement({partitionId, type = OperationType.ADD, target,
   source = NODE.A, placementClass = PLACEMENT_CLASS.SYSTEM, repair = false,
-  sourceReplicaId = null, replicaId = null, repairWaitingOn = []}) {
+  sourceReplicaId = null, replicaId = null, repairWaitingOn = [], voterRetirement}) {
   const copies = type !== OperationType.REMOVE;
   return buildPlacementAdmissionStatement({partitionId, placementClass, repair,
     move: {type, targetNodeId: target, sourceReplicaId, replicaId,
-      copySourceNodeId: copies ? source : null}},
+      copySourceNodeId: copies ? source : null,
+      ...(voterRetirement === undefined ? {} : {voterRetirement})}},
   {sourceNodeId: NODE.A, repairWaitingSourceNodeIds: new Set(repairWaitingOn),
     formationLatchEpoch: FORMATION_LATCH_EPOCH, membershipPublicationEpoch: 7,
     positions: {ledgerAppliedIndex: 1, nodesEpoch: 3}});

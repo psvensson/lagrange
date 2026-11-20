@@ -8,6 +8,7 @@
 // ledger's dispatch hold, the formation latch epoch, the founding intent,
 // the planned input positions and the moves.
 import {isDeepStrictEqual} from 'node:util';
+import {matchesExplicitCreationBindings} from './replica-operation-creation-request.js';
 import {placementReplicaIdOf} from '../partition/partition-placement-admission-identity.js';
 import {buildRuntimeServiceTargetClaimKey} from './runtime-service-replica-identity.js';
 import {ALLOWED_UNIFIED_SERVICE_TYPES, UNIFIED_SERVICE_TYPE} from
@@ -18,7 +19,7 @@ import {
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
-import {OperationType} from './replica-operation-progress.js';
+import {OPERATION_METADATA_KEY, OperationType} from './replica-operation-progress.js';
 import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE as EPOCH,
   decodeMembershipPublicationEpochBinding,
@@ -42,6 +43,9 @@ const MOVE_FIELDS = Object.freeze(['type', 'targetNodeId', 'replicaId',
   'sourceReplicaId', 'copySourceNodeId', 'targetNodeBootIncarnation',
   'targetNodeStorageIncarnation']);
 const LEARNER_RETIREMENT = ReplicaOperationField.LEARNER_RETIREMENT;
+const VOTER_RETIREMENT = ReplicaOperationField.VOTER_RETIREMENT;
+const VOTER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, VOTER_RETIREMENT]);
+const VOTER_RETIREMENT_FIELDS = Object.freeze(['nodeBootIncarnation', 'replicaCreatedAt']);
 const LEARNER_RETIREMENT_MOVE_FIELDS = Object.freeze([...MOVE_FIELDS, LEARNER_RETIREMENT]);
 const LEARNER_RETIREMENT_FIELDS = Object.freeze([
   'nodeBootIncarnation', 'replicaCreatedAt', 'lifecycleVersion', 'lifecycleVersionColumn',
@@ -136,9 +140,22 @@ function isMoveShapeValid(kind, move) {
     isNullOrPositiveInteger(move.targetNodeStorageIncarnation);
 }
 
+function canonicalVoterRetirement(value) {
+  const scope = copyStrictOwnDataRecord(value);
+  return hasExactFields(scope, VOTER_RETIREMENT_FIELDS) &&
+    isPositiveInteger(scope.nodeBootIncarnation) &&
+    isPositiveInteger(scope.replicaCreatedAt) ? ordered(scope, VOTER_RETIREMENT_FIELDS) : null;
+}
+
 function canonicalMove(kind, value) {
   const move = copyStrictOwnDataRecord(value);
   if (move === null || !MOVE_TYPES.has(move.type) || !isMoveShapeValid(kind, move)) return null;
+  if (Object.hasOwn(move, VOTER_RETIREMENT)) {
+    const scope = canonicalVoterRetirement(move[VOTER_RETIREMENT]);
+    return kind === KIND.PLACEMENT && move.type === OperationType.REMOVE &&
+      hasExactFields(move, VOTER_RETIREMENT_MOVE_FIELDS) && scope !== null ?
+      ordered({...move, [VOTER_RETIREMENT]: scope}, VOTER_RETIREMENT_MOVE_FIELDS) : null;
+  }
   if (!Object.hasOwn(move, LEARNER_RETIREMENT)) {
     return hasExactFields(move, MOVE_FIELDS) ? ordered(move, MOVE_FIELDS) : null;
   }
@@ -257,6 +274,7 @@ function isFullSourceCapacity(placementClass, repair) {
  */
 const MOVE_ALLOWED_KEYS = Object.freeze(new Set([
   ...LEARNER_RETIREMENT_MOVE_FIELDS,
+  VOTER_RETIREMENT,
   'promoteReplicaIds',
 ]));
 const CANDIDATE_REQUIRED_FIELDS = Object.freeze([
@@ -315,6 +333,8 @@ function moveOf(value) {
     copySourceNodeId: move.copySourceNodeId ?? null,
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
     targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
+    ...(Object.hasOwn(move, VOTER_RETIREMENT) ?
+      {[VOTER_RETIREMENT]: move[VOTER_RETIREMENT]} : {}),
     ...(Object.hasOwn(move, LEARNER_RETIREMENT) ?
       {learnerRetirement: move.learnerRetirement} : {})};
 }
@@ -332,6 +352,8 @@ function buildPlacementAdmissionStatement(candidate, context) {
   if (!isValidCandidateRecord(candidateRecord) ||
       !hasExactFields(contextRecord, CONTEXT_FIELDS) ||
       move === null ||
+      (move.type === OperationType.REMOVE && move[LEARNER_RETIREMENT] === undefined &&
+        move[VOTER_RETIREMENT] === undefined) ||
       !(contextRecord.repairWaitingSourceNodeIds instanceof Set)) {
     return requireStatement(null);
   }
@@ -423,6 +445,7 @@ function buildRuntimeServiceAdmissionStatement(input) {
 
 function matchesCommittedSinglePlacementStatement(operation, requested, admitted) {
   const [move] = requested.moves;
+  const operationAdmission = operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
   const replicaId = move.replicaId ?? placementReplicaIdOf(operation.operationId);
   const claimKey =
     requested.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
@@ -434,9 +457,10 @@ function matchesCommittedSinglePlacementStatement(operation, requested, admitted
     operation.sourceNodeId === requested.sourceNodeId &&
     (operation.membershipPublicationEpoch ?? null) === requested.membershipPublicationEpoch &&
     operation.replicaId === replicaId &&
-    (operation.targetNodeBootIncarnation ?? null) === move.targetNodeBootIncarnation &&
-    (operation.targetNodeStorageIncarnation ?? null) === move.targetNodeStorageIncarnation &&
-    (operation.targetClaimKey ?? null) === claimKey;
+    matchesExplicitCreationBindings(operation, move, {complete: true}) &&
+    (operation.targetClaimKey ?? null) === claimKey &&
+    isDeepStrictEqual(operationAdmission?.learnerRetirement, move.learnerRetirement) &&
+    isDeepStrictEqual(operationAdmission?.voterRetirement, move.voterRetirement);
 }
 
 export {
@@ -445,6 +469,7 @@ export {
   buildPlacementAdmissionStatement,
   buildRuntimeServiceAdmissionStatement,
   canonicalPlacementStatement,
+  canonicalVoterRetirement,
   matchesCommittedSinglePlacementStatement,
   resolveSourceCapacityForClass,
 };

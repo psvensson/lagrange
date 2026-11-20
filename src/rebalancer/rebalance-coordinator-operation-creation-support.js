@@ -1,5 +1,8 @@
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {AddressManager} from '../address/address-manager.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
@@ -54,6 +57,7 @@ const DEFINITE_PLACEMENT_OUTCOMES = Object.freeze(new Set([
 const STATIC_PRE_PROPOSAL_FAILURE_CODES = Object.freeze(new Set([
   PLACEMENT_ADMISSION_ERROR.BYTES,
   PLACEMENT_ADMISSION_ERROR.TARGET,
+  PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED,
   PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
 ]));
 
@@ -262,6 +266,28 @@ function buildPartitionPlacementMove(move, normalizedMoveType, resolvedSourceNod
     targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
     targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
   };
+}
+
+async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
+  const readiness = coordinator.controlPlaneReadinessService;
+  if (!readiness || !move.replicaId) return null;
+  const rows = await coordinator.workflowOwner.getCriticalReplicaRowsForSafety(partitionId);
+  if (rows.authoritativeReadAvailable !== true) return null;
+  const replica = rows.find((row) => row[COLUMN.REPLICA_ID] === move.replicaId &&
+    row[COLUMN.PARTITION_ID] === partitionId && row[COLUMN.NODE_ID] === move.nodeId &&
+    isVoterRaftRole(row[COLUMN.RAFT_ROLE]));
+  const replicaCreatedAt = replica?.[COLUMN.CREATED_AT];
+  if (!Number.isSafeInteger(replicaCreatedAt) || replicaCreatedAt <= 0) return null;
+
+  await readiness.readServeEligibility();
+  const observation = readiness.answerCommittedNodes();
+  if (observation?.state !== SERVE_ELIGIBILITY_STATE.READY) return null;
+  const node = indexCommittedNodeRows(observation.nodeRows)?.get(move.nodeId);
+  const nodeBootIncarnation = node?.[COLUMN.BOOT_INCARNATION];
+  if (!Number.isSafeInteger(nodeBootIncarnation) || nodeBootIncarnation <= 0 ||
+      (move.targetNodeBootIncarnation != null &&
+        move.targetNodeBootIncarnation !== nodeBootIncarnation)) return null;
+  return {nodeBootIncarnation, replicaCreatedAt};
 }
 
 function throwRuntimeServicePlacementError(entityId, answer, result) {
@@ -552,17 +578,7 @@ const operationCreationSupportMethods = {
 
   async commitSingleCreatedPlacementOperation(context, statement, intentKey) {
     const {requestedMove, entityId} = context;
-    const identities = [
-      requestedMove.entryId,
-      requestedMove.operationIntentId,
-      requestedMove.replicaIntentId,
-    ];
-    if (identities.some((value) => value != null &&
-        (typeof value !== 'string' || value.length === 0))) {
-      throwRuntimeServicePlacementError(entityId, null, {
-        reason: PLACEMENT_ADMISSION_ERROR.BYTES,
-      });
-    }
+    this.assertNativePlacementCreationIdentity(requestedMove);
     const answer = await this.admitPlacementStatement({
       entryId: requestedMove.entryId ?? null,
       intentKey,
@@ -598,6 +614,15 @@ const operationCreationSupportMethods = {
       normalizedMoveType,
       resolvedSourceNodeId,
     );
+    if (normalizedMoveType === OperationType.REMOVE) {
+      const scope = await readPartitionVoterRemovalScope(this, partitionId, move);
+      if (scope === null) {
+        throwRuntimeServicePlacementError(partitionId, null, {
+          reason: PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED,
+        });
+      }
+      placementMove.voterRetirement = scope;
+    }
     const placementClass = classifyPlacementClass(partitionId);
     const statement = buildPlacementAdmissionStatement(
       {

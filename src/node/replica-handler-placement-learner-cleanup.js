@@ -2,6 +2,9 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membersh
 import {COMMITTED_REPLICA_ROLE, projectReplicaRole} from
   '../raft/raft-rs-committed-membership-read.js';
 import {readCommittedMembershipStamp} from '../rebalancer/committed-membership-bootstrap-read.js';
+import {canonicalVoterRetirement} from '../rebalancer/replica-placement-owner-admission-statement.js';
+import {installsPlacementVoterRetirementGeneration} from
+  './replica-handler-learner-retirement-authority.js';
 import {ReplicaOperationField} from '../rebalancer/replica-operation-constants.js';
 import {removalAuthorityDeferred} from './replica-removal-debt-errors.js';
 import {learnerRetirementToken} from './replica-learner-retirement-lifecycle.js';
@@ -49,12 +52,21 @@ async function observeClearedLearnerGeneration(handler, scope, request) {
   }
 }
 
-async function checkPlacementLearnerCleanup(handler, request) {
-  const scope = request[ReplicaOperationField.LEARNER_RETIREMENT];
-  if (scope === undefined) return null;
-  const authority = await observeClearedLearnerGeneration(handler, scope, request);
-  if (authority === LEARNER_CLEANUP_AUTHORITY.CLEARED) return null;
+async function checkPlacementRemovalGeneration(handler, request) {
+  const learner = request[ReplicaOperationField.LEARNER_RETIREMENT];
+  const voter = request[ReplicaOperationField.VOTER_RETIREMENT];
+  if (learner === undefined && voter === undefined) return null;
   const replicaId = request[ReplicaOperationField.REPLICA_ID];
+  if (voter === undefined && await observeClearedLearnerGeneration(handler, learner, request) ===
+      LEARNER_CLEANUP_AUTHORITY.CLEARED) return null;
+  if (learner === undefined) {
+    const parsed = canonicalVoterRetirement(voter);
+    if (parsed !== null && await installsPlacementVoterRetirementGeneration(handler, {
+      ...parsed, targetNodeId: handler.nodeId, replicaId,
+      operationId: request[ReplicaOperationField.OPERATION_ID],
+      partitionId: request[ReplicaOperationField.PARTITION_ID],
+    })) return null;
+  }
   return handler.answerFailedCreateCleanupDeferred({
     operationId: request[ReplicaOperationField.OPERATION_ID],
     partitionId: request[ReplicaOperationField.PARTITION_ID],
@@ -62,4 +74,4 @@ async function checkPlacementLearnerCleanup(handler, request) {
   });
 }
 
-export {checkPlacementLearnerCleanup};
+export {checkPlacementRemovalGeneration};

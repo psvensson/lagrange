@@ -7,9 +7,9 @@ import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {observeScopedLearnerCleanup} from '../node/replica-cleanup-tombstone-owner.js';
+import {ReplicaCleanupTombstoneOwner, observeScopedLearnerCleanup} from '../node/replica-cleanup-tombstone-owner.js';
 import {learnerRetirementToken} from '../node/replica-learner-retirement-lifecycle.js';
-import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {
@@ -17,6 +17,7 @@ import {
   ReplicaOperationResponseStatus,
 } from './replica-operation-constants.js';
 import {OPERATION_METADATA_KEY, OperationType} from './replica-operation-progress.js';
+import {canonicalVoterRetirement} from './replica-placement-owner-admission-statement.js';
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from './replica-placement-owner-deficits.js';
 import {ReplicaStatus} from './replica-status.js';
@@ -32,6 +33,13 @@ function scopedOperationAdmission(operation) {
   const admission = operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
   return admission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT ?
     admission : NO_PLACEMENT_ADMISSION;
+}
+
+function isUnscopedPlacementRemoval(operation) {
+  const admission = scopedOperationAdmission(operation);
+  return admission !== NO_PLACEMENT_ADMISSION &&
+    admission.learnerRetirement === undefined &&
+    canonicalVoterRetirement(admission.voterRetirement) === null;
 }
 
 async function currentNode(owner, targetNodeId) {
@@ -128,11 +136,20 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
   }
   const member = rows.find((row) => row[COLUMN.REPLICA_ID] === operation.replicaId);
   const scoped = admission.learnerRetirement;
+  if (scoped !== undefined && admission.voterRetirement !== undefined) {
+    return verdict(LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+  }
   if (scoped === undefined) {
-    // An old intent under a learner projection cannot become generic voter
-    // removal. Settle the obsolete plan and let the committed wake re-plan.
-    return verdict(isCatchupLearnerRaftRole(member?.[COLUMN.RAFT_ROLE]) ?
-      LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE);
+    const voter = canonicalVoterRetirement(admission.voterRetirement);
+    if (voter === null) return verdict(LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+    if (!exactServiceGeneration(member, operation, voter) ||
+        !isVoterRaftRole(member[COLUMN.RAFT_ROLE])) {
+      return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
+    }
+    const node = await currentNode(owner, operation.targetNodeId);
+    return node?.[COLUMN.BOOT_INCARNATION] === voter.nodeBootIncarnation ?
+      verdict(LEARNER_RETIREMENT_OUTCOME.NOT_APPLICABLE, {voterScope: voter}) :
+      verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
   }
   if (member && !exactServiceGeneration(member, operation, scoped)) {
     return verdict(LEARNER_RETIREMENT_OUTCOME.SUPERSEDED);
@@ -174,8 +191,25 @@ async function routeBoundLearnerRetirement(owner, operation, handlerType, scoped
   });
 }
 
+async function releaseCompletedLearnerRetirementCleanup(owner, operation) {
+  const scope = scopedOperationAdmission(operation)?.learnerRetirement;
+  if (scope === undefined) return;
+  const cleanup = new ReplicaCleanupTombstoneOwner({
+    gateway: owner.repository.controlPlaneSystemTableGateway,
+    logger: owner.logger,
+  });
+  await cleanup.releaseCompletedScopedLearnerCleanup({
+    operationId: operation.operationId, partitionId: operation.partitionId,
+    replicaId: operation.replicaId, targetNodeId: operation.targetNodeId,
+    replicaCreatedAt: scope.replicaCreatedAt,
+  });
+}
+
 function isScopedPlacementLearnerRetirement(operation) {
   return scopedOperationAdmission(operation)?.learnerRetirement !== undefined;
 }
 
-export {evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement};
+export {
+  evaluatePlacementLearnerRetirement, isScopedPlacementLearnerRetirement,
+  isUnscopedPlacementRemoval, releaseCompletedLearnerRetirementCleanup,
+};

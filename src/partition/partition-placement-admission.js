@@ -7,8 +7,8 @@
 import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
-import {OPERATION_METADATA_KEY} from '../rebalancer/replica-operation-progress.js';
-import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
+import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
+import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL, PLACEMENT_TRANSITION_KIND} from
   '../rebalancer/replica-placement-owner-constants.js';
 import {admitCommittedCommand, PARTITION_COMMITTED_COMMAND_ORIGIN,
   committedCommandRefusalResult} from './partition-committed-command-admission.js';
@@ -115,12 +115,21 @@ function matchesAdmissionMetaFields(meta, command, statement) {
     nullableField(meta.foundingIntentId) === nullableField(statement.foundingIntentId);
 }
 
+function matchesRetirementScope(recorded, requested) {
+  if (requested === undefined || recorded === undefined) return recorded === requested;
+  if (recorded === null || requested === null) return false;
+  return Object.keys(recorded).length === Object.keys(requested).length &&
+    Object.entries(requested).every(([key, value]) => recorded[key] === value);
+}
+
 function matchesAdmittedStepMetadata(row, command, statement, move) {
   const firstStep = readFirstStepEntry(row);
   const meta = nullableField(firstStep?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION]);
   return meta !== null &&
     matchesFirstStepIncarnations(firstStep, move) &&
-    matchesAdmissionMetaFields(meta, command, statement);
+    matchesAdmissionMetaFields(meta, command, statement) &&
+    matchesRetirementScope(meta.voterRetirement, move.voterRetirement) &&
+    matchesRetirementScope(meta.learnerRetirement, move.learnerRetirement);
 }
 
 function matchesAdmittedRow(row, command, statement, move, opId) {
@@ -228,6 +237,13 @@ function proposePlacementCommand(service, command) {
   if (pending !== null) {
     return pendingFingerprints.get(command.entryId) === fingerprint ?
       pending : refusal(service, ERROR.BYTES);
+  }
+  const body = command.body;
+  if (command.type === PLACEMENT_ADMIT_TYPE &&
+      body.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT &&
+      body.moves.some((move) => move.type === OperationType.REMOVE &&
+        move.learnerRetirement === undefined && move.voterRetirement === undefined)) {
+    return refusal(service, ERROR.REMOVE_INTENT_UNSCOPED);
   }
   pendingFingerprints.set(command.entryId, fingerprint);
   const commitPromise = startPartitionRaftWriteCommit(service, {entry: command,

@@ -1,12 +1,11 @@
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {getOperationMetadataObject} from './replica-status.js';
+import {operationMatchesCreationRequest} from './replica-operation-creation-request.js';
 import {
-  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
 import {readStateField} from '../utils/state-field-read.js';
-import {SERVICE_TYPE} from '../constants/service.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
@@ -172,36 +171,21 @@ class RebalanceCoordinatorOperationIntentMethods {
     }) : null;
   }
 
+  assertNativePlacementCreationIdentity(move) {
+    const {entryId, operationIntentId, replicaIntentId} = move;
+    if ([entryId, operationIntentId, replicaIntentId].some((value) =>
+      value != null && (typeof value !== 'string' || value.length === 0))) {
+      throw new TypeError('Invalid replica creation request identity');
+    }
+    // A caller-supplied native ID can name an earlier durable entry.
+    // Without a proved local association its opaque aliases are unknown.
+    if (entryId && (operationIntentId || replicaIntentId)) {
+      throw this.createDeferredOperationVisibilityError(move.type, null, move);
+    }
+  }
+
   operationMatchesCreationRequest(operation, move, placementIntent = null) {
-    const moveType = this.normalizeMoveType(move.type);
-    const epoch = this.assertCreationRequestEpoch(move);
-    const placementEntry = this.buildPlacementCreationIntent(operation, move);
-    const exactPlacementIntent = placementIntent && placementEntry &&
-      placementEntry.entryId === placementIntent.entryId &&
-      placementIntent.operationIntentId === (move.operationIntentId ?? null) &&
-      placementIntent.replicaIntentId === (move.replicaIntentId ?? null);
-    // The placement applier mints partition replica IDs. A public planner
-    // replicaIntentId correlates that request to the retained native entry.
-    const nativePartitionAssignment = placementEntry &&
-      move.entityType === SERVICE_TYPE.PARTITION &&
-      (moveType === OperationType.ADD || moveType === OperationType.REPLACE);
-    const requestedReplicaIntent = nativePartitionAssignment ? null : move.replicaIntentId;
-    const explicitTargetReplicaId = moveType === OperationType.ADD ?
-      move.replicaId || requestedReplicaIntent :
-      requestedReplicaIntent || (move.sourceReplicaId ? move.replicaId : null);
-    return operation.partitionId === move.partitionId &&
-      this.operationMatchesMoveIntent(operation, move, move.entityType, move.entityId) &&
-      (!move.entryId || placementEntry?.entryId === move.entryId) &&
-      (!move.operationIntentId || (placementEntry ?
-        exactPlacementIntent : operation.operationId === move.operationIntentId)) &&
-      (!nativePartitionAssignment || !move.replicaIntentId || exactPlacementIntent) &&
-      (!explicitTargetReplicaId || operation.replicaId === explicitTargetReplicaId) &&
-      (!Object.hasOwn(move, 'targetClaimKey') ||
-        operation.targetClaimKey === move.targetClaimKey) &&
-      (epoch.state === MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND ||
-        operation.membershipPublicationEpoch === epoch.epoch) &&
-      (moveType !== OperationType.REPLACE ||
-        operation.sourceNodeId === (move.sourceNodeId || this.nodeId));
+    return operationMatchesCreationRequest(this, operation, move, placementIntent);
   }
 
   async refuseConflictingCreation(operation, move) {
@@ -229,6 +213,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         assertOperationUpdateSubject(candidate, operation);
         sameSubject = operation.createdAt === candidate.createdAt &&
           operation.replicaId === candidate.replicaId &&
+          (operation.copySourceNodeId ?? null) === (candidate.copySourceNodeId ?? null) &&
           (operation.membershipPublicationEpoch ?? null) ===
             (candidate.membershipPublicationEpoch ?? null);
       } catch {

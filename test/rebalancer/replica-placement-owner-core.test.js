@@ -94,6 +94,7 @@ import {
   runCorrectionBProductionAssemblyWitness,
   runGrowthPromoteLeaderRedirectAndTimeoutWitness,
   runGrowthPromoteProductionWitness,
+  runScopedRemovalPlacementAttachmentWitness,
 } from './replica-placement-owner-test-support.js';
 import {
   PRESSURE_STATE,
@@ -117,7 +118,7 @@ const LEASE_MS = 60_000;
 
 function nodeRow(nodeId, hostId, {leaseExpiresAt = NOW_MS + LEASE_MS} = {}) {
   return {[COLUMN.NODE_ID]: nodeId, [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: leaseExpiresAt,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: leaseExpiresAt, [COLUMN.BOOT_INCARNATION]: 1,
     ...(hostId === null ? {} : {[COLUMN.HOST_ID]: hostId})};
 }
 
@@ -128,6 +129,7 @@ const FIVE_ON_FOUR = Object.freeze([nodeRow('n1', 'h1'), nodeRow('n2', 'h2'),
 function replicas(partitionId, placements) {
   return placements.map(([nodeId, isLeader = false, failed = false], index) =>
     ({replicaId: `${partitionId}-r${index + 1}`, nodeId, isLeader, failed,
+      role: isLeader ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER, createdAt: NOW_MS,
       operationalVoter: !failed}));
 }
 
@@ -229,7 +231,8 @@ test('per-target eligibility: a lapsed READY lease or an undeclared host only dr
   const failed = deficit('indices-p1', [['n1', true], ['n4'], ['n5'], ['n2', false, true]], nodes);
   assert.equal(failed.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD);
   assert.deepEqual(failed.candidate.move, {type: OperationType.REMOVE, targetNodeId: 'n2',
-    replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null});
+    replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null,
+    voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: NOW_MS}});
 });
 
 test('inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies',
@@ -921,133 +924,10 @@ test('P3 & P5: createReplicaPlacementOwner validates required and optional colla
   }
 });
 
-test('P3 & P4: ControlPlaneSetup.attachReplicaPlacementOwner binds the real PartitionService leadership sink and requestPlacementAdmission path, fails closed on REMOVE without workflowOwner, and reconciles unresolved attempts on leadership start', async () => {
-  resetFixtureSingletons();
-  try {
-    const threeNodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2'), nodeRow('n3', 'h3')];
-    const nodeAuthority = {
-      subscribe: () => () => {},
-      scheduleRefresh: () => {},
-      answerCommittedNodes: () => ({
-        state: 'ready',
-        epoch: {publicationEpoch: 7},
-        nodeRows: threeNodes,
-        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 7},
-      }),
-    };
-    // Seed a SURPLUS partition (indices-p1 with 4 active voters) and an under-spread partition (tables-p1):
-    const surplusServices = [
-      {
-        [COLUMN.REPLICA_ID]: 'indices-p1-r1',
-        [COLUMN.PARTITION_ID]: 'indices-p1',
-        [COLUMN.NODE_ID]: 'n1',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-      },
-      {
-        [COLUMN.REPLICA_ID]: 'indices-p1-r2',
-        [COLUMN.PARTITION_ID]: 'indices-p1',
-        [COLUMN.NODE_ID]: 'n2',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-      },
-      {
-        [COLUMN.REPLICA_ID]: 'indices-p1-r3',
-        [COLUMN.PARTITION_ID]: 'indices-p1',
-        [COLUMN.NODE_ID]: 'n3',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-      },
-      {
-        [COLUMN.REPLICA_ID]: 'indices-p1-r4',
-        [COLUMN.PARTITION_ID]: 'indices-p1',
-        [COLUMN.NODE_ID]: 'n3',
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
-      },
-    ];
-    const cache = createSimpleSystemCache(
-      [seededPartitionRow('tables-p1'), seededPartitionRow('indices-p1')],
-      [...seededServiceRows('tables-p1'), ...surplusServices],
-    );
-
-    await onLedgerLeader(async (leader) => {
-      leader.controllablePort.setProposeHandler(async (entry) => {
-        assert.equal(applyCommitted(leader, entry), null);
-      });
-
-      // 1. Without workflowOwner, REMOVE fails closed (indices-p1 is NOT admitted),
-      // while tables-p1 is admitted through the real PartitionService leadership sink
-      // and real requestPlacementAdmission -> proposePlacementCommand -> applyPlacementCommand path:
-      const attachment1 = ControlPlaneSetup.attachReplicaPlacementOwner({
-        nodeId: 'n1',
-        ledgerPartitionService: leader,
-        controlPlaneReadinessService: {
-          serveEligibilityOwner: nodeAuthority,
-        },
-        rebalanceCoordinator: {
-          workflowOwner: null,
-        },
-        systemTableCache: cache,
-        now: () => NOW_MS,
-        logger: leader.logger,
-      });
-      assert.equal(leader.rebalancerLeadershipSink, attachment1.owner);
-      assert.equal(attachment1.owner.isLeader, true);
-      await attachment1.owner.awaitCurrentWorkIdle();
-
-      const firstRows = ledgerRows(leader);
-      assert.deepEqual(
-        firstRows.map((r) => r.partition_id),
-        ['tables-p1'],
-      );
-
-      // 2. Negative control: detaching the production leadership sink removes the binding
-      // so leader.updateRebalancerLeadership() does not activate the detached owner:
-      attachment1.detach();
-      assert.equal(leader.rebalancerLeadershipSink, null);
-      assert.equal(attachment1.owner.isLeader, false);
-      leader.updateRebalancerLeadership();
-      assert.equal(attachment1.owner.isLeader, false);
-
-      // 3. Attach a new owner WITH workflowOwner so SURPLUS REMOVE on indices-p1 is admitted,
-      // while the existing unresolved tables-p1 operation in the ledger is reconciled as busy:
-      const workflowOwner = {
-        controlPlaneReadinessService: {
-          readServeEligibility: async () => {},
-          answerCommittedNodes: () => nodeAuthority.answerCommittedNodes(),
-        },
-        resolveTimeoutCheckNowMs: () => NOW_MS,
-        getCriticalReplicaRowsForSafety: async () => surplusServices,
-        isVoterReadyFloorCountableReplica: () => true,
-        isOperationReplicaRow: (row, op) => row[COLUMN.REPLICA_ID] === op.replicaId,
-        getCriticalMinReplicaCount: () => 3,
-      };
-      const attachment2 = ControlPlaneSetup.attachReplicaPlacementOwner({
-        nodeId: 'n1',
-        ledgerPartitionService: leader,
-        controlPlaneReadinessService: {
-          serveEligibilityOwner: nodeAuthority,
-        },
-        rebalanceCoordinator: {
-          workflowOwner,
-        },
-        systemTableCache: cache,
-        now: () => NOW_MS,
-        logger: leader.logger,
-      });
-      await attachment2.owner.awaitCurrentWorkIdle();
-      const secondRows = ledgerRows(leader);
-      assert.deepEqual(
-        secondRows.map((r) => `${r.partition_id}:${r.type}`).sort(),
-        ['indices-p1:REMOVE', 'tables-p1:REPLACE'],
-      );
-      attachment2.detach();
-    }, {systemTableCache: cache});
-  } finally {
-    clearFixtureSingletons();
-  }
-});
+test('control-plane attachment admits a scoped voter removal only with its workflow owner',
+  () => runScopedRemovalPlacementAttachmentWitness({
+    nodeRow, createSimpleSystemCache, seededPartitionRow, seededServiceRows,
+  }));
 
 test('P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state', async () => {
   resetFixtureSingletons();

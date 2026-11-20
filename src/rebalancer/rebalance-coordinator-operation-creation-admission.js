@@ -1,3 +1,4 @@
+import {matchesExplicitCreationBindings} from './replica-operation-creation-request.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -441,6 +442,9 @@ const operationCreationAdmissionMethods = {
     move,
     persistenceOptions,
   ) {
+    if (!matchesExplicitCreationBindings(operation, move)) {
+      throw this.createDeferredOperationVisibilityError(operation.type, null, move);
+    }
     const admittedObservation = move?.operationCreationAdmission || null;
     let operationCreationAdmission;
     const inheritedBeforeAttempt = persistenceOptions?.beforeAttempt;

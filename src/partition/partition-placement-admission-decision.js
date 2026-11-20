@@ -194,6 +194,7 @@ function admissionMetadataOf(command, statement, move) {
     transitionKind: statement.transitionKind, placementClass: statement.placementClass,
     repair: statement.repair, formationLatchEpoch: statement.formationLatchEpoch,
     foundingIntentId: statement.foundingIntentId,
+    ...(move.voterRetirement === undefined ? {} : {voterRetirement: move.voterRetirement}),
     ...(move.learnerRetirement === undefined ? {} : {learnerRetirement: move.learnerRetirement})});
 }
 

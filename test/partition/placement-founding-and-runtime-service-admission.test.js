@@ -8,14 +8,9 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {REBALANCE_COORDINATOR_SHARED} from
-  '../../src/rebalancer/rebalance-coordinator-shared.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
-import {
-  ReplicaOperationField,
-} from '../../src/rebalancer/replica-operation-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   createPartitionServiceRebalancerMethods,
@@ -89,53 +84,9 @@ import {
 } from './placement-admission-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 
-const {
-  OPERATION_METADATA_KEY,
-  createOperationRecord,
-} = REBALANCE_COORDINATOR_SHARED;
-
 const SERVICE_ID = 'transaction_coordinator';
 const USER_PARTITION_ID = 'orders-p1';
 const SCHEMA_JOB_ID = 'schema-job-found-1';
-
-function mapLedgerRowToOperation(row) {
-  if (!row) return null;
-  const stepsHistory = typeof row.steps_history === 'string' ?
-    JSON.parse(row.steps_history) : [];
-  const first = stepsHistory[0] || {};
-  const operation = createOperationRecord({
-    operationId: row.operation_id,
-    type: row.type,
-    partitionId: row.partition_id,
-    sourceNodeId: row.source_node_id,
-    targetNodeId: row.target_node_id,
-    replicaId: row.replica_id,
-    sourceReplicaId: row.source_replica_id || null,
-    membershipPublicationEpoch: row.membership_publication_epoch ?? null,
-  });
-  operation.entityType = row.entity_type;
-  operation.entityId = row.entity_id;
-  operation.targetClaimKey = row.target_claim_key || null;
-  operation.workflowStep = row.workflow_step;
-  operation.status = row.status;
-  operation.stepsHistory = stepsHistory;
-  operation.createdAt = row.created_at;
-  operation.updatedAt = row.updated_at;
-  operation.completedAt = row.completed_at ?? null;
-  if (first[OPERATION_METADATA_KEY.REPLICA_IDS]) {
-    operation[ReplicaOperationField.REPLICA_IDS] =
-      first[OPERATION_METADATA_KEY.REPLICA_IDS];
-  }
-  if (first[OPERATION_METADATA_KEY.PEER_ADDRESSES]) {
-    operation[ReplicaOperationField.PEER_ADDRESSES] =
-      first[OPERATION_METADATA_KEY.PEER_ADDRESSES];
-  }
-  if (first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]) {
-    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
-      first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP];
-  }
-  return operation;
-}
 
 function attachAutoCommitLoop(leader, proposed) {
   let seen = proposed.length;
@@ -164,7 +115,7 @@ function createAuthoritativeLedgerRepository(leader) {
   return Object.assign(Object.create(ReplicaOperationRepository.prototype), {
     nodeId: NODE.A,
     timeSource: leader.timeSource,
-    rowToOperation: mapLedgerRowToOperation,
+    logger: leader.logger,
     async executeReplicaOperationsRead(sql, params) {
       return {
         success: true,
@@ -180,7 +131,7 @@ function createAuthoritativeLedgerRepository(leader) {
       const row = leader.db
         .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
         .get(operationId);
-      return mapLedgerRowToOperation(row);
+      return row ? this.rowToOperation(row) : null;
     },
     async compareAndSetPendingBootstrapTopologyRelease(
       released,
@@ -215,7 +166,7 @@ function createAuthoritativeLedgerRepository(leader) {
       const row = leader.db.prepare(
         'SELECT * FROM replica_operations WHERE operation_id = ?').get(released.operationId);
       return buildOperationUpdateOutcome({
-        persisted: true, operation: mapLedgerRowToOperation(row),
+        persisted: true, operation: this.rowToOperation(row),
         disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
       });
     },
@@ -599,8 +550,6 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
           entityId: USER_PARTITION_ID,
           partitionId: USER_PARTITION_ID,
           nodeId: NODE.B,
-          operationIntentId: 'shared-opaque-creation-request',
-          replicaIntentId: 'shared-opaque-replica-request',
           entryId: 'original-placement-entry-x',
         };
         await assert.rejects(
@@ -672,6 +621,102 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         }), {code: 'placement_admission_statement_invalid'});
         assert.deepEqual(ledgerRows(leader), held);
         assert.equal(proposed.filter(({type}) => type === 'PLACEMENT_ADMIT').length, 2);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('rechecks every explicit physical constraint against one committed creation row', async (t) => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        coordinator.recentOperationIntents = new Map();
+        delete coordinator.getRecentOperationIntent;
+        delete coordinator.rememberOperationIntents;
+        const wakes = [];
+        coordinator.armCoordinatorCreatedOperationProgress = async (operation) => {
+          wakes.push(operation.operationId);
+          return false;
+        };
+        const original = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          copySourceNodeId: NODE.A,
+          targetNodeBootIncarnation: 21,
+          targetNodeStorageIncarnation: 31,
+        };
+        const created = await coordinator.createOperation(original);
+        const [held] = ledgerRows(leader);
+        assert.equal(held.copy_source_node_id, original.copySourceNodeId);
+        const cases = [
+          {targetNodeBootIncarnation: 22},
+          {targetNodeStorageIncarnation: 32},
+          {copySourceNodeId: NODE.C},
+        ];
+        for (const constraint of cases) {
+          await t.test(Object.keys(constraint)[0], async () => {
+            const count = wakes.length;
+            await assert.rejects(() => coordinator.createOperation({...original, ...constraint}),
+              {rebalanceSkipReason: 'budget_exceeded'});
+            assert.equal(wakes.length, count, 'a conflicting request cannot rearm the owner');
+            const replay = await coordinator.createOperation(original);
+            assert.equal(replay.operationId, created.operationId);
+          });
+        }
+        assert.equal(proposed.length, 1);
+        assert.deepEqual(ledgerRows(leader), [held]);
+
+        const rebuilt = createCoordinatorWithLedger(leader);
+        delete rebuilt.queryExistingInFlightOperation;
+        rebuilt.armCoordinatorCreatedOperationProgress =
+          coordinator.armCoordinatorCreatedOperationProgress;
+        const count = wakes.length;
+        await assert.rejects(() => rebuilt.createOperation({
+          ...original, copySourceNodeId: NODE.C,
+        }), {failureCode: PLACEMENT_REFUSAL.PARTITION_BUSY});
+        assert.equal(wakes.length, count, 'a fresh census does not rearm mismatched work');
+        const censusReplay = await rebuilt.createOperation(original);
+        assert.equal(censusReplay.operationId, created.operationId);
+        assert.deepEqual(ledgerRows(leader), [held]);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('a reconstructed coordinator distinguishes a native entry from unproved caller aliases', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        const original = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          entryId: 'known-native-entry-without-planner-aliases',
+        };
+        const created = await coordinator.createOperation(original);
+        const [held] = ledgerRows(leader);
+        const rebuilt = createCoordinatorWithLedger(leader);
+        for (const alias of [
+          {operationIntentId: 'unproved-operation-alias'},
+          {replicaIntentId: 'unproved-replica-alias'},
+        ]) {
+          await assert.rejects(() => rebuilt.createOperation({...original, ...alias}),
+            {rebalanceSkipReason: 'deferred_retry_pending'});
+          assert.deepEqual(ledgerRows(leader), [held]);
+        }
+        const replay = await rebuilt.createOperation(original);
+        assert.equal(replay.operationId, created.operationId);
+        assert.deepEqual(ledgerRows(leader), [held]);
+        assert.equal(proposed.length, 1, 'native replay uses the original command receipt');
       } finally {
         await stopAutoCommit();
       }
