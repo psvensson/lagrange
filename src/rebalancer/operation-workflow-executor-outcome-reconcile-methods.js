@@ -110,8 +110,10 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
   }
 
   supersedesExecutorStepRetry(previous, selected) {
-    return EXECUTOR_OUTCOME_ACTION_MAP[previous?.outcomeType]?.action ===
-      EXECUTOR_OUTCOME_ACTION.UPDATE_STEP &&
+    return selected?.outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
+      selected.workflowStep === WORKFLOW_STEP.ACTIVE &&
+      EXECUTOR_OUTCOME_ACTION_MAP[previous?.outcomeType]?.action ===
+        EXECUTOR_OUTCOME_ACTION.UPDATE_STEP &&
       isMatchingExecutorReplicaOutcome(previous, selected) &&
       selected.timestamp >= previous.timestamp &&
       this.getExecutorOutcomeRetryWorkflowStepRank(selected) >
@@ -324,8 +326,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     const timerHandle =
       this.executorOutcomeRetryTimerByOperationId.get(operationId);
     if (timerHandle) {
-      this.clearTimeoutFn(timerHandle);
       this.executorOutcomeRetryTimerByOperationId.delete(operationId);
+      this.clearTimeoutFn(timerHandle);
     }
   }
 

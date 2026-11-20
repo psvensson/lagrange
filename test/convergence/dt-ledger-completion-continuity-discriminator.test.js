@@ -524,7 +524,8 @@ t.test(
       updated_at: now,
       completed_at: null,
       error_message: null,
-      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now,
+        sourceReplicaId: 'replica-terminal-0'}]),
     };
     const {coordinator, getOp} = buildSweepCoordinator({
       operationRows: [syncingRow],
@@ -575,9 +576,10 @@ t.test(
       // The terminal write never landed durably (failed authoritative
       // terminal persistence): the durable row still says SYNCING.
       const lostWrites = loseNextTerminalWrite(owner);
-      const outcome = await attemptUnconfirmedTerminal(owner, durable, projectedTerminal);
+      await t.rejects(attemptUnconfirmedTerminal(owner, durable, projectedTerminal),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED'},
+        'an acknowledgement without durable visibility cannot settle');
       t.equal(lostWrites(), 1, 'the original guarded terminal write reached the SQL fault');
-      t.equal(outcome.committed, false, 'an acknowledgement without durable visibility cannot settle');
 
       t.equal(
         owner.terminalTransitionRepairStateByOperationId.has('op-terminal-1'),
@@ -675,9 +677,10 @@ t.test(
         }],
       };
       const lostWrites = loseNextTerminalWrite(owner);
-      const outcome = await attemptUnconfirmedTerminal(owner, durable, projectedActive);
+      await t.rejects(attemptUnconfirmedTerminal(owner, durable, projectedActive),
+        {code: 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED'},
+        'an unconfirmed ACTIVE write cannot settle');
       t.equal(lostWrites(), 1, 'the original ACTIVE write reached the SQL fault');
-      t.equal(outcome.committed, false, 'an unconfirmed ACTIVE write cannot settle');
       t.equal(
         owner.terminalTransitionRepairStateByOperationId.has('op-active-1'),
         true,
@@ -688,6 +691,12 @@ t.test(
         ReplicaStatus.SYNCING,
         'the durable row still says SYNCING — the ACTIVE cell held, not lost',
       );
+      t.equal(scheduledRepairs.length, 1, 'one ACTIVE repair owns the lost acknowledgement');
+      await scheduledRepairs[0]();
+      t.equal(getOp('op-active-1').status, ReplicaStatus.ACTIVE,
+        'the same repair durably commits ADD ACTIVE after the fault clears');
+      t.equal(owner.terminalTransitionRepairStateByOperationId.has('op-active-1'), false,
+        'the repair clears only after authoritative terminal confirmation');
     } finally {
       await coordinator.shutdown();
     }
@@ -717,7 +726,8 @@ t.test(
       updated_at: now,
       completed_at: null,
       error_message: null,
-      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now,
+        sourceReplicaId: 'replica-refused-0'}]),
     };
     const {coordinator, getOp} = buildSweepCoordinator({
       operationRows: [refusedRow],

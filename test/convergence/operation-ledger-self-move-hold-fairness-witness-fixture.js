@@ -330,6 +330,10 @@ function injectLedgerAnswers({
       });
       if (!insert.success) throw new Error(insert.error);
     }
+    const previousPointReadAnswer = control.pointReadAnswer;
+    // A failed authority read of the live holder is distinct from the
+    // successful SQLite point read for the truly absent operation.
+    control.pointReadAnswer = POINT_READ_ANSWER.FAILED_READ;
     control.reservationRowsVisible = true;
     try {
       const result = await coordinator.reconcileReservations();
@@ -344,6 +348,7 @@ function injectLedgerAnswers({
         orphanReservationStatus: committedById.get(ORPHAN_OPERATION_ID),
       };
     } finally {
+      control.pointReadAnswer = previousPointReadAnswer;
       control.reservationRowsVisible = false;
       reservationStore.suspend();
     }
