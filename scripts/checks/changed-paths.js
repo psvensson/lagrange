@@ -83,7 +83,10 @@ const STATUS_ADDED_PREFIX = 'A';
 const INJECTION_SEPARATOR = ',';
 const PATH_SEPARATOR = '/';
 const MERGE_BASE = 'merge-base';
-const PUBLICATION_REMOTE = 'origin/main';
+const PUBLICATION_REMOTE = 'refs/remotes/origin/main';
+const SHOW_REF = 'show-ref';
+const SHOW_REF_ABSENT = 1;
+const MISSING_MERGE_BASE = 'git merge-base returned no unique publication base';
 const REV_PARSE = 'rev-parse';
 const VERIFY = '--verify';
 const QUIET = '--quiet';
@@ -103,16 +106,6 @@ function readGitFields(root, args, separator = NEWLINE) {
       env: gitProcessEnvironment(),
     }), separator),
     Boolean);
-}
-
-// Discovery may return no base. Selection requires every git answer.
-function discoverGitLines(root, args) {
-  try {
-    return readGitFields(root, args);
-  } catch (error) {
-    if (isGitOutputTooLarge(error)) throw error;
-    return null;
-  }
 }
 
 // `--name-status -z` emits status, path and (for a rename) destination as
@@ -167,15 +160,22 @@ function dedupe(records) {
 }
 
 /**
- * The merge base with the publication remote, or null when the repository at
- * `root` has none. This is what a push would be measured against, so it is
+ * The merge base with the publication remote, or null when its ref is absent.
+ * This is what a push would be measured against, so it is
  * the base an unqualified local proof means.
  * @param {string} root
  * @return {string|null}
  */
 export function publicationBase(root) {
-  const lines = discoverGitLines(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);
-  return lines && lines.length > 0 ? lines[0] : null;
+  try {
+    readGitFields(root, [SHOW_REF, VERIFY, QUIET, PUBLICATION_REMOTE]);
+  } catch (error) {
+    if (error?.status === SHOW_REF_ABSENT) return null;
+    throw error;
+  }
+  const lines = readGitFields(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);
+  if (lines.length !== 1) throw new Error(MISSING_MERGE_BASE);
+  return lines[0];
 }
 
 // An explicit flag wins; otherwise the environment supplies the range; otherwise
@@ -237,9 +237,15 @@ export function repositoryCheckBase(root, env = process.env) {
 export function resolvedCheckBaseCommit(explicitBase, env, root) {
   const base = resolvedCheckBase(explicitBase, env, root);
   if (!base) return null;
-  const lines = discoverGitLines(root, [REV_PARSE, VERIFY, QUIET, END_OF_OPTIONS,
-    `${base}${COMMIT_PEEL}`]);
-  if (!lines || lines.length !== 1) throw new Error(`${UNRESOLVED_BASE}${base}`);
+  let lines;
+  try {
+    lines = readGitFields(root, [REV_PARSE, VERIFY, QUIET, END_OF_OPTIONS,
+      `${base}${COMMIT_PEEL}`]);
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
+    throw new Error(`${UNRESOLVED_BASE}${base}`, {cause: error});
+  }
+  if (lines.length !== 1) throw new Error(`${UNRESOLVED_BASE}${base}`);
   return lines[0];
 }
 

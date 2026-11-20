@@ -34,6 +34,7 @@ import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
 import {spawnGit} from './checks/git-invocation.js';
+import {gitProcessEnvironment} from './checks/git-process-environment.js';
 import {
   appendArrayValue,
   copyOwnDataArray,
@@ -52,6 +53,7 @@ import {
 import {
   changedRecords,
   resolvedCheckBase,
+  resolvedCheckBaseCommit,
   semanticPaths,
   vanishedPaths,
 } from './checks/changed-paths.js';
@@ -268,7 +270,7 @@ function hasPotentiallyLossyJsonNumber(text) {
 
 function jsonFromRevision(relativePath, revision, gitRoot) {
   const result = spawnGit(['show', `${revision}:${relativePath}`],
-    {cwd: gitRoot, encoding: UTF8});
+    {cwd: gitRoot, encoding: UTF8, env: gitProcessEnvironment()});
   return result.status === 0 ? parseJson(result.stdout) : null;
 }
 
@@ -672,7 +674,7 @@ async function main() {
     return;
   }
   if (plan.kind === SELECTION_REFUSED) {
-    const sha = headSha();
+    const sha = resolvedCheckBaseCommit(DEFAULT_HEAD, {}, root);
     if (releaseProofSatisfiesRefusal(plan, {sha})) {
       process.stdout.write(
         `${RELEASE_PROOF_REUSED_PREFIX}: ${RELEASE_PROOF_ID} ${sha}${NEWLINE}`,
@@ -694,7 +696,7 @@ async function main() {
     `${plan.observedElsewhere.length}${OBSERVED_ELSEWHERE_SUFFIX})${NEWLINE}`);
   // This path never runs the whole corpus; the push gate's proof owns that
   // decision and records it itself.
-  writeProofScope({head: headSha(), fullCorpus: false, plan});
+  writeProofScope({head: resolvedCheckBaseCommit(DEFAULT_HEAD, {}, root), fullCorpus: false, plan});
   process.exitCode = await runPlacedClassifiedTestFiles(
     planTestPaths(plan), {root});
 }
@@ -728,16 +730,6 @@ export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
     testPaths: fullCorpus === false && Array.isArray(plan?.tests) ? planTestPaths(plan) : null,
   })}\n`, UTF8);
   return file;
-}
-
-const stringTrimValue = Function.call.bind(String.prototype.trim);
-const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
-
-function headSha(gitRoot = root) {
-  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
-    {cwd: gitRoot, encoding: UTF8});
-  const sha = stringTrimValue(String(result.stdout || ''));
-  return sha.length > 0 ? sha : null;
 }
 
 export function planTestPaths(plan) {

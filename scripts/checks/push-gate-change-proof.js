@@ -48,8 +48,9 @@ import {
   RANGE_SOURCE,
   SELECTION_REFUSED,
 } from './change-selection-constants.js';
-import {resolvedCheckRange} from './changed-paths.js';
+import {resolvedCheckBaseCommit, resolvedCheckRange} from './changed-paths.js';
 import {spawnGit} from './git-invocation.js';
+import {gitProcessEnvironment} from './git-process-environment.js';
 import {
   SUBSYSTEM_MANIFEST_PATH,
 } from './test-subsystem-classification-constants.js';
@@ -133,7 +134,8 @@ const LABEL_RANGE = 'proof range:';
 const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
 const stringTrim = Function.call.bind(String.prototype.trim);
-const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
+const DEFAULT_HEAD = 'HEAD';
+const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', DEFAULT_HEAD]);
 const REV_PARSE_GIT_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
 const CHECK_BASE_ENV_NAME = 'LAGRANGE_CHECK_BASE';
 const LAND_PROOF_FILENAME = 'lagrange-land-proof.json';
@@ -251,7 +253,7 @@ function resolveExpectedBase(env, repoRoot) {
 
 function gitCommonDirectory(git, repoRoot) {
   const common = git([...REV_PARSE_GIT_COMMON_DIR],
-    {cwd: repoRoot, encoding: TEXT_ENCODING});
+    {cwd: repoRoot, encoding: TEXT_ENCODING, env: gitProcessEnvironment()});
   if (common?.status !== EXIT_SUCCESS) return null;
   const commonDir = stringTrim(String(common.stdout || EMPTY_TEXT));
   return commonDir.length > 0 ? commonDir : null;
@@ -442,7 +444,7 @@ function gateReportFile(options) {
 function commitIsPublished(sha, options = {}) {
   const {git = spawnGit} = options;
   const ancestor = git([...ANCESTOR_ARGUMENTS, sha, MAIN_REMOTE_REF],
-    {cwd: root, encoding: TEXT_ENCODING});
+    {cwd: root, encoding: TEXT_ENCODING, env: gitProcessEnvironment()});
   return ancestor?.status === EXIT_SUCCESS;
 }
 
@@ -451,13 +453,13 @@ function commitIsPublished(sha, options = {}) {
 function treeIsCommit(sha, options = {}) {
   const {git = spawnGit} = options;
   const head = git([...HEAD_REVISION_ARGUMENTS],
-    {cwd: root, encoding: TEXT_ENCODING});
+    {cwd: root, encoding: TEXT_ENCODING, env: gitProcessEnvironment()});
   if (head?.status !== EXIT_SUCCESS ||
       stringTrim(String(head.stdout || EMPTY_TEXT)) !== sha) {
     return false;
   }
   const status = git([...STATUS_ARGUMENTS],
-    {cwd: root, encoding: TEXT_ENCODING});
+    {cwd: root, encoding: TEXT_ENCODING, env: gitProcessEnvironment()});
   return status?.status === EXIT_SUCCESS &&
     stringTrim(String(status.stdout || EMPTY_TEXT)) === EMPTY_TEXT;
 }
@@ -528,10 +530,7 @@ export function reportedGateRun({reportRoot, fullCorpus, plan}, run) {
 }
 
 function headRevision() {
-  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
-    {cwd: root, encoding: TEXT_ENCODING});
-  const sha = stringTrim(String(result.stdout || ''));
-  return sha.length > 0 ? sha : null;
+  return resolvedCheckBaseCommit(DEFAULT_HEAD, {}, root);
 }
 
 function main() {

@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {spawnGit} from './checks/git-invocation.js';
+import {gitProcessEnvironment} from './checks/git-process-environment.js';
 
 const EXECUTION_REPORT_SCHEMA = 'lagrange-test-execution-report/v1';
 const EXECUTION_SECTIONS_ENV = 'LAGRANGE_EXECUTION_REPORT';
@@ -90,7 +91,7 @@ const EXECUTION_PROBLEM = Object.freeze({
 // --- writing (runner and producers) ----------------------------------------
 
 function gitText(args, cwd) {
-  const result = spawnGit(args, {cwd, encoding: UTF8,
+  const result = spawnGit(args, {cwd, encoding: UTF8, env: gitProcessEnvironment(),
     stdio: ['ignore', 'pipe', 'pipe']});
   return result.status === 0 ? String(result.stdout).trim() : null;
 }
