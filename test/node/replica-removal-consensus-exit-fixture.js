@@ -248,6 +248,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     partitionId,
     replicaId,
     raft: cluster.node(replicaId),
+    timeSource: replicaStateMachine.timeSource,
     admissionFenced: false,
     fenceServingAdmissionForRemoval() {
       service.admissionFenced = true;
@@ -356,6 +357,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
         await restart.replicaStateMachine.clear();
       }
       handler.shuttingDown = true;
+      await handler.participantReleaseRecovery.shutdown();
       // The production shutdown boundary: close lifecycle admission and
       // advance every generation, so a removal still in flight cannot reach
       // the process-wide raft lifecycle registry (keyed by replica identity)
