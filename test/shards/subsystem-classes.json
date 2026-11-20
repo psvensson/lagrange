@@ -28,7 +28,7 @@
   "censusSize": 2702,
   "digest": "fnv1a32-85148c0c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-47120753",
+  "observationDigest": "fnv1a32-00c71c68",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19031,6 +19031,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -19038,6 +19039,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },

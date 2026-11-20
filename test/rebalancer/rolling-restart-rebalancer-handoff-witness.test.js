@@ -19,6 +19,8 @@ import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
 import {
@@ -34,6 +36,7 @@ import {
   createNodeHosts,
   initializeTestEnvironment,
 } from '../integration/membership-consistency-integration-test-helpers.js';
+import {createCoordinatorSqlStore} from './test-helpers.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -47,12 +50,11 @@ const OPERATION_ID = 'reentry-witness-operation';
 const PARTITION_ID = 'control_plane_publications-p1';
 const OPERATION_TYPE_ADD = 'ADD';
 const WORKFLOW_STEP_PENDING = 'PENDING';
-const REPLICA_OPERATIONS_TABLE = 'replica_operations';
+const REPLICA_OPERATIONS_TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const QUIET_LOGGER = Object.freeze({info() {}, debug() {}});
 const STEP_TIMEOUT_MS = 1000;
 // The operation was created this long before the end of its budget, so the
-// first wake is still inside the budget and the second is past it; the wake's
-// own repository read costs about a second on a node with no partition.
+// first wake is still inside the budget and the second is past it.
 const BUDGET_REMAINING_MS = 3000;
 const PAST_BUDGET_WAIT_MS = 3200;
 const STEP_AGE_MS = 5000;
@@ -66,11 +68,26 @@ const STOP_WAIT = 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT';
  * over the node's real repository, CDC owner, gateway and readiness owner;
  * timers injected (recorded, fired by the test), no jitter, and a router
  * whose remote owner never answers - the deferral the invariant is about.
+ * @param {object} testContext
  * @return {object}
  */
-function createHandoffOwner() {
+function createHandoffOwner(testContext) {
   const cache = new SystemTableCache();
-  const hosts = createNodeHosts(cache, {nodeId: COORDINATOR_NODE_ID});
+  const sqlStore = createCoordinatorSqlStore(cache);
+  testContext.after(() => sqlStore.suspend());
+  const ownerReads = [];
+  const sqlQueryEngine = {
+    executeQuery: sqlStore.execute,
+    queryExecutor: {
+      async executeOnPartition(partitionId, sql, params) {
+        assert.equal(partitionId, INITIAL_PARTITION_IDS[REPLICA_OPERATIONS_TABLE]);
+        const result = sqlStore.execute(sql, params);
+        ownerReads.push({params, result});
+        return result;
+      },
+    },
+  };
+  const hosts = createNodeHosts(cache, {nodeId: COORDINATOR_NODE_ID, sqlQueryEngine});
   const warnings = [];
   const timers = [];
   const deliveries = [];
@@ -132,7 +149,7 @@ function createHandoffOwner() {
     clearTimeoutFn: () => {},
     randomFn: () => 0,
   });
-  return {owner, hosts, repository, warnings, timers, deliveries};
+  return {owner, hosts, repository, warnings, timers, deliveries, ownerReads};
 }
 
 /**
@@ -170,18 +187,19 @@ async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
   const written = await hosts.cdcIntegrationService.insertSystemTableRow(
     REPLICA_OPERATIONS_TABLE, row);
   assert.equal(written.success, true, 'the operation row is written on the real path');
-  return {...repository.rowToOperation(row), ownerNodeId: REMOTE_OWNER_NODE_ID};
+  return repository.rowToOperation(row);
 }
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 test('bounded-owner-reentry: one operation\'s deferred handoff re-entry stops and ' +
   'clears within the operation budget the owner reads, after finitely many deferrals',
-async () => {
+async (testContext) => {
   initializeTestEnvironment();
   const minBackoffMs = OPERATION_WORKFLOW_OWNER_SHARED.DISPATCH_RETRY_DELAY_MS;
   const budgetMs = TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
-  const {owner, hosts, repository, warnings, timers, deliveries} = createHandoffOwner();
+  const {owner, hosts, repository, warnings, timers, deliveries, ownerReads} =
+    createHandoffOwner(testContext);
   // The budget is measured from createdAt on the owner's wall clock, so the
   // operation is dated after the owner is built, right before it is armed.
   const operation = await persistOperationNearBudgetEnd(hosts, repository, Date.now());
@@ -193,6 +211,10 @@ async () => {
   assert.equal(owner.hasActiveCreatedOperationHandoffRetry(OPERATION_ID), true);
   await timers[0].fn();
   await settle(SETTLE_MS);
+  assert.equal(ownerReads.length, 1, 'the wake consulted the partition owner once');
+  assert.deepEqual(ownerReads[0].params, [OPERATION_ID]);
+  assert.equal(ownerReads[0].result.rowSetComplete, true);
+  assert.equal(ownerReads[0].result.rows[0]?.operation_id, OPERATION_ID);
   assert.equal(deliveries.length, 1, 'the wake reached the transport');
   assert.equal(timers.length, 2, 'no answer: the owner deferred again');
   assert.equal(owner.hasActiveCreatedOperationHandoffRetry(OPERATION_ID), true);
@@ -224,3 +246,32 @@ async () => {
   assert.ok(timers.length <= deferralBound,
     `${timers.length} deferrals within a bound of ${deferralBound}`);
 });
+
+test('bounded-owner-reentry rejects absent and wrong-replica SQLite subjects',
+  async (testContext) => {
+    initializeTestEnvironment();
+    const {owner, hosts, repository, timers, deliveries, ownerReads} =
+      createHandoffOwner(testContext);
+    const operation = await persistOperationNearBudgetEnd(hosts, repository, Date.now());
+    const missing = {...operation, operationId: 'absent-reentry-witness'};
+    const wrongReplica = {...operation, replicaId: `${PARTITION_ID}-r3`};
+    const minBackoffMs = OPERATION_WORKFLOW_OWNER_SHARED.DISPATCH_RETRY_DELAY_MS;
+
+    for (const candidate of [missing, wrongReplica]) {
+      assert.equal(owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+        candidate, minBackoffMs, {}), true);
+      await timers.at(-1).fn();
+      assert.equal(owner.hasActiveCreatedOperationHandoffRetry(candidate.operationId), false);
+    }
+
+    assert.equal(timers.length, 2, 'neither rejected subject re-armed a wake');
+    assert.equal(deliveries.length, 0, 'neither rejected subject reached transport');
+    assert.deepEqual(ownerReads.map(({params, result}) => ({
+      params,
+      complete: result.rowSetComplete,
+      replicaIds: result.rows.map((row) => row.replica_id),
+    })), [
+      {params: [missing.operationId], complete: true, replicaIds: []},
+      {params: [wrongReplica.operationId], complete: true, replicaIds: [operation.replicaId]},
+    ]);
+  });
