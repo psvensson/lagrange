@@ -261,6 +261,13 @@ test('late native promotion preserves an incumbent named by an admitted learner 
       assert.equal(changed, null, 'no generic REMOVING row may trigger native peer removal');
       assert.equal(durableLifecycleState(cluster.replica(initial.replica_id).dbFile,
         cluster.partitionId), observed);
+      const terminal = await coordinator.getOperation(removal.operation_id);
+      assert.equal(terminal.workflowStep, 'SUPERSEDED');
+      assert.equal(terminal.status, 'superseded');
+      assert.equal(answer.success, false);
+      assert.equal(answer.skipped, true);
+      assert.equal(coordinator.stats.operationsFailed, 0);
+      assert.equal(coordinator.stats.operationsCompleted, 0);
     } finally {
       await coordinator.shutdown();
       await source.dispose();
@@ -268,15 +275,16 @@ test('late native promotion preserves an incumbent named by an admitted learner 
     }
   }, {createCluster: addressedCluster}));
 
-test('a historical unscoped learner REMOVE never dispatches after the learner becomes a voter',
+for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
+  test(`a historical unscoped REMOVE holds only unresolved dispatch debt (${priorStep})`,
   async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, ledger} = context;
     const admitted = await admitRetirement(context);
     const history = JSON.parse(admitted.removal.steps_history);
     delete history[0].placementAdmission.learnerRetirement;
     assert.equal(commitLedgerStatement(ledger, 'historical-unscoped-removal',
-      'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
-      [JSON.stringify(history), admitted.removal.operation_id]), null);
+      'UPDATE replica_operations SET steps_history = ?, workflow_step = ? WHERE operation_id = ?',
+      [JSON.stringify(history), priorStep, admitted.removal.operation_id]), null);
     const historical = ledgerRows(ledger).find((row) =>
       row.operation_id === admitted.removal.operation_id);
     const rows = admitted.rows.map((row) => row.replica_id !== initial.replica_id ? row :
@@ -294,8 +302,17 @@ test('a historical unscoped learner REMOVE never dispatches after the learner be
     try {
       const result = await coordinator.dispatchOperation(historical);
       const pending = await coordinator.getOperation(historical.operation_id);
-      assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
-      assert.equal(pending.completedAt, null);
+      if (priorStep === WORKFLOW_STEP.PENDING) {
+        assert.equal(result.reconcileOutcome, 'superseded');
+        assert.equal(pending.workflowStep, 'SUPERSEDED');
+        assert.equal(pending.status, 'superseded');
+        assert.ok(Number.isFinite(pending.completedAt));
+      } else {
+        assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+        assert.equal(pending.completedAt, null);
+      }
+      assert.equal(coordinator.stats.operationsFailed, 0);
+      assert.equal(coordinator.stats.operationsCompleted, 0);
       assert.deepEqual(deliveries, []);
       assert.deepEqual(source.serviceChanges, []);
       assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
@@ -306,6 +323,7 @@ test('a historical unscoped learner REMOVE never dispatches after the learner be
       await leader.dispose();
     }
   }, {createCluster: addressedCluster}));
+}
 
 test('guarded disconnect can clear the exact learner on the leader while its host remains lost',
   async (t) => withPlacementLeaseAuthority(async (context) => {
