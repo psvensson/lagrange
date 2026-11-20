@@ -260,7 +260,10 @@ function readOpeningRecord(group) {
 // throws in turn leaves that record as written and is the answer's reason, so
 // containing a throw never throws.
 function containUnexpectedThrow(group, error) {
-  const failed = hostFailure(RUNTIME_PHASE.UNEXPECTED_THROW, error, true);
+  const detail = group.groupId === 'contexts-p1' && error instanceof Error ?
+    {...error.detail, stack: error.stack} : error?.detail;
+  const failed = hostFailure(RUNTIME_PHASE.UNEXPECTED_THROW,
+    {message: error?.message ?? error, detail}, true);
   try {
     groupFailed(group, failed);
   } catch (announcementError) {
