@@ -1,4 +1,9 @@
-import {supersededPlacementOperationError} from './replica-operation-creation-request.js';
+import {
+  buildPartitionPlacementMove,
+  resolvePartitionPlacementIntentKey,
+  resolveRuntimeServiceIntentKey,
+  supersededPlacementOperationError,
+} from './replica-operation-creation-request.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
@@ -224,49 +229,6 @@ function isRetainedAttemptRefusedOrMismatched(answer) {
   if (answer?.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES) return true;
   const result = answer?.[PLACEMENT_RESULT_FIELD];
   return result?.outcome === PLACEMENT_OUTCOME.REFUSED;
-}
-
-function resolveRuntimeServiceIntentKey(context, operationReplicaId) {
-  const {move, criticalAddLikeIntentKey, dedupeKey, entityId, normalizedMoveType} =
-    context;
-  if (move.operationIntentId) return move.operationIntentId;
-  if (criticalAddLikeIntentKey) return criticalAddLikeIntentKey;
-  if (dedupeKey) return dedupeKey;
-  return `runtime_service:${entityId}:${normalizedMoveType}:${move.nodeId}:${operationReplicaId}`;
-}
-
-function resolvePartitionPlacementIntentKey(context) {
-  const {move, criticalAddLikeIntentKey, dedupeKey, partitionId, normalizedMoveType} =
-    context;
-  if (move.operationIntentId) return move.operationIntentId;
-  if (criticalAddLikeIntentKey) return criticalAddLikeIntentKey;
-  if (dedupeKey) return dedupeKey;
-  return `partition:${partitionId}:${normalizedMoveType}:${move.nodeId}`;
-}
-
-function buildPartitionPlacementMove(move, normalizedMoveType, resolvedSourceNodeId) {
-  const isRemove = normalizedMoveType === OperationType.REMOVE;
-  const isReplace = normalizedMoveType === OperationType.REPLACE;
-  const replicaId = isRemove ? (move.replicaId || null) : null;
-  let sourceReplicaId = null;
-  if (isReplace) {
-    sourceReplicaId = move.sourceReplicaId ?
-      move.sourceReplicaId : (move.replicaId || null);
-  }
-  let copySourceNodeId = null;
-  if (!isRemove) {
-    copySourceNodeId = move.copySourceNodeId ?
-      move.copySourceNodeId : resolvedSourceNodeId;
-  }
-  return {
-    type: normalizedMoveType,
-    targetNodeId: move.nodeId,
-    replicaId,
-    sourceReplicaId,
-    copySourceNodeId,
-    targetNodeBootIncarnation: move.targetNodeBootIncarnation ?? null,
-    targetNodeStorageIncarnation: move.targetNodeStorageIncarnation ?? null,
-  };
 }
 
 async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
@@ -582,7 +544,7 @@ const operationCreationSupportMethods = {
 
   async commitSingleCreatedPlacementOperation(context, statement, intentKey) {
     const {requestedMove, entityId} = context;
-    this.assertNativePlacementCreationIdentity(requestedMove);
+    this.assertNativePlacementAliasProof(requestedMove);
     const answer = await this.admitPlacementStatement({
       entryId: requestedMove.entryId ?? null,
       intentKey,

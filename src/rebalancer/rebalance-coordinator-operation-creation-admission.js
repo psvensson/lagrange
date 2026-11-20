@@ -442,7 +442,7 @@ const operationCreationAdmissionMethods = {
     move,
     persistenceOptions,
   ) {
-    if (!matchesExplicitCreationBindings(operation, move)) {
+    if (move.entryId || !matchesExplicitCreationBindings(operation, move)) {
       throw this.createDeferredOperationVisibilityError(operation.type, null, move);
     }
     const admittedObservation = move?.operationCreationAdmission || null;

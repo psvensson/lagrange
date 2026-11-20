@@ -180,7 +180,7 @@ documentClass: generated
 - [replica-inventory.js](replica-inventory.js) - Build the canonical immutable inventory for one rebalancer entity. (importers: many)
 - [replica-operation-constants.js](replica-operation-constants.js) - Replica operation message schema constants. (importers: hub)
 - [replica-operation-create-admission-fields.js](replica-operation-create-admission-fields.js) - No leading comment; first export: operationCarriesReplicaCreateAdmission. (importers: few)
-- [replica-operation-creation-request.js](replica-operation-creation-request.js) - No leading comment; first export: supersededPlacementOperationError. (importers: few)
+- [replica-operation-creation-request.js](replica-operation-creation-request.js) - No leading comment; first export: buildPartitionPlacementMove. (importers: few)
 - [replica-operation-insert-disposition.js](replica-operation-insert-disposition.js) - No leading comment; first export: REPLICA_OPERATION_INSERT_DISPOSITION. (importers: many)
 - [replica-operation-liveness.js](replica-operation-liveness.js) - No leading comment; first export: DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP. (importers: hub)
 - [replica-operation-membership-epoch-binding.js](replica-operation-membership-epoch-binding.js) - Replica-operation membership-publication epoch binding - the single owner of the durable-to-semantic decode for a... (importers: many)
