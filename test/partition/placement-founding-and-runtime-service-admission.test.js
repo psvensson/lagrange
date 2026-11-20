@@ -507,6 +507,63 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
     });
   });
 
+  it('requires exact committed placement visibility before resolving a retained create', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        const submit = coordinator.submitPlacementPayload.bind(coordinator);
+        const attempts = [];
+        coordinator.submitPlacementPayload = async (request, timeoutMs) => {
+          attempts.push(request.entryId);
+          const answer = await submit(request, timeoutMs);
+          return attempts.length === 1 ? {
+            success: false,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          } : answer;
+        };
+        const repo = coordinator.repository;
+        const read = repo.queryAuthoritativeOperationById.bind(repo);
+        let readable = false;
+        repo.queryAuthoritativeOperationById = async (operationId) =>
+          readable ? read(operationId) : null;
+        repo.queryAuthoritativeOperationVisibilityObservation = async (operationId) => ({
+          operation: readable ? await read(operationId) : null,
+          deferredOutcome: readable ? null : {retryAfterMs: 20},
+        });
+        const original = {
+          type: OperationType.ADD,
+          partitionId: USER_PARTITION_ID,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          operationIntentId: 'retained-placement-create',
+        };
+        const conflicting = {...original, nodeId: NODE.C};
+
+        await assert.rejects(() => coordinator.createOperation(original),
+          {failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
+        const [held] = ledgerRows(leader);
+        assert.equal(held.target_node_id, original.nodeId);
+        await assert.rejects(() => coordinator.createOperation(conflicting),
+          {rebalanceSkipReason: 'deferred_retry_pending'});
+        assert.deepEqual(ledgerRows(leader), [held]);
+
+        readable = true;
+        await assert.rejects(() => coordinator.createOperation(conflicting),
+          {rebalanceSkipReason: 'budget_exceeded'});
+        const resolved = await coordinator.createOperation(original);
+        assert.equal(resolved.operationId, held.operation_id);
+        assert.equal(resolved.targetNodeId, original.nodeId);
+        assert.deepEqual(attempts, [attempts[0], attempts[0]],
+          'settled retained admission needs owner visibility, without another proposal');
+        assert.deepEqual(ledgerRows(leader), [held]);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
   it('retains {entryId, statement} across OUTCOME_UNKNOWN retry and allocates fresh entryId when retained attempt settled as REFUSED and statement changed (Finding 5)', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       // First: create an in-flight ledger move so FOUND attempt A commits as
