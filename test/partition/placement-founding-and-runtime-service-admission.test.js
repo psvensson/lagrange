@@ -678,6 +678,87 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
     });
   });
 
+  it('rechecks every explicit physical constraint against one committed creation row', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        coordinator.recentOperationIntents = new Map();
+        delete coordinator.getRecentOperationIntent;
+        delete coordinator.rememberOperationIntents;
+        const wakes = [];
+        coordinator.armCoordinatorCreatedOperationProgress = async (operation) => {
+          wakes.push(operation.operationId);
+          return false;
+        };
+        const original = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          copySourceNodeId: NODE.A,
+          targetNodeBootIncarnation: 21,
+          targetNodeStorageIncarnation: 31,
+        };
+        const created = await coordinator.createOperation(original);
+        const [held] = ledgerRows(leader);
+        assert.equal(held.copy_source_node_id, original.copySourceNodeId);
+        const cases = [
+          {targetNodeBootIncarnation: 22},
+          {targetNodeStorageIncarnation: 32},
+          {copySourceNodeId: NODE.C},
+        ];
+        for (const constraint of cases) {
+          const count = wakes.length;
+          await assert.rejects(() => coordinator.createOperation({...original, ...constraint}),
+            {rebalanceSkipReason: 'budget_exceeded'});
+          assert.equal(wakes.length, count, 'a conflicting request cannot rearm the owner');
+          const replay = await coordinator.createOperation(original);
+          assert.equal(replay.operationId, created.operationId);
+        }
+        assert.equal(proposed.length, 1);
+        assert.deepEqual(ledgerRows(leader), [held]);
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
+  it('a reconstructed coordinator distinguishes a native entry from unproved caller aliases', async () => {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const coordinator = createCoordinatorWithLedger(leader);
+        const original = {
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: USER_PARTITION_ID,
+          partitionId: USER_PARTITION_ID,
+          nodeId: NODE.B,
+          entryId: 'known-native-entry-without-planner-aliases',
+        };
+        const created = await coordinator.createOperation(original);
+        const [held] = ledgerRows(leader);
+        const rebuilt = createCoordinatorWithLedger(leader);
+        for (const alias of [
+          {operationIntentId: 'unproved-operation-alias'},
+          {replicaIntentId: 'unproved-replica-alias'},
+        ]) {
+          await assert.rejects(() => rebuilt.createOperation({...original, ...alias}),
+            {rebalanceSkipReason: 'deferred_retry_pending'});
+          assert.deepEqual(ledgerRows(leader), [held]);
+        }
+        const replay = await rebuilt.createOperation(original);
+        assert.equal(replay.operationId, created.operationId);
+        assert.deepEqual(ledgerRows(leader), [held]);
+        assert.equal(proposed.length, 1, 'native replay uses the original command receipt');
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  });
+
   it('requires committed formation only for its gated placement classes', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
