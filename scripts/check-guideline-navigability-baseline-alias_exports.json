@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T17:56:57.266Z",
+  "generatedAt": "2026-11-14T21:05:37.928Z",
   "rawViolationCount": 38,
   "violations": [
     {
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-load-lane-admission.js",
-      "line": 651,
+      "line": 791,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -203,7 +203,7 @@
     },
     {
       "filePath": "src/partition/partition-cdc-obligation-ledger.js",
-      "line": 516,
+      "line": 546,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

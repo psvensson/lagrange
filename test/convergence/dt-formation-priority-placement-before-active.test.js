@@ -1,7 +1,4 @@
 import t from 'tap';
-import {
-  NodeJoiningReadySignalReadiness,
-} from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {
   REBALANCER_ENTITY_TYPE,
@@ -26,30 +23,14 @@ import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  isRetryableControlPlaneError,
-} from '../../src/control-plane/control-plane-error-classification.js';
-import {
-  deriveMembershipPublicationCandidate,
-} from '../../src/control-plane/membership-publication-coordinator.js';
-import {
-  buildStartupAuthoritySnapshotFromPlanningAnswer,
-} from '../../src/control-plane/startup-authority-snapshot-owner.js';
-import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-} from '../../src/control-plane/control-plane-constants.js';
-import {
-  STARTUP_JOIN_MODE,
-} from '../../src/bootstrap/rejoin-hints-constants.js';
+  SERVE_ELIGIBILITY_STATE,
+} from '../../src/control-plane/serve-eligibility-owner.js';
 import {
   LEDGER_PARTITION_ID,
   SEED_NODE_ID,
   JOINER_1_NODE_ID,
-  JOINER_2_NODE_ID,
-  JOINER_3_NODE_ID,
-  JOINER_4_NODE_ID,
   JOINER_NODE_IDS,
   applyRow,
-  buildFormationBarrierOwner,
   buildFormationCache,
   buildOwnerDerivedStartupAuthoritySnapshot,
   buildRealLedgerPlanner,
@@ -57,45 +38,6 @@ import {
   initializeEnvironment,
   resetEnvironment,
 } from './formation-barrier-test-fixture.js';
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {promise, resolve};
-}
-
-function createReadySignalOwner({formationBarrier, heartbeatCalls}) {
-  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
-  owner.nodeId = 'joining-node';
-  owner.config = {
-    readySignalMaxAttempts: 1,
-    readySignalRetryDelayMs: 1,
-    readySignalRetryMaxDelayMs: 1,
-    readySignalRetryBackoffMultiplier: 1,
-  };
-  owner.logger = {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  };
-  owner.sleep = async () => {};
-  owner.awaitCdcSubscriptionsForReadiness = async () => {};
-  owner.runBackgroundCdcCatchupAfterSubscription = () => {};
-  owner.awaitLocalQueryTransportReadinessForReadySignal = async () => {};
-  owner.awaitMetadataPublicationReadinessForReadySignal = async () => {};
-  owner.awaitOperationLedgerFormationBarrier = async () => {
-    await formationBarrier.promise;
-  };
-  owner.getNodeCapabilities = () => [];
-  owner.heartbeatService = {
-    sendHeartbeat: async () => {
-      heartbeatCalls.push('heartbeat');
-    },
-  };
-  return owner;
-}
 
 async function executeLedgerFormationTick({
   cache,
@@ -146,9 +88,6 @@ async function executeLedgerFormationTick({
       ...sourceRow,
       node_id: move.nodeId,
     });
-    // The simulated physical move includes its committed membership change:
-    // the target's configuration no longer holds the source (C1, quest
-    // replace-source-removal-owner - a REPLACE completes only on that).
     witness.commitRemoval();
   } else if (move.type === REBALANCER_MOVE_TYPE.ADD) {
     const targetReplicaId = operation.replicaId;
@@ -180,7 +119,7 @@ async function executeLedgerFormationTick({
     ),
     joinersPublicReady: cache
       .filter('nodes', (node) => node.node_id !== SEED_NODE_ID)
-      .some((node) => Number.isFinite(node.ready_lease_expires_at)),
+      .every((node) => Number.isFinite(node.ready_lease_expires_at)),
   });
   executionState.pendingOperation = {move, operation};
 }
@@ -205,7 +144,7 @@ t.test(
     t.same(
       startupAuthority.canonicalStartupNodeIds,
       [...JOINER_NODE_IDS, SEED_NODE_ID].sort(),
-      'the barrier and priority rebalancer consume the same owner-authored cohort',
+      'the priority rebalancer consumes the owner-authored cohort',
     );
     t.notOk(
       startupAuthority.ready,
@@ -215,178 +154,18 @@ t.test(
 );
 
 t.test(
-  'an engaged formation barrier renews CONNECTED liveness across the ' +
-    'projection expiry window without publishing a READY lease',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    let now = 0;
-    const livenessPublications = [];
-    const owner = buildFormationBarrierOwner({
-      cache,
-      now: () => now,
-      sleep: async (delayMs) => {
-        now += delayMs;
-      },
-    });
-    owner.config.priorityPlacementFormationPollMs = 30000;
-    owner.config.priorityPlacementFormationTimeoutMs = 120000;
-    owner.config.heartbeatIntervalMs = 10000;
-    owner.sendControlPlaneNodeStateUpdate = async (publication) => {
-      livenessPublications.push(publication);
-    };
-    owner.getOperationLedgerFormationBarrierSnapshot = async () => ({
-      now,
-      partitionId: LEDGER_PARTITION_ID,
-      targetReplicaCount: 3,
-      startupAuthorityAvailable: true,
-      startupAuthorityState:
-        now >= 90000 ? 'ready' : 'recovery_pending',
-      startupAuthorityReady: now >= 90000,
-      startupAuthorityRecoveryReasonCodes:
-        now >= 90000 ? [] : ['priority_partitions_not_spread'],
-      startupAuthorityPublicationRecoveryGateState:
-        now >= 90000 ? 'ready' : 'priority_spread_pending',
-      candidateNodeIds: Object.freeze([
-        SEED_NODE_ID,
-        ...JOINER_NODE_IDS,
-      ]),
-      preReadyCandidateNodeIds: Object.freeze([...JOINER_NODE_IDS]),
-    });
-
-    try {
-      await owner.awaitOperationLedgerFormationBarrier();
-
-      t.same(
-        livenessPublications.map((publication) => publication.heartbeatAt),
-        [0, 30000, 60000],
-        'the waiting owner refreshes liveness throughout a barrier longer than the 60-second projection grace',
-      );
-      t.ok(
-        livenessPublications.every(
-          (publication) =>
-            publication.state === 'connected' &&
-            publication.heartbeatOnly === true &&
-            publication.readyLeaseExpiresAt === undefined &&
-            publication.nodeStatePublicationMode ===
-              CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
-        ),
-        'formation publications stay on the critical liveness lane without carrying a ready lease',
-      );
-
-      const lastHeartbeatAt =
-        livenessPublications[livenessPublications.length - 1].heartbeatAt;
-      const remotePlanningAnswer = deriveMembershipPublicationCandidate({
-        publisherNodeId: JOINER_4_NODE_ID,
-        sourceTopologyEpoch: 1,
-        sourceSnapshotVersion: 2,
-        nowMs: now,
-        latestPublicationRow: {
-          publication_epoch: 1,
-          status: 'PUBLISHED',
-          published_active_node_ids: [SEED_NODE_ID],
-          required_ack_node_ids: [SEED_NODE_ID],
-          acknowledged_node_ids: [SEED_NODE_ID],
-          priority_partition_summary: {
-            satisfied: false,
-            missingPartitionIds: [LEDGER_PARTITION_ID],
-          },
-        },
-        nodeRows: [
-          {
-            node_id: SEED_NODE_ID,
-            status: ReplicaStatus.ACTIVE,
-            connection_state: 'ready',
-            last_heartbeat: now,
-            ready_lease_expires_at: now + 60000,
-          },
-          {
-            node_id: JOINER_1_NODE_ID,
-            status: ReplicaStatus.ACTIVE,
-            connection_state: 'connected',
-            last_heartbeat: lastHeartbeatAt,
-            ready_lease_expires_at: null,
-          },
-          {
-            node_id: JOINER_4_NODE_ID,
-            status: ReplicaStatus.ACTIVE,
-            connection_state: 'connected',
-            last_heartbeat: now,
-            ready_lease_expires_at: null,
-          },
-        ],
-        readinessEntries: [],
-        connectedNodeIds: [SEED_NODE_ID, JOINER_4_NODE_ID],
-      });
-      const remoteStartupAuthority =
-        buildStartupAuthoritySnapshotFromPlanningAnswer(
-          remotePlanningAnswer,
-        );
-
-      t.ok(
-        remoteStartupAuthority.canonicalStartupNodeIds.includes(
-          JOINER_1_NODE_ID,
-        ),
-        'a later remote ledger owner retains the refreshed pre-ready joiner in its canonical recovery cohort',
-      );
-    } finally {
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'join finalization keeps the public ready lease closed until the operation ' +
-    'ledger formation barrier releases',
-  async (t) => {
-    const formationBarrier = deferred();
-    const heartbeatCalls = [];
-    const owner = createReadySignalOwner({
-      formationBarrier,
-      heartbeatCalls,
-    });
-
-    const readySignal = owner.signalReadyForReplicas();
-    await new Promise((resolve) => setImmediate(resolve));
-
-    t.equal(
-      heartbeatCalls.length,
-      0,
-      'the ACTIVE/ready heartbeat is not published while ledger placement is concentrated',
-    );
-
-    formationBarrier.resolve();
-    await readySignal;
-
-    t.equal(
-      heartbeatCalls.length,
-      1,
-      'the normal heartbeat publication resumes after ledger concentration closes',
-    );
-  },
-);
-
-t.test(
   'real placement and coordinator owners use one ledger REPLACE then ' +
-    'expand-drain before the join barrier permits public readiness',
+    'expand-drain over READY joiners to cure ledger concentration',
   async (t) => {
     initializeEnvironment();
     const cache = buildFormationCache();
     const fixture = createTimeoutTestCoordinator();
     fixture.coordinator.systemTableCache = cache;
-    // The REPLACE target's own configuration, as the REPLACE owner reads it
-    // (quest replace-source-removal-owner, C1): the source is a voter until
-    // the tick's physical move commits its removal. F1: the witness answers
-    // as the group's leader (the completion authority is the leader's
-    // answer; the planner picks the target, so it is not known up front).
     const witness = createReplaceWitness({addressedLeads: true});
     const router = fixture.coordinator.messageRouter;
     const baseDeliver = router.deliver.bind(router);
     router.deliver = async (target, payload, options) =>
       witness.deliveryFor(payload) ?? baseDeliver(target, payload, options);
-    // The priority surplus REMOVE placement fence only admits the drain when
-    // the strict owner-RPC services lane proves current placement, so the
-    // authoritative owner answers from the live formation cache.
     const gateway = fixture.coordinator.controlPlaneSystemTableGateway;
     const baseReadAuthoritativeRows =
       gateway.readAuthoritativeRows.bind(gateway);
@@ -412,17 +191,14 @@ t.test(
     );
     const events = [];
     const executionState = {pendingOperation: null};
-    let now = 1000;
-    const owner = buildFormationBarrierOwner({
-      cache,
-      coordinator: fixture.coordinator,
-      isStartupAuthorityReady: () =>
-        !isLedgerQuorumConcentratedPartition(cache, LEDGER_PARTITION_ID) &&
-        [...fixture.trackedOperations.values()].every((operation) =>
-          isTerminalStep(operation.type, operation.workflow_step),
-        ),
-      now: () => now,
-      sleep: async (delayMs) => {
+    const isFormationCureDone = () =>
+      !isLedgerQuorumConcentratedPartition(cache, LEDGER_PARTITION_ID) &&
+      [...fixture.trackedOperations.values()].every((operation) =>
+        isTerminalStep(operation.type, operation.workflow_step),
+      );
+
+    try {
+      for (let tick = 0; tick < 12 && !isFormationCureDone(); tick += 1) {
         await executeLedgerFormationTick({
           cache,
           coordinator: fixture.coordinator,
@@ -431,12 +207,7 @@ t.test(
           events,
           witness,
         });
-        now += delayMs;
-      },
-    });
-
-    try {
-      await owner.awaitOperationLedgerFormationBarrier();
+      }
 
       t.equal(
         events.length,
@@ -466,9 +237,9 @@ t.test(
         events.some((event) => event.terminalAtPhysicalSpread),
         'the regression preserves production DELETE-before-terminal ordering',
       );
-      t.notOk(
-        events.some((event) => event.joinersPublicReady),
-        'no joiner exposes a ready lease while formation work is running',
+      t.ok(
+        events.every((event) => event.joinersPublicReady),
+        'joiners hold their local READY leases while ledger placement spreads',
       );
       const spreadNodeIds = new Set(
         currentLedgerReplicas(cache).map((row) => row.node_id),
@@ -488,7 +259,7 @@ t.test(
             !isTerminalStep(operation.type, operation.workflow_step),
         ).length,
         0,
-        'all durable coordinator operations are terminal before release',
+        'all durable coordinator operations are terminal',
       );
     } finally {
       await fixture.coordinator.shutdown();
@@ -498,225 +269,90 @@ t.test(
 );
 
 t.test(
-  'an intentionally two-node cohort bypasses the three-voter formation ' +
-    'barrier instead of deadlocking join readiness',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    for (const nodeId of JOINER_NODE_IDS.slice(1)) {
-      cache.applySystemTableChange('nodes', 'DELETE', {node_id: nodeId});
-    }
-    let now = 2000;
-    let sleepCalls = 0;
-    const owner = buildFormationBarrierOwner({
-      cache,
-      now: () => now,
-      sleep: async (delayMs) => {
-        sleepCalls++;
-        now += delayMs;
-      },
-    });
-
-    try {
-      await owner.awaitOperationLedgerFormationBarrier();
-      t.equal(
-        sleepCalls,
-        0,
-        'discovery expiry bypasses immediately when fewer than three live startup-authority nodes exist',
-      );
-    } finally {
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'sequential third-node growth bypasses the cold-wave barrier when the other ' +
-    'two nodes already have public ready leases',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    const now = Date.now();
-    for (const nodeId of JOINER_NODE_IDS.slice(1)) {
-      cache.applySystemTableChange('nodes', 'UPDATE', {
-        ...cache.get('nodes', nodeId),
-        ready_lease_expires_at: now + 60000,
-      });
-    }
-    let sleepCalls = 0;
-    const owner = buildFormationBarrierOwner({
-      cache,
-      now: () => now,
-      sleep: async () => {
-        sleepCalls++;
-      },
-    });
-
-    try {
-      await owner.awaitOperationLedgerFormationBarrier();
-      t.equal(
-        sleepCalls,
-        0,
-        'one pre-ready joiner retains the ordinary ready-then-rebalance growth path',
-      );
-    } finally {
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'durable rejoin bypasses a cold-formation cohort made solely from two ' +
-    'temporarily pre-ready canonical peers',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    const createOwner = (startupMode) => {
-      let now = 2500;
-      let snapshotCalls = 0;
-      const owner = buildFormationBarrierOwner({
-        cache,
-        startupMode,
-        now: () => now,
-        sleep: async (delayMs) => {
-          now += delayMs;
-        },
-      });
-      owner.config.priorityPlacementFormationTimeoutMs = 2;
-      owner.getOperationLedgerFormationBarrierSnapshot = async () => {
-        snapshotCalls++;
-        return Object.freeze({
-          now,
-          partitionId: LEDGER_PARTITION_ID,
-          targetReplicaCount: 3,
-          startupAuthorityAvailable: true,
-          startupAuthorityState: 'recovery_pending',
-          startupAuthorityReady: false,
-          startupAuthorityRecoveryReasonCodes: Object.freeze([
-            'priority_partitions_not_spread',
-          ]),
-          startupAuthorityPublicationRecoveryGateState:
-            'priority_spread_pending',
-          candidateNodeIds: Object.freeze([
-            JOINER_1_NODE_ID,
-            JOINER_2_NODE_ID,
-            JOINER_3_NODE_ID,
-          ]),
-          preReadyCandidateNodeIds: Object.freeze([
-            JOINER_2_NODE_ID,
-            JOINER_3_NODE_ID,
-          ]),
-        });
-      };
-      return {
-        owner,
-        getSnapshotCalls: () => snapshotCalls,
-      };
-    };
-
-    try {
-      const durable = createOwner(STARTUP_JOIN_MODE.DURABLE_REJOIN);
-      const durableError = await durable.owner
-        .awaitOperationLedgerFormationBarrier()
-        .then(() => null, (error) => error);
-
-      t.equal(
-        durableError,
-        null,
-        'durable reentry does not inherit cold-formation waiting from peer ready-lease quarantine',
-      );
-      t.equal(
-        durable.getSnapshotCalls(),
-        0,
-        'durable reentry is classified before polling formation evidence',
-      );
-
-      for (const startupMode of [
-        STARTUP_JOIN_MODE.FRESH_JOIN,
-        'unsupported_mode',
-      ]) {
-        const formation = createOwner(startupMode);
-        const formationError = await formation.owner
-          .awaitOperationLedgerFormationBarrier()
-          .then(() => null, (error) => error);
-        t.match(
-          formationError,
-          {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
-          `${startupMode} remains fail-closed on the same incomplete ledger snapshot`,
-        );
-        t.ok(
-          formation.getSnapshotCalls() > 0,
-          `${startupMode} still consumes formation evidence`,
-        );
-      }
-    } finally {
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'a feasible cold-formation cohort fails closed and remains resumable when ' +
-    'ledger voter observation is incomplete',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    cache.applySystemTableChange('services', 'DELETE', {
-      service_id: `${LEDGER_PARTITION_ID}-r3`,
-    });
-    let now = 3000;
-    const owner = buildFormationBarrierOwner({
-      cache,
-      now: () => now,
-      sleep: async (delayMs) => {
-        now += delayMs;
-      },
-    });
-    owner.config.priorityPlacementFormationTimeoutMs = 3;
-
-    try {
-      const error = await owner
-        .awaitOperationLedgerFormationBarrier()
-        .then(() => null, (failure) => failure);
-      t.match(
-        error,
-        {
-          code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT',
-          retryable: true,
-          deferRetry: true,
-        },
-        'an unavailable canonical release cannot be inferred from local rows',
-      );
-      t.equal(
-        isRetryableControlPlaneError(error),
-        true,
-        'the join resume owner preserves the cold-formation cohort after a transient timeout',
-      );
-    } finally {
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'pre-lease startup-authority targetability remains closed for ordinary ' +
+  'pre-ready nodes are never placement targets for priority or ordinary ' +
     'partitions',
   async (t) => {
-    const rebalancer = Object.create(UnifiedRebalancer.prototype);
-    rebalancer.isControlPlanePriorityPartition = () => false;
-
-    t.equal(
-      rebalancer.isStartupAuthorityControlPlanePlacementEligibleNode(
+    initializeEnvironment();
+    try {
+      const now = Date.now();
+      const nodeRows = [
+        {
+          node_id: SEED_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          connection_state: 'ready',
+          ready_lease_expires_at: now + 60000,
+        },
         {
           node_id: JOINER_1_NODE_ID,
           status: ReplicaStatus.ACTIVE,
           connection_state: 'connected',
           ready_lease_expires_at: null,
         },
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      ),
-      false,
-      'the startup-authority grace cannot escape the priority partition classifier',
-    );
+      ];
+      for (const entityId of [LEDGER_PARTITION_ID, 'ordinary-p1']) {
+        const rebalancer = new UnifiedRebalancer({
+          entityId,
+          entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+          nodeId: SEED_NODE_ID,
+          systemTableCache: {
+            get: () => null,
+            getAll: (tableName) => (tableName === 'nodes' ? nodeRows : []),
+            filter: () => [],
+          },
+          cdcIntegrationService: {
+            insertSystemTableRow: async () => ({success: true}),
+            updateSystemTableRow: async () => ({success: true}),
+          },
+          tablePolicyService: {
+            getPolicyForPartition: () => ({
+              minReplicaCount: 3,
+              targetReplicaCount: 3,
+            }),
+          },
+          messageRouter: {
+            getConnectionState: () => 'connected',
+            isOutboundQueueAvailable: () => true,
+            getConnectedNodes: () => [SEED_NODE_ID, JOINER_1_NODE_ID],
+          },
+          rebalanceCoordinator: {
+            getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+          },
+          sqlQueryEngine: {
+            executeQuery: async () => ({success: true, rows: []}),
+          },
+          controlPlaneReadinessService: {
+            answerCommittedNodes: () => ({
+              state: SERVE_ELIGIBILITY_STATE.READY,
+              epoch: {
+                publicationEpoch: 1,
+                publicationId: 'cluster_membership-1',
+                readAtMs: 0,
+              },
+              nodeRows,
+            }),
+            getNodeReadinessSync: (nodeId) => ({
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              },
+              reasons: [],
+            }),
+            getStartupAuthoritySnapshotSync: () => ({
+              authorityAvailable: true,
+              canonicalStartupNodeIds: [SEED_NODE_ID, JOINER_1_NODE_ID],
+            }),
+          },
+        });
+        t.same(
+          rebalancer.getAvailableNodes().map((node) => node.node_id),
+          [SEED_NODE_ID],
+          `${entityId} admits only READY-leased nodes`,
+        );
+      }
+    } finally {
+      resetEnvironment();
+    }
   },
 );

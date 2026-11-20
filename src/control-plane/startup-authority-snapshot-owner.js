@@ -566,3 +566,25 @@ function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
     projectionReadinessContract,
   });
 }
+
+const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = Object.freeze(new Set());
+
+/**
+ * The canonical startup cohort of an available startup authority, as a set
+ * of node ids (empty when the authority is unavailable or names nobody).
+ * @param {Object|null} startupAuthority
+ * @return {Set<string>}
+ */
+export function resolveStartupAuthorityNodeIdSet(startupAuthority) {
+  if (startupAuthority?.authorityAvailable !== true) {
+    return EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
+  }
+  const nodeIds = Array.isArray(startupAuthority.canonicalStartupNodeIds) ?
+    startupAuthority.canonicalStartupNodeIds.filter(
+      (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
+    ) :
+    [];
+  return nodeIds.length > 0 ?
+    new Set(nodeIds) :
+    EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
+}

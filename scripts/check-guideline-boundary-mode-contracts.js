@@ -42,16 +42,6 @@ const BOUNDARY_MODE_HOTSPOT_CONTRACTS = Object.freeze({
       'options?.readStrategy',
       'options?.requireAuthoritative',
     ]),
-  'src/bootstrap/node-joining-operation-ledger-formation-readiness.js':
-    Object.freeze([
-      'completeFormationPlacementByPartition',
-      'getEntityAuthoritativeOperationObservation',
-      'getOperationLedgerFormationDrainObservation',
-      'getOperationLedgerFormationPlacementObservation',
-      'getOperationLedgerQuorumObservation',
-      'isLedgerQuorumConcentratedPartition',
-      'readReadinessOwnerRows',
-    ]),
   'src/bootstrap/bootstrap-service-runtime-methods.js': Object.freeze([
     'registerBootstrapReadyHandler',
     'upsertNodeConnectionState',

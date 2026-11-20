@@ -85,7 +85,6 @@ function classifyCriticalNode(rebalancer, nodeRow, context) {
   if (!isWithinStartupAuthority(context, nodeId) || !status) {
     return null;
   }
-  if (rebalancer.isFormationCohortSpreadCureTarget(nodeRow)) return null;
   switch (status) {
   case NodeStatus.FAILED:
     return {kind: CRITICAL_NODE_KIND.FAILED, nodeId};

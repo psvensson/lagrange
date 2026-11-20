@@ -1,5 +1,6 @@
 /**
- * CL-044 residual falsifier: the recovery planner reaches operation creation,
+ * Priority-recovery mutation admission falsifier: the recovery planner reaches
+ * operation creation,
  * but the coordinator's strict readiness read can be replaced by a token-stale
  * deferred snapshot that erases priorityRecovery.active. The already-proven
  * operation-creation authority must survive the move handoff so admission does
@@ -170,7 +171,7 @@ function buildMoveExecution() {
   return {rebalancer, requests};
 }
 
-test('CL-044 recovery move minter carries the owner-issued operation-creation ' +
+test('recovery move minter carries the owner-issued operation-creation ' +
   'authority into coordinator admission', (t) => {
   const move = buildOwnerMintedRecoveryMove();
 
@@ -183,7 +184,7 @@ test('CL-044 recovery move minter carries the owner-issued operation-creation ' 
   t.end();
 });
 
-test('CL-044 coordinator request preserves the recovery operation-creation ' +
+test('coordinator request preserves the recovery operation-creation ' +
   'authority', async (t) => {
   const move = buildOwnerMintedRecoveryMove();
   const {rebalancer, requests} = buildMoveExecution();
@@ -198,7 +199,7 @@ test('CL-044 coordinator request preserves the recovery operation-creation ' +
   );
 });
 
-test('CL-044 inherited recovery authority cannot cross coordinator execution',
+test('inherited recovery authority cannot cross coordinator execution',
   async (t) => {
     const {rebalancer, requests} = buildMoveExecution();
 
@@ -211,7 +212,7 @@ test('CL-044 inherited recovery authority cannot cross coordinator execution',
     );
   });
 
-test('CL-044 accessor recovery authority is neither invoked nor propagated',
+test('accessor recovery authority is neither invoked nor propagated',
   async (t) => {
     const {move, readCount} = buildAccessorAuthorityMove();
     const {rebalancer, requests} = buildMoveExecution();
@@ -225,7 +226,7 @@ test('CL-044 accessor recovery authority is neither invoked nor propagated',
     );
   });
 
-test('CL-044 token-stale deferred readiness cannot veto an authorized ' +
+test('token-stale deferred readiness cannot veto an authorized ' +
   'priority-recovery cure', async (t) => {
   const policy = createPolicy(buildDeferredReadiness());
   const error = await catchAdmissionError(
@@ -240,7 +241,7 @@ test('CL-044 token-stale deferred readiness cannot veto an authorized ' +
   );
 });
 
-test('CL-044 token-stale deferred readiness still rejects a priority move ' +
+test('token-stale deferred readiness still rejects a priority move ' +
   'without operation-creation authority', async (t) => {
   const policy = createPolicy(buildDeferredReadiness());
   const error = await catchAdmissionError(
@@ -255,7 +256,7 @@ test('CL-044 token-stale deferred readiness still rejects a priority move ' +
   );
 });
 
-test('CL-044 token-stale deferred readiness rejects inherited authority',
+test('token-stale deferred readiness rejects inherited authority',
   async (t) => {
     const policy = createPolicy(buildDeferredReadiness());
     const error = await catchAdmissionError(
@@ -270,7 +271,7 @@ test('CL-044 token-stale deferred readiness rejects inherited authority',
     );
   });
 
-test('CL-044 token-stale deferred readiness rejects accessor authority ' +
+test('token-stale deferred readiness rejects accessor authority ' +
   'without invoking it', async (t) => {
   const policy = createPolicy(buildDeferredReadiness());
   const {move, readCount} = buildAccessorAuthorityMove();
@@ -284,7 +285,7 @@ test('CL-044 token-stale deferred readiness rejects accessor authority ' +
   );
 });
 
-test('CL-044 operation-creation authority cannot exempt ordinary partition ' +
+test('operation-creation authority cannot exempt ordinary partition ' +
   'background churn', async (t) => {
   const policy = createPolicy(buildDeferredReadiness());
   const error = await catchAdmissionError(
@@ -299,7 +300,7 @@ test('CL-044 operation-creation authority cannot exempt ordinary partition ' +
   );
 });
 
-test('CL-044 a fresh closed recovery lane rejects even a stale move ' +
+test('a fresh closed recovery lane rejects even a stale move ' +
   'authority marker', async (t) => {
   const policy = createPolicy(buildFreshClosedReadiness());
   const error = await catchAdmissionError(

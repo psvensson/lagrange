@@ -1,0 +1,77 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-ready-lease-independent-of-spread",
+  "class": "product",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "For every arrival order of the joiners of a formation, and with no timer expiring: every joiner whose node-local gates pass publishes its READY lease; the priority control-plane partitions, including the operation ledger, reach min(3, eligible) distinct voter holders; no client-facing cluster gate (serve eligibility, /readyz) opens before that spread is published; and no removal ever drops a priority partition below its voter-ready floor on READY nodes. A node's READY lease states only that the node can serve; 'formation complete' is the one published priority-partition summary owned by membership publication and is consumed where it protects (serve eligibility, /readyz, ordinary placement, the ledger quorum hold). The join operation-ledger formation barrier, the formation-release handoff (closure owner, contract, evidence, identity, publication, coordinator and the consumer read), the formation-release observer and the pre-READY priority-placement path with its carve-outs are removed from source, tests, decision tables, models, registries and documentation, not disabled.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/formation-ready-lease-independent-of-spread/evidence/receipt.json",
+      "requiredReceipts": [
+        "reproducer-red-on-main",
+        "reproducer-and-owned-roots-green-on-candidate",
+        "removed-mechanism-census-zero",
+        "formation-stage-completes-on-lab",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-repair-not-service-acceptance",
+      "statement": "Bounded repair of the formation deadlock measured on 2026-11-14 in the registered scenario fresh-formation-user-table-routability on local-three-node.json (lab job on tv-dator, evidence design/repeat-fail-analysis.md): seed active, both joiners inactive at the 135 s bound, each waiting in the join formation barrier for a startup authority that could not become READY without them. Closing this quest does not close the service quest fresh-formation-user-table-routability; its receipt (scenario green three consecutive times on lab hosts with unchanged predicates and bounds, on the composed stack) remains owed and is recorded as the remaining service blocker."
+    },
+    {
+      "id": "no-timer-no-bound-no-retry",
+      "statement": "No timeout, bound, retry count, delay or polling interval is added or changed to obtain liveness. The reproducer drives real owners in frozen time to a fixpoint and asserts that every admitted joiner holds a READY lease with no timer having expired, for the losing order (two joiners entering one membership derivation after a revoked first generation), a negative control and a sweep over arrival orders."
+    },
+    {
+      "id": "ready-means-node-can-serve",
+      "statement": "READY lease publication awaits only node-local gates (CDC subscription, local query transport, metadata publication readiness) and the durable NODES write. It awaits no cluster-level fact. This implements the binding ruling of 2026-09-28: one semantic READY owner at the durable NODES lifecycle boundary."
+    },
+    {
+      "id": "one-formation-fact-consumed-where-it-protects",
+      "statement": "Formation complete is the published priority-partition summary owned by membership publication. Its definition and its existing consumers (serve eligibility, /readyz, ordinary placement, the ledger quorum hold) are unchanged by this quest; a witness shows no client-facing cluster gate is open while the spread is unpublished or unstated. That today five computations share one predicate and treat 'unknown' three ways is recorded as a finding and routed to a follow-up quest (one formation fact); it is not repaired here."
+    },
+    {
+      "id": "no-pre-ready-placement",
+      "statement": "No node without a valid READY lease is a placement target. The pre-READY priority-placement path and its carve-outs (startup-authority placement eligibility cure classification, the cure-target exemption, the pre-READY branch of available nodes, the dispatch-bootstrap exemption) are deleted. A just-READY joiner receives priority replicas only by satisfying the ordinary recovery-eligibility dimension, with no exception; a witness shows that dimension holds within one readiness evaluation of READY, and if it does not, the dimension's owner is the repair site."
+    },
+    {
+      "id": "mechanism-deleted-not-disabled",
+      "statement": "The barrier, the handoff, the observer, their tests, the decision tables formation-release-handoff-closure and formation-cohort-spread-cure, model CL-044, their impact contract and coupled pair are deleted. A census test pins their absence by closure over identifiers, log message ids, constants, exports and file names. A deleted test whose property survives is restated against the new owner; a deleted test that protected only the mechanism is deleted and listed. Durable formation_release_handoff publication rows written by earlier versions are left in place and never read: no migration and no compatibility reader."
+    },
+    {
+      "id": "remove-safety-unchanged",
+      "statement": "The remove-safety floor and its committed-node authority are not changed. The independent verifier attempts the counterexample of removing a seed replica while the only other voters are SYNCING."
+    },
+    {
+      "id": "dead-ready-node-witnessed",
+      "statement": "A joiner that dies after publishing READY is witnessed in a three-node formation: placement and the floor exclude it once its lease lapses, no unsafe removal occurs, the remaining nodes either satisfy the spread for the eligible set or the formation fact reports not complete, and what happens to membership publication (whether it completes without that node's acknowledgement) is stated from the run. If publication wedges on a dead READY node, that is the same gap any ACTIVE node has today; it is recorded and a follow-up quest naming the owner is sealed before this quest lands. This quest adds no failure owner."
+    },
+    {
+      "id": "join-core-coupling",
+      "statement": "Join, rejoin, rebalance and partitioning are treated as coupled. Witnessed on the candidate: durable rejoin, rolling restart of a joiner and of the seed during formation, a joiner restart with a wiped data directory, five-node formation with joiners in one derivation and in sequence, single-node operation, and two nodes added at once to a formed three-node cluster."
+    },
+    {
+      "id": "readyz-one-meaning",
+      "statement": "/readyz means the cluster has formed (the published spread). docs/bootstrap-readiness-probes.md and every other statement of its meaning are reconciled to that."
+    },
+    {
+      "id": "supersessions-recorded-first",
+      "statement": "Before any source change, R09 supersession records are appended for each sealed claim this quest contradicts, quoting the sealed sentence: formation-priority-spread-without-exclusive-self-move-cost, formation-joining-ready-phase-fence, formation-release-handoff-closure v3 and v4, formation-release-handoff-post-reopen-capture, formation-release-handoff-consumer-parity, formation-spread-progress-at-cause, formation-barrier-spread-release-oscillation, rolling-restart-durable-rejoin-formation-barrier, operation-ledger-quorum-authoritative-release (barrier paths only), and model CL-044; and the contract-first transition record is written to evidence/transition.md."
+    },
+    {
+      "id": "static-gates-and-ratchets",
+      "statement": "No ratchet baseline is raised. The exact-count fallback census and its classification file change together and only by the removed occurrences. Nothing is moved into a file near the file-size limit. Every checker the Solver and the pre-commit hook run is clean on the change set."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "formation-circularity",
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "232082669eddebe4c9fd98d3e07c11fc91ffb781"
+}

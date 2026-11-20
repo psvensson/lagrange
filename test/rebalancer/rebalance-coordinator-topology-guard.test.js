@@ -530,8 +530,8 @@ test(
       normalizedMoveType: TEST_ADD_OPERATION_TYPE,
       move: {...context.move, replicaId: null},
     });
-    t.equal(genericAdd.state, 'allowed',
-      'a canonical live pre-ready target breaks circularity without another REPLACE');
+    t.equal(genericAdd.state, 'inventory_unusable',
+      'a pre-ready target is not placement-eligible without a ready lease');
 
     const firstFeasibleAdd = await coordinator.buildTopologyGuardSnapshot({
       ...context,

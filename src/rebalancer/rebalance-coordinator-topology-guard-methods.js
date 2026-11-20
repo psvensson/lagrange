@@ -19,9 +19,6 @@ import {
 } from './replica-placement-cure-policy.js';
 import {MOVE_REASON} from './rebalancer-constants.js';
 import {
-  getStartupAuthorityControlPlanePlacementEligibleNodeIds,
-} from '../control-plane/startup-authority-placement-eligibility.js';
-import {
   evaluatePrioritySurplusRemovePlacementFence,
 } from './priority-surplus-remove-placement-fence.js';
 
@@ -56,7 +53,6 @@ const TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES = new Set([
 const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
   state: TOPOLOGY_GUARD_STATE.ALLOWED,
 });
-const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
 const PRIORITY_SURPLUS_REMOVE_FENCE_REASON =
   'priority_surplus_remove_authority_unproven';
 
@@ -89,33 +85,6 @@ function captureInventoryCacheState(cache, capturedAtMs) {
 }
 
 class RebalanceCoordinatorTopologyGuardMethods {
-  getTopologyGuardStartupAuthorityPlacementEligibleNodeIds() {
-    const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      typeof readinessService.getStartupAuthoritySnapshotSync !==
-        LOCAL_STR_FUNCTION
-    ) {
-      return EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS;
-    }
-    let startupAuthority;
-    try {
-      startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
-        this.nodeId,
-        this.nowFn(),
-      );
-    } catch {
-      return EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS;
-    }
-    return getStartupAuthorityControlPlanePlacementEligibleNodeIds({
-      systemTableCache: this.systemTableCache,
-      startupAuthority,
-      messageRouter: this.messageRouter,
-      localNodeId: this.nodeId,
-      includeSelf: false,
-    });
-  }
-
   isTopologyGuardEntityType(entityType) {
     return TOPOLOGY_GUARD_ENTITY_TYPES.has(entityType);
   }
@@ -216,8 +185,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
       systemTableCache: this.systemTableCache,
       moveType: context?.normalizedMoveType,
       partitionId,
-      placementEligibleNodeIds:
-        this.getTopologyGuardStartupAuthorityPlacementEligibleNodeIds(),
       sourceReplicaNodeId: sourceReplica?.nodeId || null,
       targetNodeId: String(context?.move?.nodeId || '').trim(),
     });
