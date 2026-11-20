@@ -1,4 +1,4 @@
-import {COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
 import {
   NODE_LIFECYCLE_AUTHORITATIVE_READ,
   SELECT_NODE_ROW_SQL,
@@ -6,7 +6,8 @@ import {
 import {isAuthoritativeControlPlaneRowReadSuccessful, readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
-import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
+import {OPERATION_METADATA_KEY, OperationType, isReplaceRemoveDispatchPhase} from
+  '../rebalancer/replica-operation-progress.js';
 import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {PLACEMENT_TRANSITION_KIND} from '../rebalancer/replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from '../rebalancer/replica-placement-owner-deficits.js';
@@ -81,10 +82,11 @@ async function allowsUnscopedPlacementSourceRemoval(handler, scope) {
   // REPLACE owns a separate effect. Its request intentionally carries no
   // REMOVE-generation scope: the replica named here is its source.
   if (scope.operationType !== OperationType.REPLACE) return false;
-  const row = await readOne(handler, TABLES.REPLICA_OPERATIONS, SELECT_OPERATION, scope.operationId);
+  const row = await readOne(handler, TABLES.REPLICA_OPERATIONS,
+    SELECT_OPERATION, scope.operationId);
   if (row?.operation_id !== scope.operationId || row.type !== OperationType.REPLACE ||
       row.partition_id !== scope.partitionId || row.completed_at !== null ||
-      (row.workflow_step !== WORKFLOW_STEP.ACTIVE && row.workflow_step !== WORKFLOW_STEP.STOPPING) ||
+      !isReplaceRemoveDispatchPhase(row) ||
       typeof row.steps_history !== 'string') return false;
   const first = memoizedParseStepsHistoryString(row.steps_history)[0];
   return first?.[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] === scope.replicaId;
@@ -142,6 +144,7 @@ async function claimNativeLearnerRetirement(handler, scope) {
 }
 
 export {
-  admitsLearnerRetirement, allowsUnscopedPlacementSourceRemoval, claimNativeLearnerRetirement, handOffAbsentLearnerCleanup,
+  admitsLearnerRetirement, allowsUnscopedPlacementSourceRemoval, claimNativeLearnerRetirement,
+  handOffAbsentLearnerCleanup,
   installsPlacementVoterRetirementGeneration,
 };

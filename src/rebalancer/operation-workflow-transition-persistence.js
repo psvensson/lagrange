@@ -361,7 +361,9 @@ class OperationWorkflowTransitionPersistence
     if (!releaseState) throw new Error('Terminal release owner is shutting down');
     if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
       if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
-      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) this.stats.operationsCompleted++;
+      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) {
+        this.stats.operationsCompleted++;
+      }
       releaseState.commitCounted = true;
       releaseState.pendingCommitCredit = false;
     }
@@ -382,7 +384,8 @@ class OperationWorkflowTransitionPersistence
     if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
       event = REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED;
     }
-    this.emitter.emit(event, failed ? {operation, errorMessage: operation.errorMessage} : {operation});
+    const eventPayload = failed ? {operation, errorMessage: operation.errorMessage} : {operation};
+    this.emitter.emit(event, eventPayload);
     clearTerminalTransitionRepair(this, operation.operationId);
     armFailedCreateCleanupRelease(this, operation);
   }
@@ -500,7 +503,8 @@ class OperationWorkflowTransitionPersistence
       await this.releaseDurableTerminalOperation(operation, replay);
       return replay;
     }
-    if (operation.type !== OperationType.REMOVE || operation.workflowStep !== expectedWorkflowStep) {
+    if (operation.type !== OperationType.REMOVE ||
+        operation.workflowStep !== expectedWorkflowStep) {
       return null;
     }
     const now = Date.now();

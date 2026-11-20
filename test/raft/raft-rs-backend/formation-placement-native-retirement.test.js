@@ -277,64 +277,64 @@ test('late native promotion preserves an incumbent named by an admitted learner 
 
 for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
   test(`a historical unscoped REMOVE holds only unresolved dispatch debt (${priorStep})`,
-  async (t) => withPlacementLeaseAuthority(async (context) => {
-    const {cluster, initial, nodes, ledger} = context;
-    const admitted = await admitRetirement(context);
-    const history = JSON.parse(admitted.removal.steps_history);
-    delete history[0].placementAdmission.learnerRetirement;
-    assert.equal(commitLedgerStatement(ledger, 'historical-unscoped-removal',
-      'UPDATE replica_operations SET steps_history = ?, workflow_step = ? WHERE operation_id = ?',
-      [JSON.stringify(history), priorStep, admitted.removal.operation_id]), null);
-    const historical = ledgerRows(ledger).find((row) =>
-      row.operation_id === admitted.removal.operation_id);
-    const rows = admitted.rows.map((row) => row.replica_id !== initial.replica_id ? row :
-      {...row, raft_role: 'follower'});
-    const target = rows.find((row) => row.replica_id === initial.replica_id);
-    const peer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
-    commitLatePromotion(cluster, initial.replica_id);
-    assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
-    const source = sourceOf(cluster, target, [historical]);
-    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
-      [historical]);
-    const deliveries = [];
-    const coordinator = openDispatchOwner({source, rows, removal: historical, nodes, cluster,
-      leader, deliveries});
-    try {
-      const result = await coordinator.dispatchOperation(historical);
-      const pending = await coordinator.getOperation(historical.operation_id);
-      if (priorStep === WORKFLOW_STEP.PENDING) {
-        assert.equal(result.reconcileOutcome, 'superseded');
-        assert.equal(pending.workflowStep, 'SUPERSEDED');
-        assert.equal(pending.status, 'superseded');
-        assert.ok(Number.isFinite(pending.completedAt));
-      } else {
-        assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
-        assert.equal(pending.completedAt, null);
-        // The pre-cutover sender may already have emitted this generic
-        // request. Deliver that exact old shape to the real receiving owner.
-        const heldReply = await source.handler.handleMessage({payload: {
-          type: ReplicaOperationMessageType.REMOVE_REPLICA,
-          operationType: OperationType.REMOVE,
-          operationId: historical.operation_id,
-          partitionId: cluster.partitionId,
-          replicaId: initial.replica_id,
-        }, correlationId: historical.operation_id});
-        assert.equal(heldReply.status, ReplicaOperationResponseStatus.ERROR);
-        assert.equal(heldReply.deferRetry, true);
-        assert.equal(heldReply.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED');
-      }
-      assert.equal(coordinator.stats.operationsFailed, 0);
-      assert.equal(coordinator.stats.operationsCompleted, 0);
-      assert.deepEqual(deliveries, []);
-      assert.deepEqual(source.serviceChanges, []);
+    async (t) => withPlacementLeaseAuthority(async (context) => {
+      const {cluster, initial, nodes, ledger} = context;
+      const admitted = await admitRetirement(context);
+      const history = JSON.parse(admitted.removal.steps_history);
+      delete history[0].placementAdmission.learnerRetirement;
+      assert.equal(commitLedgerStatement(ledger, 'historical-unscoped-removal',
+        'UPDATE replica_operations SET steps_history = ?, workflow_step = ? WHERE operation_id = ?',
+        [JSON.stringify(history), priorStep, admitted.removal.operation_id]), null);
+      const historical = ledgerRows(ledger).find((row) =>
+        row.operation_id === admitted.removal.operation_id);
+      const rows = admitted.rows.map((row) => row.replica_id !== initial.replica_id ? row :
+        {...row, raft_role: 'follower'});
+      const target = rows.find((row) => row.replica_id === initial.replica_id);
+      const peer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
+      commitLatePromotion(cluster, initial.replica_id);
       assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
-      t.diagnostic(JSON.stringify({result, pendingStep: pending.workflowStep, peer}));
-    } finally {
-      await coordinator.shutdown();
-      await source.dispose();
-      await leader.dispose();
-    }
-  }, {createCluster: addressedCluster}));
+      const source = sourceOf(cluster, target, [historical]);
+      const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+        [historical]);
+      const deliveries = [];
+      const coordinator = openDispatchOwner({source, rows, removal: historical, nodes, cluster,
+        leader, deliveries});
+      try {
+        const result = await coordinator.dispatchOperation(historical);
+        const pending = await coordinator.getOperation(historical.operation_id);
+        if (priorStep === WORKFLOW_STEP.PENDING) {
+          assert.equal(result.reconcileOutcome, 'superseded');
+          assert.equal(pending.workflowStep, 'SUPERSEDED');
+          assert.equal(pending.status, 'superseded');
+          assert.ok(Number.isFinite(pending.completedAt));
+        } else {
+          assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
+          assert.equal(pending.completedAt, null);
+          // The pre-cutover sender may already have emitted this generic
+          // request. Deliver that exact old shape to the real receiving owner.
+          const heldReply = await source.handler.handleMessage({payload: {
+            type: ReplicaOperationMessageType.REMOVE_REPLICA,
+            operationType: OperationType.REMOVE,
+            operationId: historical.operation_id,
+            partitionId: cluster.partitionId,
+            replicaId: initial.replica_id,
+          }, correlationId: historical.operation_id});
+          assert.equal(heldReply.status, ReplicaOperationResponseStatus.ERROR);
+          assert.equal(heldReply.deferRetry, true);
+          assert.equal(heldReply.errorCode, 'REPLICA_REMOVAL_AUTHORITY_DEFERRED');
+        }
+        assert.equal(coordinator.stats.operationsFailed, 0);
+        assert.equal(coordinator.stats.operationsCompleted, 0);
+        assert.deepEqual(deliveries, []);
+        assert.deepEqual(source.serviceChanges, []);
+        assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
+        t.diagnostic(JSON.stringify({result, pendingStep: pending.workflowStep, peer}));
+      } finally {
+        await coordinator.shutdown();
+        await source.dispose();
+        await leader.dispose();
+      }
+    }, {createCluster: addressedCluster}));
 }
 
 test('guarded disconnect can clear the exact learner on the leader while its host remains lost',
@@ -545,138 +545,140 @@ for (const order of ['ledger first', 'disk first', 'disk first, new operation ow
   const cleanupFirst = order !== 'ledger first';
   const restartOperationOwner = order === 'disk first, new operation owner';
   test(`offline learner custody releases after both durable effects (${order})`, {timeout: 7000},
-  async (t) => withPlacementLeaseAuthority(async (context) => {
-    const {cluster, initial, nodes, clock} = context;
-    const targetId = initial.replica_id;
-    cluster.isolate(targetId);
-    const {rows, removal} = await admitRetirement(context);
-    const target = rows.find((row) => row.replica_id === targetId);
-    const source = sourceOf(cluster, target, [removal]);
-    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA), [removal]);
-    const deliveries = [];
-    const commitReached = Promise.withResolvers();
-    const commitReleased = Promise.withResolvers();
-    const terminalReached = Promise.withResolvers();
-    const terminalReleased = Promise.withResolvers();
-    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
-      deliveries, leader, clock});
-    const gateway = leader.lifecycleStore.gateway;
-    const apply = gateway.submitMutation.bind(gateway);
-    gateway.submitMutation = async (mutation, options) => {
-      if (mutation.data?.service_type === SERVICE_TYPE.PARTITION_CLEANUP) {
-        commitReached.resolve(mutation);
-        await commitReleased.promise;
-      }
-      return apply(mutation, options);
-    };
-    const repository = coordinator.repository;
-    let terminalCommitted = false;
-    const operationGateway = repository.controlPlaneSystemTableGateway;
-    const read = operationGateway.readAuthoritativeRows;
-    operationGateway.readAuthoritativeRows = (table, sql, params, options) =>
-      restartOperationOwner && terminalCommitted && table === TABLES.SERVICES ?
-        {success: false, error: 'receipt acknowledgement path unavailable'} :
-        read(table, sql, params, options);
-    const persist = repository.persistOperationUpdate.bind(repository);
-    if (cleanupFirst) {
-      coordinator.repository.persistOperationUpdate = async (operation, options) => {
-        if (operation.operationId === removal.operation_id &&
-            operation.workflowStep === WORKFLOW_STEP.REMOVED) {
-          terminalReached.resolve(operation);
-          await terminalReleased.promise;
-          const outcome = await persist(operation, options);
-          terminalCommitted = true;
-          return outcome;
+    async (t) => withPlacementLeaseAuthority(async (context) => {
+      const {cluster, initial, nodes, clock} = context;
+      const targetId = initial.replica_id;
+      cluster.isolate(targetId);
+      const {rows, removal} = await admitRetirement(context);
+      const target = rows.find((row) => row.replica_id === targetId);
+      const source = sourceOf(cluster, target, [removal]);
+      const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+        [removal]);
+      const deliveries = [];
+      const commitReached = Promise.withResolvers();
+      const commitReleased = Promise.withResolvers();
+      const terminalReached = Promise.withResolvers();
+      const terminalReleased = Promise.withResolvers();
+      const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
+        deliveries, leader, clock});
+      const gateway = leader.lifecycleStore.gateway;
+      const apply = gateway.submitMutation.bind(gateway);
+      gateway.submitMutation = async (mutation, options) => {
+        if (mutation.data?.service_type === SERVICE_TYPE.PARTITION_CLEANUP) {
+          commitReached.resolve(mutation);
+          await commitReleased.promise;
         }
-        return persist(operation, options);
+        return apply(mutation, options);
       };
-    }
-    const readOperation = async () => {
-      const result = await coordinator.repository.controlPlaneSystemTableGateway.readAuthoritativeRows(
-        TABLES.REPLICA_OPERATIONS, 'SELECT * FROM replica_operations WHERE operation_id = ?',
-        [removal.operation_id]);
-      return result.rows[0];
-    };
-    try {
-      const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
-      assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
-      await coordinator.dispatchOperation(removal);
-      assert.ok(settleCluster(cluster, () =>
-        !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
-      const redrive = coordinator.dispatchOperation(removal);
-      const takeover = await waitForHeldRequest(commitReached);
-      assert.equal(takeover.whereClause.created_at, target.created_at);
-      assert.equal(takeover.whereClause.cleanup_token,
-        `placement-learner-retire:${removal.operation_id}`);
-      assert.equal((await readOperation()).completed_at, null);
-      assert.equal(source.lifecycleStore.durable.services.get(targetId).service_type,
-        SERVICE_TYPE.PARTITION);
-
-      const file = path.join(source.handler.dataDir, 'partitions', cluster.partitionId,
-        `${targetId}.db`);
-      fs.mkdirSync(path.dirname(file), {recursive: true});
-      fs.copyFileSync(cluster.replica(targetId).dbFile, file);
-      commitReleased.resolve();
-      let tombstone;
+      const repository = coordinator.repository;
+      let terminalCommitted = false;
+      const operationGateway = repository.controlPlaneSystemTableGateway;
+      const read = operationGateway.readAuthoritativeRows;
+      operationGateway.readAuthoritativeRows = (table, sql, params, options) =>
+        restartOperationOwner && terminalCommitted && table === TABLES.SERVICES ?
+          {success: false, error: 'receipt acknowledgement path unavailable'} :
+          read(table, sql, params, options);
+      const persist = repository.persistOperationUpdate.bind(repository);
       if (cleanupFirst) {
-        await waitForHeldRequest(terminalReached);
-        tombstone = source.lifecycleStore.durable.services.get(targetId);
-        const restarted = source.restart();
-        await restarted.handler.removedReplicaCleanupDebtSweepTask;
-        assert.equal(fs.existsSync(file), false);
-        const receipt = source.lifecycleStore.durable.services.get(targetId);
-        assert.equal(receipt.status, 'cleanup_complete');
-        assert.equal(receipt.created_at, target.created_at);
+        coordinator.repository.persistOperationUpdate = async (operation, options) => {
+          if (operation.operationId === removal.operation_id &&
+            operation.workflowStep === WORKFLOW_STEP.REMOVED) {
+            terminalReached.resolve(operation);
+            await terminalReleased.promise;
+            const outcome = await persist(operation, options);
+            terminalCommitted = true;
+            return outcome;
+          }
+          return persist(operation, options);
+        };
+      }
+      const readOperation = async () => {
+        const result = await operationGateway.readAuthoritativeRows(
+          TABLES.REPLICA_OPERATIONS, 'SELECT * FROM replica_operations WHERE operation_id = ?',
+          [removal.operation_id]);
+        return result.rows[0];
+      };
+      try {
+        const peerId = peerIdOf(cluster, SEED_REPLICA, targetId);
+        assert.ok(appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId));
+        await coordinator.dispatchOperation(removal);
+        assert.ok(settleCluster(cluster, () =>
+          !appliedStateOf(cluster, SEED_REPLICA).learners.includes(peerId)));
+        const redrive = coordinator.dispatchOperation(removal);
+        const takeover = await waitForHeldRequest(commitReached);
+        assert.equal(takeover.whereClause.created_at, target.created_at);
+        assert.equal(takeover.whereClause.cleanup_token,
+          `placement-learner-retire:${removal.operation_id}`);
         assert.equal((await readOperation()).completed_at, null);
-        terminalReleased.resolve();
-      }
-      if (restartOperationOwner) await Promise.allSettled([redrive]);
-      else await redrive;
-      for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
-          (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
-      const terminal = await readOperation();
-      assert.equal(terminal.workflow_step, WORKFLOW_STEP.REMOVED);
-      assert.ok(Number.isFinite(terminal.completed_at));
-      assert.equal(nodes.nodeRow().connection_state, STATE.DISCONNECTED);
-      assert.equal(deliveries.some(({payload}) =>
-        payload.type === ReplicaOperationMessageType.REMOVE_REPLICA), false);
-      tombstone ??= source.lifecycleStore.durable.services.get(targetId);
-      assert.equal(tombstone.service_type, SERVICE_TYPE.PARTITION_CLEANUP);
-      assert.equal(tombstone.created_at, target.created_at);
-      assert.equal(tombstone.cleanup_token, takeover.whereClause.cleanup_token);
+        assert.equal(source.lifecycleStore.durable.services.get(targetId).service_type,
+          SERVICE_TYPE.PARTITION);
 
-      if (!cleanupFirst) {
-        // Reconstruct the target over the already committed operation.
-        source.lifecycleStore.durable.replica_operations.set(terminal.operation_id, terminal);
-        await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
-          restoreAuthorityOf(target)), {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
-        const restarted = source.restart();
-        await restarted.handler.removedReplicaCleanupDebtSweepTask;
-        assert.equal(fs.existsSync(file), false);
-      }
-      if (restartOperationOwner) {
-        assert.equal(source.lifecycleStore.durable.services.get(targetId)?.status, 'cleanup_complete');
-        await coordinator.shutdown();
-        const reconstructed = openDispatchOwner({source, rows, removal: terminal, nodes, cluster,
-          deliveries: [], leader, clock, enableReplicaCleanupReleaseRecovery: true});
-        try {
-          await reconstructed.workflowOwner.recoverReplicaCleanupReleaseDebt();
-        } finally {
-          await reconstructed.shutdown();
+        const file = path.join(source.handler.dataDir, 'partitions', cluster.partitionId,
+          `${targetId}.db`);
+        fs.mkdirSync(path.dirname(file), {recursive: true});
+        fs.copyFileSync(cluster.replica(targetId).dbFile, file);
+        commitReleased.resolve();
+        let tombstone;
+        if (cleanupFirst) {
+          await waitForHeldRequest(terminalReached);
+          tombstone = source.lifecycleStore.durable.services.get(targetId);
+          const restarted = source.restart();
+          await restarted.handler.removedReplicaCleanupDebtSweepTask;
+          assert.equal(fs.existsSync(file), false);
+          const receipt = source.lifecycleStore.durable.services.get(targetId);
+          assert.equal(receipt.status, 'cleanup_complete');
+          assert.equal(receipt.created_at, target.created_at);
+          assert.equal((await readOperation()).completed_at, null);
+          terminalReleased.resolve();
         }
-      }
-      for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
+        if (restartOperationOwner) await Promise.allSettled([redrive]);
+        else await redrive;
+        for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
+          (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
+        const terminal = await readOperation();
+        assert.equal(terminal.workflow_step, WORKFLOW_STEP.REMOVED);
+        assert.ok(Number.isFinite(terminal.completed_at));
+        assert.equal(nodes.nodeRow().connection_state, STATE.DISCONNECTED);
+        assert.equal(deliveries.some(({payload}) =>
+          payload.type === ReplicaOperationMessageType.REMOVE_REPLICA), false);
+        tombstone ??= source.lifecycleStore.durable.services.get(targetId);
+        assert.equal(tombstone.service_type, SERVICE_TYPE.PARTITION_CLEANUP);
+        assert.equal(tombstone.created_at, target.created_at);
+        assert.equal(tombstone.cleanup_token, takeover.whereClause.cleanup_token);
+
+        if (!cleanupFirst) {
+          // Reconstruct the target over the already committed operation.
+          source.lifecycleStore.durable.replica_operations.set(terminal.operation_id, terminal);
+          await assert.rejects(assertDurableRejoinStorageAdmission(
+            source.handler.replicaStateMachine, restoreAuthorityOf(target)),
+          {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
+          const restarted = source.restart();
+          await restarted.handler.removedReplicaCleanupDebtSweepTask;
+          assert.equal(fs.existsSync(file), false);
+        }
+        if (restartOperationOwner) {
+          assert.equal(source.lifecycleStore.durable.services.get(targetId)?.status, 'cleanup_complete');
+          await coordinator.shutdown();
+          const reconstructed = openDispatchOwner({source, rows, removal: terminal, nodes, cluster,
+            deliveries: [], leader, clock, enableReplicaCleanupReleaseRecovery: true});
+          try {
+            await reconstructed.workflowOwner.recoverReplicaCleanupReleaseDebt();
+          } finally {
+            await reconstructed.shutdown();
+          }
+        }
+        for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           source.lifecycleStore.durable.services.has(targetId); turns += 1) await nextTurns(1);
-      assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
-      t.diagnostic(JSON.stringify({takeover, terminal, tombstone, deliveries}));
-    } finally {
-      commitReleased.resolve();
-      terminalReleased.resolve();
-      await coordinator.shutdown();
-      await source.dispose();
-      await leader.dispose();
-    }
-  }, {createCluster: addressedCluster}));
+        assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
+        t.diagnostic(JSON.stringify({takeover, terminal, tombstone, deliveries}));
+      } finally {
+        commitReleased.resolve();
+        terminalReleased.resolve();
+        await coordinator.shutdown();
+        await source.dispose();
+        await leader.dispose();
+      }
+    }, {createCluster: addressedCluster}));
 }
 
 function restoreAuthorityOf(row) {

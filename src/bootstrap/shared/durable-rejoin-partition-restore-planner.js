@@ -1,3 +1,4 @@
+import {durableRowVersion} from '../../utils/replica-lifecycle-version.js';
 import {readOperationRecordWorkflowStep} from '../../rebalancer/replica-operation-progress.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
@@ -32,10 +33,6 @@ const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
   SERVICE_STATUS.ACTIVE,
 ]);
-const DURABLE_VERSION_COLUMN = Object.freeze({
-  STATE_ENTERED_AT: 'state_entered_at',
-  UPDATED_AT: 'updated_at',
-});
 
 function normalizeJoinMetadataString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -244,6 +241,7 @@ function buildDurableRejoinPartitionRestoreOptions({
     ) :
     null;
 
+  const version = durableRowVersion(serviceRow);
   return {
     serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
     partitionId,
@@ -279,11 +277,8 @@ function buildDurableRejoinPartitionRestoreOptions({
       replicaCreatedAt: serviceRow.created_at,
       serviceType: serviceRow.service_type,
       status: serviceRow.status,
-      durableVersionColumn: Number.isFinite(serviceRow.state_entered_at) ?
-        DURABLE_VERSION_COLUMN.STATE_ENTERED_AT :
-        DURABLE_VERSION_COLUMN.UPDATED_AT,
-      durableVersion: Number.isFinite(serviceRow.state_entered_at) ?
-        serviceRow.state_entered_at : serviceRow.updated_at,
+      durableVersionColumn: version?.column ?? null,
+      durableVersion: version?.value ?? null,
     },
   };
 }

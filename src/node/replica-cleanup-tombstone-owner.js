@@ -105,7 +105,8 @@ function cleanupReceiptOperationId(token) {
 
 function matchesScopedLearnerCleanup(authority, scope) {
   return authority?.partitionId === scope.partitionId && authority?.nodeId === scope.targetNodeId &&
-    authority?.replicaId === scope.replicaId && authority?.replicaCreatedAt === scope.replicaCreatedAt &&
+    authority?.replicaId === scope.replicaId &&
+    authority?.replicaCreatedAt === scope.replicaCreatedAt &&
     authority?.ownerToken === learnerRetirementToken(scope.operationId);
 }
 
