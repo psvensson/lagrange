@@ -1,4 +1,4 @@
-import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -40,16 +40,6 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   OWNER_LANE_HELD: 'owner_lane_held',
   REMOTE_RETRY_ACTIVE: 'remote_retry_active',
   REENTER: 'reenter',
-});
-
-const PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD = Object.freeze({
-  CONDITIONS: 'conditions',
-  LATEST_OPERATION_STATUS: 'latestOperationStatus',
-  LATEST_OPERATION_WORKFLOW_STEP: 'latestOperationWorkflowStep',
-  LATEST_TIMELINE_STATUS: 'latestTimelineStatus',
-  LATEST_TIMELINE_STEP: 'latestTimelineStep',
-  STATUS: 'status',
-  WORKFLOW_STEP: 'workflowStep',
 });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION = Object.freeze({
@@ -306,51 +296,22 @@ function selectPriorityRecoveryDispatchPendingReentryOperation(
       snapshot?.operationId ||
       OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
   ).trim();
-  const operationRecords = Array.isArray(operations) ? operations : [];
-  const matchingOperation = operationRecords.find((operation) => {
-    return (
-      operation &&
-      typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
-      operation.operationId === snapshotOperationId
-    );
-  });
-  if (matchingOperation) {
-    return matchingOperation;
-  }
-  const snapshotOperation = snapshot?.coordinator?.operation || null;
-  if (
-    !snapshotOperation ||
-    typeof snapshotOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
-    snapshotOperationId.length === 0
-  ) {
-    return null;
-  }
-  const snapshotConditions =
-    snapshot?.[
-      PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD.CONDITIONS
-    ] || {};
-  const field = PRIORITY_RECOVERY_DISPATCH_PENDING_SNAPSHOT_FIELD;
-  // The snapshot's named sources in authority order; a state none of them
-  // carries is left off the operation.
-  const workflowStep = readStateField(
-    snapshotOperation[field.WORKFLOW_STEP],
-    snapshotOperation[field.LATEST_TIMELINE_STEP],
-    snapshotConditions[field.LATEST_OPERATION_WORKFLOW_STEP],
-  );
-  const status = readStateField(
-    snapshotOperation[field.STATUS],
-    snapshotOperation[field.LATEST_TIMELINE_STATUS],
-    snapshotConditions[field.LATEST_OPERATION_STATUS],
-  );
-  return Object.freeze({
-    ...snapshotOperation,
-    operationId: snapshotOperationId,
-    ...(workflowStep === STATE_ABSENT ? {} : {workflowStep: workflowStep.trim()}),
-    ...(status === STATE_ABSENT ? {} : {status: status.trim()}),
-    createdAt: snapshotOperation.createdAtMs,
-    updatedAt: snapshotOperation.updatedAtMs,
-    completedAt: snapshotOperation.completedAtMs,
-  });
+  if (!snapshotOperationId || !Array.isArray(operations)) return null;
+  const snapshotOperation = snapshot?.coordinator?.operation;
+  const partitionId = snapshot?.partitionId;
+  // Planning snapshots have only routing and progress diagnostics. Reentry
+  // requires the matching live operation with its durable history.
+  return operations.find((operation) =>
+    typeof partitionId === 'string' &&
+    operation?.operationId === snapshotOperationId &&
+    operation.partitionId === partitionId &&
+    operation.completedAt === null &&
+    Array.isArray(operation.stepsHistory) &&
+    (snapshotOperation?.targetNodeId == null ||
+      operation.targetNodeId === snapshotOperation.targetNodeId) &&
+    (snapshotOperation?.replicaId == null ||
+      operation.replicaId === snapshotOperation.replicaId),
+  ) || null;
 }
 
 function buildPriorityRecoveryDispatchPendingReentryEvidence(
@@ -958,21 +919,44 @@ function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
   );
 }
 
-function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
+function matchesQueuedRemoteReentryOperation(expected, operation) {
+  if (!operation || operation.completedAt !== null ||
+      operation.replicaId !== expected.replicaId ||
+      operation.createdAt !== expected.createdAt ||
+      operation.workflowStep !== expected.workflowStep) {
+    return false;
+  }
+  try {
+    assertOperationUpdateSubject(expected, operation);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   owner,
   operation,
   decisionSnapshot,
   options,
 ) {
+  // The local arm already reads the operation inside its owner lane.
+  // An observer's queued remote handoff has no such preflight: the ledger may
+  // have settled or replaced its routing tuple while the work was queued.
+  let current = operation;
+  if (!owner.repository.isOperationLocallyOwned(operation)) {
+    current = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
+    if (!matchesQueuedRemoteReentryOperation(operation, current)) return false;
+  }
   const action = resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
     owner,
-    operation,
+    current,
     decisionSnapshot,
     options,
   );
   return PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_HANDLER.get(action)(
     owner,
-    operation,
+    current,
     decisionSnapshot,
   );
 }

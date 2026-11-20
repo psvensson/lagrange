@@ -495,12 +495,21 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
     }
     const planningSnapshot =
       await this.readAvailablePriorityRecoveryPlanningSnapshot(representativeOperation);
-    return this.buildPriorityRecoveryDecisionSnapshotForOperations(
+    const snapshot = this.buildPriorityRecoveryDecisionSnapshotForOperations(
       normalizedPartitionId,
       operationRecords,
       planningSnapshot,
       incompleteObservation,
     );
+    return this.finalizePriorityRecoveryPartitionOperationObservation(
+      snapshot,
+      this.isPriorityRecoveryAuthoritativeOperationReadDeferred(incompleteObservation) ?
+        [] : operationRecords,
+    );
+  }
+
+  finalizePriorityRecoveryPartitionOperationObservation(snapshot) {
+    return snapshot;
   }
 }
 

@@ -320,6 +320,7 @@ function buildStorageIncreasingOperation(overrides = {}) {
     type: OperationType.ADD,
     partitionId: TEST_PARTITION_ID,
     replicaId: TEST_PARTITION_ID + '-r1',
+    sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
     entityType: SERVICE_TYPE.PARTITION,
     entityId: TEST_PARTITION_ID,
@@ -352,6 +353,7 @@ function seedAuthoritativeOperation(sqlEngine, operation) {
     steps_history: JSON.stringify(operation.stepsHistory || []),
     entity_type: operation.entityType,
     entity_id: operation.entityId,
+    membership_publication_epoch: operation.membershipPublicationEpoch ?? null,
   });
 }
 

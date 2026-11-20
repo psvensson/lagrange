@@ -680,11 +680,16 @@ test('retained FAILED ADD repair completes instead on exact authoritative ACTIVE
       partition_id: operation.partitionId,
       node_id: operation.targetNodeId,
       status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
       created_at: now,
       updated_at: now,
     },
   });
-  t.equal(inserted.success, true, 'the exact ACTIVE target is committed in SQLite');
+  t.equal(inserted.success, true, 'the exact voter target is committed in SQLite');
+  const observation = await owner.repository.getActualReplicaObservation(
+    operation.replicaId, operation.partitionId, operation.targetNodeId);
+  t.equal(observation.lifecycleStatus, ReplicaStatus.ACTIVE,
+    'the real repository sees the committed voting target as ACTIVE');
   armTerminalTransitionRepair(owner, terminalWitnessProjection(operation, true),
     TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
     {expectedWorkflowStep: WORKFLOW_STEP.PENDING});

@@ -173,15 +173,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     clearReplaceOwnerState(this, operationId);
   }
 
-  async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
-    partitionId,
-    operations = [],
-  ) {
-    const snapshot =
-      await super.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
-        partitionId,
-        operations,
-      );
+  finalizePriorityRecoveryPartitionOperationObservation(snapshot, operations) {
     const operation =
       this.selectPriorityRecoveryDispatchPendingReentryOperation(
         snapshot,

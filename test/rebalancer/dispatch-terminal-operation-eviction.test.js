@@ -91,14 +91,18 @@ test('terminal authoritative operation in reservation gate reconciles local stat
 
 test('stale epoch in epoch gate marks terminal, updates cache progress row and clears retries', async (t) => {
   initializeConfig();
+  const sqlEngine = createTrackingSqlEngine();
   const {coordinator} = createEpochCoordinator({
     currentEpoch: PLANNING_EPOCH + 1,
+    sqlQueryEngine: sqlEngine,
   });
   const operation = buildEpochBoundAddOperation(PLANNING_EPOCH, {
     operationId: 'epoch-stale-terminal-test',
     type: OperationType.ADD,
+    sourceNodeId: coordinator.nodeId,
     workflowStep: WORKFLOW_STEP.PENDING,
   });
+  seedAuthoritativeOperation(sqlEngine, operation);
 
   let progressRowApplied = null;
   coordinator.repository.applyLocalPriorityOperationProgressRow = (op) => {

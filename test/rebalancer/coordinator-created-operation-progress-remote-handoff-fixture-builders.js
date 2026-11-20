@@ -18,6 +18,7 @@ import {
 import {
   createAllowAllStorageAdmissionService,
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
@@ -481,7 +482,10 @@ export function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
   });
 }
 
-export function createRemotePriorityVisibilityCoordinator() {
+export function createRemotePriorityVisibilityCoordinator({
+  sqlQueryEngine = null,
+  deliveries = [],
+} = {}) {
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService({defaultRepairEligible: true}),
     async getPriorityRecoveryPlanningSnapshotBestEffort() {
@@ -507,7 +511,8 @@ export function createRemotePriorityVisibilityCoordinator() {
       },
     },
     messageRouter: {
-      async deliver() {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
         return buildDeliveryEnvelope({acknowledged: true});
       },
     },
@@ -516,11 +521,14 @@ export function createRemotePriorityVisibilityCoordinator() {
         return {targetReplicaCount: 3, minReplicaCount: 1};
       },
     },
-    sqlQueryEngine: {
+    sqlQueryEngine: sqlQueryEngine || {
       async executeQuery() {
         return {success: true, rows: [], affectedRows: 0};
       },
     },
+    ...(sqlQueryEngine ? {
+      controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+    } : {}),
     controlPlaneReadinessService,
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,

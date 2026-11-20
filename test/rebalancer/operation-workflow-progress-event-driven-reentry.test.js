@@ -1,5 +1,6 @@
 import {
   buildTerminalOperationFixtureOutcome, completeServicesFixtureRead,
+  installCommittedOperationMutationFixture,
   installServicesAuthorityFixture, workflowFixtureHistory,
 } from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -44,7 +45,11 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
   '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
-import {createMockCache} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore,
+  createMockCache,
+  createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 
 import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
@@ -118,7 +123,6 @@ const TEST_READY_DISTINCT_NODE_COUNT = 1;
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 const TEST_MIN_REPLICA_COUNT = 3;
 const TEST_EMPTY_LIST = Object.freeze([]);
-const TEST_EMPTY_ROWS = Object.freeze([]);
 const TEST_UNDEFINED_VALUE = undefined;
 const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
@@ -126,7 +130,6 @@ const TEST_CONTROL_PLANE_PUBLICATION_REPLICA_DISPATCH_TARGET =
   'control-plane-publication-target-node/service/replica-dispatch';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
-const TEST_SERVICES_TABLE = 'services';
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
 const TEST_OPERATION_OWNER_EFFECT_NOT_EXECUTED = 'not_executed';
@@ -442,52 +445,34 @@ function buildTransactionCoordinator() {
   };
 }
 
-function buildSqlQueryEngine(operationRow) {
-  return {
-    async executeQuery(sql) {
-      const normalizedSql = String(sql);
-      if (normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)) {
-        const operationRows = [operationRow];
-        return {
-          success: true,
-          rows: operationRows,
-          affectedRows: operationRows.length,
-        };
-      }
-      if (normalizedSql.includes(TEST_SERVICES_TABLE)) {
-        return completeServicesFixtureRead(TEST_EMPTY_ROWS);
-      }
-      return {
-        success: true,
-        rows: TEST_EMPTY_ROWS,
-        affectedRows: 0,
-      };
-    },
-  };
-}
-
 function createEventDrivenCoordinator(
   deliveries,
   deferredTimers,
   operationRow,
   planningOptions = {},
 ) {
+  const sqlStore = createCoordinatorSqlStore(createMockCache({replicaOperations: [operationRow]}));
+  const execute = (sql, params) => {
+    const result = sqlStore.execute(sql, params);
+    sqlStore.suspend();
+    return result;
+  };
+  const sqlQueryEngine = {executeQuery: async (sql, params) => execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  gateway.submitMutation = async (mutation) => {
+    const result = sqlStore.submitMutation(mutation);
+    sqlStore.suspend();
+    return result;
+  };
+  installCommittedOperationMutationFixture(gateway);
   return new RebalanceCoordinator({
     nodeId: TEST_OBSERVER_NODE_ID,
     authoritativeVisibilityTimeoutMs: 0,
     authoritativeVisibilityRetryDelayMs: 0,
-    sqlQueryEngine: buildSqlQueryEngine(operationRow),
+    sqlQueryEngine,
+    controlPlaneSystemTableGateway: gateway,
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: createMockCache(),
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        return {
-          success: true,
-          rows: TEST_EMPTY_ROWS,
-          affectedRows: 0,
-        };
-      },
-    },
     controlPlaneReadinessService: {
       getPriorityRecoveryPlanningAnswerSync: () =>
         buildEventDrivenPlanningSnapshot(planningOptions),
@@ -1363,7 +1348,15 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
   const coordinator = createEventDrivenCoordinator(
     deliveries,
     deferredTimers,
-    buildEventDrivenOperationRow(),
+    buildEventDrivenOperationRow({
+      operation_id: operation.operationId,
+      partition_id: operation.partitionId,
+      entity_id: operation.entityId,
+      replica_id: operation.replicaId,
+      source_node_id: operation.sourceNodeId,
+      target_node_id: operation.targetNodeId,
+      workflow_step: operation.workflowStep,
+    }),
   );
 
   const failedOperationIds = [];
@@ -1807,6 +1800,10 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       workflow_step: WORKFLOW_STEP.SENDING,
       updated_at: TEST_UPDATED_AT_MS,
     });
+    const persistedSending = await coordinator.repository.persistOperationUpdate(
+      coordinator.repository.rowToOperation(sendingOperationRow),
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    t.equal(persistedSending.persisted, true, 'the SENDING cache event follows a committed step');
     coordinator.workflowOwner.clearCreatedOperationHandoffRetry(
       operation.operationId,
     );
