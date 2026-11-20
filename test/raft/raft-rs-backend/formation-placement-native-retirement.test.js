@@ -88,7 +88,7 @@ function sourceOf(cluster, row, operations, ownerIncarnation = BOOT) {
 }
 
 function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
-  leader, clock = null, onLocalDelivery = null}) {
+  leader, clock = null, onLocalDelivery = null, beforeDelivery = null, receiverAnswer = null}) {
   const coordinator = createTestCoordinator({
     nodeId: SEED, enableTimeouts: false, replaceWitness: false,
     committedMembershipFixture: false,
@@ -113,11 +113,13 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
       async deliver(address, payload) {
         const entry = {address, payload};
         deliveries.push(entry);
+        await beforeDelivery?.(payload);
         const receiver = address.startsWith(`${SEED}/`) ? leader : source;
         if (receiver === source && cluster.isolated.has(removal.replica_id)) {
           return buildDeliveryEnvelope({errorCode: ROUTER_NO_CONNECTION_ERROR_CODE});
         }
-        const answer = await receiver.handler.handleMessage({
+        const substituted = receiverAnswer?.(payload);
+        const answer = substituted ?? await receiver.handler.handleMessage({
           payload, correlationId: removal.operation_id,
         });
         entry.answer = answer;
@@ -387,3 +389,102 @@ for (const successor of ['boot', 'service generation']) {
       }
     }, {createCluster: addressedCluster}));
 }
+
+async function waitForHeldRequest(entered) {
+  const bound = Promise.withResolvers();
+  const timer = setTimeout(() => bound.reject(new Error(
+    'the exact learner proposal did not reach the delivery boundary')),
+  CONTROL_OBSERVATION_BOUND_MS);
+  try {
+    return await Promise.race([entered.promise, bound.promise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+for (const change of ['boot', 'service birth']) {
+  test(`a held native proposal cannot overtake a committed newer ${change}`,
+    {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+      const {cluster, initial, nodes, clock} = context;
+      const {rows, removal} = await admitRetirement(context);
+      const target = rows.find((row) => row.replica_id === initial.replica_id);
+      const source = sourceOf(cluster, target, [removal]);
+      const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+        [removal]);
+      leader.lifecycleStore.durable.services.set(target.replica_id, target);
+      const entered = Promise.withResolvers();
+      const resume = Promise.withResolvers();
+      const deliveries = [];
+      let held = false;
+      const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
+        deliveries, leader, clock, async beforeDelivery(payload) {
+          if (!held && payload.type === ReplicaOperationMessageType.REMOVE_LEARNER &&
+              payload.learnerRetirement.canPropose) {
+            held = true;
+            entered.resolve(payload);
+            await resume.promise;
+          }
+        }});
+      const run = coordinator.dispatchOperation(removal);
+      try {
+        const captured = await waitForHeldRequest(entered);
+        assert.equal(captured.operationId, removal.operation_id);
+        assert.equal(captured.learnerRetirement.replicaCreatedAt, target.created_at);
+        if (change === 'boot') {
+          nodes.publishNewBootAtSameWatermark();
+          await nodes.renew(BOOT + 1);
+          await nodes.waitForCommittedTarget((row) => row.boot_incarnation === BOOT + 1 &&
+            row.connection_state === STATE.READY);
+        } else {
+          const next = {...target, created_at: target.created_at + 1};
+          leader.lifecycleStore.durable.services.set(target.replica_id, next);
+          coordinator.repository.systemTableCache.upsert(TABLES.SERVICES, next);
+        }
+        resume.resolve();
+        await run;
+        const peer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
+        const retained = appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer);
+        t.diagnostic(JSON.stringify({change, node: nodes.nodeRow(), retained, deliveries}));
+        assert.equal(retained, true, 'a newer committed authority retained the native member');
+        assert.equal(source.serviceChanges.length, 0);
+      } finally {
+        resume.resolve();
+        await Promise.allSettled([run]);
+        await coordinator.shutdown();
+        await source.dispose();
+        await leader.dispose();
+      }
+    }, {createCluster: addressedCluster}));
+}
+
+test('a foreign retirement reply cannot terminate the scoped placement operation',
+  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+    const {cluster, initial, nodes, clock} = context;
+    const {rows, removal} = await admitRetirement(context);
+    const source = sourceOf(cluster, rows.find((row) => row.replica_id === initial.replica_id),
+      [removal]);
+    const leader = sourceOf(cluster, rows.find((row) => row.replica_id === SEED_REPLICA),
+      [removal]);
+    const deliveries = [];
+    const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
+      leader, clock, receiverAnswer(payload) {
+        if (payload.type !== ReplicaOperationMessageType.REMOVE_LEARNER) return undefined;
+        return {status: ReplicaOperationResponseStatus.COMPLETED,
+          operationId: 'different-retirement', partitionId: cluster.partitionId,
+          replicaId: initial.replica_id, nodeId: SEED,
+          learnerRetirement: 'learner_retirement_superseded'};
+      }});
+    try {
+      const result = await coordinator.dispatchOperation(removal);
+      const current = await coordinator.getOperation(removal.operation_id);
+      t.diagnostic(JSON.stringify({result, current: current.workflowStep, deliveries}));
+      assert.ok(deliveries.some(({payload}) => payload.operationId === removal.operation_id));
+      assert.equal(current.completedAt, null,
+        'a foreign reply cannot settle an admitted removal');
+      assert.equal(source.serviceChanges.length, 0);
+    } finally {
+      await coordinator.shutdown();
+      await source.dispose();
+      await leader.dispose();
+    }
+  }, {createCluster: addressedCluster}));
