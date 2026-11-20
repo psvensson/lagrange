@@ -494,8 +494,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           deferCdcPropagationHandshake,
           // Start as learner if joining existing group
           suppressLifecycleLogs: true,
-          onInitializationStage: (stageEvent) =>
-            this.updateReplicaCreationProgress(progress, stageEvent),
+          onInitializationStage: (stageEvent) => {
+            if (isCreateCurrent()) this.updateReplicaCreationProgress(progress, stageEvent);
+          },
           resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
         work.openedService = partitionService;
