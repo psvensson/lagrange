@@ -290,6 +290,7 @@ function injectLedgerAnswers({
     // Every lifecycle read the coordinator's interlock issued (operation id
     // and the hold action it resolved to).
     interlockReads: [],
+    entityReads: [],
   };
   // The interlock's lifecycle read (rebalance-coordinator-ledger-interlock-
   // hold-state.js resolveAuthoritativeLedgerSelfMoveHoldAction) is the reader
@@ -389,9 +390,14 @@ function injectLedgerAnswers({
         control.pointReadAnswer === POINT_READ_ANSWER.EMPTY &&
         isLedgerEntityRead(sql, params)
       ) {
-        return {success: true, rows: []};
+        const answer = {success: true, rows: []};
+        control.entityReads.push({
+          atMs: elapsed(), method, rowSetComplete: answer.rowSetComplete ?? null,
+        });
+        return answer;
       }
-      if (control.reservationRowsVisible && String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER)) {
+      if (control.reservationRowsVisible &&
+          String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER)) {
         return reservationGateway[method](...args);
       }
       return original(...args);
@@ -460,8 +466,33 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
   };
   sampleLedgerSelfMoves();
 
+  const observeSeedBlocker = seed.resolveRegisteredLedgerSelfMove.bind(seed);
+  seed.resolveRegisteredLedgerSelfMove = async (liveOperations) => {
+    const blocker = await observeSeedBlocker(liveOperations);
+    if (!extras.secondSelfMove.resolved && extras.secondSelfMove.attemptedAtMs !== null) {
+      extras.secondSelfMove.registeredBlocker = {
+        operationIds: liveOperations.map((operation) => operation.operationId),
+        blockerId: blocker?.operationId ?? null,
+      };
+    }
+    return blocker;
+  };
+
+  async function captureLedgerBoundary() {
+    const [seedHold, targetHold] = [seed, target].map((coordinator) => {
+      const hold = coordinator.getOperationLedgerInterlockAdmissionState();
+      return {id: hold.heldSelfMoveOperationId, phase: hold.heldSelfMovePhase};
+    });
+    const committed = await seed.sqlQueryEngine.executeQuery(
+      'SELECT operation_id, workflow_step, completed_at FROM replica_operations WHERE operation_id = ?',
+      [selfMoveId()],
+    );
+    return {seedHold, targetHold, committed};
+  }
+
   const attemptSecondSelfMove = async () => {
     extras.secondSelfMove.attemptedAtMs = elapsed();
+    extras.secondSelfMove.before = await captureLedgerBoundary();
     try {
       const operation = await seed.createOperation(
         buildMove({
@@ -511,6 +542,10 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
       ledgerAnswers.interlockForeignRow = false;
       extras.secondSelfMove.resolved = true;
       extras.secondSelfMove.holderPhaseAfter = holderPhase();
+      extras.secondSelfMove.after = await captureLedgerBoundary();
+      extras.secondSelfMove.pointReads = ledgerAnswers.pointReads;
+      extras.secondSelfMove.entityReads = ledgerAnswers.entityReads;
+      extras.secondSelfMove.interlockReads = ledgerAnswers.interlockReads;
       extras.selfMoveOperationId = selfMoveId();
       extras.pointReads = ledgerAnswers.pointReads;
       extras.ledgerSelfMoveRowsAfterInjection = [...trackedOperations.values()]
