@@ -568,7 +568,9 @@ export function createRemoteHandoffCoordinator({
         return authoritativeRead(tableName, sql, params);
       },
       async readAuthoritativeRows(tableName, sql, params = []) {
-        return authoritativeRead(tableName, sql, params);
+        const result = await authoritativeRead(tableName, sql, params);
+        return result?.success === true && Array.isArray(result.rows) ?
+          {...result, rowSetComplete: true} : result;
       },
       async executeQuery(sql, params = []) {
         return executeQuery(sql, params);

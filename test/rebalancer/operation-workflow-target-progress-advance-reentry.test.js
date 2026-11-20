@@ -1,3 +1,4 @@
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -57,6 +58,9 @@ function buildOperation(overrides = {}) {
     workflowStep: WORKFLOW_STEP.CREATING,
     createdAt: TEST_CREATED_AT_MS,
     updatedAt: TEST_UPDATED_AT_MS,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: workflowFixtureHistory(WORKFLOW_STEP.CREATING, TEST_UPDATED_AT_MS),
     targetVisibilityState:
       PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
     targetServiceTerminalState:
@@ -79,6 +83,9 @@ function buildOperationRow(overrides = {}) {
     workflow_step: WORKFLOW_STEP.CREATING,
     created_at: TEST_CREATED_AT_MS,
     updated_at: TEST_UPDATED_AT_MS,
+    completed_at: null,
+    error_message: null,
+    steps_history: JSON.stringify(workflowFixtureHistory(WORKFLOW_STEP.CREATING, TEST_UPDATED_AT_MS)),
     ...overrides,
   });
 }

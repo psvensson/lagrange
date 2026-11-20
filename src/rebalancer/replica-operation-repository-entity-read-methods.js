@@ -182,7 +182,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       );
       if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
       const completeRead = result.success && result.rowSetComplete === true;
-      if (completeRead) assertEntityOperationRows(result.rows, entityType, entityId);
+      if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
       const cachedRows = this.getEntityInFlightOperationRows({
@@ -251,7 +251,13 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         }
       }
 
-      return this.buildEntityOperationVisibilityObservation(operations, null);
+      const observation = this.buildEntityOperationVisibilityObservation(operations, null);
+      const ownerTransitionOperations = operations
+        .map((operation) => this.resolveEntityOperationVisibilityWithPersistedTransition(operation))
+        .filter((operation, index) => operation !== operations[index]);
+      // Local post-commit progress is tied to a row returned by this census.
+      // It remains owner progress, separate from the census membership.
+      return Object.freeze({...observation, ownerTransitionOperations});
     }
 
     /**

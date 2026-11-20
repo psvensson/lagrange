@@ -88,7 +88,17 @@ function selectAuthoritativePartitionOperations(observation, partitionId) {
   } catch {
     return [];
   }
-  return operations;
+  // A newer local commit is evidence of progress, so the stale census row
+  // cannot act as an authority to repeat its effect.
+  return operations.filter((operation) =>
+    !findOwnerTransitionOperation(observation, operation.operationId));
+}
+
+function findOwnerTransitionOperation(observation, operationId) {
+  return Array.isArray(observation?.ownerTransitionOperations) ?
+    observation.ownerTransitionOperations.find(
+      (operation) => operation?.operationId === operationId) :
+    null;
 }
 
 class PriorityRecoveryObservation extends PriorityPublicationHandoff {
@@ -134,7 +144,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
         .USE_AUTHORITATIVE_OBSERVATION
     ) {
       return Object.freeze({
-        operationRecords: authoritativeOperations,
+        operationRecords: authoritativeOperations.map((operation) =>
+          findOwnerTransitionOperation(authoritativeObservation, operation.operationId) ||
+            operation),
         incompleteObservation:
           authoritativeObservation &&
           typeof authoritativeObservation === 'object' ?

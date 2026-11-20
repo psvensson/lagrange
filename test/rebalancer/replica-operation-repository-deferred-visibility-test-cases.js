@@ -403,7 +403,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
     async (t) => {
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          readRows: async () => ({success: true, rows: []}),
+          readRows: async () => ({success: true, rowSetComplete: true, rows: []}),
           executeQuery: async () => ({success: true}),
         },
         controlPlaneReadinessService: {
@@ -468,13 +468,13 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'getOperationsByEntityAuthoritativeObservation replaces stale ' +
-      'authoritative rows with newer locally owned terminal transition witnesses',
+    'entity census preserves raw rows and exposes newer local terminal progress separately',
     async (t) => {
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
           readRows: async () => ({
             success: true,
+            rowSetComplete: true,
             rows: [
               makeRow({
                 type: OperationType.REPLACE,
@@ -515,11 +515,16 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
       );
       t.same(
         observation?.operations?.map((operation) => operation.workflowStep),
+        [WORKFLOW_STEP.CREATING],
+        'the authority census remains the exact observed row set',
+      );
+      t.same(
+        observation?.ownerTransitionOperations?.map((operation) => operation.workflowStep),
         [WORKFLOW_STEP.FAILED],
         'entity visibility should supersede the stale creating row with the newer failed transition',
       );
       t.same(
-        observation?.operations?.map((operation) => operation.status),
+        observation?.ownerTransitionOperations?.map((operation) => operation.status),
         [ReplicaStatus.FAILED],
         'the superseded entity row should preserve the terminal status',
       );
@@ -1237,6 +1242,7 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
             }
             return {
               success: true,
+              rowSetComplete: true,
               rows: [publishedAuthoritativeRow],
             };
           },

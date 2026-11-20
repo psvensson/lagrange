@@ -86,7 +86,7 @@ for (const retained of [false, true]) {
     const blocker = await f.rebalancer.revalidateCriticalSystemTopologySettlingBlocker(null);
     t.equal(blocker?.reason, 'unavailable', 'actual topology consumer keeps the refusal');
     t.ok(f.reads >= 4, 'all paths used the actual operation read owner');
-    f.setResult({success: true, rows: f.rows});
+    f.setResult({success: true, rowSetComplete: true, rows: f.rows});
     const recovered = await f.coordinator.getEntityAuthoritativeOperationObservation(
       ENTITY.entityType, ENTITY.entityId);
     t.equal(recovered.deferredOutcome, null);
@@ -190,7 +190,7 @@ test('replica ID allocation and retired-source safety retain required-read refus
     replicaId: `${ENTITY.entityId}-r4`, sourceReplicaId: `${ENTITY.entityId}-r1`,
     sourceNodeId: 'node-1', nodeId: 'node-3'};
   await t.rejects(f.coordinator.getRetiredReplaceSourceMoveSafetyError(move), REFUSAL);
-  f.setResult({success: true, rows: []});
+  f.setResult({success: true, rowSetComplete: true, rows: []});
   t.match(await f.coordinator.allocateCanonicalReplicaId({...ENTITY, partitionId: ENTITY.entityId}), /-r1$/);
   t.equal(await f.coordinator.getRetiredReplaceSourceMoveSafetyError(move), null);
 });

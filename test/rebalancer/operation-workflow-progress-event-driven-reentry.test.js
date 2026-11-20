@@ -1078,6 +1078,8 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
     },
   });
 
+  const originalNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
   try {
     coordinator.initialize();
     const committed = await coordinator.repository.queryAuthoritativeOperationById(
@@ -1147,6 +1149,7 @@ test(TEST_DIAGNOSTIC_OWNER_REENTRY_TEST_NAME, async (t) => {
       'diagnostic owner re-entry should arm bounded handoff verification',
     );
   } finally {
+    Date.now = originalNow;
     await coordinator.shutdown();
   }
 });
@@ -1225,6 +1228,8 @@ test(
       }),
     });
 
+    const originalNow = Date.now;
+    Date.now = () => TEST_CAPTURED_AT_MS;
     try {
       coordinator.initialize();
       const committed = await coordinator.repository.queryAuthoritativeOperationById(
@@ -1264,6 +1269,7 @@ test(
         'first-timeout diagnostics should wake and re-arm verification',
       );
     } finally {
+      Date.now = originalNow;
       await coordinator.shutdown();
     }
   },
@@ -1883,9 +1889,10 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       true,
       'PENDING priority cache rows should re-enter the workflow owner lane',
     );
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await coordinator.workflowOwner.operationWorkflowRunExclusive(
+      coordinator.workflowOwner.getOperationOwnerSingleFlightKey(operation.operationId),
+      async () => {},
+    );
 
     t.equal(
       deliveries.length,
@@ -1928,9 +1935,10 @@ test(TEST_CACHE_EVENT_REENTRY_TEST_NAME, async (t) => {
       true,
       'SENDING priority cache rows should re-enter the workflow owner lane',
     );
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await coordinator.workflowOwner.operationWorkflowRunExclusive(
+      coordinator.workflowOwner.getOperationOwnerSingleFlightKey(operation.operationId),
+      async () => {},
+    );
 
     t.equal(
       deliveries.length,
