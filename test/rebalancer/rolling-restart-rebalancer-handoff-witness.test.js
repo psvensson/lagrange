@@ -36,6 +36,7 @@ import {
   createNodeHosts,
   initializeTestEnvironment,
 } from '../integration/membership-consistency-integration-test-helpers.js';
+import {OperationType, createOperationAt} from '../../src/rebalancer/replica-status.js';
 import {createCoordinatorSqlStore} from './test-helpers.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -48,8 +49,6 @@ const OPERATION_ID = 'reentry-witness-operation';
 // A priority control-plane partition: the operation budget is the bound for
 // its protected steps (replica-operation-step-policy).
 const PARTITION_ID = 'control_plane_publications-p1';
-const OPERATION_TYPE_ADD = 'ADD';
-const WORKFLOW_STEP_PENDING = 'PENDING';
 const REPLICA_OPERATIONS_TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const QUIET_LOGGER = Object.freeze({info() {}, debug() {}});
 const STEP_TIMEOUT_MS = 1000;
@@ -164,26 +163,19 @@ function createHandoffOwner(testContext) {
 async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
   const budgetMs = TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
   const stepStartedAt = nowMs - STEP_AGE_MS;
-  const row = {
-    operation_id: OPERATION_ID,
-    partition_id: PARTITION_ID,
-    entity_type: 'partition',
-    entity_id: PARTITION_ID,
-    type: OPERATION_TYPE_ADD,
-    status: 'pending',
-    workflow_step: WORKFLOW_STEP_PENDING,
-    source_node_id: null,
-    target_node_id: REMOTE_OWNER_NODE_ID,
-    replica_id: `${PARTITION_ID}-r2`,
-    created_at: nowMs - budgetMs + BUDGET_REMAINING_MS,
-    updated_at: stepStartedAt,
-    completed_at: null,
-    error_message: null,
-    steps_history: JSON.stringify([{
-      step: WORKFLOW_STEP_PENDING,
-      timestamp: stepStartedAt,
-    }]),
-  };
+  const operation = createOperationAt({
+    operationId: OPERATION_ID,
+    partitionId: PARTITION_ID,
+    type: OperationType.ADD,
+    sourceNodeId: REMOTE_OWNER_NODE_ID,
+    targetNodeId: REMOTE_OWNER_NODE_ID,
+    replicaId: `${PARTITION_ID}-r2`,
+  }, nowMs - budgetMs + BUDGET_REMAINING_MS);
+  operation.entityType = 'partition';
+  operation.entityId = PARTITION_ID;
+  operation.updatedAt = stepStartedAt;
+  operation.stepsHistory[0].timestamp = stepStartedAt;
+  const row = repository.buildReplicaOperationRow(operation);
   const written = await hosts.cdcIntegrationService.insertSystemTableRow(
     REPLICA_OPERATIONS_TABLE, row);
   assert.equal(written.success, true, 'the operation row is written on the real path');
