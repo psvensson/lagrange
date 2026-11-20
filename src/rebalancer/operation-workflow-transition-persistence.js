@@ -1,3 +1,5 @@
+import {releaseCompletedLearnerRetirementCleanup} from
+  './operation-workflow-placement-learner-retirement.js';
 import {releaseOperationLedgerSelfMoveHoldAfterTerminal} from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
@@ -364,6 +366,9 @@ class OperationWorkflowTransitionPersistence
     }
     releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
     await this.releaseReservationForOperation(operation);
+    if (operation.workflowStep === WORKFLOW_STEP.REMOVED) {
+      await releaseCompletedLearnerRetirementCleanup(this, operation);
+    }
     this.clearTerminalOperationRetryState(operation);
     this.clearTransitionRetry(operation.operationId);
     this.clearDeferredSafetyBlockState(operation.operationId);

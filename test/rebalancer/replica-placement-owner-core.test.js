@@ -967,7 +967,10 @@ test('P3 & P4: ControlPlaneSetup.attachReplicaPlacementOwner binds the real Part
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
       },
-    ];
+    ].map((row, index) => ({...row,
+      [COLUMN.CREATED_AT]: NOW_MS + index,
+      [COLUMN.STATE_ENTERED_AT]: NOW_MS + index,
+    }));
     const cache = createSimpleSystemCache(
       [seededPartitionRow('tables-p1'), seededPartitionRow('indices-p1')],
       [...seededServiceRows('tables-p1'), ...surplusServices],
@@ -1044,6 +1047,11 @@ test('P3 & P4: ControlPlaneSetup.attachReplicaPlacementOwner binds the real Part
         secondRows.map((r) => `${r.partition_id}:${r.type}`).sort(),
         ['indices-p1:REMOVE', 'tables-p1:REPLACE'],
       );
+      const removal = secondRows.find((row) => row.type === OperationType.REMOVE);
+      const removed = surplusServices.find((row) => row[COLUMN.REPLICA_ID] === removal.replica_id);
+      assert.deepEqual(JSON.parse(removal.steps_history)[0].placementAdmission.voterRetirement, {
+        nodeBootIncarnation: 1, replicaCreatedAt: removed[COLUMN.CREATED_AT],
+      });
       attachment2.detach();
     }, {systemTableCache: cache});
   } finally {

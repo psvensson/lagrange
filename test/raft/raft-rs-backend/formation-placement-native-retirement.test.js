@@ -197,6 +197,9 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
     table === TABLES.SERVICES && /WHERE service_id = \?/u.test(sql) ?
       leaderGateway.readAuthoritativeRows(table, sql, params, options) :
       ownerRead(table, sql, params, options);
+  const ownerMutation = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = (mutation, options) => mutation.tableName === TABLES.SERVICES ?
+    leaderGateway.submitMutation(mutation, options) : ownerMutation(mutation, options);
   source.handler.messageRouter = coordinator.workflowOwner.messageRouter;
   relayPartitionConsensusObservations(leader.service);
   coordinator.workflowOwner.attachReplicaConsensusEvents(leader.handler.consensusEvents);
@@ -505,8 +508,10 @@ for (const successor of ['boot', 'service generation']) {
     }, {createCluster: addressedCluster}));
 }
 
-test('committed native absence hands a permanently lost learner to restart cleanup before settling',
-  {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
+for (const cleanupFirst of [false, true]) {
+  test(`offline learner custody releases after both durable effects (${
+    cleanupFirst ? 'disk first' : 'ledger first'})`, {timeout: 7000},
+  async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, clock} = context;
     const targetId = initial.replica_id;
     cluster.isolate(targetId);
@@ -517,6 +522,8 @@ test('committed native absence hands a permanently lost learner to restart clean
     const deliveries = [];
     const commitReached = Promise.withResolvers();
     const commitReleased = Promise.withResolvers();
+    const terminalReached = Promise.withResolvers();
+    const terminalReleased = Promise.withResolvers();
     const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
       deliveries, leader, clock});
     const gateway = leader.lifecycleStore.gateway;
@@ -528,6 +535,17 @@ test('committed native absence hands a permanently lost learner to restart clean
       }
       return apply(mutation, options);
     };
+    const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
+    if (cleanupFirst) {
+      coordinator.repository.persistOperationUpdate = async (operation, options) => {
+        if (operation.operationId === removal.operation_id &&
+            operation.workflowStep === WORKFLOW_STEP.REMOVED) {
+          terminalReached.resolve(operation);
+          await terminalReleased.promise;
+        }
+        return persist(operation, options);
+      };
+    }
     const readOperation = async () => {
       const result = await coordinator.repository.controlPlaneSystemTableGateway.readAuthoritativeRows(
         TABLES.REPLICA_OPERATIONS, 'SELECT * FROM replica_operations WHERE operation_id = ?',
@@ -549,7 +567,24 @@ test('committed native absence hands a permanently lost learner to restart clean
       assert.equal(source.lifecycleStore.durable.services.get(targetId).service_type,
         SERVICE_TYPE.PARTITION);
 
+      const file = path.join(source.handler.dataDir, 'partitions', cluster.partitionId,
+        `${targetId}.db`);
+      fs.mkdirSync(path.dirname(file), {recursive: true});
+      fs.copyFileSync(cluster.replica(targetId).dbFile, file);
       commitReleased.resolve();
+      let tombstone;
+      if (cleanupFirst) {
+        await waitForHeldRequest(terminalReached);
+        tombstone = source.lifecycleStore.durable.services.get(targetId);
+        const restarted = source.restart();
+        await restarted.handler.removedReplicaCleanupDebtSweepTask;
+        assert.equal(fs.existsSync(file), false);
+        const receipt = source.lifecycleStore.durable.services.get(targetId);
+        assert.equal(receipt.status, 'cleanup_complete');
+        assert.equal(receipt.created_at, target.created_at);
+        assert.equal((await readOperation()).completed_at, null);
+        terminalReleased.resolve();
+      }
       await redrive;
       for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
           (await readOperation()).completed_at === null; turns += 1) await nextTurns(1);
@@ -559,32 +594,33 @@ test('committed native absence hands a permanently lost learner to restart clean
       assert.equal(nodes.nodeRow().connection_state, STATE.DISCONNECTED);
       assert.equal(deliveries.some(({payload}) =>
         payload.type === ReplicaOperationMessageType.REMOVE_REPLICA), false);
-      const tombstone = source.lifecycleStore.durable.services.get(targetId);
+      tombstone ??= source.lifecycleStore.durable.services.get(targetId);
       assert.equal(tombstone.service_type, SERVICE_TYPE.PARTITION_CLEANUP);
       assert.equal(tombstone.created_at, target.created_at);
       assert.equal(tombstone.cleanup_token, takeover.whereClause.cleanup_token);
 
-      // A fresh process's local cleanup consults the committed ledger and
-      // SERVICES owner receipt, rather than needing the original dispatcher.
-      source.lifecycleStore.durable.replica_operations.set(terminal.operation_id, terminal);
-      const file = path.join(source.handler.dataDir, 'partitions', cluster.partitionId,
-        `${targetId}.db`);
-      fs.mkdirSync(path.dirname(file), {recursive: true});
-      fs.copyFileSync(cluster.replica(targetId).dbFile, file);
-      await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
-        restoreAuthorityOf(target)), {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
-      const restarted = source.restart();
-      await restarted.handler.removedReplicaCleanupDebtSweepTask;
-      assert.equal(fs.existsSync(file), false);
+      if (!cleanupFirst) {
+        // Reconstruct the target over the already committed operation.
+        source.lifecycleStore.durable.replica_operations.set(terminal.operation_id, terminal);
+        await assert.rejects(assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
+          restoreAuthorityOf(target)), {code: 'DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK'});
+        const restarted = source.restart();
+        await restarted.handler.removedReplicaCleanupDebtSweepTask;
+        assert.equal(fs.existsSync(file), false);
+      }
+      for (let turns = 0; turns < DELIVERY_BOUND_ROUNDS &&
+          source.lifecycleStore.durable.services.has(targetId); turns += 1) await nextTurns(1);
       assert.equal(source.lifecycleStore.durable.services.has(targetId), false);
       t.diagnostic(JSON.stringify({takeover, terminal, tombstone, deliveries}));
     } finally {
       commitReleased.resolve();
+      terminalReleased.resolve();
       await coordinator.shutdown();
       await source.dispose();
       await leader.dispose();
     }
   }, {createCluster: addressedCluster}));
+}
 
 function restoreAuthorityOf(row) {
   return {restoringExistingReplica: true, replicaId: row.replica_id, lifecycleAuthority: {
