@@ -1,8 +1,9 @@
 import {
   applyReplaceIntentIdentity,
   buildSuccessorReplaceIntentIdentity,
-  replaceIntentCollisionMatches,
+  replaceIntentPredecessorMatches,
 } from './rebalance-replace-intent-identity.js';
+import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {
   isTerminalSuccessfulCreateOperation,
 } from './replica-operation-progress.js';
@@ -22,28 +23,27 @@ class RebalanceCoordinatorOperationPersistenceCollision {
    * @private
    */
   async resolveCreatedOperationPersistenceCollision(context) {
-    const {operation, persistResult} = context;
-    const existing = persistResult.operation ||
-      await this.queryExistingOperationAfterInsertConflict({
-        operationIntentId: context.move.operationIntentId,
-        operationId: operation.operationId,
-        partitionId: context.partitionId,
-        targetNodeId: context.move.nodeId,
-        entityType: context.entityType,
-        entityId: context.entityId,
-        normalizedMove: context.normalizedMove,
-      });
+    const {operation, persistResult, requestedMove} = context;
+    const observation = persistResult.operation ?
+      {operation: persistResult.operation} :
+      await this.observeExactCreationOperation(operation.operationId);
+    const existing = observation.operation;
     if (!existing) {
-      throw new Error(
-        `Operation persistence collision is not visible: ${operation.operationId}`,
+      throw this.createDeferredOperationVisibilityError(
+        operation.type, observation, requestedMove,
       );
     }
-    this.assertReplaceIntentCollisionMatches(context, existing);
-    if (
-      context.replaceIntentIdentity &&
-      this.isRecentOperationIntentTerminal(existing)
-    ) {
+    assertOperationUpdateRecord(existing);
+    const terminal = this.isRecentOperationIntentTerminal(existing);
+    if (context.replaceIntentIdentity && terminal) {
+      if (!replaceIntentPredecessorMatches({...context, existing})) {
+        return this.refuseConflictingCreation(existing, requestedMove);
+      }
       return this.createSuccessorReplaceOperation(context, existing);
+    }
+    if (existing.operationId !== operation.operationId ||
+        !this.operationMatchesCreationRequest(existing, requestedMove)) {
+      return this.refuseConflictingCreation(existing, requestedMove);
     }
     // Deterministic-intent creators retry the SAME operation id, so a
     // durable terminal winner is the prior attempt's outcome, not an
@@ -53,8 +53,7 @@ class RebalanceCoordinatorOperationPersistenceCollision {
     // terminal-successful winner IS the create result; a terminal-failed
     // winner cannot be cured under the same intent id and must surface.
     if (
-      context.move?.operationIntentId &&
-      this.isRecentOperationIntentTerminal(existing)
+      context.move?.operationIntentId && terminal
     ) {
       if (isTerminalSuccessfulCreateOperation(existing)) {
         return existing;
@@ -73,25 +72,6 @@ class RebalanceCoordinatorOperationPersistenceCollision {
       existing,
     );
     return this.maybeRearmReusedPendingOperation(existing);
-  }
-
-  assertReplaceIntentCollisionMatches(context, existing) {
-    if (!context.replaceIntentIdentity) {
-      return;
-    }
-    if (replaceIntentCollisionMatches({
-      existing,
-      move: context.move,
-      operation: context.operation,
-      entityType: context.entityType,
-      entityId: context.entityId,
-      allowTargetChurn: Boolean(context.criticalAddLikeIntentKey),
-    })) {
-      return;
-    }
-    throw new Error(
-      `Operation persistence collision does not match REPLACE intent: ${context.operation.operationId}`,
-    );
   }
 
   createSuccessorReplaceOperation(context, existing) {

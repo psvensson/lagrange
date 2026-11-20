@@ -128,16 +128,8 @@ function replaceIntentEntityMatches(existing, entityType, entityId) {
   ].every(Boolean);
 }
 
-function replaceIntentTargetMatches(existing, move, allowTargetChurn) {
-  if (allowTargetChurn) {
-    return true;
-  }
-  return existing.targetNodeId === move?.nodeId;
-}
-
-function replaceIntentCollisionMatches(context = {}) {
-  const {existing, move, operation, entityType, entityId, allowTargetChurn} =
-    context;
+function replaceIntentPredecessorMatches(context = {}) {
+  const {existing, move, operation, entityType, entityId} = context;
   if (!existing) {
     return false;
   }
@@ -157,9 +149,11 @@ function replaceIntentCollisionMatches(context = {}) {
   return [
     existing.type === REPLACE_OPERATION_TYPE,
     replaceIntentEntityMatches(existing, entityType, entityId),
+    existing.operationId === operation.operationId,
+    existing.partitionId === operation.partitionId,
+    existing.sourceNodeId === operation.sourceNodeId,
     existing.sourceReplicaId === move?.replicaId,
     replicaIdentityMatches,
-    replaceIntentTargetMatches(existing, move, allowTargetChurn),
   ].every(Boolean);
 }
 
@@ -168,5 +162,5 @@ export {
   buildCoordinatorReplaceIntentIdentity,
   buildSuccessorReplaceIntentIdentity,
   normalizeOperationPersistResult,
-  replaceIntentCollisionMatches,
+  replaceIntentPredecessorMatches,
 };

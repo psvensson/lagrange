@@ -73,7 +73,6 @@ const {
   OPERATION_METADATA_KEY,
   OperationType,
   REBALANCE_COORDINATOR_EVENT,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   createOperationRecord,
@@ -726,20 +725,6 @@ const operationCreationSupportMethods = {
       );
     }
     return buildBootstrapTopologyHoldReleaseOutcome(true, released);
-  },
-
-  async queryExistingOperationAfterInsertConflict(context) {
-    const {operationIntentId, operationId, partitionId, targetNodeId,
-      entityType, entityId, normalizedMove} = context;
-    if (operationIntentId) {
-      const existingByDeterministicId =
-        await this.repository.queryAuthoritativeOperationById(operationId);
-      if (existingByDeterministicId) return existingByDeterministicId;
-    }
-    return this.queryExistingInFlightOperation(
-      partitionId, targetNodeId, entityType, entityId, normalizedMove,
-      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-    );
   },
 
   async armCoordinatorCreatedOperationProgress(operation, armContext = {}) {

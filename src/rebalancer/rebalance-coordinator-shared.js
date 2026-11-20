@@ -207,6 +207,7 @@ const STORAGE_RESERVATION_READ_QUERY_OPTIONS = Object.freeze({
       .OWNER_RPC_PREFERRED_SQL_FALLBACK,
 });
 const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
+  requireCompleteRows: true,
   readOptions: {
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
