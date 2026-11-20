@@ -490,6 +490,8 @@ class RebalanceCoordinatorLifecycle {
         this.controlPlaneReadinessService;
       this.workflowOwner.messageRouter = this.messageRouter;
       this.workflowOwner.tablePolicyService = this.tablePolicyService;
+      this.workflowOwner.placementAdmissionEnabled =
+        Boolean(this.placementAdmissionEnabled);
     }
 
     if (

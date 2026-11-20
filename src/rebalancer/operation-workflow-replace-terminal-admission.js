@@ -138,13 +138,20 @@ async function readReplaceDurableStep(owner, operation) {
 }
 
 async function observeCreateTarget(owner, operation) {
+  const allowActiveLearner =
+    isPartitionAdd(operation) &&
+    (Boolean(owner?.placementAdmissionEnabled) ||
+      Boolean(owner?.emitter?.placementAdmissionEnabled));
+  const readOptions = allowActiveLearner ?
+    {...ADD_TARGET_LIVENESS_READ, allowActiveLearner: true} :
+    ADD_TARGET_LIVENESS_READ;
   return typeof owner.repository?.getActualReplicaObservation ===
     OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
     owner.repository.getActualReplicaObservation(
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
-      ADD_TARGET_LIVENESS_READ,
+      readOptions,
     ) : null;
 }
 

@@ -2,7 +2,6 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {resolvePriorityRecoverySupersededTargetDecision} from './operation-workflow-priority-recovery-superseded-target-decision.js';
 
 const {
-  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   REMOVE_SAFETY_READINESS_DIMENSION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -72,7 +71,7 @@ function getPriorityRecoverySupersededTargetErrorFromContext(
         operation.replicaId,
         operation.partitionId,
         targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        context.buildObservedTargetReplicaObservationOptions(operation),
       ) :
       null;
 

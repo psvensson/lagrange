@@ -58,7 +58,6 @@ function extendOrphanSweepWithFencedAdoptions({
 const REPLACE_TIMEOUT_REENTRY_BOUNDARY = 'replace_timeout_reentry';
 const RESERVATION_RECONCILE_INTERVAL_MS = 30_000;
 const {
-  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
   OPERATION_LIFECYCLE_ACTION,
@@ -935,7 +934,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
-        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        this.buildObservedTargetReplicaObservationOptions(operation),
       ) === ReplicaStatus.ACTIVE
     );
   }

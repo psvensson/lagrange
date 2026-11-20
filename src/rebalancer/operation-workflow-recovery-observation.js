@@ -154,22 +154,20 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
-  isPreSyncCreateOperation(operation) {
-    return Boolean(
-      operation &&
-      (operation.type === OperationType.ADD ||
-        operation.type === OperationType.REPLACE) &&
-      PRE_SYNC_WORKFLOW_STEPS.has(operation.workflowStep),
-    );
+  isPreSyncCreateOperation(op) {
+    return Boolean(op && (op.type === OperationType.ADD || op.type === OperationType.REPLACE) &&
+      PRE_SYNC_WORKFLOW_STEPS.has(op.workflowStep));
   }
 
-  isLearnerTargetAddOperation(operation) {
+  isLearnerTargetAddOperation(op) {
     return Boolean(
-      operation &&
-      operation.type === OperationType.ADD &&
-      (operation.asLearner === true ||
-        operation.as_learner === true ||
-        this.placementAdmissionEnabled === true),
+      op && op.type === OperationType.ADD &&
+      (op.asLearner === true || op.as_learner === true ||
+        Boolean(op.placementHoldKey) || Boolean(op.placementAdmission) ||
+        (Array.isArray(op.stepsHistory) &&
+          op.stepsHistory.some((e) => Boolean(e?.placementAdmission))) ||
+        this.placementAdmissionEnabled === true ||
+        this.emitter?.placementAdmissionEnabled === true),
     );
   }
 

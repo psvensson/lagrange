@@ -634,17 +634,17 @@ const operationCreationSupportMethods = {
     if (typeof factory !== LOCAL_STR_FUNCTION) return;
     this.replicaPlacementOwnerFactory = factory;
     this.placementAdmissionEnabled = true;
+    if (this.workflowOwner) this.workflowOwner.placementAdmissionEnabled = true;
   },
 
   registerLedgerPartitionService(partitionService) {
-    if (!partitionService || partitionService.partitionId !== LEDGER_PARTITION_ID) {
-      return;
-    }
+    if (!partitionService || partitionService.partitionId !== LEDGER_PARTITION_ID) return;
     if (!(this.ledgerPartitionServices instanceof Set)) {
       this.ledgerPartitionServices = new Set();
     }
     this.ledgerPartitionServices.add(partitionService);
     this.placementAdmissionEnabled = true;
+    if (this.workflowOwner) this.workflowOwner.placementAdmissionEnabled = true;
   },
 
   unregisterLedgerPartitionService(partitionService) {
@@ -654,8 +654,7 @@ const operationCreationSupportMethods = {
   },
 
   attachLedgerReplicaPlacementOwner(ledgerPartitionService) {
-    if (!ledgerPartitionService ||
-        ledgerPartitionService.partitionId !== LEDGER_PARTITION_ID) {
+    if (!ledgerPartitionService || ledgerPartitionService.partitionId !== LEDGER_PARTITION_ID) {
       return null;
     }
     const readiness = this.controlPlaneReadinessService;

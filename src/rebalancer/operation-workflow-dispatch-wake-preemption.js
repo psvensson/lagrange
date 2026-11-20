@@ -218,7 +218,9 @@ async function reconcileDispatchWakePendingTargetProgress(
         allowActiveLearner:
           operation?.type === OperationType.ADD &&
           (Boolean(context?.placementAdmissionEnabled) ||
-            Boolean(operation?.placementHoldKey)),
+            Boolean(context?.emitter?.placementAdmissionEnabled) ||
+            Boolean(operation?.placementHoldKey) ||
+            Boolean(operation?.placementAdmission)),
       },
     ) :
     OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;

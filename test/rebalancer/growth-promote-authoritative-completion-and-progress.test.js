@@ -580,3 +580,88 @@ test(
     }
   },
 );
+
+test(
+  'D4 & D6: placement-admitted ADD operation completes when target replica reaches ' +
+    'status=active with raft_role=learner on reconstructed OperationWorkflowOwner',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {
+        service_id: TEST_LEARNER_1,
+        replica_id: TEST_LEARNER_1,
+        service_type: 'partition',
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_LEADER_NODE_2,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.LEARNER,
+      },
+    );
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_LEADER_NODE_1,
+      systemTableCache: cache,
+    });
+    coordinator.bindReplicaPlacementOwnerFactory(() => null);
+    const owner = coordinator.workflowOwner;
+
+    try {
+      t.equal(coordinator.placementAdmissionEnabled, true);
+      t.equal(owner.placementAdmissionEnabled, true);
+
+      const reloadedAddRow = {
+        operation_id: 'pl-nodes-p1-177-0',
+        type: OperationType.ADD,
+        partition_id: TEST_PARTITION_ID,
+        entity_type: 'partition',
+        entity_id: TEST_PARTITION_ID,
+        replica_id: TEST_LEARNER_1,
+        source_node_id: TEST_LEADER_NODE_1,
+        target_node_id: TEST_LEADER_NODE_2,
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+        created_at: 1000,
+        updated_at: 2000,
+        completed_at: null,
+        error_message: null,
+        steps_history: JSON.stringify([
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: 1000,
+            placementAdmission: {
+              entryId: 'placement-owner:test',
+              transitionKind: 'PLACEMENT',
+            },
+          },
+          {
+            step: WORKFLOW_STEP.SYNCING,
+            timestamp: 2000,
+          },
+        ]),
+      };
+      const addOp = coordinator.repository.rowToOperation(reloadedAddRow);
+      t.equal(owner.isLearnerTargetAddOperation(addOp), true);
+      t.equal(
+        owner.getObservedOperationRowTargetProgressStatus(addOp),
+        ReplicaStatus.ACTIVE,
+      );
+
+      owner.confirmActiveReplicaTerminalHandoff = async () => true;
+      const completedIds = [];
+      owner.completeOperation = async (op) => {
+        completedIds.push(op.operationId);
+        op.workflowStep = WORKFLOW_STEP.ACTIVE;
+        op.status = ReplicaStatus.ACTIVE;
+        op.completedAt = 3000;
+      };
+      const outcome = await owner.reconcileOperationLifecycle(addOp, {
+        cause: 'progress',
+      });
+      t.equal(outcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+      t.same(completedIds, ['pl-nodes-p1-177-0']);
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
