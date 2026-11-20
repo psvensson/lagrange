@@ -717,12 +717,12 @@ test('RebalanceCoordinator superseded-target gate preserves local ' +
 
   try {
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
-    const supersededTargetError =
+    const supersededTargetFailure =
       await coordinator.workflowOwner
-        .getPriorityRecoverySupersededTargetError(operation);
+        .getPriorityRecoverySupersededTargetFailure(operation);
 
     t.equal(
-      supersededTargetError,
+      supersededTargetFailure,
       null,
       'materialized local priority replacement targets should defer superseded eligible-cohort failure',
     );

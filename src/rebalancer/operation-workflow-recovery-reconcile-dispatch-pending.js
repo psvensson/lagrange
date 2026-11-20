@@ -753,13 +753,13 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
   const completion =
     priorityRecoveryContext.completion ||
     null;
-  const supersededTargetError =
-    await owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+  const supersededTargetFailure =
+    await owner.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
       operation,
       priorityRecoveryContext,
     );
   const supersededTargetState =
-    supersededTargetError ?
+    supersededTargetFailure ?
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET :
       null;
   const completionState =
@@ -818,7 +818,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
     sourceReplicaId: sourceSnapshot.sourceReplicaId,
     sourceObservationState: sourceSnapshot.observationState,
     sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
-    supersededTargetError,
+    supersededTargetFailure,
   });
 }
 

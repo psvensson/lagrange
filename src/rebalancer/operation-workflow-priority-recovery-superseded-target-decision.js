@@ -190,6 +190,7 @@ async function resolvePriorityRecoverySupersededTargetDecision({
       PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL,
     targetNodeId,
     eligibleNodeIds: Object.freeze([...eligibleNodeIds]),
+    targetObservation,
   });
 }
 

@@ -709,9 +709,9 @@ test('priority superseded-target failure requires an exact authoritative observa
       blockerReasons: [PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED],
     },
   };
-  const decide = () => owner.getPriorityRecoverySupersededTargetErrorFromContext(
+  const decide = () => owner.getPriorityRecoverySupersededTargetFailureFromContext(
     operation, priorityContext);
-  const decideRemotely = () => owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+  const decideRemotely = () => owner.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
     operation, priorityContext);
   const clockBase = Date.now();
   owner.timeSource = {now: () => clockBase + 3_600_000};
@@ -724,8 +724,8 @@ test('priority superseded-target failure requires an exact authoritative observa
   t.not((await staleDrainSource()).state, staleState,
     'unavailable target authority cannot infer stale, unmaterialized failure');
   restoreServicesRead();
-  t.match(await decide(), /eligible cohort/i, 'genuine absence still permits supersession');
-  t.match(await decideRemotely(), /eligible cohort/i, 'remote drain accepts genuine absence');
+  t.match((await decide())?.error, /eligible cohort/i, 'genuine absence still permits supersession');
+  t.match((await decideRemotely())?.error, /eligible cohort/i, 'remote drain accepts genuine absence');
   t.equal((await staleDrainSource()).state, staleState, 'genuine absence can be stale');
   const observeReplica = owner.repository.getActualReplicaObservation.bind(owner.repository);
   owner.repository.getActualReplicaObservation = async (...args) => ({

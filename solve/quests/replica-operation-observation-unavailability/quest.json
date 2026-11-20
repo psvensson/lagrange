@@ -32,9 +32,13 @@
       "src/rebalancer/operation-workflow-terminal-transition-repair.js",
       "src/rebalancer/operation-workflow-transition-persistence.js",
       "src/rebalancer/priority-recovery-superseded-target.js",
+      "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+      "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
       "src/rebalancer/replica-operation-repository-observation-methods.js",
       "src/rebalancer/replica-operation-repository.js",
       "test/rebalancer/canonical-replica-completion-observation.test.js",
+      "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+      "test/rebalancer/priority-remove-safety-spread-nonregression.test.js",
       "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js",
       "test/rebalancer/replica-operation-observation-contract.test.js",
       "test/rebalancer/strict-operation-outcomes.test.js"

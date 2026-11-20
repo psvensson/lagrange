@@ -155,6 +155,10 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       if (options?.requireCreateAdmissionAbsent === true) {
         whereClause.create_admission_state = SQL_NULL_VALUE;
       }
+      if (options?.requireExactCreateTarget === true) {
+        whereClause.replica_id = operation.replicaId;
+        whereClause.target_node_id = operation.targetNodeId;
+      }
       return whereClause;
     }
 

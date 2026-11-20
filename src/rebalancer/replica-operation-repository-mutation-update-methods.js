@@ -240,6 +240,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
               terminalTransition,
               requireCreateAdmissionAbsent:
                 options.requireCreateAdmissionAbsent === true,
+              requireExactCreateTarget: options.requireExactCreateTarget === true,
               expectedStepsHistory,
             },
           ),
@@ -261,7 +262,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           // at the caller that projected the row. Retry attempts repeat it.
           beforeAttempt: options.terminalAdmission,
         },
-        {
+        options.requireExactCreateTarget === true ? null : {
           sql: this.resolveOperationUpdateSql(
             expectedWorkflowStep,
             terminalTransition,
@@ -304,7 +305,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           return this.resolveZeroChangeOperationUpdate(
             operation,
             expectedWorkflowStep,
-            {terminalTransition},
+            {terminalTransition, requireExactCreateTarget: options.requireExactCreateTarget},
           );
         }
         return buildOperationUpdateOutcome({
@@ -549,6 +550,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
         if (
+          options.requireExactCreateTarget === true ||
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {

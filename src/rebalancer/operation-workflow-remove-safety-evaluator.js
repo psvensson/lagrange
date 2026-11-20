@@ -163,13 +163,16 @@ async function evaluatePriorityRecoveryCompletionRemoveSafety(
       operation,
       planningSnapshot,
     );
-  const supersededTargetError =
-    await context.getPriorityRecoverySupersededTargetErrorFromContext(
+  const supersededTargetFailure =
+    await context.getPriorityRecoverySupersededTargetFailureFromContext(
       operation,
       priorityRecoveryContext,
     );
-  if (supersededTargetError) {
-    return context.buildFailedRemoveSafetyEvaluation(supersededTargetError);
+  if (supersededTargetFailure) {
+    return Object.freeze({
+      ...context.buildFailedRemoveSafetyEvaluation(supersededTargetFailure.error),
+      priorityRecoverySupersession: supersededTargetFailure,
+    });
   }
 
   if (
@@ -229,13 +232,16 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  const supersededTargetError =
-    await context.getPriorityRecoverySupersededTargetErrorFromContext(
+  const supersededTargetFailure =
+    await context.getPriorityRecoverySupersededTargetFailureFromContext(
       operation,
       priorityRecoveryContext,
     );
-  if (supersededTargetError) {
-    return context.buildFailedRemoveSafetyEvaluation(supersededTargetError);
+  if (supersededTargetFailure) {
+    return Object.freeze({
+      ...context.buildFailedRemoveSafetyEvaluation(supersededTargetFailure.error),
+      priorityRecoverySupersession: supersededTargetFailure,
+    });
   }
   if (
     priorityRecoveryCompletion?.state ===

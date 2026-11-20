@@ -162,7 +162,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  async resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+  async resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
     operation,
     priorityRecoveryContext,
   ) {
@@ -197,8 +197,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     ) {
       return null;
     }
-    const targetState =
-      await this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation);
+    const targetObservation = await this.observePriorityRecoveryTarget(operation);
+    const targetState = resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
+      operation,
+      targetObservation,
+    });
     if (
       targetState !== PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED &&
       targetState !==
@@ -206,10 +209,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     ) {
       return null;
     }
-    return this.buildPriorityRecoverySupersededTargetError(
+    return this.buildPriorityRecoverySupersededTargetFailure(
       operation,
       targetNodeId,
       eligibleNodeIds,
+      targetObservation,
     );
   }
 
@@ -613,10 +617,10 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation, planningSnapshot);
     const completion = this.buildPriorityRecoveryCompletionForOperation(
       operation, planningSnapshot) || priorityRecoveryContext?.completion || null;
-    const supersededTargetError =
-      await this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+    const supersededTargetFailure =
+      await this.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
         operation, priorityRecoveryContext);
-    const supersededTargetState = supersededTargetError ?
+    const supersededTargetState = supersededTargetFailure ?
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET : null;
     const completionState = completion?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE;
@@ -646,7 +650,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       sourceReplicaId: sourceSnapshot.sourceReplicaId,
       sourceObservationState: sourceSnapshot.observationState,
       sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
-      supersededTargetError,
+      supersededTargetFailure,
     });
   }
 
@@ -691,8 +695,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       return isTerminalTransitionOutcomeSettled(
         await this.failOperation(
           operation,
-          resolvedDrainSnapshot.supersededTargetError,
-          {logLevel: FAILURE_LOG_LEVEL.WARN},
+          resolvedDrainSnapshot.supersededTargetFailure.error,
+          {
+            logLevel: FAILURE_LOG_LEVEL.WARN,
+            priorityRecoverySupersession: resolvedDrainSnapshot.supersededTargetFailure,
+          },
         ),
       );
     }
