@@ -112,7 +112,7 @@ function createTargetOutcomeHarness(operation, options = {}) {
   const scheduledTimers = [];
   const warnings = [];
   const connectionDiagnosticNodeIds = [];
-  let operationVisible = true;
+  let operationReadAvailable = true;
   const logger = {
     debug() {},
     info() {},
@@ -127,10 +127,11 @@ function createTargetOutcomeHarness(operation, options = {}) {
   const executeQuery = async (sql, params = []) => {
     if (
       String(sql).includes('WHERE operation_id') &&
-      params[0] === operation.operationId &&
-      operationVisible
+      params[0] === operation.operationId
     ) {
-      return {success: true, rows: [operationToRow(operation)]};
+      return operationReadAvailable ?
+        {success: true, rows: [operationToRow(operation)]} :
+        {success: false, error: 'operation owner read temporarily unavailable'};
     }
     return {success: true, rows: [], affectedRows: 0};
   };
@@ -187,8 +188,8 @@ function createTargetOutcomeHarness(operation, options = {}) {
     deliveries,
     emitter,
     scheduledTimers,
-    setOperationVisible(visible) {
-      operationVisible = visible;
+    setOperationReadAvailable(available) {
+      operationReadAvailable = available;
     },
     warnings,
   };
@@ -480,13 +481,21 @@ test(
         'transport diagnostics should inspect the source-owner connection',
       );
 
-      harness.setOperationVisible(false);
+      harness.setOperationReadAvailable(false);
       await retryTimer.callback();
+      t.equal(remoteHandoffDeliveries(harness.deliveries).length, 1,
+        'an unavailable owner read retains the obligation without sending a snapshot');
+      const retainedTimer = owner.createdOperationHandoffRetryTimerByOperationId.get(OPERATION_ID);
+      t.ok(retainedTimer, 'the same operation still owns the bounded retry');
+      t.equal(owner.createdOperationHandoffRetryTargetNodeByOperationId.get(OPERATION_ID),
+        SOURCE_NODE_ID);
+      harness.setOperationReadAvailable(true);
+      await retainedTimer?.callback();
 
       t.equal(
         remoteHandoffDeliveries(harness.deliveries).length,
         2,
-        'the retained operation snapshot should retry through the same ingress',
+        'recovered exact authority wakes the same source owner through the original ingress',
       );
       t.equal(
         harness.deliveries[1]?.target,
@@ -496,21 +505,6 @@ test(
       t.ok(
         owner.createdOperationHandoffRetryTimerByOperationId.has(OPERATION_ID),
         'successful delivery should retain the bounded verification follow-up',
-      );
-      const snapshotWarning = harness.warnings.find(
-        (entry) => entry.message ===
-          REBALANCE_COORDINATOR_LOG_MSG
-            .COORDINATOR_HANDOFF_RETRY_FROM_SNAPSHOT,
-      );
-      t.equal(
-        snapshotWarning?.fields?.handoffDestinationNodeId,
-        SOURCE_NODE_ID,
-        'snapshot retry should retain the source-owner destination',
-      );
-      t.equal(
-        snapshotWarning?.fields?.targetNodeId,
-        undefined,
-        'snapshot retry must not regress to the replica target diagnostic',
       );
     } finally {
       await harness.coordinator.shutdown();

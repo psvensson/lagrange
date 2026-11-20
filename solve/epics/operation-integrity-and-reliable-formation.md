@@ -394,6 +394,19 @@ Public SQL remains an independent service criterion.
 [First original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-e068cbdc-nov20.tar.gz)
 and [second original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz).
 
+Across all retained ledger snapshots, `e068cbdc` admitted 73 ADDs by
+the deadline. Seventy reached ACTIVE with a completion timestamp inside
+the bound. It recorded zero REMOVE admissions. Run `57e4db30` admitted
+43 ADDs and one REMOVE; 39 ADDs completed within the bound. In the first
+run four ADDs had a leader decision of `authority_unavailable` with reason
+`Message timeout` during the measured window (ten logged decisions). In
+the second, eight ADDs had that outcome (twenty decisions). These counts
+use distinct operation IDs from the ledger and one leader-side log event
+type. A single reversal cannot explain both failures. On the next composed
+run, retain the distribution of creation-to-completion time for distinct
+ADDs alongside waits for authoritative reads, so delays in necessary work
+remain visible even if the reversal disappears.
+
 The second ledger also records an actual reversal on adam-laptop. ADD
 `pl-contexts-p1-505-0` completed, then REMOVE `pl-contexts-p1-559-0` was
 admitted 6.280 seconds later for the same replica. After the REMOVE committed,

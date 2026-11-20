@@ -223,19 +223,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       // workflow owner until an authoritative read proves the incumbents have
       // drained. A second self-move still cannot register alongside it.
       if (context?.registerDurableSelfMoveIntent === true) {
-        const heldSelfMove = await this.resolveRegisteredLedgerSelfMove(
-          liveOperations,
+        await this.assertNoRegisteredLedgerSelfMove(
+          liveOperations, normalizedMoveType, partitionId,
         );
-        if (heldSelfMove) {
-          throw this.createOperationLedgerInterlockError(
-            normalizedMoveType,
-            OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
-              String(partitionId) +
-              OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
-            OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
-            heldSelfMove.operationId,
-          );
-        }
         if (observation?.deferredOutcome) {
           throw this.createDeferredOperationVisibilityError(
             normalizedMoveType,
@@ -395,6 +385,20 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       liveOperations,
       OPERATION_LEDGER_SELF_MOVE_REGISTERING_HOLD_ACTIONS,
     );
+  }
+
+  async assertNoRegisteredLedgerSelfMove(liveOperations, moveType, partitionId) {
+    const holder = await this.resolveRegisteredLedgerSelfMove(liveOperations);
+    if (holder) {
+      throw this.createOperationLedgerInterlockError(
+        moveType,
+        OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+          String(partitionId) +
+          OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
+        OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
+        holder.operationId,
+      );
+    }
   }
 
   /**

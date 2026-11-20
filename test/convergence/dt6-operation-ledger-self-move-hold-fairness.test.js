@@ -250,6 +250,23 @@ test(
           m.extras.secondSelfMove,
         )})`,
     );
+    const move = m.extras.secondSelfMove;
+    assert.equal(move.durableBefore?.length, SINGLE_SELF_MOVE,
+      'SQLite held exactly one unresolved ledger operation before the request');
+    const [holder] = move.durableBefore ?? [];
+    assert.equal(holder?.operation_id, m.extras.selfMoveOperationId);
+    assert.notEqual(move.requested?.target_node_id, holder?.target_node_id,
+      'the request names a different physical target');
+    assert.notEqual(move.requested?.source_replica_id, holder?.source_replica_id,
+      'the request names a different physical source replica');
+    assert.equal(move.returned, null,
+      `the conflicting request cannot adopt the incumbent (${JSON.stringify(move)})`);
+    assert.deepEqual(move.durableAfter, move.durableBefore,
+      'the conflicting request retained exactly the incumbent row');
+    assert.deepEqual(move.replayed, holder,
+      'a same-subject request replays the real committed incumbent');
+    assert.deepEqual(move.durableAfterReplay, move.durableBefore,
+      'same-subject replay did not insert another unresolved row');
     assert.deepEqual(
       m.extras.secondSelfMove.refusals.map((refusal) => refusal.reason),
       [SELF_MOVE_WAITING_REASON],

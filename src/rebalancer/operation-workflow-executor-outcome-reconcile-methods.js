@@ -11,11 +11,8 @@ import {
   EXECUTOR_OUTCOME_VISIBILITY_ABSENCE,
   applyOperationWorkflowExecutorOutcomeVisibility,
 } from './operation-workflow-executor-outcome-visibility.js';
+import {redriveExecutorOutcomeReconcile} from './operation-workflow-executor-outcome-redrive.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
-
-function isExecutorTerminalPersistSettled(transitionOutcome) {
-  return isTerminalTransitionOutcomeSettled(transitionOutcome);
-}
 
 const {
   EXECUTOR_OUTCOME_ACTION, EXECUTOR_OUTCOME_ACTION_MAP, EXECUTOR_OUTCOME_FIELD,
@@ -44,11 +41,6 @@ const EXECUTOR_FAILURE_RECONCILE_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
-
-// CL-029: bound on consecutive lane waits in the re-drive loop (each wait
-// is a full holder execution, not a poll); past it the timed retry owns
-// the evidence.
-const EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS = 50;
 
 // CL-029: timed outcome retries back off exponentially per operation up
 // to this cap (reset whenever the evidence is consumed); a fixed
@@ -120,103 +112,8 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         this.getExecutorOutcomeRetryWorkflowStepRank(previous);
   }
 
-  /**
-   * CL-029: apply retained executor-outcome evidence under the operation
-   * lane until it is consumed. operationWorkflowRunExclusive COALESCES —
-   * a held lane returns the holder's promise and discards the factory —
-   * so a plain single submission loses the evidence whenever the dispatch
-   * step-walk (or any other holder) owns the lane when the outcome
-   * arrives (the target_sync wedge). Awaiting the coalesced promise IS
-   * the wait for the holder to finish; the loop then resubmits the
-   * LATEST retained payload. Exits: payload consumed (applied), a retry
-   * timer armed (it re-enters here on fire), payload left untouched by a
-   * reconcile that ran (intentional non-consumption, e.g. remote-owner
-   * wake), reconcile error (routed to the transition-retry machinery),
-   * or the lane-wait cap (falls back to the timed retry so the evidence
-   * keeps an owner). A holder's rejection is NOT the outcome's failure —
-   * it has its own retry owners — so !factoryRan rejections just loop.
-   * @param {string} operationId
-   * @return {Promise<void>}
-   */
-  async redriveExecutorOutcomeReconcile(operationId) {
-    if (
-      !operationId ||
-      this.executorOutcomeRedriveInFlightByOperationId.has(operationId)
-    ) {
-      return;
-    }
-    this.executorOutcomeRedriveInFlightByOperationId.add(operationId);
-    try {
-      for (
-        let laneWait = 0;
-        laneWait < EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS;
-        laneWait++
-      ) {
-        if (this.isShuttingDown || !this.isInitialized) {
-          return;
-        }
-        const payload =
-          this.executorOutcomeRetryPayloadByOperationId.get(operationId);
-        if (!payload) {
-          return;
-        }
-        if (this.executorOutcomeRetryTimerByOperationId.has(operationId)) {
-          return;
-        }
-        let factoryRan = false;
-        try {
-          await this.operationWorkflowRunExclusive(
-            this.getOperationOwnerSingleFlightKey(operationId),
-            () => {
-              factoryRan = true;
-              return this.reconcileExecutorOutcome(payload);
-            },
-          );
-        } catch (error) {
-          if (!factoryRan || this.supersedesExecutorStepRetry(payload,
-            this.executorOutcomeRetryPayloadByOperationId.get(operationId))) {
-            continue;
-          }
-          // Retryable reconcile failures re-arm the OUTCOME retry (with
-          // the deferred completion context preserved); non-retryable
-          // failures log OUTCOME_TRANSITION_FAILED. Either way the error
-          // belongs to the outcome, never to the coalesced lane holder.
-          this.handleDeferredExecutorOutcomeRetryFailure(
-            payload,
-            error,
-            null,
-          );
-          return;
-        }
-        if (!factoryRan) {
-          continue;
-        }
-        const retainedAfterRun =
-          this.executorOutcomeRetryPayloadByOperationId.get(operationId);
-        if (retainedAfterRun === payload) {
-          // CL-029 backstop: a reconcile that ran but left the evidence
-          // untouched must not strand the payload owner-less. Every real
-          // reconcile path at HEAD clears or replaces the entry, so this
-          // exit guards the CLASS (a future path that forgets to clear or
-          // schedule, or the unmapped-action fallthrough) rather than a
-          // demonstrated live path — the previously silent orphan becomes
-          // a bounded 30s-cadence retry with a warn per arm. Consumption
-          // clears the timer and resets the backoff.
-          this.scheduleRetainedExecutorOutcomeRetry(payload, null);
-          return;
-        }
-      }
-      if (this.isShuttingDown || !this.isInitialized) {
-        return;
-      }
-      const retained =
-        this.executorOutcomeRetryPayloadByOperationId.get(operationId);
-      if (retained) {
-        this.scheduleRetainedExecutorOutcomeRetry(retained, null);
-      }
-    } finally {
-      this.executorOutcomeRedriveInFlightByOperationId.delete(operationId);
-    }
+  redriveExecutorOutcomeReconcile(operationId) {
+    return redriveExecutorOutcomeReconcile(this, operationId);
   }
 
   buildExecutorFailureOutcomeErrorLike(outcome, fallbackMessage) {
@@ -585,7 +482,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       return;
     }
     const completionOutcome = await this.completeOperation(operation);
-    if (!isExecutorTerminalPersistSettled(completionOutcome)) {
+    if (!isTerminalTransitionOutcomeSettled(completionOutcome)) {
       this.scheduleRetainedExecutorOutcomeRetry(outcome, visibilityObservation);
       return;
     }
@@ -738,7 +635,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         operation,
         errorLike?.message || errorMessage || outcomeType,
       );
-      if (!isExecutorTerminalPersistSettled(failureOutcome)) {
+      if (!isTerminalTransitionOutcomeSettled(failureOutcome)) {
         this.scheduleRetainedExecutorOutcomeRetry(
           outcome,
           visibilityObservation,

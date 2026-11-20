@@ -489,7 +489,9 @@ test('ReplicaHandler.initialize recovers a refused cleanup snapshot through ' +
   const entered = Promise.withResolvers();
   const release = Promise.withResolvers();
   state.available = true;
-  state.beforeSnapshot = async () => { entered.resolve(); await release.promise; };
+  state.beforeSnapshot = async () => {
+    entered.resolve(); await release.promise;
+  };
   handler.replicaCreateAdmissionRecoveryRearmOwner.cancel();
   state.wake();
   await boundedStartupObservation(entered.promise);
@@ -544,7 +546,9 @@ test('shutdown fences a late successful startup snapshot before filesystem clean
       TEST_ORPHAN_REPLICA_ID);
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
-    state.beforeSnapshot = async () => { entered.resolve(); await release.promise; };
+    state.beforeSnapshot = async () => {
+      entered.resolve(); await release.promise;
+    };
     handler.initialize();
     await boundedStartupObservation(entered.promise);
     const shutdown = handler.shutdown();
@@ -580,7 +584,9 @@ test('shutdown joins an admitted sweep and fences its paused authority read',
     t.equal(state.sweepCalls, 1, 'one real sweep is awaiting current authority');
     await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
     let shutdownSettled = false;
-    const shutdown = handler.shutdown().then(() => { shutdownSettled = true; });
+    const shutdown = handler.shutdown().then(() => {
+      shutdownSettled = true;
+    });
     await new Promise((resolve) => setImmediate(resolve));
     t.equal(shutdownSettled, false, 'shutdown waits for its in-flight sweep');
     release.resolve();
@@ -623,7 +629,9 @@ test('an admitted cleanup release CAS preserves a new token after shutdown start
     await boundedStartupObservation(entered.promise);
     await boundedStartupObservation(handler.replicaCreateAdmissionRecoveryTask);
     let shutdownSettled = false;
-    const shutdown = handler.shutdown().then(() => { shutdownSettled = true; });
+    const shutdown = handler.shutdown().then(() => {
+      shutdownSettled = true;
+    });
     await new Promise((resolve) => setImmediate(resolve));
     t.equal(shutdownSettled, false, 'shutdown joins the already-admitted release');
     t.equal(handler.startReplicaCreateAdmissionRecovery(), false,

@@ -15,9 +15,6 @@ import {
 import {observeGrowthPromoteIncompleteState} from './operation-workflow-growth-promote.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 
-function isTerminalPersistSettled(transitionOutcome) {
-  return isTerminalTransitionOutcomeSettled(transitionOutcome);
-}
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -785,7 +782,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
         return false;
       }
-      return isTerminalPersistSettled(await this.completeOperation(operation));
+      return isTerminalTransitionOutcomeSettled(await this.completeOperation(operation));
     }
 
     if (actualStatus === ReplicaStatus.REMOVING) {

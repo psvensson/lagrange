@@ -584,8 +584,12 @@ function readManagedExecution(directory, originals) {
   const runs = readExecutionRuns(sections);
   const reconstructed = buildExecutionReport({candidate, producer: report.producer,
     commands: report.commands, planned: [TEST_FILE], runs, reusedProofs: []});
-  const validation = executionReportProblems(reconstructed, {sha: MANAGED.source, tree: MANAGED.tree,
-    retryPolicy: RETRY_POLICY.REFUSE, requiredFiles: [TEST_FILE]});
+  const validation = executionReportProblems(reconstructed, {
+    sha: MANAGED.source,
+    tree: MANAGED.tree,
+    retryPolicy: RETRY_POLICY.REFUSE,
+    requiredFiles: [TEST_FILE],
+  });
   requireManaged(isDeepStrictEqual(report, reconstructed) &&
     isDeepStrictEqual(validation, readJson(originals, MANAGED_FILE.VALIDATION)) &&
     validation.problems.length === 0 && validation.qualification.length === 0 &&
@@ -622,7 +626,8 @@ function readManagedNative(originals, status, {invocation, run}) {
   const readiness = readJson(originals, MANAGED_FILE.READINESS);
   const lock = sourceBlob(LOCK_FILE, MANAGED.source);
   requireManaged(isDeepStrictEqual(native, readJson(originals, MANAGED_FILE.NATIVE_AFTER)) &&
-    native.lockfile === digest(lock) && native.package === JSON.parse(lock).packages[BETTER_SQLITE3].version &&
+    native.lockfile === digest(lock) &&
+    native.package === JSON.parse(lock).packages[BETTER_SQLITE3].version &&
     native.sqlite.sourceId && native.compileOptions.length > 0 &&
     readiness.readiness.ready === true && readiness.capability.thermal === 'measured' &&
     readiness.requirement.source === MANAGED.source &&
@@ -630,7 +635,8 @@ function readManagedNative(originals, status, {invocation, run}) {
   'native SQLite identity or candidate readiness changed');
   const sourceRoot = run.checkout.root;
   const records = managedProcessPairs(originals);
-  const [classified] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, CLASSIFIED_RUNNER));
+  const [classified] = records.filter(({argv}) =>
+    argv[1] === path.join(sourceRoot, CLASSIFIED_RUNNER));
   const [runner] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, MANAGED_RUNNER));
   const [test] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, TEST_FILE));
   requireManaged(records.length === 3 && classified && runner && test &&
@@ -674,7 +680,8 @@ function parseManagedTap(raw) {
     const parent = byParent.get(name);
     checkParserCompletion(result, assertions.length, name, requireManaged);
     requireManaged(!nested && result.ok === true && parent?.ok === true &&
-      [parent, ...assertions].every((item) => item.ok && !item.skip && !item.todo && !item.tapError),
+      [parent, ...assertions].every((item) =>
+        item.ok && !item.skip && !item.todo && !item.tapError),
     `unmeasured or failed managed case: ${name}`);
     leaves += assertions.length;
   }
@@ -700,7 +707,8 @@ function managedSourceDigests() {
   const changed = sourceCommand(['diff', '--name-only', SOURCE, MANAGED.source, '--',
     'src/rebalancer']).toString(ENCODING.TEXT).trim().split(NEWLINE);
   const files = new Set([...PRODUCTION_FILES, ...changed, LOCK_FILE]);
-  return Object.fromEntries([...files].map((file) => [file, digest(sourceBlob(file, MANAGED.source))]));
+  return Object.fromEntries([...files].map((file) =>
+    [file, digest(sourceBlob(file, MANAGED.source))]));
 }
 
 function admitManagedPositive(directory, output) {
