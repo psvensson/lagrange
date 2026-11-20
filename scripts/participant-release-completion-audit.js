@@ -49,7 +49,7 @@ const SEED_BINDINGS = Object.freeze([SEED_FACTORY, 'PARTICIPANT_CUTOVER_OUTCOME'
   'PARTICIPANT_RELEASE_TRIGGER', 'TABLES', 'observeParticipantReleaseClockValue',
   'readParticipantReleaseClock', 'participantReleaseSeedBudgetObservation']);
 const FRESH_BINDINGS = Object.freeze([FRESH_FACTORY, 'handler', 'now', 'sleep',
-  'OUTCOME', 'BOUND', 'TRIGGER']);
+  'OUTCOME', 'BOUND', 'TRIGGER', 'FRESH_CREATE_RELEASE_UNAVAILABLE']);
 const COMMON_BINDINGS = Object.freeze([NAME, 'runtimeBuildProvenance', 'RUNTIME_BUILD_STATE']);
 const INTRINSICS = Object.freeze(['Object', 'Math', 'Number', 'Promise']);
 const FRESH_PARAMETERS = Object.freeze(['handler']);
@@ -64,6 +64,8 @@ const OWNER_DECLARATIONS = Object.freeze(['const objectFreeze = Object.freeze;',
   'const mathMin = Math.min;', 'const mathMax = Math.max;',
   'const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;']);
 const NOW_DECLARATION = 'const now = () => handler.timeSource.now();';
+const FRESH_UNAVAILABLE_DECLARATION =
+  'const FRESH_CREATE_RELEASE_UNAVAILABLE = \'FRESH_CREATE_RELEASE_UNAVAILABLE\';';
 const RULE_REFERENCE = 'architecture/contracts/authority-and-recovery.md: one decision algorithm';
 const REASON = Object.freeze({BODY: 'completion input, control-flow or canonical binding contract differs',
   CENSUS: 'completion must have exactly the seed and fresh CREATE caller census'});
@@ -75,8 +77,8 @@ const OWNER_CONTRACT = `async function completeParticipantRelease(owner, request
   const intent = objectFreeze({...request});
   const deadline = intent.deadlineAtMs;
   const seed = intent.trigger === TRIGGER.FRESH_SEED;
-  let answer = null;
-  let completed = false;
+  let answer;
+  let completion;
   let attemptCount = 0;
   let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
   let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
@@ -87,19 +89,21 @@ const OWNER_CONTRACT = `async function completeParticipantRelease(owner, request
       firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain, answer.blockedDrain);
       firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt, answer.joinedAttempt);
     }
-    if (answer.outcome === OUTCOME.CUT_OVER) {
-      completed = true;
+    const outcome = answer.outcome;
+    if (outcome === OUTCOME.CUT_OVER) {
+      completion = {completed: true, outcome};
       break;
     }
-    const retryAfterMs = answer.outcome === OUTCOME.NOT_LEADER ?
+    const retryAfterMs = outcome === OUTCOME.NOT_LEADER ?
       BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
+    completion = {completed: false, outcome, retryAfterMs};
     if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
         clock.now() + retryAfterMs > deadline) break;
     const remaining = deadline - clock.now();
     if (!seed && remaining <= 0) break;
     await clock.sleep(mathMin(retryAfterMs, mathMax(0, remaining)));
   } while (clock.now() <= deadline);
-  return {answer, completed, attemptCount, firstBlockedDrain, firstJoinedAttempt};
+  return {answer, ...completion, attemptCount, firstBlockedDrain, firstJoinedAttempt};
 }`;
 const FIRST_OBSERVATION_CONTRACT = `function retainFirstReleaseObservation(current, value) {
   return current === null && value !== undefined ? value : current;
@@ -113,27 +117,36 @@ const REQUEST_CONTRACT = `async function requestParticipantRelease(owner, reques
     {...payload, replicaId: first.leaderReplicaId});
 }`;
 const FRESH_CONTRACT = `({async releaseFreshCreate(partitionId, options = {}) {
-  const build = await runtimeBuildProvenance();
-  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
-    throw new Error(\`Fresh replica release build unavailable: \${build.reason}\`);
-  }
-  const deadline = options.deadlineAtMs;
-  if (!Number.isSafeInteger(deadline) || deadline <= now()) {
-    throw new Error(RELEASE_RECOVERY_ERROR.FRESH_DEADLINE);
-  }
-  const createAdmissionIdentity = handler.participantReleaseAuthorizationOwner
-    .freshCreateReleaseIdentity({partitionId,
-      createAdmissionEvidence: options.createAdmissionEvidence,
-      identityExisted: options.identityExisted});
-  if (createAdmissionIdentity === null) {
-    throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
-  }
-  const {answer, completed} = await completeParticipantRelease(handler, {partitionId,
-    targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-    deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
-  if (completed) return answer;
-  throw new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED + JSON.stringify({partitionId, answer}));
-}})`;
+    const build = await runtimeBuildProvenance();
+    if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+      throw new Error(\`Fresh replica release build unavailable: \${build.reason}\`);
+    }
+    const deadline = options.deadlineAtMs;
+    if (!Number.isSafeInteger(deadline) || deadline <= now()) {
+      throw Object.assign(new Error(RELEASE_RECOVERY_ERROR.FRESH_DEADLINE),
+        {code: FRESH_CREATE_RELEASE_UNAVAILABLE});
+    }
+    const createAdmissionIdentity = handler.participantReleaseAuthorizationOwner
+      .freshCreateReleaseIdentity({partitionId,
+        createAdmissionEvidence: options.createAdmissionEvidence,
+        identityExisted: options.identityExisted});
+    if (createAdmissionIdentity === null) {
+      throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
+    }
+    const {answer, completed, outcome, retryAfterMs} =
+      await completeParticipantRelease(handler, {partitionId,
+        targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+        deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
+    if (completed) return answer;
+    const error = new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
+      JSON.stringify({partitionId, answer}));
+    error.participantReleaseAnswer = answer;
+    if (outcome === OUTCOME.UNAVAILABLE || outcome === OUTCOME.NOT_LEADER ||
+        (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0)) {
+      error.code = FRESH_CREATE_RELEASE_UNAVAILABLE;
+    }
+    throw error;
+  }})`;
 const SLEEP_CONTRACT = `function sleep(delayMs) {
   return new Promise((resolve) => {
     const handle = handler.timeSource.setTimeout(() => resolve(), delayMs);
@@ -332,7 +345,8 @@ function freshCallerMatches(ast) {
   return factory !== null && guardedBindingsUnchanged(ast, FRESH_BINDINGS) &&
     constantsMatch(ast, FRESH) && callerMethodMatches(ast, factory, FRESH_CONTRACT, true) &&
     functionMatches(ast, SLEEP_CONTRACT, factory.body.body) &&
-    declarationMatches(factory.body.body, NOW_DECLARATION);
+    declarationMatches(factory.body.body, NOW_DECLARATION) &&
+    declarationMatches(ast.body, FRESH_UNAVAILABLE_DECLARATION);
 }
 
 function callerMatches(ast, file) {

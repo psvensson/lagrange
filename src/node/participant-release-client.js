@@ -166,10 +166,8 @@ async function completeParticipantRelease(owner, request, clock) {
   const intent = objectFreeze({...request});
   const deadline = intent.deadlineAtMs;
   const seed = intent.trigger === TRIGGER.FRESH_SEED;
-  let answer = null;
-  let outcome = null;
-  let retryAfterMs = null;
-  let completed = false;
+  let answer;
+  let completion;
   let attemptCount = 0;
   let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
   let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
@@ -180,14 +178,14 @@ async function completeParticipantRelease(owner, request, clock) {
       firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain, answer.blockedDrain);
       firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt, answer.joinedAttempt);
     }
-    outcome = answer.outcome;
+    const outcome = answer.outcome;
     if (outcome === OUTCOME.CUT_OVER) {
-      completed = true;
+      completion = {completed: true, outcome};
       break;
     }
-    outcome = answer.outcome;
-    retryAfterMs = outcome === OUTCOME.NOT_LEADER ?
+    const retryAfterMs = outcome === OUTCOME.NOT_LEADER ?
       BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
+    completion = {completed: false, outcome, retryAfterMs};
     if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
         clock.now() + retryAfterMs > deadline) break;
     const remaining = deadline - clock.now();
@@ -196,8 +194,7 @@ async function completeParticipantRelease(owner, request, clock) {
     if (!seed && remaining <= 0) break;
     await clock.sleep(mathMin(retryAfterMs, mathMax(0, remaining)));
   } while (clock.now() <= deadline);
-  return {answer, completed, outcome, retryAfterMs, attemptCount,
-    firstBlockedDrain, firstJoinedAttempt};
+  return {answer, ...completion, attemptCount, firstBlockedDrain, firstJoinedAttempt};
 }
 
 export {askParticipantRelease, completeParticipantRelease, participantReleaseAbsoluteClockValid,

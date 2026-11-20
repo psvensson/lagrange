@@ -64,14 +64,6 @@ const CRITICAL_OPTIONS = Object.freeze({
   deliveryPriority: 'critical',
   workClass: 'critical',
 });
-const CREATE_ADMISSION_REQUEST_FIELD = Object.freeze({
-  OPERATION_ID: 'operationId',
-  ENTITY_ID: 'entityId',
-  PARTITION_ID: 'partitionId',
-  REPLICA_ID: 'replicaId',
-  ADMISSION_TOKEN: 'admissionToken',
-  ATTEMPT_TOKEN: 'attemptToken',
-});
 const processOwnerRegistry = new Map();
 
 function admissionError(code, operationId, message) {
@@ -118,39 +110,21 @@ function nullableSafeInteger(value) {
   return Number.isSafeInteger(normalized) ? normalized : null;
 }
 
-function normalizedStringField(source, field) {
-  return String(source?.[field] ?? '').trim();
+function normalizedString(value) {
+  return String(value ?? '').trim();
 }
 
 function normalizeRequest(request, nodeId) {
   return {
-    operationId: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.OPERATION_ID,
-    ),
+    operationId: normalizedString(request?.operationId),
     operationType: request?.operationType ?? null,
     entityType: request?.entityType ?? null,
-    entityId: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.ENTITY_ID,
-    ),
-    partitionId: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.PARTITION_ID,
-    ),
-    replicaId: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.REPLICA_ID,
-    ),
+    entityId: normalizedString(request?.entityId),
+    partitionId: normalizedString(request?.partitionId),
+    replicaId: normalizedString(request?.replicaId),
     targetNodeId: nodeId,
-    admissionToken: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.ADMISSION_TOKEN,
-    ),
-    attemptToken: normalizedStringField(
-      request,
-      CREATE_ADMISSION_REQUEST_FIELD.ATTEMPT_TOKEN,
-    ),
+    admissionToken: normalizedString(request?.admissionToken),
+    attemptToken: normalizedString(request?.attemptToken),
     attemptSeq: nullableSafeInteger(request?.attemptSeq),
     workflowUpdatedAt: nullableSafeInteger(request?.workflowUpdatedAt),
   };
@@ -262,6 +236,12 @@ function rowMatchesAdmissionIdentity(row, evidence) {
       evidence?.replicaCreatedAt;
 }
 
+function matchDurableAdmissionRequest(row, evidence) {
+  const request = requestFromAdmissionRow(row);
+  return rowMatchesAdmission(row, request) &&
+    rowMatchesAdmissionIdentity(row, evidence) ? request : null;
+}
+
 function isRetainedAdmissionRowEligible(row, request, nodeId) {
   return rowMatchesAdmission(row, request) &&
     row.target_node_id === nodeId && !isClosedAdmission(row);
@@ -273,9 +253,7 @@ function isRetainedOwnerEligible(previousOwner, currentOwner) {
 }
 
 function currentRowMatchesRetainedAdmission(current, retainedEvidence, owner) {
-  const request = requestFromAdmissionRow(current);
-  return rowMatchesAdmission(current, request) &&
-    rowMatchesAdmissionIdentity(current, retainedEvidence) &&
+  return matchDurableAdmissionRequest(current, retainedEvidence) !== null &&
     current.create_admission_owner_incarnation === owner;
 }
 
@@ -290,9 +268,7 @@ function isValidAdvanceRequest(evidence, ownerIncarnation,
 
 function rowMatchesAdvanceResult(row, evidence, nextState, ownerIncarnation,
   data) {
-  const request = requestFromAdmissionRow(row);
-  return rowMatchesAdmission(row, request) &&
-    rowMatchesAdmissionIdentity(row, evidence) &&
+  return matchDurableAdmissionRequest(row, evidence) !== null &&
     row.create_admission_state === nextState &&
     row.create_admission_owner_incarnation === ownerIncarnation &&
     Object.entries(data).every(([field, value]) => row?.[field] === value);
@@ -403,13 +379,13 @@ class ReplicaCreateAdmissionOwner {
 
   async authorizeParticipantRelease(evidence) {
     const row = await this.readOperation(evidence?.operationId);
-    if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
-        !rowMatchesAdmissionIdentity(row, evidence) ||
+    const request = matchDurableAdmissionRequest(row, evidence);
+    if (request === null ||
         row.completed_at !== null && row.completed_at !== undefined ||
         row.create_admission_state !== CREATE_ADMISSION_STATE.MATERIALIZED) {
       return null;
     }
-    return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
+    return admissionEvidenceFromRow(row, request);
   }
 
   async readReplicaAdmissions(replicaId) {
@@ -722,8 +698,7 @@ class ReplicaCreateAdmissionOwner {
   async beginFailedAttemptRotation(evidence, physicalClaim = null) {
     requireReplicaCreateRotationWorkerClaim(this, evidence, physicalClaim);
     const row = await this.readOperation(evidence.operationId);
-    if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
-        !rowMatchesAdmissionIdentity(row, evidence) ||
+    if (matchDurableAdmissionRequest(row, evidence) === null ||
         row.completed_at !== null && row.completed_at !== undefined ||
         row.create_admission_state !== CREATE_ADMISSION_STATE.FAILED ||
         row.create_admission_attempt_token !== evidence.attemptToken) {
