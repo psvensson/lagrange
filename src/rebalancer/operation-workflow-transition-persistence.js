@@ -209,11 +209,11 @@ class OperationWorkflowTransitionPersistence
         let transitionCommitted;
         try {
           const persisted = await this.repository.persistOperationUpdate(projectedOperation, {
-              ...this.buildOperationTransitionPersistOptions(),
-              confirmPersistence: true,
-              expectedWorkflowStep: WORKFLOW_STEP.PENDING,
-              timeoutBudget: mutationBudget,
-            });
+            ...this.buildOperationTransitionPersistOptions(),
+            confirmPersistence: true,
+            expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+            timeoutBudget: mutationBudget,
+          });
           transitionCommitted = buildOperationTransitionOutcome(persisted,
             {repository: this.repository, requestedOperation: projectedOperation});
         } catch (error) {

@@ -1,3 +1,5 @@
+import {SERVICE_TYPE} from '../constants/service.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isDeepStrictEqual} from 'node:util';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {
@@ -70,9 +72,20 @@ function requireDataFields(record, fields) {
 function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
   assertOperationData(operation);
   requireDataFields(operation, [...SUBJECT_FIELDS, 'workflowStep', 'status', 'completedAt']);
-  for (const field of SUBJECT_FIELDS) {
+  for (const field of ['operationId', 'type', 'entityType', 'entityId']) {
     requireOutcome(typeof operation[field] === 'string' && operation[field].length > 0,
       `invalid operation ${field}`);
+  }
+  try {
+    assertCanonicalRebalancerEntityIdentity(operation);
+  } catch (_) {
+    throw invalidOperationPersistenceOutcome('invalid canonical entity identity');
+  }
+  requireOutcome(operation.partitionId === null ||
+    typeof operation.partitionId === 'string' && operation.partitionId.length > 0,
+  'invalid partition identity');
+  if (operation.entityType === SERVICE_TYPE.PARTITION) {
+    requireOutcome(operation.partitionId === operation.entityId, 'partition entity differs');
   }
   const steps = getWorkflowSteps(operation.type);
   requireOutcome(steps.length > 0 && (steps.includes(operation.workflowStep) ||

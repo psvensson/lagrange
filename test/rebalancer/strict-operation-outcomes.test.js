@@ -150,6 +150,13 @@ async function seedOperation(t, fixture, operationId, overrides = {}) {
   });
   operation.entityType = SERVICE_TYPE.PARTITION;
   operation.entityId = PARTITION_ID;
+  if (operation.type === OperationType.GROWTH_PROMOTE) {
+    operation.sourceReplicaId = `${operation.replicaId}-peer`;
+    operation.promoteReplicaIds = [operation.replicaId, operation.sourceReplicaId];
+    Object.assign(operation.stepsHistory[0], {
+      sourceReplicaId: operation.sourceReplicaId, promoteReplicaIds: operation.promoteReplicaIds,
+    });
+  }
   const persisted = await fixture.coordinator.repository.persistNewOperation(operation);
   t.equal(persisted, true, 'seed goes through the real repository and SQLite INSERT');
   const now = Date.now();
@@ -358,8 +365,10 @@ async function persistTerminalWitness(fixture, operation, {failed = false} = {})
     stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
   const answer = await fixture.coordinator.repository.persistOperationUpdate(projected,
     {terminalTransition: true, confirmPersistence: false});
-  return buildOperationTransitionOutcome(answer,
+  const outcome = buildOperationTransitionOutcome(answer,
     {repository: fixture.coordinator.repository, requestedOperation: projected});
+  return {outcome, operation: await fixture.coordinator.repository
+    .queryAuthoritativeOperationById(operation.operationId)};
 }
 
 for (const type of [OperationType.ADD, OperationType.GROWTH_PROMOTE]) {
@@ -403,7 +412,9 @@ test('strict outcomes failed REPLACE repair releases before now-refused write ad
     t.same(held.projectedOperation, committed.operation);
     t.same(held.persistOptions, {}, 'release debt carries no stale new-write admission');
     t.equal(reservationStatus(fixture.current, operation.operationId), RESERVATION_STATUS.ACTIVE);
-    owner.releasePlacementHold = async () => { placementAttempts++; };
+    owner.releasePlacementHold = async () => {
+      placementAttempts++;
+    };
     await runTerminalTransitionRepairAttempt(owner, operation.operationId);
     t.equal(placementAttempts, 2);
     t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), false);
@@ -431,7 +442,11 @@ test('strict outcomes accessor corruption is rejected without evaluating the get
     const result = await persist(...args);
     const corrupted = {...result.operation};
     Object.defineProperty(corrupted, 'targetNodeBootIncarnation', {
-      enumerable: true, get() { getterCalls++; return 1; },
+      enumerable: true,
+      get() {
+        getterCalls++;
+        return 1;
+      },
     });
     return {...result, operation: corrupted};
   };

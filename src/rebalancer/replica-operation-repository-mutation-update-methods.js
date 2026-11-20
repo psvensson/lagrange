@@ -398,7 +398,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
 
     // A failed gateway mutation either recovers through the already-applied
     // witness (the write landed despite the retryable failure) or escalates.
-    async resolveFailedOperationUpdateResult(operation, result, options = {}) {
+    async resolveFailedOperationUpdateResult(operation, result) {
       const recoveredPersistedMutation =
         await this.recoverPersistedReplicaOperationMutation(
           operation,

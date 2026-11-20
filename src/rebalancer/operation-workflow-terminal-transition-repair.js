@@ -260,8 +260,10 @@ function buildTerminalTransitionRepairState(
   cause,
 ) {
   const releaseOnly = cause === TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING;
-  const cleanupOnly = cause === TERMINAL_TRANSITION_REPAIR_CAUSE.FAILED_CREATE_CLEANUP_RELEASE_PENDING;
-  const retainRelease = existingState?.phase === TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING;
+  const cleanupOnly = cause ===
+    TERMINAL_TRANSITION_REPAIR_CAUSE.FAILED_CREATE_CLEANUP_RELEASE_PENDING;
+  const retainRelease = existingState?.phase ===
+    TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING;
   return {
     projectedOperation: releaseOnly ? owner.cloneOperationSnapshot(projectedOperation) :
       existingState?.projectedOperation || owner.cloneOperationSnapshot(projectedOperation),
@@ -455,7 +457,6 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       await owner.releaseDurableTerminalOperation(heldState.projectedOperation, outcome);
       await owner.confirmCommittedTransitionPersistence(outcome.operation,
         {terminalTransitionRepair: true, repairPersistOptions: heldState.persistOptions});
-
     },
   );
 }

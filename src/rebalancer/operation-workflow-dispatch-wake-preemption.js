@@ -228,17 +228,14 @@ async function reconcileDispatchWakePendingTargetProgress(
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_PENDING) {
     return didOperationReconcileAdvanceOrComplete(
       await context.updateStep(operation, WORKFLOW_STEP.CREATING));
-
   }
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_SYNCING) {
     return didOperationReconcileAdvanceOrComplete(
       await context.updateStep(operation, WORKFLOW_STEP.SYNCING));
-
   }
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_ACTIVE) {
     return didOperationReconcileAdvanceOrComplete(
       await context.updateStep(operation, WORKFLOW_STEP.ACTIVE));
-
   }
   return false;
 }

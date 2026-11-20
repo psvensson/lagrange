@@ -599,7 +599,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     try {
       if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
           await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-            undefined, {stepMetadata, requireDurable: true}) === OPERATION_RECONCILE_OUTCOME.ADVANCED &&
+            undefined, {stepMetadata, requireDurable: true}) ===
+              OPERATION_RECONCILE_OUTCOME.ADVANCED &&
           replaceIntentEntryOf(operation)) {
         // This owner's own durable transition committed the intent entry.
         return true;
