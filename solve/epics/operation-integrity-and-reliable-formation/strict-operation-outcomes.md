@@ -554,9 +554,14 @@ composed review have distinct records.
 [Managed native originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-native-8281e61d-5487-nov20.tar.gz).
 
 Continue from the existing [Quest log](../../quests/strict-operation-outcomes/log.ndjson).
-The repository owner must preserve uncertainty on malformed target reads.
-The workflow owner must bind superseded-target failure to the target state at
-the conditional write and retain outstanding release and retry work. Run the
-affected dispatch, reservation and recovery suites on the composed source.
+At `d4f4c69cd` independent review approved the complete entity census,
+partial-read pressure handling and newly armed dispatch-pending timer.
+The workflow owner is now testing an ordinary timer that was already armed
+when strict reentry joined it, and the remote target-progress wake after
+planning. Release the timer while the exact row is withheld, then restore
+the row and observe the same logical operation wake. The integration
+owner is checking the affected dispatch, reservation and recovery suites
+on `58ec69a2a`.
+[Latest original controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--workflow-wake-strict-census-and-growth-d4f-nov20.tar.gz).
 The integration owner admits the remaining receipt rows after their original
 controls, classified checks and independent review are complete.

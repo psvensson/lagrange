@@ -281,6 +281,37 @@ findings, this distinction determines which source an agent should reproduce.
   the accepted formation gate.
   [Managed suite selections and outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-placement-outcome-composition-b4a5bb898-nov20.tar.gz).
 
+The composed source at `58ec69a2a` includes the independently reviewed
+CREATE recovery and complete operation census. At `d4f4c69cd` the native
+growth controls observed an occupied placement during joint membership,
+clearance after the terminal ledger write, and the next dispatch to a new
+leader with the original placement target preserved. The active strict-outcome
+assignment follows two effects through their existing owner: a new strict
+retry joining an older timer and a remote target-progress wake after
+planning. Both must revalidate the exact operation before sending.
+[Managed recovery and census controls](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--workflow-wake-strict-census-and-growth-d4f-nov20.tar.gz).
+
+The same 53-file selection on `58ec69a2a` passed 51 files and failed two.
+One convergence witness allowed a second ledger REPLACE at virtual time
+26,000 ms while its target-side hold still reported engaged. The same host
+passed at the CREATE parent and reproduced the second admission at the
+strict-workflow parent. Trace the admission-time seed-side ledger and
+target-side holder before attributing the failure to an actual concurrent
+durable move. The second failure is a direct CREATE caller in the growth
+deadline fixture. Its success case omitted the registered release route.
+[Original 53-file run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-composed-53-58ec-nov20.tar.gz).
+
+Static verification also has a measured selection defect. In request #5499
+the checker lost access to the base, printed a fatal Git error, and returned
+success on zero changed JavaScript files. In #5500 the provisioned base
+tree and full changed-path list matched the integration owner's digests.
+On `0760d97d4` that measured range reached ESLint on 1,012 paths and
+failed on 28 errors and seven file-size regressions. The change-selection
+owner must surface mandatory Git read errors. The changing runtime and
+test owners retain the measured lint and size repairs.
+[Rejected range attempts](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--static-selection-unreadable-base-5498-5499-nov20.tar.gz)
+and [measured range and original output](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--static-bound-range-5500-nov20.tar.gz).
+
 ### Physical formation and placement stability
 
 At `dc021bf30` the existing embedded formation test passed on tv-dator in
@@ -418,14 +449,15 @@ disk using the same replica ID. The test observes the target's log.
 The earlier router failures remain available in the
 [original attempts](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-activation-registered-route-and-native-floor-nov20.tar.gz).
 
-Separately, the local authoritative read in
-`cdc-integration-service-authoritative-read-flow.js` awaits a partition
-query before the owner RPC. With a permanently held read, finite-loss
-tests cannot establish that this underlying work is released or that the
-same generation resumes automatically. The CDC read owner must qualify
-the actual partition query lifetime. NODES, SERVICES and the operation
-ledger have different commit boundaries. Trace the generation predicate
-at the durable effect before assigning cross-partition boot guarantees.
+The CREATE admission owner requires an owner-RPC read. At `07b8787ea`
+that read waited on a local partition query whose rows the contract could
+never accept. At `2ca08690c` it calls the designated owner directly. The
+remote success, refusal, unavailable route and same-host native cases pass,
+as do the neighboring permitted read modes (ten files, 758 assertions).
+Independent review covers removal of the unused wait. A permanently blocked
+query *at the selected owner* and atomic fencing across NODES, SERVICES and
+the operation ledger remain separate obligations.
+[Original held-read controls and passing source](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--cdc-required-owner-held-local-2ca-nov20.tar.gz).
 
 Both physical runs spent most recorded operation time on ADD. Summing each
 ADD's own ledger step durations inside the original 420 seconds, SENDING and
