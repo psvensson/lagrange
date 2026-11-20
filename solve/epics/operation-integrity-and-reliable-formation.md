@@ -350,6 +350,15 @@ and a true disconnect followed by a committed same-boot rejoin restored
 eligibility. The heartbeat and placement owners share this correction.
 [Original four-case run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-placement-owned-disconnect-4b85c-nov20.tar.gz).
 
+At `c2def7ee9` the heartbeat writer conditions its single update on the
+observed boot incarnation, lifecycle status and connection state as well as
+the node ID and both watermarks. Independent review traced zero affected
+rows through the lease sweep. On tv-dator the newer boot and same-boot
+renewal both survived, and genuine disconnect followed by rejoin still
+worked. The connected-learner placement case still failed. All five sweep
+consumer files passed on adams-gamla (165 assertions).
+[Guarded-write originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-lease-disconnect-c2def-nov20.tar.gz).
+
 The placement owner must preserve the exact existing replica across an overdue
 renewal, keep the host ineligible for new work, and prove removal and recovery
 after an owned disconnect or confirmed replica failure. Trace missing rows,
@@ -376,6 +385,20 @@ replacement cases. The broader run passed six of seven files and review
 found remaining same-service read and deadline cases.
 [Physical source logs and ledger](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-57e4db30-nov20.tar.gz)
 and [managed paired release and broader results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--create-registered-release-custody-and-cone-nov20.tar.gz).
+
+The same-service recovery changes at `823799522` retain the materialized
+worker during temporary uncertainty and route the subsequent activation
+through its owner. The exact six-file managed selection passed five files;
+the first unfinished router case did not register the required release
+route. The owner is reconciling callers and fixtures on the registered
+route. Separately, the local authoritative read in
+`cdc-integration-service-authoritative-read-flow.js` awaits a partition
+query before the owner RPC. With a permanently held read, finite-loss
+tests cannot establish that this underlying work is released or that the
+same generation resumes automatically. The CDC read owner must qualify
+the actual partition query lifetime. NODES, SERVICES and the operation
+ledger have different commit boundaries. Trace the generation predicate
+at the durable effect before assigning cross-partition boot guarantees.
 
 Both physical runs spent most recorded operation time on ADD. Summing each
 ADD's own ledger step durations inside the original 420 seconds, SENDING and
@@ -1418,7 +1441,7 @@ Quest evidence above govern continuation.
 | `E6` CDC fairness, exact coverage & hydration handoff | 3+ contender FIFO slice fairness with live credit retention across delayed ACK continuations and lifecycle-only contender retirement; bounded `<= 256` hydration ACK batches with actual-prefix pressure preserved; absolute retry timer deadlines (`dueAtMs`); pre-hydration invocation retirement via progress-cell `logIndex` and verified `command.acknowledged` batches | `src/topology/cdc-group-propagation-durable-delivery.js`, `src/topology/cdc-group-propagation-service.js`, `src/partition/partition-cdc-obligation-progress.js`, `src/partition/partition-cdc-obligation-delivery.js` | Reservation hold expiry (`300ms`) allows ready work without dropping a live contender's FIFO queue position or credit; actual owed-prefix pressure (`readOwedCdcHead`) bounds retained delivered rows; retry timer preemption compares absolute `dueAtMs`; `command.acknowledged` batches verified `<= 256` | `test/topology/cdc-group-propagation-service.test.js`, `test/topology/cdc-group-propagation-proposal-cost.test.js`, `test/partition/cdc-hydration-live-handoff.test.js`, `test/partition/partition-cdc-obligation-reclamation.test.js` | Bounded fixes and explicit ACK/proposal measurements independently approved; E8/E9 pending |
 | `E7` First-cause diagnostics & required-domain evaluation | Bounded key-based diagnostic aggregation retaining `firstSample`, `latestSample`, original cause, boundary, owner, trigger, and explicit truncation/eviction loss accounting outward on `AdminControlSnapshot`; complete keyed readiness disposition over published required node domain | `src/control-plane/control-plane-diagnostics-ledger.js`, `src/control-plane/authoritative-node-evidence-reconciler.js`, `src/control-plane/control-plane-readiness-diagnostics-eligibility.js`, `src/control-plane/control-plane-system-table-gateway-dependency-resolution.js`, `src/admin/admin-control-snapshot-readiness-diagnostics-methods.js`, `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/control-plane-readiness-service-node-methods.js` | Every required node in published membership receives an explicit readiness entry; `ControlPlaneDiagnosticsLedger` bounds payload values, preserves distinct-key root causes under secondary churn, and exposes explicit loss accounting (`evictedKeys`, `overwrittenEntries`, `droppedSamples`, `truncatedStrings`, `truncatedArrays`, `truncatedObjects`, `totalLossEvents`) outward on `AdminControlSnapshot` | `test/control-plane/control-plane-readiness-service-cluster-health-and-recovery-diagnostics.test.js`, `test/admin/admin-control-snapshot.test.js` | Bounded mechanism verified at `fffd9add`; outward field names reconciled; E8/E9 pending |
 | `E8` Composed verification on faithful substrates | Deterministic repros with negative controls and process-isolated embedded-cluster verification covering E1–E7 on one canonical candidate SHA | `test/closure/registry.json`, `test/integration/helpers/embedded-cluster-harness.js`, focused unit/integration suites | Fresh independent verifier must bind approval and negative controls to the final committed candidate; earlier approvals retain only their measured scope | Focused witnesses, genuine three-process `test/integration/fresh-formation-without-admin-polling.integration.test.js`, native owner-wake negative in `test/convergence/dt6-publication-quorum-failback-network.test.js`, public application fixtures and exact-candidate independent verification `approve` | In progress |
-| `E9` Unchanged physical acceptance & closure | Three consecutive green fresh-state runs of `fresh-formation-user-table-routability` on `local-three-node.json` (`adam-laptop,lenovo-laptop,tv-dator`) and admitted proof receipt | `scripts/lab.js`, `solve/quests/fresh-formation-user-table-routability/evidence/receipt.json` | Full node logs, harness reports, and admitted receipt bound to exact candidate SHA | `node scripts/lab.js harness run fresh-formation-user-table-routability --base test/distributed/config/local-three-node.json --nodes adam-laptop,lenovo-laptop,tv-dator` (x3 consecutive, frozen clean candidate) + `node scripts/solve.js probe --id fresh-formation-user-table-routability` | In progress |
+| `E9` Unchanged physical acceptance & closure | Three consecutive green fresh-state runs of `fresh-formation-user-table-routability` on `local-three-node.json` (`tv-dator,adam-laptop,adams-gamla`) within 420 seconds each and admitted proof receipt | `scripts/lab.js`, `solve/quests/fresh-formation-user-table-routability/evidence/receipt.json` | Full node logs, harness reports, and admitted receipt bound to exact candidate SHA | `node scripts/lab.js harness run fresh-formation-user-table-routability --base test/distributed/config/local-three-node.json --nodes tv-dator,adam-laptop,adams-gamla` (x3 consecutive, frozen clean candidate) + `node scripts/solve.js probe --id fresh-formation-user-table-routability` | In progress |
 
 ## Decision log
 
